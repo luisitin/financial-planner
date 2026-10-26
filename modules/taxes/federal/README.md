@@ -16,7 +16,7 @@
 Not modelled: AMT, the qualified business income deduction, the earned income and education credits, self-employment tax (self-employment income is taxed as ordinary income with a note), state tax, married filing separately living-together rules for Social Security, the FICA wage base on the additional Medicare tax. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
 
 ## Tests
-`tests/tax.test.mjs` (the engine on hand-worked 2025 cases), `tests/tax-pages.test.mjs` (this page on `qa/fixtures/tax-plan.mjs`), `module.test.mjs`.
+`tests/tax.test.mjs` (the engine on hand-worked 2025 cases), `tests/tax-pages.test.mjs` (this page on `qa/fixtures/tax-plan.mjs`), `module.test.mjs`. `tests/golden-federal.test.mjs`: 12,000 invented returns for 2024 to 2026 (`tests/golden/taxes/federal-<year>.csv`), worked independently from the IRS figures in `tests/golden/taxes/RULES.md` (Rev. Procs. 2023-34, 2024-40, 2025-32; Pub. L. 119-21), each within $1. The 2,246 rows where the engine and the law part ways run as `todo` tests, listed by cause in `tests/golden/taxes/federal-todo.json`: capital losses dropped when they exceed non-wage ordinary income, the senior deduction on separate returns and its per-person phase-out, the gains worksheet's line 25, the separate-return SALT phase-down rate, and the 2026 charity floor, non-itemizer charity deduction and 37%-bracket itemized limit (RULES.md section 11 has a worked example of each).
 
 ## Ideas / not yet
 - State tax (PolicyEngine as a local service), self-employment tax and the QBI deduction, AMT for stock-option years, a "compare with last year's return" line-by-line check.
