@@ -3,6 +3,7 @@ id: reasoning-data-model-v2
 title: The plan object, version 2
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: report
 ---

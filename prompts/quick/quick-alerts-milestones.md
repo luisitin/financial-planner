@@ -3,6 +3,7 @@ id: quick-alerts-milestones
 title: Needs attention: age milestones in the next twelve months
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, Claude (2nd account), Muse
 output: diff
 ---

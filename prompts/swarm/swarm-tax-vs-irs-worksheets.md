@@ -3,6 +3,7 @@ id: swarm-tax-vs-irs-worksheets
 title: The federal tax engine against the IRS's own worksheets
 category: swarm
 size: XL
+effort: An orchestrator with workers, an hour or more
 destinations: Claude Code, Codex, Claude (2nd account), Gemini CLI
 output: report
 ---

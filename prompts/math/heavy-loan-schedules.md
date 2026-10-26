@@ -1,0 +1,59 @@
+---
+id: heavy-loan-schedules
+title: Twenty thousand loans worked to the cent
+category: math
+size: XL
+effort: A fleet of about 40 small workers (one per rate band and loan kind), about an hour
+destinations: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+---
+# Twenty thousand loans worked to the cent
+
+You are improving **Financial Planner**, an open-source personal finance app: https://github.com/luisitin/financial-planner (branch `main`, MIT licence).
+Plain ES modules, Node 20, no framework, no bundler. One page = one folder `modules/<group>/<id>/` holding `module.js` (manifest),
+`compute.js` (pure math: runs in the browser, on the PC server and in tests), `view.js` (DOM only), `README.md` (purpose,
+formulas with sources) and `module.test.mjs` (node:test). Shared math lives in `core/math/`. The plan is one JSON object
+(`docs/DATA_MODEL.md`). The owner reads the app on a 390 px phone and is not a finance professional: words on screen are plain.
+
+**Read these first** (raw files you can fetch directly; the whole repo is at https://github.com/luisitin/financial-planner):
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/core/math/finance.js
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/core/math/payoff.js
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/debt/mortgage/README.md
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/debt/payoff/README.md
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/debt/refinance/README.md
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/tests/finance.test.mjs
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/core/csv.js
+
+## The task
+
+**Step 1, the lead.**
+- Find out how `core/math/finance.js` and `core/math/payoff.js` round each month's interest and the final payment. The comments and the debt READMEs say; if they do not, read the code for that convention only, and state it.
+- Write one rules sheet: the payment `P·r / (1 − (1 + r)^−n)` with `r` = annual rate / 12; the rounding convention; extra payments applied after the month's interest, in the same month; biweekly as the mortgage README defines it; a recast as a new payment over the remaining term after a lump sum.
+- CSV layout: `case_id, principal, annual_rate, term_months, extra_monthly, lump_sum, lump_month, schedule (monthly|biweekly), recast (0|1), payment, total_interest, payoff_month, balance_12, balance_60, balance_120, final_payment, note`.
+
+**Step 2, the workers.** 40 shards: 8 rate bands (0%; 0.01 to 3%; 3 to 5%; 5 to 7%; 7 to 10%; 10 to 18%; 18 to 30%; payments below the month's interest) × 5 loan kinds (plain; extra every month; one lump sum; biweekly; lump sum then recast). Each worker writes:
+- 500 rows with principals from $500 to $2,000,000 and terms from 6 to 480 months;
+- every edge: a 0% rate, a one-month term, an extra payment that pays the loan off the next month, and a payment below the interest that must never pay off (`payoff_month` = `never`);
+- 12 full month-by-month schedules in their own CSV (`month, payment, interest, principal, extra, balance`).
+
+Work each from the rules sheet with your own arithmetic or your own short script, never the repo's code.
+
+**Step 3, the workers.** Every tenth row a second way; fix or flag.
+
+**Step 4, the lead.** Sample 2% yourself. Deliver `tests/golden/debt/loans.csv`, `tests/golden/debt/schedules/<case_id>.csv` and `tests/golden-loans.test.mjs`, checking `core/math/finance.js` and `core/math/payoff.js` to the cent. Disagreements become `todo` tests and lead your answer.
+
+## How to answer
+
+1. Start with a rationale of at most ten lines: what you changed and why.
+2. Next, the disagreements between your answer key and the code, each with the worked numbers: they matter most. Then give every CSV file and the test runner whole, each in its own fenced code block whose first line is its path (`# path: tests/golden/...csv`; that line is dropped when the file is saved). If the files add up to more than about 1 MB, attach them instead of pasting: one file each, or one Markdown file holding them all in fenced blocks with their paths.
+3. End with the list of files you touched and the commands that verify them (`npm test`, `npm run check`).
+
+Rules:
+- Never run, import or copy the repo's code to get an expected value: the answer key must be independent of the code, or it proves nothing. A calculator, or a short script a worker writes itself from the rules in this prompt, is fine.
+- Every CSV has a header row, one case per row, money to the cent, rates to six decimals and dates as YYYY-MM-DD.
+- Follow the project's rules in `AGENTS.md`: `compute.js` stays pure (no DOM, fetch, storage or timers); money math lives in code, never in an AI model; plain words on screen; every formula gets a test and a written source.
+- Never edit `modules/registry.js` (generated by `npm run registry`), `data/` or `planner.properties`.
+- Tests use `node:test` and `node:assert/strict`, in the module's `module.test.mjs` or `tests/<topic>.test.mjs`, so that `npm test` and `npm run check` stay green. Say which commands you ran; if you could not run them, say so plainly.
+- Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
+- The repo is public: use invented example data only (no real names, addresses, account numbers).
+- If something is unclear, state your assumption and carry on; do not stop to ask.

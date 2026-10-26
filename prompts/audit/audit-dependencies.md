@@ -3,6 +3,7 @@ id: audit-dependencies
 title: Dependencies and the supply chain
 category: audit
 size: S
+effort: One strong model, under an hour
 destinations: ChatGPT, Claude (2nd account), Gemini, Copilot
 output: report
 ---

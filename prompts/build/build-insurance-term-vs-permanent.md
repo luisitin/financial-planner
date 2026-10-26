@@ -3,6 +3,7 @@ id: build-insurance-term-vs-permanent
 title: Build "Term vs permanent" (insurance/term-vs-permanent)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

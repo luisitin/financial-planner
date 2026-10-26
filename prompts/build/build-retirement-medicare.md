@@ -3,6 +3,7 @@ id: build-retirement-medicare
 title: Build "Medicare and IRMAA" (retirement/medicare)
 category: build
 size: M
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

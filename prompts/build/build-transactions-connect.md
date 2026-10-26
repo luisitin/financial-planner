@@ -3,6 +3,7 @@ id: build-transactions-connect
 title: Build "Bank connections" (transactions/connect)
 category: build
 size: M
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

@@ -3,6 +3,7 @@ id: research-2027-figures
 title: Every 2027 figure the app uses, with sources
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT, Grok
 output: research
 ---

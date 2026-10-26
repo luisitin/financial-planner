@@ -3,6 +3,7 @@ id: build-reports-tax
 title: Build "Tax report" (reports/tax)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

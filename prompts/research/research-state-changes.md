@@ -3,6 +3,7 @@ id: research-state-changes
 title: State income tax changes for 2026 and 2027
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: research
 ---

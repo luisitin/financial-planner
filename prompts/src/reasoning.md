@@ -1,5 +1,5 @@
 # Deep reasoning
-Architecture, data model, flows, methodology and security. Judgement matters more than arithmetic.
+A strong model making decisions: architecture, data model, flows, visual design, words, continuity, methodology and security. Judgement matters more than volume.
 
 ---
 id: reasoning-architecture-review
@@ -184,3 +184,109 @@ The roadmap expects the browser copy to outgrow localStorage (about 5 MB) once a
 3. Fix the two slowest computes (indexes by month or account computed once, not per page) and make the ledger render the visible rows only.
 
 Report the before and after numbers. Diffs with tests.
+
+---
+id: reasoning-monte-carlo-validation
+title: Prove the Monte Carlo engine is statistically sound
+size: L
+effort: One strong model, under an hour
+to: ChatGPT, Gemini, DeepSeek, Claude (2nd account)
+output: diff
+read: core/math/montecarlo.js, tests/montecarlo.test.mjs, modules/retirement/monte-carlo/compute.js, modules/retirement/monte-carlo/README.md, core/math/retirement.js
+summary: Seed reproducibility, zero volatility, moments, convergence and error bars on the success rate, checked the way a statistician would.
+
+Write `tests/montecarlo-stats.test.mjs`, which checks the random-return engine the way a statistician would, using fixed seeds so the tests are deterministic:
+- the same seed gives identical paths; different seeds give different ones;
+- zero volatility reproduces the deterministic compound-growth path exactly;
+- over 20,000 draws, the sample mean and standard deviation of annual returns (log or simple, whichever the code draws) fall inside 99.9% confidence intervals around the configured values, and skew and kurtosis match the distribution the code claims (lognormal or normal: say which it is);
+- if stocks and bonds are drawn jointly, the sample correlation matches the configured one;
+- the success rate converges: the difference between 5,000 and 20,000 paths is inside the binomial standard error. The page could show that error: give the formula `sqrt(p(1-p)/n)` and a test of a helper that returns it.
+
+If any check fails, find out why and say so before proposing a fix.
+
+---
+id: reasoning-plain-words
+title: Plain words everywhere: a jargon sweep
+size: M
+effort: One strong model, under an hour
+to: Muse, ChatGPT, Claude (2nd account), Gemini
+output: diff
+read: AGENTS.md, docs/DESIGN_LOG.md, docs/MODULE_CATALOG.md, modules/system/assumptions/view.js, modules/taxes/federal/view.js, modules/retirement/withdrawal-strategy/view.js, modules/investments/allocation/view.js
+summary: Every label, help line and purpose a layperson would stumble on, rewritten without changing what it means.
+
+Rule 14 in AGENTS.md: titles, labels, purposes and help text are plain words, and abbreviations (RMD, DTI, IRMAA, AGI, MAGI, ETF, TWR, IRR, SWR...) are spelled out or replaced. Scan every usable page's `view.js` and `module.js` (`purpose`), and the purposes in `docs/MODULE_CATALOG.md`, for:
+- abbreviations and finance or developer terms on screen;
+- sentences longer than about 20 words, passive voice, and labels that describe the system instead of what the person does.
+
+Deliver a table (file, current text, proposed text) and the diffs. Keep the meaning exact: a plain rewrite that changes what a number means is worse than jargon. The same idea gets the same words on every page. Do not touch anything `docs/DESIGN_LOG.md` records as decided.
+
+---
+id: reasoning-chart-kit
+title: One small chart kit for every page
+size: M
+effort: One strong model, under an hour
+to: Claude (2nd account), ChatGPT, Gemini, Muse
+output: diff
+read: AGENTS.md, docs/FEEDBACK.md, docs/DESIGN_LOG.md, modules/retirement/charts.js, modules/cashflow/forecast/view.js, modules/investments/allocation/view.js, core/ui/base.css
+summary: Promote the retirement chart helper to core/ui (line, bars, progress) with the settled look, then use it on four more pages.
+
+Charts exist in three places with three styles (`modules/retirement/charts.js`, the forecast's balance line, the allocation bars). Tester item F-024 asks for history lines, share bars, goal progress and a debt payoff timeline.
+
+Make `core/ui/chart.js` (inline SVG, no library, dependency-free like the rest of `core/`) with `line`, `bars` and `progress`, carrying the look the design log settled: 11 px labels at phone size, an accent line with a soft fill, a marked low or end point, gridlines that hug the data, a sentence instead of an empty chart, colours from the CSS tokens so dark mode works, and a text alternative. Move the retirement pages onto it without visual change, then use it on Net worth (history), Expenses (shares), Goals (progress) and Debts (payoff timeline). Diffs, with Node tests of the pure scale and tick functions.
+
+---
+id: reasoning-established-dashboard
+title: The dashboard once the plan is set up
+size: M
+effort: One strong model, under an hour
+to: Muse, Claude (2nd account), ChatGPT, Gemini
+output: diff
+read: AGENTS.md, docs/DESIGN_LOG.md, modules/overview/dashboard/view.js, modules/overview/dashboard/compute.js, modules/overview/alerts/compute.js, core/phases.js
+summary: What someone with a finished plan should see first each time they open the app.
+
+The dashboard was designed around setup. For a household whose plan is complete, decide what it shows on each visit: the three or four numbers that matter (net worth and its change, this month's spending against plan, the retirement verdict, the next action), Needs attention with its count, and what changed since the last visit. The design log records that the build-phase list stays "for now": keep it, folded, below everything else.
+
+Describe the layout in a short text wireframe for a 390 px phone, then implement it in `modules/overview/dashboard/view.js` (and its compute, if a number is missing) following the design rules. Diffs.
+
+---
+id: reasoning-empty-states
+title: Empty states that say what to do first
+size: M
+effort: One strong model, under an hour
+to: Muse, ChatGPT, Gemini, Claude (2nd account)
+output: diff
+read: AGENTS.md, docs/DESIGN_LOG.md, modules/cashflow/budget/view.js, modules/investments/holdings/view.js, modules/debt/mortgage/view.js, modules/retirement/social-security/view.js
+summary: Every usable page, opened on an empty plan, explains itself and offers the first step, in one consistent voice.
+
+AGENTS.md: "Empty states explain what to do first instead of showing zeros and empty tables." For each usable page, work out what it shows on an empty plan (read its view and compute) and write its empty state: one sentence on what the page will tell you, what it needs, and one filled button that goes there (or opens the form). Example tone: "Add your accounts and this page will show how long your cash would last. It takes about two minutes." Keep the voice the same across every page.
+
+Deliver a table (page, what it shows now, proposed text and button) and the diffs. Follow the existing `ui` helpers; no new global CSS.
+
+---
+id: reasoning-help-content
+title: Help text for every page, in plain words
+size: L
+effort: One strong model, about an hour (or a lead with a few helpers, one per page group, and the lead editing for one voice)
+to: Muse, ChatGPT, Claude (2nd account), Gemini
+output: data
+read: docs/MODULE_CATALOG.md, modules/system/help/README.md, modules/system/help/module.js, AGENTS.md
+summary: A data file the planned Help page and a "?" on each page can read.
+
+Write the content for the planned `system/help` page as `modules/system/help/data/help.js`. For every page in `docs/MODULE_CATALOG.md` (usable ones first), add an entry `{ key: "group/id", what: "...", howToRead: ["..."], whereNumbersComeFrom: "...", commonQuestions: [{ q, a }] }`, in plain words for a non-specialist and accurate to what the page actually computes (read its compute and README; never promise what it does not do). Planned pages get only `what`. Keep one voice and one set of terms across all entries. Add a test that every catalog key has an entry and that no entry uses an abbreviation without spelling it out.
+
+---
+id: reasoning-spanish
+title: Spanish (Mexico) for the whole interface
+size: L
+effort: One strong model, about an hour
+to: Muse, ChatGPT, Gemini, Le Chat, Qwen
+output: diff
+read: docs/PLAN.md, core/format.js, core/app.js, core/ui/dom.js, modules/system/settings/view.js, modules/overview/dashboard/view.js
+summary: A tiny translation layer and the shell and core strings in Mexican Spanish.
+
+`docs/PLAN.md` plans Spanish strings through `core/i18n.js` with per-module string tables; number formatting already follows `meta.locale`. Build the mechanism and the first tables:
+- `core/i18n.js`: `t(key, vars)` with English as the fallback, plural forms, and the locale from the plan (`meta.locale`), dependency-free;
+- `core/i18n/es-MX.js` with every string in the shell (`index.html`, `core/app.js`, `core/ui/*`) and on the dashboard and Settings pages, written as a Mexican Spanish speaker would say them about money (natural, not literal; the "tú" form). US-specific terms (401(k), IRA, Social Security) stay, and are explained once;
+- the dashboard and Settings converted to `t()`, as the pattern the other pages will follow.
+
+Diffs, with tests that every key used exists in both languages.

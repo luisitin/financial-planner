@@ -3,6 +3,7 @@ id: quick-networth-since-line
 title: Net worth: "+$X since last time" line and a small history chart
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, Muse, Claude (2nd account)
 output: diff
 ---

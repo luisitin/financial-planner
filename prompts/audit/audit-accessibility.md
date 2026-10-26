@@ -3,6 +3,7 @@ id: audit-accessibility
 title: Accessibility audit (WCAG 2.2 AA) of the shell and ten pages
 category: audit
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, Copilot
 output: report
 ---

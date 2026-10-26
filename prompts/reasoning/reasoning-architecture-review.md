@@ -3,6 +3,7 @@ id: reasoning-architecture-review
 title: Architecture review: will this shape hold at 200 pages?
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, Muse
 output: report
 ---

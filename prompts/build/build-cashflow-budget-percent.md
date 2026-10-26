@@ -3,6 +3,7 @@ id: build-cashflow-budget-percent
 title: Build "Budget (50/30/20)" (cashflow/budget-percent)
 category: build
 size: M
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

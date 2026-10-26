@@ -3,6 +3,7 @@ id: reasoning-live-sync
 title: Two phones and a PC editing the same plan
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: diff
 ---

@@ -3,6 +3,7 @@ id: reasoning-large-plans
 title: Fifty thousand transactions on a phone
 category: reasoning
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, DeepSeek
 output: diff
 ---

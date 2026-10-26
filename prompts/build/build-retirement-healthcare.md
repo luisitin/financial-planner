@@ -3,6 +3,7 @@ id: build-retirement-healthcare
 title: Build "Healthcare before 65" (retirement/healthcare)
 category: build
 size: M
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

@@ -3,6 +3,7 @@ id: quick-format-locales
 title: Number and money formatting: locales and odd values
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: Muse, ChatGPT, Copilot, Le Chat
 output: diff
 ---

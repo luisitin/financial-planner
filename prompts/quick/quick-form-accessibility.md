@@ -3,6 +3,7 @@ id: quick-form-accessibility
 title: Forms and notices that screen readers can follow
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, Claude (2nd account), Copilot
 output: diff
 ---

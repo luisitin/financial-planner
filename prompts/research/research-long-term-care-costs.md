@@ -3,6 +3,7 @@ id: research-long-term-care-costs
 title: What long-term care costs, by state
 category: research
 size: S
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: data
 ---

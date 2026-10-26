@@ -3,6 +3,7 @@ id: quick-dates-edge-tests
 title: Dates and pay periods: the edge cases
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: DeepSeek, ChatGPT, Gemini, Copilot
 output: diff
 ---

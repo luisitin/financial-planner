@@ -3,6 +3,7 @@ id: audit-test-gaps
 title: Which formulas have no test?
 category: audit
 size: M
+effort: One strong model, under an hour
 destinations: ChatGPT, Gemini, Claude (2nd account), DeepSeek
 output: diff
 ---

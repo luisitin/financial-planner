@@ -3,6 +3,7 @@ id: build-estate-documents
 title: Build "Documents checklist" (estate/documents)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

@@ -3,6 +3,7 @@ id: quick-shares-property-tests
 title: Percentages that add up to 100: property tests
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: DeepSeek, ChatGPT, Qwen, Gemini
 output: diff
 ---

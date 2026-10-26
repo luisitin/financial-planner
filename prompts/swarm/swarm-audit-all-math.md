@@ -3,6 +3,7 @@ id: swarm-audit-all-math
 title: Audit every module's math: one worker per topic, merged and cross-checked
 category: swarm
 size: XL
+effort: An orchestrator with workers, an hour or more
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account)
 output: report
 ---

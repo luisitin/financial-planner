@@ -3,6 +3,7 @@ id: quick-ofx-import
 title: Import OFX and QFX bank files
 category: quick
 size: M
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, Claude (2nd account), DeepSeek
 output: diff
 ---

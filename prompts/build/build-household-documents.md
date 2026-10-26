@@ -3,6 +3,7 @@ id: build-household-documents
 title: Build "Document vault index" (household/documents)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

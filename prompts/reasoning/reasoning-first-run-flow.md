@@ -3,6 +3,7 @@ id: reasoning-first-run-flow
 title: The first ten minutes for someone who is not a finance person
 category: reasoning
 size: M
+effort: One strong model, under an hour
 destinations: Muse, Claude (2nd account), ChatGPT, Gemini
 output: report
 ---

@@ -3,6 +3,7 @@ id: reasoning-planning-methodology
 title: Is the planning method sound?
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, Muse
 output: report
 ---

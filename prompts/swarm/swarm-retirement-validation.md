@@ -3,6 +3,7 @@ id: swarm-retirement-validation
 title: Validate the retirement engine against published results
 category: swarm
 size: XL
+effort: An orchestrator with workers, an hour or more
 destinations: Claude Code, Codex, Claude (2nd account), Gemini CLI
 output: report
 ---

@@ -1,5 +1,5 @@
 # Quick
-One focused improvement each. Any chat model can do these in one answer.
+Minutes of work for one agent (or a few small helpers): one focused fix, one table, one small dataset. Any chat model can do these in one answer.
 
 ---
 id: quick-networth-since-line
@@ -212,6 +212,127 @@ The server (`server/server.mjs`) has no tests. Add environment overrides `PLANNE
 - `GET /api/health` and `/api/config` (no secrets in it);
 - the plan round trip (`PUT` then `GET /api/plan`) and that a backup file appears;
 - static files are served, and these are refused with 403: `planner.properties`, `data/...`, `private/...`, `.git/config`, `a%5cb` paths, `name::$DATA`, 8.3 short names (`PLANNE~1.PRO`), trailing dots and spaces;
-- with a token set: a request without it gets 401; a request from 127.0.0.1 without it passes only when the Host is loopback and there is no foreign `Origin` header.
+- with a token set: a request without it gets 401; a request from 127.0.0.1 without it passes only when the Host is loopback and there is no foreign `Origin` header;
+- with no token: a request with a foreign or `null` `Origin`, or with a public `Host` name (DNS rebinding), gets 401; IP addresses, one-word names, `.local`/`.lan`/`.home.arpa`/`.internal`/`.ts.net` names and names listed in `server.hosts` pass.
 
 The child process must be killed in `after()` even when a test fails.
+
+---
+id: quick-state-tax-tables
+title: Every state's income tax as data (2025, 2026)
+size: M
+effort: One agent, about 15 minutes (or 26 small helpers, two states each, in a couple of minutes)
+to: ChatGPT, Gemini, Perplexity, Claude (2nd account), Claude Code
+output: data
+read: docs/DATA_MODEL.md, modules/taxes/state/README.md, modules/taxes/state/module.js, core/math/tax.js, modules/taxes/federal/data/federal.js
+summary: All 50 states and DC in one data file, every figure from the state's own revenue department.
+
+The planned State tax page (`taxes/state`) needs each state's personal income tax as data. Produce `modules/taxes/state/data/states.js` for all 50 states and the District of Columbia, tax years 2025 and 2026, in exactly this shape:
+
+```js
+export const STATES = {
+  CA: {
+    2025: {
+      kind: "brackets",            // "brackets" | "flat" | "none" | "interest-dividends-only" | "capital-gains-only"
+      brackets: { single: [[0, 0.01], [10756, 0.02]], married_joint: [...], married_separate: [...], head_of_household: [...] },
+      standard: { single: 5540, married_joint: 11080, married_separate: 5540, head_of_household: 11080 },   // 0 if none
+      exemption: { personal: 149, dependent: 461, kind: "credit" },   // "deduction" or "credit"
+      startsFrom: "federal-agi",   // "federal-agi" | "federal-taxable" | "own"
+      retirement: { socialSecurityTaxed: false, pensionExclusion: null },   // the state's retirement-income rules, with limits
+      notes: ["mental health services tax: 1% over $1,000,000"],   // anything the simple model leaves out
+      source: "https://... (the revenue department's own rate schedule or form instructions)",
+    },
+    2026: { ... },
+  },
+  TX: { 2025: { kind: "none", source: "..." }, 2026: { kind: "none", source: "..." } },
+};
+```
+
+Rules:
+- Every number comes from the state's revenue department (rate schedule or form instructions), never an aggregator. Where 2026 is not yet published, carry 2025 forward and add `"projected: not yet published"` to `notes`.
+- States that cut rates on a schedule or a revenue trigger (for example Arkansas, Georgia, Indiana, Iowa, Kentucky, Louisiana, Mississippi, Missouri, Nebraska, North Carolina, Ohio, Oklahoma, South Carolina, West Virginia): note the schedule and the trigger.
+- Local income taxes (New York City, Yonkers, Maryland counties, Pennsylvania and Ohio localities, Michigan cities, Indiana counties, Kansas City and St. Louis) go in `notes`; they are not modelled.
+- Washington's capital-gains excise tax and New Hampshire's interest-and-dividends tax (for the years it applies) get their own `kind`.
+
+Then add `tests/state-tax-data.test.mjs`: the shape for every state and year, brackets ascending, rates between 0 and 15%, and one hand-worked return per state that has an income tax. If your tool can run helpers, give each two states; one agent alone is fine too.
+
+---
+id: quick-contribution-limits
+title: Contribution limits, 2015 to 2027, every account type
+size: M
+effort: One agent, about 15 minutes
+to: ChatGPT, Perplexity, Gemini, DeepSeek
+output: data
+read: modules/retirement/contributions/data/limits.js, modules/investments/limits/compute.js, modules/investments/limits/README.md, modules/retirement/contributions/compute.js
+summary: 401(k)/403(b)/457, IRA, Roth phase-outs, HSA, FSA, SIMPLE, SEP, catch-ups, the 60-63 super catch-up.
+
+Extend `modules/retirement/contributions/data/limits.js` so it holds every year from 2015 to 2027. Keep its current shape; add fields if needed, and update the two computes that read it. Cover:
+- the elective deferral limit (401(k), 403(b), governmental 457(b)), the catch-up at 50+, the SECURE 2.0 super catch-up for ages 60 to 63 (from 2025), and the 2026 rule that catch-ups for wages over the threshold must be Roth;
+- the total annual additions limit (415(c)); the SIMPLE IRA limit and its catch-ups; the SEP percentage and dollar cap;
+- the IRA and Roth IRA limit and catch-up; the Roth income phase-out ranges and the deductible-IRA phase-outs, by filing status;
+- the HSA self and family limits and the 55+ catch-up; the health FSA limit and carryover; the dependent-care FSA;
+- the annual gift exclusion (for front-loading a 529).
+
+Cite each year's IRS notice or revenue procedure. A 2027 figure not yet announced on the day you answer is marked projected, with how you projected it. Tests: the table's shape, rising where the law says so, and five hand-checked "room left" cases.
+
+---
+id: quick-rmd-tables
+title: Required minimum distributions: tables, start ages, worked cases
+size: S
+effort: One agent, about 10 minutes
+to: ChatGPT, Gemini, DeepSeek, Perplexity
+output: diff
+read: core/math/rmd.js, modules/retirement/rmd/compute.js, modules/retirement/rmd/README.md, modules/retirement/rmd/module.test.mjs
+summary: Uniform Lifetime, Joint and Last Survivor, Single Life; the SECURE 2.0 start ages.
+
+Check and extend `core/math/rmd.js` against IRS Publication 590-B (the tables in effect from 2022):
+- the full Uniform Lifetime Table (ages 72 to 120+); the Joint and Last Survivor table for a spouse more than ten years younger (at least the rows the app needs, and how to look up the rest); the Single Life table for inherited accounts;
+- the start age by birth date: 70½ (born before July 1, 1949), 72 (born July 1, 1949 to 1950), 73 (born 1951 to 1959), 75 (born 1960 or later); the first-year deadline of April 1 of the following year, and the double withdrawal that deadline creates;
+- the 10-year rule for most non-spouse beneficiaries, and the yearly withdrawals still required when the owner had already started.
+
+Twenty worked cases as tests: the balance on December 31 of the prior year, the age, the divisor and the required withdrawal to the cent.
+
+---
+id: quick-health-cost-tables
+title: Health cost tables: marketplace subsidies and Medicare income surcharges
+size: M
+effort: One agent with web search, about 15 minutes
+to: ChatGPT, Perplexity, Gemini, Claude (2nd account)
+output: data
+read: modules/retirement/healthcare/README.md, modules/retirement/medicare/README.md, docs/DATA_MODEL.md, core/math/tax.js
+summary: Federal poverty guidelines, the subsidy percentages, and the Medicare surcharge (IRMAA) brackets and premiums.
+
+Two planned pages need tables. Produce both as data modules with sources, plus tests that use them:
+1. `modules/retirement/healthcare/data/aca.js`: the federal poverty guidelines (48 states, Alaska, Hawaii) for coverage years 2024 to 2027; the applicable-percentage table for each coverage year (say plainly what happened to the enhanced subsidies after 2025 and to the 400% cliff, with the law and the date); and the income the subsidy counts (modified AGI, which adds back untaxed Social Security and tax-exempt interest).
+2. `modules/retirement/medicare/data/medicare.js`: the Part B standard premium and deductible, the Part D base premium, and the income-related surcharge (IRMAA) brackets for single and joint filers with the two-year look-back on income, for 2024 to 2027. 2027 figures not yet announced are marked projected.
+
+Tests: a 63-year-old couple's subsidy at 150%, 300%, 400% and 450% of the poverty line for a second-lowest-cost silver premium you state, and five surcharge lookups at bracket edges.
+
+---
+id: quick-life-tables
+title: Life tables for "How long to plan for"
+size: S
+effort: One agent, about 10 minutes
+to: ChatGPT, Gemini, DeepSeek, Perplexity
+output: data
+read: modules/retirement/longevity/compute.js, modules/retirement/longevity/README.md, modules/retirement/longevity/module.test.mjs
+summary: The SSA period life table as data, survival for one person and a couple, and how far the page's curve fit drifts from the table.
+
+The longevity page fits a Gompertz curve. Add the real table and measure the fit:
+1. `modules/retirement/longevity/data/ssa-life-table.js`: the latest SSA period life table (from the Trustees Report actuarial tables): the probability of death q(x) at every single age from 0 to 119, male and female, with the table year and the source link.
+2. Survival from any age to every later age, for one person and for a couple (at least one alive), from the table.
+3. For ages 50, 60, 65, 70 and 80: the age with a 50%, 25% and 10% chance of being reached, from the table and from the code's Gompertz fit, and the difference.
+
+Tests from step 3 (the table's values), and a note in the README on when the fit is good enough.
+
+---
+id: quick-glossary
+title: A plain-words glossary of every term the app uses
+size: M
+effort: One agent, about 20 minutes
+to: Muse, ChatGPT, Gemini, Le Chat
+output: data
+read: modules/ai/glossary/README.md, modules/ai/glossary/module.js, docs/MODULE_CATALOG.md
+summary: Definitions a teenager would understand, each linked to the pages that use the term.
+
+The planned page `ai/glossary` needs content. Collect every financial term the app's pages and catalog use (start from the catalog purposes and the usable pages' views) and write `modules/ai/glossary/data/terms.js`: `{ term, aka: [...], plain: "one or two sentences a 15-year-old would understand", example: "a short worked example with invented numbers", pages: ["group/id", ...] }`. At least 120 terms, accurate for US rules, with no circular definitions. Add a test that every page key it names exists in the catalog.

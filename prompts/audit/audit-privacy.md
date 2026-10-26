@@ -3,6 +3,7 @@ id: audit-privacy
 title: Fresh-eyes privacy check of the public repo
 category: audit
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: report
 ---

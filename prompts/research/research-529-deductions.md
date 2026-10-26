@@ -3,6 +3,7 @@ id: research-529-deductions
 title: State tax breaks for 529 college savings
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: data
 ---

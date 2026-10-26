@@ -1,293 +1,237 @@
 # Heavy math
-Long, number-heavy work with little judgement. Best with a model that shows its arithmetic.
+An hour or more of high-volume, mechanical work for a fleet of small models (for example 20 to 50
+Haiku-class workers under one lead). No design decisions: every rule, column and split is spelled out,
+so a worker cannot go wrong by following it. Small table jobs live in Quick.
 
 ---
-id: math-amortization-golden
-title: Fifty golden loan schedules for the debt pages
-size: L
-to: ChatGPT, DeepSeek, Gemini, Claude (2nd account)
-output: diff
-read: core/math/finance.js, core/math/payoff.js, tests/finance.test.mjs, tests/payoff.test.mjs, modules/debt/mortgage/compute.js, modules/debt/refinance/compute.js
-summary: Hand-checked amortisation, extra-payment, biweekly and recast cases.
+id: heavy-federal-tax-grid
+title: Federal income tax for 12,000 invented returns (2024 to 2026)
+size: XL
+effort: A fleet of about 48 small workers (one per year, filing status and income band), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: core/math/tax.js, modules/taxes/federal/data/federal.js, modules/taxes/federal/README.md, modules/taxes/federal/compute.js, tests/tax.test.mjs, core/csv.js
+summary: Every filing status, income mix and threshold, worked from the IRS's own rules into CSV files the tests replay.
 
-Build `tests/amortization-golden.test.mjs` with fifty loan cases worked out independently of the code (show the formula and the key intermediate numbers in a comment for each):
-- rates 0%, 0.01%, 2.75%, 6.5%, 7.25%, 19.99%, 29.99%; terms 12, 36, 60, 180, 360 months; principals from $500 to $1,250,000;
-- the payment (to the cent), total interest, the payoff month, the balance after 12 and after 60 payments, and the final payment, which is smaller and must zero the balance exactly;
-- extra principal every month, a one-time lump sum in month 13, biweekly payments (26 half-payments a year), a recast after a lump sum, and a payment below the monthly interest (never pays off: the code must say so, not loop);
-- the mortgage page's "what an extra $X saves" figures for three of the cases.
+The federal tax engine (`federalTax(inputs, params)` in `core/math/tax.js`, year tables in `modules/taxes/federal/data/federal.js`) has a few dozen hand-worked tests. Give it twelve thousand.
 
-Cross-check each payment against the standard formula `P·r / (1 − (1+r)^−n)` and say which convention the code uses for rounding each month's interest (to the cent or not); the tests must pin that convention.
+**Scope: what the engine covers** (the README's "Edge cases" lists what it leaves out; do not test those): tax years 2024, 2025 and 2026; single, married filing jointly, married filing separately, head of household; wages, taxable interest, ordinary and qualified dividends, short- and long-term capital gains and losses (with the $3,000 loss limit), pensions and IRA distributions, Social Security benefits (the taxable-portion worksheet), the standard deduction with the 65+ and blind additions, the 2025 to 2028 senior deduction and its phase-out, itemized deductions (state and local taxes under that year's cap, mortgage interest, charity), the child tax credit and the credit for other dependents with their phase-outs, the 3.8% net investment income tax and the 0.9% additional Medicare tax.
 
----
-id: math-tvm-excel-parity
-title: PMT, FV, PV, NPER, RATE, NPV, IRR, XIRR: Excel parity
-size: M
-to: ChatGPT, DeepSeek, Gemini, Qwen
-output: diff
-read: core/math/finance.js, core/math/returns.js, tests/finance.test.mjs, tests/returns.test.mjs
-summary: Thirty vectors each, matching spreadsheet semantics and edge cases.
+**Step 1, the lead (about 10 minutes).**
+- Read the input and output objects of `federalTax` and fix one CSV layout: `case_id, year, filing_status, age_1, age_2, blind_1, blind_2, kids_under_17, other_dependents, wages, interest, ordinary_dividends, qualified_dividends, st_gain, lt_gain, pensions, ira_distributions, social_security, salt_paid, mortgage_interest, charity`, then the expected results `agi, taxable_social_security, deduction, taxable_income, ordinary_tax, capital_gains_tax, credits, niit, additional_medicare, total_tax, marginal_rate`, then `note`.
+- Write one rules sheet with each year's figures copied from the IRS's own documents: Rev. Proc. 2023-34 (2024), Rev. Proc. 2024-40 plus the July 2025 law's changes (2025), Rev. Proc. 2025-32 (2026). It covers brackets, standard deductions and additions, capital-gains thresholds, Social Security base amounts, credit amounts and phase-outs, the NIIT and additional Medicare thresholds, the SALT cap and its phase-down, and the senior deduction. Wherever `federal.js` differs from the IRS figure, that difference goes first in your answer.
+- Give every worker the layout, the rules sheet and its shard.
 
-People check this app against spreadsheets. For every time-value function in `core/math/finance.js` and `core/math/returns.js`, write thirty test vectors whose expected values follow Excel/LibreOffice semantics exactly (sign convention: money paid out is negative; `type` 0 = end of period, 1 = beginning):
-- ordinary cases, rate 0, `type` 1, negative rates, very long horizons (600 periods);
-- RATE and IRR with a guess, a cash-flow series with no sign change (must return an error or `null`, state which the code does), and a series with two real IRRs (say which one is returned and why);
-- XIRR with irregular dates across a leap day, a first flow that is not the earliest date, and same-day flows.
+**Step 2, the workers (in parallel).** 48 shards: 3 years × 4 filing statuses × 4 income bands (under $50,000; $50,000 to $150,000; $150,000 to $400,000; over $400,000 up to $5,000,000). Each worker writes 250 rows for its shard:
+- 100 grid rows, incomes spread evenly through the band, the mix rotating through wages only, wages plus investment income, retirement income (pension, IRA, Social Security) and everything at once;
+- 100 edge rows: exactly at, $1 below and $1 above every bracket edge, capital-gains threshold, Social Security base amount, credit phase-out start and end, NIIT threshold, senior-deduction phase-out and SALT phase-down point that falls inside the band;
+- 50 random rows, every field drawn at random within the band.
 
-Where the code's convention differs from Excel's on purpose, keep the code and write the test for the code's convention with a comment saying how Excel differs. Values to at least 1e-9 relative.
+Work each expected value from the rules sheet and the IRS worksheets (Qualified Dividends and Capital Gain Tax Worksheet, Social Security Benefits Worksheet, Schedule 8812, Forms 8960 and 8959). A calculator, or a short script you write yourself from the rules sheet, is fine. **Never run, import or copy the repo's code**: the point is an independent answer key. Use the same rounding in every row (exact cents, or whole dollars as the forms allow) and say which.
 
----
-id: math-federal-tax-vectors
-title: Forty federal returns worked by hand (2024 to 2026)
-size: L
-to: ChatGPT, Gemini, Claude (2nd account), DeepSeek
-output: diff
-read: core/math/tax.js, modules/taxes/federal/data/federal.js, modules/taxes/federal/README.md, modules/taxes/federal/compute.js, tests/tax.test.mjs, tests/tax-pages.test.mjs
-summary: Brackets, capital-gains stacking, Social Security taxability, credits, NIIT, senior deduction.
+**Step 3, the workers.** Re-derive every tenth row a second way (by hand if the first pass was a script, by script if it was by hand). Fix the row, or flag it in `note`.
 
-Write forty invented households and work each one's federal income tax by hand for tax years 2024, 2025 and 2026 (2026 from IRS Rev. Proc. 2025-32), following the IRS worksheets, and add them as tests in `tests/tax-vectors.test.mjs`:
-- every filing status; wages only; wages plus qualified dividends and long-term gains that straddle the 0%/15% and 15%/20% thresholds (the Qualified Dividends and Capital Gain Tax Worksheet); a short-term loss larger than $3,000 with carryover;
-- Social Security benefits at the 0%, 50% and 85% taxable zones (the Social Security Benefits Worksheet), with and without a pension;
-- the additional standard deduction for 65+ and blind, and the 2025 to 2028 senior deduction with its phase-out;
-- child tax credit and credit for other dependents, including the phase-out;
-- net investment income tax (3.8%) and the additional Medicare tax (0.9%);
-- itemized vs standard deduction, including the SALT cap for the year in question.
-
-For each case show taxable income, the tax before credits, credits, other taxes and the total, with the worksheet lines. If the code disagrees, mark the test `todo` with the line where you think the code is wrong, and lead your answer with those.
+**Step 4, the lead.**
+- Re-derive a 2% sample yourself; redo any shard with an error in it.
+- Deliver `tests/golden/taxes/federal-<year>.csv` (one per year) and `tests/golden-federal.test.mjs`. The test reads each CSV with `parseCsv` from `core/csv.js`, maps the columns to `federalTax`'s inputs and asserts every result within $1.
+- A row where the engine disagrees stays in the CSV and becomes a `{ todo: "<reason>" }` test. Put those first in your answer with the worked numbers: they are the point of the exercise.
 
 ---
-id: math-state-tax-northeast
-title: State income tax tables, Northeast and DC (2025, 2026)
-size: L
-to: ChatGPT, Gemini, Perplexity, Claude (2nd account)
-output: data
-read: docs/DATA_MODEL.md, modules/taxes/state/README.md, core/math/tax.js, modules/taxes/federal/data/federal.js
-summary: CT, DE, DC, ME, MD, MA, NH, NJ, NY, PA, RI, VT as data with sources.
+id: heavy-state-tax-grid
+title: State income tax for every state: an answer key of 40,000 rows (2025, 2026)
+size: XL
+effort: A fleet of 51 small workers (one per state and DC), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: modules/taxes/state/README.md, modules/taxes/state/module.js, core/math/tax.js, core/csv.js, docs/DATA_MODEL.md
+summary: Each state's tax on a grid of incomes and households, worked from the state's own forms, ready to test the State tax page.
 
-The planned page `taxes/state` needs each state's personal income tax as data. Produce `modules/taxes/state/data/northeast.js` for Connecticut, Delaware, District of Columbia, Maine, Maryland, Massachusetts, New Hampshire, New Jersey, New York, Pennsylvania, Rhode Island and Vermont, tax years 2025 and 2026, in exactly this shape:
+The State tax page (`taxes/state`) is planned; its tables come from the Quick prompt `quick-state-tax-tables`. This job builds, independently of those tables, the answer key the page will be tested against.
 
-```js
-export const STATES = {
-  NY: {
-    2025: {
-      kind: "brackets",            // "brackets" | "flat" | "none" | "interest-dividends-only"
-      brackets: { single: [[0, 0.04], [8500, 0.045]], married_joint: [...], married_separate: [...], head_of_household: [...] },
-      standard: { single: 8000, married_joint: 16050, ... },   // 0 if the state has none
-      exemption: { personal: 0, dependent: 1000 },              // per person
-      startsFrom: "federal-agi",   // or "federal-taxable" or "own"
-      notes: ["recapture of lower brackets above $107,650 AGI"], // anything the simple model leaves out
-      source: "https://... (the revenue department's own page or form instructions)",
-    },
-    2026: { ... },
-  },
-};
-```
+**Step 1, the lead.** Fix one CSV layout: `case_id, state, year, filing_status, age_1, age_2, dependents, federal_agi, federal_taxable_income, wages, social_security, pension, lt_gain, state_taxable_income, state_tax_before_credits, state_credits, state_tax, note`. Brief every worker with it and the rules below.
 
-Rules: every number from the state's revenue department (form instructions or rate schedule), not an aggregator; where 2026 is not yet published, carry 2025 forward and add `"projected: not yet published"` to `notes`. Mark local income taxes (New York City, Yonkers, Maryland counties, Pennsylvania local earned-income tax) in `notes` instead of modelling them. Then add `tests/state-tax-data.test.mjs` checking the shape and three hand-worked returns per state.
+**Step 2, the workers (one per state and DC).** For tax years 2025 and 2026, write about 850 rows:
+- 4 filing statuses × 100 income points from $0 to $1,000,000 (denser around the state's bracket edges, and each edge exactly) × 2 households (no dependents and under 65; two dependents);
+- 50 retiree rows (65 and over, Social Security and a pension) that exercise the state's retirement-income exclusions.
 
----
-id: math-state-tax-midwest
-title: State income tax tables, Midwest (2025, 2026)
-size: L
-to: ChatGPT, Gemini, Perplexity, DeepSeek
-output: data
-read: docs/DATA_MODEL.md, modules/taxes/state/README.md, core/math/tax.js, modules/taxes/federal/data/federal.js
-summary: IL, IN, IA, KS, MI, MN, MO, NE, ND, OH, SD, WI as data with sources.
+Rules for every worker:
+- Work every row from that state revenue department's own form instructions and rate schedule for that year. Never use an aggregator site, and never the repo's tables or code. Cite the form in a comment line at the top of your shard.
+- Where 2026 is not yet published, use 2025 and put `projected` in `note`.
+- States with no wage income tax need only a short shard confirming $0, plus their special cases (Washington's capital-gains excise tax; New Hampshire's interest-and-dividends tax for the years it applies).
+- Local income taxes (New York City, Yonkers, Maryland counties, Pennsylvania, Ohio and Michigan localities and so on) are out: state tax only.
 
-Same task and the same data shape as the Northeast prompt (copied here so this one stands alone). Produce `modules/taxes/state/data/midwest.js` for Illinois, Indiana, Iowa, Kansas, Michigan, Minnesota, Missouri, Nebraska, North Dakota, Ohio, South Dakota and Wisconsin, tax years 2025 and 2026:
+**Step 3, the workers.** Re-derive every tenth row a second way; fix or flag.
 
-```js
-export const STATES = {
-  OH: {
-    2025: {
-      kind: "brackets",            // "brackets" | "flat" | "none" | "interest-dividends-only"
-      brackets: { single: [[0, 0], [26050, 0.0275]], married_joint: [...], married_separate: [...], head_of_household: [...] },
-      standard: { single: 0, married_joint: 0, ... },
-      exemption: { personal: 0, dependent: 0 },
-      startsFrom: "federal-agi",   // or "federal-taxable" or "own"
-      notes: ["municipal income taxes not modelled"],
-      source: "https://... (the revenue department's own page or form instructions)",
-    },
-    2026: { ... },
-  },
-};
-```
-
-Every number from the state's revenue department; where 2026 is not yet published, carry 2025 forward and note `"projected: not yet published"`. Watch the states that cut rates on a schedule (Iowa, Nebraska, Indiana, Missouri, Ohio) and note the trigger rules. Local taxes (Ohio cities, Michigan cities, Indiana counties, Missouri's two cities) go in `notes`. Add tests: shape plus three hand-worked returns per state.
+**Step 4, the lead.**
+- Re-derive a 2% sample; redo any shard with an error.
+- Deliver `tests/golden/taxes/state-<code>.csv` per state and `tests/golden-state.test.mjs`. It runs each row through `modules/taxes/state/compute.js` once that page exists, and until then skips with a message saying so.
 
 ---
-id: math-state-tax-south
-title: State income tax tables, South (2025, 2026)
-size: L
-to: ChatGPT, Gemini, Perplexity, Claude (2nd account)
-output: data
-read: docs/DATA_MODEL.md, modules/taxes/state/README.md, core/math/tax.js, modules/taxes/federal/data/federal.js
-summary: AL, AR, FL, GA, KY, LA, MS, NC, OK, SC, TN, TX, VA, WV as data with sources.
+id: heavy-loan-schedules
+title: Twenty thousand loans worked to the cent
+size: XL
+effort: A fleet of about 40 small workers (one per rate band and loan kind), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: core/math/finance.js, core/math/payoff.js, modules/debt/mortgage/README.md, modules/debt/payoff/README.md, modules/debt/refinance/README.md, tests/finance.test.mjs, core/csv.js
+summary: Payment, interest, payoff month and balances for every kind of loan and extra payment, plus 500 full month-by-month schedules.
 
-Same task and data shape as the other state prompts. Produce `modules/taxes/state/data/south.js` for Alabama, Arkansas, Florida, Georgia, Kentucky, Louisiana, Mississippi, North Carolina, Oklahoma, South Carolina, Tennessee, Texas, Virginia and West Virginia, tax years 2025 and 2026:
+**Step 1, the lead.**
+- Find out how `core/math/finance.js` and `core/math/payoff.js` round each month's interest and the final payment. The comments and the debt READMEs say; if they do not, read the code for that convention only, and state it.
+- Write one rules sheet: the payment `P·r / (1 − (1 + r)^−n)` with `r` = annual rate / 12; the rounding convention; extra payments applied after the month's interest, in the same month; biweekly as the mortgage README defines it; a recast as a new payment over the remaining term after a lump sum.
+- CSV layout: `case_id, principal, annual_rate, term_months, extra_monthly, lump_sum, lump_month, schedule (monthly|biweekly), recast (0|1), payment, total_interest, payoff_month, balance_12, balance_60, balance_120, final_payment, note`.
 
-```js
-export const STATES = {
-  GA: {
-    2025: {
-      kind: "flat",                // "brackets" | "flat" | "none" | "interest-dividends-only"
-      brackets: { single: [[0, 0.0519]], married_joint: [[0, 0.0519]], married_separate: [[0, 0.0519]], head_of_household: [[0, 0.0519]] },
-      standard: { single: 12000, married_joint: 24000, ... },
-      exemption: { personal: 0, dependent: 4000 },
-      startsFrom: "federal-agi",
-      notes: [],
-      source: "https://... (the revenue department's own page or form instructions)",
-    },
-    2026: { ... },
-  },
-  TX: { 2025: { kind: "none", source: "..." }, 2026: { kind: "none", source: "..." } },
-};
-```
+**Step 2, the workers.** 40 shards: 8 rate bands (0%; 0.01 to 3%; 3 to 5%; 5 to 7%; 7 to 10%; 10 to 18%; 18 to 30%; payments below the month's interest) × 5 loan kinds (plain; extra every month; one lump sum; biweekly; lump sum then recast). Each worker writes:
+- 500 rows with principals from $500 to $2,000,000 and terms from 6 to 480 months;
+- every edge: a 0% rate, a one-month term, an extra payment that pays the loan off the next month, and a payment below the interest that must never pay off (`payoff_month` = `never`);
+- 12 full month-by-month schedules in their own CSV (`month, payment, interest, principal, extra, balance`).
 
-Every number from the state's revenue department; 2026 carried forward with `"projected: not yet published"` where needed. Several of these states moved to flat taxes or cut rates on triggers (Georgia, Louisiana, Mississippi, North Carolina, Arkansas, Kentucky, West Virginia, Oklahoma, South Carolina): note each schedule. Retirement-income exclusions that matter to retirees (pension and Social Security exclusions) go in a `retirement` field as plain data with the rule's limits. Tests: shape plus three hand-worked returns per state with an income tax.
+Work each from the rules sheet with your own arithmetic or your own short script, never the repo's code.
+
+**Step 3, the workers.** Every tenth row a second way; fix or flag.
+
+**Step 4, the lead.** Sample 2% yourself. Deliver `tests/golden/debt/loans.csv`, `tests/golden/debt/schedules/<case_id>.csv` and `tests/golden-loans.test.mjs`, checking `core/math/finance.js` and `core/math/payoff.js` to the cent. Disagreements become `todo` tests and lead your answer.
 
 ---
-id: math-state-tax-west
-title: State income tax tables, West (2025, 2026)
-size: L
-to: ChatGPT, Gemini, Perplexity, DeepSeek
-output: data
-read: docs/DATA_MODEL.md, modules/taxes/state/README.md, core/math/tax.js, modules/taxes/federal/data/federal.js
-summary: AK, AZ, CA, CO, HI, ID, MT, NV, NM, OR, UT, WA, WY as data with sources.
+id: heavy-spreadsheet-parity
+title: Ten thousand spreadsheet cases: PMT, PV, FV, NPER, RATE, NPV, IRR, XIRR
+size: XL
+effort: A fleet of about 40 small workers (five per function), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: core/math/finance.js, core/math/returns.js, tests/finance.test.mjs, tests/returns.test.mjs, core/csv.js
+summary: Every time-value function against Excel's own rules, including the awkward cases people hit in real spreadsheets.
 
-Same task and data shape as the other state prompts. Produce `modules/taxes/state/data/west.js` for Alaska, Arizona, California, Colorado, Hawaii, Idaho, Montana, Nevada, New Mexico, Oregon, Utah, Washington and Wyoming, tax years 2025 and 2026:
+People check this app against spreadsheets, so its time-value functions should give Excel's answers.
 
-```js
-export const STATES = {
-  CA: {
-    2025: {
-      kind: "brackets",            // "brackets" | "flat" | "none" | "interest-dividends-only" | "capital-gains-only"
-      brackets: { single: [[0, 0.01], [10756, 0.02]], married_joint: [...], married_separate: [...], head_of_household: [...] },
-      standard: { single: 5540, married_joint: 11080, ... },
-      exemption: { personal: 149, dependent: 461, kind: "credit" },   // say whether it is a deduction or a credit
-      startsFrom: "federal-agi",
-      notes: ["mental health services tax: 1% over $1,000,000"],
-      source: "https://... (the revenue department's own page or form instructions)",
-    },
-    2026: { ... },
-  },
-  WA: { 2025: { kind: "capital-gains-only", ... } },
-};
-```
+**Step 1, the lead.** Write the rules sheet with Excel's definitions:
+- the sign convention: money paid out is negative; `type` 0 is the end of the period, 1 the beginning;
+- the closed forms for PMT, PV, FV and NPER, including `type` 1 and a rate of exactly 0;
+- NPV discounts the first value by one period;
+- RATE and IRR use Newton's method from a guess of 0.1, and give an error when the flows never change sign;
+- XIRR counts actual days over 365 from the first date in the list.
 
-Every number from the state's revenue department; 2026 carried forward with `"projected: not yet published"` where needed. Washington's capital-gains excise tax and Hawaii's many brackets need care; Oregon and California index brackets yearly. Tests: shape plus three hand-worked returns per state with an income tax.
+Then fix one CSV layout per function: the arguments in Excel's order, then `expected, note`.
 
----
-id: math-contribution-limits-history
-title: Contribution limits, 2015 to 2027, every account type
-size: M
-to: ChatGPT, Perplexity, Gemini, DeepSeek
-output: data
-read: modules/retirement/contributions/data/limits.js, modules/investments/limits/compute.js, modules/investments/limits/README.md, modules/retirement/contributions/compute.js
-summary: 401(k)/403(b)/457, IRA, Roth phase-outs, HSA, FSA, SIMPLE, SEP, catch-ups, 60-63 super catch-up.
+**Step 2, the workers.** 8 functions × 5 workers × 250 rows = 10,000 rows:
+- ordinary grids: rates from −5% to 50% a period, 1 to 600 periods, tiny and huge amounts;
+- a rate of exactly 0 and `type` 1 for every function that takes them;
+- each function's awkward cases. For RATE and IRR: flows with no sign change (error), and two sign changes with two real roots (the root Excel returns from guess 0.1). For XIRR: dates across a leap day, a first flow that is not the earliest date, and same-day flows.
 
-Extend `modules/retirement/contributions/data/limits.js` so it holds every year from 2015 to 2027 (keep its current shape; add fields if needed and update the two computes that read it):
-- elective deferral limit (401(k), 403(b), governmental 457(b)), catch-up at 50+, the SECURE 2.0 super catch-up for ages 60 to 63 (from 2025), and the 2026 rule that catch-ups for wages over the threshold must be Roth;
-- total annual additions limit (415(c)); SIMPLE IRA and its catch-ups; SEP percentage and dollar cap;
-- IRA and Roth IRA limit and catch-up; the Roth income phase-out ranges and the deductible-IRA phase-outs, by filing status;
-- HSA self and family limits and the 55+ catch-up; health FSA limit and carryover; dependent-care FSA;
-- the annual gift exclusion (for 529 front-loading).
+Expected values come from Excel's formulas, worked with your own arithmetic or script, or with LibreOffice Calc if your tool can run it. Never use the repo's code. 10 significant digits.
 
-Each year with its IRS notice or revenue procedure. 2027 figures not yet announced on the day you answer: mark them projected and say how you projected them. Tests: the table's shape, monotonic where the law says so, and five hand-checked "room left" cases.
+**Step 3, the workers.** Every tenth row a second way.
+
+**Step 4, the lead.** Sample 2%. Deliver `tests/golden/finance/<function>.csv` and `tests/golden-finance.test.mjs` (relative tolerance 1e-9). Where the code differs from Excel on purpose, the test asserts the code's convention and the row's `note` says how Excel differs. Unintended differences become `todo` tests and lead your answer.
 
 ---
-id: math-monte-carlo-validation
-title: Prove the Monte Carlo engine is statistically sound
-size: L
-to: ChatGPT, Gemini, DeepSeek, Claude (2nd account)
-output: diff
-read: core/math/montecarlo.js, tests/montecarlo.test.mjs, modules/retirement/monte-carlo/compute.js, modules/retirement/monte-carlo/README.md, core/math/retirement.js
-summary: Seed reproducibility, zero volatility, moments, convergence, success-rate error bars.
+id: heavy-social-security-grid
+title: Social Security for 2,000 invented work histories at every claiming age
+size: XL
+effort: A fleet of 40 small workers (50 histories each), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: modules/retirement/social-security/compute.js, modules/retirement/social-security/data/ssa.js, modules/retirement/social-security/README.md, modules/retirement/social-security/module.test.mjs, core/csv.js
+summary: Earnings records to monthly benefits at every claiming age from 62 to 70, plus spousal and survivor amounts, from the SSA's own rules.
 
-Write `tests/montecarlo-stats.test.mjs` that checks the random-return engine the way a statistician would, using fixed seeds so the tests are deterministic:
-- the same seed gives identical paths; different seeds give different ones;
-- zero volatility reproduces the deterministic compound-growth path exactly;
-- over 20,000 draws, the sample mean and standard deviation of annual (log or simple, whichever the code draws) returns fall inside 99.9% confidence intervals around the configured values; skew and kurtosis match the distribution the code claims (lognormal or normal: say which it is);
-- if stocks and bonds are drawn jointly, the sample correlation matches the configured one;
-- the success rate converges: the difference between 5,000 and 20,000 paths is inside the binomial standard error, and the page could show that error (give the formula `sqrt(p(1-p)/n)` and a test of a helper that returns it).
+**Step 1, the lead.** Write the rules sheet from the Social Security Administration's own pages, linking each:
+- the national average wage index series, and the taxable maximum by year;
+- AIME: the 35 highest years, earnings indexed to the year the person turns 60 and not indexed after that;
+- PIA: 90%, 32% and 15% of AIME across the bend points of the year the person turns 62, rounded down to the dime; then cost-of-living raises from 62 on;
+- full retirement age by birth year;
+- claiming early: 5/9 of 1% per month for the first 36 months, 5/12 of 1% beyond that;
+- claiming late: 2/3 of 1% per month (8% a year), up to 70;
+- spousal benefit: up to 50% of the worker's PIA, reduced for early claiming (25/36 of 1% and 5/12 of 1% per month), with no delayed credits;
+- the survivor benefit rules.
 
-If any check fails, find out why and say so before proposing a fix.
+Then two CSV layouts:
+- `histories.csv`: `history_id, birth_date`, then one column of covered earnings per year from 1966 to 2030;
+- `benefits.csv`: `history_id, claim_age_years, claim_age_months, aime, pia, monthly_benefit, spousal_at_same_age, survivor, note`.
 
----
-id: math-rmd-tables
-title: Required minimum distributions: tables, start ages, worked cases
-size: M
-to: ChatGPT, Gemini, DeepSeek, Perplexity
-output: diff
-read: core/math/rmd.js, modules/retirement/rmd/compute.js, modules/retirement/rmd/README.md, modules/retirement/rmd/module.test.mjs
-summary: Uniform Lifetime, Joint and Last Survivor, Single Life; SECURE 2.0 start ages.
+**Step 2, the workers.** Each invents 50 histories:
+- birth years 1950 to 1995;
+- patterns: steady, rising, a late start, gaps, part-time, at the taxable maximum, under 35 years of work, too few credits to qualify, and a high earner above the maximum.
 
-Check and extend `core/math/rmd.js` against IRS Publication 590-B (tables in effect from 2022):
-- the full Uniform Lifetime Table (ages 72 to 120+), the Joint and Last Survivor table for a spouse more than ten years younger (at least the rows the app needs, with how to look up the rest), and the Single Life table for inherited accounts;
-- start age by birth date: 70½ (born before July 1, 1949), 72 (born July 1, 1949 to 1950), 73 (born 1951 to 1959), 75 (born 1960 or later), with the first-year deadline of April 1 of the following year and the double-distribution trap that creates;
-- the 10-year rule for most non-spouse beneficiaries and the annual-RMD requirement when the owner had already started.
+For each history, compute the benefit at every claiming age from 62y0m to 70y0m in 3-month steps (33 rows), plus the spousal and survivor amounts. Use the SSA's figures, never the repo's `ssa.js` or code. Your own script written from the rules sheet is fine.
 
-Twenty worked cases as tests: balance on December 31 of the prior year, age, divisor, RMD to the cent.
+**Step 3, the workers.** Every tenth history a second way.
 
----
-id: math-social-security-vectors
-title: Social Security benefit math: twenty-five worked cases
-size: L
-to: ChatGPT, Gemini, Claude (2nd account), DeepSeek
-output: diff
-read: modules/retirement/social-security/compute.js, modules/retirement/social-security/data/ssa.js, modules/retirement/social-security/README.md, modules/retirement/social-security/module.test.mjs
-summary: AWI indexing, bend points, PIA rounding, early and delayed claiming, spousal, earnings test.
-
-Verify `modules/retirement/social-security` against the SSA's own rules and add twenty-five hand-worked tests:
-- AIME from a 35-year earnings record indexed by the average wage index of the year the person turns 60 (and not indexed after 60), with the taxable maximum per year;
-- PIA from the bend points of the year of eligibility (age 62), each factor applied and the result rounded down to the dime, then COLAs from 62 onward;
-- benefit at every claiming age from 62 to 70 by month: 5/9 of 1% for the first 36 months early, 5/12 of 1% beyond, 8%/year delayed credits up to 70, with full retirement age by birth year;
-- spousal benefit (up to 50% of the worker's PIA, reduced if claimed early, no delayed credits) and the survivor benefit;
-- the earnings test before full retirement age (2025 to 2027 thresholds) and how withheld months are credited back.
-
-Use the data in `data/ssa.js` where it covers the year; say which tables are missing. For each case show the arithmetic.
+**Step 4, the lead.** Sample 2%. Wherever `data/ssa.js` differs from the SSA's figures, say so first. Deliver `tests/golden/retirement/ss-histories.csv`, `ss-benefits.csv` and `tests/golden-social-security.test.mjs`, which checks the page's compute to the dime. Disagreements become `todo` tests.
 
 ---
-id: math-aca-irmaa-tables
-title: Health cost tables: ACA subsidy and Medicare income surcharges
-size: M
-to: ChatGPT, Perplexity, Gemini, Claude (2nd account)
-output: data
-read: modules/retirement/healthcare/README.md, modules/retirement/medicare/README.md, docs/DATA_MODEL.md, core/math/tax.js
-summary: Federal poverty guidelines, applicable percentages, IRMAA brackets and premiums.
+id: heavy-retirement-replays
+title: Every retirement start year since 1871: about 100,000 historical replays
+size: XL
+effort: A fleet of 33 small workers (one per stock mix and length of retirement), about an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+read: modules/retirement/historical/README.md, modules/retirement/historical/compute.js, modules/retirement/historical/data/returns.js, modules/investments/backtest/data/shiller.js, modules/investments/backtest/README.md, core/csv.js
+summary: Whether the money lasts, the ending balance and the worst point, for every start year, withdrawal rate, stock mix and length of retirement.
 
-Two planned pages need tables. Produce both as data modules with sources, plus tests that use them:
-1. `modules/retirement/healthcare/data/aca.js`: federal poverty guidelines (48 states, Alaska, Hawaii) for the coverage years 2024 to 2027; the applicable-percentage table for each coverage year (say plainly what happened to the enhanced subsidies after 2025 and the 400% cliff, with the law and date); the definition of household income for the subsidy (modified AGI including untaxed Social Security and tax-exempt interest).
-2. `modules/retirement/medicare/data/medicare.js`: Part B standard premium and deductible, Part D base premium, and the IRMAA brackets (single and joint, with the two-year look-back on MAGI) and surcharges for 2024 to 2027; the 2027 figures marked projected if not yet announced.
+The historical page answers "would my plan have survived every real start year?". This job builds the whole answer table independently, so the page can be checked against it.
 
-Tests: a 63-year-old couple's subsidy at 150%, 300%, 400% and 450% of the poverty line for the second-lowest-cost silver plan premium you assume, and five IRMAA lookups at bracket edges.
+**Step 1, the lead.**
+- Copy the conventions word for word from `modules/retirement/historical/README.md` into the rules sheet: when in the year the withdrawal happens, how it grows with inflation, yearly rebalancing, which series stand for stocks, bonds and cash, and any fees.
+- The data is given, not tested: the yearly series in `modules/retirement/historical/data/returns.js` for 1928 to 2025, and for 1871 to 1927 the yearly series built from `modules/investments/backtest/data/shiller.js` as its README describes.
+- CSV layout, with a starting balance of 1,000,000: `start_year, years, withdrawal_rate, stock_share, lasted (0|1), years_lasted, ending_real_balance, lowest_real_balance, lowest_year, note`.
 
----
-id: math-historical-returns-check
-title: Check the historical return data and the 4% rule replays
-size: L
-to: ChatGPT, Gemini, DeepSeek, Claude (2nd account)
-output: diff
-read: modules/retirement/historical/data/returns.js, modules/investments/backtest/data/shiller.js, modules/retirement/historical/compute.js, modules/investments/backtest/compute.js, tools/extract-history.py, tools/extract-shiller.py
-summary: Damodaran 1928-2025 and Shiller 1871- against their sources; Trinity-style success rates.
+**Step 2, the workers.** One per stock share (0%, 10%, ... 100%) × length of retirement (20, 30, 40 years) = 33 workers. Each replays every start year that has enough data, for withdrawal rates from 2.0% to 8.0% in 0.25% steps (25 rates): about 3,000 rows each. Use your own short script written from the rules sheet, never the repo's code.
 
-The historical pages replay real years. Check the data and the replays:
-1. Compare `modules/retirement/historical/data/returns.js` (Damodaran, 1928 to 2025: stocks, T-bills, T-bonds, inflation) and `modules/investments/backtest/data/shiller.js` against the published source files: list any year that differs by more than 0.05 percentage points and say which value is right.
-2. Compute by hand (show your method) the compound annual growth, worst year, best year and deepest peak-to-trough fall for 100% stocks, 60/40 and 40/60 over the full span.
-3. Replay a 30-year retirement with 4% of the starting balance, raised with inflation, for every start year with 30 years of data, for 50/50 and 75/25 mixes: the share of start years where the money lasts. Compare with the Trinity study and Bengen (1994), and explain differences (data source, rebalancing, fees, monthly vs yearly).
+**Step 3, the workers.** Recompute 30 random rows year by year by hand, shown, to prove the script.
 
-Turn steps 2 and 3 into tests for the two pages' computes.
+**Step 4, the lead.**
+- Build the success-rate table (the share of start years whose money lasted) for every rate × mix × length.
+- Compare it with the Trinity study (1998, updated 2011) and Bengen (1994) where they overlap, and explain the gaps (data, rebalancing, timing, fees).
+- Deliver `tests/golden/retirement/replays-<years>.csv` and `tests/golden-historical.test.mjs`, which checks `modules/retirement/historical/compute.js` on a 1% sample of rows (all of them if that runs in under ten seconds). Disagreements become `todo` tests and lead your answer.
 
 ---
-id: math-longevity-tables
-title: Life tables for "How long to plan for"
-size: M
-to: ChatGPT, Gemini, DeepSeek, Perplexity
-output: data
-read: modules/retirement/longevity/compute.js, modules/retirement/longevity/README.md, modules/retirement/longevity/module.test.mjs
-summary: The SSA period life table as data, joint survival, and how far the Gompertz fit drifts.
+id: heavy-historical-data-audit
+title: Check every number in the historical return tables against the original files
+size: XL
+effort: A fleet of 16 small workers (one per decade), about half an hour
+to: Claude Code, Codex, Gemini CLI, ChatGPT
+output: report
+read: modules/retirement/historical/data/returns.js, modules/investments/backtest/data/shiller.js, tools/extract-history.py, tools/extract-shiller.py, modules/retirement/historical/README.md
+summary: About 10,000 data points (yearly 1928 to 2025, monthly from 1871) compared one by one with Damodaran's and Shiller's published files.
 
-The longevity page fits a Gompertz curve. Add the real table and measure the fit:
-1. `modules/retirement/longevity/data/ssa-life-table.js`: the latest SSA period life table (from the Trustees Report actuarial tables): death probability q(x) by single age 0 to 119, male and female, with the table year and source link.
-2. Survival from any age to every later age, single and joint (at least one of a couple alive), from the table.
-3. For ages 50, 60, 65, 70 and 80: the age with a 50%, 25% and 10% chance of being reached, from the table and from the code's Gompertz fit, and the difference.
+Every historical page rests on two data files. This job compares every value in them with the published originals.
 
-Tests from step 3 (table values) and a note in the README on when the fit is good enough.
+**Step 1, the lead.** Fetch the source files the two extract scripts name (Damodaran's `histretSP` spreadsheet and Shiller's `ie_data` spreadsheet). Note each file's version date. Give each worker its decade of rows, from both the repo files and the sources.
+
+**Step 2, the workers (one per decade, 1870s to 2020s).**
+- Compare every value: stocks, T-bills, T-bonds and inflation from Damodaran; price, dividend, earnings, CPI and the long rate from Shiller.
+- List each difference larger than 0.01 percentage points (0.01 on an index level), with both values and a verdict: a typo, a later revision of the source, or a units mix-up.
+
+**Step 3, the lead.**
+- Merge the lists.
+- For every confirmed error, give the corrected value and the fix, as a change to the extract script if the error is systematic, otherwise to the data file.
+- Add `tests/historical-data.test.mjs`, pinning 50 spot values per series to their source cells.
+
+---
+id: heavy-households-verify
+title: Recompute the key figures for the 1,400 pretend households
+size: XL
+effort: A fleet of 14 to 28 small workers (one or two per household type), about an hour
+to: Claude Code, Codex, Gemini CLI
+output: report
+read: qa/households/README.md, qa/households/INDEX.md, qa/households/lib/catalog.mjs, qa/households/lib/expect.mjs, qa/households/run.mjs, qa/households/01-single-adult/base/H-0001-base.md
+summary: Net worth, monthly income and spending, emergency-fund months, debt payoff dates and goal status, worked by hand for every failing case and a sample of the passing ones.
+
+`qa/households/` holds 1,400 invented households (14 types × 100 variations). Alongside them, `lib/expect.mjs` holds the tester's own math for what each page should show, and `run.mjs` compares the app against it. Some cases fail.
+
+**Step 1, the lead.** Read `lib/expect.mjs` and turn each figure it checks into a plain rule, with its formula, rounding and the page it belongs to. That rules sheet is every worker's brief. Then give each worker one type folder (`01-single-adult` ... `14-unusual-structures`); a big folder can go to two workers.
+
+**Step 2, the workers.** Recompute by hand, from the case file and the rules sheet, every figure the case lists. Cover the base case, every case whose `INDEX.md` status is `fail`, and 10 random passing cases. Decide each disagreement:
+- the app is wrong: a bug in the app;
+- `expect.mjs` is wrong: a wrong expectation;
+- the case asks for something the rules do not define: undefined.
+
+Report one row per figure: `case_id, figure, app_value, expect_value, your_value, verdict, one-line reason`.
+
+**Step 3, the lead.**
+- Group the verdicts by root cause; one bug usually explains many cases.
+- For each app bug, give a diff to the page's compute with a test.
+- For each wrong expectation, give a diff to `lib/expect.mjs`.
+- For each undefined case, write the decision into the case catalog.
+
+Deliver the root-cause table first. The cases' `results/` folder is not in the repo, so reason from the case files and the code.

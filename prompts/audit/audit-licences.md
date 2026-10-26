@@ -3,6 +3,7 @@ id: audit-licences
 title: Licence and attribution audit for a public MIT repo
 category: audit
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, Perplexity
 output: report
 ---

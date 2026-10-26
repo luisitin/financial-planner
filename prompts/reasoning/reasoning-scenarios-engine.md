@@ -3,6 +3,7 @@ id: reasoning-scenarios-engine
 title: What-if scenarios that every page understands
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: diff
 ---

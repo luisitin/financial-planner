@@ -3,6 +3,7 @@ id: audit-performance
 title: Performance on a mid-range phone
 category: audit
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: report
 ---

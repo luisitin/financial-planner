@@ -3,6 +3,7 @@ id: reasoning-ai-guardrails
 title: Guardrails for the AI features
 category: reasoning
 size: M
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini, Muse
 output: report
 ---

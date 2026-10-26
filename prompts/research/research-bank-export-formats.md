@@ -3,6 +3,7 @@ id: research-bank-export-formats
 title: What the big banks' export files really look like
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, ChatGPT, Gemini, Grok
 output: diff
 ---

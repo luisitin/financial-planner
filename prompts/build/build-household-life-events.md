@@ -3,6 +3,7 @@ id: build-household-life-events
 title: Build "Life events" (household/life-events)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

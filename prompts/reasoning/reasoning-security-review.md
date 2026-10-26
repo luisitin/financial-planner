@@ -3,6 +3,7 @@ id: reasoning-security-review
 title: Security review of the PC server and the AI paths
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: report
 ---

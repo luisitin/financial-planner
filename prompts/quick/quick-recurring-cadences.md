@@ -3,6 +3,7 @@ id: quick-recurring-cadences
 title: Bills page: every real billing rhythm
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, DeepSeek, Claude (2nd account)
 output: diff
 ---

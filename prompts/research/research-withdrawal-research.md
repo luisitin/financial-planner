@@ -3,6 +3,7 @@ id: research-withdrawal-research
 title: Safe withdrawal research since 2023
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT, Claude (2nd account)
 output: report
 ---

@@ -3,6 +3,7 @@ id: research-2025-tax-law
 title: The 2025 tax law: what it changed for households, year by year
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT, Claude (2nd account)
 output: research
 ---

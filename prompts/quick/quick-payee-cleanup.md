@@ -3,6 +3,7 @@ id: quick-payee-cleanup
 title: Clean payee names for thirty common bank descriptors
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: Muse, ChatGPT, Grok, Gemini
 output: diff
 ---

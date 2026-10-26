@@ -3,6 +3,7 @@ id: research-student-loans
 title: Federal student loan repayment after the 2025 law
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: research
 ---

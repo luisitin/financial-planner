@@ -3,6 +3,7 @@ id: quick-search-aliases
 title: Search: let people find pages in their own words
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: Muse, ChatGPT, Gemini, Grok
 output: diff
 ---

@@ -3,6 +3,7 @@ id: reasoning-encryption-at-rest
 title: Encrypt the plan with a passphrase
 category: reasoning
 size: L
+effort: One strong model, under an hour
 destinations: Claude (2nd account), ChatGPT, Gemini
 output: diff
 ---

@@ -1,5 +1,5 @@
 # Math + reasoning (swarm)
-For an orchestrator model that can run a team of smaller worker models (Claude Code subagents, ChatGPT agent or Codex tasks, Gemini CLI, a Muse workspace...). Each prompt carries its split plan.
+For an orchestrator model that can run a team of smaller worker models (Claude Code subagents, ChatGPT agent or Codex tasks, Gemini CLI, a Muse workspace...). Each prompt carries its split plan. These need both volume and judgement: the workers do the volume, the orchestrator decides.
 
 ---
 id: swarm-audit-all-math
@@ -23,25 +23,6 @@ You are the **orchestrator**. Your workers are smaller models that each audit on
 4. Deliver: the merged findings, then diffs for every accepted fix with a test that fails before and passes after.
 
 ---
-id: swarm-state-income-tax
-title: Build the State tax page: engine by the orchestrator, data by region workers
-size: XL
-to: Claude Code, Codex, Gemini CLI, Claude (2nd account)
-output: files
-read: AGENTS.md, docs/DATA_MODEL.md, core/math/tax.js, modules/taxes/federal/compute.js, modules/taxes/federal/data/federal.js, modules/taxes/state/module.js, modules/taxes/state/README.md, modules/taxes/federal/view.js
-summary: A common schema, four regional data workers, one engine, cross-checked against published examples.
-
-You are the **orchestrator** for building the planned page `taxes/state` (estimate the household's state income tax for the state in `plan.household.state`).
-
-**Step 1 (you):** fix the data schema every worker must follow: per state and year, `kind` (`brackets` / `flat` / `none` / `interest-dividends-only` / `capital-gains-only`), brackets per filing status, standard deduction, exemptions (deduction or credit), starting point (federal AGI, federal taxable income or the state's own), retirement-income exclusions, notes for what the model leaves out, and the source URL. Write it as a JSDoc typedef in `modules/taxes/state/data/schema.js`.
-
-**Step 2 (four workers in parallel):** Northeast + DC; Midwest; South; West (the same state lists as the four `math-state-tax-*` prompts in this library). Brief: "Using only the state revenue departments' own rate schedules and form instructions, fill the schema for tax years 2025 and 2026 for your states; mark unpublished 2026 values `projected`; for each state include three worked returns (income, filing status, the state tax) that you computed from the official instructions. Output: one JS module `modules/taxes/state/data/<region>.js` and a Markdown list of the worked returns."
-
-**Step 3 (you):** write the engine in `modules/taxes/state/compute.js` (pure; reuses `core/math/tax.js` bracket helpers and the federal page's AGI and taxable income through `ctx`-free imports), run every worker's worked returns through it as tests, and investigate every mismatch: wrong data, wrong engine, or a rule the schema cannot express (then extend the schema and tell the workers what changed).
-
-**Step 4 (you):** the view (plain words: "Your state income tax this year: about $X"; states with no income tax say so in one line), README with sources, catalog row to `usable`, CHANGELOG line. Deliver every file whole.
-
----
 id: swarm-retirement-validation
 title: Validate the retirement engine against published results
 size: XL
@@ -63,21 +44,6 @@ You are the **orchestrator**. The question: does `core/math/retirement.js` and t
 Brief each worker: "Report the published figure with its exact source, the engine's figure, your independent figure, and a diagnosis of any gap larger than 1 percentage point or $100 (data, rebalancing, timing within the year, fees, rounding, or a bug with file and line)."
 
 **Your job:** reconcile. A gap explained by a documented modelling choice is fine (say so in the README); a bug gets a fix as a diff and a test pinned to the published figure. Deliver the reconciliation table first.
-
----
-id: swarm-households-verify
-title: Verify the 1,400 pretend households: one worker per household type
-size: XL
-to: Claude Code, Codex, Gemini CLI
-output: report
-read: qa/households/README.md, qa/households/INDEX.md, qa/households/lib/catalog.mjs, qa/households/lib/expect.mjs, qa/households/run.mjs, qa/households/01-single-adult/base/H-0001-base.md
-summary: 14 workers recompute key figures by hand; the orchestrator fixes the expectations or files the bugs.
-
-`qa/households/` holds 1,400 invented households (14 types x 100 variations) and `lib/expect.mjs`, the tester's own math for what each page should show; `run.mjs` compares the app against it. Some cases fail. You are the **orchestrator**.
-
-**Split plan:** one worker per type folder (`01-single-adult` ... `14-unusual-structures`). Brief: "For your folder, take the base case and every case whose INDEX.md status is `fail`, plus ten random passing cases. For each, recompute by hand the figures the case file lists (net worth, monthly income and spending, emergency-fund months, debt payoff dates, goal status). Decide for every disagreement which side is right: the app (then `expect.mjs` is wrong), `expect.mjs` (then the app has a bug), or the case itself (it asks for something undefined). Report: case id, figure, app value, expect value, your value, verdict, one-line reason."
-
-**Your job:** group the verdicts by root cause (one bug usually explains many cases); for each app bug give a diff to the page's compute with a test; for each wrong expectation a diff to `lib/expect.mjs`; for undefined cases, a decision written into the case catalog. Deliver the root-cause table first. Note: the cases' `results/` folder is not in the repo; reason from the case files and the code.
 
 ---
 id: swarm-tax-vs-irs-worksheets

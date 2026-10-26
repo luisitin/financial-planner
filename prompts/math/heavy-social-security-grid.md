@@ -1,0 +1,65 @@
+---
+id: heavy-social-security-grid
+title: Social Security for 2,000 invented work histories at every claiming age
+category: math
+size: XL
+effort: A fleet of 40 small workers (50 histories each), about an hour
+destinations: Claude Code, Codex, Gemini CLI, ChatGPT
+output: golden
+---
+# Social Security for 2,000 invented work histories at every claiming age
+
+You are improving **Financial Planner**, an open-source personal finance app: https://github.com/luisitin/financial-planner (branch `main`, MIT licence).
+Plain ES modules, Node 20, no framework, no bundler. One page = one folder `modules/<group>/<id>/` holding `module.js` (manifest),
+`compute.js` (pure math: runs in the browser, on the PC server and in tests), `view.js` (DOM only), `README.md` (purpose,
+formulas with sources) and `module.test.mjs` (node:test). Shared math lives in `core/math/`. The plan is one JSON object
+(`docs/DATA_MODEL.md`). The owner reads the app on a 390 px phone and is not a finance professional: words on screen are plain.
+
+**Read these first** (raw files you can fetch directly; the whole repo is at https://github.com/luisitin/financial-planner):
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/retirement/social-security/compute.js
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/retirement/social-security/data/ssa.js
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/retirement/social-security/README.md
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/modules/retirement/social-security/module.test.mjs
+- https://raw.githubusercontent.com/luisitin/financial-planner/main/core/csv.js
+
+## The task
+
+**Step 1, the lead.** Write the rules sheet from the Social Security Administration's own pages, linking each:
+- the national average wage index series, and the taxable maximum by year;
+- AIME: the 35 highest years, earnings indexed to the year the person turns 60 and not indexed after that;
+- PIA: 90%, 32% and 15% of AIME across the bend points of the year the person turns 62, rounded down to the dime; then cost-of-living raises from 62 on;
+- full retirement age by birth year;
+- claiming early: 5/9 of 1% per month for the first 36 months, 5/12 of 1% beyond that;
+- claiming late: 2/3 of 1% per month (8% a year), up to 70;
+- spousal benefit: up to 50% of the worker's PIA, reduced for early claiming (25/36 of 1% and 5/12 of 1% per month), with no delayed credits;
+- the survivor benefit rules.
+
+Then two CSV layouts:
+- `histories.csv`: `history_id, birth_date`, then one column of covered earnings per year from 1966 to 2030;
+- `benefits.csv`: `history_id, claim_age_years, claim_age_months, aime, pia, monthly_benefit, spousal_at_same_age, survivor, note`.
+
+**Step 2, the workers.** Each invents 50 histories:
+- birth years 1950 to 1995;
+- patterns: steady, rising, a late start, gaps, part-time, at the taxable maximum, under 35 years of work, too few credits to qualify, and a high earner above the maximum.
+
+For each history, compute the benefit at every claiming age from 62y0m to 70y0m in 3-month steps (33 rows), plus the spousal and survivor amounts. Use the SSA's figures, never the repo's `ssa.js` or code. Your own script written from the rules sheet is fine.
+
+**Step 3, the workers.** Every tenth history a second way.
+
+**Step 4, the lead.** Sample 2%. Wherever `data/ssa.js` differs from the SSA's figures, say so first. Deliver `tests/golden/retirement/ss-histories.csv`, `ss-benefits.csv` and `tests/golden-social-security.test.mjs`, which checks the page's compute to the dime. Disagreements become `todo` tests.
+
+## How to answer
+
+1. Start with a rationale of at most ten lines: what you changed and why.
+2. Next, the disagreements between your answer key and the code, each with the worked numbers: they matter most. Then give every CSV file and the test runner whole, each in its own fenced code block whose first line is its path (`# path: tests/golden/...csv`; that line is dropped when the file is saved). If the files add up to more than about 1 MB, attach them instead of pasting: one file each, or one Markdown file holding them all in fenced blocks with their paths.
+3. End with the list of files you touched and the commands that verify them (`npm test`, `npm run check`).
+
+Rules:
+- Never run, import or copy the repo's code to get an expected value: the answer key must be independent of the code, or it proves nothing. A calculator, or a short script a worker writes itself from the rules in this prompt, is fine.
+- Every CSV has a header row, one case per row, money to the cent, rates to six decimals and dates as YYYY-MM-DD.
+- Follow the project's rules in `AGENTS.md`: `compute.js` stays pure (no DOM, fetch, storage or timers); money math lives in code, never in an AI model; plain words on screen; every formula gets a test and a written source.
+- Never edit `modules/registry.js` (generated by `npm run registry`), `data/` or `planner.properties`.
+- Tests use `node:test` and `node:assert/strict`, in the module's `module.test.mjs` or `tests/<topic>.test.mjs`, so that `npm test` and `npm run check` stay green. Say which commands you ran; if you could not run them, say so plainly.
+- Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
+- The repo is public: use invented example data only (no real names, addresses, account numbers).
+- If something is unclear, state your assumption and carry on; do not stop to ask.

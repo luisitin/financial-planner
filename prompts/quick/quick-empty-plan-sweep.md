@@ -3,6 +3,7 @@ id: quick-empty-plan-sweep
 title: Every page's compute on an empty and a full plan
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Claude (2nd account), Gemini, Codex
 output: diff
 ---

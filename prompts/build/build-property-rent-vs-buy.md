@@ -3,6 +3,7 @@ id: build-property-rent-vs-buy
 title: Build "Rent vs buy" (property/rent-vs-buy)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

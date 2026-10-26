@@ -3,6 +3,7 @@ id: swarm-phase8-protection-estate
 title: Build Phase 8 (insurance and estate) with a team
 category: swarm
 size: XL
+effort: An orchestrator with workers, an hour or more
 destinations: Claude Code, Codex, Gemini CLI
 output: files
 ---

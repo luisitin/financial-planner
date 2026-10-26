@@ -3,6 +3,7 @@ id: build-investments-employer-stock
 title: Build "Employer stock" (investments/employer-stock)
 category: build
 size: M
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

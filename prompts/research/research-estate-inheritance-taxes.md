@@ -3,6 +3,7 @@ id: research-estate-inheritance-taxes
 title: State estate and inheritance taxes, 2026
 category: research
 size: S
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: data
 ---

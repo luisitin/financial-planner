@@ -3,6 +3,7 @@ id: build-scenarios-compare
 title: Build "Scenario compare" (scenarios/compare)
 category: build
 size: L
+effort: One coding agent with the repo, under an hour
 destinations: Claude Code, Codex, Gemini CLI, Claude (2nd account), ChatGPT
 output: files
 ---

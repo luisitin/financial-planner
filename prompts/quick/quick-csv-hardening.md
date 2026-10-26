@@ -3,6 +3,7 @@ id: quick-csv-hardening
 title: CSV reader: the formats real banks produce
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, DeepSeek, Gemini, Copilot
 output: diff
 ---

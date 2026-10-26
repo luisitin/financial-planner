@@ -3,6 +3,7 @@ id: research-open-source-2026
 title: The best open-source finance projects to learn from, late 2026
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT, Grok
 output: diff
 ---

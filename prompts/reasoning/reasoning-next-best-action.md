@@ -3,6 +3,7 @@ id: reasoning-next-best-action
 title: "What should I do with my next dollar?" as code
 category: reasoning
 size: M
+effort: One strong model, under an hour
 destinations: Muse, ChatGPT, Claude (2nd account), Gemini
 output: diff
 ---

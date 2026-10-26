@@ -3,6 +3,7 @@ id: quick-doc-link-targets
 title: Docs reader: links inside the text are too small to tap
 category: quick
 size: S
+effort: One agent, a few minutes
 destinations: ChatGPT, Gemini, Muse, Copilot
 output: diff
 ---

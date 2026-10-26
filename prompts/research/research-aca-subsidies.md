@@ -3,6 +3,7 @@ id: research-aca-subsidies
 title: Health insurance before 65: the marketplace subsidy rules now
 category: research
 size: M
+effort: One agent with web search, under an hour
 destinations: Perplexity, Gemini, ChatGPT
 output: research
 ---

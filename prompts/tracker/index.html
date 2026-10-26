@@ -59,6 +59,7 @@ main .wrap { padding-block: 16px 48px; display: grid; gap: 14px; }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 [hidden] { display: none !important; }
 .chip.toggle { border-style: dashed; color: var(--accent); }
+.chip.toggle[aria-pressed="true"] { border-style: solid; color: var(--on-accent); }
 .count-line { font-size: 13px; color: var(--muted); }
 
 .list { display: grid; gap: 10px; }
@@ -66,7 +67,18 @@ main .wrap { padding-block: 16px 48px; display: grid; gap: 14px; }
 .card.done { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
 .card.flash { outline: 2px solid var(--accent); }
 .head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
-.head h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; text-wrap: balance; min-width: 0; }
+.head h3 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; text-wrap: balance; min-width: 0; }
+.title-wrap { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.rank { flex: none; font: 600 13px/1.6 var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 0 7px; font-variant-numeric: tabular-nums; }
+.tag.tier-first { background: var(--accent-soft); color: var(--accent); }
+.effort { margin: 0; font-size: 13px; color: var(--muted); }
+.effort b { color: var(--ink); font-weight: 600; }
+.value-box { margin: 0; background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.55; }
+.btn[aria-expanded="true"] { background: var(--accent-soft); }
+.tier-head { margin: 12px 0 0; font-size: 17px; font-weight: 700; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tier-head:first-child { margin-top: 0; }
+.tier-head .n { font: 500 12px var(--mono); color: var(--muted); }
+.tier-blurb { margin: -6px 0 2px; font-size: 14px; color: var(--muted); max-width: 70ch; }
 .state { flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
 .state.sent { background: var(--accent-soft); color: var(--accent); }
 .state.answered { background: var(--accent); color: var(--on-accent); }
@@ -135,6 +147,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     <details class="how" id="how">
       <summary>How this board works</summary>
       <ol>
+        <li>The first tab, <b>Most important first</b>, ranks every prompt. <b>What this brings</b> on a card says what it would do for your planner, and <b>Who does it</b> says which kind of AI to send it to and how long it takes.</li>
         <li>Press <b>Copy prompt</b> and paste it into ChatGPT, Gemini, Muse, another Claude or any tool.</li>
         <li>Tap the tools you sent it to under <b>Sent to</b>.</li>
         <li>When the answer comes back, paste it or attach the file under <b>Answer and notes</b>, then save.</li>
@@ -151,7 +164,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     <div class="list" id="list"><div class="empty">Loading the prompts...</div></div>
   </div>
 </main>
-<footer class="wrap" id="foot">Prompts come from <code>prompts/index.json</code> in the repo; your progress and answers are saved with this page.</footer>
+<footer class="wrap" id="foot">Prompts come from <code>prompts/index.json</code> in the repo; the ranking and the "what this brings" notes from <code>prompts/src/value.json</code>. Your progress and answers are saved with this page.</footer>
 
 <script>
 (() => {
@@ -171,7 +184,11 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   const store = { get(k) { try { return JSON.parse(localStorage.getItem("ppb." + k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem("ppb." + k, JSON.stringify(v)); } catch {} } };
   const FILTERS = [["all", "All"], ["todo", "To send"], ["sent", "Sent"], ["answered", "Answered"], ["done", "Done"]];
   const TYPES = { md: "text/markdown", markdown: "text/markdown", txt: "text/plain", diff: "text/plain", patch: "text/plain", log: "text/plain", js: "text/plain", mjs: "text/plain", ts: "text/plain", py: "text/plain", html: "text/plain", css: "text/plain", json: "application/json", csv: "text/csv", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
-  const S = { data: null, byId: new Map(), docs: new Map(), tab: null, q: "", filter: store.get("filter") || "all", cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
+  const S = { data: null, byId: new Map(), docs: new Map(), tiers: new Map(), tab: null, q: "", filter: store.get("filter") || "all", showValues: store.get("showValues") === true, cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
+  // the first tab holds every prompt in rank order; the others are the categories, also in rank order
+  const RANKED = { id: "ranked", title: "Most important first", blurb: "Every prompt, ranked by what it does for your planner: first the ones that keep your numbers right and your data safe, then the pages and fixes you will notice most. Each card says who should do it and how long it takes." };
+  const tabs = () => [RANKED, ...S.data.categories];
+  const inTab = (p, tab) => tab === RANKED.id || p.category === tab;
 
   const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
   const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
@@ -179,6 +196,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   const sentList = (d) => Object.keys(d.sent || {});
   const stateOf = (d) => d.done ? "done" : (d.responses || []).length ? "answered" : sentList(d).length ? "sent" : "todo";
   const STATE_TEXT = { todo: "Not sent", sent: "Sent", answered: "Answered", done: "Done" };
+  // what comes back, in plain words (the prompt's `output` field)
+  const OUTPUT_TEXT = { diff: "code changes", files: "whole files", data: "data tables", report: "report and fixes", research: "sourced figures", golden: "answer key (CSV)" };
   const saveDrafts = () => store.set("drafts", S.drafts);
 
   async function boot() {
@@ -191,12 +210,13 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       return;
     }
     for (const p of S.data.prompts) S.byId.set(p.id, p);
+    S.tiers = new Map((S.data.tiers || []).map((t, i) => [t.id, { ...t, i }]));
     $("#repo").textContent = S.data.repo.replace(/^https:\/\//, "");
     const hash = decodeURIComponent(location.hash.slice(1));
-    const cats = S.data.categories.map((c) => c.id);
+    const cats = tabs().map((c) => c.id);
     if (cats.includes(hash)) S.tab = hash;
-    else if (S.byId.has(hash)) { S.tab = S.byId.get(hash).category; S.filter = "all"; S.focus = hash; }
-    else S.tab = cats.includes(store.get("tab")) ? store.get("tab") : cats[0];
+    else if (S.byId.has(hash)) { S.tab = RANKED.id; S.filter = "all"; S.focus = hash; }
+    else S.tab = cats.includes(store.get("tab2")) ? store.get("tab2") : cats[0];
     $("#q").addEventListener("input", (e) => { S.q = e.target.value.trim().toLowerCase(); renderList(); });
     renderTabs(); renderChips(); renderList(); renderTotals();
     connect();
@@ -238,11 +258,11 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   }
   function renderTabs(onlyCounts) {
     const nav = $("#tabs");
-    if (onlyCounts) { for (const b of nav.children) { const list = S.data.prompts.filter((p) => p.category === b.dataset.id); const c = counts(list); b.querySelector(".n").textContent = c.done + "/" + c.total; } return; }
-    nav.replaceChildren(...S.data.categories.map((cat) => {
-      const c = counts(S.data.prompts.filter((p) => p.category === cat.id));
+    if (onlyCounts) { for (const b of nav.children) { const list = S.data.prompts.filter((p) => inTab(p, b.dataset.id)); const c = counts(list); b.querySelector(".n").textContent = c.done + "/" + c.total; } return; }
+    nav.replaceChildren(...tabs().map((cat) => {
+      const c = counts(S.data.prompts.filter((p) => inTab(p, cat.id)));
       return h("button", { class: "tab", role: "tab", "data-id": cat.id, "aria-selected": String(cat.id === S.tab), onclick: () => {
-        S.tab = cat.id; store.set("tab", S.tab); try { history.replaceState(null, "", "#" + S.tab); } catch {}
+        S.tab = cat.id; store.set("tab2", S.tab); try { history.replaceState(null, "", "#" + S.tab); } catch {}
         for (const b of nav.children) b.setAttribute("aria-selected", String(b.dataset.id === S.tab));
         renderList();
       } }, cat.title, h("span", { class: "n", text: c.done + "/" + c.total }));
@@ -252,23 +272,40 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   function renderChips() {
     $("#chips").replaceChildren(...FILTERS.map(([id, label]) => h("button", { class: "chip", "aria-pressed": String(S.filter === id), onclick: () => {
       S.filter = id; store.set("filter", id); renderChips(); renderList();
-    } }, label)));
+    } }, label)),
+    h("button", { class: "chip toggle", "aria-pressed": String(S.showValues), onclick: () => {
+      S.showValues = !S.showValues; store.set("showValues", S.showValues); renderChips();
+      for (const r of S.cards.values()) showValue(r, S.showValues);
+    } }, S.showValues ? "Hide what each brings" : "Show what each brings"));
   }
 
   // ---- list --------------------------------------------------------------------------------------
   function renderList() {
-    const cat = S.data.categories.find((c) => c.id === S.tab);
+    const cat = tabs().find((c) => c.id === S.tab);
     $("#blurb").textContent = cat ? cat.blurb : "";
-    let items = S.data.prompts.filter((p) => p.category === S.tab);
+    let items = S.data.prompts.filter((p) => inTab(p, S.tab));
     const total = items.length;
-    if (S.q) items = items.filter((p) => (p.title + " " + p.id + " " + (p.summary || "")).toLowerCase().includes(S.q));
+    if (S.q) items = items.filter((p) => (p.title + " " + p.id + " " + (p.summary || "") + " " + (p.value || "")).toLowerCase().includes(S.q));
     if (S.filter !== "all") items = items.filter((p) => stateOf(docOf(p.id)) === S.filter);
-    if (S.tab === "build") items.sort((a, b) => (a.phase ?? 99) - (b.phase ?? 99) || a.title.localeCompare(b.title));
-    $("#countLine").textContent = items.length === total ? total + " prompts" : items.length + " of " + total + " prompts shown";
+    items.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+    $("#countLine").textContent = (items.length === total ? total + " prompts" : items.length + " of " + total + " prompts shown") + ", most important first";
     S.cards.clear();
     const list = $("#list");
     if (!items.length) { list.replaceChildren(h("div", { class: "empty", text: S.q ? "Nothing matches that search in this tab." : "Nothing here yet: try another filter." })); return; }
-    list.replaceChildren(...items.map(card));
+    // on the ranked tab, a heading opens each tier (Start here, Next, ...)
+    const kids = [], shown = new Map();
+    for (const p of items) shown.set(p.tier, (shown.get(p.tier) || 0) + 1);
+    let tierId;
+    for (const p of items) {
+      if (S.tab === RANKED.id && p.tier !== tierId && S.tiers.has(p.tier)) {
+        tierId = p.tier;
+        const t = S.tiers.get(tierId);
+        kids.push(h("h2", { class: "tier-head" }, t.title, h("span", { class: "n", text: shown.get(tierId) + (shown.get(tierId) === 1 ? " prompt" : " prompts") })));
+        if (t.blurb) kids.push(h("p", { class: "tier-blurb", text: t.blurb }));
+      }
+      kids.push(card(p));
+    }
+    list.replaceChildren(...kids);
     for (const id of S.cards.keys()) patch(id);
     if (S.focus && S.cards.has(S.focus)) {
       const c = S.cards.get(S.focus); S.focus = null;
@@ -310,11 +347,16 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     refs.saveAnswer = h("button", { class: "btn primary", onclick: () => saveAnswer(refs) }, "Save the answer");
     refs.notes = h("textarea", { id: "notes-" + p.id, placeholder: "Notes: what was good, what to apply, follow-ups...", oninput: (e) => { (S.drafts[p.id] ||= {}).notes = e.target.value; saveDrafts(); }, onblur: () => saveNotes(refs) });
     refs.saveNotes = h("button", { class: "btn quiet", onclick: () => saveNotes(refs) }, "Save notes");
+    const tier = S.tiers.get(p.tier), of = S.data.prompts.length;
+    refs.valueBox = h("p", { class: "value-box", id: "val-" + p.id, hidden: !S.showValues, text: p.value || p.summary || "" });
+    refs.valueBtn = h("button", { class: "btn", "aria-expanded": String(S.showValues), "aria-controls": "val-" + p.id, onclick: () => showValue(refs, refs.valueBox.hidden) }, "What this brings");
     refs.el = h("article", { class: "card", id: p.id },
-      h("div", { class: "head" }, h("h2", { text: p.title }), refs.state),
-      h("div", { class: "meta" }, h("span", { class: "tag", text: "size " + p.size }), h("span", { class: "tag", text: p.output }), p.phase != null ? h("span", { class: "tag", text: "phase " + p.phase }) : null, h("span", { class: "id", text: p.id })),
+      h("div", { class: "head" }, h("div", { class: "title-wrap" }, p.rank ? h("span", { class: "rank", title: "Rank " + p.rank + " of " + of, "aria-label": "Rank " + p.rank + " of " + of }, "#" + p.rank) : null, h("h3", { text: p.title })), refs.state),
+      h("div", { class: "meta" }, tier ? h("span", { class: "tag" + (tier.i === 0 ? " tier-first" : ""), text: tier.title }) : null, h("span", { class: "tag", title: "What comes back", text: OUTPUT_TEXT[p.output] || p.output }), p.phase != null ? h("span", { class: "tag", text: "phase " + p.phase }) : null, h("span", { class: "id", text: p.id })),
       p.summary ? h("p", { class: "summary", text: p.summary }) : null,
-      h("div", { class: "actions" }, refs.copy),
+      p.effort ? h("p", { class: "effort" }, h("b", {}, "Who does it: "), p.effort) : null,
+      h("div", { class: "actions" }, refs.copy, refs.valueBtn),
+      refs.valueBox,
       refs.text,
       h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox),
       h("div", { class: "done-row" }, h("label", { for: "done-" + p.id }, refs.done, "Done"), refs.when),
@@ -329,6 +371,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     S.cards.set(p.id, refs);
     return refs.el;
   }
+
+  function showValue(refs, on) { refs.valueBox.hidden = !on; refs.valueBtn.setAttribute("aria-expanded", String(on)); }
 
   function fillText(refs) {
     if (refs.text.querySelector("pre")) return;

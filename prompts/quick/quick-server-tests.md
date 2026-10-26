@@ -3,6 +3,7 @@ id: quick-server-tests
 title: Tests for the PC server: deny list, token, plan round trip
 category: quick
 size: M
+effort: One agent, a few minutes
 destinations: Claude (2nd account), ChatGPT, Codex, Gemini
 output: diff
 ---
@@ -26,7 +27,8 @@ The server (`server/server.mjs`) has no tests. Add environment overrides `PLANNE
 - `GET /api/health` and `/api/config` (no secrets in it);
 - the plan round trip (`PUT` then `GET /api/plan`) and that a backup file appears;
 - static files are served, and these are refused with 403: `planner.properties`, `data/...`, `private/...`, `.git/config`, `a%5cb` paths, `name::$DATA`, 8.3 short names (`PLANNE~1.PRO`), trailing dots and spaces;
-- with a token set: a request without it gets 401; a request from 127.0.0.1 without it passes only when the Host is loopback and there is no foreign `Origin` header.
+- with a token set: a request without it gets 401; a request from 127.0.0.1 without it passes only when the Host is loopback and there is no foreign `Origin` header;
+- with no token: a request with a foreign or `null` `Origin`, or with a public `Host` name (DNS rebinding), gets 401; IP addresses, one-word names, `.local`/`.lan`/`.home.arpa`/`.internal`/`.ts.net` names and names listed in `server.hosts` pass.
 
 The child process must be killed in `after()` even when a test fails.
 

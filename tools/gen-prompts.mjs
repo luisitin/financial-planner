@@ -1,8 +1,10 @@
 // tools/gen-prompts.mjs -- builds the prompt library the owner sends to other AI tools (ChatGPT, Gemini,
 // another Claude...). Sources: prompts/src/<category>.md (hand-written, blocks separated by `---`), plus
 // two generated sets: one "build this page" prompt per planned page in docs/MODULE_CATALOG.md and one
-// "test vectors" prompt per usable module with math. Writes prompts/<category>/<id>.md (self-contained,
-// what you paste) and prompts/index.json (everything, read by the prompt tracker). Run after editing:
+// "golden test tables" fleet job per group of usable pages. prompts/src/value.json ranks every prompt (tiers,
+// most important first) and holds the plain-words "what this brings" note the board shows. Writes
+// prompts/<category>/<id>.md (self-contained, what you paste) and prompts/index.json (everything, read by the
+// prompt board). Run after editing:
 //   node tools/gen-prompts.mjs
 import fs from "node:fs";
 import path from "node:path";
@@ -13,15 +15,23 @@ const OUT = path.join(ROOT, "prompts");
 export const REPO = "https://github.com/luisitin/financial-planner";
 const RAW = "https://raw.githubusercontent.com/luisitin/financial-planner/main/";
 
+// Categories are kinds of agent work, so the owner knows what to send each one to. `effort` is the default
+// "who and how long" line; a prompt's own `effort:` header overrides it.
 export const CATEGORIES = [
-  { id: "quick", title: "Quick", blurb: "One focused improvement each; any chat model, one answer." },
-  { id: "math", title: "Heavy math", blurb: "Long, number-heavy work with little judgement: test vectors, tables, schedules." },
-  { id: "reasoning", title: "Deep reasoning", blurb: "Architecture, data model, flows, methodology, security: judgement over arithmetic." },
-  { id: "swarm", title: "Math + reasoning (swarm)", blurb: "For an orchestrator model with a team of worker models; the split plan is in the prompt." },
-  { id: "research", title: "Research", blurb: "Current limits and law, with sources, turned into the repo's tables." },
-  { id: "build", title: "Build a page", blurb: "Promote one planned page from docs/MODULE_CATALOG.md to a working page." },
-  { id: "audit", title: "Audit", blurb: "Fresh eyes on accessibility, licences, privacy, tests, performance." },
-  { id: "design", title: "Design and words", blurb: "Plain words, empty states, help text, charts, Spanish." },
+  { id: "quick", title: "Quick", effort: "One agent, a few minutes",
+    blurb: "Minutes of work for one agent, or a few small helpers: one focused fix, one table, one small dataset. Any chat model." },
+  { id: "math", title: "Heavy math", effort: "A fleet of small models, about an hour",
+    blurb: "An hour or more of high-volume, mechanical work for a fleet of small models (20 to 50 Haiku-class workers under one lead): thousands of rows worked by exact rules. Every rule, column and split is spelled out, so a worker cannot go wrong by following it." },
+  { id: "reasoning", title: "Deep reasoning", effort: "One strong model, under an hour",
+    blurb: "A strong model making decisions: architecture, data model, flows, visual design, words and continuity, methodology, security. Judgement over volume." },
+  { id: "swarm", title: "Math + reasoning (swarm)", effort: "An orchestrator with workers, an hour or more",
+    blurb: "An orchestrator with a team of worker models, for jobs that need both volume and judgement. The split plan is in the prompt." },
+  { id: "research", title: "Research", effort: "One agent with web search, under an hour",
+    blurb: "Current figures and law from primary sources, turned into the repo's tables." },
+  { id: "build", title: "Build a page", effort: "One coding agent with the repo, under an hour",
+    blurb: "A coding agent promotes one planned page from docs/MODULE_CATALOG.md to a working page." },
+  { id: "audit", title: "Audit", effort: "One strong model, under an hour",
+    blurb: "Fresh eyes on one quality: accessibility, licences, privacy, tests, performance, dependencies." },
 ];
 export const DESTINATIONS = ["ChatGPT", "Gemini", "Muse", "Claude (2nd account)", "Claude Code", "Codex", "Gemini CLI", "Grok", "DeepSeek", "Perplexity", "Copilot", "Le Chat", "Qwen", "Kimi", "Other"];
 
@@ -45,17 +55,23 @@ const FORMATS = {
   data: "Give the data as a whole JavaScript module (`export const ...`), each figure with a source comment, in a fenced block whose first line is `// path: <where it goes>`; then the tests that use it, as a unified diff or whole file.",
   report: "Give a report in Markdown: findings ranked by impact, each with the file and line, why it matters and the fix. Then the changes for the top findings as unified diffs (or whole files for new ones).",
   research: "Give a table of every figure with its value, the year it applies to and a link to the primary source (IRS, SSA, CMS, a statute, a state revenue department). Mark anything not yet officially announced as a projection. Then the changes to the repo's tables as unified diffs or whole files.",
+  golden: "Next, the disagreements between your answer key and the code, each with the worked numbers: they matter most. Then give every CSV file and the test runner whole, each in its own fenced code block whose first line is its path (`# path: tests/golden/...csv`; that line is dropped when the file is saved). If the files add up to more than about 1 MB, attach them instead of pasting: one file each, or one Markdown file holding them all in fenced blocks with their paths.",
 };
+const GOLDEN_RULES = [
+  "Never run, import or copy the repo's code to get an expected value: the answer key must be independent of the code, or it proves nothing. A calculator, or a short script a worker writes itself from the rules in this prompt, is fine.",
+  "Every CSV has a header row, one case per row, money to the cent, rates to six decimals and dates as YYYY-MM-DD.",
+];
 function contract(output) {
   return [
     "## How to answer",
     "",
     "1. Start with a rationale of at most ten lines: what you changed and why.",
     `2. ${FORMATS[output] ?? FORMATS.diff}`,
-    ...(output === "files" ? [] : ["3. A whole file goes in its own fenced code block whose first line is a comment with its path (`// path: modules/x/y/compute.js`)."]),
-    `${output === "files" ? 3 : 4}. End with the list of files you touched and the commands that verify them (\`npm test\`, \`npm run check\`).`,
+    ...(output === "files" || output === "golden" ? [] : ["3. A whole file goes in its own fenced code block whose first line is a comment with its path (`// path: modules/x/y/compute.js`)."]),
+    `${output === "files" || output === "golden" ? 3 : 4}. End with the list of files you touched and the commands that verify them (\`npm test\`, \`npm run check\`).`,
     "",
     "Rules:",
+    ...(output === "golden" ? GOLDEN_RULES : []).map((r) => `- ${r}`),
     ...COMMON_RULES.map((r) => `- ${r}`),
   ].join("\n");
 }
@@ -68,7 +84,7 @@ function parseSource(file, category) {
     const split = block.indexOf("\n\n");
     const head = block.slice(0, split), body = block.slice(split + 2).trim();
     const meta = Object.fromEntries(head.split("\n").map((l) => { const i = l.indexOf(":"); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }));
-    prompts.push({ category, id: meta.id, title: meta.title, size: meta.size ?? "M", to: list(meta.to), output: meta.output ?? "diff", read: list(meta.read), summary: meta.summary ?? "", body });
+    prompts.push({ category, id: meta.id, title: meta.title, size: meta.size ?? "M", effort: meta.effort, to: list(meta.to), output: meta.output ?? "diff", read: list(meta.read), summary: meta.summary ?? "", body });
   }
   return prompts;
 }
@@ -114,27 +130,80 @@ Use \`${sib}\` as the example of a finished page in this project.`,
   });
 }
 
-// ---- generated: test vectors for a usable module -----------------------------------------------------
+// ---- generated: golden test tables for a group of usable pages (a fleet job) ---------------------------
+// One prompt per bucket of page groups. Pages with no math, and pages that have their own heavy prompt in
+// prompts/src/math.md (federal tax, Social Security, historical replays) or are random (Monte Carlo), are left out.
 const NO_MATH = new Set(["overview/dashboard", "overview/pages", "system/settings", "system/docs", "ai/assistant"]);
-function vectorPrompts(rows) {
-  return rows.filter((r) => r.status === "usable" && !NO_MATH.has(`${r.group}/${r.id}`)).map((r) => {
-    const key = `${r.group}/${r.id}`, dir = `modules/${key}`;
-    const src = fs.readFileSync(path.join(ROOT, dir, "compute.js"), "utf8");
-    const core = [...src.matchAll(/from\s+"(?:\.\.\/)+(core\/[^"]+\.js)"/g)].map((m) => m[1]);
-    const dataFiles = fs.existsSync(path.join(ROOT, dir, "data")) ? fs.readdirSync(path.join(ROOT, dir, "data")).map((f) => `${dir}/data/${f}`) : [];
+const OWN_PROMPT = { "taxes/federal": "heavy-federal-tax-grid", "retirement/social-security": "heavy-social-security-grid", "retirement/historical": "heavy-retirement-replays", "retirement/monte-carlo": "reasoning-monte-carlo-validation" };
+const GOLDEN_BUCKETS = [
+  { id: "basics", groups: ["balance", "overview", "household", "goals", "system"], title: "net worth, cash, people, goals and assumptions" },
+  { id: "cashflow", groups: ["cashflow"], title: "cash flow and budget" },
+  { id: "transactions", groups: ["transactions"], title: "transactions" },
+  { id: "debt", groups: ["debt"], title: "debt" },
+  { id: "retirement", groups: ["retirement"], title: "retirement" },
+  { id: "investments", groups: ["investments"], title: "investments" },
+  { id: "taxes", groups: ["taxes"], title: "tax" },
+];
+function goldenPrompts(rows) {
+  const usable = rows.filter((r) => r.status === "usable" && !NO_MATH.has(`${r.group}/${r.id}`));
+  return GOLDEN_BUCKETS.map((b) => {
+    const pages = usable.filter((r) => b.groups.includes(r.group) && !OWN_PROMPT[`${r.group}/${r.id}`]);
+    const skipped = usable.filter((r) => b.groups.includes(r.group) && OWN_PROMPT[`${r.group}/${r.id}`]);
+    if (!pages.length) return null;
+    const n = pages.length;
     return {
-      category: "math", id: `vectors-${r.group}-${r.id}`, title: `Test vectors: ${r.title} (${key})`, size: core.length > 1 || dataFiles.length ? "L" : "M",
-      to: ["ChatGPT", "Gemini", "DeepSeek", "Claude (2nd account)", "Muse"], output: "diff",
-      read: [`${dir}/compute.js`, `${dir}/README.md`, `${dir}/module.test.mjs`, ...new Set(core), ...dataFiles],
-      summary: `Independent hand-worked test cases for every formula in ${key}.`,
-      body: `Write independent test vectors for every formula in \`${dir}/compute.js\` (the "${r.title}" page: ${r.purpose.replace(/\.$/, "")}).
+      category: "math", id: `heavy-golden-${b.id}`, size: "XL",
+      title: `Answer keys for every formula on the ${b.title} pages (${n} pages, thousands of rows)`,
+      effort: `A fleet of ${n} small workers (one per page), about an hour`,
+      to: ["Claude Code", "Codex", "Gemini CLI", "ChatGPT"], output: "golden",
+      read: ["core/csv.js", ...pages.flatMap((r) => [`modules/${r.group}/${r.id}/compute.js`, `modules/${r.group}/${r.id}/README.md`])],
+      summary: `At least 100 hand-worked cases per formula on ${n} working pages, as CSV files the tests replay; one worker per page.`,
+      body: `Build an answer key for every formula and rule on these ${n} working pages, at volume, as CSV files the tests replay:
 
-1. List every formula and rule the compute applies, including the ones it imports from \`core/math/\` and its tables. For each one, cite where it comes from (the README's source, or the official one if the README has none).
-2. For each formula, work out by hand at least three cases: an ordinary one, a boundary (zero, a threshold exactly, the first and last year, a leap day, a negative or empty input) and a large or unusual one. Show the arithmetic in a short comment above each assertion, so a reader can check it without running code.
-3. Write them as \`node:test\` cases appended to \`${dir}/module.test.mjs\`, using small invented plans built in the test (see the existing tests for the shape). Compare money to the cent with a tolerance helper, not exact floats.
-4. If your hand result disagrees with what the code returns, do not change the expected value to match: keep your value, mark the test \`{ todo: "disagrees with compute: <why>" }\`, and put the disagreements first in your answer with your reasoning. Those are the valuable part.`,
+${pages.map((r) => `- \`${r.group}/${r.id}\` (${r.title}): ${r.purpose}`).join("\n")}
+${skipped.length ? `\nLeft out because they have their own prompt: ${skipped.map((r) => `\`${r.group}/${r.id}\` (\`${OWN_PROMPT[`${r.group}/${r.id}`]}\`)`).join(", ")}.\n` : ""}
+This is high-volume, mechanical work with no design decisions.
+
+**Step 1, the lead.** For each page, list every formula and rule its \`compute.js\` applies (including what it imports from \`core/math/\`), quoting the README's wording, rounding and source. Fix one CSV layout per page: \`case_id\`, the inputs as columns (a small invented plan or params, flattened), the expected results, then \`note\`. Put the layout and the quoted rules into that page's worker brief. Where the README is silent, take the rule from the source it cites, not from the code, and say so.
+
+**Step 2, the workers (one per page; split a big page by formula).** Fill the page's CSV with at least 100 rows per formula or rule:
+- 60 grid rows across realistic values: one person and a family, small and large amounts, this year and 30 years out;
+- 30 edge rows: zero, empty lists, exactly at every threshold the README names and either side of it, the first and last month or year, leap days, and negative amounts where they can occur;
+- 10 extreme rows: very large, very small, very long horizons.
+
+Work each expected value from the brief with your own arithmetic, or a short script you write yourself from the brief.
+
+**Step 3, the workers.** Re-derive every tenth row a second way (by hand if the first pass was a script, by script if it was by hand). Fix the row, or flag it in \`note\`.
+
+**Step 4, the lead.** Re-derive a 2% sample yourself; redo any page with an error. Deliver \`tests/golden/${b.id}/<page>.csv\` and one runner, \`tests/golden-${b.id}.test.mjs\`. The runner reads each CSV with \`parseCsv\` from \`core/csv.js\`, builds the plan or params for each row, calls the page's \`compute()\` (or the \`core/math\` function) and compares money within 0.005. A row where the code disagrees stays in the CSV and becomes a \`{ todo: "<why>" }\` test. Those disagreements lead your answer: they are the point.`,
     };
-  });
+  }).filter(Boolean);
+}
+
+// ---- ranking and "what this brings" ------------------------------------------------------------------
+// prompts/src/value.json: { tiers: [{ id, title, blurb, ids: [...] }], value: { <id>: "plain words" } }.
+// The order of ids across the tiers is the rank. A prompt missing from it is ranked last with a warning.
+function applyValue(prompts) {
+  const file = path.join(OUT, "src", "value.json");
+  if (!fs.existsSync(file)) return [];
+  const v = JSON.parse(fs.readFileSync(file, "utf8"));
+  const byId = new Map(prompts.map((p) => [p.id, p]));
+  const seen = new Set();
+  let rank = 0;
+  for (const tier of v.tiers) for (const id of tier.ids) {
+    const p = byId.get(id);
+    if (!p) { console.warn(`value.json: no prompt ${id}`); continue; }
+    if (seen.has(id)) throw new Error(`value.json: ${id} is ranked twice`);
+    seen.add(id);
+    Object.assign(p, { rank: ++rank, tier: tier.id, value: v.value?.[id] || "" });
+    if (!p.value) console.warn(`value.json: no "what this brings" for ${id}`);
+  }
+  const last = v.tiers.at(-1)?.id;
+  for (const p of prompts) if (!seen.has(p.id)) {
+    console.warn(`value.json: ${p.id} is not ranked; it goes last`);
+    Object.assign(p, { rank: ++rank, tier: last, value: v.value?.[p.id] || p.summary });
+  }
+  return v.tiers.map(({ id, title, blurb, ids }) => ({ id, title, blurb, count: ids.filter((x) => byId.has(x)).length }));
 }
 
 // ---- write -------------------------------------------------------------------------------------------
@@ -148,7 +217,7 @@ function main() {
   for (const c of CATEGORIES) {
     const file = path.join(OUT, "src", `${c.id}.md`);
     if (fs.existsSync(file)) prompts.push(...parseSource(file, c.id));
-    if (c.id === "math") prompts.push(...vectorPrompts(rows));
+    if (c.id === "math") prompts.push(...goldenPrompts(rows));
     if (c.id === "build") prompts.push(...buildPrompts(rows));
   }
   const seen = new Set();
@@ -157,20 +226,24 @@ function main() {
     if (seen.has(p.id)) throw new Error(`duplicate prompt id ${p.id}`);
     seen.add(p.id);
     for (const f of p.read) if (!fs.existsSync(path.join(ROOT, f))) throw new Error(`${p.id}: read list names a missing file ${f}`);
+    p.effort ||= CATEGORIES.find((c) => c.id === p.category).effort;
     p.text = expand(p);
   }
-  for (const c of CATEGORIES) {
-    const dir = path.join(OUT, c.id);
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
+  const tiers = applyValue(prompts);
+  const order = new Map(CATEGORIES.map((c, i) => [c.id, i]));
+  prompts.sort((a, b) => order.get(a.category) - order.get(b.category) || (a.rank ?? 1e9) - (b.rank ?? 1e9));
+  for (const dir of fs.readdirSync(OUT, { withFileTypes: true })) {
+    // every category folder is rebuilt from scratch; folders of retired categories go too
+    if (dir.isDirectory() && !["src", "tracker"].includes(dir.name)) fs.rmSync(path.join(OUT, dir.name), { recursive: true, force: true });
   }
+  for (const c of CATEGORIES) fs.mkdirSync(path.join(OUT, c.id), { recursive: true });
   for (const p of prompts) {
-    const front = ["---", `id: ${p.id}`, `title: ${p.title}`, `category: ${p.category}`, `size: ${p.size}`, `destinations: ${p.to.join(", ")}`, `output: ${p.output}`, "---", ""].join("\n");
+    const front = ["---", `id: ${p.id}`, `title: ${p.title}`, `category: ${p.category}`, `size: ${p.size}`, `effort: ${p.effort}`, `destinations: ${p.to.join(", ")}`, `output: ${p.output}`, "---", ""].join("\n");
     fs.writeFileSync(path.join(OUT, p.category, `${p.id}.md`), front + p.text);
   }
   const index = {
-    generated: "tools/gen-prompts.mjs", repo: REPO, categories: CATEGORIES, destinations: DESTINATIONS,
-    prompts: prompts.map(({ category, id, title, size, to, output, summary, phase, text }) => ({ id, category, title, size, destinations: to, output, summary, phase, file: `prompts/${category}/${id}.md`, text })),
+    generated: "tools/gen-prompts.mjs", repo: REPO, categories: CATEGORIES, tiers, destinations: DESTINATIONS,
+    prompts: prompts.map(({ category, id, title, size, effort, rank, tier, value, to, output, summary, phase, text }) => ({ id, category, title, size, effort, rank, tier, value, destinations: to, output, summary, phase, file: `prompts/${category}/${id}.md`, text })),
   };
   fs.writeFileSync(path.join(OUT, "index.json"), JSON.stringify(index, null, 1) + "\n");
   const counts = CATEGORIES.map((c) => `${c.id} ${prompts.filter((p) => p.category === c.id).length}`).join(", ");
