@@ -289,6 +289,15 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - evidence: run `node qa/smoke-all.mjs` (4 minutes) or look at shots/qa-smoke-balance-liquidity-phone.png
 - status: open
 
+### F-028  Retirement: a pension typed on the Income page never reaches "Will the money last?" (found by the lead)
+- when: 2026-10-26 15:22   page: retirement/projection, cashflow/income   severity: wrong number
+- for: builder
+- what happened: the Income page asks for "a pension" (income type `pension`), but `modules/retirement/projection/compute.js` builds retirement income only from Social Security and `plan.retirement.pensions`, and line 74 leaves `pension` items out of a partner's pay on purpose. Nothing in the app writes `retirement.pensions`: only `core/schema/migrate.js` creates it (empty) and the tests fill it. So a pension entered where the app asks for it is missing from the projection, the year-by-year table and every page built on them.
+- expected: a pension entered once counts in retirement.
+- suggestion: in the projection, also turn current or future `income` items of type `pension` into retirement incomes (yearly from amount and period, start age from `startDate` or the person's retirement age, `cola` from `growth > 0`), skipping any that duplicate a `retirement.pensions` entry. Or route the Income page's pension type into `retirement.pensions`. The planned `retirement/pensions` page (prompt `build-retirement-pensions`, #14 on the prompt board) can then own the details. Add a test: a plan whose only retirement income is a pension from the Income page.
+- evidence: `modules/retirement/projection/compute.js` lines 68 and 74; `core/schema/migrate.js` line 64; `grep -rn "retirement.pensions" modules core`.
+- status: open
+
 ## Closed
 
 (nothing yet)
