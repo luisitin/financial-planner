@@ -298,6 +298,23 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - evidence: `modules/retirement/projection/compute.js` lines 68 and 74; `core/schema/migrate.js` line 64; `grep -rn "retirement.pensions" modules core`.
 - status: open
 
+### F-029  Federal tax: the tax math disagrees with the law on 2,246 of 12,000 test returns, seven causes (found by the federal tax answer key)
+- when: 2026-10-26 16:00   page: taxes/federal, core/math/tax.js   severity: wrong number
+- for: builder
+- what happened: `tests/golden-federal.test.mjs` (pull request #1, merged in `c61f889`) checks the engine against 12,000 invented returns for 2024 to 2026 whose answers were worked from the IRS figures without the app's code. 9,754 agree within $1. The other 2,246 run as to-do tests, listed by cause in `tests/golden/taxes/federal-todo.json`, each cause with a worked example in `tests/golden/taxes/RULES.md` section 11:
+  1. `capital-loss-dropped` (870 rows): a net capital loss larger than interest, non-qualified dividends, pensions and IRA money is dropped (`otherOrdinary` is floored at 0), so AGI and taxable income come out too high. The law takes up to $3,000 off any income, wages included (IRC §1211(b)).
+  2. `charity-2026` (998): the 2026 charity rules are missing: gifts count only above 0.5% of AGI for people who itemize, and people who take the standard deduction deduct up to $1,000 ($2,000 joint) of cash gifts.
+  3. `senior-deduction-separate` (325): the $6,000 senior deduction is given on married-filing-separately returns; the law allows it to married people only on a joint return (so the separate-return threshold in `modules/taxes/federal/data/federal.js` goes too).
+  4. `itemized-limit-2026` (225): the 2026 limit on itemized deductions in the 37% bracket (cut by 2/37, IRC §68 as amended) is missing.
+  5. `senior-phase-out-per-person` (96): the senior deduction's 6% phase-out is taken once from $12,000 instead of from each person's $6,000, so a couple keeps too much.
+  6. `salt-separate-phase-down` (50): the married-filing-separately cap on state and local taxes phases down at 15% of the income over the threshold instead of the law's 30%.
+  7. `gains-worksheet-line-25` (1): the capital gains worksheet's last step (take the smaller of the worksheet tax and the regular tax) is not applied.
+  Also, outside the test's columns (checked): `taxInputs()` in `modules/taxes/federal/compute.js` never passes `investmentIncome`, so `core/math/tax.js` line 169 counts only qualified dividends and long-term gains toward the 3.8% net investment income tax; interest, other dividends and short-term gains are left out.
+- expected: all 12,000 rows within $1, and the page's net investment income tax counting all investment income.
+- suggestion: fix one cause at a time in `core/math/tax.js` (and the page's inputs for 1 and the investment income); when a cause is fixed, delete its list from `federal-todo.json` and its rows must then pass. The answer's author reports that all seven fixes, applied to a scratch copy, brought every row into agreement and that taking any one away brought its rows back. Add the investment-income case to `tests/tax-pages.test.mjs`.
+- evidence: `npm test` (2,246 to-do); `node --test tests/golden-federal.test.mjs`; https://github.com/luisitin/financial-planner/pull/1; prompt `heavy-federal-tax-grid` on the prompt board.
+- status: open
+
 ## Closed
 
 (nothing yet)
