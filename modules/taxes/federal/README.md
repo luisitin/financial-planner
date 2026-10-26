@@ -1,0 +1,22 @@
+# Federal estimate  (`taxes/federal`)
+
+**Status:** usable (phase 6)
+**Purpose:** This year's federal income tax from what the plan knows and what you type: the bill or refund, your effective and marginal rates.
+
+## Inputs
+`household` (filing status, people's birth dates for the age allowance and dependents), `income` (pay, bonuses, pensions, Social Security, self-employment, rent, "other"; items marked not taxable are skipped), `retirement.contributions` (pre-tax 401(k) money comes off wages; IRA and HSA contributions are adjustments), `taxes.thisYear` (figures the plan cannot see: a wages override, other ordinary income, qualified dividends, tax-exempt interest, a Social Security override, other adjustments, withheld, other payments), `taxes.itemized`, `taxes.gains` (from the Capital gains page), `taxes.estimated.paid`, `taxes.year` (null = this year), `taxes.dependentsUnder17` / `otherDependents` / `blind` (null = counted from People), `taxes.hsa.contribution`.
+
+## Outputs
+`taxInputs()` (shared by every tax page): `year`, `params` (the year's table, indexed past the last one), `filingStatus`, `inputs` for `federalTax`, `sources[]` (each figure and where it came from), `itemized` (total after caps, lines), `people` (ages65plus, dependents), `gains` (netted). `compute()` adds `result` (`federalTax`: income, taxable Social Security, AGI, deduction used, taxable income, ordinary and gains tax, credits, NIIT, additional Medicare, total, effective rate, bracket, room, balance), `marginal` (the true cost of the next 1,000), `steps[]` (the walk from income to tax), `years`, `isIndexed`.
+
+## Formulas
+`core/math/tax.js`, parameter-driven from `data/federal.js` (2024 and 2025 extracted from the vendored UsTaxes project, which is AGPL-3.0, by `tools/extract-tax.mjs`; the figures themselves are the IRS's; 2026 typed from Rev. Proc. 2025-32). Ordinary brackets; standard deduction plus the age/blindness allowance, or itemized when larger (state and local taxes capped, 2025-2029 OBBB cap with the phase-out over 500,000; medical over 7.5% of AGI); the 2025-2028 senior deduction (6,000 a person 65+, phased out at 6% over 75,000/150,000); qualified dividends and long-term gains stacked on top at 0/15/20%; the Social Security benefits worksheet (provisional income = other income + tax-exempt interest + half the benefits; up to 50% taxable between the base and the second threshold, up to 85% above; thresholds not indexed); the child tax credit (2,000 in 2024, 2,200 from 2025; 500 for other dependents; phased out 50 per 1,000 over 200,000/400,000; refundable up to 1,700 a child at 15% of earned income over 2,500); NIIT 3.8% on investment income over 200,000/250,000/125,000; additional Medicare 0.9% on wages over the same thresholds. Gains netting as Schedule D: short and long offset each other, a net loss takes up to 3,000 (1,500 separately) off ordinary income, the rest carries forward. Years past the last table: brackets, deductions, gains thresholds and the wage base inflated with the plan's inflation and rounded; Social Security thresholds, NIIT/Medicare thresholds and credit phase-outs stay fixed, as in the law.
+
+## Edge cases
+Not modelled: AMT, the qualified business income deduction, the earned income and education credits, self-employment tax (self-employment income is taxed as ordinary income with a note), state tax, married filing separately living-together rules for Social Security, the FICA wage base on the additional Medicare tax. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
+
+## Tests
+`tests/tax.test.mjs` (the engine on hand-worked 2025 cases), `tests/tax-pages.test.mjs` (this page on `qa/fixtures/tax-plan.mjs`), `module.test.mjs`.
+
+## Ideas / not yet
+- State tax (PolicyEngine as a local service), self-employment tax and the QBI deduction, AMT for stock-option years, a "compare with last year's return" line-by-line check.

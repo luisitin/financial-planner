@@ -1,0 +1,63 @@
+# planner.properties -- the PC server's settings. Same idea as a Bedrock
+# server.properties: key=value, one per line, # starts a comment.
+#
+# Copy this file to planner.properties and edit. planner.properties is ignored by
+# git and never served to browsers, so it is safe to share the project folder
+# without it: the app then falls back to its own System > Settings page.
+#
+# Read at startup, and re-read on every GET /api/config (so most edits do not
+# need a restart; server.port and server.bind do).
+
+# ---- server -------------------------------------------------------------
+# Port the app is served on. Phones open http://<this PC's LAN IP>:<port>/
+server.port=8787
+# 0.0.0.0 = every interface (LAN).  127.0.0.1 = this PC only.
+server.bind=0.0.0.0
+
+# ---- security -----------------------------------------------------------
+# REQUIRED before exposing the server beyond your own LAN (tunnel, port forward).
+# Any string. Devices enter it once in System > Settings. Empty = no auth (LAN only).
+auth.token=
+# true = requests from this PC itself (127.0.0.1) never need the token, so the PC's own
+# browser and the tools keep working. false = everyone needs it. Only requests that ask for
+# this server by its loopback name (http://127.0.0.1:<port> or localhost) from its own pages or
+# from tools count: another web site open in the PC's browser, a copy of the app opened from a
+# file, or a different host name all need the token.
+auth.trustLocal=true
+
+# ---- data ---------------------------------------------------------------
+# Where plan.json and backups live (relative to the project root or absolute).
+data.dir=data
+# How many timestamped backups of plan.json to keep.
+data.backups=50
+
+# ---- AI -----------------------------------------------------------------
+# ollama | openai | none      (openai = any OpenAI-compatible endpoint)
+ai.provider=ollama
+ai.host=127.0.0.1
+ai.port=11434
+# Empty = first model Ollama lists. For example: qwen3.5:9b, gemma4:12b, hermes3:8b
+ai.model=qwen3.5:9b
+# Only for ai.provider=openai:
+ai.baseUrl=
+ai.apiKey=
+# Give slow models room (ms).
+ai.timeoutMs=180000
+# Model used to read pictures of statements (Transactions > Statement reader). Empty = the
+# first Ollama model that can see images (qwen3.5 and gemma4 can). For ai.provider=openai the
+# ai.model must accept images.
+ai.visionModel=
+
+# ---- statements ---------------------------------------------------------
+# Largest statement file (PDF or picture) the server will read, in MB.
+statements.maxMb=25
+
+# ---- compute ------------------------------------------------------------
+# Upper bound on Monte Carlo paths a module may request from this PC.
+compute.maxPaths=20000
+
+# ---- features -----------------------------------------------------------
+# Turn pages off for everyone using this server: feature.<group>/<id>=false
+# (a device's own toggle in System > Settings still wins). Examples:
+# feature.estate/documents=false
+# feature.ai/assistant=false

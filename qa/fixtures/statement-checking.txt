@@ -1,0 +1,33 @@
+FIRST RIVER BANK
+Everyday Checking                                         Account number: 000123456789
+Ana Rivera and Bo Rivera                                  Statement Period: 12/16/2026 - 01/15/2027
+
+Account Summary
+Beginning balance on 12/16/2026                                 $2,394.89
+Deposits and other additions                                    $3,900.00
+Withdrawals and other subtractions                             -$2,306.40
+Ending balance on 01/15/2027                                    $3,988.49
+
+Deposits and other additions
+Date       Description                                            Amount
+12/18      ACME CORP DES:PAYROLL ID:1234567 INDN:ANA RIVERA         1,950.00
+01/02      ACME CORP DES:PAYROLL ID:1234567 INDN:ANA RIVERA         1,950.00
+Total deposits and other additions                              $3,900.00
+
+Withdrawals and other subtractions
+Date       Description                                            Amount
+12/19      Zelle payment to Bo Rivera Conf# abc123                   120.00
+12/22      CHASE CREDIT CRD DES:AUTOPAY ID:4760039224                640.22
+12/27      SHELL OIL 57442 12/26 PURCHASE DAYTON OH                   48.00
+01/02      OAK STREET APARTMENTS DES:RENT ID:5566                  1,500.00
+01/05      Online Transfer to SAV ...5566 transaction#: 9981         500.00
+Total withdrawals and other subtractions                        -$2,808.22
+
+Checks
+Date       Check #    Amount
+01/10      1042       125.00
+
+Daily ledger balances
+Date       Balance          Date       Balance
+12/18      4,344.89         01/02      5,104.67
+Page 1 of 1

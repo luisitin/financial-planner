@@ -1,0 +1,20 @@
+# Known-safe hits for tools/leak-guard.mjs, one per line: <rule> <path glob> <exact text, or * for any>
+# Keep entries narrow: a broad * here is a hole in the guard.
+
+# the app icons
+binary icon-*.png *
+# Tailscale's address range (CGNAT), not a host
+ip ** 100.64.0.0
+# placeholder text in the "PC address" field
+ip modules/system/settings/view.js 192.168.1.50
+# Netflix's public billing number, as it appears on bank statements
+phone ** 866-579-7172
+# 2^32 in the seeded random generator
+digits core/math/montecarlo.js 4294967296
+# fixtures: invented account and reference numbers, and Chase's public ACH company ids for card autopay
+digits qa/fixtures/** 000123456789
+digits qa/fixtures/** 0162345678901
+digits qa/fixtures/** 4760039224
+digits qa/fixtures/** 5760039224
+# generated pretend households: the trillion-balance and billion-expense edge cases
+digits qa/households/** *

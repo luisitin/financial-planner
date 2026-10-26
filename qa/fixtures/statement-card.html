@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Riverbank Visa statement</title>
+<style>
+  @page { size: letter; margin: 0.6in; }
+  body { font: 11pt/1.45 Arial, Helvetica, sans-serif; color: #111; margin: 0; width: 7.3in; }
+  h1 { font-size: 16pt; margin: 0 0 2px; letter-spacing: .04em; }
+  .top { display: flex; justify-content: space-between; margin-bottom: 14px; }
+  .box { border: 1px solid #999; padding: 8px 10px; font-size: 10pt; }
+  .box div { display: flex; justify-content: space-between; gap: 30px; }
+  h2 { font-size: 12pt; margin: 16px 0 6px; border-bottom: 2px solid #333; }
+  table { border-collapse: collapse; width: 100%; font-size: 10.5pt; }
+  th { text-align: left; border-bottom: 1px solid #999; padding: 3px 4px; font-size: 9.5pt; text-transform: uppercase; }
+  td { padding: 3px 4px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
+  td.amt, th.amt { text-align: right; white-space: nowrap; }
+  .total td { font-weight: bold; border-top: 1px solid #333; }
+  .small { font-size: 9pt; color: #444; margin-top: 18px; }
+</style></head>
+<body>
+  <div class="top">
+    <div><h1>RIVERBANK VISA SIGNATURE</h1>Account ending in 4471<br>Ana Rivera</div>
+    <div class="box">
+      <div><span>Statement Period</span><span>08/13/2026 - 09/12/2026</span></div>
+      <div><span>Payment Due Date</span><span>10/07/2026</span></div>
+      <div><span>New Balance</span><span>$1,254.68</span></div>
+      <div><span>Minimum Payment Due</span><span>$35.00</span></div>
+    </div>
+  </div>
+  <h2>Account Summary</h2>
+  <table>
+    <tr><td>Previous Balance</td><td class="amt">$640.22</td></tr>
+    <tr><td>Payments and Credits</td><td class="amt">-$640.22</td></tr>
+    <tr><td>Purchases</td><td class="amt">$1,254.68</td></tr>
+    <tr><td>Fees Charged</td><td class="amt">$0.00</td></tr>
+    <tr><td>Interest Charged</td><td class="amt">$0.00</td></tr>
+    <tr class="total"><td>New Balance</td><td class="amt">$1,254.68</td></tr>
+  </table>
+  <h2>Transactions</h2>
+  <table>
+    <tr><th>Trans Date</th><th>Post Date</th><th>Description</th><th class="amt">Amount</th></tr>
+    <tr><td>08/14</td><td>08/14</td><td>AUTOPAY PAYMENT - THANK YOU</td><td class="amt">-$640.22</td></tr>
+    <tr><td>08/16</td><td>08/17</td><td>KROGER #0421 DAYTON OH</td><td class="amt">$54.12</td></tr>
+    <tr><td>08/20</td><td>08/21</td><td>UNITED AIRLINES 0162345678901 CHICAGO IL</td><td class="amt">$412.60</td></tr>
+    <tr><td>08/27</td><td>08/28</td><td>SHELL OIL 57442 DAYTON OH</td><td class="amt">$48.00</td></tr>
+    <tr><td>08/30</td><td>08/31</td><td>NETFLIX.COM LOS GATOS CA</td><td class="amt">$15.49</td></tr>
+    <tr><td>09/01</td><td>09/02</td><td>KROGER #0421 DAYTON OH</td><td class="amt">$86.40</td></tr>
+    <tr><td>09/02</td><td>09/03</td><td>AMAZON MKTPL*2K3AB1 AMZN.COM/BILL WA</td><td class="amt">$42.17</td></tr>
+    <tr><td>09/05</td><td>09/06</td><td>ZARA USA NEW YORK NY</td><td class="amt">$129.90</td></tr>
+    <tr><td>09/08</td><td>09/08</td><td>REFUND ZARA USA NEW YORK NY</td><td class="amt">-$129.90</td></tr>
+    <tr><td>09/10</td><td>09/11</td><td>TARGET 00012345 DAYTON OH</td><td class="amt">$466.00</td></tr>
+    <tr class="total"><td colspan="3">Total Purchases for this period</td><td class="amt">$1,254.68</td></tr>
+  </table>
+  <h2>Interest Charge Calculation</h2>
+  <p class="small">Your Annual Percentage Rate (APR) is the annual interest rate on your account. Purchases 23.99% $0.00</p>
+  <p class="small">Page 1 of 1</p>
+</body></html>

@@ -1,0 +1,471 @@
+<title>Planner Prompt Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a work queue. Sticky header with the totals and one tab per prompt category; under it, one
+   card per prompt: copy it, mark where it went, attach the answer, tick done. Ledger-blue accent from
+   the planner's own icon; green only means done. */
+:root {
+  --bg: #f4f6f9; --surface: #ffffff; --ink: #141c27; --muted: #5a6677; --line: #dce2ea; --chip: #edf1f7;
+  --accent: #1e5bd0; --on-accent: #ffffff; --accent-soft: #e3ecfb; --good: #17784a; --good-soft: #e1f3e9;
+  --warn: #9a5a00; --bad: #b42318; --bad-soft: #fbe9e7; --shadow: 0 1px 2px rgba(20, 28, 39, .06);
+  --sans: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e131a; --surface: #151c26; --ink: #e5ecf4; --muted: #98a6b7; --line: #263141; --chip: #1c2533;
+  --accent: #74a3ff; --on-accent: #0a1222; --accent-soft: #1b2a44; --good: #5cc992; --good-soft: #15301f;
+  --warn: #f0b35a; --bad: #ff8a7a; --bad-soft: #3a1c19; --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e131a; --surface: #151c26; --ink: #e5ecf4; --muted: #98a6b7; --line: #263141; --chip: #1c2533;
+  --accent: #74a3ff; --on-accent: #0a1222; --accent-soft: #1b2a44; --good: #5cc992; --good-soft: #15301f;
+  --warn: #f0b35a; --bad: #ff8a7a; --bad-soft: #3a1c19; --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top .wrap { padding-block: 14px 0; display: grid; gap: 10px; }
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+.repo { font: 12px var(--mono); color: var(--muted); user-select: all; overflow-wrap: anywhere; }
+.totals { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.totals b { color: var(--ink); font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0; background: var(--good); transition: width .3s; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; margin: 0 -4px; padding: 0 4px; }
+.tab { flex: none; border: 0; background: none; padding: 10px 12px 11px; min-height: 44px; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.tab .n { font: 500 12px var(--mono); margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+main .wrap { padding-block: 16px 48px; display: grid; gap: 14px; }
+.notice { border-radius: var(--radius); padding: 10px 14px; font-size: 14px; }
+.notice.warn { background: var(--bad-soft); color: var(--bad); }
+.notice.info { background: var(--accent-soft); color: var(--ink); }
+.blurb { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.how { font-size: 14px; color: var(--muted); }
+.how summary { cursor: pointer; min-height: 32px; display: inline-flex; align-items: center; }
+.how ol { margin: 6px 0 0; padding-left: 20px; max-width: 70ch; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters input[type=search] { flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; min-height: 36px; font-size: 13px; cursor: pointer; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+[hidden] { display: none !important; }
+.chip.toggle { border-style: dashed; color: var(--accent); }
+.count-line { font-size: 13px; color: var(--muted); }
+
+.list { display: grid; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.card.done { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.card.flash { outline: 2px solid var(--accent); }
+.head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.head h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; text-wrap: balance; min-width: 0; }
+.state { flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+.state.sent { background: var(--accent-soft); color: var(--accent); }
+.state.answered { background: var(--accent); color: var(--on-accent); }
+.state.done { background: var(--good-soft); color: var(--good); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.tag { font: 500 11px var(--mono); padding: 2px 7px; border-radius: 5px; background: var(--chip); color: var(--muted); }
+.id { font: 12px var(--mono); color: var(--muted); user-select: all; overflow-wrap: anywhere; }
+.summary { margin: 0; font-size: 14px; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { min-height: 44px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.quiet { border-color: var(--line); color: var(--ink); }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: default; }
+.text { margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.row { display: grid; gap: 6px; }
+.label { font-size: 13px; font-weight: 600; }
+.sent-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.other { display: flex; gap: 6px; flex-wrap: wrap; }
+.other input { min-height: 36px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); width: 160px; max-width: 100%; }
+.done-row { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; }
+.done-row label { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; min-height: 44px; }
+.done-row input { width: 22px; height: 22px; accent-color: var(--good); }
+.when { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.more { border-top: 1px solid var(--line); padding-top: 8px; }
+.more > summary { cursor: pointer; font-weight: 600; font-size: 14px; min-height: 40px; display: flex; align-items: center; gap: 8px; }
+.more[open] > summary { margin-bottom: 8px; }
+.answers { display: grid; gap: 6px; }
+.answer { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.answer .what { min-width: 0; overflow-wrap: anywhere; }
+.answer .small { color: var(--muted); font-size: 12px; }
+.answer .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.answer .btn { min-height: 36px; padding: 4px 10px; font-size: 13px; }
+textarea { width: 100%; min-height: 110px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); resize: vertical; font: 13px/1.5 var(--mono); }
+.grid2 { display: grid; gap: 10px; grid-template-columns: 1fr; }
+.file-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.file-row select { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 6px 10px; max-width: 100%; }
+.file-name { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.msg:empty { display: none; }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; }
+.msg.ok { background: var(--good-soft); color: var(--good); }
+.msg.error { background: var(--bad-soft); color: var(--bad); }
+.empty { text-align: center; color: var(--muted); padding: 32px 12px; border: 1px dashed var(--line); border-radius: var(--radius); }
+footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="title-row">
+      <h1>Planner Prompt Board</h1>
+      <span class="repo" id="repo">github.com/luisitin/financial-planner</span>
+    </div>
+    <div class="totals" id="totals" aria-live="polite"><span>Loading the prompts...</span></div>
+    <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Prompt categories"></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div id="banner"></div>
+    <p class="blurb" id="blurb"></p>
+    <details class="how" id="how">
+      <summary>How this board works</summary>
+      <ol>
+        <li>Press <b>Copy prompt</b> and paste it into ChatGPT, Gemini, Muse, another Claude or any tool.</li>
+        <li>Tap the tools you sent it to under <b>Sent to</b>.</li>
+        <li>When the answer comes back, paste it or attach the file under <b>Answer and notes</b>, then save.</li>
+        <li>Tick <b>Done</b> when you are finished with that prompt.</li>
+      </ol>
+      <p>Claude copies every saved answer to the PC (into <code>ai-responses/&lt;prompt id&gt;/</code>), tries the good changes on a branch, runs the tests and reports back.</p>
+    </details>
+    <div class="filters">
+      <label class="sr" for="q">Search this tab</label>
+      <input type="search" id="q" placeholder="Search titles and ids" autocomplete="off">
+      <div class="filters" id="chips" role="group" aria-label="Show"></div>
+    </div>
+    <div class="count-line" id="countLine"></div>
+    <div class="list" id="list"><div class="empty">Loading the prompts...</div></div>
+  </div>
+</main>
+<footer class="wrap" id="foot">Prompts come from <code>prompts/index.json</code> in the repo; your progress and answers are saved with this page.</footer>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const h = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "text") el.textContent = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    return el;
+  };
+  const store = { get(k) { try { return JSON.parse(localStorage.getItem("ppb." + k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem("ppb." + k, JSON.stringify(v)); } catch {} } };
+  const FILTERS = [["all", "All"], ["todo", "To send"], ["sent", "Sent"], ["answered", "Answered"], ["done", "Done"]];
+  const TYPES = { md: "text/markdown", markdown: "text/markdown", txt: "text/plain", diff: "text/plain", patch: "text/plain", log: "text/plain", js: "text/plain", mjs: "text/plain", ts: "text/plain", py: "text/plain", html: "text/plain", css: "text/plain", json: "application/json", csv: "text/csv", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
+  const S = { data: null, byId: new Map(), docs: new Map(), tab: null, q: "", filter: store.get("filter") || "all", cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
+
+  const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
+  const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+  const docOf = (id) => S.docs.get(id) || {};
+  const sentList = (d) => Object.keys(d.sent || {});
+  const stateOf = (d) => d.done ? "done" : (d.responses || []).length ? "answered" : sentList(d).length ? "sent" : "todo";
+  const STATE_TEXT = { todo: "Not sent", sent: "Sent", answered: "Answered", done: "Done" };
+  const saveDrafts = () => store.set("drafts", S.drafts);
+
+  async function boot() {
+    try {
+      const r = await fetch("prompts.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error(r.status + " " + r.statusText);
+      S.data = await r.json();
+    } catch (e) {
+      $("#list").replaceChildren(h("div", { class: "notice warn", text: "The prompt list did not load (" + e.message + "). Reload the page; if it keeps failing, ask Claude to republish the board." }));
+      return;
+    }
+    for (const p of S.data.prompts) S.byId.set(p.id, p);
+    $("#repo").textContent = S.data.repo.replace(/^https:\/\//, "");
+    const hash = decodeURIComponent(location.hash.slice(1));
+    const cats = S.data.categories.map((c) => c.id);
+    if (cats.includes(hash)) S.tab = hash;
+    else if (S.byId.has(hash)) { S.tab = S.byId.get(hash).category; S.filter = "all"; S.focus = hash; }
+    else S.tab = cats.includes(store.get("tab")) ? store.get("tab") : cats[0];
+    $("#q").addEventListener("input", (e) => { S.q = e.target.value.trim().toLowerCase(); renderList(); });
+    renderTabs(); renderChips(); renderList(); renderTotals();
+    connect();
+  }
+
+  async function connect() {
+    if (!window.claude || typeof window.claude.use !== "function") { banner("info", "Open this board on claude.ai to save your progress. You can still copy prompts."); return; }
+    const [db, assets, user] = await Promise.all(["db", "assets", "user"].map((n) => window.claude.use(n).catch(() => null)));
+    S.db = db; S.assets = assets;
+    if (user && typeof user.can === "function") { try { if ((await user.can("data.write")) === false) S.canWrite = false; } catch {} }
+    if (!db) { banner("info", "Saving is not available in this view. Sign in on claude.ai to keep your progress; copying still works."); return; }
+    if (!S.canWrite) banner("info", "You can read this board but not change it.");
+    db.collection("status").onSnapshot((snap) => {
+      const next = new Map();
+      for (const d of snap.docs) if (d.exists) next.set(d.id, d.data());
+      S.docs = next; S.live = true;
+      for (const id of S.cards.keys()) patch(id);
+      renderTotals(); renderTabs(true);
+    }, (e) => banner("warn", "Live updates stopped (" + (e && e.code || "error") + "). Reload the page to reconnect."));
+  }
+
+  function banner(kind, text) { $("#banner").replaceChildren(h("div", { class: "notice " + kind, role: kind === "warn" ? "alert" : "status", text })); }
+
+  // ---- header ------------------------------------------------------------------------------------
+  function counts(list) {
+    let sent = 0, answered = 0, done = 0;
+    for (const p of list) { const d = docOf(p.id); if (sentList(d).length) sent++; if ((d.responses || []).length) answered++; if (d.done) done++; }
+    return { total: list.length, sent, answered, done };
+  }
+  function renderTotals() {
+    if (!S.data) return;
+    const c = counts(S.data.prompts);
+    $("#totals").replaceChildren(
+      h("span", {}, h("b", { text: c.done }), " of " + c.total + " done"),
+      h("span", {}, h("b", { text: c.sent }), " sent"),
+      h("span", {}, h("b", { text: c.answered }), " with an answer"),
+      h("span", {}, h("b", { text: c.total - c.sent }), " not sent yet"));
+    $("#bar").style.width = (c.total ? (100 * c.done / c.total) : 0).toFixed(1) + "%";
+  }
+  function renderTabs(onlyCounts) {
+    const nav = $("#tabs");
+    if (onlyCounts) { for (const b of nav.children) { const list = S.data.prompts.filter((p) => p.category === b.dataset.id); const c = counts(list); b.querySelector(".n").textContent = c.done + "/" + c.total; } return; }
+    nav.replaceChildren(...S.data.categories.map((cat) => {
+      const c = counts(S.data.prompts.filter((p) => p.category === cat.id));
+      return h("button", { class: "tab", role: "tab", "data-id": cat.id, "aria-selected": String(cat.id === S.tab), onclick: () => {
+        S.tab = cat.id; store.set("tab", S.tab); try { history.replaceState(null, "", "#" + S.tab); } catch {}
+        for (const b of nav.children) b.setAttribute("aria-selected", String(b.dataset.id === S.tab));
+        renderList();
+      } }, cat.title, h("span", { class: "n", text: c.done + "/" + c.total }));
+    }));
+    nav.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  function renderChips() {
+    $("#chips").replaceChildren(...FILTERS.map(([id, label]) => h("button", { class: "chip", "aria-pressed": String(S.filter === id), onclick: () => {
+      S.filter = id; store.set("filter", id); renderChips(); renderList();
+    } }, label)));
+  }
+
+  // ---- list --------------------------------------------------------------------------------------
+  function renderList() {
+    const cat = S.data.categories.find((c) => c.id === S.tab);
+    $("#blurb").textContent = cat ? cat.blurb : "";
+    let items = S.data.prompts.filter((p) => p.category === S.tab);
+    const total = items.length;
+    if (S.q) items = items.filter((p) => (p.title + " " + p.id + " " + (p.summary || "")).toLowerCase().includes(S.q));
+    if (S.filter !== "all") items = items.filter((p) => stateOf(docOf(p.id)) === S.filter);
+    if (S.tab === "build") items.sort((a, b) => (a.phase ?? 99) - (b.phase ?? 99) || a.title.localeCompare(b.title));
+    $("#countLine").textContent = items.length === total ? total + " prompts" : items.length + " of " + total + " prompts shown";
+    S.cards.clear();
+    const list = $("#list");
+    if (!items.length) { list.replaceChildren(h("div", { class: "empty", text: S.q ? "Nothing matches that search in this tab." : "Nothing here yet: try another filter." })); return; }
+    list.replaceChildren(...items.map(card));
+    for (const id of S.cards.keys()) patch(id);
+    if (S.focus && S.cards.has(S.focus)) {
+      const c = S.cards.get(S.focus); S.focus = null;
+      c.el.classList.add("flash"); c.text.open = true; fillText(c);
+      requestAnimationFrame(() => c.el.scrollIntoView({ block: "start" }));
+    }
+  }
+
+  function card(p) {
+    const refs = { p };
+    const suggested = p.destinations || [];
+    const others = S.data.destinations.filter((d) => d !== "Other" && !suggested.includes(d));
+    const chip = (d) => h("button", { class: "chip", "data-dest": d, "aria-pressed": "false", onclick: () => toggleSent(p.id, d) }, d);
+    refs.state = h("span", { class: "state" });
+    refs.copy = h("button", { class: "btn primary", onclick: () => copyPrompt(refs) }, "Copy prompt");
+    refs.text = h("details", { class: "more", ontoggle: () => refs.text.open && fillText(refs) }, h("summary", {}, "Show the prompt text"));
+    // the suggested tools show; the rest and a free-text box fold behind "More tools"
+    const otherIn = h("input", { type: "text", placeholder: "Another tool", "aria-label": "Another tool's name", maxlength: "40", onkeydown: (e) => { if (e.key === "Enter") addOther(); } });
+    const addOther = () => { const v = otherIn.value.trim(); if (v) { toggleSent(p.id, v, true); otherIn.value = ""; } };
+    refs.moreChips = h("div", { class: "sent-chips" }, ...others.map(chip));
+    refs.moreBox = h("div", { class: "row", hidden: true }, refs.moreChips,
+      h("div", { class: "other" }, otherIn, h("button", { class: "btn quiet", style: "min-height:36px;padding:4px 12px", onclick: addOther }, "Add")));
+    const moreBtn = h("button", { class: "chip toggle", "aria-expanded": "false", onclick: () => {
+      refs.moreBox.hidden = !refs.moreBox.hidden; moreBtn.setAttribute("aria-expanded", String(!refs.moreBox.hidden));
+      moreBtn.textContent = refs.moreBox.hidden ? "+ More tools" : "Fewer tools";
+    } }, "+ More tools");
+    refs.chipsExtra = h("span", { class: "sent-chips", style: "display:contents" });
+    refs.chips = h("div", { class: "sent-chips" }, ...suggested.map(chip), refs.chipsExtra, moreBtn);
+    refs.done = h("input", { type: "checkbox", id: "done-" + p.id, onchange: (e) => setDone(p.id, e.target.checked) });
+    refs.when = h("span", { class: "when" });
+    refs.msg = h("div", { class: "msg", role: "status" });
+    refs.answers = h("div", { class: "answers" });
+    refs.moreSummary = h("summary", {}, "Answer and notes");
+    refs.paste = h("textarea", { id: "paste-" + p.id, placeholder: "Paste the answer here (Markdown, diffs, whole files)...", oninput: (e) => { (S.drafts[p.id] ||= {}).paste = e.target.value; saveDrafts(); } });
+    refs.paste.value = S.drafts[p.id]?.paste || "";
+    refs.file = h("input", { type: "file", id: "file-" + p.id, class: "sr", onchange: () => { refs.fileName.textContent = refs.file.files[0] ? refs.file.files[0].name + " (" + kb(refs.file.files[0].size) + ")" : ""; } });
+    refs.fileName = h("span", { class: "file-name" });
+    refs.from = h("select", { "aria-label": "Which tool answered" }, h("option", { value: "" }, "Which tool answered?"), ...S.data.destinations.map((d) => h("option", { value: d }, d)));
+    refs.saveAnswer = h("button", { class: "btn primary", onclick: () => saveAnswer(refs) }, "Save the answer");
+    refs.notes = h("textarea", { id: "notes-" + p.id, placeholder: "Notes: what was good, what to apply, follow-ups...", oninput: (e) => { (S.drafts[p.id] ||= {}).notes = e.target.value; saveDrafts(); }, onblur: () => saveNotes(refs) });
+    refs.saveNotes = h("button", { class: "btn quiet", onclick: () => saveNotes(refs) }, "Save notes");
+    refs.el = h("article", { class: "card", id: p.id },
+      h("div", { class: "head" }, h("h2", { text: p.title }), refs.state),
+      h("div", { class: "meta" }, h("span", { class: "tag", text: "size " + p.size }), h("span", { class: "tag", text: p.output }), p.phase != null ? h("span", { class: "tag", text: "phase " + p.phase }) : null, h("span", { class: "id", text: p.id })),
+      p.summary ? h("p", { class: "summary", text: p.summary }) : null,
+      h("div", { class: "actions" }, refs.copy),
+      refs.text,
+      h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox),
+      h("div", { class: "done-row" }, h("label", { for: "done-" + p.id }, refs.done, "Done"), refs.when),
+      h("details", { class: "more" }, refs.moreSummary,
+        h("div", { class: "row" }, refs.answers),
+        h("div", { class: "grid2" },
+          h("div", { class: "row" }, h("label", { class: "label", for: "paste-" + p.id }, "The answer"), refs.paste,
+            h("div", { class: "file-row" }, h("label", { class: "btn quiet", for: "file-" + p.id, style: "display:inline-flex;align-items:center" }, "Attach a file"), refs.file, refs.fileName),
+            h("div", { class: "file-row" }, refs.from, refs.saveAnswer)),
+          h("div", { class: "row" }, h("label", { class: "label", for: "notes-" + p.id }, "Notes"), refs.notes, h("div", { class: "file-row" }, refs.saveNotes)))),
+      refs.msg);
+    S.cards.set(p.id, refs);
+    return refs.el;
+  }
+
+  function fillText(refs) {
+    if (refs.text.querySelector("pre")) return;
+    refs.pre = h("pre", { class: "text", tabindex: "0", text: refs.p.text });
+    refs.text.append(refs.pre);
+  }
+
+  // patch one card from its saved state without touching what is being typed
+  function patch(id) {
+    const r = S.cards.get(id); if (!r) return;
+    const d = docOf(id), st = stateOf(d), sent = sentList(d);
+    r.el.classList.toggle("done", !!d.done);
+    r.state.className = "state " + st; r.state.textContent = STATE_TEXT[st];
+    const shown = [...r.chips.querySelectorAll(":scope > [data-dest]"), ...r.moreChips.children];
+    for (const b of shown) b.setAttribute("aria-pressed", String(sent.includes(b.dataset.dest)));
+    const suggested = new Set(r.p.destinations || []);
+    r.chipsExtra.replaceChildren(...sent.filter((s) => !suggested.has(s)).map((s) => h("button", { class: "chip", "aria-pressed": "true", "data-extra": s, onclick: () => toggleSent(id, s) }, s)));
+    r.done.checked = !!d.done;
+    const bits = [];
+    if (d.done && d.doneAt) bits.push("done " + fmtWhen(d.doneAt));
+    if (sent.length) bits.push("sent " + fmtWhen(Object.values(d.sent).sort()[0]));
+    r.when.textContent = bits.join(" · ");
+    const resp = d.responses || [];
+    r.moreSummary.textContent = "Answer and notes" + (resp.length ? " (" + resp.length + " saved)" : "");
+    r.answers.replaceChildren(...resp.map((a) => answerRow(id, a)));
+    if (document.activeElement !== r.notes) {
+      const draft = S.drafts[id]?.notes;
+      const v = draft != null && draft !== (d.notes || "") ? draft : (d.notes || "");
+      if (r.notes.value !== v) r.notes.value = v;
+    }
+    const ro = !S.db || !S.canWrite;
+    for (const el of [r.done, r.saveAnswer, r.saveNotes, ...r.chips.querySelectorAll("[data-dest],[data-extra]"), ...r.moreChips.children]) el.disabled = ro;
+  }
+
+  function answerRow(id, a) {
+    const href = a.asset ? "/_blob/" + a.asset : null;
+    const rm = h("button", { class: "btn danger", onclick: () => {
+      if (rm.dataset.armed) return removeAnswer(id, a);
+      rm.dataset.armed = "1"; rm.textContent = "Remove for good?";
+      setTimeout(() => { if (rm.isConnected) { delete rm.dataset.armed; rm.textContent = "Remove"; } }, 4000);
+    } }, "Remove");
+    rm.disabled = !S.db || !S.canWrite;
+    return h("div", { class: "answer" },
+      h("div", { class: "what" }, h("div", {}, a.name || "answer"), h("div", { class: "small", text: [a.from || "unknown tool", a.size ? kb(a.size) : "", a.addedAt ? fmtWhen(a.addedAt) : ""].filter(Boolean).join(" · ") })),
+      h("div", { class: "btns" }, href ? h("a", { class: "btn quiet", href, target: "_blank", rel: "noopener" }, "Open") : null, rm));
+  }
+
+  // ---- writes (one at a time per prompt) -----------------------------------------------------------
+  function say(id, kind, text) { const r = S.cards.get(id); if (r) { r.msg.className = "msg " + kind; r.msg.textContent = text; } }
+  function save(id, mutate) {
+    if (!S.db || !S.canWrite) { say(id, "error", "Saving is not available here. Open the board on claude.ai while signed in."); return Promise.resolve(false); }
+    const run = async () => {
+      const cur = structuredClone(docOf(id));
+      const next = mutate(cur) || cur;
+      next.updatedAt = new Date().toISOString();
+      await S.db.collection("status").doc(id).set(next);
+      S.docs.set(id, next); patch(id); renderTotals(); renderTabs(true);
+      return true;
+    };
+    const p = (S.chains.get(id) || Promise.resolve()).then(run).catch((e) => {
+      say(id, "error", e && e.code === "quota_exceeded" ? "The board's storage is full. Remove old answers, then try again." : "That did not save (" + (e && (e.code || e.message) || "error") + "). Try again in a moment.");
+      return false;
+    });
+    S.chains.set(id, p);
+    return p;
+  }
+  function toggleSent(id, dest, forceOn) {
+    save(id, (d) => { d.sent ||= {}; if (d.sent[dest] && !forceOn) delete d.sent[dest]; else d.sent[dest] ||= new Date().toISOString(); return d; });
+  }
+  function setDone(id, on) {
+    save(id, (d) => { d.done = on; d.doneAt = on ? new Date().toISOString() : null; return d; }).then((ok) => ok && say(id, "ok", on ? "Marked done." : "Marked not done."));
+  }
+  async function saveNotes(r) {
+    const id = r.p.id, v = r.notes.value;
+    if (v === (docOf(id).notes || "")) return;
+    const ok = await save(id, (d) => { d.notes = v; return d; });
+    if (ok) { if (S.drafts[id]) { delete S.drafts[id].notes; saveDrafts(); } say(id, "ok", "Notes saved."); }
+  }
+  function typeFor(file) {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    return TYPES[ext] || (file.type && Object.values(TYPES).includes(file.type) ? file.type : null);
+  }
+  async function saveAnswer(r) {
+    const id = r.p.id, file = r.file.files[0], text = r.paste.value.trim(), from = r.from.value || sentList(docOf(id)).slice(-1)[0] || "";
+    if (!file && !text) return say(id, "error", "Paste the answer or attach a file first.");
+    if (!S.db || !S.canWrite) return say(id, "error", "Saving is not available here. Open the board on claude.ai while signed in.");
+    r.saveAnswer.disabled = true; say(id, "ok", "Saving...");
+    const now = new Date().toISOString(), stamp = now.slice(0, 16).replace(/[-:T]/g, "");
+    const items = [];
+    try {
+      if (file) {
+        const type = typeFor(file);
+        if (!type) throw { message: "files of this type cannot be stored; paste the text instead, or attach .md, .txt, .diff, .json, .csv, .pdf or an image" };
+        if (!S.assets) throw { message: "only an editor of this board can attach files; paste the text instead" };
+        const up = await S.assets.upload(file, { type });
+        items.push({ asset: up.id, name: file.name, type: up.contentType, size: up.sizeBytes, source: "file", from, addedAt: now });
+      }
+      if (text) {
+        if (S.assets) {
+          const up = await S.assets.upload(new Blob([text], { type: "text/markdown" }), { type: "text/markdown" });
+          items.push({ asset: up.id, name: "pasted-" + stamp + ".md", type: "text/markdown", size: up.sizeBytes, source: "paste", from, addedAt: now });
+        } else {
+          if (text.length > 200000) throw { message: "the pasted answer is too long to keep without file storage; attach it as a file" };
+          items.push({ asset: null, name: "pasted-" + stamp + ".md", type: "text/markdown", size: text.length, source: "paste", from, addedAt: now, text });
+        }
+      }
+    } catch (e) {
+      r.saveAnswer.disabled = false;
+      return say(id, "error", "The answer was not saved: " + (e.code === "too_large" ? "the file is over 20 MB" : (e.message || e.code || "upload failed")) + ".");
+    }
+    const ok = await save(id, (d) => { d.responses = [...(d.responses || []), ...items]; if (from) { d.sent ||= {}; d.sent[from] ||= now; } return d; });
+    r.saveAnswer.disabled = false;
+    if (ok) {
+      r.paste.value = ""; r.file.value = ""; r.fileName.textContent = "";
+      if (S.drafts[id]) { delete S.drafts[id].paste; saveDrafts(); }
+      say(id, "ok", "Answer saved. Claude copies it to the PC on the next sync.");
+    }
+  }
+  async function removeAnswer(id, a) {
+    const ok = await save(id, (d) => { d.responses = (d.responses || []).filter((x) => !(x.addedAt === a.addedAt && x.name === a.name && x.asset === a.asset)); return d; });
+    if (ok && a.asset && S.assets) { try { await S.assets.delete(a.asset); } catch {} }
+    if (ok) say(id, "ok", "Answer removed.");
+  }
+
+  // ---- copy ----------------------------------------------------------------------------------------
+  function copyPrompt(r) {
+    const done = (label) => { r.copy.textContent = label; setTimeout(() => { if (r.copy.isConnected) r.copy.textContent = "Copy prompt"; }, 2200); };
+    const fallback = () => {
+      r.text.open = true; fillText(r);
+      const sel = getSelection(), range = document.createRange(); range.selectNodeContents(r.pre); sel.removeAllRanges(); sel.addRange(range);
+      done("Selected: copy it");
+    };
+    try {
+      navigator.clipboard.writeText(r.p.text).then(() => { done("Copied"); say(r.p.id, "ok", "Copied. Paste it into the tool, then tap where you sent it."); }, fallback);
+    } catch { fallback(); }
+  }
+
+  boot();
+})();
+</script>

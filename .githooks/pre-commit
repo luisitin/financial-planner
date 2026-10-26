@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuses a commit that carries personal data or a non-noreply author (tools/leak-guard.mjs).
+# Installed per clone by `npm run hooks` (git config core.hooksPath .githooks).
+exec node tools/leak-guard.mjs

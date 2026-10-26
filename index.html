@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Planner</title>
+<!--
+  The SHELL. It never contains page content. Pages live in modules/<group>/<id>/
+  and are discovered through modules/registry.js (generated -- run `npm run registry`).
+  Read AGENTS.md before editing anything.
+-->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-180.png">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Planner">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#181c22" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="./core/ui/base.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="nav-toggle" aria-label="Menu" title="Menu">&#9776;</button>
+    <span id="page-title">Planner</span>
+    <button id="status" type="button" title="connection status">Connecting…</button>
+  </header>
+  <div id="scrim"></div>
+  <nav id="sidebar" aria-label="Pages"></nav>
+  <main id="content"><div class="booting"><div class="booting-icon">📒</div><div class="booting-name">Financial Planner</div><div class="muted">Opening your plan…</div></div></main>
+</div>
+<script type="module" src="./core/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# private: your connection settings and your financial data (root only: modules/*/data/ are
+# public tables and must be committed)
+planner.properties
+/data/
+# your machine's notes, the leak guard's scrub list, pre-scrub originals
+/private/
+# AI responses pulled from the prompt tracker (public only when the owner says so)
+/ai-responses/
+# generated
+/dist/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+/vendor/
+/shots/
+# QA run output (written by qa/households/run.mjs)
+/qa/households/results/
+/qa/households/.tmp/
+# Claude Code: this machine's own permission tweaks
+.claude/settings.local.json

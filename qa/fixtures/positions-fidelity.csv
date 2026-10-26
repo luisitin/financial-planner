@@ -1,0 +1,10 @@
+Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type
+X12345678,Individual,FXAIX,FIDELITY 500 INDEX FUND,120.5,$212.34,+$1.20,$25586.97,+$144.60,+0.57%,+$5586.97,+27.93%,60.12%,$20000.00,$165.98,Cash
+X12345678,Individual,SPAXX**,HELD IN MONEY MARKET,,,,$3120.50,,,,,7.33%,,,Cash
+X12345678,Individual,VXUS,VANGUARD TOTAL INTL STOCK ETF,200,$68.10,-$0.30,$13620.00,-$60.00,-0.44%,+$1620.00,+13.50%,32.00%,$12000.00,$60.00,Cash
+Z98765432,ROTH IRA,FZROX,FIDELITY ZERO TOTAL MARKET INDEX FUND,850.123,$19.50,+$0.10,$16577.40,+$85.01,+0.52%,+$2577.40,+18.41%,100.00%,$14000.00,$16.47,Cash
+Z98765432,ROTH IRA,Pending Activity,,,,,$0.00,,,,,,,,
+,,,,,,,,,,,,,,,
+
+"The data and information in this spreadsheet is provided to you solely for your use and is not intended for use by any third party."
+"Date downloaded 09/16/2026 3:10 pm ET"

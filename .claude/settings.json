@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node tools/shot.mjs:*)",
+      "Bash(node tools/drive.mjs:*)",
+      "Bash(node tools/gen-registry.mjs:*)",
+      "Bash(node tools/check.mjs:*)",
+      "Bash(node tools/scaffold-from-catalog.mjs:*)",
+      "Bash(node --check:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run check:*)",
+      "Bash(npm run registry:*)",
+      "Bash(curl -s http://127.0.0.1:8787/*)",
+      "Bash(curl.exe -s http://127.0.0.1:8787/*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "PowerShell(node tools/shot.mjs:*)",
+      "PowerShell(node tools/drive.mjs:*)",
+      "PowerShell(node tools/gen-registry.mjs:*)",
+      "PowerShell(node tools/check.mjs:*)",
+      "PowerShell(node tools/scaffold-from-catalog.mjs:*)",
+      "PowerShell(node --check:*)",
+      "PowerShell(npm test:*)",
+      "PowerShell(npm run check:*)",
+      "PowerShell(npm run registry:*)",
+      "PowerShell(curl -s http://127.0.0.1:8787/*)",
+      "PowerShell(curl.exe -s http://127.0.0.1:8787/*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "Read(//c/FinancialPlanner/**)"
+    ],
+    "deny": [
+      "Read(//c/FinancialPlanner/planner.properties)",
+      "Read(//c/FinancialPlanner/data/**)",
+      "Edit(//c/FinancialPlanner/planner.properties)",
+      "Edit(//c/FinancialPlanner/data/**)"
+    ]
+  }
+}
