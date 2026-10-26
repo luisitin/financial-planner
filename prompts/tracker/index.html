@@ -224,7 +224,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   const inPlay = (p) => isOut(docOf(p.id)) || S.results.has(p.id);
   const inTab = (p, tab) => tab === RANKED.id || (tab === PIPE.id ? isOut(docOf(p.id)) : tab === RESULTS.id ? inPlay(p) : p.category === tab);
   // results, written by Claude: { stage: checking | ready | pushed | rejected, summary, findings: [], commits: [sha], from, updatedAt }
-  const STAGE_TEXT = { checking: "Claude is checking it", ready: "Changes ready, being tested", pushed: "Pushed", rejected: "Not used" };
+  const STAGE_TEXT = { checking: "Claude is checking it", ready: "Changes ready to merge", pushed: "Pushed", rejected: "Not used" };
   const isFinished = (p) => { const r = S.results.get(p.id); return r ? r.stage === "pushed" || r.stage === "rejected" : !!docOf(p.id).done; };
 
   const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
