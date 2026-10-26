@@ -51,3 +51,4 @@ Rules:
 - Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
 - The repo is public: use invented example data only (no real names, addresses, account numbers).
 - If something is unclear, state your assumption and carry on; do not stop to ask.
+- If you commit or open a pull request, put `Prompt: swarm-tax-vs-irs-worksheets` on its own line in the commit message or pull request description.

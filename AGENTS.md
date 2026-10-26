@@ -32,7 +32,7 @@ configures the server and is never committed or served.
 9. **Keep `docs/MODULE_CATALOG.md` true.** New page: add its row. Status changes: update the row. `npm run check` fails if a module is missing from it.
 10. **Never commit or serve secrets or data.** `planner.properties`, `data/`, `vendor/` and `dist/` are git-ignored on purpose. Do not add another place to store a token.
 11. **Lifting code from an open-source project** (see `docs/RESOURCES.md`): note the project, file and licence in the module README. MIT/Apache/BSD: fine. AGPL/GPL: the repo is public under MIT, so never paste their code; use them as references, or take only facts (tax figures, tables) and say so in the README.
-12. **One change, one CHANGELOG line** in `CHANGELOG.md` under Unreleased.
+12. **One change, one CHANGELOG line** in `CHANGELOG.md` under Unreleased. A commit that carries out a prompt from `prompts/` has a `Prompt: <id>` line in its message (and a pull request in its description), so the owner's prompt board can show what each prompt led to.
 13. **Look at what you built.** `node tools/shot.mjs <group>/<id>` screenshots the page at phone
     and desktop widths (full page, real phone emulation; `--dark`, `--eval`, `--max-height`),
     then Read the PNG in `shots/`. Do this before saying a page is done. The owner reads the

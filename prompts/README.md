@@ -46,3 +46,13 @@ and the "How to answer" rules, and refuses a prompt that names a file the repo d
 Responses come back through the board into `ai-responses/<prompt-id>/` on the owner's PC
 (git-ignored). Good changes are applied on a branch, tested (`npm test`, `npm run check`),
 passed through the leak guard and pushed.
+
+## Results
+Every commit or pull request that carries out a prompt has a `Prompt: <id>` line (each
+prompt's rules ask for it, and AGENTS.md rule 12 says so too). `tools/push-feed.mjs` lists the
+last 30 commits on `main`, the open pull requests and any other branch with changes main does
+not have yet, each tagged with the prompts it names. The lead's sync loop writes that list
+and a short write-up per prompt into the board's database (`repo/pushes`, and
+`results/<id>` with a stage: checking, ready, pushed or rejected, plus what it found), and
+the board's **Results** tab shows them: what is finished, what is still in the works, and
+the recent pushes.
