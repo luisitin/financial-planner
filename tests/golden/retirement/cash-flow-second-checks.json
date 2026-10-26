@@ -1,0 +1,502 @@
+[
+  {
+    "rule": "ledger-mapping",
+    "row": 10,
+    "method": "PV remaining reconciles nominal end: 601080.000415 = 601080.000415"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 10,
+    "method": "multiply purchasing power back to nominal: 889745.235393 = 889745.235393"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 10,
+    "method": "income plus withdrawals funds all spending: 628862.671422 = 628862.671422"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 10,
+    "method": "per-person sum across work years: 25145.18 = 25145.18"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 10,
+    "method": "first-year funding plus shortage: 60108 = 60108"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 10,
+    "method": "exact cent input less rational gross draws: 667866.663333 = 667866.663333"
+  },
+  {
+    "rule": "readiness",
+    "row": 10,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 20,
+    "method": "PV remaining reconciles nominal end: 602279.996174 = 602279.996174"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 20,
+    "method": "multiply purchasing power back to nominal: 544828.796599 = 544828.796599"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 20,
+    "method": "income plus withdrawals funds all spending: 1096710.09624 = 1096710.09624"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 20,
+    "method": "per-person sum across work years: 24994.62 = 24994.62"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 20,
+    "method": "first-year funding plus shortage: 60228 = 60228"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 20,
+    "method": "exact cent input less rational gross draws: 1003800 = 1003800"
+  },
+  {
+    "rule": "readiness",
+    "row": 20,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 30,
+    "method": "PV remaining reconciles nominal end: 603480.002295 = 603480.002295"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 30,
+    "method": "multiply purchasing power back to nominal: 1957325.53679 = 1957325.53679"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 30,
+    "method": "income plus withdrawals funds all spending: 2099198.63425 = 2099198.63425"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 30,
+    "method": "per-person sum across work years: 25245.58 = 25245.58"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 30,
+    "method": "first-year funding plus shortage: 60348 = 60348"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 30,
+    "method": "exact cent input less rational gross draws: 670533.336667 = 670533.336667"
+  },
+  {
+    "rule": "readiness",
+    "row": 30,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 40,
+    "method": "PV remaining reconciles nominal end: 604679.998698 = 604679.998698"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 40,
+    "method": "multiply purchasing power back to nominal: 575117.272451 = 575117.272451"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 40,
+    "method": "income plus withdrawals funds all spending: 578182.468837 = 578182.468837"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 40,
+    "method": "per-person sum across work years: 25094.22 = 25094.22"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 40,
+    "method": "first-year funding plus shortage: 60468 = 60468"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 40,
+    "method": "exact cent input less rational gross draws: 1007800 = 1007800"
+  },
+  {
+    "rule": "readiness",
+    "row": 40,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 50,
+    "method": "PV remaining reconciles nominal end: 605880.000731 = 605880.000731"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 50,
+    "method": "multiply purchasing power back to nominal: 1327557.6915 = 1327557.6915"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 50,
+    "method": "income plus withdrawals funds all spending: 1334087.41404 = 1334087.41404"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 50,
+    "method": "per-person sum across work years: 25345.98 = 25345.98"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 50,
+    "method": "first-year funding plus shortage: 60588 = 60588"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 50,
+    "method": "exact cent input less rational gross draws: 673200 = 673200"
+  },
+  {
+    "rule": "readiness",
+    "row": 50,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 60,
+    "method": "PV remaining reconciles nominal end: 607079.996478 = 607079.996478"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 60,
+    "method": "multiply purchasing power back to nominal: 522322.032197 = 522322.032197"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 60,
+    "method": "income plus withdrawals funds all spending: 1580226.97323 = 1580226.97323"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 60,
+    "method": "per-person sum across work years: 25193.82 = 25193.82"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 60,
+    "method": "first-year funding plus shortage: 60708 = 60708"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 60,
+    "method": "exact cent input less rational gross draws: 1011800 = 1011800"
+  },
+  {
+    "rule": "readiness",
+    "row": 60,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 70,
+    "method": "PV remaining reconciles nominal end: 599999.99804 = 599999.99804"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 70,
+    "method": "multiply purchasing power back to nominal: 2023880.03965 = 2023880.03965"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 70,
+    "method": "income plus withdrawals funds all spending: 2167964.42692 = 2167964.42692"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 70,
+    "method": "per-person sum across work years: 25100 = 25100"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 70,
+    "method": "first-year funding plus shortage: 60000 = 60000"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 70,
+    "method": "exact cent input less rational gross draws: 666666.663333 = 666666.663333"
+  },
+  {
+    "rule": "readiness",
+    "row": 70,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 80,
+    "method": "PV remaining reconciles nominal end: 599999.999226 = 599999.999226"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 80,
+    "method": "multiply purchasing power back to nominal: 513649.361911 = 513649.361911"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 80,
+    "method": "income plus withdrawals funds all spending: 1606179.78207 = 1606179.78207"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 80,
+    "method": "per-person sum across work years: 24900 = 24900"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 80,
+    "method": "first-year funding plus shortage: 60000 = 60000"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 80,
+    "method": "exact cent input less rational gross draws: 1000000 = 1000000"
+  },
+  {
+    "rule": "readiness",
+    "row": 80,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 90,
+    "method": "PV remaining reconciles nominal end: 599999.99804 = 599999.99804"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 90,
+    "method": "multiply purchasing power back to nominal: 2023880.03965 = 2023880.03965"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 90,
+    "method": "income plus withdrawals funds all spending: 2167964.42692 = 2167964.42692"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 90,
+    "method": "per-person sum across work years: 25100 = 25100"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 90,
+    "method": "first-year funding plus shortage: 60000 = 60000"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 90,
+    "method": "exact cent input less rational gross draws: 666666.663333 = 666666.663333"
+  },
+  {
+    "rule": "readiness",
+    "row": 90,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "ledger-mapping",
+    "row": 100,
+    "method": "PV remaining reconciles nominal end: 12000.0008136 = 12000.0008136"
+  },
+  {
+    "rule": "real-deflation",
+    "row": 100,
+    "method": "multiply purchasing power back to nominal: 7269.24573076 = 7269.24573076"
+  },
+  {
+    "rule": "ledger-totals",
+    "row": 100,
+    "method": "income plus withdrawals funds all spending: 76076.1190472 = 76076.1190472"
+  },
+  {
+    "rule": "family-timing-contributions",
+    "row": 100,
+    "method": "per-person sum across work years: 498 = 498"
+  },
+  {
+    "rule": "shortfall-ledger",
+    "row": 100,
+    "method": "first-year funding plus shortage: 1200 = 1200"
+  },
+  {
+    "rule": "taxed-ledger",
+    "row": 100,
+    "method": "exact cent input less rational gross draws: 980000 = 980000"
+  },
+  {
+    "rule": "readiness",
+    "row": 100,
+    "method": "one absent required section: 1 = 1"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 10,
+    "method": "nominal draw conservation: 23541 = 23541"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 10,
+    "method": "nominal growth and real recovery: 1957 = 1957"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 10,
+    "method": "retained balance factor products: 45569.1056911 = 45569.1056911"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 20,
+    "method": "nominal draw conservation: 35612 = 35612"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 20,
+    "method": "nominal growth and real recovery: 2987 = 2987"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 20,
+    "method": "retained balance factor products: 71660.5075142 = 71660.5075142"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 30,
+    "method": "nominal draw conservation: 48321 = 48321"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 30,
+    "method": "nominal growth and real recovery: 4017 = 4017"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 30,
+    "method": "retained balance factor products: 93536.5853659 = 93536.5853659"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 40,
+    "method": "nominal draw conservation: 60172 = 60172"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 40,
+    "method": "nominal growth and real recovery: 5047 = 5047"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 40,
+    "method": "retained balance factor products: 121081.547179 = 121081.547179"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 50,
+    "method": "nominal draw conservation: 73101 = 73101"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 50,
+    "method": "nominal growth and real recovery: 6077 = 6077"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 50,
+    "method": "retained balance factor products: 141504.065041 = 141504.065041"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 60,
+    "method": "nominal draw conservation: 84732 = 84732"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 60,
+    "method": "nominal growth and real recovery: 7107 = 7107"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 60,
+    "method": "retained balance factor products: 170502.586844 = 170502.586844"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 70,
+    "method": "nominal draw conservation: 12.39 = 12.39"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 70,
+    "method": "nominal growth and real recovery: 1.03 = 1.03"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 70,
+    "method": "retained balance factor products: 23.0432010202 = 23.0432010202"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 80,
+    "method": "nominal draw conservation: 1228000 = 1228000"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 80,
+    "method": "nominal growth and real recovery: 103000 = 103000"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 80,
+    "method": "retained balance factor products: 2471051.98325 = 2471051.98325"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 90,
+    "method": "nominal draw conservation: 12.39 = 12.39"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 90,
+    "method": "nominal growth and real recovery: 1.03 = 1.03"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 90,
+    "method": "retained balance factor products: 23.9837398374 = 23.9837398374"
+  },
+  {
+    "rule": "all-buckets-real",
+    "row": 100,
+    "method": "nominal draw conservation: 12280 = 12280"
+  },
+  {
+    "rule": "contributions-real",
+    "row": 100,
+    "method": "nominal growth and real recovery: 1030 = 1030"
+  },
+  {
+    "rule": "rmd-tax-real",
+    "row": 100,
+    "method": "retained balance factor products: 23741.479839 = 23741.479839"
+  }
+]

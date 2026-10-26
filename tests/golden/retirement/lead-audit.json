@@ -1,0 +1,1342 @@
+[
+  {
+    "page": "projection",
+    "rows": 2100,
+    "audited": 42,
+    "cases": [
+      {
+        "case_id": "projection-account-buckets-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-account-buckets-094",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-calendar-horizon-018",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-calendar-horizon-078",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-spending-source-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-spending-source-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-contribution-growth-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-contribution-growth-094",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-income-start-end-cola-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-income-start-end-cola-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-price-level-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-price-level-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-glide-blend-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-glide-blend-094",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-sequence-overrides-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-sequence-overrides-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-fixed-real-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-fixed-real-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-percent-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-percent-094",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-guardrails-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-guardrails-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-vpw-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-vpw-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-withdraw-flat-grossup-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-withdraw-flat-grossup-094",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-failure-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-failure-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-post-flow-growth-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-post-flow-growth-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-affordable-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-affordable-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-page-summary-018",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-page-summary-078",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-readiness-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-readiness-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-typed-social-adapter-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-typed-social-adapter-094",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-partner-pay-adapter-018",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-partner-pay-adapter-078",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-rmd-surplus-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "projection-rmd-surplus-078",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "cash-flow",
+    "rows": 1000,
+    "audited": 20,
+    "cases": [
+      {
+        "case_id": "cash-flow-ledger-mapping-018",
+        "assertions": 15,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-ledger-mapping-094",
+        "assertions": 15,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-real-deflation-018",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-real-deflation-078",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-ledger-totals-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-ledger-totals-078",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-family-timing-contributions-018",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-family-timing-contributions-094",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-shortfall-ledger-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-shortfall-ledger-078",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-taxed-ledger-018",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-taxed-ledger-078",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-readiness-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-readiness-094",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-all-buckets-real-018",
+        "assertions": 8,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-all-buckets-real-078",
+        "assertions": 8,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-contributions-real-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-contributions-real-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-rmd-tax-real-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "cash-flow-rmd-tax-real-094",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "contributions",
+    "rows": 2200,
+    "audited": 44,
+    "cases": [
+      {
+        "case_id": "contributions-period-weekly-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-weekly-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-biweekly-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-biweekly-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-semimonthly-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-semimonthly-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-monthly-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-monthly-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-quarterly-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-quarterly-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-annual-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-annual-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-once-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-once-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-unknown-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-period-unknown-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-own-match-total-018",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-own-match-total-078",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-person-aggregation-018",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-person-aggregation-094",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-ira-combined-limit-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-ira-combined-limit-078",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-base-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-base-078",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-catchup-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-catchup-094",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-super-catchup-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-401k-super-catchup-078",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-hsa-self-catchup-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-hsa-self-catchup-078",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-hsa-employer-cap-018",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-hsa-employer-cap-094",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-age-reached-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-age-reached-078",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-table-year-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-table-year-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-empty-input-018",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-empty-input-094",
+        "assertions": 7,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-dependent-exclusion-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-dependent-exclusion-078",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-missing-account-person-018",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-missing-account-person-078",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-warning-threshold-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "contributions-warning-threshold-094",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "longevity",
+    "rows": 800,
+    "audited": 16,
+    "cases": [
+      {
+        "case_id": "longevity-survival-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-survival-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-inverse-survival-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-inverse-survival-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-life-expectancy-sum-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-life-expectancy-sum-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-birthday-aware-page-018",
+        "assertions": 20,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-birthday-aware-page-094",
+        "assertions": 50,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-couple-probability-clock-018",
+        "assertions": 50,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-couple-probability-clock-078",
+        "assertions": 50,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-page-defaults-omissions-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-page-defaults-omissions-078",
+        "assertions": 20,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-individual-age120-tail-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-individual-age120-tail-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-couple-70year-cap-018",
+        "assertions": 50,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "longevity-couple-70year-cap-078",
+        "assertions": 50,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "fire",
+    "rows": 1800,
+    "audited": 36,
+    "cases": [
+      {
+        "case_id": "fire-fi-number-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-fi-number-094",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-withdrawal-override-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-withdrawal-override-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-invested-buckets-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-invested-buckets-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-saving-no-double-count-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-saving-no-double-count-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-real-return-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-real-return-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-positive-return-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-positive-return-078",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-zero-return-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-zero-return-094",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-negative-return-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-years-negative-return-078",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-eighty-year-boundary-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-eighty-year-boundary-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-age-year-retirement-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-age-year-retirement-094",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-coast-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-coast-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-progress-gap-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-progress-gap-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-savings-rate-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-savings-rate-094",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-missing-spending-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-missing-spending-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-incomplete-plan-fallback-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-incomplete-plan-fallback-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-expense-spending-source-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-expense-spending-source-094",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-default-assumptions-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-default-assumptions-078",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-income-period-dates-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "fire-income-period-dates-078",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "rmd",
+    "rows": 1100,
+    "audited": 22,
+    "cases": [
+      {
+        "case_id": "rmd-factor-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-factor-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-cohort-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-cohort-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-amount-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-amount-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-calendar-018",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-calendar-094",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-schedule-018",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-schedule-078",
+        "assertions": 12,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-real-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-real-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-tax-018",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-tax-094",
+        "assertions": 5,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-totals-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-totals-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-ownership-018",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-ownership-078",
+        "assertions": 9,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-exclusions-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-exclusions-094",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-page_table-018",
+        "assertions": 59,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "rmd-page_table-078",
+        "assertions": 59,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "withdrawal-strategy",
+    "rows": 800,
+    "audited": 16,
+    "cases": [
+      {
+        "case_id": "withdrawal-strategy-fixed-real-018",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-fixed-real-094",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-percent-018",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-percent-078",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-guardrails-018",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-guardrails-078",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-vpw-018",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-vpw-094",
+        "assertions": 13,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-vpw-beginning-timing-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-vpw-beginning-timing-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-worst-history-selection-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-worst-history-selection-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-page-spending-summaries-018",
+        "assertions": 57,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-page-spending-summaries-094",
+        "assertions": 57,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-page-readiness-defaults-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-page-readiness-defaults-078",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "sequence-risk",
+    "rows": 500,
+    "audited": 10,
+    "cases": [
+      {
+        "case_id": "sequence-risk-tail-sort-paired-018",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-tail-sort-paired-094",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-geometric-means-018",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-geometric-means-078",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-run-summaries-018",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-run-summaries-078",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-steady-assumptions-018",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-steady-assumptions-094",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-history-readiness-018",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "sequence-risk-history-readiness-078",
+        "assertions": 27,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "withdrawal-order",
+    "rows": 1400,
+    "audited": 28,
+    "cases": [
+      {
+        "case_id": "withdrawal-order-ordinary-018",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-ordinary-094",
+        "assertions": 3,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-qualified-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-qualified-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-social-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-social-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-standard-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-standard-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-senior-018",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-senior-078",
+        "assertions": 4,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-indexing-018",
+        "assertions": 11,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-indexing-078",
+        "assertions": 11,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-niit-018",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-niit-094",
+        "assertions": 2,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-normalization-018",
+        "assertions": 24,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-normalization-078",
+        "assertions": 24,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-grossup-018",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-grossup-078",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-rmd-018",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-rmd-094",
+        "assertions": 6,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-totals-018",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-totals-078",
+        "assertions": 10,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-estate-018",
+        "assertions": 14,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-estate-078",
+        "assertions": 14,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-ranking-018",
+        "assertions": 18,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-ranking-094",
+        "assertions": 18,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-selection-018",
+        "assertions": 24,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-order-selection-078",
+        "assertions": 24,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  },
+  {
+    "page": "roth-conversions",
+    "rows": 1000,
+    "audited": 20,
+    "cases": [
+      {
+        "case_id": "roth-conversions-bracket_top-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-bracket_top-094",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-room-018",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-room-078",
+        "assertions": 1,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-eligibility-018",
+        "assertions": 11,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-eligibility-078",
+        "assertions": 11,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-conversion_tax-018",
+        "assertions": 17,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-conversion_tax-094",
+        "assertions": 17,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-insufficient-018",
+        "assertions": 18,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-insufficient-078",
+        "assertions": 18,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-comparison-018",
+        "assertions": 26,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-comparison-078",
+        "assertions": 26,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-real_totals-018",
+        "assertions": 17,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-real_totals-094",
+        "assertions": 17,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-table_span-018",
+        "assertions": 22,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-table_span-078",
+        "assertions": 14,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-irmaa-018",
+        "assertions": 14,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-irmaa-078",
+        "assertions": 14,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-readiness-018",
+        "assertions": 8,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "roth-conversions-readiness-094",
+        "assertions": 8,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      }
+    ]
+  }
+]

@@ -18,3 +18,13 @@ digits qa/fixtures/** 4760039224
 digits qa/fixtures/** 5760039224
 # generated pretend households: the trillion-balance and billion-expense edge cases
 digits qa/households/** *
+# Independent golden retirement fixtures contain invented extreme balances,
+# worked arithmetic and public-source hashes; these exact output areas are synthetic.
+digits tests/golden/retirement/*.csv *
+digits tests/golden/retirement/*.json *
+digits tools/golden_retirement/*.py *
+digits tests/golden/retirement/DISAGREEMENTS.md *
+# Public NYU source SHA-256 substring and the public SSA POMS document id.
+digits tests/golden/retirement/briefs/sequence-risk.md 6422510704608
+digits tests/golden/retirement/briefs/withdrawal-strategy.md 6422510704608
+digits modules/retirement/roth-conversions/README.md 0601101031

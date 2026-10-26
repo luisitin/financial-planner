@@ -7,7 +7,7 @@
   "scripts": {
     "serve": "node server/server.mjs",
     "registry": "node tools/gen-registry.mjs",
-    "test": "node tools/gen-registry.mjs && node --test \"tests/**/*.test.mjs\" \"modules/**/module.test.mjs\"",
+    "test": "node tools/run-tests.mjs",
     "build": "node tools/gen-registry.mjs && node tools/build.mjs",
     "check": "node tools/check.mjs",
     "leak-guard": "node tools/leak-guard.mjs --worktree",

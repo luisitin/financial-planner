@@ -27,3 +27,19 @@ No adult with a birth date, no accounts, or no spending figure: the page lists w
 
 ## Ideas / not yet
 - Real tax brackets instead of one rate (Phase 6); Roth conversions; a survivor scenario (one Social Security stops); one-off events (sell the house, an inheritance).
+
+## Independent answer key
+
+`tests/golden/retirement/projection.csv` contains 2,100 invented cases across 21 rules;
+`tests/golden-retirement.test.mjs` replays them. The source inventory, exact layout and
+rounding policy are in `tests/golden/retirement/briefs/projection.md`. Independent Python
+oracles use geometric sums, discounted annuities and cash conservation; every tenth case
+has another derivation, and a separate lead audit samples every rule. No expected value
+comes from running this module. Money is compared within0.005; rates to six-place precision.
+
+The documented model assumptions above supply timing, bucket, glide and strategy rules.
+IRS Publication590-B TableIII supplies the tested RMD factor24.6 at75:
+https://www.irs.gov/publications/p590b . Whole-dime typed Social Security amounts claimed
+at full retirement age67 isolate the annualization adapter; the SSA benefit formula remains
+in its own test scope. Source/model disagreements remain explicit TODO tests, including
+affordable-spending searches with a too-small upper bound and precision lost at large balances.
