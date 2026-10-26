@@ -64,11 +64,13 @@ const GOLDEN_RULES = [
 // How the work gets back to the owner: a tool with the repo opens a pull request, which the lead's hourly watch
 // picks up (tools/push-feed.mjs, tagged by the `ai/<id>` branch and the `Prompt: <id>` line); a chat answers in
 // its reply, which the owner pastes into the prompt board.
+// A tool's default commit author can be the owner's real name and email; the commits on main use a no-reply identity,
+// so the prompt has the tool copy that (the handle itself is on the leak guard's scrub list).
 function handBack(id) {
   return [
     "## How to hand it back",
     "",
-    `- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch \`ai/${id}\` from \`main\`, run \`npm test\` and \`npm run check\`, commit with \`Prompt: ${id}\` on its own line in the message, push the branch and open a pull request against \`main\`. Its description holds your rationale, the files you touched, the commands you ran and \`Prompt: ${id}\` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with \`Prompt: ${id}\` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.`,
+    `- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch \`ai/${id}\` from \`main\`, run \`npm test\` and \`npm run check\`, commit with \`Prompt: ${id}\` on its own line in the message, push the branch and open a pull request against \`main\`. The repo is public, so commit only under the GitHub no-reply identity the commits on \`main\` use, never under a personal name or email: before your first commit, run \`git config user.name "$(git log -1 --format=%an origin/main)"\` and \`git config user.email "$(git log -1 --format=%ae origin/main)"\`. The pull request's description holds your rationale, the files you touched, the commands you ran and \`Prompt: ${id}\` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with \`Prompt: ${id}\` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.`,
     "- **If you cannot push** (a chat): put everything in your reply, as below. The owner pastes your reply into their board.",
     "",
   ].join("\n");

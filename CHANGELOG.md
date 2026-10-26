@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [lead] Prompts: the hand-back section names who to commit as (the owner's GitHub no-reply address, never a personal name or email), after two Codex pull requests went out under a personal name and email; they went into main re-saved under the no-reply address.
 - [lead] Feedback F-030 and F-031 for the builder: the retirement answer key (pull request #4) found 17 causes behind 468 disagreeing cases (required-withdrawal start age and per-owner amounts, HSA employer deposits, the spending search, withdrawal timing, conversion rounding, life-table cut-offs), and the Social Security answer key (pull request #3) found the tables stop before SSA's October 2026 figures, nine benefits a dime low and no spouse or survivor amounts.
 - [lead] Prompts: every prompt now says how to hand the work back (a tool that works in the repo pushes a branch `ai/<id>` and opens a pull request with a `Prompt: <id>` line; a chat answers in its reply for the owner to paste). Before this, prompts only asked for diffs in the reply, so answers finished in Codex or Gemini never reached the repo or the board. The board says the same in its answer box, its how-to and on waiting cards; `tools/push-feed.mjs` also matches `ai/<id>` branch names.
 - [lead] Feedback F-029 for the builder: the federal tax answer key (pull request #1) found seven places where the tax math and the law disagree (2,246 of 12,000 returns), plus the net investment income tax counting only qualified dividends and long-term gains on the Federal page.
