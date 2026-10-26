@@ -61,7 +61,7 @@ const GOLDEN_RULES = [
   "Never run, import or copy the repo's code to get an expected value: the answer key must be independent of the code, or it proves nothing. A calculator, or a short script a worker writes itself from the rules in this prompt, is fine.",
   "Every CSV has a header row, one case per row, money to the cent, rates to six decimals and dates as YYYY-MM-DD.",
 ];
-function contract(output) {
+function contract(output, id) {
   return [
     "## How to answer",
     "",
@@ -73,6 +73,8 @@ function contract(output) {
     "Rules:",
     ...(output === "golden" ? GOLDEN_RULES : []).map((r) => `- ${r}`),
     ...COMMON_RULES.map((r) => `- ${r}`),
+    // the Prompt Board's Results tab finds the commits and pull requests that carry this line
+    `- If you commit or open a pull request, put \`Prompt: ${id}\` on its own line in the commit message or pull request description.`,
   ].join("\n");
 }
 
@@ -209,7 +211,7 @@ function applyValue(prompts) {
 // ---- write -------------------------------------------------------------------------------------------
 function expand(p) {
   const reads = p.read.map((f) => `- ${RAW}${f}`).join("\n");
-  return `# ${p.title}\n\n${INTRO}\n\n**Read these first** (raw files you can fetch directly; the whole repo is at ${REPO}):\n${reads || `- ${RAW}AGENTS.md`}\n\n## The task\n\n${p.body.replaceAll("{{REPO}}", REPO).replaceAll("{{RAW}}", RAW)}\n\n${contract(p.output)}\n`;
+  return `# ${p.title}\n\n${INTRO}\n\n**Read these first** (raw files you can fetch directly; the whole repo is at ${REPO}):\n${reads || `- ${RAW}AGENTS.md`}\n\n## The task\n\n${p.body.replaceAll("{{REPO}}", REPO).replaceAll("{{RAW}}", RAW)}\n\n${contract(p.output, p.id)}\n`;
 }
 function main() {
   const rows = catalogRows();

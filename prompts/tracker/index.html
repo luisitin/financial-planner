@@ -92,6 +92,20 @@ main .wrap { padding-block: 16px 48px; display: grid; gap: 14px; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pipe-row .num.hot { color: var(--accent); font-weight: 700; }
 .pipe-sort { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 13px; color: var(--muted); padding: 8px 8px 2px; }
+.found-label { display: block; font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
+.value-box p { margin: 0; }
+.found { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 4px; }
+.commits { display: grid; gap: 4px; font-size: 13px; }
+.commit { overflow-wrap: anywhere; }
+.commit a, .feed-row .sha { font: 12px var(--mono); }
+.feed { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.feed-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.feed-row:first-child { border-top: 0; }
+.feed-row .d { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.feed-row .t { min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.feed-row small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.tag.link { border: 0; cursor: pointer; color: var(--accent); background: var(--accent-soft); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--sans); padding: 3px 8px; }
+.feed-foot { margin: 0; padding: 8px 12px 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
 .pipe-sort select { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px 8px; color: var(--ink); max-width: 100%; }
 .state { flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
 .state.sent { background: var(--accent-soft); color: var(--accent); }
@@ -166,6 +180,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
         <li>Tap the tools you sent it to under <b>Sent to</b>. The <b>Sent out</b> tab then shows everything you sent, who has it and since when; tap a tool there to see only its prompts.</li>
         <li>When the answer comes back, press <b>Add the answer</b> (or open <b>Answer and notes</b>), paste it or attach the file, then save.</li>
         <li>Tick <b>Done</b> when you are finished with that prompt.</li>
+        <li><b>Results</b> shows what came of each prompt: finished and pushed (with what it found and links to the changes), still in the works, and every recent push to the repo.</li>
       </ol>
       <p>Claude copies every saved answer to the PC (into <code>ai-responses/&lt;prompt id&gt;/</code>), tries the good changes on a branch, runs the tests and reports back.</p>
     </details>
@@ -199,13 +214,18 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   const FILTERS = [["all", "All"], ["todo", "To send"], ["sent", "Waiting"], ["answered", "Answered"], ["done", "Done"]];
   const SORTS = [["action", "What needs you first"], ["oldest", "Oldest sent first"], ["newest", "Newest sent first"], ["rank", "Most important first"]];
   const TYPES = { md: "text/markdown", markdown: "text/markdown", txt: "text/plain", diff: "text/plain", patch: "text/plain", log: "text/plain", js: "text/plain", mjs: "text/plain", ts: "text/plain", py: "text/plain", html: "text/plain", css: "text/plain", json: "application/json", csv: "text/csv", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
-  const S = { data: null, byId: new Map(), docs: new Map(), tiers: new Map(), tab: null, q: "", filter: store.get("filter") || "all", showValues: store.get("showValues") === true, pipe: { tool: store.get("pipeTool") || "", sort: store.get("pipeSort") || "action" }, cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
+  const S = { data: null, byId: new Map(), docs: new Map(), tiers: new Map(), tab: null, q: "", filter: store.get("filter") || "all", showValues: store.get("showValues") === true, pipe: { tool: store.get("pipeTool") || "", sort: store.get("pipeSort") || "action" }, results: new Map(), feed: null, cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
   // tab 1: every prompt in rank order; tab 2: everything sent out, by tool; then the categories, in rank order
   const RANKED = { id: "ranked", title: "Most important first", blurb: "Every prompt, ranked by what it does for your planner: first the ones that keep your numbers right and your data safe, then the pages and fixes you will notice most. Each card says who should do it and how long it takes." };
   const PIPE = { id: "sent", title: "Sent out", blurb: "Everything you have sent out: who has it, since when, and what came back. Tap a tool to see only what you sent there; the first order puts what needs you on top." };
-  const tabs = () => [RANKED, PIPE, ...S.data.categories];
+  const RESULTS = { id: "results", title: "Results", blurb: "What came of the prompts: what is finished and pushed to the repo, what is still in the works, and what each finished one found. Claude fills this in as it checks answers and pushes changes, and it watches the repo for new pushes." };
+  const tabs = () => [RANKED, PIPE, RESULTS, ...S.data.categories];
   const isOut = (d) => sentList(d).length > 0 || (d.responses || []).length > 0;
-  const inTab = (p, tab) => tab === RANKED.id || (tab === PIPE.id ? isOut(docOf(p.id)) : p.category === tab);
+  const inPlay = (p) => isOut(docOf(p.id)) || S.results.has(p.id);
+  const inTab = (p, tab) => tab === RANKED.id || (tab === PIPE.id ? isOut(docOf(p.id)) : tab === RESULTS.id ? inPlay(p) : p.category === tab);
+  // results, written by Claude: { stage: checking | ready | pushed | rejected, summary, findings: [], commits: [sha], from, updatedAt }
+  const STAGE_TEXT = { checking: "Claude is checking it", ready: "Changes ready, being tested", pushed: "Pushed", rejected: "Not used" };
+  const isFinished = (p) => { const r = S.results.get(p.id); return r ? r.stage === "pushed" || r.stage === "rejected" : !!docOf(p.id).done; };
 
   const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
   const fmtDay = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return iso; } };
@@ -257,7 +277,16 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       renderTotals(); renderTabs(true);
       // on Sent out, refresh the "who has what" table; the cards stay put until the next filter or tab change
       if (S.tab === PIPE.id && S.pipeBox?.isConnected) S.pipeBox.replaceWith(pipeControls());
+      if (S.tab === RESULTS.id) renderList();
     }, (e) => banner("warn", "Live updates stopped (" + (e && e.code || "error") + "). Reload the page to reconnect."));
+    // what Claude found and pushed, and the repo's recent pushes (both written by Claude, read-only here)
+    const afterResults = () => { for (const id of S.cards.keys()) patch(id); renderTabs(true); if (S.tab === RESULTS.id) renderList(); };
+    db.collection("results").onSnapshot((snap) => {
+      const next = new Map();
+      for (const d of snap.docs) if (d.exists) next.set(d.id, d.data());
+      S.results = next; afterResults();
+    }, () => {});
+    db.doc("repo/pushes").onSnapshot((snap) => { S.feed = snap.exists ? snap.data() : null; afterResults(); }, () => {});
   }
 
   function banner(kind, text) { $("#banner").replaceChildren(h("div", { class: "notice " + kind, role: kind === "warn" ? "alert" : "status", text })); }
@@ -291,16 +320,22 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   }
   function renderTabs(onlyCounts) {
     const nav = $("#tabs");
-    if (onlyCounts) { for (const b of nav.children) { const list = S.data.prompts.filter((p) => inTab(p, b.dataset.id)); const c = counts(list); b.querySelector(".n").textContent = c.done + "/" + c.total; } return; }
+    if (onlyCounts) { for (const b of nav.children) b.querySelector(".n").textContent = tabCount(b.dataset.id); return; }
     nav.replaceChildren(...tabs().map((cat) => {
-      const c = counts(S.data.prompts.filter((p) => inTab(p, cat.id)));
       return h("button", { class: "tab", role: "tab", "data-id": cat.id, "aria-selected": String(cat.id === S.tab), onclick: () => {
         S.tab = cat.id; store.set("tab2", S.tab); try { history.replaceState(null, "", "#" + S.tab); } catch {}
         for (const b of nav.children) b.setAttribute("aria-selected", String(b.dataset.id === S.tab));
         renderList();
-      } }, cat.title, h("span", { class: "n", text: c.done + "/" + c.total }));
+      } }, cat.title, h("span", { class: "n", text: tabCount(cat.id) }));
     }));
     nav.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  // done out of all in a tab; on Results, finished out of everything in play
+  function tabCount(id) {
+    const list = S.data.prompts.filter((p) => inTab(p, id));
+    if (id === RESULTS.id) return list.filter(isFinished).length + "/" + list.length;
+    const c = counts(list);
+    return c.done + "/" + c.total;
   }
   function renderChips() {
     $("#chips").replaceChildren(...FILTERS.map(([id, label]) => h("button", { class: "chip", "aria-pressed": String(S.filter === id), onclick: () => {
@@ -316,6 +351,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   function renderList() {
     const cat = tabs().find((c) => c.id === S.tab);
     $("#blurb").textContent = cat ? cat.blurb : "";
+    $("#chips").hidden = S.tab === RESULTS.id;
+    if (S.tab === RESULTS.id) return renderResults();
     const pipe = S.tab === PIPE.id;
     let items = S.data.prompts.filter((p) => inTab(p, S.tab));
     if (pipe && S.pipe.tool && !toolStats().some((s) => s.tool === S.pipe.tool)) { S.pipe.tool = ""; store.set("pipeTool", ""); }
@@ -352,10 +389,88 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     list.replaceChildren(...kids);
     for (const id of S.cards.keys()) patch(id);
     if (S.focus && S.cards.has(S.focus)) {
-      const c = S.cards.get(S.focus); S.focus = null;
-      c.el.classList.add("flash"); c.text.open = true; fillText(c);
-      requestAnimationFrame(() => c.el.scrollIntoView({ block: "start" }));
+      const c = S.cards.get(S.focus), mode = S.focusMode; S.focus = null; S.focusMode = null;
+      c.el.classList.add("flash");
+      if (mode === "answer") requestAnimationFrame(() => openAnswer(c));
+      else {
+        if (mode !== "card") { c.text.open = true; fillText(c); }
+        requestAnimationFrame(() => c.el.scrollIntoView({ block: "start" }));
+      }
     }
+  }
+
+  // jump from Results to a prompt's card (on Sent out when it went out, otherwise on the ranked tab)
+  function openPrompt(id, answer) {
+    S.tab = isOut(docOf(id)) ? PIPE.id : RANKED.id; S.filter = "all"; S.pipe.tool = ""; S.q = ""; $("#q").value = "";
+    S.focus = id; S.focusMode = answer ? "answer" : "card";
+    try { history.replaceState(null, "", "#" + S.tab); } catch {}
+    renderTabs(); renderChips(); renderList();
+  }
+
+  // ---- results: finished and pushed, in the works, recent pushes -------------------------------------
+  const firstSent = (p) => Object.values(docOf(p.id).sent || {}).sort()[0] || "";
+  const finishedAt = (p) => S.results.get(p.id)?.updatedAt || docOf(p.id).doneAt || "";
+  const WORK_ORDER = { ready: 0, checking: 1 };
+  function renderResults() {
+    let list = S.data.prompts.filter(inPlay);
+    if (S.q) list = list.filter((p) => (p.title + " " + p.id + " " + (S.results.get(p.id)?.summary || "")).toLowerCase().includes(S.q));
+    const finished = list.filter(isFinished).sort((a, b) => finishedAt(b).localeCompare(finishedAt(a)));
+    const working = list.filter((p) => !isFinished(p)).sort((a, b) => workRank(a) - workRank(b) || firstSent(a).localeCompare(firstSent(b)));
+    const commits = S.feed?.commits || [], pulls = S.feed?.pulls || [], branches = S.feed?.branches || [];
+    $("#countLine").textContent = finished.length + " finished, " + working.length + " in the works" + (commits[0] ? "; last push " + fmtDay(commits[0].date) + " (" + ago(commits[0].date) + ")" : "");
+    S.cards.clear();
+    $("#list").replaceChildren(
+      sectionHead("Finished", plural(finished.length, "prompt")),
+      ...(finished.length ? finished.map(resultCard) : [h("div", { class: "empty", text: "Nothing finished yet. When an answer has been checked and its changes pushed, it shows here with what it found." })]),
+      sectionHead("In the works", plural(working.length, "prompt")),
+      ...(working.length ? working.map(workCard) : [h("div", { class: "empty", text: "Nothing in the works. Send a prompt from the first tab and tap where it went." })]),
+      sectionHead("Recent pushes to the repo", [plural(commits.length, "push", "pushes"), plural(pulls.length, "open pull request"), branches.length ? plural(branches.length, "branch", "branches") + " not merged" : ""].filter(Boolean).join(", ")),
+      feedBox());
+  }
+  function workRank(p) { const r = S.results.get(p.id); return r ? WORK_ORDER[r.stage] ?? 2 : stateOf(docOf(p.id)) === "answered" ? 2 : 3; }
+  const plural = (n, one, many = one + "s") => n ? n + " " + (n === 1 ? one : many) : "";
+  const sectionHead = (title, count) => h("h2", { class: "tier-head" }, title, h("span", { class: "n", text: count }));
+  function resultHead(p, pill) {
+    return h("div", { class: "head" }, h("div", { class: "title-wrap" }, p.rank ? h("span", { class: "rank", "aria-label": "Rank " + p.rank }, "#" + p.rank) : null, h("h3", { text: p.title })), pill);
+  }
+  function commitLink(sha) {
+    const c = (S.feed?.commits || []).find((x) => x.sha === sha || x.sha.startsWith(sha));
+    return h("div", { class: "commit" }, h("a", { href: c?.url || S.data.repo + "/commit/" + sha, target: "_blank", rel: "noopener" }, c?.short || String(sha).slice(0, 7)), c ? " " + c.title : "");
+  }
+  function resultCard(p) {
+    const r = S.results.get(p.id) || {}, when = finishedAt(p);
+    const verb = r.stage === "pushed" ? "Pushed " : r.stage === "rejected" ? "Closed " : "Marked done ";
+    return h("article", { class: "card" },
+      resultHead(p, h("span", { class: "state " + (r.stage === "rejected" ? "todo" : "done"), text: r.stage ? STAGE_TEXT[r.stage] : "Done" })),
+      h("p", { class: "effort", text: [when ? verb + fmtDay(when) + " (" + ago(when) + ")" : "", r.from ? "answer from " + r.from : ""].filter(Boolean).join(" · ") }),
+      r.summary ? h("div", { class: "value-box" }, h("b", { class: "found-label" }, "What it found"), h("p", { text: r.summary })) : h("p", { class: "summary", text: "No write-up yet: Claude adds what it found when it checks the answer." }),
+      (r.findings || []).length ? h("ul", { class: "found" }, ...r.findings.map((f) => h("li", { text: f }))) : null,
+      (r.commits || []).length ? h("div", { class: "commits" }, h("span", { class: "label" }, "The changes"), ...r.commits.map(commitLink)) : null,
+      h("div", { class: "actions" }, h("button", { class: "btn quiet", onclick: () => openPrompt(p.id) }, "Open the prompt")));
+  }
+  function workCard(p) {
+    const r = S.results.get(p.id), d = docOf(p.id), st = stateOf(d);
+    const where = r ? STAGE_TEXT[r.stage] : st === "answered" ? "Answer in: Claude checks it on the next sync" : "Waiting for the answer";
+    const went = Object.entries(d.sent || {}).sort((a, b) => a[1].localeCompare(b[1])).map(([t, at]) => t + " " + fmtDay(at) + " (" + ago(at) + ")");
+    return h("article", { class: "card" },
+      resultHead(p, h("span", { class: "state " + (r ? (r.stage === "ready" ? "answered" : "sent") : st), text: r ? (r.stage === "ready" ? "Changes ready" : "Checking") : STATE_TEXT[st] })),
+      h("p", { class: "effort", text: where + (went.length ? ". Sent to " + went.join("; ") : "") }),
+      r?.summary ? h("p", { class: "summary", text: r.summary }) : null,
+      h("div", { class: "actions" }, st === "sent" && !r ? h("button", { class: "btn", onclick: () => openPrompt(p.id, true) }, "Add the answer") : null,
+        h("button", { class: "btn quiet", onclick: () => openPrompt(p.id) }, "Open the prompt")));
+  }
+  function feedBox() {
+    const f = S.feed;
+    if (!f || !(f.commits || []).length) return h("div", { class: "empty", text: "No pushes recorded yet. Claude watches the repo and lists each push here." });
+    const tag = (id) => { const p = S.byId.get(id); return p ? h("button", { class: "tag link", onclick: () => openPrompt(id) }, "#" + p.rank + " " + p.title) : null; };
+    const row = (d, link, title, prompts, note) => h("div", { class: "feed-row" }, h("span", { class: "d", text: d }), h("div", { class: "t" }, link, h("span", { text: title }), note ? h("small", { text: note }) : null, ...(prompts || []).map(tag)));
+    // pull requests and side branches are pushed but not in the main code yet; then the commits on main
+    return h("div", { class: "feed" },
+      ...(f.pulls || []).map((pr) => row("open", h("a", { href: pr.url, target: "_blank", rel: "noopener" }, "Pull request #" + pr.number), pr.title, pr.prompts)),
+      ...(f.branches || []).map((b) => row(fmtDay(b.date), h("a", { class: "sha", href: b.url, target: "_blank", rel: "noopener" }, b.name), b.title, b.prompts,
+        "Branch with " + plural(b.ahead, "change") + " not merged yet")),
+      ...f.commits.map((c) => row(fmtDay(c.date), h("a", { class: "sha", href: c.url, target: "_blank", rel: "noopener" }, c.short), c.title, c.prompts)),
+      h("p", { class: "feed-foot", text: "Checked " + fmtWhen(f.checkedAt) + ". Claude checks the repo every hour while its session is open." }));
   }
 
   // ---- sent out: who has what ------------------------------------------------------------------
@@ -428,6 +543,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     refs.done = h("input", { type: "checkbox", id: "done-" + p.id, onchange: (e) => setDone(p.id, e.target.checked) });
     refs.when = h("span", { class: "when" });
     refs.sentLine = h("p", { class: "when sent-line" });
+    refs.resultLine = h("p", { class: "when sent-line", hidden: true });
     refs.addBtn = h("button", { class: "btn", hidden: true, onclick: () => openAnswer(refs) }, "Add the answer");
     refs.msg = h("div", { class: "msg", role: "status" });
     refs.answers = h("div", { class: "answers" });
@@ -451,7 +567,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       h("div", { class: "actions" }, refs.copy, refs.valueBtn, refs.addBtn),
       refs.valueBox,
       refs.text,
-      h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox, refs.sentLine),
+      h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox, refs.sentLine, refs.resultLine),
       h("div", { class: "done-row" }, h("label", { for: "done-" + p.id }, refs.done, "Done"), refs.when),
       refs.answerFold = h("details", { class: "more" }, refs.moreSummary,
         h("div", { class: "row" }, refs.answers),
@@ -507,6 +623,10 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     r.sentLine.textContent = went.length ? "Sent to " + went.join("; ") : "";
     r.addBtn.hidden = !!d.done || !sent.length;
     r.addBtn.textContent = (d.responses || []).length ? "Add another answer" : "Add the answer";
+    const res = S.results.get(id);
+    r.resultLine.hidden = !res;
+    const over = res && (res.stage === "pushed" || res.stage === "rejected");
+    r.resultLine.textContent = res ? "Result: " + (STAGE_TEXT[res.stage] || res.stage) + (res.updatedAt ? (over ? " " : " (since ") + fmtDay(res.updatedAt) + (over ? "" : ")") : "") + (res.summary ? ". " + (res.summary.length > 160 ? res.summary.slice(0, 157) + "..." : res.summary) : "") : "";
     for (const t of sent) if (![...r.from.options].some((o) => o.value === t)) r.from.append(h("option", { value: t }, t));
     const resp = d.responses || [];
     r.moreSummary.textContent = "Answer and notes" + (resp.length ? " (" + resp.length + " saved)" : "");
