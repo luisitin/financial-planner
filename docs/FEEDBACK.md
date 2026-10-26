@@ -315,6 +315,31 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - evidence: `npm test` (2,246 to-do); `node --test tests/golden-federal.test.mjs`; https://github.com/luisitin/financial-planner/pull/1; prompt `heavy-federal-tax-grid` on the prompt board.
 - status: open
 
+### F-030  Retirement: 468 of 12,700 answer-key cases disagree with the rules, seventeen causes (found by the retirement answer key)
+- when: 2026-10-26 18:05   page: retirement/* (ten pages), core/math/retirement.js, core/math/rmd.js   severity: wrong number
+- for: builder
+- what happened: `tests/golden-retirement.test.mjs` (pull request #4, merged in `9557ad3`) checks ten retirement pages against 12,700 cases worked from cited rules without the app's code. 12,232 agree; 468 run as to-do tests. `tests/golden/retirement/DISAGREEMENTS.md` gives each cause with worked numbers and a case id:
+  1. Required withdrawals: people born before July 1949 start at 70½, not 72 (`rmd-cohort-061`); the withdrawal is worked on the household's total instead of each owner's accounts (`rmd-ownership-001`); life-insurance cash value is treated as an IRA and gets a required withdrawal (`rmd-exclusions-009`).
+  2. Contributions: an employer's HSA deposits do not count toward the yearly HSA limit (`contributions-hsa-employer-cap-001`).
+  3. "How much can I spend": the search's upper bound is too low ($20,000 that could all be spent comes out as $10,004, `projection-affordable-001`) and it stops about $2 short at very large balances (`projection-affordable-092`).
+  4. Variable percentage withdrawal pays at the end of the year instead of the start (`withdrawal-strategy-vpw-beginning-timing-092`).
+  5. Tax inside the retirement pages: indexing rounds the 2025 head-of-household standard deduction in its own year ($23,650 instead of $23,625, `withdrawal-order-indexing-004`); the senior deduction on separate returns and the once-only couple phase-out, the same causes as F-029 (`withdrawal-order-senior-003`, `-027`, `roth-conversions-room-073`).
+  6. Roth conversions: the room is rounded to whole dollars (`roth-conversions-room-061`), the bracket-filling target stops within a dollar (`roth-conversions-eligibility-009`) and conversions under $1 are skipped (`-091`).
+  7. How long the money must last: the survival search stops at 120 before it crosses, the remaining-life sum drops the years after 120, and the couple search stops after 70 years.
+- expected: the cases agree, or a cause is recorded as an intended simplification in the page README and its rows' to-do says so.
+- suggestion: fix 1, 2 and 5 first (they change real plans' numbers); 3 and 4 next; 6 and 7 are small. F-029's fixes to `core/math/tax.js` clear part of 5. When a cause is fixed, clear the `todo` column on its rows and they must pass. The generators in `tools/golden_retirement/` rebuild the CSVs from the rules; never regenerate them from the app's code.
+- evidence: `npm test` (468 retirement to-do); `GOLDEN_PAGES=rmd node --test tests/golden-retirement.test.mjs`; https://github.com/luisitin/financial-planner/pull/4; prompt `heavy-golden-retirement`.
+- status: open
+
+### F-031  Social Security: the tables stop before SSA's October 2026 figures; spouse and survivor amounts missing (found by the Social Security answer key)
+- when: 2026-10-26 18:05   page: retirement/social-security   severity: wrong number
+- for: builder
+- what happened: `tests/golden-social-security.test.mjs` (from pull request #3, in `07c455d`) checks the page against 2,000 invented earnings histories and 66,000 claiming-age rows worked from SSA's rules. Six to-do tests record what is missing: `modules/retirement/social-security/data/ssa.js` ends at the 2024 average wage index and the 2025 cost-of-living raise, so a 1965 birth year indexes earnings with a stale wage index; the 2027 bend points are derived ($1,286 and $7,749) instead of SSA's published $1,340 and $8,077; the 2026 raise (3.6%) is not applied; 2027 earnings are not capped at $192,300. Nine benefits come out one dime low because binary floating point floors the claim factor product ($2,315.50 shows as $2,315.40). The page returns no spouse or survivor estimate.
+- expected: the published SSA figures in the table; benefits exact to the dime; spouse and survivor amounts (the CSV has benchmark columns for both).
+- suggestion: add the 2025 wage index, the 2026 raise, the 2027 bend points and the 2027 earnings cap to `ssa.js`, each checked on ssa.gov (links in `tests/golden/retirement/ss-rules.md`; the answer key read them on 2026-10-26). Round in whole cents before the dime floor (or work in cents). Spouse and survivor amounts can come with the planned pages that need them.
+- evidence: `node --test tests/golden-social-security.test.mjs` (6 to-do); `tests/golden/retirement/ss-rules.md`; prompt `heavy-social-security-grid`.
+- status: open
+
 ## Closed
 
 (nothing yet)
