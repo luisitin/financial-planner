@@ -79,6 +79,20 @@ main .wrap { padding-block: 16px 48px; display: grid; gap: 14px; }
 .tier-head:first-child { margin-top: 0; }
 .tier-head .n { font: 500 12px var(--mono); color: var(--muted); }
 .tier-blurb { margin: -6px 0 2px; font-size: 14px; color: var(--muted); max-width: 70ch; }
+.totals .total { border: 0; background: none; padding: 4px 0; min-height: 36px; font: inherit; color: var(--muted); cursor: pointer; text-align: left; }
+.totals .total:hover { color: var(--ink); }
+.sent-line { margin: 2px 0 0; }
+.pipe { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; display: grid; gap: 2px; }
+.pipe-head, .pipe-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 66px); align-items: center; gap: 4px; padding: 6px 8px; }
+.pipe-head { font-size: 12px; font-weight: 600; color: var(--muted); }
+.pipe-row { border: 0; background: none; border-radius: 8px; min-height: 44px; text-align: left; cursor: pointer; font-size: 14px; color: var(--ink); }
+.pipe-row[aria-pressed="true"] { background: var(--accent-soft); }
+.pipe-tool { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.pipe-tool small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pipe-row .num.hot { color: var(--accent); font-weight: 700; }
+.pipe-sort { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 13px; color: var(--muted); padding: 8px 8px 2px; }
+.pipe-sort select { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px 8px; color: var(--ink); max-width: 100%; }
 .state { flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
 .state.sent { background: var(--accent-soft); color: var(--accent); }
 .state.answered { background: var(--accent); color: var(--on-accent); }
@@ -149,8 +163,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       <ol>
         <li>The first tab, <b>Most important first</b>, ranks every prompt. <b>What this brings</b> on a card says what it would do for your planner, and <b>Who does it</b> says which kind of AI to send it to and how long it takes.</li>
         <li>Press <b>Copy prompt</b> and paste it into ChatGPT, Gemini, Muse, another Claude or any tool.</li>
-        <li>Tap the tools you sent it to under <b>Sent to</b>.</li>
-        <li>When the answer comes back, paste it or attach the file under <b>Answer and notes</b>, then save.</li>
+        <li>Tap the tools you sent it to under <b>Sent to</b>. The <b>Sent out</b> tab then shows everything you sent, who has it and since when; tap a tool there to see only its prompts.</li>
+        <li>When the answer comes back, press <b>Add the answer</b> (or open <b>Answer and notes</b>), paste it or attach the file, then save.</li>
         <li>Tick <b>Done</b> when you are finished with that prompt.</li>
       </ol>
       <p>Claude copies every saved answer to the PC (into <code>ai-responses/&lt;prompt id&gt;/</code>), tries the good changes on a branch, runs the tests and reports back.</p>
@@ -182,20 +196,26 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     return el;
   };
   const store = { get(k) { try { return JSON.parse(localStorage.getItem("ppb." + k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem("ppb." + k, JSON.stringify(v)); } catch {} } };
-  const FILTERS = [["all", "All"], ["todo", "To send"], ["sent", "Sent"], ["answered", "Answered"], ["done", "Done"]];
+  const FILTERS = [["all", "All"], ["todo", "To send"], ["sent", "Waiting"], ["answered", "Answered"], ["done", "Done"]];
+  const SORTS = [["action", "What needs you first"], ["oldest", "Oldest sent first"], ["newest", "Newest sent first"], ["rank", "Most important first"]];
   const TYPES = { md: "text/markdown", markdown: "text/markdown", txt: "text/plain", diff: "text/plain", patch: "text/plain", log: "text/plain", js: "text/plain", mjs: "text/plain", ts: "text/plain", py: "text/plain", html: "text/plain", css: "text/plain", json: "application/json", csv: "text/csv", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
-  const S = { data: null, byId: new Map(), docs: new Map(), tiers: new Map(), tab: null, q: "", filter: store.get("filter") || "all", showValues: store.get("showValues") === true, cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
-  // the first tab holds every prompt in rank order; the others are the categories, also in rank order
+  const S = { data: null, byId: new Map(), docs: new Map(), tiers: new Map(), tab: null, q: "", filter: store.get("filter") || "all", showValues: store.get("showValues") === true, pipe: { tool: store.get("pipeTool") || "", sort: store.get("pipeSort") || "action" }, cards: new Map(), db: null, assets: null, canWrite: true, live: false, chains: new Map(), drafts: store.get("drafts") || {} };
+  // tab 1: every prompt in rank order; tab 2: everything sent out, by tool; then the categories, in rank order
   const RANKED = { id: "ranked", title: "Most important first", blurb: "Every prompt, ranked by what it does for your planner: first the ones that keep your numbers right and your data safe, then the pages and fixes you will notice most. Each card says who should do it and how long it takes." };
-  const tabs = () => [RANKED, ...S.data.categories];
-  const inTab = (p, tab) => tab === RANKED.id || p.category === tab;
+  const PIPE = { id: "sent", title: "Sent out", blurb: "Everything you have sent out: who has it, since when, and what came back. Tap a tool to see only what you sent there; the first order puts what needs you on top." };
+  const tabs = () => [RANKED, PIPE, ...S.data.categories];
+  const isOut = (d) => sentList(d).length > 0 || (d.responses || []).length > 0;
+  const inTab = (p, tab) => tab === RANKED.id || (tab === PIPE.id ? isOut(docOf(p.id)) : p.category === tab);
 
   const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
+  const fmtDay = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return iso; } };
+  const ago = (iso) => { const days = Math.floor((Date.now() - new Date(iso)) / 864e5); return days <= 0 ? "today" : days === 1 ? "yesterday" : days + " days ago"; };
   const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
   const docOf = (id) => S.docs.get(id) || {};
   const sentList = (d) => Object.keys(d.sent || {});
+  const answeredBy = (d) => new Set((d.responses || []).map((r) => r.from).filter(Boolean));
   const stateOf = (d) => d.done ? "done" : (d.responses || []).length ? "answered" : sentList(d).length ? "sent" : "todo";
-  const STATE_TEXT = { todo: "Not sent", sent: "Sent", answered: "Answered", done: "Done" };
+  const STATE_TEXT = { todo: "Not sent", sent: "Waiting", answered: "Answered", done: "Done" };
   // what comes back, in plain words (the prompt's `output` field)
   const OUTPUT_TEXT = { diff: "code changes", files: "whole files", data: "data tables", report: "report and fixes", research: "sourced figures", golden: "answer key (CSV)" };
   const saveDrafts = () => store.set("drafts", S.drafts);
@@ -235,6 +255,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       S.docs = next; S.live = true;
       for (const id of S.cards.keys()) patch(id);
       renderTotals(); renderTabs(true);
+      // on Sent out, refresh the "who has what" table; the cards stay put until the next filter or tab change
+      if (S.tab === PIPE.id && S.pipeBox?.isConnected) S.pipeBox.replaceWith(pipeControls());
     }, (e) => banner("warn", "Live updates stopped (" + (e && e.code || "error") + "). Reload the page to reconnect."));
   }
 
@@ -242,18 +264,29 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
 
   // ---- header ------------------------------------------------------------------------------------
   function counts(list) {
-    let sent = 0, answered = 0, done = 0;
-    for (const p of list) { const d = docOf(p.id); if (sentList(d).length) sent++; if ((d.responses || []).length) answered++; if (d.done) done++; }
-    return { total: list.length, sent, answered, done };
+    let out = 0, waiting = 0, answered = 0, done = 0;
+    for (const p of list) {
+      const d = docOf(p.id), st = stateOf(d);
+      if (isOut(d)) out++;
+      if (st === "sent") waiting++; else if (st === "answered") answered++; else if (st === "done") done++;
+    }
+    return { total: list.length, out, waiting, answered, done };
+  }
+  // each total is a shortcut: it opens the list it counts
+  function go(tab, filter) {
+    S.tab = tab; S.filter = filter; store.set("tab2", tab); store.set("filter", filter);
+    try { history.replaceState(null, "", "#" + tab); } catch {}
+    renderTabs(); renderChips(); renderList();
   }
   function renderTotals() {
     if (!S.data) return;
     const c = counts(S.data.prompts);
+    const item = (n, label, tab, filter) => h("button", { class: "total", onclick: () => go(tab, filter) }, h("b", { text: n }), " " + label);
     $("#totals").replaceChildren(
-      h("span", {}, h("b", { text: c.done }), " of " + c.total + " done"),
-      h("span", {}, h("b", { text: c.sent }), " sent"),
-      h("span", {}, h("b", { text: c.answered }), " with an answer"),
-      h("span", {}, h("b", { text: c.total - c.sent }), " not sent yet"));
+      item(c.done, "of " + c.total + " done", PIPE.id, "done"),
+      item(c.waiting, "waiting for an answer", PIPE.id, "sent"),
+      item(c.answered, "answered, to check", PIPE.id, "answered"),
+      item(c.total - c.out, "not sent yet", RANKED.id, "todo"));
     $("#bar").style.width = (c.total ? (100 * c.done / c.total) : 0).toFixed(1) + "%";
   }
   function renderTabs(onlyCounts) {
@@ -283,17 +316,28 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   function renderList() {
     const cat = tabs().find((c) => c.id === S.tab);
     $("#blurb").textContent = cat ? cat.blurb : "";
+    const pipe = S.tab === PIPE.id;
     let items = S.data.prompts.filter((p) => inTab(p, S.tab));
+    if (pipe && S.pipe.tool && !toolStats().some((s) => s.tool === S.pipe.tool)) { S.pipe.tool = ""; store.set("pipeTool", ""); }
+    if (pipe && S.pipe.tool) items = items.filter((p) => { const d = docOf(p.id); return d.sent?.[S.pipe.tool] || answeredBy(d).has(S.pipe.tool); });
     const total = items.length;
     if (S.q) items = items.filter((p) => (p.title + " " + p.id + " " + (p.summary || "") + " " + (p.value || "")).toLowerCase().includes(S.q));
     if (S.filter !== "all") items = items.filter((p) => stateOf(docOf(p.id)) === S.filter);
-    items.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
-    $("#countLine").textContent = (items.length === total ? total + " prompts" : items.length + " of " + total + " prompts shown") + ", most important first";
+    if (pipe) pipeSort(items); else items.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+    $("#countLine").textContent = pipe
+      ? (items.length === total ? total : items.length + " of " + total) + " sent out" + (S.pipe.tool ? " to " + S.pipe.tool : "") + ", " + SORTS.find(([v]) => v === S.pipe.sort)[1].toLowerCase()
+      : (items.length === total ? total + " prompts" : items.length + " of " + total + " prompts shown") + ", most important first";
     S.cards.clear();
     const list = $("#list");
-    if (!items.length) { list.replaceChildren(h("div", { class: "empty", text: S.q ? "Nothing matches that search in this tab." : "Nothing here yet: try another filter." })); return; }
+    const head = pipe ? [pipeControls()] : [];
+    if (!items.length) {
+      const why = pipe && !S.docs.size ? "Nothing sent yet. Copy a prompt, paste it into a tool, then tap that tool under Sent to: it shows up here with the date."
+        : S.q ? "Nothing matches that search in this tab." : "Nothing here yet: try another filter" + (pipe && S.pipe.tool ? " or another tool." : ".");
+      list.replaceChildren(...head, h("div", { class: "empty", text: why }));
+      return;
+    }
     // on the ranked tab, a heading opens each tier (Start here, Next, ...)
-    const kids = [], shown = new Map();
+    const kids = [...head], shown = new Map();
     for (const p of items) shown.set(p.tier, (shown.get(p.tier) || 0) + 1);
     let tierId;
     for (const p of items) {
@@ -312,6 +356,53 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       c.el.classList.add("flash"); c.text.open = true; fillText(c);
       requestAnimationFrame(() => c.el.scrollIntoView({ block: "start" }));
     }
+  }
+
+  // ---- sent out: who has what ------------------------------------------------------------------
+  // per tool: waiting (sent, nothing back from that tool yet), answered (an answer came from it, not done), done
+  function toolStats() {
+    const m = new Map();
+    for (const [id, d] of S.docs) {
+      if (!S.byId.has(id)) continue;
+      const from = answeredBy(d);
+      for (const t of new Set([...sentList(d), ...from])) {
+        const s = m.get(t) || { tool: t, waiting: 0, answered: 0, done: 0, oldest: null };
+        if (d.done) s.done++;
+        else if (from.has(t)) s.answered++;
+        else { s.waiting++; const at = d.sent?.[t]; if (at && (!s.oldest || at < s.oldest)) s.oldest = at; }
+        m.set(t, s);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.waiting - a.waiting || (b.answered + b.done) - (a.answered + a.done) || a.tool.localeCompare(b.tool));
+  }
+  function pipeControls() {
+    const stats = toolStats(), all = counts(S.data.prompts.filter((p) => isOut(docOf(p.id))));
+    const row = (tool, label, s) => h("button", { class: "pipe-row", "aria-pressed": String(S.pipe.tool === tool), onclick: () => { S.pipe.tool = tool; store.set("pipeTool", tool); renderList(); } },
+      h("span", { class: "pipe-tool" }, label, s.oldest ? h("small", { text: "oldest waiting: sent " + ago(s.oldest) }) : null),
+      h("span", { class: "num" + (s.waiting ? " hot" : "") }, String(s.waiting)), h("span", { class: "num" }, String(s.answered)), h("span", { class: "num" }, String(s.done)));
+    S.pipeBox = h("section", { class: "pipe", "aria-label": "Who has what" },
+      h("div", { class: "pipe-head" }, h("span", {}, "Who has what"), h("span", { class: "num" }, "Waiting"), h("span", { class: "num" }, "Answered"), h("span", { class: "num" }, "Done")),
+      row("", "All tools", { waiting: all.waiting, answered: all.answered, done: all.done }),
+      ...stats.map((s) => row(s.tool, s.tool, s)),
+      h("label", { class: "pipe-sort" }, "Order",
+        h("select", { onchange: (e) => { S.pipe.sort = e.target.value; store.set("pipeSort", S.pipe.sort); renderList(); } },
+          ...SORTS.map(([v, l]) => h("option", { value: v, selected: S.pipe.sort === v }, l)))));
+    return S.pipeBox;
+  }
+  // the dates that matter for one prompt: when it went to the chosen tool, or to any tool
+  function sentAt(p, which) {
+    const d = docOf(p.id), ts = (S.pipe.tool ? [d.sent?.[S.pipe.tool]] : Object.values(d.sent || {})).filter(Boolean).sort();
+    return (which === "first" ? ts[0] : ts[ts.length - 1]) || "";
+  }
+  const STAGE = { sent: 0, answered: 1, done: 2, todo: 3 };
+  function pipeSort(items) {
+    const k = S.pipe.sort;
+    return items.sort((a, b) =>
+      k === "rank" ? (a.rank ?? 1e9) - (b.rank ?? 1e9)
+      : k === "newest" ? sentAt(b, "last").localeCompare(sentAt(a, "last"))
+      : k === "oldest" ? sentAt(a, "first").localeCompare(sentAt(b, "first"))
+      // what needs you first: waiting (oldest first, the ones to chase), then answers to check, then done
+      : STAGE[stateOf(docOf(a.id))] - STAGE[stateOf(docOf(b.id))] || sentAt(a, "first").localeCompare(sentAt(b, "first")));
   }
 
   function card(p) {
@@ -336,6 +427,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     refs.chips = h("div", { class: "sent-chips" }, ...suggested.map(chip), refs.chipsExtra, moreBtn);
     refs.done = h("input", { type: "checkbox", id: "done-" + p.id, onchange: (e) => setDone(p.id, e.target.checked) });
     refs.when = h("span", { class: "when" });
+    refs.sentLine = h("p", { class: "when sent-line" });
+    refs.addBtn = h("button", { class: "btn", hidden: true, onclick: () => openAnswer(refs) }, "Add the answer");
     refs.msg = h("div", { class: "msg", role: "status" });
     refs.answers = h("div", { class: "answers" });
     refs.moreSummary = h("summary", {}, "Answer and notes");
@@ -355,12 +448,12 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       h("div", { class: "meta" }, tier ? h("span", { class: "tag" + (tier.i === 0 ? " tier-first" : ""), text: tier.title }) : null, h("span", { class: "tag", title: "What comes back", text: OUTPUT_TEXT[p.output] || p.output }), p.phase != null ? h("span", { class: "tag", text: "phase " + p.phase }) : null, h("span", { class: "id", text: p.id })),
       p.summary ? h("p", { class: "summary", text: p.summary }) : null,
       p.effort ? h("p", { class: "effort" }, h("b", {}, "Who does it: "), p.effort) : null,
-      h("div", { class: "actions" }, refs.copy, refs.valueBtn),
+      h("div", { class: "actions" }, refs.copy, refs.valueBtn, refs.addBtn),
       refs.valueBox,
       refs.text,
-      h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox),
+      h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox, refs.sentLine),
       h("div", { class: "done-row" }, h("label", { for: "done-" + p.id }, refs.done, "Done"), refs.when),
-      h("details", { class: "more" }, refs.moreSummary,
+      refs.answerFold = h("details", { class: "more" }, refs.moreSummary,
         h("div", { class: "row" }, refs.answers),
         h("div", { class: "grid2" },
           h("div", { class: "row" }, h("label", { class: "label", for: "paste-" + p.id }, "The answer"), refs.paste,
@@ -373,6 +466,22 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   }
 
   function showValue(refs, on) { refs.valueBox.hidden = !on; refs.valueBtn.setAttribute("aria-expanded", String(on)); }
+
+  // "Add the answer": open the answer box, pick the tool it most likely came from, put the cursor in it
+  function openAnswer(r) {
+    r.answerFold.open = true;
+    if (!r.from.value) {
+      const d = docOf(r.p.id), last = Object.entries(d.sent || {}).sort((a, b) => a[1].localeCompare(b[1])).pop();
+      const tool = S.tab === PIPE.id && S.pipe.tool ? S.pipe.tool : last?.[0];
+      if (tool) setFrom(r, tool);
+    }
+    r.paste.focus({ preventScroll: true });
+    r.paste.scrollIntoView({ block: "center" });
+  }
+  function setFrom(r, tool) {
+    if (![...r.from.options].some((o) => o.value === tool)) r.from.append(h("option", { value: tool }, tool));
+    r.from.value = tool;
+  }
 
   function fillText(refs) {
     if (refs.text.querySelector("pre")) return;
@@ -391,10 +500,14 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
     const suggested = new Set(r.p.destinations || []);
     r.chipsExtra.replaceChildren(...sent.filter((s) => !suggested.has(s)).map((s) => h("button", { class: "chip", "aria-pressed": "true", "data-extra": s, onclick: () => toggleSent(id, s) }, s)));
     r.done.checked = !!d.done;
-    const bits = [];
-    if (d.done && d.doneAt) bits.push("done " + fmtWhen(d.doneAt));
-    if (sent.length) bits.push("sent " + fmtWhen(Object.values(d.sent).sort()[0]));
-    r.when.textContent = bits.join(" · ");
+    r.when.textContent = d.done && d.doneAt ? fmtWhen(d.doneAt) : "";
+    // one line per prompt: where it went, when, and which tools have answered
+    const from = answeredBy(d);
+    const went = Object.entries(d.sent || {}).sort((a, b) => a[1].localeCompare(b[1])).map(([t, at]) => t + " " + fmtDay(at) + " (" + ago(at) + ")" + (from.has(t) ? ", answered" : ""));
+    r.sentLine.textContent = went.length ? "Sent to " + went.join("; ") : "";
+    r.addBtn.hidden = !!d.done || !sent.length;
+    r.addBtn.textContent = (d.responses || []).length ? "Add another answer" : "Add the answer";
+    for (const t of sent) if (![...r.from.options].some((o) => o.value === t)) r.from.append(h("option", { value: t }, t));
     const resp = d.responses || [];
     r.moreSummary.textContent = "Answer and notes" + (resp.length ? " (" + resp.length + " saved)" : "");
     r.answers.replaceChildren(...resp.map((a) => answerRow(id, a)));
