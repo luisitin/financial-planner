@@ -14,3 +14,42 @@ A Gompertz mortality law S(t | x) = exp(-e^((x-m)/b) (e^((t-x)/b) - 1)) with mod
 
 ## Tests
 `tests/retirement-pages.test.mjs`: monotonic curve, sex and health shifts, expectancy and 90th-percentile ages in the expected ranges, the couple.
+
+## Independent formula answer key
+
+`tests/golden/retirement/longevity.csv` contains800 invented examples, replayed
+by `tests/golden-retirement.test.mjs`. Its specification and exact flat CSV
+layout are in `tests/golden/retirement/briefs/longevity.md`; reproduce it with
+`python tools/golden_retirement/longevity.py`. The generator does not import or
+execute application code. Each of eight formula/rule groups has60 grid,30 edge
+and10 extreme cases. Every tenth row has a separately asserted derivation.
+
+The model's84/88/86 modal ages,10.5/9.5/10 dispersions and+3/-4 health shifts
+come from the modeling assumptions stated above. They are **not published SSA
+coefficients**. [SSA's period table](https://www.ssa.gov/oact/STATS/table4c6.html)
+explains life expectancy as average remaining years at an exact age; its current
+page is2023 data. We preserve the original documented approximate fit rather
+than claiming the current table validates its coefficients.
+
+The oracle independently uses cumulative hazard H(t)=exp((t-m)/b) and
+S(x,t)=exp(H(x)-H(t)). Solving S=p gives the threshold
+`ceil(m+b*ln(exp((x-m)/b)-ln(p)))`. Reached ages have survival one. The couple
+rule is inclusion-exclusion, `S_a+S_b-S_a*S_b`, with an independence assumption
+and ages labeled on the first adult's clock. Input birthdays use ordinary whole
+calendar years; February29 birthdays advance March1 in a nonleap year.
+
+The original README did not specify how its survival "sum" was sampled. The
+answer key discloses the existing numerical contract: one-year midpoint
+rectangles through age120; expected age is current age plus that remaining-year
+sum. It checks that sum a second way using weighted survival decrements plus
+the surviving tail. This is a numerical approximation, not an SSA table value.
+Probability and decimal-year expectations have six decimal places; ages and
+calendar years are integers. No dollar arithmetic occurs here.
+
+Separate rows preserve discrepancies caused by undocumented horizon limits:
+the inverse helper stops at120, the remaining-year sum omits survival after120,
+and the couple crossing search stops after70 years even while joint survival
+exceeds10%. These rows retain uncapped model expectations and a specific TODO
+reason. The age200 endpoint used for the unbounded midpoint checks has a tail
+below half the last stored decimal, as bounded in the brief. No production
+formula was changed by adding this answer key.

@@ -18,5 +18,56 @@ Conversions are skipped in a year they would make the plan fail. The marketplace
 ## Tests
 `tests/tax-pages.test.mjs` (a big pre-tax pot is helped; a couple already in the 12% bracket barely is), `tests/retirement.test.mjs` (the engine step), `module.test.mjs`.
 
+## Independent answer key and audited sources
+
+`tests/golden/retirement/roth-conversions.csv` holds 1,000 invented cases,
+100 for each of ten rules, each split into 60 grid, 30 edge and 10 extreme
+cases. The complete inventory and CSV layout are in
+`tests/golden/retirement/briefs/roth-conversions.md`. The independent generators
+are `tools/golden_retirement/roth_conversions.py` and `tax_oracle.py`.
+They do not import the application. Every tenth row has a second calculation
+or conservation check recorded beside its source.
+
+Bracket ceilings and deductions are from [IRS Rev. Proc. 2025-32](https://www.irs.gov/irb/2025-45_IRB).
+The temporary age-65 deduction uses [IRC 151(d)(5)(C)](https://uscode.house.gov/us/usc/119-120/t26/s151/)
+and [IRS Schedule 1-A instructions](https://www.irs.gov/instructions/i1040gi).
+Taxable traditional-IRA distributions and conversions are described in
+[IRS Publication 590-B](https://www.irs.gov/publications/p590b).
+Rates and balances in the fixtures are invented scenario inputs. Source-year
+tax amounts remain exact; future indexing is the stated hypothetical planning
+assumption, not a prediction of tax law.
+
+For a single person under 65 in 2026, the 12% bracket ends at $50,400 and
+the standard deduction is $16,100. With no other income and enough cash
+to pay the tax, the target conversion is `50,400 + 16,100 = $66,500`;
+its federal tax is `12,400 * .10 + 38,000 * .12 = $5,800`.
+The independent solver first fixes the withdrawals already needed for spending,
+then solves for the largest conversion that stays under the chosen taxable
+income ceiling while the remaining accounts can pay the extra tax. The answer
+is found to cent precision, rather than assuming a fixed number of corrections
+will converge. Rows retain disagreements about whole-dollar room rounding and
+the temporary senior deduction instead of replacing their answers with code output.
+The code also skips positive conversions below $1, a minimum absent from the
+documented model and cited IRA rules. An available $0.01 with no tax liability
+can convert $0.01 under those rules; those cases retain a specific TODO.
+
+Required-withdrawal age and an explicitly supplied until-age are both exclusive
+conversion boundaries. A failed spending plan converts nothing. The reported
+span counts eligible years even if the pre-tax account is empty; the table
+contains only years with a positive conversion. Real totals divide each
+nominal conversion, tax and required withdrawal by that year's cumulative price
+level before summing. The chosen option and best option are separate fields;
+ties keep the first listed option.
+
+The $109,000 individual and $218,000 joint 2026 Medicare thresholds and the
+two-year lookback follow [SSA POMS HI 01101.031](https://secure.ssa.gov/poms.NSF/lnx/0601101031)
+and the [CMS 2026 Medicare fact sheet](https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles).
+That POMS table places a surviving spouse with a dependent child in the
+individual tier, which is used here. The flag starts at age 63 to look ahead
+to age 65, and requires income strictly above the threshold; equality does
+not trigger it. Later threshold indexing follows the page's planning assumption.
+Money is rounded only for annual federal tax and final CSV answers; rates
+are written with six decimal places.
+
 ## Ideas / not yet
 - Stop at the IRMAA line as a choice; partial-year retirements; state tax on conversions.

@@ -19,3 +19,7 @@ Thumbs.db
 /qa/households/.tmp/
 # Claude Code: this machine's own permission tweaks
 .claude/settings.local.json
+# Generated downloadable answer-key bundles; source fixtures stay tracked.
+/retirement-answer-keys.md
+/retirement-answer-keys.zip
+/tools/golden_retirement/__pycache__/

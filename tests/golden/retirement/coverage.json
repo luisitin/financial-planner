@@ -1,0 +1,981 @@
+[
+  {
+    "page": "cash-flow",
+    "rows": 1000,
+    "rules": {
+      "ledger-mapping": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "real-deflation": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "ledger-totals": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "family-timing-contributions": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "shortfall-ledger": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "taxed-ledger": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "readiness": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "all-buckets-real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "contributions-real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "rmd-tax-real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 0,
+    "bytes": 1061674,
+    "sha256": "a3747e81091d758ce9c8225be42a1660da0a5d82fd49e7675e04370f60868c13"
+  },
+  {
+    "page": "contributions",
+    "rows": 2200,
+    "rules": {
+      "period-weekly": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-biweekly": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-semimonthly": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-monthly": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-quarterly": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-annual": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-once": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "period-unknown": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "own-match-total": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "person-aggregation": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "ira-combined-limit": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "401k-base": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "401k-catchup": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "401k-super-catchup": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "hsa-self-catchup": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "hsa-employer-cap": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 100
+      },
+      "age-reached": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "table-year": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "empty-input": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "dependent-exclusion": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "missing-account-person": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "warning-threshold": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 100,
+    "bytes": 895171,
+    "sha256": "b21d860ac55fae112f30c9e86f04bae226973ad6d5bd89489eb511b8eb48a007"
+  },
+  {
+    "page": "fire",
+    "rows": 1800,
+    "rules": {
+      "fi-number": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "withdrawal-override": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "invested-buckets": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "saving-no-double-count": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "real-return": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "years-positive-return": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "years-zero-return": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "years-negative-return": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "eighty-year-boundary": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "age-year-retirement": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "coast": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "progress-gap": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "savings-rate": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "missing-spending": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "incomplete-plan-fallback": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "expense-spending-source": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "default-assumptions": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "income-period-dates": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 0,
+    "bytes": 878632,
+    "sha256": "d1ac4d12759adb611ed0f1de3b5b71bc9cb54e11541f3c93dc139d3b22efd6da"
+  },
+  {
+    "page": "longevity",
+    "rows": 800,
+    "rules": {
+      "survival": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "inverse-survival": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 15
+      },
+      "life-expectancy-sum": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "birthday-aware-page": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "couple-probability-clock": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "page-defaults-omissions": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "individual-age120-tail": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 27
+      },
+      "couple-70year-cap": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 33
+      }
+    },
+    "todo": 75,
+    "bytes": 402930,
+    "sha256": "3f74f060703512fd6eaaf445d6434ede8b2fe9790e77afef42f3a2ff114f8d46"
+  },
+  {
+    "page": "projection",
+    "rows": 2100,
+    "rules": {
+      "account-buckets": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "calendar-horizon": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "spending-source": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "contribution-growth": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "income-start-end-cola": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "price-level": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "glide-blend": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "sequence-overrides": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "fixed-real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "percent": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "guardrails": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "vpw": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "withdraw-flat-grossup": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "failure": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "post-flow-growth": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "affordable": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 8
+      },
+      "page-summary": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "readiness": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "typed-social-adapter": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "partner-pay-adapter": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "rmd-surplus": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 8,
+    "bytes": 1596035,
+    "sha256": "45f2182418e4de138a50224b0b8cf6d4d7e416e0f91c29b9a996eaa6580415e4"
+  },
+  {
+    "page": "rmd",
+    "rows": 1100,
+    "rules": {
+      "factor": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "cohort": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 17
+      },
+      "amount": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "calendar": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 14
+      },
+      "schedule": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "tax": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "totals": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "ownership": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 92
+      },
+      "exclusions": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 10
+      },
+      "page_table": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 133,
+    "bytes": 697713,
+    "sha256": "5ddb2c5e4349aa30736c92c41e3b0a3781e991dc872a171a9f1d6ed9106bd999"
+  },
+  {
+    "page": "roth-conversions",
+    "rows": 1000,
+    "rules": {
+      "bracket_top": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "room": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 16
+      },
+      "eligibility": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 11
+      },
+      "conversion_tax": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 10
+      },
+      "insufficient": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "comparison": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 10
+      },
+      "real_totals": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 10
+      },
+      "table_span": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 8
+      },
+      "irmaa": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "readiness": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 9
+      }
+    },
+    "todo": 74,
+    "bytes": 793889,
+    "sha256": "648aafbcdbba8320f0de0b0664d768fd8406fe8f5f61a767eae903baa86c312b"
+  },
+  {
+    "page": "sequence-risk",
+    "rows": 500,
+    "rules": {
+      "tail-sort-paired": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "geometric-means": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "run-summaries": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "steady-assumptions": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "history-readiness": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 0,
+    "bytes": 313060,
+    "sha256": "fdc222f417a270841af682586f8fac1d2a26f5fd3c131985dc7b88f91389dd7e"
+  },
+  {
+    "page": "withdrawal-order",
+    "rows": 1400,
+    "rules": {
+      "ordinary": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "qualified": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "social": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "standard": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "senior": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 11
+      },
+      "indexing": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 9
+      },
+      "niit": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "normalization": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "grossup": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "rmd": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "totals": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "estate": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "ranking": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "selection": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 20,
+    "bytes": 939732,
+    "sha256": "e0632ba864ac506c60d0a016da4074bf840860b8c4fc5602eae8c078f86dd999"
+  },
+  {
+    "page": "withdrawal-strategy",
+    "rows": 800,
+    "rules": {
+      "fixed-real": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "percent": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "guardrails": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "vpw": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "vpw-beginning-timing": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 58
+      },
+      "worst-history-selection": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "page-spending-summaries": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "page-readiness-defaults": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      }
+    },
+    "todo": 58,
+    "bytes": 712190,
+    "sha256": "24fae0d0d607087a264c385c0874d83391fd9fbea34dc1ad720280ba4c76c1d2"
+  }
+]
