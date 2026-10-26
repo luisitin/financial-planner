@@ -3,7 +3,9 @@
 // with the prompt ids its messages name (a `Prompt: <id>` line, or the id anywhere in the message). The lead's loop
 // writes the result into the board's database (collection `repo`, document `pushes`), so the Results tab shows what
 // was pushed and for which prompt.
-//   node tools/push-feed.mjs [out.json]      (no argument: print the JSON)
+//   node tools/push-feed.mjs [out.json] [--compare board-copy.json]
+// No out file: print the JSON. --compare says whether anything was pushed since that copy (the board's document,
+// pulled with ArtifactData get ... out_dir): a new head on main, a pull request opened or updated, a branch moved.
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -42,6 +44,13 @@ const branches = git("for-each-ref", "--sort=-committerdate", `--format=%(refnam
   .filter((b) => b.ahead > 0).slice(0, 10);
 
 const feed = { repo: REPO, branch: "main", head: commits[0]?.sha ?? null, checkedAt: new Date().toISOString(), commits, pulls, branches };
-const out = process.argv[2];
+const argv = process.argv.slice(2), ci = argv.indexOf("--compare");
+const against = ci >= 0 ? argv.splice(ci, 2)[1] : null, out = argv[0];
 if (out) { fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true }); fs.writeFileSync(out, JSON.stringify(feed, null, 2) + "\n"); console.log(`push-feed: ${commits.length} commits (head ${commits[0]?.short ?? "-"}), ${pulls.length} open pull requests, ${branches.length} other branches -> ${out}`); }
 else process.stdout.write(JSON.stringify(feed, null, 2) + "\n");
+if (against) {
+  const sig = (f) => [f.head, ...(f.pulls || []).map((p) => `#${p.number}@${p.updatedAt}`), ...(f.branches || []).map((b) => `${b.name}@${b.sha}`)].join(" ");
+  let old = null;
+  try { old = JSON.parse(fs.readFileSync(against, "utf8")); } catch { /* no copy yet: everything is new */ }
+  console.log(old && sig(old) === sig(feed) ? "push-feed: unchanged since the board's copy" : "push-feed: CHANGED since the board's copy");
+}
