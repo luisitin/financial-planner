@@ -12,6 +12,11 @@ name, its addresses, your tailnet link) belong in `private/` (git-ignored), not 
    screen). It installs with the Planner icon and opens full-screen like an app.
 4. The plan lives on the PC (`data/plan.json`). The phone shows "PC" in the status pill.
 
+Without a token the server answers only its own pages, reached by an IP address, a one-word PC
+name, or a name ending in `.local`, `.lan`, `.home.arpa`, `.internal` or `.ts.net`. If you reach
+the PC by another name, list it in `server.hosts=` in `planner.properties`. Other web sites open
+in a browser get "401" either way, so they cannot read the plan.
+
 Windows Firewall must allow inbound TCP 8787. Double-click `Allow-Firewall.bat` once
 (it asks for administrator approval) to add the rule "Financial Planner 8787". The rule
 covers every profile, so it also works when Windows classifies the home network as "Public".

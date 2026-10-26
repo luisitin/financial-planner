@@ -13,10 +13,17 @@
 server.port=8787
 # 0.0.0.0 = every interface (LAN).  127.0.0.1 = this PC only.
 server.bind=0.0.0.0
+# Without auth.token the server answers only its own pages, reached by an IP address, a one-word
+# PC name, or a name ending in .local .lan .home.arpa .internal or .ts.net. Any other name you use
+# for this PC goes here, comma-separated (for example: planner.example.org). With a token set,
+# any name works for a device that has the token.
+server.hosts=
 
 # ---- security -----------------------------------------------------------
 # REQUIRED before exposing the server beyond your own LAN (tunnel, port forward).
-# Any string. Devices enter it once in System > Settings. Empty = no auth (LAN only).
+# Any string. Devices enter it once in System > Settings. Empty = no auth (LAN only): then only
+# the server's own pages may use it, so a copy of the app opened from a file or another site needs
+# a token.
 auth.token=
 # true = requests from this PC itself (127.0.0.1) never need the token, so the PC's own
 # browser and the tools keep working. false = everyone needs it. Only requests that ask for

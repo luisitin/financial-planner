@@ -26,7 +26,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 
 const DEFAULTS = {
-  "server.port": "8787", "server.bind": "0.0.0.0",
+  "server.port": "8787", "server.bind": "0.0.0.0", "server.hosts": "",
   "auth.token": "", "auth.trustLocal": "true",
   "data.dir": "data", "data.backups": "50",
   "ai.provider": "ollama", "ai.host": "127.0.0.1", "ai.port": "11434", "ai.model": "", "ai.baseUrl": "", "ai.apiKey": "", "ai.timeoutMs": "180000",
@@ -68,13 +68,22 @@ const json = (res, code, body) => { res.writeHead(code, { "Content-Type": "appli
 const readBody = (req) => new Promise((resolve, reject) => { const chunks = []; req.on("data", (c) => { chunks.push(c); if (chunks.reduce((n, b) => n + b.length, 0) > 50e6) reject(new Error("body too large")); }); req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8"))); req.on("error", reject); });
 const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const isLocal = (req) => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket?.remoteAddress);
+// Names a browser on this network uses for the PC: IP addresses, one-word PC names (localhost too), the
+// private suffixes below and any listed in server.hosts. A public name that leads here is a DNS-rebinding page.
+const NETWORK_NAME = /^(\[[0-9a-f:.]+\]|\d{1,3}(\.\d{1,3}){3}|[a-z0-9-]+|[a-z0-9.-]+\.(local|lan|home\.arpa|internal|ts\.net))(:\d+)?$/;
 function authorized(req) {
   const want = P("auth.token");
-  if (!want) return true;
+  // a page's request carries Origin; only this server's own pages may go without the token
+  const host = String(req.headers.host || "").toLowerCase(), origin = String(req.headers.origin || "").toLowerCase();
+  const ownPage = !origin || origin === `http://${host}` || origin === `https://${host}`;
+  if (!want) {
+    // no token (LAN only): still refuse other web sites open in a browser here, and names that are not this network's
+    const extra = P("server.hosts").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+    return ownPage && (NETWORK_NAME.test(host) || extra.includes(host.replace(/:\d+$/, "")));
+  }
   // the PC itself (its browser, the tools) needs no token, but only when it asks for itself: a page from another
   // site open in the PC's browser (Origin is not this server) or a DNS name rebound to 127.0.0.1 (Host is not loopback) does
-  const host = String(req.headers.host || "").toLowerCase(), origin = req.headers.origin;
-  const asksForItself = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host) && (!origin || origin.toLowerCase() === `http://${host}`);
+  const asksForItself = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host) && (!origin || origin === `http://${host}`);
   if (isLocal(req) && asksForItself && P("auth.trustLocal") !== "false") return true;
   const got = req.headers["x-planner-token"] || (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   return got === want;
@@ -146,7 +155,11 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, version: VERSION, plan: fs.existsSync(PLAN_FILE), ai: { provider: P("ai.provider"), reachable: aiOk }, authRequired: !!P("auth.token") });
   }
   if (req.method === "GET" && route === "config") { ({ props, source } = loadProperties()); return json(res, 200, publicConfig()); }
-  if (!authorized(req)) return json(res, 401, { error: "missing or wrong X-Planner-Token" });
+  if (!authorized(req)) {
+    if (P("auth.token")) return json(res, 401, { error: "missing or wrong X-Planner-Token" });
+    console.warn(`refused ${req.method} /api/${route}: Host ${req.headers.host || "(none)"}, Origin ${req.headers.origin || "(none)"}`);
+    return json(res, 401, { error: "This server only answers its own pages on this network. To use it from another page or address, set auth.token in planner.properties (or add the address to server.hosts)." });
+  }
 
   if (route === "plan" && req.method === "GET") { const p = readPlan(); return p ? json(res, 200, p) : json(res, 404, { error: "no plan yet" }); }
   if (route === "plan" && req.method === "PUT") {

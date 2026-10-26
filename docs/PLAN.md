@@ -107,7 +107,8 @@ re-read on every `GET /api/config`. Lives in the project root, git-ignored, neve
 |---|---|---|
 | `server.port` | 8787 | port the app and API are served on |
 | `server.bind` | 0.0.0.0 | interface; `127.0.0.1` restricts to this PC |
-| `auth.token` | (empty) | when set, every `/api` call except health/config needs header `X-Planner-Token` |
+| `server.hosts` | (empty) | extra names for the PC, comma-separated, accepted without a token (IP addresses, one-word names and `.local` `.lan` `.home.arpa` `.internal` `.ts.net` names always are) |
+| `auth.token` | (empty) | when set, every `/api` call except health/config needs header `X-Planner-Token`; when empty, `/api` answers only the server's own pages at a network name (no foreign `Origin`, no public `Host`) |
 | `data.dir` | data | where `plan.json` and `backups/` live |
 | `data.backups` | 50 | backups to keep |
 | `ai.provider` | ollama | `ollama` / `openai` / `none` |
@@ -153,6 +154,7 @@ trip, server-side net-worth compute, Ollama model list, static serving, and the 
 * Financial data never leaves the PC unless the owner points the app at a remote AI provider.
 * `planner.properties`, `data/`, `vendor/` and `dist/` are git-ignored and `planner.properties` and `data/` are never served.
 * A token is the only auth today: one shared secret, entered once per device. Planned: per-device tokens with names, revocation, and a read-only viewer role for a partner.
+* Without a token the server still refuses other web sites: a request whose `Origin` is not the server itself, or whose `Host` is a public name (DNS rebinding), gets 401. A copy of the app opened from a file or another site therefore needs a token.
 * The single-file build embeds no secrets; a copy given to someone contains only code.
 * AI context is a summary; the raw plan is never sent.
 
