@@ -10,12 +10,15 @@ export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds
   const rand = mulberry32(seed);
   const muS = Math.log(1 + stocks) - 0.5 * Math.log(1 + (stdevStocks / (1 + stocks)) ** 2), sigS = Math.sqrt(Math.log(1 + (stdevStocks / (1 + stocks)) ** 2));
   const muB = Math.log(1 + bonds) - 0.5 * Math.log(1 + (stdevBonds / (1 + bonds)) ** 2), sigB = Math.sqrt(Math.log(1 + (stdevBonds / (1 + bonds)) ** 2));
+  // Convert the requested correlation of simple returns to the correlation of their normal log draws.
+  const spread = Math.sqrt(Math.expm1(sigS ** 2) * Math.expm1(sigB ** 2));
+  const normalCorr = spread > 0 ? Math.log1p(corr * spread) / (sigS * sigB) : corr;
   const out = [];
   for (let p = 0; p < n; p++) {
     const seq = [];
     for (let y = 0; y < years; y++) {
-      const z1 = normal(rand), z2 = corr * z1 + Math.sqrt(1 - corr * corr) * normal(rand);
-      seq.push({ stocks: Math.exp(muS + sigS * z1) - 1, bonds: Math.exp(muB + sigB * z2) - 1 });
+      const z1 = normal(rand), z2 = normalCorr * z1 + Math.sqrt(1 - normalCorr * normalCorr) * normal(rand);
+      seq.push({ stocks: stdevStocks === 0 ? stocks : Math.exp(muS + sigS * z1) - 1, bonds: stdevBonds === 0 ? bonds : Math.exp(muB + sigB * z2) - 1 });
     }
     out.push(seq);
   }

@@ -17,6 +17,10 @@ export function percentile(sorted, p) {
   const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 }
+/** Standard error of a sample proportion (for example, the share of successful paths). */
+export function binomialStandardError(p, n) {
+  return Math.sqrt(p * (1 - p) / n);
+}
 /**
  * Simulate a balance over `years` with a random return each year.
  * { start, years, meanReturn, stdev, paths = 1000, seed = 1, flow(year, balance) -> net contribution (+) or withdrawal (-) for that year }
