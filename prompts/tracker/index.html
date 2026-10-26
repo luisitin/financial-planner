@@ -178,7 +178,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
         <li>The first tab, <b>Most important first</b>, ranks every prompt. <b>What this brings</b> on a card says what it would do for your planner, and <b>Who does it</b> says which kind of AI to send it to and how long it takes.</li>
         <li>Press <b>Copy prompt</b> and paste it into ChatGPT, Gemini, Muse, another Claude or any tool.</li>
         <li>Tap the tools you sent it to under <b>Sent to</b>. The <b>Sent out</b> tab then shows everything you sent, who has it and since when; tap a tool there to see only its prompts.</li>
-        <li>When the answer comes back, press <b>Add the answer</b> (or open <b>Answer and notes</b>), paste it or attach the file, then save.</li>
+        <li>When the answer comes back from a chat, press <b>Add the answer</b> (or open <b>Answer and notes</b>), paste it or attach the file, then save.</li>
+        <li>Tools that work on the repo (Codex, Claude Code, Gemini CLI) hand their work back as a pull request instead: in Codex, open the finished task and tap <b>Create PR</b>. There is nothing to paste; it shows on <b>Results</b> within the hour.</li>
         <li>Tick <b>Done</b> when you are finished with that prompt.</li>
         <li><b>Results</b> shows what came of each prompt: finished and pushed (with what it found and links to the changes), still in the works, and every recent push to the repo.</li>
       </ol>
@@ -225,6 +226,8 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
   const inTab = (p, tab) => tab === RANKED.id || (tab === PIPE.id ? isOut(docOf(p.id)) : tab === RESULTS.id ? inPlay(p) : p.category === tab);
   // results, written by Claude: { stage: checking | ready | pushed | rejected, summary, findings: [], commits: [sha], from, updatedAt }
   const STAGE_TEXT = { checking: "Claude is checking it", ready: "Changes ready to merge", pushed: "Pushed", rejected: "Not used" };
+  // tools that work on the repo answer with a pull request, which Claude's hourly watch picks up
+  const REPO_HINT = "Sent to Codex, Claude Code or another tool that works on the repo? It hands its work back as a pull request: in Codex, open the finished task and tap Create PR. Claude picks it up within the hour, with nothing to paste here.";
   const isFinished = (p) => { const r = S.results.get(p.id); return r ? r.stage === "pushed" || r.stage === "rejected" : !!docOf(p.id).done; };
 
   const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
@@ -456,6 +459,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       resultHead(p, h("span", { class: "state " + (r ? (r.stage === "ready" ? "answered" : "sent") : st), text: r ? (r.stage === "ready" ? "Changes ready" : "Checking") : STATE_TEXT[st] })),
       h("p", { class: "effort", text: where + (went.length ? ". Sent to " + went.join("; ") : "") }),
       r?.summary ? h("p", { class: "summary", text: r.summary }) : null,
+      st === "sent" && !r ? h("p", { class: "summary", text: "Finished already? From Codex or Claude Code, open the task and tap Create PR (or ask it to open a pull request). From a chat, paste its reply with Add the answer." }) : null,
       h("div", { class: "actions" }, st === "sent" && !r ? h("button", { class: "btn", onclick: () => openPrompt(p.id, true) }, "Add the answer") : null,
         h("button", { class: "btn quiet", onclick: () => openPrompt(p.id) }, "Open the prompt")));
   }
@@ -570,6 +574,7 @@ footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
       h("div", { class: "row" }, h("span", { class: "label" }, "Sent to"), refs.chips, refs.moreBox, refs.sentLine, refs.resultLine),
       h("div", { class: "done-row" }, h("label", { for: "done-" + p.id }, refs.done, "Done"), refs.when),
       refs.answerFold = h("details", { class: "more" }, refs.moreSummary,
+        h("p", { class: "summary", text: REPO_HINT }),
         h("div", { class: "row" }, refs.answers),
         h("div", { class: "grid2" },
           h("div", { class: "row" }, h("label", { class: "label", for: "paste-" + p.id }, "The answer"), refs.paste,

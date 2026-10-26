@@ -29,6 +29,11 @@ Tester item F-027: links inside the rendered documents (System > Docs) are 17 to
 
 Explain your choice in the rationale. Scope any CSS inside the docs page's own selectors (no new global rules), and check it in dark mode too.
 
+## How to hand it back
+
+- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch `ai/quick-doc-link-targets` from `main`, run `npm test` and `npm run check`, commit with `Prompt: quick-doc-link-targets` on its own line in the message, push the branch and open a pull request against `main`. Its description holds your rationale, the files you touched, the commands you ran and `Prompt: quick-doc-link-targets` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with `Prompt: quick-doc-link-targets` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.
+- **If you cannot push** (a chat): put everything in your reply, as below. The owner pastes your reply into their board.
+
 ## How to answer
 
 1. Start with a rationale of at most ten lines: what you changed and why.
@@ -43,4 +48,3 @@ Rules:
 - Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
 - The repo is public: use invented example data only (no real names, addresses, account numbers).
 - If something is unclear, state your assumption and carry on; do not stop to ask.
-- If you commit or open a pull request, put `Prompt: quick-doc-link-targets` on its own line in the commit message or pull request description.

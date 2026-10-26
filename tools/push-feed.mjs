@@ -1,6 +1,6 @@
 // tools/push-feed.mjs -- the Prompt Board's "Recent pushes" feed: the last 30 commits on origin/main, the open pull
 // requests (when the gh CLI is signed in) and the other branches with commits that are not on main yet, each tagged
-// with the prompt ids its messages name (a `Prompt: <id>` line, or the id anywhere in the message). The lead's loop
+// with the prompt ids it names (an `ai/<id>` branch, a `Prompt: <id>` line, or the id anywhere in the message). The lead's loop
 // writes the result into the board's database (collection `repo`, document `pushes`), so the Results tab shows what
 // was pushed and for which prompt.
 //   node tools/push-feed.mjs [out.json] [--compare board-copy.json]
@@ -29,7 +29,7 @@ const commits = git("log", "origin/main", "-30", `--format=%H${SEP}%h${SEP}%cI${
 let pulls = [];
 try {
   pulls = JSON.parse(execFileSync("gh", ["pr", "list", "--repo", slug, "--state", "open", "--json", "number,title,headRefName,url,updatedAt,body"], { encoding: "utf8" }))
-    .map((pr) => ({ number: pr.number, title: pr.title, branch: pr.headRefName, url: pr.url, updatedAt: pr.updatedAt, prompts: mentions(`${pr.title}\n${pr.body || ""}`) }));
+    .map((pr) => ({ number: pr.number, title: pr.title, branch: pr.headRefName, url: pr.url, updatedAt: pr.updatedAt, prompts: mentions(`${pr.headRefName}\n${pr.title}\n${pr.body || ""}`) }));
 } catch { /* no gh, or not signed in: the feed just has no pull requests */ }
 // branches an agent pushed without a pull request: newest first, only those with commits main does not have
 const inPull = new Set(pulls.map((pr) => pr.branch));
@@ -39,7 +39,7 @@ const branches = git("for-each-ref", "--sort=-committerdate", `--format=%(refnam
   .map(([ref, sha, date, title]) => {
     const name = ref.slice(7), ahead = Number(git("rev-list", "--count", `origin/main..${ref}`).trim());
     return { name, sha, short: sha.slice(0, 7), date, title, ahead, url: `${REPO}/tree/${name.split("/").map(encodeURIComponent).join("/")}`,
-      prompts: ahead ? mentions(git("log", `origin/main..${ref}`, "--format=%s%n%b")) : [] };
+      prompts: ahead ? mentions(`${name}\n${git("log", `origin/main..${ref}`, "--format=%s%n%b")}`) : [] };
   })
   .filter((b) => b.ahead > 0).slice(0, 10);
 

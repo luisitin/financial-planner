@@ -23,6 +23,11 @@ formulas with sources) and `module.test.mjs` (node:test). Shared math lives in `
 
 Produce `modules/insurance/ltc/data/costs.js` from the latest published cost-of-care survey (say which and when): median yearly cost by state for a home health aide, adult day care, assisted living and a private nursing-home room, plus the national figures and the survey's own growth rate. Add the probability of needing paid long-term care and the average duration from a government or peer-reviewed source (for example HHS/ASPE). Sources on every figure; a test of the shape.
 
+## How to hand it back
+
+- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch `ai/research-long-term-care-costs` from `main`, run `npm test` and `npm run check`, commit with `Prompt: research-long-term-care-costs` on its own line in the message, push the branch and open a pull request against `main`. Its description holds your rationale, the files you touched, the commands you ran and `Prompt: research-long-term-care-costs` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with `Prompt: research-long-term-care-costs` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.
+- **If you cannot push** (a chat): put everything in your reply, as below. The owner pastes your reply into their board.
+
 ## How to answer
 
 1. Start with a rationale of at most ten lines: what you changed and why.
@@ -37,4 +42,3 @@ Rules:
 - Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
 - The repo is public: use invented example data only (no real names, addresses, account numbers).
 - If something is unclear, state your assumption and carry on; do not stop to ask.
-- If you commit or open a pull request, put `Prompt: research-long-term-care-costs` on its own line in the commit message or pull request description.

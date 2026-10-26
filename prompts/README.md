@@ -48,8 +48,11 @@ Responses come back through the board into `ai-responses/<prompt-id>/` on the ow
 passed through the leak guard and pushed.
 
 ## Results
-Every commit or pull request that carries out a prompt has a `Prompt: <id>` line (each
-prompt's rules ask for it, and AGENTS.md rule 12 says so too). `tools/push-feed.mjs` lists the
+Every prompt ends with "How to hand it back": a tool that works in the repo (Codex, Claude
+Code, Gemini CLI...) pushes a branch `ai/<id>` and opens a pull request with a `Prompt: <id>`
+line (AGENTS.md rule 12 says the same for any commit that carries out a prompt); a chat answers
+in its reply, which the owner pastes into the board. In Codex the owner taps "Create PR" on the
+finished task. `tools/push-feed.mjs` lists the
 last 30 commits on `main`, the open pull requests and any other branch with changes main does
 not have yet, each tagged with the prompts it names. The lead's sync loop writes that list
 and a short write-up per prompt into the board's database (`repo/pushes`, and

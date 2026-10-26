@@ -30,6 +30,11 @@ For every page whose status is `usable` in `docs/MODULE_CATALOG.md`, add three t
 
 Add tests to `tests/search.test.mjs` for twenty realistic questions and the page each should rank first.
 
+## How to hand it back
+
+- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch `ai/quick-search-aliases` from `main`, run `npm test` and `npm run check`, commit with `Prompt: quick-search-aliases` on its own line in the message, push the branch and open a pull request against `main`. Its description holds your rationale, the files you touched, the commands you ran and `Prompt: quick-search-aliases` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with `Prompt: quick-search-aliases` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.
+- **If you cannot push** (a chat): put everything in your reply, as below. The owner pastes your reply into their board.
+
 ## How to answer
 
 1. Start with a rationale of at most ten lines: what you changed and why.
@@ -44,4 +49,3 @@ Rules:
 - Every number needs a source (IRS/SSA/CMS publication, statute, paper, or a worked example you show). Put the source next to the number in a comment and in the module README.
 - The repo is public: use invented example data only (no real names, addresses, account numbers).
 - If something is unclear, state your assumption and carry on; do not stop to ask.
-- If you commit or open a pull request, put `Prompt: quick-search-aliases` on its own line in the commit message or pull request description.

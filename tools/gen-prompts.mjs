@@ -61,8 +61,21 @@ const GOLDEN_RULES = [
   "Never run, import or copy the repo's code to get an expected value: the answer key must be independent of the code, or it proves nothing. A calculator, or a short script a worker writes itself from the rules in this prompt, is fine.",
   "Every CSV has a header row, one case per row, money to the cent, rates to six decimals and dates as YYYY-MM-DD.",
 ];
+// How the work gets back to the owner: a tool with the repo opens a pull request, which the lead's hourly watch
+// picks up (tools/push-feed.mjs, tagged by the `ai/<id>` branch and the `Prompt: <id>` line); a chat answers in
+// its reply, which the owner pastes into the prompt board.
+function handBack(id) {
+  return [
+    "## How to hand it back",
+    "",
+    `- **If you can work in the repo** (Codex, Claude Code, Gemini CLI, Jules, Copilot's coding agent, or any tool connected to GitHub): make the changes on a new branch \`ai/${id}\` from \`main\`, run \`npm test\` and \`npm run check\`, commit with \`Prompt: ${id}\` on its own line in the message, push the branch and open a pull request against \`main\`. Its description holds your rationale, the files you touched, the commands you ran and \`Prompt: ${id}\` on its own line. Do not merge it. If your tool opens the pull request for the owner (Codex's "Create PR" button), end your last message with \`Prompt: ${id}\` so it reaches the description. The owner's board picks the pull request up within the hour; nothing else is needed.`,
+    "- **If you cannot push** (a chat): put everything in your reply, as below. The owner pastes your reply into their board.",
+    "",
+  ].join("\n");
+}
 function contract(output, id) {
   return [
+    handBack(id),
     "## How to answer",
     "",
     "1. Start with a rationale of at most ten lines: what you changed and why.",
@@ -73,8 +86,6 @@ function contract(output, id) {
     "Rules:",
     ...(output === "golden" ? GOLDEN_RULES : []).map((r) => `- ${r}`),
     ...COMMON_RULES.map((r) => `- ${r}`),
-    // the Prompt Board's Results tab finds the commits and pull requests that carry this line
-    `- If you commit or open a pull request, put \`Prompt: ${id}\` on its own line in the commit message or pull request description.`,
   ].join("\n");
 }
 
