@@ -99,7 +99,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `retirement/contributions` | Retirement contributions | usable | 5 | What goes into 401(k)s, IRAs, Roths and HSAs each year, with the employer match and this year's limits. | - |
 | `retirement/social-security` | Social Security | usable | 5 | Your benefit from your ssa.gov earnings record or your statement, and what claiming at each age pays. | ssa.tools, Open Social Security |
 | `retirement/pensions` | Pensions | usable | 5 | Your pension: what it pays and what inflation does to it, a lump sum against monthly payments, and the survivor option, with your own life expectancy. | - |
-| `retirement/annuities` | Annuities | planned | 5 | Lets you enter annuity quotes to see the guaranteed income floor they would give you and compares them with bonds. | - |
+| `retirement/annuities` | Annuities | usable | 5 | An annuity quote against your plan: the return it pays like over your likely lifetime, what bonds paying the same would cost, and what buying it does to your plan. | - |
 | `retirement/cash-flow` | Year by year | usable | 5 | Every year of the plan in one table: ages, what comes in, what goes out, what is taken from where, what is left. | Bogleheads RPM |
 | `retirement/withdrawal-strategy` | How much to take out | usable | 5 | Four ways of deciding what to withdraw each year, compared on your numbers and through the worst stretch of history. | FI Calc |
 | `retirement/withdrawal-order` | Withdrawal order | usable | 6 | Which account to draw from first (taxable, pre-tax or Roth) and what each order costs in lifetime tax and spending. | Owl |
