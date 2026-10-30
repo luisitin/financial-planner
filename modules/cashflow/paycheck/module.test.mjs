@@ -49,6 +49,9 @@ test("Worksheet 1A: the Step 2 box, Step 3 credits, Step 4(a), 4(b) and 4(c)", (
   near(withholdFederal(3430, 26, { status: "married_joint" }, 2026).perCheck, (2480 + 0.12 * (3430 * 26 - 12900 - 44100)) / 26);
   near(withholdFederal(4000, 12, { status: "head_of_household" }, 2026).tentative, 1770 + 0.12 * (48000 - 8600 - 33250));
   assert.equal(withholdFederal(200, 26, { status: "single" }, 2026).perCheck, 0, "under the first row: nothing");
+  // line 1i to the cent: 415.03 x 260 + 1,030.20 is 108,938.00, the start of a row, not a floating-point hair below it
+  const edge = withholdFederal(415.03, 260, { status: "single", step2: true, otherIncome: 1030.2 }, 2026);
+  assert.equal(edge.adjusted, 108938); near(edge.tentative, 20512);
 });
 
 test("the W-4 status follows the household's filing status", () => {
@@ -117,6 +120,12 @@ test("Social Security stops at the wage base; the 0.9% starts above $200,000; th
   near(a.yearly.ss, 0.062 * 184500); near(a.yearly.medicare, 0.0145 * 260000 + 0.009 * 60000);
   near(a.yearly.net, a.net * 26 + (a.ss * 26 - 0.062 * 184500) - 0.009 * 60000);
   near(a.monthly, a.yearly.net / 12);
+  // a year whose pay lands exactly on the wage base at its last paycheck: that paycheck reaches it (the page says nothing,
+  // as nothing stops early); exactly $200,000 is not above it
+  const exact = ana(compute(withPay((q) => { const i = q.income.find((x) => x.id === "i-ana"); i.amount = 15375; i.period = "monthly"; q.retirement.contributions = []; }), { today: TODAY }));
+  assert.equal(exact.ssStopsAfter, 12); near(exact.yearly.ss, 0.062 * 184500);
+  const flat = ana(compute(withPay((q) => { const i = q.income.find((x) => x.id === "i-ana"); i.amount = 200000 / 8; i.period = "monthly"; q.retirement.contributions = []; }), { today: TODAY }));
+  assert.equal(flat.extraMedicareFrom, 9, "200,000 reached at paycheck 8 exactly: the 0.9% starts with the 9th");
 });
 
 test("two jobs: each employer counts Social Security to the wage base and the 0.9% on its own pay", () => {

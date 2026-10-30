@@ -36,7 +36,8 @@ export function withholdFederal(wages, paychecks, w4 = {}, year) {
   const status = W4_STATUSES[w4.status] ? w4.status : "single";
   const n = Math.max(1, paychecks);
   const annual = Math.max(0, wages) * n + pos(w4.otherIncome);
-  const adjusted = Math.max(0, annual - pos(w4.deductions) - (w4.step2 ? 0 : T.step1g[status === "married_joint" ? "married_joint" : "other"]));
+  // line 1i to the cent (Pub 15-T allows rounding), so sums like 415.03 x 260 + 1,030.20 land on a table row's start, not a hair below it
+  const adjusted = Math.max(0, Math.round((annual - pos(w4.deductions) - (w4.step2 ? 0 : T.step1g[status === "married_joint" ? "married_joint" : "other"])) * 100) / 100);
   const rows = (w4.step2 ? T.checkbox : T.standard)[status];
   const row = rows.reduce((found, r) => (adjusted >= r.from ? r : found), rows[0]);
   const tentative = row.base + row.rate * (adjusted - row.from);
@@ -157,8 +158,10 @@ export function compute(plan, params = {}) {
     const ficaYear = wages.fica * paychecks;
     const ss = PAYROLL.ss * wages.fica, medicare = PAYROLL.medicare * wages.fica;
     const one = jobs.length === 1;
-    const ssStopsAfter = one && ficaYear > wageBase && wages.fica > 0 ? Math.ceil(wageBase / wages.fica) : null;
-    const extraMedicareFrom = one && ficaYear > PAYROLL.extraOver && wages.fica > 0 ? Math.floor(PAYROLL.extraOver / wages.fica) + 1 : null;
+    // the paycheck in which the year's pay reaches the wage base, and the first in which it passes $200,000 (to the cent, so
+    // a year landing exactly on either is not missed or moved by floating-point dust)
+    const ssStopsAfter = one && ficaYear >= wageBase - 0.005 && wages.fica > 0 ? Math.ceil(wageBase / wages.fica - 1e-9) : null;
+    const extraMedicareFrom = one && ficaYear > PAYROLL.extraOver + 0.005 && wages.fica > 0 ? Math.floor(PAYROLL.extraOver / wages.fica + 1e-9) + 1 : null;
     const stateTax = num(s.state) !== null ? { amount: pos(s.state), from: "typed", rate: null }
       : st.method === "none" ? { amount: 0, from: "no-tax", rate: 0 }
       : stateRate !== null ? { amount: stateRate * wages.state, from: "rate", rate: stateRate } : { amount: 0, from: "none", rate: null };

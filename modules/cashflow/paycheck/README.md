@@ -41,16 +41,20 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
   check page's figure if it is for the same number of paychecks; else the IRS
   percentage method for automated payroll, W-4 from 2020 or later (Publication 15-T (2026), Worksheet 1A, dated Dec 3,
   2025, checked 2026-10-30): annual = taxable pay × paychecks + Step 4(a); less Step 4(b) and, without the Step 2 box,
-  $12,900 married filing jointly / $8,600 otherwise (line 1g); the annual table's base + its rate × the amount over the
+  $12,900 married filing jointly / $8,600 otherwise (line 1g), the result (line 1i) to the cent (Pub 15-T p.9 allows
+  rounding; it stops a sum such as 415.03 × 260 + 1,030.20 landing a floating-point hair below a row's start); the
+  annual table's base + its rate × the amount over the
   row's start (the Step 2 checkbox tables when ticked; `data/withholding.js`, the published bases kept as printed); ÷
   paychecks; less Step 3 ÷ paychecks (not below 0); + Step 4(c). The W-4 status defaults to the household's: married
   filing jointly (and a qualifying surviving spouse) → married filing jointly, head of household → head of household,
   else single.
 - **Social Security** = 6.2% of its taxable pay; each employer stops at the wage base ($184,500 in 2026) of its own
-  pay (IRC 3121(a)(1)): with one job, after paycheck ⌈base ÷ pay⌉; with several, each job's share of the pay counted
+  pay (IRC 3121(a)(1)): with one job, after paycheck ⌈base ÷ pay⌉, the paycheck in which the year's pay reaches the base
+  (a year landing exactly on it at its last paycheck gives that paycheck; the page mentions it only when it comes before
+  the last); with several, each job's share of the pay counted
   separately (the excess over one base comes back on the tax return). **Medicare** = 1.45%, + 0.9% on pay over
   $200,000 from one employer in the year (IRC 3101, 3102(f); IRS Publication 15 (2026)): from paycheck
-  ⌊200,000 ÷ pay⌋ + 1, per job.
+  ⌊200,000 ÷ pay⌋ + 1, per job (exactly $200,000 is not above it).
 - **State**: typed, else the State page's tax ÷ its income (the household's average after its allowances and
   deductions, not the top rate) × the state's taxable pay; "none in your state" for a state without income tax. Local income taxes are not counted (a note in states
   that have them).
@@ -75,12 +79,22 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
 ## Tests
 `module.test.mjs` (16): the 2026 tables against their own arithmetic and the 2026 standard deductions; Worksheet 1A by
 hand (single), the Step 2 box, Steps 3, 4(a), 4(b), 4(c), married filing jointly, head of household, under the first
-row; the W-4 status; the family's paychecks (the 401(k) before income tax only, the shares, the W-4 note assumed or
+row, a row's start reached exactly; the wage base reached at the last paycheck, $200,000 reached exactly; the W-4 status; the family's paychecks (the 401(k) before income tax only, the shares, the W-4 note assumed or
 typed); `hundred`; cafeteria-plan items, Benefits elections capped and only for this year; the HSA and FSA page's
 figures, an HSA as state pay in California; two jobs; the Withholding check page's figure only for the same paychecks
 and without a typed W-4; the state's share of income (Colorado), typed state figures; the pay stub's figure and
 Pennsylvania's 401(k); the employer's part; paychecks from the period, typed or assumed, a Roth 401(k); not ready,
 pay linked to a child.
+
+## Answer key
+`tests/golden-paycheck.test.mjs` checks `withholdFederal` against 3,000 rows of Publication 15-T (2026) Worksheet 1A
+(every table row's start, a cent below and above, for each status and both Step 2 choices; 1 to 260 paychecks) and
+`compute`'s Social Security, Medicare, the paycheck the wage base is reached and the first with the 0.9% against 1,500
+one-job years, all worked independently from Publications 15-T and 15 (`tools/golden_paycheck`,
+`tests/golden/paycheck/RULES.md`) and recomputed to the cent by a separate audit. It found the floating-point edge at a
+row's start and the year landing exactly on the wage base, both fixed above. The printed single, Step 2 checkbox table
+is not continuous (the IRS rounded two row starts and one base: −$0.12 at 108,938, +$0.18 at 328,350); the page and
+the key both follow the printed table, as payroll software does.
 
 ## Ideas / not yet
 - A W-4 from 2019 or earlier (allowances, $4,300 each in 2026), supplemental pay, local taxes, the year-to-date view

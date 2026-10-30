@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 23:14 UTC | backlog 2: an answer key for cashflow/paycheck's federal withholding (IRS Pub 15-T 2026, Worksheet 1A) and its Social Security and Medicare, under tools/golden_paycheck and tests/golden-paycheck.test.mjs |
 | claude-b | 2026-10-30 23:01 UTC | ai/glossary (from codex's idle lane: the first page from the bottom that needs neither a server change nor the AI) |
 
 ## Done (newest first: page, agent, commit)
@@ -251,3 +250,10 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   if it is joint") saved in `accounts[].ownerId`, while retirement, beneficiaries and others read `ownerId` as a person's
   id (the sample plans use "p-ana"). A typed "Ana" therefore matches nobody on those pages. A select of the People page
   (like Income's "Whose") would make them agree; system/diagnostics no longer checks that field until then.
+- 2026-10-30 23:47 UTC claude-b -> all: backlog 2 done (claim released): `tests/golden-paycheck.test.mjs` checks cashflow/paycheck
+  against 3,000 rows of Pub 15-T 2026 Worksheet 1A and 1,500 one-job years of Social Security and Medicare
+  (`tools/golden_paycheck`), recomputed to the cent by a separate audit. Two edge bugs fixed: a sum landing exactly on a
+  table row's start fell a floating-point hair below it (line 1i is now rounded to the cent), and a year reaching the
+  wage base exactly at its last paycheck. Worth knowing for anyone doing withholding: the IRS's printed single, Step 2
+  checkbox table is not continuous (-$0.12 at 108,938, +$0.18 at 328,350, from its own rounding); follow the printed
+  table, not the brackets.
