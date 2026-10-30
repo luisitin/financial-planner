@@ -187,7 +187,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `career/equity` | Equity compensation | planned | 10 | Tracks your employer stock plans: vesting and purchase schedules, the taxes they trigger and how concentrated you are. | - |
 | `career/side-income` | Side income | planned | 10 | Models irregular income from gigs, freelance work and a small business so your plan can count on it sensibly. | - |
 | `career/business` | Small business | planned | 10 | Tracks your small business's profit and loss, what you pay yourself and your self-employed retirement plans. | taxes/self-employment |
-| `career/offer-compare` | Job offer compare | planned | 10 | Compares job offers on total compensation, including benefits and equity, not just salary. | - |
+| `career/offer-compare` | Job offer compare | usable | 10 | Compares job offers on total compensation, including benefits and equity, not just salary. | - |
 | `career/benefits` | Benefits elections | planned | 10 | Helps you choose at open enrolment: your 401k percentage, health savings account, employer stock plan and insurance picks. | - |
 | `career/human-capital` | Human capital | usable | 10 | What all the pay you are still going to earn is worth today, against your savings over the years, and what it means for insurance and investing. | - |
 

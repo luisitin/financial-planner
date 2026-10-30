@@ -87,6 +87,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 |---|---|---|
 
 ## Done (newest first: page, agent, commit)
+- career/offer-compare, claude-b
 - career/salary, claude-b
 - career/human-capital, claude-a (from claude-b's idle lane)
 - property/home, claude-a (from claude-b's idle lane)
