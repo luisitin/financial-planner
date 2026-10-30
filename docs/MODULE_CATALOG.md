@@ -90,7 +90,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `goals/vehicle` | Vehicle | planned | 4 | Helps you decide whether to save up for your next vehicle or finance it, and on what timeline. | property/vehicles |
 | `goals/travel` | Travel and events | planned | 4 | Turns trips, a wedding and other milestones into goals you fund month by month. | - |
 | `goals/charitable` | Giving | planned | 4 | Plans your charitable giving, works out the numbers on a donor-advised fund and shows the effect on your taxes. | taxes/* |
-| `goals/prioritizer` | Goal prioritiser | planned | 4 | Splits your monthly surplus across your goals according to their priority and deadline. | - |
+| `goals/prioritizer` | Goal prioritiser | usable | 4 | The money left each month shared across your goals by priority and date: which arrive on time and how late the rest would be. | - |
 
 ## retirement
 | key | title | status | phase | purpose | seeds |
