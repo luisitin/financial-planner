@@ -89,7 +89,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `goals/education` | Education (529) | usable | 4 | College for each child: what it would cost when they get there, the monthly saving that covers it, and how much today's saving covers. | College Board 2025 |
 | `goals/vehicle` | Vehicle | usable | 4 | Your next car paid in cash or financed: the saving a month for cash, the loan for the rest, and the 20/4/10 rule. | - |
 | `goals/travel` | Travel and events | usable | 4 | Trips, a wedding and other big days priced from their parts, with what to put aside each month to pay in cash. | - |
-| `goals/charitable` | Giving | planned | 4 | Plans your charitable giving, works out the numbers on a donor-advised fund and shows the effect on your taxes. | taxes/* |
+| `goals/charitable` | Giving | usable | 4 | What your giving saves in tax and really costs, and how to give the same for less: bunching, shares that have grown, gifts from an IRA. | IRC 170(p), 408(d)(8) |
 | `goals/prioritizer` | Goal prioritiser | usable | 4 | The money left each month shared across your goals by priority and date: which arrive on time and how late the rest would be. | - |
 
 ## retirement
