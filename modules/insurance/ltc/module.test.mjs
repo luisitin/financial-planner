@@ -15,10 +15,10 @@ test("the 2024 national medians", () => {
 test("settings: the defaults, and the years from the person's sex", () => {
   const p = familyPlan(TODAY);
   assert.deepEqual(settingsFor(p, "p-ana"), { care: DEFAULTS.care, startAge: DEFAULTS.startAge, costFactor: 1, years: AVERAGE_YEARS_ANY, sex: "" });
-  p.retirement.longevity = { "p-ana": { sex: "female" }, "p-bo": { sex: "male" } };
-  assert.equal(settingsFor(p, "p-ana").years, AVERAGE_YEARS.female); assert.equal(settingsFor(p, "p-bo").years, AVERAGE_YEARS.male);
+  p.retirement.longevity = { "p-ana": { sex: "f" }, "p-bo": { sex: "m" } };
+  assert.equal(settingsFor(p, "p-ana").years, AVERAGE_YEARS.f); assert.equal(settingsFor(p, "p-bo").years, AVERAGE_YEARS.m);
   p.insurance.ltc = { care: "assisted", startAge: 80, years: 5, costFactor: 1.3 };
-  assert.deepEqual(settingsFor(p, "p-ana"), { care: "assisted", startAge: 80, costFactor: 1.3, years: 5, sex: "female" });
+  assert.deepEqual(settingsFor(p, "p-ana"), { care: "assisted", startAge: 80, costFactor: 1.3, years: 5, sex: "f" });
 });
 
 test("care events: whole years then the part-year; a policy pays after its wait, up to its monthly benefit and its pool", () => {

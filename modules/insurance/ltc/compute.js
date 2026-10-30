@@ -20,7 +20,7 @@ export const CARE = {
 };
 export const COST_YEAR = 2024;
 /** Almost 70% of people turning 65 will need some long-term care; women for 3.7 years on average, men 2.2 (US Administration for Community Living, "How much care will you need?"). */
-export const CHANCE_AFTER_65 = 0.7, AVERAGE_YEARS = { female: 3.7, male: 2.2 }, AVERAGE_YEARS_ANY = 3;
+export const CHANCE_AFTER_65 = 0.7, AVERAGE_YEARS = { f: 3.7, m: 2.2 }, AVERAGE_YEARS_ANY = 3;
 /** The usual settings: a private nursing-home room from 85. */
 export const DEFAULTS = { care: "nursing", startAge: 85, costFactor: 1 };
 /** Policy terms when the policy does not say: a 90-day waiting period and three years of benefits, the most common choices. */

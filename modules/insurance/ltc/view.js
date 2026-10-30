@@ -33,7 +33,7 @@ export function render(page, ctx) {
     host.replaceChildren();
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Care in later life"),
-      ui.h("p", { class: "lede" }, `Almost ${Math.round(CHANCE_AFTER_65 * 10)} in 10 people turning 65 will need help with daily life at some point: at home, in assisted living or in a nursing home. Women need it for ${AVERAGE_YEARS.female} years on average, men for ${AVERAGE_YEARS.male}. Medicare pays for very little of it.`),
+      ui.h("p", { class: "lede" }, `Almost ${Math.round(CHANCE_AFTER_65 * 10)} in 10 people turning 65 will need help with daily life at some point: at home, in assisted living or in a nursing home. Women need it for ${AVERAGE_YEARS.f} years on average, men for ${AVERAGE_YEARS.m}. Medicare pays for very little of it.`),
       ui.h("p", { class: "muted small" }, "Figures: US Administration for Community Living; care costs from the CareScout (Genworth) Cost of Care Survey.")));
     if (!d || !d.ready) {
       host.append(ui.card(null, ui.h("p", {}, "To see whether your plan could pay for care, it needs the basics first:"), ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
@@ -97,7 +97,7 @@ export function render(page, ctx) {
     card.append(ui.form([
       { key: "care", label: "Kind of care", type: "select", options: Object.entries(CARE).map(([value, c]) => ({ value, label: c.label })) },
       { key: "startAge", label: "From age", type: "number", min: 50, max: 110, step: "1", help: `${DEFAULTS.startAge} if you leave it empty` },
-      { key: "years", label: "For how many years", type: "number", min: 0.5, max: MAX_YEARS, step: "0.5", help: `empty: the average, ${AVERAGE_YEARS.female} for women and ${AVERAGE_YEARS.male} for men (set on How long to plan for), 3 otherwise` },
+      { key: "years", label: "For how many years", type: "number", min: 0.5, max: MAX_YEARS, step: "0.5", help: `empty: the average, ${AVERAGE_YEARS.f} for women and ${AVERAGE_YEARS.m} for men (set on How long to plan for), 3 otherwise` },
       { key: "costFactor", label: "Costs where you live", type: "percent", min: 10, max: 400, help: "100% = the national middle price; 130% if your state costs 30% more" },
     ], { care: d.settings.care, startAge: s.startAge ?? "", years: s.years ?? "", costFactor: s.costFactor ?? 1 }, (v) => {
       pending = "Care settings saved.";
