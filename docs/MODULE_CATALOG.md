@@ -17,7 +17,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `overview/benchmarks` | How am I doing | usable | 9 | Your net worth against families of your age, your retirement savings against the usual guideline for your age, and the rules of thumb for saving, cash, housing and debt. | Fed SCF 2025, Fidelity |
 | `overview/health-score` | Plan health score | usable | 9 | Your whole plan as one score from 0 to 100: cash cushion, saving, debt, retirement, protection, goals and how complete it is, with where the missing points are. | - |
 | `overview/timeline` | Life timeline | usable | 9 | Every moment from today to the end of your plan that changes your money: retiring, Social Security, Medicare, the last mortgage payment, children growing up, and whether the savings last. | - |
-| `overview/monthly-review` | Monthly review | planned | 9 | Walks you through the month: spending against budget, the change in net worth, goal progress and your to-dos. | - |
+| `overview/monthly-review` | Monthly review | usable | 9 | Walks you through the month in ten minutes: fresh balances, the bank files, spending against the budget, the change in net worth, goals and what needs attention, then marks it reviewed with a note. | - |
 
 ## household
 | key | title | status | phase | purpose | seeds |

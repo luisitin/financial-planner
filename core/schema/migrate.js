@@ -70,6 +70,7 @@ export function emptyPlan() {
     },
     scenarios: [],           // [{ id, name, overrides: {...partial plan...}, createdAt }]
     pageNotes: {},           // { "group/id": "what the owner wants this page to do" } -- typed on placeholder pages
+    reviews: [],             // [{ month: "YYYY-MM", at: "YYYY-MM-DD", note }] one per month marked reviewed (overview/monthly-review)
     notes: "",
   };
 }

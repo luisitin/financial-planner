@@ -36,6 +36,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 | `retirement` | `{ spendingMonthly, stocksNow, stocksRetired, taxRate, strategy: fixed-real\|percent\|guardrails\|vpw, withdrawalRate, contributions: [{ id, accountId, personId, amount, period, employerMatch }], socialSecurity: { [personId]: { claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings } }, pensions: [{ id, personId, name, monthly, startAge, endAge?, cola }], longevity: { [personId]: { sex, health } }, taxMode: "flat"\|"brackets", withdrawalOrder: ["taxable", "deferred", "free"] (after cash), rothConversion: { on, fillRate, untilAge }, gainShare, dividendYield }` | retirement/* |
 | `scenarios` | `[{ id, name, overrides: partial plan, createdAt }]` -- applied on top of the plan by scenarios/compare | scenarios/compare |
 | `pageNotes` | `{ "group/id": "text" }` -- what the owner wants a not-yet-built page to do, typed on its placeholder | core/ui/placeholder |
+| `reviews` | `[{ month: "YYYY-MM", at: "YYYY-MM-DD", note }]` -- one per month the owner marked reviewed, with what they noted | overview/monthly-review |
 | `notes` | free text | - |
 
 ## Rules for changing it

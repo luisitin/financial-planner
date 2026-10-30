@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Monthly review (`overview/monthly-review`) is usable: the month in nine steps checked against the plan (fresh balances, the net-worth point, the bank files and filing them, the budget, where the money went, goals, what needs attention, the next step), then "mark reviewed" with a note; new plan section `reviews` (added to older plans on load).
 - [builder] How am I doing (`overview/benchmarks`) is usable: net worth against the median family of the same age (the Federal Reserve's 2025 Survey of Consumer Finances, out October 2026), retirement savings against Fidelity's multiple of pay for the age, saving 15%, 3 to 6 months of cash, housing under 28% and debt under 36% of gross income, each as a ruler with its source.
 - [builder] Export (`reports/export`) is usable: eleven tables as spreadsheet files (CSV), made on the device: accounts, transactions, income, expenses, debts, goals, holdings, net-worth history, the retirement plan year by year, tax year by year and the life timeline; plus the whole plan as one JSON file.
 - [builder] Plan summary (`reports/plan-summary`) is usable: the whole plan as an advisor-style document, opening with a plain-words paragraph, then where you stand, each month's money, retirement with the chance the money lasts, the stress tests, goals, debts, the next ten years, next steps, plan health and the assumptions; "Print or save as PDF" prints the same sheet as a clean document of its own (`modules/reports/report-kit.js`, shared by the reports to come).
