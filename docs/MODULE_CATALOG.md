@@ -129,7 +129,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `investments/backtest` | Backtest | usable | 7 | Any stocks-and-bonds mix run through the years since 1871, side by side with another: growth, the worst years, the deepest fall. | Simba, Shiller |
 | `investments/tax-lots` | Tax lots and harvesting | usable | 7 | The gain or loss on each lot you hold, the losses worth harvesting in taxable accounts, and the order to sell in when you need cash. | - |
 | `investments/employer-stock` | Employer stock | planned | 7 | Shows how much of your wealth is in your employer's stock, when your employer stock plans vest and the risk that carries. | career/equity |
-| `investments/crypto` | Crypto | planned | 7 | Tracks your crypto holdings and what you paid for them, with a clear flag on how volatile they are. | - |
+| `investments/crypto` | Crypto | usable | 7 | Your crypto and the funds that hold it: value against what you paid, the share of net worth, how far it could fall, and the tax if sold. | - |
 | `investments/limits` | Contribution limits | usable | 7 | This year's limits for 401(k)s, IRAs, HSAs, FSAs and 529 gifts against what is going in, the room left, the Roth income check and the deadlines. | - |
 
 ## taxes
