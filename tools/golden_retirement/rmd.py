@@ -111,7 +111,7 @@ for i,a in enumerate(factor_ages):
 birth_years=[1950+i%46 for i in range(60)]+[1948,1950,1951,1958,1959,1960,1961,1940,1930,1947]*3+[1900,1901,1910,1920,1948,1950,1951,1960,2056,2200]
 for i,y in enumerate(birth_years):
     a=start_age(f'{y}-01-01')
-    todo='Birth years before 1949 began at age70.5 under Pub.590-B; helper incorrectly returns72.' if y<1949 else ''
+    todo=''   # fixed 2026-10-30 (F-030), was: Birth years before 1949 began at age70.5 under Pub.590-B; helper incorrectly returns72.
     rows.append(case('rmd','cohort',i,'rmdStartAge',{'value':six(a)},args={'0':y},todo=todo,note=second(COHORT_SOURCE+'; January1 assumed for year-only primitive; no ambiguous1949 primitive',i,f'chronological test: year{y} lies in '+('pre1949 =>70.5' if y<1949 else '1949-1950 =>72' if y<1951 else '1951-1959 =>73' if y<1960 else '1960+ =>75'))))
 
 balances=['1000','10000','100000','500000','1000000','2500000']
@@ -135,7 +135,7 @@ for i,birth in enumerate(dates):
     people=[{'id':'p1','name':'Example Adult','birthDate':birth,'role':'self'}]
     if i%3==0: people.append({'id':'child','name':'Example Child','birthDate':'2020-02-29','role':'dependent'})
     expected={'people':{'length':1,'0':{'birthYear':int(birth[:4]),'age':year-int(birth[:4]),'startAge':six(sa),'startYear':sy,'yearsUntil':max(0,sy-year),'deferredNow':'0.00','firstRmd':None,'firstRmdReal':None}},'ready':False}
-    todo='Birthday-sensitive older RMD cohort: page uses72 for all pre1951 births instead of70.5 before July1,1949.' if birth<'1949-07-01' else ''
+    todo=''   # fixed 2026-10-30 (F-030), was: Birthday-sensitive older RMD cohort: page uses72 for all pre1951 births instead of70.5 before July1,1949.
     proof=f'birthday {birth} plus legal age{sa} falls in {sy}; remaining=max(0,{sy}-{year})={max(0,sy-year)}'
     rows.append(case('rmd','calendar',i,'compute',expected,plan={'household':{'people':people},'accounts':[]},params={'today':f'{year}-'+['01-01','12-31','02-28','03-01'][i%4]},todo=todo,note=second(COHORT_SOURCE+'; age display is calendar-year age; dependent excluded; no projection inputs so first amount null',i,proof)))
 
@@ -183,7 +183,7 @@ for i in range(100):
     plan['accounts'].append({'id':'ret2','name':'Partner IRA','type':'ira','ownerId':'p2','balance':cents(b2)})
     f=factor(age)
     expected={'people':{'length':2,'0':{'deferredNow':cents(b1),'firstRmd':cents(b1/f),'firstRmdReal':cents(b1/f)},'1':{'deferredNow':cents(b2),'firstRmd':cents(b2/f),'firstRmdReal':cents(b2/f)}},'deferredNow':cents(b1+b2),'hasDeferred':b1+b2>0}
-    todo='Ownership is lost: page repeats household pre-tax balance and household RMD for each adult; Pub.590-B requires each owner/account calculation.' if b1+b2>0 else ''
+    todo=''   # fixed 2026-10-30 (F-030), was: Ownership is lost: page repeats household pre-tax balance and household RMD for each adult; Pub.590-B requires each owner/account calculation.
     proof=f'individual shares {cents(b1)}/{f}={cents(b1/f)} and {cents(b2)}/{f}={cents(b2/f)}; additivity gives household{cents((b1+b2)/f)}'
     rows.append(case('rmd','ownership',i,'compute',expected,plan=plan,params={'today':f'{year}-01-01'},todo=todo,note=second(SOURCE+'; each IRA belongs to an individual; plan ownerId from docs/DATA_MODEL.md; both adults start in this year',i,proof)))
 
@@ -197,7 +197,7 @@ for i in range(100):
     plan['accounts']=[{'id':'excluded','name':'Example '+kind,'type':kind,'ownerId':'p1','balance':cents(amount)}]
     if i in [60,61,62]: plan['accounts']=[]
     expected={'deferredNow':'0.00','hasDeferred':False,'deferredAccounts':{'length':0},'schedule':{'length':0},'totalRmdReal':'0.00','totalTaxReal':'0.00'}
-    todo='Ordinary cash-value life insurance is not an IRA; account type alone incorrectly imposes IRA required withdrawals (IRC408(a)(3)).' if kind=='cash_value_life' else ''
+    todo=''   # fixed 2026-10-30 (F-030), was: Ordinary cash-value life insurance is not an IRA; account type alone incorrectly imposes IRA required withdrawals (IRC408(a)(3)).
     note=INSURANCE_SOURCE+'; Roth has no lifetime RMD; other listed accounts are outside traditional retirement accounts; no inherited account or beneficiary assumption'
     rows.append(case('rmd','exclusions',i,'compute',expected,plan=plan,params={'today':f'{year}-01-01'},todo=todo,note=second(note,i,f'{kind} balance{cents(amount)} contributes zero to eligible IRA/401k set; empty sum=0; zero/factor=0')))
 

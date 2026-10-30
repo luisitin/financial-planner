@@ -92,7 +92,7 @@ case_id,rule,kind,target,arg.0.balances.cash,arg.0.balances.deferred,arg.0.balan
 | percent | 60 | 30 | 10 | 10 | 0 |
 | guardrails | 60 | 30 | 10 | 10 | 0 |
 | vpw | 60 | 30 | 10 | 10 | 0 |
-| vpw-beginning-timing | 60 | 30 | 10 | 10 | 58 |
+| vpw-beginning-timing | 60 | 30 | 10 | 10 | 0 |
 | worst-history-selection | 60 | 30 | 10 | 10 | 0 |
 | page-spending-summaries | 60 | 30 | 10 | 10 | 0 |
 | page-readiness-defaults | 60 | 30 | 10 | 10 | 0 |

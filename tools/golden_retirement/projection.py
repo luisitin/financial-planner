@@ -150,10 +150,11 @@ for i in range(100):
     inp=engine(year,2,start,spend);inp['strategy']='guardrails';inp['rates']['inflation']=rate(f);inp['returns']={'stocks':rate(r),'bonds':rate(r)}
     add('guardrails',i,{'rows':{'1':{'spending':money(secondSpend)}}},inputs=inp,second=('compare portfolio to inverse rate thresholds',secondSpend,spend*(0.9 if total<spend/(w*1.2) else 1.1 if total>spend/(w*0.8) else 1+f if (1+r)/(1+f)>=1 else 1),0.001))
 
-    # VPW PMT via discounted unit payments, not a copy of the PMT implementation.
+    # VPW via discounted unit payments, not a copy of the PMT implementation. The withdrawal is taken at the
+    # start of the year, before that year's return (Bogleheads VPW), so the stream starts at k=0 (annuity due).
     real=[0,0.02,-0.05,-0.5][i%4];h=max(1,min(n,80));inp=engine(year,h,b,s);inp['strategy']='vpw';inp['returns']={'stocks':rate(real),'bonds':rate(real)}
-    ann=sum((1+real)**(-k) for k in range(1,h+1)); payment=b/ann
-    closed=b/h if real==0 else b*real/(1-(1+real)**-h)
+    ann=sum((1+real)**(-k) for k in range(0,h)); payment=b/ann
+    closed=b/h if real==0 else b*real/(1-(1+real)**-h)/(1+real)
     add('vpw',i,{'rows':{'0':{'spending':money(payment)}}},inputs=inp,second=('discounted payments vs finite annuity',payment,closed,max(0.002,abs(payment)*1e-10)))
 
     # Flat tax withdrawals split across all buckets, derived in spendable units.
@@ -183,7 +184,7 @@ for i in range(100):
     affordable=math.floor(initial/h+0.5)
     capped=max(10000,initial*0.5+inp['spending']['yearly']*4)<initial/h-0.5
     issue='Initial search upper bound is below the feasible spending; bisection never expands its bracket.' if capped else 'Thirty bisection steps leave whole-dollar error at very large balances (closed-form equal shares).' if i in [91,92,96,97] else ''
-    add('affordable',i,{'value':money(affordable)},inputs=inp,target='affordableSpending',second=('equal shares recombine principal',initial/h*h,initial,max(0.001,initial*1e-12)),todo=issue)
+    add('affordable',i,{'value':money(affordable)},inputs=inp,target='affordableSpending',second=('equal shares recombine principal',initial/h*h,initial,max(0.001,initial*1e-12)),todo='')   # fixed 2026-10-30 (F-030), was: issue
 
     # Page coverage/verdict and summary on a simple three-year, zero-return model.
     spend=1200;initial=[3000,3600,4000,5000][i%4]+(i//4)*123.45;p=plan(year,initial,100)

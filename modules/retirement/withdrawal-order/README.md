@@ -35,8 +35,8 @@ For example, 2026 single taxable income of $50,400 has ordinary tax
 The source-year figures stay exact. Later hypothetical years compound the
 plan's inflation, rounding brackets to $25 and deductions and capital-gain
 thresholds to $50, as an explicit planning assumption rather than a tax forecast.
-The 2025 head-of-household standard deduction is $23,625 under the amended law;
-rounding that source-year amount to $23,650 is retained as a TODO disagreement.
+The 2025 head-of-household standard deduction is $23,625 under the amended law
+and stays exact: a table's own year is never re-rounded (fixed 2026-10-30, F-030).
 
 Social Security taxable income follows [IRS Publication 915, Worksheet 1](https://www.irs.gov/publications/p915).
 Single, head-of-household and surviving-spouse thresholds are $25,000 and
@@ -54,8 +54,8 @@ For 2025 through 2028, each eligible person starts with $6,000; that person's
 amount falls by 6% of income above $75,000, or $150,000 on a joint return.
 Married taxpayers must file jointly to qualify. For two eligible joint filers
 at $200,000, the deduction is `2 * (6,000 - .06 * 50,000) = $6,000`, not
-`12,000 - .06 * 50,000 = $9,000`. The latter result and married-separate
-eligibility are explicit TODO disagreements in the key.
+`12,000 - .06 * 50,000 = $9,000`. Both rules are in `core/math/tax.js` since
+2026-10-30 (F-029, F-030).
 
 Page-level answers solve for the smallest gross withdrawal whose after-tax
 proceeds cover spending. An independent bisection allocates each proposed draw

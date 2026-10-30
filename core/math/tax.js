@@ -4,8 +4,10 @@
 // the year-by-year retirement projection.
 //
 // What is modelled: ordinary brackets, standard deduction with the age/blindness allowance or
-// itemized deductions, the 2025-2028 senior deduction, long-term gains and qualified dividends
-// stacked on ordinary income at 0/15/20%, the taxation of Social Security benefits (the IRS
+// itemized deductions (from 2026 with the limit in the 37% bracket and the charity deduction for
+// people who do not itemize), the 2025-2028 senior deduction, long-term gains and qualified
+// dividends stacked on ordinary income at 0/15/20% (the worksheet's last step included), a net
+// capital loss of up to 3,000 against any income, the taxation of Social Security benefits (the IRS
 // worksheet), the net investment income tax, the additional Medicare tax on wages, the child tax
 // credit with its phase-out and refundable part. Not modelled: AMT, the qualified business income
 // deduction, the earned income credit, education credits, self-employment tax.
@@ -34,7 +36,7 @@ export function paramsFor(tables, year, { inflation = 0.025 } = {}) {
 
 /** A copy of `params` with the indexed figures scaled by `factor` (brackets, deductions, gains thresholds, the wage base); Social Security thresholds, NIIT/Medicare thresholds and the credit phase-outs are fixed in law. */
 export function indexParams(params, factor, year = null) {
-  const round = (n, to) => Math.round((n * factor) / to) * to;
+  const round = (n, to) => factor === 1 ? n : Math.round((n * factor) / to) * to;   // a table's own year keeps its published figures exactly
   const status = {};
   for (const [k, s] of Object.entries(params.status)) {
     status[k] = { ...s, brackets: s.brackets.map((b) => round(b, 25)), standardDeduction: round(s.standardDeduction, 50), extraAllowance: round(s.extraAllowance, 50), ltcgBrackets: s.ltcgBrackets ? s.ltcgBrackets.map((b) => round(b, 50)) : null };
@@ -111,7 +113,7 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
   const b = pos(benefits);
   if (b <= 0) return 0;
   const th = params.ssTaxation?.[status] ?? params.ssTaxation?.single ?? { base: 25000, extra: 9000 };
-  const provisional = pos(otherIncome) + pos(taxExemptInterest) + b / 2;
+  const provisional = (Number(otherIncome) || 0) + pos(taxExemptInterest) + b / 2;   // a capital loss can take "other income" below zero (worksheet line 3)
   const over = provisional - th.base;
   if (over <= 0) return 0;
   const over2 = Math.max(0, over - th.extra);
@@ -124,7 +126,9 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
  * inputs: {
  *   filingStatus, wages, otherOrdinary (interest, pensions, IRA withdrawals, Roth conversions, short-term gains, business),
  *   qualifiedIncome (qualified dividends + net long-term gains), socialSecurity (gross benefits), taxExemptInterest,
- *   adjustments (above the line: HSA, deductible IRA, ...), itemized (total itemized deductions, or 0),
+ *   capitalLoss (the allowed net capital loss, 0 to -3,000 or -1,500 separately: Schedule D line 21, taken off any income),
+ *   adjustments (above the line: HSA, deductible IRA, ...), itemized (total itemized deductions after their caps, or 0),
+ *   charitableCash (cash gifts to charity: from 2026 deductible up to 1,000 / 2,000 joint by people who do not itemize),
  *   ages65plus (you and a spouse), blind, dependentsUnder17, otherDependents, investmentIncome (for NIIT; default qualified income),
  *   withheld, paid (estimated payments)
  * }
@@ -134,26 +138,41 @@ export function federalTax(inputs, params) {
   const wages = pos(inputs.wages), otherOrdinary = pos(inputs.otherOrdinary), qualified = pos(inputs.qualifiedIncome), ss = pos(inputs.socialSecurity);
   const exempt = pos(inputs.taxExemptInterest), adjustments = pos(inputs.adjustments), itemized = pos(inputs.itemized);
   const ages65plus = Math.min(2, Math.max(0, Math.round(Number(inputs.ages65plus) || 0))), blind = Math.min(2, Math.max(0, Math.round(Number(inputs.blind) || 0)));
+  const capitalLoss = Math.min(0, Number(inputs.capitalLoss) || 0), charitableCash = pos(inputs.charitableCash);
   const ordinary = wages + otherOrdinary;
-  const otherIncome = ordinary + qualified - adjustments;
+  const otherIncome = ordinary + qualified + capitalLoss - adjustments;
   const taxableSS = taxableSocialSecurity(ss, otherIncome, exempt, status, params);
   const gross = ordinary + qualified + ss;
-  const agi = Math.max(0, ordinary + qualified + taxableSS - adjustments);
+  const agi = ordinary + qualified + capitalLoss + taxableSS - adjustments;   // Form 1040 line 11; a capital loss can take it below zero
   const std = standardDeduction(status, params, { ages65plus, blind });
-  const useItemized = itemized > std;
+  // the senior deduction (2025-2028): 6,000 a person 65 or older, each person's amount cut by 6% of the income over the threshold; married people only on a joint return
   let senior = 0;
-  if (params.seniorDeduction && ages65plus > 0) {
+  if (params.seniorDeduction && ages65plus > 0 && status !== "married_separate") {
     const sd = params.seniorDeduction;
     const th = sd.phaseOutThreshold[status] ?? sd.phaseOutThreshold.single;
-    senior = Math.max(0, sd.perPerson * ages65plus - Math.max(0, agi - th) * sd.phaseOutRate);
+    senior = Math.max(0, sd.perPerson - Math.max(0, agi - th) * sd.phaseOutRate) * ages65plus;
   }
-  const deduction = (useItemized ? itemized : std) + senior;
+  // from 2026: itemized deductions lose 2/37 of the smaller of themselves and the income over the 37% bracket's start (IRC §68)
+  let itemizedLimit = 0;
+  if (params.itemizedLimit && itemized > 0) {
+    const [num, den] = params.itemizedLimit.fraction ?? [2, 37];
+    const top = bracketsFor(status, params).at(-1).from;
+    itemizedLimit = (num / den) * Math.min(itemized, Math.max(0, agi - senior - top));
+  }
+  const itemizedAfter = itemized - itemizedLimit;
+  // from 2026: people who take the standard deduction also deduct cash gifts to charity, up to 1,000 (2,000 joint) (IRC §170(p))
+  const charityCap = params.charity?.nonItemizerCap?.[status] ?? params.charity?.nonItemizerCap?.single ?? 0;
+  const nonItemizerCharity = Math.min(charitableCash, charityCap);
+  const useItemized = itemizedAfter > std + nonItemizerCharity;
+  const deduction = (useItemized ? itemizedAfter : std + nonItemizerCharity) + senior;
   const taxableIncome = Math.max(0, agi - deduction);
   const qualifiedTaxable = Math.min(qualified, taxableIncome);
   const ordinaryTaxable = taxableIncome - qualifiedTaxable;
   const ord = taxOnOrdinary(ordinaryTaxable, status, params);
   const qual = taxOnQualified(ordinaryTaxable, qualifiedTaxable, status, params);
-  const incomeTax = ord.tax + qual.tax;
+  // the gains worksheet's last line: never more than the regular tax on all of taxable income
+  const incomeTax = qualifiedTaxable > 0 ? Math.min(ord.tax + qual.tax, taxOnOrdinary(taxableIncome, status, params).tax) : ord.tax;
+  const qualifiedTax = incomeTax - ord.tax;
   // credits: child tax credit, phased out $50 per $1,000 (or part) of income over the threshold; the refundable part needs earned income
   let childTaxCredit = 0, refundable = 0;
   const kids = Math.max(0, Math.round(Number(inputs.dependentsUnder17) || 0)), others = Math.max(0, Math.round(Number(inputs.otherDependents) || 0));
@@ -175,11 +194,11 @@ export function federalTax(inputs, params) {
   const withheld = pos(inputs.withheld), paid = pos(inputs.paid);
   const out = {
     year: params.year ?? null, filingStatus: status,
-    income: { wages, ordinary, qualified, socialSecurity: ss, taxableSocialSecurity: taxableSS, taxExemptInterest: exempt, gross },
+    income: { wages, ordinary, qualified, capitalLoss, socialSecurity: ss, taxableSocialSecurity: taxableSS, taxExemptInterest: exempt, gross },
     agi, adjustments,
-    deduction: { standard: std, itemized, used: useItemized ? "itemized" : "standard", senior, amount: deduction },
+    deduction: { standard: std, itemized: itemizedAfter, itemizedBeforeLimit: itemized, itemizedLimit, charity: useItemized ? 0 : nonItemizerCharity, used: useItemized ? "itemized" : "standard", senior, amount: deduction },
     taxableIncome, ordinaryTaxable, qualifiedTaxable,
-    ordinaryTax: ord.tax, qualifiedTax: qual.tax, incomeTax, layers: ord.layers, qualifiedLayers: qual.layers,
+    ordinaryTax: ord.tax, qualifiedTax, incomeTax, layers: ord.layers, qualifiedLayers: qual.layers,
     credits: { childTaxCredit, refundable },
     niit, additionalMedicare, totalTax: money(totalTax),
     effectiveRate: gross > 0 ? totalTax / gross : 0,
@@ -196,15 +215,32 @@ export function marginalRate(inputs, params, delta = 1000) {
   return Math.max(0, (b - a) / delta);
 }
 
-/** The largest extra ordinary income (a Roth conversion, say) that keeps taxable income at or under `taxableTop`; 0 if already over. */
-export function roomUnder(inputs, params, taxableTop) {
-  let c = Math.max(0, taxableTop - federalTax(inputs, params).taxableIncome);
-  for (let k = 0; k < 4 && c > 0; k++) {
-    const ti = federalTax({ ...inputs, otherOrdinary: pos(inputs.otherOrdinary) + c }, params).taxableIncome;
-    if (Math.abs(ti - taxableTop) < 1) break;
-    c = Math.max(0, c - (ti - taxableTop));
+/**
+ * The largest x in [lo, hi] with f(x) <= 0, for f non-decreasing with f(lo) <= 0 < f(hi) (f may return Infinity
+ * for "not allowed"). Secant steps inside the bracket, a bisection every third step so a stuck end cannot stall
+ * it; stops when the bracket is under `tol` wide or f is within `ftol` of zero (either side).
+ */
+export function largestAtOrUnder(f, lo, flo, hi, fhi, tol = 1e-6, ftol = 1e-9) {
+  for (let k = 0; k < 200 && hi - lo > tol; k++) {
+    let x = Number.isFinite(fhi) && Number.isFinite(flo) && fhi !== flo ? lo - flo * (hi - lo) / (fhi - flo) : (lo + hi) / 2;
+    if (!(x > lo && x < hi) || k % 3 === 2) x = (lo + hi) / 2;
+    const fx = f(x);
+    if (Math.abs(fx) <= ftol) return x;   // on the line, within the tolerance either side
+    if (fx < 0) { lo = x; flo = fx; } else { hi = x; fhi = fx; }
   }
-  return Math.round(c);
+  return lo;
+}
+
+/** The largest extra ordinary income (a Roth conversion, say) that keeps taxable income at or under `taxableTop`, to a fraction of a cent; 0 if already at or over. */
+export function roomUnder(inputs, params, taxableTop) {
+  const base = pos(inputs.otherOrdinary);
+  const over = (c) => federalTax({ ...inputs, otherOrdinary: base + c }, params).taxableIncome - taxableTop;
+  const f0 = over(0);
+  if (f0 >= 0) return 0;
+  let lo = 0, flo = f0, hi = -f0, fhi = over(hi);
+  while (fhi <= 0 && hi < 1e15) { lo = hi; flo = fhi; hi = hi * 2 + 1; fhi = over(hi); }   // deductions still unused: reach further
+  if (fhi <= 0) return hi;
+  return largestAtOrUnder(over, lo, flo, hi, fhi);
 }
 
 /** The taxable-income top of the bracket with `rate` for a status (Infinity for the top rate). */

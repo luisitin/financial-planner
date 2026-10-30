@@ -106,7 +106,7 @@ def ledger(I,options=None):
         if retired:
             if strategy=='percent':spend=max(0,balance*wr)
             elif strategy=='vpw':
-                real=max(-.5,(1+r)/(1+infl)-1);years=I['endYear']-year+1;spend=max(0,balance/sum((1+real)**-j for j in range(1,int(years)+1)))
+                real=max(-.5,(1+r)/(1+infl)-1);years=I['endYear']-year+1;spend=max(0,balance/sum((1+real)**-j for j in range(0,int(years))))
             elif strategy=='guardrails':
                 if guard is None:guard=number(I['spending']['yearly'])*price
                 elif balance<guard/(1.2*wr):guard*=.9
@@ -194,7 +194,7 @@ def mortality(row):
         return math.fsum(pr(x,x+j+.5,o) for j in range(max(0,math.ceil(end-x))))
     if row['target']=='survival':return {'value':pr(*args)}
     if row['target']=='ageAtSurvival':return {'value':inv(*args)}
-    if row['target']=='lifeExpectancy':return {'value':life(args[0],args[1],300 if row['rule']=='individual-age120-tail' else 120)}
+    if row['target']=='lifeExpectancy':return {'value':life(args[0],args[1],300)}
     p=expand(row,'plan');params=expand(row,'params');today=params.get('today');people=[]
     for per in p.get('household',{}).get('people',[]):
         if per.get('role')=='dependent' or not per.get('birthDate'):continue
@@ -202,14 +202,13 @@ def mortality(row):
         b=date.fromisoformat(per['birthDate']);t=date.fromisoformat(today) if today else None
         x=t.year-b.year-int((t.month,t.day)<(b.month,b.day)) if t else None
         out=dict(id=per['id'],name=per['name'],age=x,**opts,currentPlanEnd=number(per.get('lifeExpectancy',p.get('assumptions',{}).get('planEndAge',95))),expectancy=None,ages=[],planTo=None)
-        if x is not None:out.update(expectancy=x+life(x,opts,120),ages=[dict(age=k,p=pr(x,k,opts)) for k in [80,85,90,95,100]],planTo=min(120,inv(x,.1,opts)))
+        if x is not None:out.update(expectancy=x+life(x,opts,300),ages=[dict(age=k,p=pr(x,k,opts)) for k in [80,85,90,95,100]],planTo=inv(x,.1,opts))
         people.append(out)
     alive=[x for x in people if x['age'] is not None];either=None
     if len(alive)>=2:
         a,b=alive[:2]
         def union(y):return 1-(1-pr(a['age'],a['age']+y,a))*(1-pr(b['age'],b['age']+y,b))
         y=next(k for k in range(300) if union(k)<=.1)
-        if row['rule']!='couple-70year-cap':y=min(70,y)
         either=dict(ages=[dict(age=k,p=union(k-a['age'])) for k in [80,85,90,95,100]],planTo=a['age']+y,planToYear=int(today[:4])+y,first=a['name'],second=b['name'])
     suggestion='' if not alive else f"Plan for at least one of you being alive to about {either['planTo']} ({either['first']}'s age): that is when the chance drops under 1 in 10." if either else f"Plan to about {alive[0]['planTo']}: that is when the chance of still being alive drops under 1 in 10."
     return dict(people=people,either=either,hasData=bool(alive),suggestion=suggestion)

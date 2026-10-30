@@ -45,11 +45,11 @@ The independent solver first fixes the withdrawals already needed for spending,
 then solves for the largest conversion that stays under the chosen taxable
 income ceiling while the remaining accounts can pay the extra tax. The answer
 is found to cent precision, rather than assuming a fixed number of corrections
-will converge. Rows retain disagreements about whole-dollar room rounding and
-the temporary senior deduction instead of replacing their answers with code output.
-The code also skips positive conversions below $1, a minimum absent from the
-documented model and cited IRA rules. An available $0.01 with no tax liability
-can convert $0.01 under those rules; those cases retain a specific TODO.
+will converge. Fixed 2026-10-30 (F-030): `roomUnder` and the engine's conversion step
+solve to a fraction of a cent (secant steps inside a bracket, `largestAtOrUnder` in
+`core/math/tax.js`), the senior deduction follows the law (per person, joint returns
+only), and conversions under $1 are no longer skipped: an available $0.01 with no tax
+liability converts $0.01.
 
 Required-withdrawal age and an explicitly supplied until-age are both exclusive
 conversion boundaries. A failed spending plan converts nothing. The reported

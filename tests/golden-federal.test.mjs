@@ -18,15 +18,7 @@ const YEARS = [2024, 2025, 2026];
 // Where the engine and the law part ways (worked examples in tests/golden/taxes/RULES.md, "Known
 // disagreements"). The case ids for each cause are in golden/taxes/federal-todo.json; a row can have
 // more than one cause. When a cause is fixed, delete its list and those rows must then pass.
-const REASONS = {
-  "capital-loss-dropped": "a net capital loss is dropped when it is larger than interest, non-qualified dividends, pensions and IRA money (otherOrdinary is floored at 0), so AGI, the Social Security worksheet and taxable income come out too high (IRC §1211(b): up to 3,000 off any income, wages included)",
-  "senior-deduction-separate": "the senior deduction is given on a married-filing-separately return; the law allows it to married people only on a joint return (IRS FS-2025-03, Schedule 1-A Part V)",
-  "senior-phase-out-per-person": "the senior deduction's 6% phase-out is taken once from 12,000; Schedule 1-A takes it off each person's 6,000, so a couple loses it twice as fast",
-  "gains-worksheet-line-25": "the Qualified Dividends and Capital Gain Tax Worksheet's line 25 (the smaller of the worksheet tax and the regular tax) is not applied: between the 0% gains top and the 12% bracket top, 15% is more than 12%",
-  "salt-separate-phase-down": "the married-filing-separately SALT cap phases down at 15% of AGI over 250,000 (252,500 in 2026) instead of the law's 30% (IRC §164(b)(7) as amended by Pub. L. 119-21 §70120)",
-  "charity-2026": "2026 charity rules are not modelled: itemized gifts count only above 0.5% of AGI (IRC §170(b)(1)(I)), and people who take the standard deduction deduct up to 1,000 (2,000 joint) of cash gifts (IRC §170(p))",
-  "itemized-limit-2026": "the 2026 limit on itemized deductions in the 37% bracket is not modelled: they are cut by 2/37 of the smaller of the deductions or the income over the 37% bracket start (IRC §68 as amended by Pub. L. 119-21 §70111)",
-};
+const REASONS = {};   // cause -> plain-words reason; all seven causes found by the key were fixed on 2026-10-30 (F-029)
 const TODO = {};   // case_id -> reason
 const todoLists = JSON.parse(fs.readFileSync(new URL("./golden/taxes/federal-todo.json", import.meta.url), "utf8"));
 for (const [cause, ids] of Object.entries(todoLists)) for (const id of ids) TODO[id] = TODO[id] ? `${TODO[id]}; ${REASONS[cause]}` : REASONS[cause];
@@ -45,8 +37,10 @@ function engine(row, params, extraIra = 0) {
   const base = {
     filingStatus: status,
     wages: num(row.wages),
-    otherOrdinary: Math.max(0, interest + dividends - qualifiedDividends + num(row.pensions) + num(row.ira_distributions) + extraIra + gains.netShort + gains.lossAllowed),
+    otherOrdinary: Math.max(0, interest + dividends - qualifiedDividends + num(row.pensions) + num(row.ira_distributions) + extraIra + gains.netShort),
     qualifiedIncome: qualifiedDividends + gains.netLong,
+    capitalLoss: gains.lossAllowed,                                  // Schedule D line 21: off any income
+    charitableCash: num(row.charity),                                // the 2026 deduction for people who do not itemize
     socialSecurity: num(row.social_security),
     ages65plus: (num(row.age_1) >= 65 ? 1 : 0) + (joint && num(row.age_2) >= 65 ? 1 : 0),
     blind: num(row.blind_1) + (joint ? num(row.blind_2) : 0),

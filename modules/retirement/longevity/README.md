@@ -39,17 +39,17 @@ and ages labeled on the first adult's clock. Input birthdays use ordinary whole
 calendar years; February29 birthdays advance March1 in a nonleap year.
 
 The original README did not specify how its survival "sum" was sampled. The
-answer key discloses the existing numerical contract: one-year midpoint
-rectangles through age120; expected age is current age plus that remaining-year
+answer key discloses the numerical contract: one-year midpoint
+rectangles, summed until the survival left is negligible (the Gompertz law has
+no maximum age; the key evaluates to age 200); expected age is current age plus that remaining-year
 sum. It checks that sum a second way using weighted survival decrements plus
 the surviving tail. This is a numerical approximation, not an SSA table value.
 Probability and decimal-year expectations have six decimal places; ages and
 calendar years are integers. No dollar arithmetic occurs here.
 
-Separate rows preserve discrepancies caused by undocumented horizon limits:
-the inverse helper stops at120, the remaining-year sum omits survival after120,
-and the couple crossing search stops after70 years even while joint survival
-exceeds10%. These rows retain uncapped model expectations and a specific TODO
-reason. The age200 endpoint used for the unbounded midpoint checks has a tail
-below half the last stored decimal, as bounded in the brief. No production
-formula was changed by adding this answer key.
+Fixed 2026-10-30 (F-030): the searches no longer stop at age 120 or after 70
+calendar years. `ageAtSurvival` walks on until the chance falls to the target,
+`lifeExpectancy` sums the curve until what is left is negligible, and the couple's
+"at least one alive" search runs until it crosses 10%; 300 years is only a guard.
+The age200 endpoint used for the unbounded midpoint checks has a tail below half
+the last stored decimal, as bounded in the brief.

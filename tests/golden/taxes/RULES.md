@@ -195,6 +195,10 @@ STAT §1411(b), §3101(b)(2), same all three years.
 
 ## 11. Known disagreements with the engine (the `todo` rows)
 
+**All seven fixed 2026-10-30 (F-029):** `core/math/tax.js` and `itemizedTotal` now follow this sheet, the
+runner passes the allowed capital loss and the cash gifts the way the Federal page does, and
+`federal-todo.json` is empty; all 12,000 rows agree within $1. The table below is kept as the record.
+
 `tests/golden/taxes/federal-todo.json` lists the case ids for each cause; 2,246 of the 12,000 rows.
 Applying all seven fixes below to a scratch copy of the engine made all 12,000 rows agree, and
 leaving out any one of them brought its rows back.

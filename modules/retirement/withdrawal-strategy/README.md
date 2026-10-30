@@ -33,11 +33,10 @@ changes. No production return data or executable formulas are used to generate
 the answer key. All household amounts and dates are invented worked examples.
 
 The guardrail factors 1.2/0.8 and spending changes of 10% are the simplified
-Projection README model. The annuity key exposes a timing issue: ordinary
-end-year PMT is withdrawn before earning that year's return. For $100,000 with
-one year left and a 3% real return, PMT is $103,000, while a beginning-year
-withdrawal can use only $100,000. Separate TODO rows retain the beginning-year
-cash-flow identity and its $3,000 difference; other VPW rows preserve the stated
-PMT compatibility contract. Sources: the model's Projection README, the
+Projection README model. VPW is withdrawn at the start of the year, before
+that year's return, so its payment is the annuity-due amount (ordinary PMT divided
+by 1 + the real return): for $100,000 with one year left and a 3% real return it is
+$100,000, not $103,000, and the money lasts exactly to the end instead of failing
+in the last year (fixed 2026-10-30, F-030; the key's `vpw` rule follows the same timing). Sources: the model's Projection README, the
 [FPA Bengen reprint](https://www.financialplanningassociation.org/sites/default/files/2021-04/MAR04%20Determining%20Withdrawal%20Rates%20Using%20Historical%20Data.pdf),
 and [Bogleheads VPW](https://www.bogleheads.org/wiki/Variable_percentage_withdrawal).

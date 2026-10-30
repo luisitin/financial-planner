@@ -1,5 +1,12 @@
 # Disagreements retained in the answer key
 
+**All fixed 2026-10-30 (F-030).** The engine and pages now follow every rule below; the generators
+in `tools/golden_retirement/` no longer mark TODO rows, and all 12,700 cases agree. Two compatibility
+rules were brought into line with their sourced counterparts and regenerated from the generators
+(never from the app): `vpw` now pays at the start of the year like `vpw-beginning-timing` (Bogleheads
+VPW), and `life-expectancy-sum` and the page rules no longer stop at age 120 or after 70 years, like
+`individual-age120-tail` and `couple-70year-cap`. The table is kept as the record of what was found.
+
 12,700 source-based cases cover127 separately named rules. Every rule has60 grid,
 30 edge and10 extreme cases;1,270 rows have a second derivation. The lead independently
 re-derived254 rows (2%) with a third script that imports neither workers nor application code.

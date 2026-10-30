@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { project, affordableSpending, STRATEGIES } from "../core/math/retirement.js";
-import { rmdFactor, rmdStartAge, rmdAmount } from "../core/math/rmd.js";
+import { rmdFactor, rmdStartAge, rmdStartYear, rmdAmount } from "../core/math/rmd.js";
 
 const near = (a, b, tol = 0.5) => assert.ok(Math.abs(a - b) < tol, `${a} != ${b}`);
 const base = () => ({
@@ -18,7 +18,9 @@ const base = () => ({
 
 test("RMD table and start age", () => {
   assert.equal(rmdFactor(73), 26.5); assert.equal(rmdFactor(90), 12.2); assert.equal(rmdFactor(130), 2.0); assert.equal(rmdFactor(60), Infinity);
-  assert.equal(rmdStartAge(1955), 73); assert.equal(rmdStartAge(1960), 75); assert.equal(rmdStartAge(1949), 72);
+  assert.equal(rmdStartAge(1955), 73); assert.equal(rmdStartAge(1960), 75); assert.equal(rmdStartAge(1950), 72);
+  assert.equal(rmdStartAge("1949-06-30"), 70.5); assert.equal(rmdStartAge("1949-07-01"), 72); assert.equal(rmdStartAge(1948), 70.5, "a year alone counts as January 1");
+  assert.equal(rmdStartYear("1948-06-30"), 2018); assert.equal(rmdStartYear("1948-07-01"), 2019); assert.equal(rmdStartYear("1955-03-01"), 2028);
   near(rmdAmount(265000, 73), 10000, 0.01); assert.equal(rmdAmount(265000, 65), 0);
 });
 test("zero returns, zero inflation: contributions while working, then spending from cash, taxable, deferred (grossed up)", () => {

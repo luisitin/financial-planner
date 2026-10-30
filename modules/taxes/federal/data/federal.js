@@ -4,7 +4,8 @@
 // allowance for age 65+ or blindness, long-term capital gains bracket tops, Social Security benefit
 // taxation thresholds (base = where up to half becomes taxable; base + extra = where up to 85% does),
 // the Social Security wage base, NIIT and additional-Medicare thresholds, the child tax credit, and
-// the 2025-2028 senior deduction.
+// the 2025-2028 senior deduction (joint and unmarried returns only), and from 2026 the charity rules and
+// the limit on itemized deductions in the 37% bracket.
 export const FEDERAL = {
  "2024": {
   "year": 2024,
@@ -309,7 +310,6 @@ export const FEDERAL = {
    "phaseOutThreshold": {
     "single": 75000,
     "married_joint": 150000,
-    "married_separate": 75000,
     "head_of_household": 75000,
     "qualifying_surviving": 75000
    },
@@ -471,11 +471,26 @@ export const FEDERAL = {
    "phaseOutThreshold": {
     "single": 75000,
     "married_joint": 150000,
-    "married_separate": 75000,
     "head_of_household": 75000,
     "qualifying_surviving": 75000
    },
    "phaseOutRate": 0.06
+  },
+  "charity": {
+   "floorRate": 0.005,
+   "nonItemizerCap": {
+    "single": 1000,
+    "married_joint": 2000,
+    "married_separate": 1000,
+    "head_of_household": 1000,
+    "qualifying_surviving": 1000
+   }
+  },
+  "itemizedLimit": {
+   "fraction": [
+    2,
+    37
+   ]
   }
  }
 };

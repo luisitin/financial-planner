@@ -217,7 +217,7 @@ for i in range(100):
     add('hsa-employer-cap',i,expected,
         f'IRS Pub969 Employer contributions: employer dollars reduce what the individual can contribute; {m(own)}+{m(employer)}={m(combined)} against {m(limit)}. Model assumes full-year self-only eligibility.',
         plan=plan([person(age,year)],[entry(own,employer=employer)],[{'id':'x','type':'hsa'}]),params={'today':(date(year,1,1)+timedelta(days=i)).isoformat()},check=check,
-        todo='HSA cap omits employer money: IRS Publication 969 requires employee plus employer contributions to share the annual limit; README blanket exclusion is incorrect for HSA.')
+        todo='')   # fixed 2026-10-30 (F-030): employer HSA deposits now count toward the limit
 
 
 # Age is attained by December 31, independent of the execution month or leap-day birth.

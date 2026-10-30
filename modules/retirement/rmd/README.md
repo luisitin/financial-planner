@@ -10,7 +10,7 @@
 `people[]` (startAge, startYear, yearsUntil, firstRmd nominal and real), `schedule[]` from the projection (year, age, factor, rmd, rmdReal, taxes, deferredEnd), `totalRmdReal`, `table[]` (ages 72-100), `hasDeferred`.
 
 ## Formulas
-`core/math/rmd.js`: IRS Publication 590-B Table III (Uniform Lifetime Table, in effect from 2022); start age 73 for people born 1951-1959, 75 from 1960 (SECURE 2.0), 72 before. Required amount = prior year-end pre-tax balance / factor for the age reached that year.
+`core/math/rmd.js`: IRS Publication 590-B Table III (Uniform Lifetime Table, in effect from 2022); start age 70½ for people born before July 1, 1949 (the year they reach it: their 70th for a birthday in January to June, their 71st from July), 72 for July 1949 to 1950, 73 for 1951-1959, 75 from 1960 (SECURE 2.0). Required amount = each owner's prior year-end balance in their own 401(k)s and IRAs / the factor for the age they reach that year; the projection keeps each owner's slice of the pre-tax bucket (`rmd.owners` in the engine), an account with no owner belongs to the first person, and life-insurance cash value (in the same bucket) has none.
 
 ## Tests
 `tests/retirement.test.mjs` (table, start ages, amounts) and `tests/retirement-pages.test.mjs` (the page).
@@ -37,15 +37,14 @@ July 1, 1949, and age 72 for July 1, 1949 through 1950; the original README's
 "72 before" therefore omits an older cohort. Age 73 applies to 1951 through
 1959; age 75 for 1960 and later follows
 [SECURE 2.0, section 107](https://www.congress.gov/117/plaws/publ328/PLAW-117publ328.pdf).
-Birth month determines the calendar year age 70.5 is reached. The CSV keeps
-these source-based answers as explicit TODO disagreements.
+Birth month determines the calendar year age 70.5 is reached. Fixed
+2026-10-30 (F-030): `rmdStartAge` and `rmdStartYear` take the birth date.
 
 The publication calculates an owner's required distribution from that owner's
 accounts. A spouse's IRA is not part of that owner's balance: two invented
 $100,000 IRAs owned by two age-73 adults each require $3,773.58; the household
-total is $7,547.17 before rounding the individual outputs. The page currently
-repeats the household balance and household amount for each person. Those
-rows also remain explicit TODOs.
+total is $7,547.17 before rounding the individual outputs. Fixed 2026-10-30
+(F-030): each person's balance and first withdrawal are their own.
 
 Ordinary life-insurance cash value does not by itself become an IRA subject
 to required withdrawals. [IRS retirement plan investments FAQs](https://www.irs.gov/retirement-plans/retirement-plan-investments-faqs)

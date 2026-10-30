@@ -57,7 +57,7 @@
   {
     "rule": "vpw",
     "row": 10,
-    "method": "discounted payments vs finite annuity; left=223185.355731; right=223185.355731; residual=2.33e-10"
+    "method": "discounted payments vs finite annuity; left=218809.172285; right=218809.172285; residual=2.33e-10"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -147,7 +147,7 @@
   {
     "rule": "vpw",
     "row": 20,
-    "method": "discounted payments vs finite annuity; left=0.0524970221491; right=0.0524970221491; residual=0"
+    "method": "discounted payments vs finite annuity; left=0.104994044298; right=0.104994044298; residual=0"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -237,7 +237,7 @@
   {
     "rule": "vpw",
     "row": 30,
-    "method": "discounted payments vs finite annuity; left=40872.8438264; right=40872.8438264; residual=3.64e-11"
+    "method": "discounted payments vs finite annuity; left=40071.415516; right=40071.415516; residual=3.64e-11"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -327,7 +327,7 @@
   {
     "rule": "vpw",
     "row": 40,
-    "method": "discounted payments vs finite annuity; left=987.643954057; right=987.643954057; residual=0"
+    "method": "discounted payments vs finite annuity; left=1975.28790811; right=1975.28790811; residual=0"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -417,7 +417,7 @@
   {
     "rule": "vpw",
     "row": 50,
-    "method": "discounted payments vs finite annuity; left=7707.71756481; right=7707.71756481; residual=6.37e-12"
+    "method": "discounted payments vs finite annuity; left=7556.58584785; right=7556.58584785; residual=5.46e-12"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -507,7 +507,7 @@
   {
     "rule": "vpw",
     "row": 60,
-    "method": "discounted payments vs finite annuity; left=0.000433691279435; right=0.000433691279435; residual=0"
+    "method": "discounted payments vs finite annuity; left=0.00086738255887; right=0.00086738255887; residual=0"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -597,7 +597,7 @@
   {
     "rule": "vpw",
     "row": 70,
-    "method": "discounted payments vs finite annuity; left=52.3156166682; right=52.3156166682; residual=4.97e-14"
+    "method": "discounted payments vs finite annuity; left=51.2898202629; right=51.2898202629; residual=5.68e-14"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -687,7 +687,7 @@
   {
     "rule": "vpw",
     "row": 80,
-    "method": "discounted payments vs finite annuity; left=2.32830643762e-12; right=2.32830643762e-12; residual=0"
+    "method": "discounted payments vs finite annuity; left=4.65661287525e-12; right=4.65661287525e-12; residual=0"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -777,7 +777,7 @@
   {
     "rule": "vpw",
     "row": 90,
-    "method": "discounted payments vs finite annuity; left=4359.63472235; right=4359.63472235; residual=3.64e-12"
+    "method": "discounted payments vs finite annuity; left=4274.15168858; right=4274.15168858; residual=4.55e-12"
   },
   {
     "rule": "withdraw-flat-grossup",
@@ -867,7 +867,7 @@
   {
     "rule": "vpw",
     "row": 100,
-    "method": "discounted payments vs finite annuity; left=4.13590306277e-17; right=4.13590306277e-17; residual=0"
+    "method": "discounted payments vs finite annuity; left=8.27180612553e-17; right=8.27180612553e-17; residual=0"
   },
   {
     "rule": "withdraw-flat-grossup",

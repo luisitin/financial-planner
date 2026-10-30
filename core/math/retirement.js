@@ -16,7 +16,7 @@
 // the first year the buckets cannot cover the gap.
 import { pmt } from "./finance.js";
 import { rmdFactor } from "./rmd.js";
-import { federalTax, roomUnder, bracketTop } from "./tax.js";
+import { federalTax, roomUnder, bracketTop, largestAtOrUnder } from "./tax.js";
 
 export const STRATEGIES = {
   "fixed-real": "The same spending every year, adjusted for inflation",
@@ -37,7 +37,9 @@ export const STRATEGIES = {
  *   retireYear,                                     // first year of retirement for the household (spending starts)
  *   rates: { inflation, cash, salaryGrowth, taxRate, stocksNow, stocksRetired },
  *   returns: { stocks, bonds } (expected, used when no sequence is given),
- *   rmd: { birthYear, startAge } | null,
+ *   rmd: { birthYear, startAge, owners? } | null,     // owners: [{ personIndex, share, startAge }]: each adult's share of the pre-tax bucket, withdrawn at their own age;
+ *                                                   // what no owner holds (life-insurance cash value) has none. Without owners the primary owns it all.
+ *   contributions[].rmdExempt: true adds to the part with no required withdrawals,
  *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw", withdrawalRate (for percent/guardrails, e.g. 0.04),
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
  *   tax: { mode: "flat" } (rates.taxRate on pre-tax withdrawals, the default) |
@@ -66,6 +68,11 @@ export function project(inputs, options = {}) {
   let guardSpend = null, lastReal = null;
   const strategy = STRATEGIES[I.strategy] ? I.strategy : "fixed-real";
   const wr = I.withdrawalRate ?? 0.04;
+  // required withdrawals: each owner's slice of the pre-tax bucket, kept in dollars; contributions add to their owner's slice,
+  // the year's RMD comes off it, every other move in or out of the bucket (spending, conversions, growth) moves all slices alike
+  const owners = !I.rmd ? [] : Array.isArray(I.rmd.owners) ? I.rmd.owners : [{ personIndex: 0, share: 1, startAge: I.rmd.startAge }];
+  const slices = owners.map((o) => (Number(o.share) || 0) * buckets.deferred);
+  const rmdAge = I.rmd ? (I.rmd.startAge ?? owners.find((o) => o.personIndex === 0)?.startAge ?? null) : null;
   for (let year = I.startYear, i = 0; year <= I.endYear; year++, i++) {
     const ages = people.map((p) => year - p.birthYear);
     const retired = year >= I.retireYear;
@@ -85,6 +92,7 @@ export function project(inputs, options = {}) {
       if (age >= stopAge) continue;
       const amt = c.yearly * Math.pow(1 + r.salaryGrowth, i);
       buckets[c.bucket] = (buckets[c.bucket] ?? 0) + amt; contrib += amt;
+      if (c.bucket === "deferred" && !c.rmdExempt) { const k = owners.length === 1 && !Array.isArray(I.rmd.owners) ? 0 : owners.findIndex((o) => o.personIndex === (c.personIndex ?? 0)); if (k >= 0) slices[k] += amt; }
     }
     // 2. guaranteed income this year (nominal)
     let income = 0, incomeTaxable = 0, incomeSocial = 0;
@@ -104,7 +112,7 @@ export function project(inputs, options = {}) {
       const yearsLeft = Math.max(1, I.endYear - year + 1);
       if (strategy === "fixed-real") spending = baseSpend * priceLevel;
       else if (strategy === "percent") spending = Math.max(0, total * wr) + 0;
-      else if (strategy === "vpw") { const realRet = (1 + portfolioReturn) / (1 + infl) - 1; spending = Math.max(0, pmt(Math.max(-0.5, realRet), yearsLeft, total)); }
+      else if (strategy === "vpw") { const realRet = (1 + portfolioReturn) / (1 + infl) - 1; spending = Math.max(0, pmt(Math.max(-0.5, realRet), yearsLeft, total, 0, true)); }   // paid at the start of the year, before that year's return (Bogleheads VPW)
       else if (strategy === "guardrails") {
         if (guardSpend === null) guardSpend = baseSpend * priceLevel;
         else {
@@ -118,10 +126,18 @@ export function project(inputs, options = {}) {
     // 4. the gap, required withdrawals, Roth conversions, then withdrawals in order until spending and the year's tax are covered
     const need = Math.max(0, spending - income);
     const withdrawn = { cash: 0, taxable: 0, deferred: 0, free: 0 };
-    const rmdAge = I.rmd?.startAge ?? null;
     let rmd = 0, conversion = 0, taxes = 0, taxInfo = null;
     const taxableStart = buckets.taxable;
-    if (rmdAge && ages[0] >= rmdAge && buckets.deferred > 0) { rmd = Math.min(buckets.deferred, buckets.deferred / rmdFactor(ages[0])); buckets.deferred -= rmd; withdrawn.deferred += rmd; }
+    const rmdBy = people.map(() => 0);
+    owners.forEach((o, k) => {
+      const age = ages[o.personIndex ?? 0];
+      if (!o.startAge || age === undefined || age < o.startAge || slices[k] <= 0) return;
+      const amt = Math.min(slices[k], buckets.deferred - rmd, slices[k] / rmdFactor(age));
+      if (!(amt > 0)) return;
+      slices[k] -= amt; rmd += amt; rmdBy[o.personIndex ?? 0] += amt;
+    });
+    if (rmd > 0) { buckets.deferred -= rmd; withdrawn.deferred += rmd; }
+    const deferredAfterRmd = buckets.deferred;
     const params = brackets ? tax.paramsFor(year) : null;
     const ages65plus = people.slice(0, 2).filter((p, k) => ages[k] >= 65).length;
     const taxFor = () => {
@@ -156,18 +172,26 @@ export function project(inputs, options = {}) {
       if (Number.isFinite(top)) {
         const base = { b: { ...buckets }, w: { ...withdrawn }, netOut, taxes, shortfall };
         const restore = () => { Object.assign(buckets, base.b); Object.assign(withdrawn, base.w); netOut = base.netOut; taxes = base.taxes; shortfall = base.shortfall; conversion = 0; };
-        let c = Math.min(buckets.deferred, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
-        for (let k = 0; k < 4; k++) {
-          restore();
-          if (c < 1) break;
-          conversion = c; buckets.deferred -= c; buckets.free += c;
-          settle();
-          if (shortfall > 0.005) { c = 0; continue; }
-          const diff = (taxInfo?.taxableIncome ?? 0) - top;   // over the top: trim; under it (the tax's own withdrawal changed the picture): add
-          if (Math.abs(diff) <= 1 || (diff < 0 && c >= buckets.deferred + c - 0.5)) break;
-          c = Math.max(0, Math.min(base.b.deferred, c - diff));
+        // how far over the top the year ends after converting c and settling its tax (Infinity: the year would come up short)
+        let last = null, lastF = 0;
+        const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.taxableIncome ?? 0) - top; return lastF; };
+        const most = base.b.deferred;
+        const guess = Math.min(most, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
+        // taxable income rises at least a dollar for each dollar converted, so one probe brackets the answer and a secant step finishes it
+        let c = 0;
+        const TOL = 1e-3;   // a tenth of a cent of taxable income: the tax gross-up itself settles to $0.0005
+        if (guess > 0) {
+          const fg = over(guess);
+          if (fg <= 0 && fg > -TOL) c = guess;
+          else if (fg <= 0) { const hi = Math.min(most, guess - fg), fh = hi > guess ? over(hi) : fg; c = fh <= 0 ? hi : largestAtOrUnder(over, guess, fg, hi, fh, TOL, TOL); }
+          else if (!Number.isFinite(fg)) c = largestAtOrUnder(over, 0, -1, guess, fg, TOL, TOL);
+          else { const lo = Math.max(0, guess - fg), fl = over(lo); c = fl > 0 ? 0 : fl > -TOL ? lo : largestAtOrUnder(over, lo, fl, guess, fg, TOL, TOL); }
         }
-        if (c < 1) { restore(); taxes = taxFor(); }
+        if (c > 0) {
+          if (last !== c) over(c);
+          for (let k = 0; k < 4 && c > 0 && lastF > 0; k++) { c = Math.max(0, c - lastF - TOL); over(c); }   // a hair over the top: step back under it, so the year never ends in the next bracket
+        }
+        if (c <= 0) { restore(); taxes = taxFor(); }
       }
     }
     if (shortfall > 0.005 && success) { success = false; failYear = year; failAge = ages[0]; }
@@ -176,13 +200,15 @@ export function project(inputs, options = {}) {
     if (surplus > 0) buckets.taxable += surplus;   // the required withdrawal beyond what the year needed
     totalWithdrawn += withdrawn.cash + withdrawn.taxable + withdrawn.deferred + withdrawn.free; totalTaxes += taxes; totalConverted += conversion;
     // 5. growth on what is left (contributions and withdrawals mid-year would be finer; end-of-year is the common simple choice)
+    const kept = deferredAfterRmd > 0 ? buckets.deferred / deferredAfterRmd : 0;
+    for (let k = 0; k < slices.length; k++) slices[k] *= kept * (1 + portfolioReturn);
     buckets.cash *= 1 + retCash;
     for (const b of ["taxable", "deferred", "free"]) buckets[b] *= 1 + portfolioReturn;
     const endTotal = buckets.cash + buckets.taxable + buckets.deferred + buckets.free;
     lastReal = (1 + portfolioReturn) / (1 + infl) - 1;
     rows.push({
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
-      contributions: contrib, income, incomeLines, spending, withdrawn, rmd, conversion, taxes, taxInfo, shortfall,
+      contributions: contrib, income, incomeLines, spending, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }
@@ -193,12 +219,19 @@ export function project(inputs, options = {}) {
   return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order };
 }
 
-/** Real (today's-dollar) yearly spending the plan could afford: the largest fixed-real spending that still succeeds (bisection). */
-export function affordableSpending(inputs, options = {}, { lo = 0, hi = null, steps = 30 } = {}) {
+/**
+ * Real (today's-dollar) yearly spending the plan could afford: the largest fixed-real spending that still
+ * succeeds, to the dollar. The ceiling doubles until it fails (so a first guess that is too low cannot cap
+ * the answer), then bisection narrows the bracket until both ends round to the same dollar (down to a
+ * millionth of a dollar when the answer sits on a half dollar); `steps` caps the bisection rounds.
+ */
+export function affordableSpending(inputs, options = {}, { lo = 0, hi = null, steps = 200 } = {}) {
   const start = (inputs.balances.cash + inputs.balances.taxable + inputs.balances.deferred + inputs.balances.free);
   let high = hi ?? Math.max(10000, start * 0.5 + (inputs.spending?.yearly ?? 0) * 4), low = lo;
   const ok = (s) => project({ ...inputs, strategy: "fixed-real", spending: { yearly: s } }, options).success;
   if (!ok(low)) return 0;
-  for (let k = 0; k < steps; k++) { const mid = (low + high) / 2; if (ok(mid)) low = mid; else high = mid; }
+  for (let k = 0; k < 64 && ok(high); k++) { low = high; high *= 2; }
+  // stop once both ends round to the same dollar (the answer lies between them), or the bracket is negligibly narrow
+  for (let k = 0; k < steps && Math.round(low) !== Math.round(high) && high - low > Math.max(1e-6, high * 1e-12); k++) { const mid = (low + high) / 2; if (ok(mid)) low = mid; else high = mid; }
   return Math.round(low);
 }

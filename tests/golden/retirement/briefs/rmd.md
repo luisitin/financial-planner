@@ -62,13 +62,13 @@ case_id,rule,kind,target,arg.0,arg.1,params.today,plan.accounts,plan.accounts.0.
 | Rule | Grid | Edge | Extreme | Second checks | TODO |
 |---|---:|---:|---:|---:|---:|
 | factor | 60 | 30 | 10 | 10 | 0 |
-| cohort | 60 | 30 | 10 | 10 | 17 |
+| cohort | 60 | 30 | 10 | 10 | 0 |
 | amount | 60 | 30 | 10 | 10 | 0 |
-| calendar | 60 | 30 | 10 | 10 | 14 |
+| calendar | 60 | 30 | 10 | 10 | 0 |
 | schedule | 60 | 30 | 10 | 10 | 0 |
 | real | 60 | 30 | 10 | 10 | 0 |
 | tax | 60 | 30 | 10 | 10 | 0 |
 | totals | 60 | 30 | 10 | 10 | 0 |
-| ownership | 60 | 30 | 10 | 10 | 92 |
-| exclusions | 60 | 30 | 10 | 10 | 10 |
+| ownership | 60 | 30 | 10 | 10 | 0 |
+| exclusions | 60 | 30 | 10 | 10 | 0 |
 | page_table | 60 | 30 | 10 | 10 | 0 |

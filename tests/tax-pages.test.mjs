@@ -52,7 +52,7 @@ test("federal: typed figures replace the plan's; the year can be changed; an emp
 test("itemized deductions: the state-and-local cap, the medical floor; gains netting: short losses eat long gains, 3,000 of loss a year", () => {
   const P = FEDERAL[2026];
   const it = itemizedTotal({ mortgageInterest: 12000, propertyTax: 30000, stateTax: 20000, charitable: 2000, medical: 12000 }, 100000, "married_joint", P);
-  assert.equal(it.saltCap, 40400); near(it.total, 12000 + 40400 + 2000 + (12000 - 7500));
+  assert.equal(it.saltCap, 40400); near(it.total, 12000 + 40400 + (2000 - 500) + (12000 - 7500), 0.01);   // 2026: gifts count over 0.5% of income (500)
   assert.ok(it.lines.find((l) => l.key === "salt").note.includes("capped"));
   const high = itemizedTotal({ propertyTax: 50000 }, 600000, "married_joint", P);   // 95,000 over 505,000 x 0.3 = 28,500 off the cap
   near(high.saltCap, 40400 - 28500);
@@ -181,4 +181,25 @@ test("roth conversions: a big pre-tax pot with high required withdrawals is help
   const on = roth(p, { today: TODAY });
   assert.equal(on.on, true); assert.equal(on.fillRate, 0.12); assert.equal(on.table[on.table.length - 1].ages[0], 64);
   assert.ok(on.notes.some((n) => n.includes("brackets")));
+});
+
+test("federal (F-029): a net loss comes off wages, the 3.8% tax sees all investment income, gifts count without itemizing in 2026", () => {
+  const p = taxPlan();
+  p.taxes.gains = [{ id: "g", name: "Bad year", proceeds: 2000, basis: 12000, held: "long" }];   // 10,000 loss: 3,000 now
+  const d = federal(p, { today: TODAY });
+  assert.equal(d.inputs.capitalLoss, -3000); assert.equal(d.inputs.otherOrdinary, 0, "the loss is not floored away inside other income");
+  assert.equal(d.result.agi, 144000 - 12000 - 3000, "wages less adjustments less the 3,000 loss");
+  // a high earner with interest, dividends and gains: Form 8960 counts them all, not only the qualified part
+  const rich = taxPlan();
+  rich.taxes.thisYear.wages = 400000; rich.taxes.thisYear.qualifiedIncome = 10000;
+  rich.taxes.gains = [{ id: "s", name: "Quick trade", proceeds: 15000, basis: 10000, held: "short" }];
+  rich.income.push({ id: "div", name: "Bond fund interest", type: "investment", personId: "", amount: 20000, period: "annual" });
+  const r = federal(rich, { today: TODAY });
+  assert.equal(r.inputs.investmentIncome, 20000 + 10000 + 5000);
+  near(r.result.niit, 0.038 * 35000, 0.01);
+  // 2026: 800 of cash gifts on the standard deduction come off as well (up to 2,000 joint)
+  const giver = taxPlan(); giver.taxes.itemized = { charitable: 800 };
+  const g = federal(giver, { today: TODAY });
+  assert.equal(g.result.deduction.used, "standard"); near(g.result.deduction.charity, 800, 0.01);
+  near(g.result.taxableIncome, 102800 - 800, 0.01);
 });

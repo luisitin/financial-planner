@@ -9,7 +9,8 @@ from common import formatted
 
 ROOT=Path(__file__).resolve().parents[2]
 DIR=ROOT/'tests/golden/retirement'
-files=sorted(DIR.glob('*.csv'))
+PAGES=['projection','contributions','cash-flow','withdrawal-strategy','withdrawal-order','roth-conversions','rmd','sequence-risk','longevity','fire']
+files=sorted(DIR/f'{p}.csv' for p in PAGES)   # the ten retirement pages; the Social Security key (ss-*.csv) has its own layout
 coverage=[]
 for path in files:
     with path.open(encoding='utf-8',newline='') as f:

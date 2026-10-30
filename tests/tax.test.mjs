@@ -62,7 +62,8 @@ test("Social Security worksheet: 30,000 of benefits with a 20,000 pension -> 5,3
 
 test("the senior deduction phases out at 6% over the threshold and disappears outside 2025-2028", () => {
   const r = federalTax({ filingStatus: "married_joint", otherOrdinary: 170000, ages65plus: 2 }, P);
-  near(r.deduction.senior, 12000 - 0.06 * 20000);
+  near(r.deduction.senior, 2 * (6000 - 0.06 * 20000));   // each person's 6,000 loses 6% of the excess (Schedule 1-A)
+  assert.equal(federalTax({ filingStatus: "married_separate", otherOrdinary: 40000, ages65plus: 1 }, P).deduction.senior, 0, "married people only on a joint return");
   const p2024 = FEDERAL[2024];
   assert.equal(federalTax({ filingStatus: "single", otherOrdinary: 50000, ages65plus: 1 }, p2024).deduction.senior, 0);
   assert.equal(paramsFor(FEDERAL, 2030).seniorDeduction, undefined);

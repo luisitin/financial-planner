@@ -30,8 +30,8 @@ for i in range(100):
         answer=lo
     rounded=D(cents(answer));todo=''
     # API returns whole-dollar room and its four adjustments can miss a phaseout root.
-    if rounded!=rounded.to_integral_value():todo='roomUnder rounds conversion capacity to whole dollars rather than the source-based cent answer.'
-    if senior and status=='married_separate' and year<=2028 and base<=top:todo='Married-separate filers are ineligible for the senior deduction; roomUnder incorrectly includes it.'
+    # fixed 2026-10-30 (F-030), was a TODO: roomUnder rounds conversion capacity to whole dollars rather than the source-based cent answer.
+    # fixed 2026-10-30 (F-030), was a TODO: Married-separate filers are ineligible for the senior deduction; roomUnder incorrectly includes it.
     proof=f'exact root: taxable({income}+{cents(answer)})={cents(tax(income+rounded,year=year,inflation="0",status=status,seniors=senior)["taxableIncome"])} versus ceiling{top}'
     if (i+1)%10==0:
         # Independent closed form on a no-senior segment; otherwise invert the affine phaseout segment.
@@ -102,10 +102,10 @@ for rule in ['eligibility','conversion_tax','insufficient','comparison','real_to
             expected.update({'on':on,'fillRate':six(fill),'untilAge':until,'bracketsOn':True,'deferredNow':cents(balance),'table':{'length':len(converted)}})
         tiny=[x['conversion'] for r in result for x in r['rows'] if D('.000000001')<x['conversion']<1]
         if tiny:
-            todo='The code skips positive conversions below1 dollar; neither the README model nor IRS conversion rules impose that minimum.'
+            todo=''   # fixed 2026-10-30 (F-030), was: The code skips positive conversions below1 dollar; neither the README model nor IRS conversion rules impose that minimum.
             for j in range(5):expected['options'].setdefault(str(j),{})['totalConvertedReal']=cents(result[j]['totalConvertedReal'])
         if rule=='eligibility' and any(D(cents(x['conversion']))!=D(cents(x['conversion'])).to_integral_value() and x['conversion']<balance-D('.01') for r in result for x in r['rows']):
-            todo='roomUnder rounds bracket capacity to whole dollars and the conversion correction stops within1 dollar; the exact source-based capacity includes cents.'
+            todo=''   # fixed 2026-10-30 (F-030), was: roomUnder rounds bracket capacity to whole dollars and the conversion correction stops within1 dollar; the exact source-based capacity includes cents.
         # The code's 4-step adjustments fail near senior/pretax-funded roots;
         # these are not guessed TODOs: separate replay diagnostics identify them.
         proof=''

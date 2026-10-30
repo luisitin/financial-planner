@@ -10,20 +10,26 @@ import { perYear } from "../../../core/math/periods.js";
 export { TAX_YEARS };
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
 
-/** The itemized deductions that count, after the state-and-local cap and the medical floor. */
+/**
+ * The itemized deductions that count, after the state-and-local cap, the medical floor and (from 2026)
+ * the charity floor of 0.5% of income. On a separate return the cap, its floor and the income where
+ * it starts shrinking are halved, and it shrinks at the full 30% (IRC §164(b)(7)).
+ */
 export function itemizedTotal(itemized, agi, status, params) {
   const it = itemized ?? {};
   const n = (k) => Math.max(0, Number(it[k]) || 0);
   const salt = params.saltCap ?? { cap: 10000 };
-  let cap = salt.cap;
-  if (salt.phaseOutStart) cap = Math.max(salt.floor ?? 0, cap - Math.max(0, agi - (status === "married_separate" ? salt.phaseOutStart / 2 : salt.phaseOutStart)) * (salt.phaseOutRate ?? 0.3));
-  if (status === "married_separate") cap /= 2;
+  const share = status === "married_separate" ? 0.5 : 1;
+  let cap = salt.cap * share;
+  if (salt.phaseOutStart) cap = Math.max((salt.floor ?? 0) * share, cap - Math.max(0, agi - salt.phaseOutStart * share) * (salt.phaseOutRate ?? 0.3));
   const stateAndLocal = Math.min(n("propertyTax") + n("stateTax"), cap);
-  const medical = Math.max(0, n("medical") - 0.075 * agi);
+  const medical = Math.max(0, n("medical") - 0.075 * Math.max(0, agi));
+  const charityFloor = (params.charity?.floorRate ?? 0) * Math.max(0, agi);
+  const charitable = Math.max(0, n("charitable") - charityFloor);
   const lines = [
     { key: "mortgageInterest", label: "Mortgage interest", amount: n("mortgageInterest") },
     { key: "salt", label: "State and local taxes", amount: stateAndLocal, note: n("propertyTax") + n("stateTax") > cap ? `capped at ${fmtInt(cap)}` : null },
-    { key: "charitable", label: "Charitable gifts", amount: n("charitable") },
+    { key: "charitable", label: "Charitable gifts", amount: charitable, note: charityFloor > 0 && n("charitable") > 0 ? `over ${fmtInt(charityFloor)} (0.5% of income)` : null },
     { key: "medical", label: "Medical over 7.5% of income", amount: medical, note: n("medical") > 0 && medical === 0 ? "under the floor" : null },
     { key: "other", label: "Other", amount: n("other") },
   ];
@@ -71,7 +77,7 @@ export function taxInputs(plan, params = {}) {
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   const gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
-  const otherOrdinary = Math.max(0, business + rental + pension + investment + other + otherTyped + gains.netShort + gains.lossAllowed);
+  const otherOrdinary = Math.max(0, business + rental + pension + investment + other + otherTyped + gains.netShort);
   if (pension) sources.push({ key: "pension", label: "Pensions", amount: pension, from: "plan", detail: "Income page" });
   if (business) { sources.push({ key: "business", label: "Self-employment", amount: business, from: "plan", detail: "Income page; self-employment tax is not included" }); notes.push("Self-employment income is taxed here as ordinary income; the 15.3% self-employment tax on it is not included yet."); }
   if (rental) sources.push({ key: "rental", label: "Rent", amount: rental, from: "plan", detail: "Income page, before expenses" });
@@ -104,7 +110,9 @@ export function taxInputs(plan, params = {}) {
   const dependentsUnder17 = given(t.dependentsUnder17) ? Number(t.dependentsUnder17) : under17Auto;
   const otherDependents = given(t.otherDependents) ? Number(t.otherDependents) : deps.length - under17Auto;
   const paid = (Number(ty.paid) || 0) + (t.estimated?.paid ?? []).reduce((s, x) => s + (Number(x) || 0), 0);
-  const base = { filingStatus, wages, otherOrdinary, qualifiedIncome, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business };
+  // net investment income for the 3.8% tax (Form 8960): dividends and interest, the typed qualified dividends and the year's net gain or allowed loss; rent is left out (only its gross is known)
+  const investmentIncome = Math.max(0, investment + qualifiedTyped + gains.netShort + gains.netLong + gains.lossAllowed);
+  const base = { filingStatus, wages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
   const agi = federalTax({ ...base, itemized: 0 }, P).agi;
   const itemized = itemizedTotal(t.itemized, agi, filingStatus, P);
   const inputs = { ...base, itemized: itemized.total };
@@ -126,10 +134,14 @@ export function compute(plan, params = {}) {
   const r = result;
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });
+  if (r.income.capitalLoss < 0) steps.push({ label: "Capital loss", amount: r.income.capitalLoss, sub: `a net loss on sales comes off any income, up to ${fmtInt(b.filingStatus === "married_separate" ? 1500 : 3000)} a year${b.gains.carryForward < 0 ? `; ${fmtInt(-b.gains.carryForward)} carries to next year` : ""}` });
   if (r.adjustments > 0) steps.push({ label: "Adjustments", amount: -r.adjustments, sub: "IRA, HSA and other above-the-line deductions" });
   steps.push({ label: "Adjusted gross income", amount: r.agi, sub: "" });
-  steps.push({ label: r.deduction.used === "itemized" ? "Itemized deductions" : "Standard deduction", amount: -(r.deduction.amount - r.deduction.senior), sub: r.deduction.used === "itemized" ? `more than the ${fmtInt(r.deduction.standard)} standard deduction` : b.itemized.total > 0 ? `your itemized ${fmtInt(b.itemized.total)} is less` : b.people.ages65plus ? "includes the extra allowance for age" : "" });
-  if (r.deduction.senior > 0) steps.push({ label: "Senior deduction", amount: -r.deduction.senior, sub: "6,000 a person over 65, tax years 2025 to 2028" });
+  const dsub = r.deduction.used === "itemized"
+    ? `more than the ${fmtInt(r.deduction.standard)} standard deduction${r.deduction.itemizedLimit > 0 ? `; ${fmtInt(r.deduction.itemizedLimit)} less for income in the top bracket` : ""}`
+    : [r.deduction.charity > 0 ? `includes ${fmtInt(r.deduction.charity)} of gifts to charity, allowed without itemizing from 2026` : null, b.itemized.total > 0 ? `your itemized ${fmtInt(b.itemized.total)} is less` : null, !b.itemized.total && b.people.ages65plus ? "includes the extra allowance for age" : null].filter(Boolean).join("; ");
+  steps.push({ label: r.deduction.used === "itemized" ? "Itemized deductions" : "Standard deduction", amount: -(r.deduction.amount - r.deduction.senior), sub: dsub });
+  if (r.deduction.senior > 0) steps.push({ label: "Senior deduction", amount: -r.deduction.senior, sub: "6,000 a person 65 or over, tax years 2025 to 2028, less as income rises" });
   steps.push({ label: "Taxable income", amount: r.taxableIncome, sub: r.qualifiedTaxable > 0 ? `${fmtInt(r.ordinaryTaxable)} ordinary, ${fmtInt(r.qualifiedTaxable)} at the gains rates` : "" });
   steps.push({ label: "Income tax", amount: r.incomeTax, sub: r.qualifiedTax > 0 ? `${fmtInt(r.ordinaryTax)} through the brackets, ${fmtInt(r.qualifiedTax)} on dividends and gains` : "through the brackets" });
   if (r.credits.childTaxCredit > 0 || r.credits.refundable > 0) steps.push({ label: "Child tax credit", amount: -(r.credits.childTaxCredit + r.credits.refundable), sub: r.credits.refundable > 0 ? `${fmtInt(r.credits.refundable)} of it comes back as a refund` : `${b.people.dependentsUnder17} under 17` });

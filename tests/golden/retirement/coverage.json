@@ -192,7 +192,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 100
+        "todo": 0
       },
       "age-reached": {
         "grid": 60,
@@ -237,9 +237,9 @@
         "todo": 0
       }
     },
-    "todo": 100,
-    "bytes": 895171,
-    "sha256": "b21d860ac55fae112f30c9e86f04bae226973ad6d5bd89489eb511b8eb48a007"
+    "todo": 0,
+    "bytes": 878271,
+    "sha256": "973a1fdd80ed8a897c4f7905822bd2160423ff503b0e96464949fc0c7ac4d367"
   },
   {
     "page": "fire",
@@ -392,7 +392,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 15
+        "todo": 0
       },
       "life-expectancy-sum": {
         "grid": 60,
@@ -427,19 +427,19 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 27
+        "todo": 0
       },
       "couple-70year-cap": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 33
+        "todo": 0
       }
     },
-    "todo": 75,
-    "bytes": 402930,
-    "sha256": "3f74f060703512fd6eaaf445d6434ede8b2fe9790e77afef42f3a2ff114f8d46"
+    "todo": 0,
+    "bytes": 397960,
+    "sha256": "be9384a9bee21d3007c8dfee2d1dfe7b4b0d96281a9ef4012c2de9e4303ba832"
   },
   {
     "page": "projection",
@@ -555,7 +555,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 8
+        "todo": 0
       },
       "page-summary": {
         "grid": 60,
@@ -593,9 +593,9 @@
         "todo": 0
       }
     },
-    "todo": 8,
-    "bytes": 1596035,
-    "sha256": "45f2182418e4de138a50224b0b8cf6d4d7e416e0f91c29b9a996eaa6580415e4"
+    "todo": 0,
+    "bytes": 1595262,
+    "sha256": "554eedd2e6b0e264a833beca94b5aa334fa2cc20b0fefe1eb68a38fa5b51a487"
   },
   {
     "page": "rmd",
@@ -613,7 +613,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 17
+        "todo": 0
       },
       "amount": {
         "grid": 60,
@@ -627,7 +627,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 14
+        "todo": 0
       },
       "schedule": {
         "grid": 60,
@@ -662,14 +662,14 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 92
+        "todo": 0
       },
       "exclusions": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 10
+        "todo": 0
       },
       "page_table": {
         "grid": 60,
@@ -679,9 +679,9 @@
         "todo": 0
       }
     },
-    "todo": 133,
-    "bytes": 697713,
-    "sha256": "5ddb2c5e4349aa30736c92c41e3b0a3781e991dc872a171a9f1d6ed9106bd999"
+    "todo": 0,
+    "bytes": 680382,
+    "sha256": "890514df28812ed0aede4f3e41c207edce0a6c723b33c5a1e4eb50d7355df340"
   },
   {
     "page": "roth-conversions",
@@ -699,21 +699,21 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 16
+        "todo": 0
       },
       "eligibility": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 11
+        "todo": 0
       },
       "conversion_tax": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 10
+        "todo": 0
       },
       "insufficient": {
         "grid": 60,
@@ -727,21 +727,21 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 10
+        "todo": 0
       },
       "real_totals": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 10
+        "todo": 0
       },
       "table_span": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 8
+        "todo": 0
       },
       "irmaa": {
         "grid": 60,
@@ -755,12 +755,12 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 9
+        "todo": 0
       }
     },
-    "todo": 74,
-    "bytes": 793889,
-    "sha256": "648aafbcdbba8320f0de0b0664d768fd8406fe8f5f61a767eae903baa86c312b"
+    "todo": 0,
+    "bytes": 785173,
+    "sha256": "965c5e0d778a8e87a821cce205196ca8981fd3a696a38b8a73aee353c2be6833"
   },
   {
     "page": "sequence-risk",
@@ -843,14 +843,14 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 11
+        "todo": 0
       },
       "indexing": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 9
+        "todo": 0
       },
       "niit": {
         "grid": 60,
@@ -909,9 +909,9 @@
         "todo": 0
       }
     },
-    "todo": 20,
-    "bytes": 939732,
-    "sha256": "e0632ba864ac506c60d0a016da4074bf840860b8c4fc5602eae8c078f86dd999"
+    "todo": 0,
+    "bytes": 937669,
+    "sha256": "111b92014446dc4af3ece85bbd6fdd23a3b00e14f5d8d541e6f11223b23eb3df"
   },
   {
     "page": "withdrawal-strategy",
@@ -950,7 +950,7 @@
         "edge": 30,
         "extreme": 10,
         "secondChecks": 10,
-        "todo": 58
+        "todo": 0
       },
       "worst-history-selection": {
         "grid": 60,
@@ -974,8 +974,8 @@
         "todo": 0
       }
     },
-    "todo": 58,
-    "bytes": 712190,
-    "sha256": "24fae0d0d607087a264c385c0874d83391fd9fbea34dc1ad720280ba4c76c1d2"
+    "todo": 0,
+    "bytes": 705182,
+    "sha256": "7b4c66298d2bac3a584f55e2c729ff04c5003bc4366ee93976b3c2641b3823f9"
   }
 ]

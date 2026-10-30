@@ -11,7 +11,7 @@
 
 ## Formulas
 - Yearly = amount x times per year (`core/math/periods.js`) + employer match.
-- Limits (`data/limits.js`, IRS): 2026: 401(k)/403(b) 24,500 (+8,000 from 50; 11,250 from 60 to 63), IRA 7,500 traditional and Roth together (+1,100 from 50), HSA 4,400 self-only (+1,000 from 55; 8,750 family). 2025 also listed. The age reached in the year is what counts. Employer money is outside these limits.
+- Limits (`data/limits.js`, IRS): 2026: 401(k)/403(b) 24,500 (+8,000 from 50; 11,250 from 60 to 63), IRA 7,500 traditional and Roth together (+1,100 from 50), HSA 4,400 self-only (+1,000 from 55; 8,750 family). 2025 also listed. The age reached in the year is what counts. An employer's 401(k) match is outside the elective-deferral limit; an employer's HSA deposits share the HSA limit (IRS Pub. 969, Employer contributions).
 
 ## Tests
 `tests/retirement-pages.test.mjs`: totals, match, catch-up limits, an over-limit warning.
@@ -40,12 +40,4 @@ supports the age-55 additional 1,000. The future-year answer key freezes the 202
 table rather than inventing future law. All balances in the fixtures are invented
 worked examples, whose arithmetic and source are in each row's note.
 
-**Known discrepancy:** the earlier blanket sentence that employer money is outside
-the limits is incorrect for HSAs. Publication 969, Employer contributions, requires
-employer payments to reduce what the individual may contribute. Thus a 2026
-self-only HSA at age 40 with 4,400 from the individual and 100 from the employer
-uses 4,500 against the 4,400 limit and is over by 100. The current implementation
-counts only 4,400 toward that limit. These sourced cases remain explicit TODO
-tests until the discrepancy is corrected. Employer 401(k) money remains outside
-the elective-deferral limit; this audit does not introduce the separate overall
-defined-contribution cap. Family HSA selection remains a documented future feature.
+**Fixed 2026-10-30 (F-030):** employer HSA deposits now count toward the HSA limit (Publication 969: employer payments reduce what the individual may contribute), so a 2026 self-only HSA at age 40 with 4,400 from the individual and 100 from the employer uses 4,500 against the 4,400 limit and is over by 100. Employer 401(k) money remains outside the elective-deferral limit; the separate overall defined-contribution cap is not modelled. Family HSA selection remains a documented future feature.

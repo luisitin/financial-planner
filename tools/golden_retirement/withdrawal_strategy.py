@@ -65,7 +65,7 @@ def simulate(inp,seq=None,strategy=None):
         if j>=delay:
             if kind=='fixed-real':spend=base*price
             elif kind=='percent':spend=max(0,b*wr)
-            elif kind=='vpw':spend=max(0,annuity(b,max(-.5,(1+r)/(1+inflation)-1),n-j))
+            elif kind=='vpw':spend=max(0,annuity(b,max(-.5,(1+r)/(1+inflation)-1),n-j,True))
             else:
                 if guard is None:guard=base*price
                 elif (guard/b if b>0 else 1)>wr*1.2:guard*=.9
@@ -182,9 +182,9 @@ def build():
                     close(b*g**n/(1+f)**(n-1),result['endBalanceReal'])
                 elif policy=='vpw':
                     real=max(-.5,(1+r)/(1+f)-1)
-                    payment=b/n if real==0 else b*real/(1-(1+real)**(-n))
-                    close(payment,annuity(b,real,n))
-                    close(payment*sum((1+real)**(-k) for k in range(1,n+1)),b)
+                    payment=b/n if real==0 else b*real/(1-(1+real)**(-n))/(1+real)
+                    close(payment,annuity(b,real,n,True))
+                    close(payment*sum((1+real)**(-k) for k in range(0,n)),b)
                 else:
                     first=float(result['rows'][0]['spending']);assert first==float(inp['spending']['yearly'])
                     # Reconstruct second-year threshold in balance units.
@@ -195,12 +195,12 @@ def build():
             add(policy,i,expected,inp=inp,check=check,note='Full annual path, first/last nominal and real spending, and depletion; no taxes or external income.')
 
     for i in range(100):
-        # The beginning-year unit-payment PV includes k=0. This correction is
-        # kept as a TODO, while the vpw group above tests the documented PMT.
+        # The beginning-year unit-payment PV includes k=0. Since 2026-10-30 (F-030) the app pays VPW at the
+        # start of the year, so the vpw group above uses the same timing and these rows carry no TODO.
         n=1+i%30 if i<90 else [1,1,60,100,120][i%5];b=[1000,100000,1000000,.01,1e9][i%5]
         r=[0,.03,-.02,.1,-.5][i%5];inp=engine(2026 if i%2==0 else 2056,n,b,1200,r,0);inp['strategy']='vpw'
         payment=annuity(b,r,n,True);endpay=annuity(b,r,n)
-        todo='VPW uses an end-year payment before applying returns; beginning-year PV requires a payment divided by (1+real return).' if abs(payment-endpay)>.005 else ''
+        todo=''
         add('vpw-beginning-timing',i,{'rows':{'0':{'spending':money(payment)}}},inp=inp,todo=todo,
             note=f'Beginning-year PV=sum(k=0..{n-1}) discount; due payment={payment:.8f}; ordinary payment={endpay:.8f}.',
             check=lambda:close(payment*(1+r),endpay))

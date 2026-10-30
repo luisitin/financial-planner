@@ -123,7 +123,7 @@ case_id,rule,kind,target,arg.0,arg.1,params.today,plan.accounts,plan.accounts.0.
 | 401k-catchup | 60 | 30 | 10 | 10 | 0 |
 | 401k-super-catchup | 60 | 30 | 10 | 10 | 0 |
 | hsa-self-catchup | 60 | 30 | 10 | 10 | 0 |
-| hsa-employer-cap | 60 | 30 | 10 | 10 | 100 |
+| hsa-employer-cap | 60 | 30 | 10 | 10 | 0 |
 | age-reached | 60 | 30 | 10 | 10 | 0 |
 | table-year | 60 | 30 | 10 | 10 | 0 |
 | empty-input | 60 | 30 | 10 | 10 | 0 |

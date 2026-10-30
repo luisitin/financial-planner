@@ -33,7 +33,8 @@ export function compute(plan, params = {}) {
     const age = today && p.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null;   // the age reached this year is what the catch-up rules use
     const limits = [];
     for (const [kind, def] of Object.entries(L.kinds)) {
-      const used = mine.filter((i) => LIMIT_KIND[i.accountType] === kind).reduce((s, i) => s + i.yearly, 0);
+      // an employer's HSA deposits share the HSA limit (IRS Pub. 969); a 401(k) match has its own, much higher, overall limit
+      const used = mine.filter((i) => LIMIT_KIND[i.accountType] === kind).reduce((s, i) => s + i.yearly + (kind === "hsa" ? i.matchYearly : 0), 0);
       if (!used) continue;
       let limit = def.limit, catchUp = 0;
       if (age !== null && def.catchUpAge && age >= def.catchUpAge) { catchUp = def.catchUp; if (def.superCatchUp && age >= def.superCatchUp.from && age <= def.superCatchUp.to) catchUp = def.superCatchUp.amount; limit += catchUp; }

@@ -15,10 +15,15 @@ export function survival(age, toAge, { sex = "", health = "average" } = {}) {
   if (toAge <= age) return 1;
   return Math.exp(-Math.exp((age - m) / b) * (Math.exp((toAge - age) / b) - 1));
 }
-/** The age by which the chance of still being alive falls under `p` (e.g. 0.1 -> the 90th percentile of lifespan). */
-export function ageAtSurvival(age, p, opts) { let a = age; while (a < 120 && survival(age, a, opts) > p) a++; return a; }
-/** Expected remaining years (life expectancy) by summing the survival curve. */
-export function lifeExpectancy(age, opts) { let e = 0; for (let t = age; t < 120; t++) e += survival(age, t + 0.5, opts); return e; }
+// The curve always crosses any chance above zero; the searches stop there (300 years is only a guard).
+/** The age by which the chance of still being alive falls to `p` or under (e.g. 0.1 -> the 90th percentile of lifespan). */
+export function ageAtSurvival(age, p, opts) { let a = age; while (a < age + 300 && survival(age, a, opts) > p) a++; return a; }
+/** Expected remaining years (life expectancy): the survival curve summed at mid-year points until what is left is negligible. */
+export function lifeExpectancy(age, opts) {
+  let e = 0;
+  for (let t = age; t < age + 300; t++) { const s = survival(age, t + 0.5, opts); e += s; if (s < 1e-15) break; }
+  return e;
+}
 
 /**
  * compute(plan, { today }) -> {
@@ -44,7 +49,7 @@ export function compute(plan, params = {}) {
     const [a, b] = alive;
     const pEither = (calendarYearsAhead) => 1 - (1 - survival(a.age, a.age + calendarYearsAhead, a)) * (1 - survival(b.age, b.age + calendarYearsAhead, b));
     const ages = marks.map((m) => ({ age: m, p: pEither(m - a.age) }));   // "age" on the first person's clock
-    let y = 0; while (y < 70 && pEither(y) > 0.1) y++;
+    let y = 0; while (y < 300 && pEither(y) > 0.1) y++;
     either = { ages, planTo: a.age + y, planToYear: today ? Number(String(today).slice(0, 4)) + y : null, first: a.name, second: b.name };
   }
   const suggestion = !alive.length ? "" : either ? `Plan for at least one of you being alive to about ${either.planTo} (${either.first}'s age): that is when the chance drops under 1 in 10.` : `Plan to about ${alive[0].planTo}: that is when the chance of still being alive drops under 1 in 10.`;

@@ -53,14 +53,17 @@ def quantile(x, p, opts):
     return answer
 
 
-def remaining(x, opts, end=120):
-    # Integral approximated by unit-width midpoint rectangles, as the brief fixes.
+def remaining(x, opts, end=None):
+    # Integral approximated by unit-width midpoint rectangles, as the brief fixes. Since 2026-10-30 (F-030) the sum
+    # runs on to age 200 (well past where the tail underflows below six decimals): the Gompertz law has no maximum age.
+    end = 200 if end is None else end
     n = max(0, ceil(end-x))
     return fsum(chance(x, x+j+0.5, opts) for j in range(n))
 
 
-def remaining_second(x, opts, end=120):
+def remaining_second(x, opts, end=None):
     # Summation by parts: expected duration = weighted deaths + surviving tail.
+    end = 200 if end is None else end
     n = max(0, ceil(end-x))
     if not n:
         return 0.0
@@ -99,7 +102,7 @@ def union_quantile(x, y, a, b):
     return x+hi
 
 
-def page_expected(plan, today, *, capped_couple=True):
+def page_expected(plan, today, *, capped_couple=False):
     people = []
     for p in plan.get('household', {}).get('people', []):
         if p.get('role') == 'dependent' or not p.get('birthDate'):
@@ -114,7 +117,7 @@ def page_expected(plan, today, *, capped_couple=True):
         if age is not None:
             result.update(expectancy=f'{age+remaining(age, opts):.6f}',
                           ages=[{'age': mark, 'p': rate(chance(age, mark, opts))} for mark in MARKS],
-                          planTo=min(120, quantile(age, .1, opts)) if age < 120 else age)
+                          planTo=quantile(age, .1, opts))
         people.append(result)
     alive = [p for p in people if p['age'] is not None]
     either = None
@@ -147,16 +150,15 @@ def verify_page(plan, today, expected, *, uncapped=False):
         assert isclose(float(out['expectancy']), x+remaining_second(x, out), abs_tol=0.00000051)
         for mark in out['ages']:
             assert isclose(float(mark['p']), chance_second(x, mark['age'], out), abs_tol=0.00000051)
-        if out['planTo'] < 120:
-            assert chance_second(x, out['planTo'], out) <= .1
-            assert chance_second(x, out['planTo']-1, out) > .1
+        assert chance_second(x, out['planTo'], out) <= .1
+        assert out['planTo'] == x or chance_second(x, out['planTo']-1, out) > .1
     if expected['either']:
         a, b = expected['people'][:2]
         for point in expected['either']['ages']:
             dt = point['age']-a['age']
             second = 1-(1-chance_second(a['age'], a['age']+dt, a))*(1-chance_second(b['age'], b['age']+dt, b))
             assert isclose(float(point['p']), second, abs_tol=0.00000051)
-        if uncapped or expected['either']['planTo'] < a['age']+70:
+        if True:
             dt = expected['either']['planTo']-a['age']
             assert union(a['age'], b['age'], dt, a, b) <= .1
             assert union(a['age'], b['age'], dt-1, a, b) > .1
@@ -209,7 +211,7 @@ def build():
         opts = {'sex': ('m', 'f', '')[i%3], 'health': ('better', 'average', 'worse')[(i//3)%3]}
         p = (.1, .25, .5, .75, 1)[i%5] if i < 90 else (.000001, .000010, .000100, .001000, .999999)[i%5]
         value = quantile(x, p, opts)
-        todo = 'The age-120 stop returns before survival reaches the requested probability.' if value > 120 and x < value and p < 1 else ''
+        todo = ''   # the age-120 stop was removed on 2026-10-30 (F-030)
         def check():
             assert chance_second(x, value, opts) <= p*(1+1e-10)
             assert value == x or chance_second(x, value-1, opts) > p
@@ -222,7 +224,7 @@ def build():
         opts = {'sex': ('m', 'f', '')[i%3], 'health': ('better', 'average', 'worse')[(i//3)%3]}
         value = remaining(x, opts)
         add('life-expectancy-sum', i, 'lifeExpectancy', {'value': f'{value:.6f}'}, args=[x, opts],
-            note='Unit midpoint rectangles to age120; this numerical approximation is an explicit brief contract.',
+            note='Unit midpoint rectangles to age200 (no maximum age in the Gompertz law); this numerical approximation is an explicit brief contract.',
             check=checker(lambda: equal(value, remaining_second(x, opts)), 'weighted survival decrements plus residual tail (summation by parts)'))
 
     for i in range(100):
@@ -254,7 +256,7 @@ def build():
         plan = {'household': {'people':[person(x,today),person(y,today,'b')]},'retirement':{'longevity':{'a':a,'b':b}}}
         expected = page_expected(plan, today)
         add('couple-probability-clock', i, 'compute', expected, plan=plan, today=today,
-            note='Union S_a+S_b-S_a*S_b; marks share calendar time measured from the first adult; existing cap retained in this contract group.',
+            note='Union S_a+S_b-S_a*S_b; marks share calendar time measured from the first adult; no calendar-horizon cap.',
             check=checker(lambda: verify_page(plan, today, expected), 'page cross-check'))
 
     for i in range(100):
@@ -282,8 +284,8 @@ def build():
         # stop at age120. The midpoint integration itself is not changed.
         x = 20+i if i < 60 else 110+(i-60)%11 if i < 90 else 120+i-90
         opts = {'sex': ('m','f','')[i%3], 'health': ('average','better','worse')[i%3]}
-        value, cut = remaining(x, opts, 200), remaining(x, opts)
-        todo = 'The undocumented age-120 cutoff omits a positive survival tail visible at six-decimal precision.' if abs(float(f'{value:.6f}')-cut) > .00000050001 else ''
+        value, cut = remaining(x, opts, 200), remaining(x, opts, 120)
+        todo = ''   # the age-120 cutoff was removed on 2026-10-30 (F-030)
         add('individual-age120-tail', i, 'lifeExpectancy', {'value':f'{value:.6f}'}, args=[x, opts],
             note=f'Unbounded midpoint sum evaluated to age200 (tail underflows below six decimals); capped sum={cut:.9f}; omitted years={value-cut:.9f}.', todo=todo,
             check=checker(lambda: equal(value, remaining_second(x, opts, 200)), 'uncapped sum by weighted survival decrements with vanishing terminal mass'))
@@ -297,7 +299,7 @@ def build():
         plan = {'household':{'people':[person(x,today), person(y,today,'b')]},'retirement':{'longevity':{'a':a,'b':b}}}
         expected = page_expected(plan, today, capped_couple=False)
         dt = expected['either']['planTo']-x
-        todo = 'The undocumented 70-year couple search cap stops while joint survival remains above10%.' if dt > 70 else ''
+        todo = ''   # the 70-year couple cap was removed on 2026-10-30 (F-030)
         add('couple-70year-cap', i, 'compute', expected, plan=plan, today=today,
             note=f'Uncapped joint crossing at first adult age{x+dt}; S_either(70)={union(x,y,70,a,b):.9f}; crossing years={dt}.', todo=todo,
             check=checker(lambda: verify_page(plan, today, expected, uncapped=True), 'page cross-check'))

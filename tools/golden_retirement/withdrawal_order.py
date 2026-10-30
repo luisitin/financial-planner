@@ -54,10 +54,10 @@ for i in range(100):
     # At one cent over the threshold, the missing second reduction is only
     # $0.0006: all asserted money fields agree within the $0.005 tolerance.
     # Keep that row as an ordinary passing boundary case rather than a TODO.
-    todo='Senior phaseout must reduce each eligible $6000 amount; code reduces a combined couple amount only once.' if status=='married_joint' and count==2 and D('.005')<(income-threshold)*D('.06') and income-threshold<D(200000) and year<=2028 else ''
-    if status=='married_separate' and count>0 and year<=2028 and income<D(175000):todo='IRS Schedule1-A excludes married-filing-separately from the senior deduction; code grants it.'
+    todo=''   # fixed 2026-10-30 (F-030), was: Senior phaseout must reduce each eligible $6000 amount; code reduces a combined couple amount only once.
+    # fixed 2026-10-30 (F-030), was a TODO: IRS Schedule1-A excludes married-filing-separately from the senior deduction; code grants it.
     # Source-year2025 HOH standard23625 must stay exact, not round to23650.
-    if year==2025 and status=='head_of_household':todo='Published2025 head-of-household standard deduction23625 is rounded incorrectly to23650 by paramsFor.'
+    # fixed 2026-10-30 (F-030), was a TODO: Published2025 head-of-household standard deduction23625 is rounded incorrectly to23650 by paramsFor.
     rows.append(case(PAGE,'senior',i,'federalTax',{'deduction':{'standard':cents(ans['deduction']['standard']),'senior':cents(ans['deduction']['senior']),'amount':cents(ans['deduction']['amount'])},'totalTax':cents(ans['totalTax'])},args={'0':{'filingStatus':status,'otherOrdinary':cents(income),'ages65plus':count}},params=testparam(year),todo=todo,note=note(i,'IRC151(d)(5)(C); IRS Schedule1-A https://www.irs.gov/instructions/i1040gi; ages65+ eligible2025..2028; assumptions valid SSN and no foreign exclusion',f'each-person deduction=max(0,6000-.06*max(0,{income}-{threshold})); eligible count={count}; statutory filing restriction applied')))
 
 for i in range(100):
@@ -65,7 +65,7 @@ for i in range(100):
     if i>=90:year=[2026,2056,2106,2126][i%4];infl=['0','0.01'][i%2]
     p=tax_parameters(year,infl,status)
     expected={'year':year,'status':{status:{'brackets':{str(j):cents(v) for j,v in enumerate(p['tops'])},'standardDeduction':cents(p['standard']),'extraAllowance':cents(p['extra']),'ltcgBrackets':{str(j):cents(v) for j,v in enumerate(p['capital'])}}}}
-    todo='Published2025 head-of-household standard deduction23625 must remain exact; base-year rounding changes it by25.' if year==2025 and status=='head_of_household' else ''
+    todo=''   # fixed 2026-10-30 (F-030), was: Published2025 head-of-household standard deduction23625 must remain exact; base-year rounding changes it by25.
     rows.append(case(PAGE,'indexing',i,'paramsFor',expected,args={'0':year,'1':{'inflation':six(infl)}},todo=todo,note=note(i,SOURCE+'; source-year values exact; future brackets nearest25 and deductions/gains nearest50; no CPI law prediction',f'growth=(1+{infl})^max(0,{year}-2026); independently scale each published threshold then integer-quotient nearest-unit rounding')))
 
 for i in range(100):

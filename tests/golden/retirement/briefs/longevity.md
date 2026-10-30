@@ -98,10 +98,10 @@ case_id,rule,kind,target,arg.0,arg.1,arg.1.health,arg.1.sex,arg.2.health,arg.2.s
 | Rule | Grid | Edge | Extreme | Second checks | TODO |
 |---|---:|---:|---:|---:|---:|
 | survival | 60 | 30 | 10 | 10 | 0 |
-| inverse-survival | 60 | 30 | 10 | 10 | 15 |
+| inverse-survival | 60 | 30 | 10 | 10 | 0 |
 | life-expectancy-sum | 60 | 30 | 10 | 10 | 0 |
 | birthday-aware-page | 60 | 30 | 10 | 10 | 0 |
 | couple-probability-clock | 60 | 30 | 10 | 10 | 0 |
 | page-defaults-omissions | 60 | 30 | 10 | 10 | 0 |
-| individual-age120-tail | 60 | 30 | 10 | 10 | 27 |
-| couple-70year-cap | 60 | 30 | 10 | 10 | 33 |
+| individual-age120-tail | 60 | 30 | 10 | 10 | 0 |
+| couple-70year-cap | 60 | 30 | 10 | 10 | 0 |

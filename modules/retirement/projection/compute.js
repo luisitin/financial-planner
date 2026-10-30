@@ -2,7 +2,7 @@
 // (people, buckets, contributions, guaranteed income, spending, rates) and runs the expected-
 // return projection. Every other retirement page starts from buildInputs() so they all agree.
 import { project, affordableSpending, STRATEGIES } from "../../../core/math/retirement.js";
-import { rmdStartAge } from "../../../core/math/rmd.js";
+import { rmdStartAge, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
@@ -35,6 +35,48 @@ export function taxSettings(plan, overrides = {}) {
 }
 
 /**
+ * Pensions typed on the Income page (type "pension"), as engine incomes. One already being paid
+ * (no start date, or one in the past) counts from now, as the Income page counts it; a future one
+ * from the age its owner reaches in the start year; an end date stops it after that year's age.
+ * A rise typed on the item means it keeps up with inflation (cola). One-off pension payments,
+ * ended items and items that repeat a `retirement.pensions` entry (same person, and the same name
+ * or the same monthly amount within a dollar) are left out.
+ * incomePensions(plan, people, pensions, today) -> [{ name, yearly, personId, startAge, endAge?, cola, taxable, source: "income" }]
+ */
+export function incomePensions(plan, people, pensions, today) {
+  const out = [];
+  if (!people.length) return out;
+  const nowYear = Number(String(today).slice(0, 4));
+  for (const x of plan.income ?? []) {
+    if (x.type !== "pension" || x.period === "once") continue;
+    const yearly = perYear(x.amount, x.period);
+    if (!(yearly > 0)) continue;
+    if (x.endDate && String(x.endDate) < String(today)) continue;
+    const who = people.find((p) => p.id === x.personId) ?? people[0];
+    const name = String(x.name || "Pension").trim();
+    const dup = pensions.some((pn) => (pn.personId || people[0].id) === who.id && (String(pn.name ?? "").trim().toLowerCase() === name.toLowerCase() || Math.abs(Number(pn.monthly) * 12 - yearly) < 12));
+    if (dup) continue;
+    const startYear = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : nowYear;
+    const endAge = x.endDate ? Number(String(x.endDate).slice(0, 4)) - who.birthYear : undefined;
+    out.push({ name, yearly, personId: who.id, startAge: startYear - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, source: "income" });
+  }
+  return out;
+}
+
+/**
+ * Each adult's share of the pre-tax bucket that has required withdrawals, with their own start age: their own
+ * 401(k)s and IRAs (an account with no owner belongs to the first person). Life-insurance cash value sits in
+ * the same bucket but belongs to no owner, so it has none.
+ */
+export function rmdOwners(plan, people, adults, deferredTotal) {
+  return people.map((p, i) => {
+    const own = (plan.accounts ?? []).filter((a) => RMD_ACCOUNT_TYPES.includes(a.type) && (a.ownerId === p.id || (i === 0 && !people.some((q) => q.id === a.ownerId))));
+    const held = own.reduce((s, a) => s + countedBalance(a), 0);
+    return { personIndex: i, share: deferredTotal > 0 ? held / deferredTotal : (i === 0 ? 1 : 0), startAge: rmdStartAge(adults.find((a) => a.id === p.id)?.birthDate ?? p.birthYear) };
+  });
+}
+
+/**
  * buildInputs(plan, { today }) -> { inputs, notes: [text], people, spendingSource } or { inputs: null, missing: [text] }
  */
 export function buildInputs(plan, params = {}) {
@@ -60,12 +102,13 @@ export function buildInputs(plan, params = {}) {
   const contributions = (rt.contributions ?? []).map((c) => {
     const acct = (plan.accounts ?? []).find((x) => x.id === c.accountId);
     const bucket = BUCKET_OF[acct?.type] ?? "taxable";
-    return { bucket, yearly: perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), personIndex: personIndex(c.personId), name: acct?.name ?? "contribution" };
+    return { bucket, yearly: perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}) };
   }).filter((c) => c.yearly > 0);
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });
   for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: Math.floor(p.claimAge), cola: true, taxable: true, kind: "social" });
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true });
+  for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   const retireYear = Math.max(year, people[0].birthYear + people[0].retireAge);
   // a partner who keeps working after the household retires brings their pay in as income
   const inc = (plan.income ?? []).length ? computeIncome(plan, { today }) : null;
@@ -82,7 +125,7 @@ export function buildInputs(plan, params = {}) {
     rates: { inflation: Number(a.inflation ?? 0.03), cash: Number(a.returnCash ?? 0.02), salaryGrowth: Number(a.salaryGrowth ?? 0.03), taxRate: Number(rt.taxRate ?? 0.15), stocksNow: Number(rt.stocksNow ?? 0.7), stocksRetired: Number(rt.stocksRetired ?? 0.5) },
     returns: { stocks: Number(a.returnStocks ?? 0.07), bonds: Number(a.returnBonds ?? 0.04) },
     stdev: { stocks: Number(a.stdevStocks ?? 0.15), bonds: Number(a.stdevBonds ?? 0.05) },
-    rmd: { birthYear: people[0].birthYear, startAge: rmdStartAge(people[0].birthYear) },
+    rmd: { birthYear: people[0].birthYear, startAge: rmdStartAge(adults.find((p) => p.id === people[0].id)?.birthDate ?? people[0].birthYear), owners: rmdOwners(plan, people, adults, balances.deferred) },
     strategy: STRATEGIES[rt.strategy] ? rt.strategy : "fixed-real", withdrawalRate: Number(rt.withdrawalRate ?? 0.04),
     withdrawalOrder: Array.isArray(rt.withdrawalOrder) && rt.withdrawalOrder.length ? rt.withdrawalOrder : ["taxable", "deferred", "free"],
     tax: taxSettings(plan),

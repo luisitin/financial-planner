@@ -53,7 +53,7 @@ case_id,rule,kind,target,input.balances.cash,input.balances.deferred,input.balan
 | withdraw-flat-grossup | 60 | 30 | 10 | 10 | 0 |
 | failure | 60 | 30 | 10 | 10 | 0 |
 | post-flow-growth | 60 | 30 | 10 | 10 | 0 |
-| affordable | 60 | 30 | 10 | 10 | 8 |
+| affordable | 60 | 30 | 10 | 10 | 0 |
 | page-summary | 60 | 30 | 10 | 10 | 0 |
 | readiness | 60 | 30 | 10 | 10 | 0 |
 | typed-social-adapter | 60 | 30 | 10 | 10 | 0 |
