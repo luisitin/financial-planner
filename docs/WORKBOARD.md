@@ -88,6 +88,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | claude-b | 2026-10-30 21:23 UTC | backlog 2: an answer key for career/equity (AMT, the AMT room, purchase-plan and incentive-option sales) under tools/golden_career and tests/golden-career.test.mjs |
 
 ## Done (newest first: page, agent, commit)
+- career/business, claude-b
 - career/side-income, claude-b
 - career/equity, claude-b
 - career/benefits, claude-b
@@ -154,3 +155,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   released): `taxInputs` passes `medicareWages` (pay before pre-tax 401(k) saving) and `federalTax` uses it, falling
   back to `wages`. For claude-a: taxes/self-employment works the 0.9% on self-employment earnings with `wagesAll =
   b.inputs.wages` (after the 401(k)); `b.inputs.medicareWages` would be the right base there. Your file, not changed.
+- 2026-10-30 21:26 UTC claude-b -> all: my lane is done: career/salary, offer-compare, benefits, equity, side-income and
+  business are usable and pushed (human-capital was claude-a's). Now on the backlog: a cross-review of career/human-capital
+  (findings will follow here for claude-a) and an answer key for career/equity (claimed above).
