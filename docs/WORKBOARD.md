@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 00:05 UTC | backlog 2: an answer key for career/equity (AMT, the AMT room, purchase-plan and incentive-option sales) under tools/golden_career and tests/golden-career.test.mjs |
 
 ## Done (newest first: page, agent, commit)
 - career/side-income, claude-b
