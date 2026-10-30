@@ -25,6 +25,8 @@ export function render(page, ctx) {
   const titleOf = (key) => modules?.get?.(key)?.title ?? key;
   const open = (key, label) => ui.h("a", { class: "btn secondary small", href: `#/${key}` }, label ?? `Open ${titleOf(key)}`);
   const bad = d.issues.filter((x) => x.level === "bad").length;
+  const c = d.counts;
+  const empty = !c.people && !c.accounts && !c.income && !c.expenses;
 
   // the summary: one line each, filled in as the checks answer
   const line = (title, sub) => {
@@ -36,8 +38,10 @@ export function render(page, ctx) {
   const L = { plan: line("Your plan"), pages: line("Every page's sums"), kept: line("Where your plan is kept"), pc: line("The PC"), ai: line("The AI helper") };
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Is everything working?"),
     ui.h("p", { class: "muted small" }, "A check of your plan and of the parts of the app that keep and use it. Nothing here changes your plan unless you press a button under a problem and confirm."),
+    empty ? ui.h("div", { class: "notice info" }, ui.h("p", {}, "Your plan is empty, so there is nothing to check yet. Start with the people in your household, then what you own, earn and spend."), ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "Add the people"))) : null,
     ui.h("ul", { class: "records" }, Object.values(L).map((x) => x.li))));
-  L.plan.set(d.issues.length ? (bad ? "bad" : "warn") : "ok", d.issues.length ? `${d.issues.length} to look at` : "No problems", d.issues.length ? "Listed below, with a fix where there is a safe one." : "The links checked between people, accounts, goals and policies point somewhere; dates are real dates; amounts are numbers.");
+  if (empty) L.plan.set("", "Empty", "Nothing to check yet: add the people in your household first.");
+  else L.plan.set(d.issues.length ? (bad ? "bad" : "warn") : "ok", d.issues.length ? `${d.issues.length} to look at` : "No problems", d.issues.length ? "Listed below, with a fix where there is a safe one." : "The links checked between people, accounts, goals and policies point somewhere; dates are real dates; amounts are numbers.");
   const backend = store.backend?.() ?? "local";
   const sandbox = store.sandbox?.() ?? false;
   L.kept.set(sandbox ? "accent" : backend === "server" ? "ok" : "warn", sandbox ? "Pretend plan" : backend === "server" ? "On your PC" : "This browser only",
@@ -51,11 +55,12 @@ export function render(page, ctx) {
     x.names ? ui.h("div", { class: "rec-sub" }, x.names) : null,
     ui.h("div", { class: "rec-foot" }, ui.h("span", { class: "rec-actions" },
       x.fix ? ui.button(x.fix.label, () => {
-        if (!ui.confirm(`${x.fix.label}? This changes ${x.count === 1 ? "1 item" : `${x.count} items`} in your plan.`)) return;
+        const k = x.changes ?? x.count;
+        if (!ui.confirm(`${x.fix.label}? This changes ${k === 1 ? "1 item" : `${k} items`} in your plan.`)) return;
         store.update((q) => { const n = applyFix(q, x.key); pending = `Fixed: ${n === 1 ? "1 item" : `${n} items`} changed.`; });
       }, { class: "small" }) : null,
-      open(x.page)))))));
-  root.append(problems);
+      x.page ? open(x.page) : null))))));
+  if (!(empty && !d.issues.length)) root.append(problems);
 
   // every page's sums on the plan (run once per version of the plan, after the page is shown)
   const pagesCard = ui.card("Every page's sums", ui.h("p", { class: "muted" }, "Running each page's numbers on your plan…"));
@@ -70,7 +75,7 @@ export function render(page, ctx) {
         ui.h("div", { class: "rec-sub" }, "This page could not work out its numbers from your plan. Open it to see what it shows; if it stays broken, the message below helps whoever fixes the app."),
         ui.h("div", { class: "dg-err" }, f.error),
         ui.h("div", { class: "rec-foot" }, ui.h("span", { class: "rec-actions" }, open(f.key, "Open the page")))))) : ui.notice("ok", `All ${r.ran} pages worked out their numbers from your plan.`),
-      ui.h("p", { class: "muted small" }, `${list.length} pages in the app: ${byStatus("usable")} ready, ${byStatus("stub")} partly built, ${byStatus("planned")} still to come. ${r.skipped - byStatus("planned") > 0 ? `${r.skipped - byStatus("planned")} pages that run long simulations are not run here: open them to check.` : ""}`));
+      ui.h("p", { class: "muted small" }, `${list.length} pages in the app: ${[[byStatus("usable"), "ready"], [byStatus("stub"), "partly built"], [byStatus("planned"), "still to come"]].filter(([k]) => k > 0).map(([k, w]) => `${k} ${w}`).join(", ")}. Pages that run long simulations check themselves when you open them.`));
   };
   const at = plan.meta?.updatedAt ?? "";
   let timer = null;
@@ -81,19 +86,11 @@ export function render(page, ctx) {
     showPages(result);
   }, 30);
 
-  // what is in the plan, and how much room it takes; an empty plan says where to start
-  const c = d.counts;
+  // what is in the plan (its size is in the technical fold, and a problem when near the browser's room)
   const kb = d.size.chars / 1024;
-  const empty = !c.people && !c.accounts && !c.income && !c.expenses;
   const n = (k, one, many) => `${c[k]} ${c[k] === 1 ? one : many}`;
-  root.append(ui.card("What is in your plan", empty
-    ? ui.h("p", {}, "Your plan is empty: start with the people in your household, then what you own, earn and spend.")
-    : ui.h("p", {}, `${n("people", "person", "people")}, ${n("accounts", "account", "accounts")}, ${n("goals", "goal", "goals")}, ${n("income", "income item", "income items")} and ${n("expenses", "spending item", "spending items")}; ${c.transactions ? `${c.transactions.toLocaleString("en-US")} ${c.transactions === 1 ? "transaction" : "transactions"}` : "no transactions yet"}.`),
-    ui.h("p", { class: "muted small" }, `The plan is about ${kb < 1024 ? `${Math.max(1, Math.round(kb))} KB` : `${(kb / 1024).toFixed(1)} MB`}: ${d.size.share < 0.01 ? "under 1%" : `${Math.round(d.size.share * 100)}%`} of the ${Math.round(STORAGE_LIMIT / 1024 / 1024)} MB a browser keeps for one site.`)));
-
-  root.append(ui.card("Next", empty
-    ? ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "Add the people"), ui.h("a", { class: "btn secondary", href: "#/system/settings" }, "Settings"))
-    : ui.row(ui.h("a", { class: "btn secondary", href: "#/system/settings" }, "Settings"), ui.h("a", { class: "btn secondary", href: "#/household/people" }, "People"))));
+  if (!empty) root.append(ui.card("What is in your plan",
+    ui.h("p", {}, `${n("people", "person", "people")}, ${n("accounts", "account", "accounts")}, ${n("goals", "goal", "goals")}, ${n("income", "income item", "income items")} and ${n("expenses", "spending item", "spending items")}; ${c.transactions ? `${c.transactions.toLocaleString("en-US")} ${c.transactions === 1 ? "transaction" : "transactions"}` : "no transactions yet"}.`)));
 
   // the PC and the AI helper (asked after the page is shown)
   const details = ui.h("ul", { class: "records" });
@@ -102,6 +99,7 @@ export function render(page, ctx) {
   let storageOk = true;
   try { localStorage.setItem("planner.diagnostics", "1"); localStorage.removeItem("planner.diagnostics"); } catch { storageOk = false; }
   detail("Plan version", `${d.schema.plan} (this app: ${d.schema.app})`);
+  detail("Plan size", `about ${kb < 1024 ? `${Math.max(1, Math.round(kb))} KB` : `${(kb / 1024).toFixed(1)} MB`} of ${Math.round(STORAGE_LIMIT / 1024 / 1024)} MB`);
   detail("This browser can keep data", storageOk ? "Yes" : "No");
   detail("Online", navigator.onLine ? "Yes" : "No");
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Versions and connection"), foldStatus, ui.h("span", { class: "fold-chev" }, "›")),
@@ -110,7 +108,7 @@ export function render(page, ctx) {
     let ok = false;
     try { ok = await api.ready(); } catch { ok = false; }
     const h = api.health;
-    L.pc.set(ok ? "ok" : backend === "server" ? "bad" : "", ok ? "Connected" : "Not connected", ok ? `The app's server answers${h?.version ? ` (version ${h.version})` : ""}${h?.plan ? " and holds your plan" : ""}.` : backend === "server" ? "Your plan is kept on the PC but it does not answer now: changes stay in this browser until it does." : "This app is not connected to a PC. That is fine on one device; Settings connects it.");
+    L.pc.set(ok ? "ok" : backend === "server" ? "bad" : "", ok ? "Connected" : "Not connected", ok ? `Your PC answers${h?.plan ? " and keeps your plan" : ""}.` : backend === "server" ? "Your plan is kept on the PC but it does not answer now: changes stay in this browser until it does." : "This app is not connected to a PC. That is fine on one device; Settings connects it.");
     if (ok) { detail("App version", h?.version ?? "-"); detail("Server", api.base() || "-"); detail("Asks for a sign-in code", h?.authRequired ? "Yes" : "No"); }
     let st = "off";
     try { st = await ai.status(); } catch { st = "unreachable"; }

@@ -5,6 +5,7 @@
 // every page's own sums run on the plan.
 import { SCHEMA_VERSION } from "../../../core/schema/migrate.js";
 import { PERIODS } from "../../../core/math/periods.js";
+import { KINDS as ESTATE_KINDS } from "../../estate/documents/compute.js";
 
 /** What a browser keeps for one site in its local storage, in characters (MDN, "Storage quotas and eviction criteria": 5 MiB per origin). */
 export const STORAGE_LIMIT = 5 * 1024 * 1024;
@@ -25,38 +26,56 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const PROPERTY_PAGE = { home: "property/home", rental: "property/rental", vehicle: "property/vehicles", purchase: "property/purchase" };
 const GONE_PERSON = ["belongs to someone no longer on the People page", "belong to someone no longer on the People page"];
 const HOUSEHOLD = ["Make it the household's", "Make them the household's"];
+/** A value the app made as a hidden label (crypto.randomUUID, its base-36 fallback, or the sample plans' "p-ana"), not a typed name. */
+export const looksLikeId = (v) => typeof v === "string" && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) || /^[a-z0-9]{12,}$/.test(v) || /^[a-z]{1,3}-[a-z0-9-]+$/.test(v));
+const estateKind = (k) => (typeof k === "string" && Object.hasOwn(ESTATE_KINDS, k) ? ESTATE_KINDS[k] : null);
+const counted = (one, many) => (self) => [`${one}; its page counts it as ${self}'s until you choose whose it is`, `${many}; their pages count them as ${self}'s until you choose whose they are`];
 
 /**
- * The links in the plan: a list (`get` returns the plan's own array, or a one-item array for a single object), its
- * field, what it points at, whether it must be set (else blank means the household, or no link), the page that edits
- * it, the words for one and for several, and the fix: "clear" (blank the link: the item becomes the household's, or
- * loses its goal or account), "drop" (take the missing ids out of a list of ids), "remove" (take out a leftover that
- * no page can show any more), or null (the item's own page sets it right).
- * Not checked: accounts' "whose account" on Net worth, which is typed text (a name), not a link.
+ * The links in the plan: a list (`get` returns the plan's own array, or a one-item array for a single setting: `single`),
+ * its field, what it points at, whether it must be set (else blank means the household, or no link), an optional `when`
+ * (only the items it is true for), the page that edits it (`page: null` when no page can show the leftover), the words
+ * for one and for several (or a function of the "you" person's name), what to call an item without a name (`one`), and
+ * the fix: "clear" (blank the link: the item becomes the household's, or loses its goal or account), "drop" (take the
+ * missing ids out of a list of ids), "remove" (take out a leftover that no page can show any more), or null (the item's
+ * own page sets it right).
+ * Net worth's "whose account" is typed text (a name): only a value that looks like an app-made label is checked there.
  */
 export const LINKS = [
   { key: "income.person", get: (p) => p.income, field: "personId", to: "people", what: ["income item", "income items"], page: "cashflow/income", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
-  { key: "contributions.person", get: (p) => p.retirement?.contributions, field: "personId", to: "people", what: ["retirement saving", "retirement savings"], page: "retirement/contributions", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
-  { key: "contributions.account", get: (p) => p.retirement?.contributions, field: "accountId", to: "accounts", required: true, what: ["retirement saving", "retirement savings"], page: "retirement/contributions", fix: null, say: ["goes into an account that no longer exists", "go into an account that no longer exists"] },
-  { key: "pensions.person", get: (p) => p.retirement?.pensions, field: "personId", to: "people", what: ["pension", "pensions"], page: "retirement/pensions", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
-  { key: "annuities.person", get: (p) => p.retirement?.annuities, field: "personId", to: "people", what: ["annuity", "annuities"], page: "retirement/annuities", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
-  { key: "equity.person", get: (p) => (p.equity && typeof p.equity === "object" ? [p.equity] : []), field: "personId", to: "people", what: ["employer's shares setting", "employer's shares settings"], page: "investments/employer-stock", fix: "clear", say: ["belongs to someone no longer on the People page", "belong to someone no longer on the People page"], fixLabel: ["Let the app pick whoever has a salary", "Let the app pick whoever has a salary"] },
+  { key: "accounts.owner", get: (p) => p.accounts, field: "ownerId", to: "people", when: (x) => looksLikeId(x.ownerId), what: ["account", "accounts"], page: "balance/net-worth", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
+  { key: "contributions.person", get: (p) => p.retirement?.contributions, field: "personId", to: "people", what: ["retirement saving", "retirement savings"], one: "a saving", page: "retirement/contributions", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
+  { key: "contributions.account", get: (p) => p.retirement?.contributions, field: "accountId", to: "accounts", required: true, what: ["retirement saving", "retirement savings"], one: "a saving", page: "retirement/contributions", fix: null, say: ["goes into an account that no longer exists", "go into an account that no longer exists"] },
+  { key: "pensions.person", get: (p) => p.retirement?.pensions, field: "personId", to: "people", what: ["pension", "pensions"], page: "retirement/pensions", fix: null, say: counted("belongs to someone no longer on the People page", "belong to someone no longer on the People page") },
+  { key: "annuities.person", get: (p) => p.retirement?.annuities, field: "personId", to: "people", what: ["annuity", "annuities"], page: "retirement/annuities", fix: null, say: counted("belongs to someone no longer on the People page", "belong to someone no longer on the People page") },
+  { key: "equity.person", get: (p) => (p.equity && typeof p.equity === "object" ? [p.equity] : []), single: true, field: "personId", to: "people", what: ["employer's shares setting", "employer's shares settings"], page: "investments/employer-stock", fix: "clear", say: ["belongs to someone no longer on the People page", "belong to someone no longer on the People page"], fixLabel: ["Let the app pick whoever has a salary", "Let the app pick whoever has a salary"] },
   { key: "goals.fundedBy", get: (p) => p.goals, field: "fundedBy", many: true, to: "accounts", what: ["goal", "goals"], page: "goals/goals", fix: "drop", say: ["counts an account that no longer exists", "count an account that no longer exists"], fixLabel: ["Take the missing account off", "Take the missing accounts off"] },
-  { key: "debts.account", get: (p) => p.debts, field: "accountId", to: "accounts", required: true, what: ["loan detail", "loan details"], page: "balance/liabilities", fix: "remove", say: ["is left from an account that no longer exists (no page shows it)", "are left from accounts that no longer exist (no page shows them)"], fixLabel: ["Remove the leftover loan detail", "Remove the leftover loan details"] },
-  { key: "debtPlan.mortgage", get: (p) => (p.debtPlan && typeof p.debtPlan === "object" ? [p.debtPlan] : []), field: "mortgageAccountId", to: "accounts", what: ["mortgage choice on the Debts page", "mortgage choices on the Debts page"], page: "debt/mortgage", fix: "clear", say: ["points at an account that no longer exists", "point at an account that no longer exists"], fixLabel: ["Forget the missing mortgage", "Forget the missing mortgages"] },
-  { key: "debtPlan.order", get: (p) => (p.debtPlan && typeof p.debtPlan === "object" ? [p.debtPlan] : []), field: "customOrder", many: true, to: "accounts", what: ["payoff order", "payoff orders"], page: "debt/payoff", fix: "drop", say: ["lists an account that no longer exists", "list an account that no longer exists"], fixLabel: ["Take the missing account off", "Take the missing accounts off"] },
+  { key: "debts.account", get: (p) => p.debts, field: "accountId", to: "accounts", required: true, what: ["loan detail", "loan details"], one: "a loan", page: null, fix: "remove", say: ["is left from an account that no longer exists; no page shows it", "are left from accounts that no longer exist; no page shows them"], fixLabel: ["Remove the leftover loan detail", "Remove the leftover loan details"] },
+  { key: "debtPlan.mortgage", get: (p) => (p.debtPlan && typeof p.debtPlan === "object" ? [p.debtPlan] : []), single: true, field: "mortgageAccountId", to: "accounts", what: ["mortgage choice on the Debts page", "mortgage choices on the Debts page"], page: "debt/mortgage", fix: "clear", say: ["points at an account that no longer exists", "point at an account that no longer exists"], fixLabel: ["Forget the missing mortgage", "Forget the missing mortgages"] },
+  { key: "debtPlan.order", get: (p) => (p.debtPlan && typeof p.debtPlan === "object" ? [p.debtPlan] : []), single: true, field: "customOrder", many: true, to: "accounts", what: ["payoff order", "payoff orders"], page: "debt/payoff", fix: "drop", say: ["lists an account that no longer exists", "list an account that no longer exists"], fixLabel: ["Take the missing account off", "Take the missing accounts off"] },
   { key: "transactions.account", get: (p) => p.transactions, field: "accountId", to: "accounts", what: ["transaction", "transactions"], page: "transactions/ledger", fix: null, say: ["is in an account that no longer exists", "are in an account that no longer exists"] },
-  { key: "holdings.account", get: (p) => p.holdings, field: "accountId", to: "accounts", required: true, what: ["investment", "investments"], page: "investments/holdings", fix: "remove", say: ["is left from an account that no longer exists (no page can change it)", "are left from accounts that no longer exist (no page can change them)"], fixLabel: ["Remove the leftover investment", "Remove the leftover investments"] },
+  { key: "holdings.account", get: (p) => p.holdings, field: "accountId", to: "accounts", required: true, what: ["investment", "investments"], page: null, fix: "remove", say: ["is left from an account that no longer exists; no page can change it", "are left from accounts that no longer exist; no page can change them"], fixLabel: ["Remove the leftover investment", "Remove the leftover investments"] },
   { key: "rules.account", get: (p) => p.rules, field: "accountId", to: "accounts", what: ["sorting rule", "sorting rules"], page: "transactions/rules", fix: "clear", say: ["is for an account that no longer exists", "are for an account that no longer exists"], fixLabel: ["Make it work for every account", "Make them work for every account"] },
   { key: "insurance.person", get: (p) => p.insurance?.policies, field: "personId", to: "people", what: ["insurance policy", "insurance policies"], page: "insurance/policies", fix: "clear", say: ["covers someone no longer on the People page", "cover someone no longer on the People page"], fixLabel: HOUSEHOLD },
   { key: "insurance.account", get: (p) => p.insurance?.policies, field: "accountId", to: "accounts", what: ["insurance policy", "insurance policies"], page: "insurance/policies", fix: "clear", say: ["insures something no longer on Net worth", "insure something no longer on Net worth"], fixLabel: ["Unlink the missing home or car", "Unlink the missing homes or cars"] },
-  { key: "estate.person", get: (p) => p.estate?.documents, field: "personId", to: "people", what: ["estate paper (a will, a power of attorney)", "estate papers"], page: "estate/documents", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
-  { key: "beneficiaries.account", get: (p) => p.estate?.beneficiaries, field: "accountId", to: "accounts", what: ["beneficiary list", "beneficiary lists"], page: "estate/beneficiaries", fix: "remove", say: ["is left from an account that no longer exists (no page shows it)", "are left from accounts that no longer exist (no page shows them)"], fixLabel: ["Remove the leftover list", "Remove the leftover lists"] },
-  { key: "beneficiaries.policy", get: (p) => p.estate?.beneficiaries, field: "policyId", to: "policies", what: ["beneficiary list", "beneficiary lists"], page: "estate/beneficiaries", fix: "remove", say: ["is left from a policy that no longer exists (no page shows it)", "are left from policies that no longer exist (no page shows them)"], fixLabel: ["Remove the leftover list", "Remove the leftover lists"] },
+  // a paper for one adult who is gone is listed nowhere (the page lists each adult's papers); a household paper (the guardian, a trust, the letter) comes back once blank
+  { key: "estate.person", get: (p) => p.estate?.documents, field: "personId", to: "people", when: (x) => estateKind(x.kind)?.per !== "household", what: ["estate paper", "estate papers"], page: null, fix: "remove", say: ["belongs to someone no longer on the People page; no page shows it", "belong to someone no longer on the People page; no page shows them"], fixLabel: ["Remove the leftover paper", "Remove the leftover papers"] },
+  { key: "estate.household", get: (p) => p.estate?.documents, field: "personId", to: "people", when: (x) => estateKind(x.kind)?.per === "household", what: ["household estate paper", "household estate papers"], page: "estate/documents", fix: "clear", say: GONE_PERSON, fixLabel: HOUSEHOLD },
+  { key: "beneficiaries.account", get: (p) => p.estate?.beneficiaries, field: "accountId", to: "accounts", what: ["beneficiary list", "beneficiary lists"], page: null, fix: "remove", say: ["is left from an account that no longer exists; no page shows it", "are left from accounts that no longer exist; no page shows them"], fixLabel: ["Remove the leftover list", "Remove the leftover lists"] },
+  { key: "beneficiaries.policy", get: (p) => p.estate?.beneficiaries, field: "policyId", to: "policies", what: ["beneficiary list", "beneficiary lists"], page: null, fix: "remove", say: ["is left from a policy that no longer exists; no page shows it", "are left from policies that no longer exist; no page shows them"], fixLabel: ["Remove the leftover list", "Remove the leftover lists"] },
   { key: "events.goal", get: (p) => p.events, field: "goalId", to: "goals", what: ["trip or event", "trips and events"], page: "goals/travel", fix: "clear", say: ["saves toward a goal that no longer exists", "save toward a goal that no longer exists"], fixLabel: ["Unlink the missing goal", "Unlink the missing goals"] },
   { key: "property.account", get: (p) => p.property, field: "accountId", to: "accounts", what: ["property", "properties"], page: (x) => PROPERTY_PAGE[x?.kind] ?? "property/home", fix: "clear", say: ["points at an account that no longer exists", "point at an account that no longer exists"], fixLabel: ["Unlink the missing account", "Unlink the missing accounts"] },
   { key: "property.loan", get: (p) => p.property, field: "loanAccountId", to: "accounts", what: ["property", "properties"], page: (x) => PROPERTY_PAGE[x?.kind] ?? "property/home", fix: "clear", say: ["points at a loan that no longer exists", "point at loans that no longer exist"], fixLabel: ["Unlink the missing loan", "Unlink the missing loans"] },
 ];
+
+/** The item a link applies to: an object, and `when` true for it. */
+const applies = (L, x) => !!x && typeof x === "object" && (!L.when || L.when(x));
+/** A link that points at nothing (or, when it must be set, is blank). */
+const brokenLink = (L, x, targets) => {
+  if (L.many) return list(x[L.field]).some((id) => given(id) && !targets.has(id));
+  const v = x[L.field];
+  return given(v) ? !targets.has(v) : !!L.required;
+};
 
 /** The lists whose items each need their own id (the app finds, changes and removes items by it). */
 export const ID_LISTS = [
@@ -83,21 +102,22 @@ const PERIOD_LISTS = [
 
 /** Rates kept as fractions (6% is 0.06): above 1 means 100%, almost surely typed as a whole number. */
 const RATE_FIELDS = [
-  { key: "debts.rate", get: (p) => p.debts, field: "rate", what: ["loan", "loans"], label: "an interest rate", page: "balance/liabilities" },
+  { key: "debts.rate", get: (p) => p.debts, field: "rate", what: ["loan", "loans"], one: "a loan", label: "an interest rate", page: "balance/liabilities" },
   { key: "goals.rate", get: (p) => p.goals, field: "rate", what: ["goal", "goals"], label: "a growth rate", page: "goals/goals" },
 ];
 /** The assumptions kept as fractions, with their plain names. */
 export const ASSUMPTION_RATES = { inflation: "inflation", returnStocks: "stock returns", returnBonds: "bond returns", returnCash: "cash returns", salaryGrowth: "pay growth" };
-/** Estate papers have no name of their own, only a kind. */
-const ESTATE_KINDS = { will: "Will", guardian: "Guardian for the children", poaFinance: "Power of attorney for money", poaHealth: "Power of attorney for health care", livingWill: "Living will", hipaa: "Medical privacy release", trust: "Trust", letter: "Letter of instruction" };
 
 const ids = (plan, to) => new Set((to === "people" ? list(plan.household?.people) : to === "accounts" ? list(plan.accounts) : to === "policies" ? list(plan.insurance?.policies) : list(plan.goals)).map((x) => x?.id));
 const pctText = (v) => `${Number((Number(v) * 100).toFixed(1))}%`;
+/** A rate over 100% shown so it never reads as 100%: rounded up to one decimal. */
+const pctOver = (v) => `${Math.ceil(Number(v) * 1000 - 1e-9) / 10}%`;
 const isPeriod = (v) => typeof v === "string" && Object.hasOwn(PERIODS, v);
 
 /**
  * compute(plan, { today }) -> {
- *   issues: [{ key, level: "bad"|"warn", page, text, count, fix: null|{ label }, names (plain words, never an id) }],
+ *   issues: [{ key, level: "bad"|"warn", page (null: no page shows it), text, count, changes (what the fix changes, when it
+ *     differs from count), fix: null|{ label }, names (plain words, never an id) }],
  *   counts: { people, accounts, transactions, income, expenses, goals, debts, holdings },
  *   size: { chars, share (of STORAGE_LIMIT), warn },
  *   schema: { plan, app, newer }
@@ -110,40 +130,43 @@ export function compute(plan, params = {}) {
   const accountNames = new Map(list(plan.accounts).filter((a) => a && given(a.id) && a.name).map((a) => [a.id, a.name]));
   let money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
   try { const f = new Intl.NumberFormat("en-US", { style: "currency", currency: plan.meta?.currency || "USD", maximumFractionDigits: 0 }); money = (n) => f.format(n); } catch { /* an unknown currency code: dollars */ }
-  const nameOf = (x) => {
-    if (!x || typeof x !== "object") return "one without a name";
-    const own = x.name || x.payee || x.symbol || (x.contains ? `the rule for "${x.contains}"` : "") || ESTATE_KINDS[x.kind] || accountNames.get(x.accountId) || accountNames.get(x.loanAccountId);
+  const nameOf = (x, one = "one") => {
+    if (!x || typeof x !== "object") return "";
+    const people = list(x.primary).map((b) => b?.name).filter(Boolean);
+    const own = x.name || x.payee || x.symbol || (x.contains ? `the rule for "${x.contains}"` : "") || estateKind(x.kind)?.label || accountNames.get(x.accountId) || accountNames.get(x.loanAccountId) || (people.length ? `the list naming ${people.join(" and ")}` : "");
     if (own) return String(own);
-    if (isNum(x.amount)) return `one of ${money(Number(x.amount))}${isPeriod(x.period) && x.period !== "once" ? ` ${PERIODS[x.period].label.toLowerCase()}` : ""}`;
-    if (isNum(x.rate)) return `one at ${pctText(x.rate)}`;
-    if (isNum(x.shares)) return `one of ${Number(x.shares)} shares`;
-    if (isDate(x.date)) return `one on ${x.date}`;
-    return "one without a name";
+    if (isNum(x.amount)) return `${one} of ${money(Number(x.amount))}${isPeriod(x.period) && x.period !== "once" ? ` ${PERIODS[x.period].label.toLowerCase()}` : ""}`;
+    if (isNum(x.rate)) return `${one} at ${pctText(x.rate)}`;
+    if (isNum(x.shares)) return `${one} of ${Number(x.shares)} shares`;
+    if (isDate(x.date)) return `${one} on ${x.date}`;
+    return "";
   };
-  const some = (xs, n = 3) => xs.slice(0, n).map(nameOf).join(", ") + (xs.length > n ? ` and ${xs.length - n} more` : "");
+  // up to three names, "; " between them (names can hold commas); items without one are counted, not named
+  const some = (xs, one, n = 3) => {
+    const named = xs.map((x) => nameOf(x, one)).filter(Boolean);
+    if (!named.length) return "";
+    const rest = xs.length - Math.min(n, named.length);
+    return named.slice(0, n).join("; ") + (rest > 0 ? ` and ${rest} more` : "");
+  };
+  const selfName = list(plan.household?.people).find((x) => x?.role === "self")?.name || list(plan.household?.people).find((x) => x?.role !== "dependent")?.name || "you";
   const issues = [];
   const add = (x) => issues.push({ fix: null, names: "", ...x });
 
   // links that point at nothing
   for (const L of LINKS) {
     const targets = ids(plan, L.to);
-    const broken = list(L.get(plan)).filter((x) => {
-      if (!x || typeof x !== "object") return false;
-      if (L.many) return list(x[L.field]).some((id) => given(id) && !targets.has(id));
-      const v = x[L.field];
-      if (!given(v)) return !!L.required;
-      return !targets.has(v);
-    });
+    const broken = list(L.get(plan)).filter((x) => applies(L, x) && brokenLink(L, x, targets));
     if (!broken.length) continue;
     const page = typeof L.page === "function" ? L.page(broken[0]) : L.page;
-    add({ key: `link:${L.key}`, level: L.required ? "bad" : "warn", page, count: broken.length, names: some(broken),
-      text: `${plural(broken.length, ...L.what)} ${L.say[broken.length === 1 ? 0 : 1]}`,
+    const say = typeof L.say === "function" ? L.say(selfName) : L.say;
+    add({ key: `link:${L.key}`, level: L.required ? "bad" : "warn", page, count: broken.length, names: L.single ? "" : some(broken, L.one),
+      text: `${plural(broken.length, ...L.what)} ${say[broken.length === 1 ? 0 : 1]}`,
       fix: L.fix ? { label: L.fixLabel[broken.length === 1 ? 0 : 1] } : null });
   }
   // Social Security details (claiming age, earnings record) kept for someone no longer on the People page: no page shows them
   const people0 = ids(plan, "people");
   const ssGone = Object.keys(plan.retirement?.socialSecurity ?? {}).filter((k) => !people0.has(k));
-  if (ssGone.length) add({ key: "link:socialSecurity.person", level: "warn", page: "retirement/social-security", count: ssGone.length,
+  if (ssGone.length) add({ key: "link:socialSecurity.person", level: "warn", page: null, count: ssGone.length,
     text: `Social Security details (claiming age, earnings record) are kept for ${ssGone.length === 1 ? "someone" : `${ssGone.length} people`} no longer on the People page; no page shows them`,
     fix: { label: "Remove the leftover details" } });
 
@@ -155,11 +178,12 @@ export function compute(plan, params = {}) {
     const shared = items.filter((x) => given(x.id) && times.get(x.id) > 1), none = items.filter((x) => !given(x.id));
     const n = shared.length + none.length;
     if (!n) continue;
-    const verb = n === 1 ? "has" : "have";
-    add({ key: `ids:${D.key}`, level: "bad", page: D.page, count: n, names: some([...shared, ...none]),
-      text: shared.length && none.length ? `${n} of your ${D.what} have the same hidden label as another, or none, so changing or removing one can change the wrong one`
-        : shared.length ? `${n} of your ${D.what} have the same hidden label, so changing or removing one can change the other`
-        : `${n} of your ${D.what} ${verb} no hidden label, so the app cannot safely change or remove ${n === 1 ? "it" : "them"}`,
+    // the fix keeps the first of each shared label: it changes the others and those with none
+    const changes = shared.length - new Set(shared.map((x) => x.id)).size + none.length;
+    add({ key: `ids:${D.key}`, level: "bad", page: D.page, count: n, changes, names: some([...shared, ...none]),
+      text: shared.length && none.length ? `${n} of your ${D.what} share a hidden label with another, or have none, so changing or removing one can change another`
+        : shared.length ? `${n} of your ${D.what} share a hidden label with another, so changing or removing one can change another`
+        : `${n} of your ${D.what} ${n === 1 ? "has" : "have"} no hidden label, so the app cannot safely change or remove ${n === 1 ? "it" : "them"}`,
       fix: { label: shared.length ? "Tell them apart" : n === 1 ? "Give it a label" : "Give them labels" } });
   }
 
@@ -213,14 +237,14 @@ export function compute(plan, params = {}) {
   // rates typed as whole numbers (6 for 6% is 600%)
   for (const R of RATE_FIELDS) {
     const high = list(R.get(plan)).filter((x) => x && isNum(x[R.field]) && Number(x[R.field]) > 1);
-    if (high.length) add({ key: `rate:${R.key}`, level: "bad", page: R.page, count: high.length, names: some(high),
-      text: `${plural(high.length, ...R.what)} ${high.length === 1 ? "has" : "have"} ${R.label} over 100% (for example ${pctText(high[0][R.field])}): probably ${Number(high[0][R.field])}% was meant`,
+    if (high.length) add({ key: `rate:${R.key}`, level: "bad", page: R.page, count: high.length, names: some(high, R.one),
+      text: `${plural(high.length, ...R.what)} ${high.length === 1 ? "has" : "have"} ${R.label} over 100% (for example ${pctOver(high[0][R.field])}): probably ${Number(high[0][R.field])}% was meant`,
       fix: { label: high.length === 1 ? "Read it as a percentage" : "Read them as percentages" } });
   }
   const a = plan.assumptions ?? {};
   const highA = Object.keys(ASSUMPTION_RATES).filter((k) => isNum(a[k]) && Number(a[k]) > 1);
   if (highA.length) add({ key: "rate:assumptions", level: "bad", page: "system/assumptions", count: highA.length, names: highA.map((k) => ASSUMPTION_RATES[k]).join(", "),
-    text: `${plural(highA.length, "assumption")} ${highA.length === 1 ? "is" : "are"} over 100% a year (for example ${ASSUMPTION_RATES[highA[0]]} at ${pctText(a[highA[0]])}): probably ${Number(a[highA[0]])}% was meant`,
+    text: `${plural(highA.length, "assumption")} ${highA.length === 1 ? "is" : "are"} over 100% a year (for example ${ASSUMPTION_RATES[highA[0]]} at ${pctOver(a[highA[0]])}): probably ${Number(a[highA[0]])}% was meant`,
     fix: { label: highA.length === 1 ? "Read it as a percentage" : "Read them as percentages" } });
 
   // the people: one "you"
@@ -263,15 +287,12 @@ export function applyFix(draft, key) {
     if (L.fix === "remove") {
       if (!Array.isArray(arr)) return 0;
       for (let i = arr.length - 1; i >= 0; i--) {
-        const x = arr[i];
-        if (!x || typeof x !== "object") continue;
-        const v = x[L.field];
-        if ((!given(v) && L.required) || (given(v) && !targets.has(v))) { arr.splice(i, 1); changed++; }
+        if (applies(L, arr[i]) && brokenLink(L, arr[i], targets)) { arr.splice(i, 1); changed++; }
       }
       return changed;
     }
     for (const x of list(arr)) {
-      if (!x || typeof x !== "object") continue;
+      if (!applies(L, x)) continue;
       if (L.many) {
         const kept = list(x[L.field]).filter((id) => !given(id) || targets.has(id));
         if (kept.length !== list(x[L.field]).length) { x[L.field] = kept; changed++; }
