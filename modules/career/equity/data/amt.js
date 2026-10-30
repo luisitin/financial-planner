@@ -1,6 +1,6 @@
 // modules/career/equity/data/amt.js -- the alternative minimum tax figures by year (IRC 55). Exemption, the income
 // where the exemption starts to shrink and how fast (25 cents a dollar to 2025, 50 cents from 2026: P.L. 119-21 section
-// 70107), and where the 28% rate starts (26% below). Sources: IRS Rev. Proc. 2024-40 section 3.11 (2025) and Rev. Proc.
+// 70107), and where the 28% rate starts (26% below). Sources: IRS Rev. Proc. 2024-40 section 2.11 (2025) and Rev. Proc.
 // 2025-32 section 4.10 (2026), both checked 2026-10-30. Add each year from the autumn revenue procedure.
 export const AMT = {
   2025: {

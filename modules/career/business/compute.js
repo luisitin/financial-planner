@@ -52,8 +52,11 @@ export function planRooms({ profit, seHalf, age = null, deferralLeft, year }) {
   const left = deferralLeft ?? L401.limit;
   const earned = Math.max(0, profit - seHalf);
   const sep = Math.min(total415, 0.2 * earned);
-  const soloEmployer = 0.2 * earned;
-  const soloBase = Math.min(total415, soloEmployer + Math.min(left, Math.max(0, earned - soloEmployer)));
+  // solo 401(k): the employer's 20% plus the deferral, together never above the dollar cap or 100% of pay, which for
+  // the self-employed is earnings less the employer contribution: d + E <= earned - E (Publication 560's Deduction
+  // Worksheet steps 9-15; IRC 415(c)(1), (c)(3)(B), 401(c)(2))
+  const soloEmployer = 0.2 * earned, soloDeferral = Math.min(left, earned);
+  const soloBase = Math.min(total415, soloEmployer + soloDeferral, (earned + soloDeferral) / 2);
   const solo = soloBase + Math.min(catchFor(age, L401), Math.max(0, earned - soloBase));
   const Y = forYear(SIMPLE, year), S = Y.small;
   const simpleComp = SE.base * Math.max(0, profit);
@@ -81,7 +84,7 @@ export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOr
   const M = qbiMinimum ?? { amount: 0, from: Infinity };
   const r = federalTax({
     ...inputs, otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + Math.max(0, P)), adjustments: adj,
-    selfEmployment: Math.max(0, otherSE + P - se.half),
+    selfEmployment: otherSE + P - se.half,   // a loss lowers the earned income for the refundable child tax credit
     qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
   }, params);
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
@@ -94,7 +97,8 @@ export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOr
  * for Social Security and Medicare, and taken off again as self-employed health insurance up to the salary, the
  * owner's Medicare wages from it: Notice 2008-1, IRC 162(l)(2)(A)); the owner
  * pays the employee's share and income tax on the salary plus what is left (passed through, no self-employment tax),
- * with the 20% deduction on what is left; a loss passed through comes off other income.
+ * with the 20% deduction on what is left less that health insurance deduction; a loss passed through comes off other
+ * income.
  */
 export function scorpTax(profit, salary, costs, { inputs, params, otherOrdinary = inputs.otherOrdinary, otherSE = 0, wages = 0, medicareWages = 0, wageBase, health = 0, retirement = 0, qbiMinimum = null }) {
   const W = Math.max(0, Math.min(salary, profit));
@@ -103,10 +107,12 @@ export function scorpTax(profit, salary, costs, { inputs, params, otherOrdinary 
   const premiums = pos(health), healthOff = Math.min(premiums, W);
   const passed = profit - W - employer - costs - premiums;
   const adj = (Number(inputs.adjustments) || 0) + healthOff + retirement + Math.max(0, -passed);
-  const qbiBase = Math.max(0, passed);
+  // the 20% deduction on what is passed through less the owner's health insurance deduction, which is the business's
+  // too (Treas. Reg. 1.199A-3(b)(1)(vi); IRS section 199A FAQ 39: QBI can be reduced at the corporation and again here)
+  const qbiBase = Math.max(0, passed - healthOff);
   const M = qbiMinimum ?? { amount: 0, from: Infinity };
   const r = federalTax({
-    ...inputs, wages: (Number(inputs.wages) || 0) + W + premiums, otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + qbiBase), adjustments: adj,
+    ...inputs, wages: (Number(inputs.wages) || 0) + W + premiums, otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + Math.max(0, passed)), adjustments: adj,
     selfEmployment: otherSE, qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
   }, params);
   // the owner's share: Social Security only to the wage base after other wages (the excess comes back on the return), Medicare, the 0.9%

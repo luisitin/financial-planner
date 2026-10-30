@@ -40,8 +40,9 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   profit above the filing status's line. The state's rate on profit less half the self-employment tax and the health
   insurance. Keep a month = (profit − the half of meals not counted − all the tax) ÷ 12; what the owner takes out is
   compared with it.
-- **A loss** as a sole proprietor comes off the household's other income (no self-employment tax, no 20% deduction):
-  the tax figures turn negative, what the loss saves. Loss limits (basis, at-risk, excess business loss) and carrying a
+- **A loss** as a sole proprietor comes off the household's other income (no self-employment tax, no 20% deduction)
+  and off the earned income the refundable child tax credit is figured on (Schedule 8812's Earned Income Worksheet,
+  IRC 32(c)(2)(A)): the tax figures turn negative, what the loss saves. Loss limits (basis, at-risk, excess business loss) and carrying a
   loss to another year are not modelled.
 - **As an S corporation** (`scorpTax`): the owner's salary (typed; else 60% of profit, an example, said so) at most the
   profit; the corporation pays the employer's 7.65% on it (6.2% to the wage base + 1.45%), the running costs (typed;
@@ -49,14 +50,18 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   Security and Medicare, then taken off as self-employed health insurance up to the salary, the owner's Medicare wages
   from the corporation: Notice 2008-1, IRC 162(l)(2)(A)); the owner pays the employee's
   share (Social Security to the base after other wages, Medicare, the 0.9%). What is left passes through without
-  self-employment tax, with the 20% deduction on it; a loss passed through comes off other income. State tax = the
+  self-employment tax, with the 20% deduction on it less the owner's health insurance deduction, which the IRS counts
+  against the business's income again (Treas. Reg. 1.199A-3(b)(1)(vi); IRS section 199A FAQ 39: "QBI being reduced at
+  both the entity and the shareholder level"); a loss passed through comes off other income. State tax = the
   state's rate × (salary + the premiums − the health insurance taken off + what passes through). Saving = the sole proprietor's taxes − (the S corporation's taxes + its
   running costs). The IRS requires reasonable pay for the owner's work before the rest is taken ("S corporation
   compensation and medical insurance issues", irs.gov).
 - **Retirement plans** (IRS Publication 560): earnings = profit − half the self-employment tax. SEP-IRA = 20% of
   earnings, at most the 415(c) limit ($72,000 in 2026, $70,000 in 2025; Notice 2025-67). Solo 401(k) = 20% of earnings
-  (the business's part) + the employee's deferral (the 402(g) room left after any 401(k) at a job, at most the earnings
-  left after the business's part, IRC 415(c)(3)), together at most the 415(c) limit, + the catch-up on top of that
+  (the business's part) + the employee's deferral (the 402(g) room left after any 401(k) at a job, at most the
+  earnings), together at most the 415(c) limit and at most 100% of pay, which for the self-employed is earnings less the
+  business's part: deferral + business part ≤ (earnings + deferral) ÷ 2 (Publication 560's Deduction Worksheet steps
+  9-15; IRC 415(c)(1), (c)(3)(B), 401(c)(2)), + the catch-up on top of that
   limit (from age 50: $8,000; 60 to 63: $11,250 in 2026), also out of the earnings left. A new one can be set up for a
   year until the tax-filing deadline; the owner's own part in its first year by the April deadline (IRC 401(b)(2),
   SECURE 2.0 section 317). SIMPLE IRA: pay = 92.35% of profit before any
@@ -85,13 +90,19 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   against the solo 401(k)'s.
 
 ## Tests
-`module.test.mjs` (19): the home office; the year's mileage rate; the profit and loss and a negative amount; meals at
+`module.test.mjs` (20): the home office; the year's mileage rate; the profit and loss and a negative amount; meals at
 half; the sole proprietor's tax by hand; the state's rate (Pennsylvania) for both forms, with health insurance; the tax
 year from the Federal tax page (2025 figures); the wage base and the 0.9%; self-employed health insurance and its limit;
 the 20% deduction's limit and its $400 minimum; the refundable child tax credit; a loss; an S corporation by hand and
 its examples; a loss passed through and a bigger profit; the retirement plans and the October 1 deadline; plans never
-above the earnings, the SIMPLE match never above the deferral, a tie for most room; catch-ups at 55 and 62; a 401(k) at
+above the earnings, the solo 401(k) within 100% of pay (Publication 560's worksheet), the SIMPLE match never above the deferral, a tie for most room; catch-ups at 55 and 62; a 401(k) at
 a job; not ready with expenses kept, the Income page's amount, the Self-employment page's expenses.
+
+## Answer key
+`tests/golden-business.test.mjs` checks `soleTax`, `scorpTax` and `planRooms` against 4,000 rows worked independently
+from the IRS forms and Publication 560 for 2025 and 2026 (`tools/golden_business`, `tests/golden/business/RULES.md`).
+It found three errors, fixed above: the S corporation's 20% deduction did not take off the owner's health insurance
+deduction; a loss did not lower the child tax credit's earned income; the solo 401(k) passed 100% of pay.
 
 ## Ideas / not yet
 - Expenses read from the ledger (transactions in a business category); a quarter-by-quarter profit and loss.

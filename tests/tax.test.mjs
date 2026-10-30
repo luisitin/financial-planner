@@ -79,6 +79,15 @@ test("child tax credit: two children take 4,400 off a 6,543 bill; phased out $50
   near(low.incomeTax, 425); assert.equal(low.credits.childTaxCredit, 425); near(low.credits.refundable, 1700); near(low.totalTax, -1700);
 });
 
+test("the refundable child tax credit: a business loss lowers the earned income it is figured on (Schedule 8812)", () => {
+  const job = federalTax({ filingStatus: "single", wages: 12000, dependentsUnder17: 1 }, P);
+  near(job.credits.refundable, 0.15 * (12000 - 2500));
+  const loss = federalTax({ filingStatus: "single", wages: 12000, adjustments: 2000, selfEmployment: -2000, dependentsUnder17: 1 }, P);
+  near(loss.credits.refundable, 0.15 * (10000 - 2500));
+  const big = federalTax({ filingStatus: "single", wages: 12000, adjustments: 12000, selfEmployment: -15000, dependentsUnder17: 1 }, P);
+  assert.equal(big.credits.refundable, 0, "earned income never below zero");
+});
+
 test("net investment income tax and the additional Medicare tax", () => {
   const r = federalTax({ filingStatus: "single", wages: 250000, qualifiedIncome: 50000 }, P);
   near(r.niit, 0.038 * 50000); near(r.additionalMedicare, 0.009 * 50000);

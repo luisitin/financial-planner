@@ -188,7 +188,8 @@ export function federalTax(inputs, params) {
     const th = params.childTaxCreditPhaseOut?.[status] ?? 200000;
     const reduced = Math.max(0, full - Math.ceil(Math.max(0, agi - th) / 1000) * 50);
     childTaxCredit = Math.min(reduced, incomeTax);
-    const earned = wages + pos(inputs.selfEmployment);
+    // earned income (IRC 32(c)(2)(A), Schedule 8812's Earned Income Worksheet): wages + self-employment earnings, a loss included
+    const earned = Math.max(0, wages + (Number(inputs.selfEmployment) || 0));
     refundable = Math.min(reduced - childTaxCredit, kids * (params.additionalChildTaxCredit ?? 1700), 0.15 * Math.max(0, earned - 2500));
   }
   // the extra taxes: net investment income tax and the additional Medicare tax on wages

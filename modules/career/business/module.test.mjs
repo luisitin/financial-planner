@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, homeOffice, soleTax, scorpTax, mileageYear, PAYROLL, DEDUCTIBLE } from "./compute.js";
+import { compute, homeOffice, soleTax, scorpTax, mileageYear, planRooms, PAYROLL, DEDUCTIBLE } from "./compute.js";
 import { HOME_OFFICE, SIMPLE, QBI_LINE, SCORP_COSTS_EXAMPLE } from "./data/business.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { SE } from "../../taxes/self-employment/compute.js";
@@ -61,8 +61,9 @@ test("the state's rate on profit less half the self-employment tax and the healt
   assert.equal(d.stateRate, 0.0307);
   near(d.tax.state, (50000 - seOf(50000) / 2 - 6000) * 0.0307, 0.01);
   const s = compute(withBiz({ revenue: 100000, salary: 50000, scorpCosts: 0, healthPremiums: 6000 }, PA), { today: TODAY }).scorp;
-  // the corporation pays the health insurance, so it comes off what passes through, the 20% deduction and the state's base
-  near(s.passed, 100000 - 50000 - s.employer - 6000); near(s.qbi, 0.2 * s.passed, 0.01); near(s.state, (50000 + s.passed) * 0.0307, 0.01);
+  // the corporation pays the health insurance, so it comes off what passes through and the state's base; the owner's
+  // deduction for it comes off the 20% deduction's base again (IRS section 199A FAQ 39)
+  near(s.passed, 100000 - 50000 - s.employer - 6000); near(s.qbi, 0.2 * (s.passed - 6000), 0.01); near(s.state, (50000 + s.passed) * 0.0307, 0.01);
   // the owner's deduction for it stops at the salary (the Medicare wages from the corporation)
   const low = scorpTax(100000, 3000, 0, { ...ctx(withBiz(BIZ)), health: 6000 });
   assert.equal(low.healthOff, 3000); assert.equal(low.premiums, 6000);
@@ -163,6 +164,18 @@ test("the plans never take more than the business earned; the SIMPLE match never
   // a big profit: SEP and solo both reach 72,000 (no single best); SIMPLE 18,100 matched by 18,100
   const big = compute(withBiz({ revenue: 1234567 }), { today: "2026-09-15" });
   assert.deepEqual(big.plans.map((x) => Math.round(x.room)), [72000, 72000, 36200]); assert.equal(big.best, null);
+});
+
+test("the solo 401(k) stays within 100% of pay, earnings less the business's part (Publication 560 worksheet, steps 9-15)", () => {
+  // 2025, age 33, 38,358 of profit, 2,709.91 half the self-employment tax: earnings 35,648.09
+  const r = planRooms({ profit: 38358, seHalf: 2709.91, age: 33, deferralLeft: 23500, year: 2025 });
+  near(r.earned, 35648.09, 1e-6);
+  // business part 20% = 7,129.62 would leave 28,518.47 of pay for a 23,500 deferral, but pay is earnings less the
+  // business part: d + E <= 35,648.09 - E with d = 23,500 gives E = 6,074.05, 29,574.05 in all (not 30,629.62)
+  near(r.solo, (35648.09 + 23500) / 2, 1e-6); near(r.solo, 29574.045, 1e-6);
+  // the deferral alone is small next to the earnings: the 20% is the limit, as before
+  const room = planRooms({ profit: 80000, seHalf: 5651.88, age: 33, deferralLeft: 5000, year: 2025 });
+  near(room.solo, 0.2 * (80000 - 5651.88) + 5000, 1e-6);
 });
 
 test("catch-ups from 50, and the larger ones from 60 to 63, on top of the solo 401(k) and SIMPLE limits", () => {

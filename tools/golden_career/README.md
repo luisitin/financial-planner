@@ -49,13 +49,13 @@ files. The scripts set `sys.dont_write_bytecode`, so no `__pycache__` lands in t
 
 | | 2025 | 2026 |
 |---|---|---|
-| Ordinary brackets | RP24 s.3.01 (not changed by OBBBA) | RP25 s.4.01 |
+| Ordinary brackets | RP24 s.2.01 (not changed by OBBBA) | RP25 s.4.01 |
 | Standard deduction | 15,750 single and separate / 31,500 joint / 23,625 head of household (OBBBA s.70102, restated in RP25 s.2.08) | 16,100 / 32,200 / 24,150 (RP25 s.4.14) |
-| 0% and 15% tops for qualified dividends | RP24 s.3.03 | RP25 s.4.03 |
-| AMT exemption | 88,100 single and HoH / 137,000 joint / 68,500 separate (RP24 s.3.11) | 90,100 / 140,200 / 70,100 (RP25 s.4.10) |
-| Phase-out start | 626,350 / 1,252,700 / 626,350 (RP24 s.3.11) | 500,000 / 1,000,000 / 500,000 (RP25 s.4.10) |
+| 0% and 15% tops for qualified dividends | RP24 s.2.03 | RP25 s.4.03 |
+| AMT exemption | 88,100 single and HoH / 137,000 joint / 68,500 separate (RP24 s.2.11) | 90,100 / 140,200 / 70,100 (RP25 s.4.10) |
+| Phase-out start | 626,350 / 1,252,700 / 626,350 (RP24 s.2.11) | 500,000 / 1,000,000 / 500,000 (RP25 s.4.10) |
 | Phase-out rate | 25 cents per dollar (IRC55(d)(2)) | 50 cents per dollar (OBBBA s.70107(c), IRC55(d)(4)(A)(ii)(IV); RP25's complete phase-out 1,280,400 = 1,000,000 + 2 x 140,200) |
-| 28% applies above | 239,100 (119,550 separate), minus 4,782 (2,391) (RP24 s.3.11, F6251 line 7) | 244,500 (122,250 separate), minus 4,890 (2,445) (RP25 s.4.10, D6251 line 7) |
+| 28% applies above | 239,100 (119,550 separate), minus 4,782 (2,391) (RP24 s.2.11, F6251 line 7) | 244,500 (122,250 separate), minus 4,890 (2,445) (RP25 s.4.10, D6251 line 7) |
 | Separate-return line 4 addition | over 900,350 add 25% of the excess, at most 68,500 (I6251 "Line 4") | not published yet (see "Open points") |
 
 Note: the task brief cited "Rev. Proc. 2024-40 s.2.11" for the 2025 AMT figures. In the

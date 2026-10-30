@@ -23,11 +23,11 @@ YEARS = (2025, 2026)
 RATES = (D('0.10'), D('0.12'), D('0.22'), D('0.24'), D('0.32'), D('0.35'), D('0.37'))
 
 BRACKET_TOPS = {
-    2025: {  # RP24 s.3.01 Tables 1-4 (OBBBA left the 2025 brackets unchanged)
-        'single':            (11925, 48475, 103350, 197300, 250525, 626350),   # RP24 s.3.01 Table 3
-        'married_joint':     (23850, 96950, 206700, 394600, 501050, 751600),   # RP24 s.3.01 Table 1
-        'married_separate':  (11925, 48475, 103350, 197300, 250525, 375800),   # RP24 s.3.01 Table 4
-        'head_of_household': (17000, 64850, 103350, 197300, 250500, 626350),   # RP24 s.3.01 Table 2
+    2025: {  # RP24 s.2.01 Tables 1-4 (OBBBA left the 2025 brackets unchanged)
+        'single':            (11925, 48475, 103350, 197300, 250525, 626350),   # RP24 s.2.01 Table 3
+        'married_joint':     (23850, 96950, 206700, 394600, 501050, 751600),   # RP24 s.2.01 Table 1
+        'married_separate':  (11925, 48475, 103350, 197300, 250525, 375800),   # RP24 s.2.01 Table 4
+        'head_of_household': (17000, 64850, 103350, 197300, 250500, 626350),   # RP24 s.2.01 Table 2
     },
     2026: {
         'single':            (12400, 50400, 105700, 201775, 256225, 640600),   # RP25 s.4.01 Table 3
@@ -41,10 +41,10 @@ BRACKET_TOPS = {
 # by the second derivation in amt_key.py (a check on the bracket tops above, typed separately).
 BRACKET_BASES = {
     2025: {
-        'single':            ('0', '1192.50', '5578.50', '17651', '40199', '57231', '188769.75'),  # RP24 s.3.01 Table 3
-        'married_joint':     ('0', '2385', '11157', '35302', '80398', '114462', '202154.50'),      # RP24 s.3.01 Table 1
-        'married_separate':  ('0', '1192.50', '5578.50', '17651', '40199', '57231', '101077.25'),  # RP24 s.3.01 Table 4
-        'head_of_household': ('0', '1700', '7442', '15912', '38460', '55484', '187031.50'),        # RP24 s.3.01 Table 2
+        'single':            ('0', '1192.50', '5578.50', '17651', '40199', '57231', '188769.75'),  # RP24 s.2.01 Table 3
+        'married_joint':     ('0', '2385', '11157', '35302', '80398', '114462', '202154.50'),      # RP24 s.2.01 Table 1
+        'married_separate':  ('0', '1192.50', '5578.50', '17651', '40199', '57231', '101077.25'),  # RP24 s.2.01 Table 4
+        'head_of_household': ('0', '1700', '7442', '15912', '38460', '55484', '187031.50'),        # RP24 s.2.01 Table 2
     },
     2026: {
         'single':            ('0', '1240', '5800', '17966', '41024', '58448', '192979.25'),        # RP25 s.4.01 Table 3
@@ -55,7 +55,7 @@ BRACKET_BASES = {
 }
 
 STANDARD_DEDUCTION = {
-    # OBBBA s.70102 (IRC 63(c)(7) as amended), restated in RP25 s.2.08; replaces RP24 s.3.15
+    # OBBBA s.70102 (IRC 63(c)(7) as amended), restated in RP25 s.2.08; replaces RP24 s.2.15
     2025: {'single': 15750, 'married_joint': 31500, 'married_separate': 15750, 'head_of_household': 23625},
     # RP25 s.4.14(1)
     2026: {'single': 16100, 'married_joint': 32200, 'married_separate': 16100, 'head_of_household': 24150},
@@ -63,7 +63,7 @@ STANDARD_DEDUCTION = {
 
 # Long-term gain and qualified dividend rate tops: (0% up to, 15% up to); 20% above.
 GAIN_TOPS = {
-    2025: {  # RP24 s.3.03
+    2025: {  # RP24 s.2.03
         'single': (48350, 533400), 'married_joint': (96700, 600050),
         'married_separate': (48350, 300000), 'head_of_household': (64750, 566700),
     },
@@ -75,11 +75,11 @@ GAIN_TOPS = {
 
 # ---- Alternative minimum tax (IRC 55) -------------------------------------------------------
 AMT_EXEMPTION = {
-    2025: {'single': 88100, 'married_joint': 137000, 'married_separate': 68500, 'head_of_household': 88100},  # RP24 s.3.11; F6251 line 5
+    2025: {'single': 88100, 'married_joint': 137000, 'married_separate': 68500, 'head_of_household': 88100},  # RP24 s.2.11; F6251 line 5
     2026: {'single': 90100, 'married_joint': 140200, 'married_separate': 70100, 'head_of_household': 90100},  # RP25 s.4.10; D6251 line 5
 }
 AMT_PHASEOUT_START = {
-    2025: {'single': 626350, 'married_joint': 1252700, 'married_separate': 626350, 'head_of_household': 626350},  # RP24 s.3.11
+    2025: {'single': 626350, 'married_joint': 1252700, 'married_separate': 626350, 'head_of_household': 626350},  # RP24 s.2.11
     2026: {'single': 500000, 'married_joint': 1000000, 'married_separate': 500000, 'head_of_household': 500000},  # RP25 s.4.10; IRC55(d)(4)(A)(ii)
 }
 AMT_PHASEOUT_RATE = {
@@ -88,12 +88,12 @@ AMT_PHASEOUT_RATE = {
 }
 # Complete phase-out points printed in the Rev. Procs (a check on start + exemption / rate).
 AMT_PHASEOUT_END = {
-    2025: {'single': 978750, 'married_joint': 1800700, 'married_separate': 900350, 'head_of_household': 978750},  # RP24 s.3.11
+    2025: {'single': 978750, 'married_joint': 1800700, 'married_separate': 900350, 'head_of_household': 978750},  # RP24 s.2.11
     2026: {'single': 680200, 'married_joint': 1280400, 'married_separate': 640200, 'head_of_household': 680200},  # RP25 s.4.10
 }
 # The 28% rate applies to the taxable excess above this amount (IRC 55(b)(1)).
 AMT_28_FROM = {
-    2025: {'single': 239100, 'married_joint': 239100, 'married_separate': 119550, 'head_of_household': 239100},  # RP24 s.3.11; F6251 line 7
+    2025: {'single': 239100, 'married_joint': 239100, 'married_separate': 119550, 'head_of_household': 239100},  # RP24 s.2.11; F6251 line 7
     2026: {'single': 244500, 'married_joint': 244500, 'married_separate': 122250, 'head_of_household': 244500},  # RP25 s.4.10; D6251 line 7
 }
 # Amount subtracted after multiplying by 28% (= 2% of the breakpoint), as printed on the form.
