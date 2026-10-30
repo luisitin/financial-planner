@@ -46,7 +46,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `cashflow/expenses` | Expenses | usable | 2 | Your regular spending by category, split into what you must pay and what is nice to have. | - |
 | `cashflow/income-statement` | Income statement | usable | 3 | What came in, what went out and what you kept, month by month, from your real transactions. | Firefly reports |
 | `cashflow/budget` | Budget | usable | 4 | An envelope for each kind of spending: what is spent so far this month, what is left, and whether the pace is right. | Actual loot-core |
-| `cashflow/budget-percent` | Budget (50/30/20) | planned | 4 | Splits your income into needs, wants and savings using the 50/30/20 rule or your own percentages. | - |
+| `cashflow/budget-percent` | Budget (50/30/20) | usable | 4 | Splits what you take home after tax into needs, wants and savings, against the 50/30/20 rule or your own split. | - |
 | `cashflow/recurring` | Bills and regular payments | usable | 4 | The payments that come back every week, month or year, when the next one is due, and which look missed. | Actual schedules |
 | `cashflow/forecast` | Cash-flow forecast | usable | 4 | Where your everyday cash is heading over the next three months, day by day, and whether a shortfall is coming. | Actual |
 | `cashflow/sinking-funds` | Irregular expenses | usable | 4 | Yearly and one-time costs turned into a monthly amount to set aside so the money is there when the bill lands. | - |
