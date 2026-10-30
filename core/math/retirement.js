@@ -40,6 +40,10 @@ export const STRATEGIES = {
  *   rmd: { birthYear, startAge, owners? } | null,     // owners: [{ personIndex, share, startAge }]: each adult's share of the pre-tax bucket, withdrawn at their own age;
  *                                                   // what no owner holds (life-insurance cash value) has none. Without owners the primary owns it all.
  *   contributions[].rmdExempt: true adds to the part with no required withdrawals,
+ *   contributions[].untilYear / skipYears, incomes[].fromYear / untilYear: calendar-year bounds on top of the ages (what-if pages),
+ *   events: [{ year, amount, label }] | undefined   // today's dollars that year: > 0 comes out of savings on top of spending (in the
+ *                                                   // withdrawal order, working years too); < 0 goes into the taxable bucket at the start of the year
+ *   spendingChanges: [{ fromYear, factor }] | undefined   // fixed-real and guardrail spending times the factor from that year on (a survivor, say),
  *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw", withdrawalRate (for percent/guardrails, e.g. 0.04),
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
  *   tax: { mode: "flat" } (rates.taxRate on pre-tax withdrawals, the default) |
@@ -90,6 +94,7 @@ export function project(inputs, options = {}) {
       const p = people[c.personIndex ?? 0]; const age = ages[c.personIndex ?? 0];
       const stopAge = c.untilAge ?? p?.retireAge ?? 65;
       if (age >= stopAge) continue;
+      if ((c.untilYear !== undefined && c.untilYear !== null && year > c.untilYear) || c.skipYears?.includes(year)) continue;
       const amt = c.yearly * Math.pow(1 + r.salaryGrowth, i);
       buckets[c.bucket] = (buckets[c.bucket] ?? 0) + amt; contrib += amt;
       if (c.bucket === "deferred" && !c.rmdExempt) { const k = owners.length === 1 && !Array.isArray(I.rmd.owners) ? 0 : owners.findIndex((o) => o.personIndex === (c.personIndex ?? 0)); if (k >= 0) slices[k] += amt; }
@@ -100,6 +105,7 @@ export function project(inputs, options = {}) {
     for (const inc of I.incomes ?? []) {
       const age = ages[inc.personIndex ?? 0];
       if (age < inc.startAge || (inc.endAge !== undefined && inc.endAge !== null && age > inc.endAge)) continue;
+      if ((inc.fromYear !== undefined && inc.fromYear !== null && year < inc.fromYear) || (inc.untilYear !== undefined && inc.untilYear !== null && year > inc.untilYear)) continue;
       const amt = inc.yearly * (inc.cola === false ? 1 : priceLevel);
       income += amt; incomeLines.push({ name: inc.name, amount: amt });
       if (inc.taxable === false) continue;
@@ -123,8 +129,13 @@ export function project(inputs, options = {}) {
         spending = guardSpend;
       }
     }
+    // what-if hooks: a spending change from a year on (fixed-real and guardrails), one-off money out of or into savings
+    const factor = (I.spendingChanges ?? []).reduce((f, s) => (year >= s.fromYear ? f * s.factor : f), 1);
+    if (factor !== 1 && (strategy === "fixed-real" || strategy === "guardrails")) spending *= factor;
+    let eventOut = 0;
+    for (const e of I.events ?? []) if (e.year === year) { const amt = (Number(e.amount) || 0) * priceLevel; if (amt >= 0) eventOut += amt; else buckets.taxable += -amt; }
     // 4. the gap, required withdrawals, Roth conversions, then withdrawals in order until spending and the year's tax are covered
-    const need = Math.max(0, spending - income);
+    const need = Math.max(0, spending - income) + eventOut;
     const withdrawn = { cash: 0, taxable: 0, deferred: 0, free: 0 };
     let rmd = 0, conversion = 0, taxes = 0, taxInfo = null;
     const taxableStart = buckets.taxable;
@@ -208,7 +219,7 @@ export function project(inputs, options = {}) {
     lastReal = (1 + portfolioReturn) / (1 + infl) - 1;
     rows.push({
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
-      contributions: contrib, income, incomeLines, spending, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
+      contributions: contrib, income, incomeLines, spending, eventOut, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }

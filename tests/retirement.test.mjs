@@ -128,3 +128,26 @@ test("brackets: Roth conversions fill the chosen bracket before RMDs and stop at
   const w = project(k).rows[0];                             // an RMD at 60 (forced for the test): 100,000 / 27.4 factor floor... rmdFactor(60) is Infinity, so no RMD
   assert.equal(w.rmd, 0);
 });
+test("what-if hooks: one-off money out and in, a spending change, calendar bounds on contributions and incomes", () => {
+  // money out in a working year comes from cash first, then taxable; money in lands in taxable
+  const out = base(); out.events = [{ year: 2026, amount: 15000, label: "six months without pay" }, { year: 2027, amount: -40000, label: "inheritance" }];
+  const r = project(out);
+  near(r.rows[0].eventOut, 15000); near(r.rows[0].withdrawn.cash, 10000); near(r.rows[0].withdrawn.taxable, 5000);
+  near(r.rows[1].balances.taxable, 100000 - 5000 + 40000);
+  // spending times 0.75 from 2029
+  const sc = base(); sc.spendingChanges = [{ fromYear: 2029, factor: 0.75 }];
+  const s = project(sc);
+  near(s.rows[2].spending, 50000); near(s.rows[3].spending, 37500); near(s.rows[4].spending, 37500);
+  // contributions: skipped in 2026, stopped after 2026 -> one year of 12,000 in each case
+  const sk = base(); sk.contributions[0].skipYears = [2026];
+  near(project(sk).rows[0].contributions, 0); near(project(sk).rows[1].contributions, 12000);
+  const un = base(); un.contributions[0].untilYear = 2026;
+  near(project(un).rows[0].contributions, 12000); near(project(un).rows[1].contributions, 0);
+  // incomes bounded by calendar years on top of the start age
+  const inc = base(); inc.endYear = 2035; inc.incomes = [{ name: "Survivor", yearly: 30000, personIndex: 0, startAge: 60, cola: true, taxable: true, fromYear: 2029, untilYear: 2030 }];
+  const ri = project(inc);
+  assert.deepEqual(ri.rows.map((x) => x.income), [0, 0, 0, 30000, 30000, 0, 0, 0, 0, 0]);
+  // money out that savings cannot cover fails the plan in that year
+  const big = base(); big.events = [{ year: 2027, amount: 1e6 }];
+  const rb = project(big); assert.equal(rb.success, false); assert.equal(rb.failYear, 2027);
+});
