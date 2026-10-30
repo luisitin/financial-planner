@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Rental analysis (`property/rental`) is usable: each rental from rent to after-tax cash (vacancy, running costs, net operating income, loan payments), cap rate, cash-on-cash, debt-service coverage, break-even occupancy, depreciation over 27.5 years, the $25,000 loss allowance shared across rentals, and what it adds to wealth; add, change and remove rentals.
 - [builder] Employer stock (`investments/employer-stock`) is usable: shares of your employer held anywhere, vested options and grants still to vest, the share of invested wealth against a 10% ceiling, what a halving would take while your pay depends on the same company, the next year's vests and the gap between the 22% withheld and your rate, and how to get under 10% (plan shares first, no tax); grants entered here (`equity.grants`).
 - [builder] Help (`system/help`) is usable: how the app works in plain words, the seven first steps with a tick for each one the plan already has, a search over every page, every page by section with what it is for (and which are coming), and the questions people ask.
 - [builder] Crypto (`investments/crypto`) is usable: coins in crypto accounts and bitcoin or ether funds anywhere, value against cost, the share of net worth (flagged above 5%), what a 75% fall would take, each coin's lots with a quick price update, the tax if sold today, losses to bank (no wash-sale rule on coins), gains to wait on, and adding a coin.
