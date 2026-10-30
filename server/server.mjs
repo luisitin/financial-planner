@@ -195,6 +195,22 @@ async function handleApi(req, res, url) {
       return json(res, 200, out);
     } catch (e) { return json(res, 422, { error: e.message ?? String(e) }); }
   }
+  if (route === "document/text" && req.method === "POST") {
+    // { fileName, mime, dataBase64 } -> { text, pages }: a PDF's own text layer, for ai/reader (the file lives in memory for the request only)
+    let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "invalid JSON" }); }
+    if (typeof body.dataBase64 !== "string" || !body.dataBase64) return json(res, 400, { error: "dataBase64 required" });
+    const buffer = Buffer.from(body.dataBase64, "base64");
+    const maxMb = Number(P("statements.maxMb")) || 25;
+    if (buffer.length > maxMb * 1024 * 1024) return json(res, 413, { error: `The file is bigger than ${maxMb} MB.` });
+    if (!/pdf/i.test(String(body.mime ?? "")) && !/\.pdf$/i.test(String(body.fileName ?? ""))) return json(res, 415, { error: "Only PDFs can be read here. For a photo, copy the text from it, or use the Statements page." });
+    try {
+      const { pdfPages } = await import("./statements.mjs");
+      const { pages, numPages } = await pdfPages(buffer);
+      const text = pages.map((pg) => pg.text).join("\n");
+      if (!text.trim()) return json(res, 422, { error: "This PDF has no text in it (it is a scan). Copy the text from it, or use the Statements page, which can read pictures with the AI." });
+      return json(res, 200, { text, pages: numPages });
+    } catch (e) { return json(res, 422, { error: /pdfjs/i.test(String(e)) ? "The PC cannot read PDFs yet: run npm install in the app's folder." : e.message ?? String(e) }); }
+  }
   if (route === "ai/chat" && req.method === "POST") {
     let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "invalid JSON" }); }
     if (!Array.isArray(body.messages)) return json(res, 400, { error: "messages[] required" });

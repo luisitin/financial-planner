@@ -68,6 +68,11 @@ export const api = {
     if (!r.ok) { let msg = `${r.status}`; try { msg = (await r.json()).error ?? msg; } catch { } throw new Error(msg); }
     return r.json();
   },
+  async readDocumentText(payload) {
+    const r = await fetch(this.base() + "/api/document/text", { method: "POST", headers: this.headers(), body: JSON.stringify(payload) });
+    if (!r.ok) { let msg = `${r.status}`; try { msg = (await r.json()).error ?? msg; } catch { } throw new Error(msg); }
+    return r.json();
+  },
   async aiChat(messages, options = {}) {
     const r = await fetch(this.base() + "/api/ai/chat", { method: "POST", headers: this.headers(), body: JSON.stringify({ messages, ...options }) });
     if (!r.ok) throw new Error(`ai chat ${r.status}: ${await r.text()}`);
