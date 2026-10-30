@@ -143,7 +143,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `taxes/estimated` | Estimated payments | usable | 6 | Quarterly estimated payments: the safe-harbour amount, what is due each quarter and when, and where you stand today. | - |
 | `taxes/self-employment` | Self-employment | usable | 6 | What a business adds in tax, what each extra $100 keeps, the retirement room and the quarterly payments. | IRC 1401, 199A |
 | `taxes/projection` | Tax, year by year | usable | 6 | Federal tax in every year of the retirement plan through the real brackets: the totals, the worst years, and how the flat setting compares. | Owl |
-| `taxes/filing-status` | Filing status compare | planned | 6 | Compares filing jointly, filing separately or as head of household to see which costs you least. | - |
+| `taxes/filing-status` | Filing status compare | usable | 6 | Which way to file: a couple jointly or separately, a single parent as head of household, with this year's federal tax each way. | IRS Pub 501 |
 | `taxes/documents` | Tax documents checklist | planned | 6 | Lists the tax documents you need to collect each year and where each one comes from. | - |
 | `taxes/hsa-fsa` | HSA and FSA | usable | 6 | The health savings account: its limit, the room left, the tax it saves, what it grows into; and the FSA use-it-or-lose-it deadline. | - |
 
