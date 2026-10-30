@@ -62,9 +62,10 @@ test("the family: Ana's job now from the plan, against an offer, by hand", () =>
   const P2 = paramsFor(FEDERAL, 2028, { inflation: 0.03 });
   const w2 = 128000 * g(2) + 12000 - 2400;
   near(big.rows[2].tax, fedOnly(ti.inputs, P2, other + w2) - fedOnly(ti.inputs, P2, other) + w2 * 0.0765, 1e-6);
-  near(big.overYears.commute, 3 * 48 * 14 * 4);
+  const weeks = 52 - DEFAULTS.ptoDays / 5;   // 19 days off: 48.2 weeks
+  near(big.overYears.commute, 3 * weeks * 14 * 4);
   near(big.overYears.net, big.rows.reduce((s, r) => s + r.afterTax, 0) - big.overYears.commute);
-  near(big.perHour, (big.steadyAfterTax - 3 * 48 * 14) / (40 * 48 + 3 * 48 * 70 / 60));
+  near(big.perHour, (big.steadyAfterTax - 3 * weeks * 14) / (40 * weeks + 3 * weeks * 70 / 60));
   assert.equal(d.best, "o1"); assert.equal(d.runnerUp, "current"); assert.equal(big.rank, 1); near(big.vsCurrent, big.overYears.net - now.overYears.net);
 });
 

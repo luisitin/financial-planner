@@ -16,8 +16,12 @@ import { addMonths } from "../../../core/math/dates.js";
 export const MAX_OFFERS = 3;
 /** Employee Social Security (to the wage base) and Medicare on pay (IRC 3101); health premiums paid through a cafeteria plan are free of both (IRC 125, 3121(a)(5)(G)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145, extraMedicare: 0.009 };
-/** Starting values a blank field falls back to; examples, not survey figures (the form says so). Offers take the job now's. */
-export const DEFAULTS = { years: 4, hoursWeek: 40, ptoDays: 20, officeDays: 5 };
+/**
+ * Starting values a blank field falls back to (offers take the job now's). Days off: the private-industry average after a
+ * year of service, 11 paid vacation days (BLS National Compensation Survey, March 2026) and 8 paid holidays (2025);
+ * hours and office days are plain examples, said so on the form.
+ */
+export const DEFAULTS = { years: 4, hoursWeek: 40, ptoDays: 19, officeDays: 5 };
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const pos = (v) => Math.max(0, num(v) ?? 0);

@@ -59,7 +59,10 @@ perHour, overYears: { gross, afterTax, commute, net }, stockYears, stockShare, i
 - **Leaving gives up** = the value of every share still to vest at the employer now (RSUs at the price, options at the
   spread), shown as a note; the comparison already counts only what would vest within the years compared.
 - Blank days off, hours and raise on an offer are the job now's; for the job now (and office days anywhere) they are
-  20 days, 40 hours and 5 days: examples, said so on each form.
+  19 days off (the private-industry average after a year: 11 paid vacation days, BLS National Compensation Survey,
+  March 2026, and 8 paid holidays, 2025), 40 hours and 5 days (examples, said so on each form). The form's help quotes
+  what workers paid for health cover in 2026 ($1,672 alone, $7,471 for a family; KFF Employer Health Benefits Survey
+  2026) and the average one-way commute (27.4 minutes; Census American Community Survey 2025), all checked 2026-10-30.
 
 ## Edge cases
 - No pay on Income and nothing typed for the job now, with an offer: the job now is "No job now": no pay, match,
