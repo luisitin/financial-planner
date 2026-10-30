@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-30 23:40 UTC | taxes/federal + core/math/tax.js: the 0.9% additional Medicare tax on Medicare wages (before pre-tax 401(k) saving); `medicareWages` input, falls back to `wages` |
 
 ## Done (newest first: page, agent, commit)
 - career/side-income, claude-b
