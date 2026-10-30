@@ -35,8 +35,32 @@ export function mileageYear(year) {
   return steps.reduce((t, m, i) => t + (m.cents / 100) * daysBetween(i === 0 ? `${year}-01-01` : m.from, steps[i + 1]?.from ?? end), 0) / days;
 }
 
-/** The SIMPLE IRA catch-up for an age at the end of the year: none under 50, the 60-to-63 amount, else the usual one. */
+/** A catch-up for an age reached by December 31: none under 50, the 60-to-63 amount, else the usual one. */
 const catchFor = (age, L) => (age === null || age < (L.catchUpAge ?? 50) ? 0 : L.superCatchUp && age >= L.superCatchUp.from && age <= L.superCatchUp.to ? L.superCatchUp.amount : L.catchUp);
+
+/**
+ * The most each self-employed retirement plan takes in a year (IRS Publication 560), from the profit and half the
+ * self-employment tax on it. SEP-IRA: 20% of earnings (profit - half the tax), at most the 415(c) limit. Solo 401(k):
+ * the business's 20% and the employee's deferral (the 402(g) room left after a job's 401(k), out of the earnings left
+ * after the 20%), together at most the 415(c) limit, + the catch-up on top, out of the earnings left. SIMPLE IRA: pay =
+ * 92.35% of profit (Schedule SE line 4); deferral = min(pay, the limit + catch-up, the room left + catch-up); the match
+ * = the deferral, at most 3% of pay.
+ */
+export function planRooms({ profit, seHalf, age = null, deferralLeft, year }) {
+  const L401 = forYear(LIMITS, year).kinds["401k"];
+  const total415 = TOTAL_ADDITIONS[year] ?? TOTAL_ADDITIONS[Math.max(...Object.keys(TOTAL_ADDITIONS).map(Number).filter((y) => y <= year))];
+  const left = deferralLeft ?? L401.limit;
+  const earned = Math.max(0, profit - seHalf);
+  const sep = Math.min(total415, 0.2 * earned);
+  const soloEmployer = 0.2 * earned;
+  const soloBase = Math.min(total415, soloEmployer + Math.min(left, Math.max(0, earned - soloEmployer)));
+  const solo = soloBase + Math.min(catchFor(age, L401), Math.max(0, earned - soloBase));
+  const Y = forYear(SIMPLE, year), S = Y.small;
+  const simpleComp = SE.base * Math.max(0, profit);
+  const deferral = Math.min(simpleComp, S.limit + catchFor(age, { catchUpAge: 50, catchUp: S.catchUp, superCatchUp: Y.superCatchUp }), left + catchFor(age, { catchUpAge: 50, catchUp: S.catchUp, superCatchUp: Y.superCatchUp }));
+  const simple = deferral + Math.min(deferral, Y.match * simpleComp);
+  return { earned, simpleComp, sep, solo, simple, simpleLimit: S.limit, total415 };
+}
 
 /**
  * The household's federal tax with the business's profit as a sole proprietor, and what it adds: self-employment tax on
@@ -62,7 +86,7 @@ export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOr
   }, params);
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
   const extra = SE.addlMedicare * (Math.max(0, medicareWages + se.base - th) - Math.max(0, medicareWages - th));
-  return { se, healthOff, qbi: r.deduction.qbi, income: r.totalTax - r.additionalMedicare, extra, taxable: r.taxableIncome + r.deduction.qbi };
+  return { se, healthOff, qbi: r.deduction.qbi, income: r.totalTax - r.additionalMedicare, extra, agi: r.agi, taxable: r.taxableIncome + r.deduction.qbi };
 }
 /**
  * The same profit through an S corporation paying the owner `salary`: the corporation pays the employer's Social
@@ -172,32 +196,18 @@ export function compute(plan, params = {}) {
   // the retirement plans for the self-employed (IRS Publication 560)
   const se = computeSelfEmployment(plan, { today });
   const row = se.ready ? se.people.find((p) => p.id === (person?.id ?? se.people[0]?.id)) ?? se.people[0] : null;
-  const earned = Math.max(0, profit - sole.se.half);
   const age = person?.birthDate ? year - Number(String(person.birthDate).slice(0, 4)) : null;   // catch-ups go by the age reached by December 31
   const L401 = forYear(LIMITS, year).kinds["401k"];
-  const total415 = TOTAL_ADDITIONS[year] ?? (se.ready ? se.total415 : TOTAL_ADDITIONS[2026]);
   const deferralLeft = row ? row.deferralLeft : L401.limit;
-  const sepRoom = Math.min(total415, 0.2 * earned);
-  // solo 401(k): the employer's 20%, and the employee's deferral out of what is left of the earnings, together at most the
-  // 415(c) limit; the catch-up from 50 sits on top of that limit, also out of the earnings left
-  const soloEmployer = 0.2 * earned;
-  const soloDeferral = Math.min(deferralLeft, Math.max(0, earned - soloEmployer));
-  const soloBase = Math.min(total415, soloEmployer + soloDeferral);
-  const soloRoom = soloBase + Math.min(catchFor(age, L401), Math.max(0, earned - soloBase));
-  // SIMPLE IRA: pay = 92.35% of profit before any contribution (Schedule SE line 4); the deferral shares the yearly limit
-  // on what a person puts in across plans (IRC 402(g)) with a 401(k) at a job; the match is dollar for dollar, up to 3% of pay
-  const S = forYear(SIMPLE, year).small;
-  const simpleComp = SE.base * Math.max(0, profit);
-  const simpleCatch = catchFor(age, { catchUpAge: 50, catchUp: S.catchUp, superCatchUp: forYear(SIMPLE, year).superCatchUp });
-  const simpleDeferral = Math.min(simpleComp, S.limit + simpleCatch, deferralLeft + simpleCatch);
-  const simpleRoom = simpleDeferral + Math.min(simpleDeferral, forYear(SIMPLE, year).match * simpleComp);
+  const R = planRooms({ profit, seHalf: sole.se.half, age, deferralLeft, year });
+  const { earned, simpleComp } = R;
   // a new SIMPLE IRA for a year must be set up by October 1 of it (a business that starts later: as soon as it can)
   const simpleLate = today > `${year}-${SIMPLE_DEADLINE}`;
   const savedBy = (room) => { if (!(room > 0)) return 0; const w = soleTax(profit, { ...T, retirement: room }); return soleTotal - (w.income - noneIncome + w.se.total + w.extra + stateOf(w, room)); };
   const plans = [
-    { key: "sep", label: "SEP-IRA", room: sepRoom },
-    { key: "solo", label: "Solo 401(k)", room: soloRoom },
-    { key: "simple", label: "SIMPLE IRA", room: simpleRoom, late: simpleLate },
+    { key: "sep", label: "SEP-IRA", room: R.sep },
+    { key: "solo", label: "Solo 401(k)", room: R.solo },
+    { key: "simple", label: "SIMPLE IRA", room: R.simple, late: simpleLate },
   ].map((p) => ({ ...p, saved: p.late ? 0 : savedBy(p.room) }));
   const open = plans.filter((p) => !p.late && p.room > 0.5).sort((a, b) => b.room - a.room);
   const best = open.length && (open.length === 1 || open[0].room > open[1].room + 0.5) ? open[0].key : null;
@@ -210,7 +220,7 @@ export function compute(plan, params = {}) {
     ready: true, year, incomeId: item?.id ?? null, name: s.name || item?.name || "Your business", person: person ? { id: person.id, name: person.name } : null,
     revenue, revenueFrom: typedRevenue !== null ? "typed" : "income", incomeYearly: item?.yearly ?? null, expenses, typedTotal, notDeducted, homeOffice: office, miles, expensesTotal,
     profit, loss: profit < 0, margin: revenue > 0 ? profit / revenue : null, breakEvenMonthly: (expensesTotal + notDeducted) / 12,
-    tax, keepMonthly, drawMonthly, draw, scorp, plans, best, earned, simpleComp, simpleLate, simpleLimit: S.limit, job401k, qbiLimited, qbiLine: line, stateRate, notes,
+    tax, keepMonthly, drawMonthly, draw, scorp, plans, best, earned, simpleComp, simpleLate, simpleLimit: R.simpleLimit, job401k, qbiLimited, qbiLine: line, stateRate, notes,
     seExpenses, typedHere: typedRevenue !== null || typed.length > 0, singleBusiness: biz.length <= 1,
   };
 }
