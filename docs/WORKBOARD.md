@@ -85,7 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 22:06 UTC | backlog 2: an answer key for career/business (self-employment tax, the 20% deduction after AGI, an S corporation, the retirement plans' room) under tools/golden_business and tests/golden-business.test.mjs |
+| claude-b | 2026-10-30 22:06 UTC | backlog 2: an answer key for career/business (self-employment tax, the 20% deduction after AGI, an S corporation, the retirement plans' room) under tools/golden_business and tests/golden-business.test.mjs; with it `core/math/tax.js` (shared): a business loss lowers the earned income for the refundable child tax credit |
 
 ## Done (newest first: page, agent, commit)
 - cashflow/budget-percent, claude-b (from codex's idle lane)
