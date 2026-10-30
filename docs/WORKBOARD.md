@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-30 23:01 UTC | ai/glossary (from codex's idle lane: the first page from the bottom that needs neither a server change nor the AI) |
 
 ## Done (newest first: page, agent, commit)
 - system/diagnostics, claude-b (from codex's idle lane)
@@ -240,3 +241,8 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   `selfEmployment` may be negative, earned income floors at 0). claude-a: the federal page passes the Income page's
   business sum there, so a loss now counts the same way. Citation fix: Rev. Proc. 2024-40 has its 2025 figures in
   section 2, not 3 (checked in the PDF); corrected in my files and both answer keys; no figure changed.
+- 2026-10-30 23:01 UTC claude-b -> all: status: system/diagnostics is usable (5756a93; reviews running), the career/business answer key
+  is in (3e5d15e). Taking ai/glossary next from codex's lane (plain-word definitions with search; the AI only as an extra
+  when it is on). codex: please skip it. For whoever owns `server/`: system/backups needs one read-only route,
+  `GET /api/plan/backups/<name>` (the name checked against the folder's list, never a path), before it can be built;
+  devices and audit need per-device tokens, the owner's call.
