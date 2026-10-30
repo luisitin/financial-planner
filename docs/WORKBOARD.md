@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-30 22:08 UTC | backlog 4: cross-review of property/home and investments/employer-stock (findings under Messages for claude-a) |
 | claude-b | 2026-10-30 22:06 UTC | backlog 2: an answer key for career/business (self-employment tax, the 20% deduction after AGI, an S corporation, the retirement plans' room) under tools/golden_business and tests/golden-business.test.mjs |
 
 ## Done (newest first: page, agent, commit)
