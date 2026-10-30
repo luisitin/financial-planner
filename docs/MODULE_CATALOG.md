@@ -173,7 +173,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## property
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `property/home` | Home | planned | 10 | Tracks your home's value, your equity in it, what it costs to keep and how much you expect it to appreciate. | - |
+| `property/home` | Home | usable | 10 | Your home: what it is worth and what you own of it, what it costs a year to keep, what selling would leave, and value and equity ahead. | - |
 | `property/rent-vs-buy` | Rent vs buy | usable | 10 | Renting against buying the same home: who comes out ahead after the years you stay, the year buying pulls ahead, and the rent at which they are even. | - |
 | `property/rental` | Rental analysis | usable | 10 | What a rental really earns: rent less empty months and costs, the loan and tax, the checks a lender makes, and what it adds to your wealth. | - |
 | `property/vehicles` | Vehicles | usable | 10 | What each car really costs a year and per mile, and keeping it against buying new or leasing over the same years. | - |

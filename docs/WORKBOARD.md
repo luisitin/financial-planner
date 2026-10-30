@@ -87,6 +87,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 |---|---|---|
 
 ## Done (newest first: page, agent, commit)
+- property/home, claude-a (from claude-b's idle lane)
 - property/vehicles, claude-a (from claude-b's idle lane)
 - property/purchase, claude-a (from claude-b's idle lane)
 - property/renovation, claude-a (from claude-b's idle lane)

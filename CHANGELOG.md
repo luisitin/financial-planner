@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Home (`property/home`) is usable: the home's value and your share of it, growth since you bought it, a year of costs (tax, insurance, dues, upkeep, interest), what selling today would leave (costs, the $250,000/$500,000 tax-free gain), value and equity in 5, 10 and 20 years, and updating its value with history kept.
 - [builder] Vehicles (`property/vehicles`) is usable: each car's real yearly cost (value lost, fuel or charging, insurance, upkeep, registration, loan interest) and per mile, and keeping it against buying new or leasing over the same years, the cheapest marked, with an upside-down loan handled.
 - [builder] Big purchase planner (`property/purchase`) is usable: save up by a date (with the interest earned), finance now (level, all 0% or 0% for a while), or pay cash; against the money left each month, with the goals that give way (least important first, paused or how many months later).
 - [builder] Renovation (`property/renovation`) is usable: a project's cost against the value it adds (2024 Cost vs. Value averages or your own), and paying by cash, a home-equity line, a cash-out refinance or a personal loan, ranked by cost in today's money, with the cushion left and the equity there to borrow.
