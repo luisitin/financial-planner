@@ -174,7 +174,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `property/home` | Home | planned | 10 | Tracks your home's value, your equity in it, what it costs to keep and how much you expect it to appreciate. | - |
-| `property/rent-vs-buy` | Rent vs buy | planned | 10 | Compares the total cost of renting against buying over any number of years, counting what your money could earn elsewhere. | - |
+| `property/rent-vs-buy` | Rent vs buy | usable | 10 | Renting against buying the same home: who comes out ahead after the years you stay, the year buying pulls ahead, and the rent at which they are even. | - |
 | `property/rental` | Rental analysis | planned | 10 | Works out a rental property's yield, cash return, whether rent covers the loan, vacancy allowance and depreciation. | - |
 | `property/vehicles` | Vehicles | planned | 10 | Works out what each vehicle really costs to own and whether to lease, buy or keep the one you have. | - |
 | `property/purchase` | Big purchase planner | planned | 10 | Helps you plan any big purchase: whether to save up or finance it, and what it does to your other goals. | - |
