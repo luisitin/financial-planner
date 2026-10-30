@@ -2,7 +2,7 @@
 // holds, gathered from the pages that work it out: who the plan is for, where you stand, each month's
 // money, the plan's health, retirement (with the chance the money lasts), protection, goals, debts,
 // the milestones ahead, the next steps and the assumptions behind it all. The view lays it out as a
-// printable document.
+// printable sheet.
 import { compute as computePeople } from "../../household/people/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
