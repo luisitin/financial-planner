@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Vehicle (`goals/vehicle`) is usable: the next car (from the car goal, or entered) paid in cash or financed: what to save a month to pay cash by the date, what is saved by then at the current pace, the loan, payment and interest for the rest, and the 20/4/10 checks against your income.
 - [builder] Emergency fund (`goals/emergency-fund`) is usable: the months this household should aim for and why (earners, pay that varies), the cushion against the target as a bar, when it is full at the emergency goal's pace, where to keep it (and what idle checking money would earn), and an opt-in "This goal is my emergency fund" tick that the Emergency fund page (balance/liquidity) now honours: option C of F-034, left open for the owner.
 - [builder] `docs/WORKBOARD.md`: three builders (claude-a, claude-b, codex) on one branch: lanes of the 47 remaining pages, claims, conflict rules, the checks before every push and a message log. AGENTS.md and TEAM.md point to it.
 - [builder] Goal prioritiser (`goals/prioritizer`) is usable: the money left each month for goals (from Next best action, or an amount you set) shared out must-haves first and by date, each goal's amount against what it needs and gets now, which arrive on time and how late the rest would be, and a button that sets the amounts on Goals.

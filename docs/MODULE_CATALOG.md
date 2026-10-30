@@ -87,7 +87,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `goals/emergency-fund` | Emergency fund | usable | 2 | How big your emergency fund should be for your household, how far along it is, when it is full and where to keep it. | - |
 | `goals/house` | House down payment | usable | 4 | How much home your income supports, what it costs a month, the cash you need on the day and when you will have it. | lenders' 28/36 |
 | `goals/education` | Education (529) | usable | 4 | College for each child: what it would cost when they get there, the monthly saving that covers it, and how much today's saving covers. | College Board 2025 |
-| `goals/vehicle` | Vehicle | planned | 4 | Helps you decide whether to save up for your next vehicle or finance it, and on what timeline. | property/vehicles |
+| `goals/vehicle` | Vehicle | usable | 4 | Your next car paid in cash or financed: the saving a month for cash, the loan for the rest, and the 20/4/10 rule. | - |
 | `goals/travel` | Travel and events | planned | 4 | Turns trips, a wedding and other milestones into goals you fund month by month. | - |
 | `goals/charitable` | Giving | planned | 4 | Plans your charitable giving, works out the numbers on a donor-advised fund and shows the effect on your taxes. | taxes/* |
 | `goals/prioritizer` | Goal prioritiser | usable | 4 | The money left each month shared across your goals by priority and date: which arrive on time and how late the rest would be. | - |

@@ -84,6 +84,8 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 |---|---|---|
 
 ## Done (newest first: page, agent, commit)
+- goals/vehicle, claude-a
+- goals/emergency-fund, claude-a, 59fffd2
 - goals/prioritizer, claude-a, e470868
 - goals/education, claude-a, fa8619e
 - goals/house, claude-a, f1538a5
