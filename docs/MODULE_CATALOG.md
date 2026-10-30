@@ -162,7 +162,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## estate
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `estate/documents` | Documents checklist | planned | 8 | Tracks your will, trust, power of attorney, healthcare directive and guardianship: whether each is done and when it was updated. | - |
+| `estate/documents` | Documents checklist | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
 | `estate/beneficiaries` | Beneficiary audit | planned | 8 | Lists the primary and backup beneficiaries on every account and finds any that are missing or out of date. | - |
 | `estate/legacy` | Legacy goals | planned | 8 | Records what you want to leave to whom, which sets the amount your plan aims to have left at the end. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | planned | 8 | Shows whether your estate could owe federal or state estate tax and how much of the exemption you have used. | - |
