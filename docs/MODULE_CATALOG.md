@@ -153,7 +153,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `insurance/policies` | Policies | usable | 8 | Every policy on one list: what it pays, what it costs a year, whom it covers, when it ends or renews, and what deserves a second look. | - |
 | `insurance/life-needs` | Life insurance needs | usable | 8 | How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the cover you have. | SSA survivors, family maximum, earnings test |
 | `insurance/term-vs-permanent` | Term vs permanent | usable | 8 | Whole life against buying term and investing the difference, with the illustration's own numbers: which is ahead, and the return that decides it. | - |
-| `insurance/cash-value` | Cash-value model | planned | 8 | Works out the true rate of return on a permanent policy's cash value and whether to keep it or cash it in. | - |
+| `insurance/cash-value` | Cash-value model | usable | 8 | A whole or universal life policy you own, as an investment: what it has really earned, what cashing in leaves after tax, and whether to keep it. | IRC 72(e) |
 | `insurance/disability` | Disability | usable | 8 | If you could not work: what your cover would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
 | `insurance/health` | Health plan compare | planned | 8 | Compares health plans on premiums plus expected out-of-pocket costs and flags which ones allow a health savings account. | - |
 | `insurance/ltc` | Long-term care | usable | 8 | The odds you will need care in later life, what it costs, and whether your plan could pay for it or a policy would help. | CareScout 2024 medians, ACL odds |
