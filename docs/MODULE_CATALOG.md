@@ -16,7 +16,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `overview/next-best-action` | Next best action | planned | 9 | Tells you what to do with your next spare dollar, following the well-known order: employer match, high-interest debt, emergency fund, retirement, then the rest. | r/pf wiki |
 | `overview/benchmarks` | How am I doing | planned | 9 | Compares your net worth, savings rate and debt ratios with people of your age and income. | Fed SCF |
 | `overview/health-score` | Plan health score | planned | 9 | Scores your plan from 0 to 100 on emergency fund, debt, savings rate, insurance gaps and estate documents, and explains why. | - |
-| `overview/timeline` | Life timeline | planned | 9 | Shows your ages, retirement, goals, mortgage payoff, Medicare and required minimum distributions on one timeline. | - |
+| `overview/timeline` | Life timeline | usable | 9 | Every moment from today to the end of your plan that changes your money: retiring, Social Security, Medicare, the last mortgage payment, children growing up, and whether the savings last. | - |
 | `overview/monthly-review` | Monthly review | planned | 9 | Walks you through the month: spending against budget, the change in net worth, goal progress and your to-dos. | - |
 
 ## household
