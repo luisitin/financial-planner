@@ -26,6 +26,21 @@ export function pmt(rate, n, principal, fvAmount = 0, due = false) {
   const p = (principal * g + fvAmount) * rate / (g - 1);
   return due ? p / (1 + rate) : p;
 }
+/**
+ * The rate per period at which a lump sum plus a level payment each period grows to `target` in `n` periods: the
+ * inverse of fv(), an internal rate of return. Bisection between -99% and as high as it takes; null when there is
+ * nothing put in, no time, or the target is below what is left at -99%.
+ */
+export function rateFor(target, n, pmt = 0, pvAmount = 0, due = false) {
+  if (!(n > 0) || !(target > 0) || (pmt <= 0 && pvAmount <= 0)) return null;
+  // fv() with (g - 1) / rate computed without cancellation near 0 (expm1 / log1p), so the search is exact there too
+  const grow = (r) => { const gm1 = Math.expm1(n * Math.log1p(r)); const ann = r === 0 ? n : gm1 / r; return pvAmount * (gm1 + 1) + pmt * ann * (due ? 1 + r : 1); };
+  let lo = -0.99, hi = 1;
+  if (grow(lo) > target) return null;
+  for (let k = 0; k < 60 && grow(hi) < target; k++) hi *= 2;
+  for (let k = 0; k < 200 && hi - lo > 1e-13; k++) { const mid = (lo + hi) / 2; if (grow(mid) < target) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
 /** Payment needed each period to reach `target` in `n` periods starting from `start`. */
 export function pmtToReach(rate, n, target, start = 0) {
   if (n <= 0) return Math.max(0, target - start);

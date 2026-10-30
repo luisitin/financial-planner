@@ -32,3 +32,14 @@ test("cagr, real rate, inflation helpers", () => {
   close(inflate(100, 0.03, 10), 134.39);
   close(deflate(134.39, 0.03, 10), 100);
 });
+
+test("rateFor: the inverse of fv (an internal rate of return)", async () => {
+  const { rateFor } = await import("../core/math/finance.js");
+  for (const [r, n, p, v, due] of [[0.05, 10, 100, 1000, true], [0.07, 30, 5000, 0, true], [-0.03, 8, 200, 0, false], [0.12, 5, 0, 2500, false]]) {
+    const target = fv(r, n, p, v, due);
+    assert.ok(Math.abs(rateFor(target, n, p, v, due) - r) < 1e-9, `${r}`);
+  }
+  assert.ok(Math.abs(rateFor(1000 + 100 * 10, 10, 100, 1000)) < 1e-9, "no growth: 0%");
+  assert.equal(rateFor(100, 0, 10), null); assert.equal(rateFor(0, 5, 10), null); assert.equal(rateFor(100, 5, 0, 0), null);
+  assert.equal(rateFor(1e-9, 5, 100), null, "below what is left at -99%");
+});
