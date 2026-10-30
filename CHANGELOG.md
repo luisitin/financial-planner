@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Policies (`insurance/policies`) is usable: every insurance policy on one list grouped by what it protects, the premiums a year, each adult's life and disability cover, and flags for cover that ends with the job, a term that ends while people still depend on it, renewals in the next 60 days and ended policies. The policy record gains optional `name`, `endDate`, `renewalDate`, `throughWork`, `notes` and kind `other`.
 - [builder] Annual review pack (`reports/annual-review`) is usable: the year from the saved net-worth points, the monthly reviews and their notes, and the bank files (money in and out by month, where it went), the goals, the plan's health and what next year holds, as one printable pack. With it all fifteen Phase 9 pages are usable.
 - [builder] Financial statements (`reports/statements`) are usable: a balance sheet (by kind, most liquid first, and by owner), an income statement (a year from the plan, and the last twelve months from the bank files when there are any) and a cash-flow statement (cash from living, money put to work, the interest and principal in the loan payments, how fast net worth grows), as one printable pack.
 - [builder] Tax report (`reports/tax`) is usable: this year's federal estimate step by step, the rates and the room in the bracket, the bracket ladder, how the tax gets paid, gains and the HSA, and the tax the retirement plan pays year by year, as one printable document.
