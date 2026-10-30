@@ -86,7 +86,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `goals/goals` | Goals | usable | 2 | What you are saving for, by when, and what to put aside each month to get there. | Firefly piggy banks |
 | `goals/emergency-fund` | Emergency fund | planned | 2 | Sets your emergency fund target in months of essential expenses and suggests where to keep the money. | - |
 | `goals/house` | House down payment | usable | 4 | How much home your income supports, what it costs a month, the cash you need on the day and when you will have it. | lenders' 28/36 |
-| `goals/education` | Education (529) | planned | 4 | Plans 529 college plan contributions, allowing for tuition inflation and your state's tax deduction. | - |
+| `goals/education` | Education (529) | usable | 4 | College for each child: what it would cost when they get there, the monthly saving that covers it, and how much today's saving covers. | College Board 2025 |
 | `goals/vehicle` | Vehicle | planned | 4 | Helps you decide whether to save up for your next vehicle or finance it, and on what timeline. | property/vehicles |
 | `goals/travel` | Travel and events | planned | 4 | Turns trips, a wedding and other milestones into goals you fund month by month. | - |
 | `goals/charitable` | Giving | planned | 4 | Plans your charitable giving, works out the numbers on a donor-advised fund and shows the effect on your taxes. | taxes/* |

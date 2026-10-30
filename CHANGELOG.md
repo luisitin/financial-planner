@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Education (529) (`goals/education`) is usable: for each child, four years of a public in-state or private college (2025-26 College Board prices, rising 4% a year) when they get there, what is set aside (their college goal or 529 accounts), the monthly saving that covers the chosen share by the first bill, how much today's saving covers, and a button that sets the goal.
 - [builder] House down payment (`goals/house`) is usable: the most the income supports by the lenders' 28% and 36% rules (after the other loans), a home's monthly cost, the cash needed on the day (down payment, closing costs, reserves), when you get there or what a month gets you there by a date, and a button that adds or updates the goal on Goals.
 - [builder] Rent vs buy (`property/rent-vs-buy`) is usable: the same home bought or rented as two households starting with the same money (the renter invests the deposit and each year's difference): who is ahead after the years you stay, the year buying pulls ahead (with a 40-year chart), the rent at which they are even, and the first year's monthly costs. New optional plan section `whatIfs` holds calculator inputs.
 - [builder] Bucket strategy (`retirement/buckets`) is usable: cash for the next two years of the plan's withdrawals (spending and tax less guaranteed income), bonds for the eight after (discounted at the real bond return), stocks for the rest, as one bar; the stock share that leaves against the plan's, and how to refill the buckets.
