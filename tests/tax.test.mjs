@@ -94,6 +94,23 @@ test("the additional Medicare tax is on Medicare wages (before 401(k) saving) wh
   near(federalTax({ filingStatus: "married_joint", wages: 240000, medicareWages: 260000 }, P).incomeTax, federalTax({ filingStatus: "married_joint", wages: 240000 }, P).incomeTax);
 });
 
+test("the 20% business deduction comes after AGI, at most 20% of taxable income less net capital gain", () => {
+  const P = paramsFor(FEDERAL, 2026);
+  // single, 60,000 of business income, standard deduction 16,100: 43,900 before it, so at most 8,780
+  const a = federalTax({ filingStatus: "single", otherOrdinary: 60000, qbiDeduction: 10000 }, P);
+  near(a.agi, 60000); near(a.deduction.qbi, 8780); near(a.taxableIncome, 43900 - 8780);
+  near(federalTax({ filingStatus: "single", otherOrdinary: 60000, qbiDeduction: 5000 }, P).taxableIncome, 43900 - 5000);
+  // taxable income all from qualified dividends: no room for it
+  assert.equal(federalTax({ filingStatus: "single", otherOrdinary: 10000, qualifiedIncome: 150000, qbiDeduction: 2000 }, P).deduction.qbi, 0);
+  // AGI, and so taxable Social Security, does not move
+  const ss = { filingStatus: "single", ages65plus: 1, socialSecurity: 30000, otherOrdinary: 50000 };
+  const b = federalTax({ ...ss, qbiDeduction: 4000 }, P), c = federalTax(ss, P);
+  near(b.agi, c.agi); near(b.income.taxableSocialSecurity, c.income.taxableSocialSecurity); near(c.taxableIncome - b.taxableIncome, 4000);
+  // the active-business minimum overrides the limit: 17,000 of income leaves 900, but the deduction is still 400
+  near(federalTax({ filingStatus: "single", otherOrdinary: 17000, qbiDeduction: 300, qbiMinimum: 400 }, P).taxableIncome, 500);
+  assert.equal(federalTax({ filingStatus: "single", otherOrdinary: 60000 }, P).deduction.qbi, 0, "nothing passed, nothing taken");
+});
+
 test("itemized deductions replace the standard one only when larger; withholding gives a balance", () => {
   const a = federalTax({ filingStatus: "single", wages: 80000, itemized: 12000 }, P);
   assert.equal(a.deduction.used, "standard");

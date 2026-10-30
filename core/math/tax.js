@@ -131,6 +131,8 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
  *   charitableCash (cash gifts to charity: from 2026 deductible up to 1,000 / 2,000 joint by people who do not itemize),
  *   ages65plus (you and a spouse), blind, dependentsUnder17, otherDependents, investmentIncome (for NIIT; default qualified income),
  *   medicareWages (Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving, W-2 box 5; default wages),
+ *   qbiDeduction (the 20% business deduction before its taxable-income limit, IRC 199A: taken after AGI, at most 20% of
+ *   taxable income less net capital gain), qbiMinimum (the floor on it for an active business, IRC 199A(i); default 0),
  *   withheld, paid (estimated payments)
  * }
  */
@@ -166,7 +168,11 @@ export function federalTax(inputs, params) {
   const nonItemizerCharity = Math.min(charitableCash, charityCap);
   const useItemized = itemizedAfter > std + nonItemizerCharity;
   const deduction = (useItemized ? itemizedAfter : std + nonItemizerCharity) + senior;
-  const taxableIncome = Math.max(0, agi - deduction);
+  // the 20% business deduction comes after AGI (Form 1040 line 13), at most 20% of taxable income before it less the net
+  // capital gain, which counts qualified dividends (IRC 199A(a), 1(h)(11)); the active-business minimum (199A(i)) overrides that limit
+  const beforeQbi = Math.max(0, agi - deduction);
+  const qbi = Math.max(Math.min(pos(inputs.qbiDeduction), 0.2 * Math.max(0, beforeQbi - Math.min(qualified, beforeQbi))), pos(inputs.qbiMinimum));
+  const taxableIncome = Math.max(0, beforeQbi - qbi);
   const qualifiedTaxable = Math.min(qualified, taxableIncome);
   const ordinaryTaxable = taxableIncome - qualifiedTaxable;
   const ord = taxOnOrdinary(ordinaryTaxable, status, params);
@@ -199,7 +205,7 @@ export function federalTax(inputs, params) {
     year: params.year ?? null, filingStatus: status,
     income: { wages, ordinary, qualified, capitalLoss, socialSecurity: ss, taxableSocialSecurity: taxableSS, taxExemptInterest: exempt, gross },
     agi, adjustments,
-    deduction: { standard: std, itemized: itemizedAfter, itemizedBeforeLimit: itemized, itemizedLimit, charity: useItemized ? 0 : nonItemizerCharity, used: useItemized ? "itemized" : "standard", senior, amount: deduction },
+    deduction: { standard: std, itemized: itemizedAfter, itemizedBeforeLimit: itemized, itemizedLimit, charity: useItemized ? 0 : nonItemizerCharity, used: useItemized ? "itemized" : "standard", senior, amount: deduction, qbi },
     taxableIncome, ordinaryTaxable, qualifiedTaxable,
     ordinaryTax: ord.tax, qualifiedTax, incomeTax, layers: ord.layers, qualifiedLayers: qual.layers,
     credits: { childTaxCredit, refundable },

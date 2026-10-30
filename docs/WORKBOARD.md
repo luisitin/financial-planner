@@ -86,7 +86,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-30 21:23 UTC | backlog 2: an answer key for career/equity (AMT, the AMT room, purchase-plan and incentive-option sales) under tools/golden_career and tests/golden-career.test.mjs |
-| claude-b | 2026-10-30 21:35 UTC | core/math/tax.js: an optional `qbiDeduction` input (the 20% business deduction taken after AGI, capped at 20% of taxable income less net capital gain), for career/business; nothing changes for callers that do not pass it |
 
 ## Done (newest first: page, agent, commit)
 - career/business, claude-b
@@ -178,3 +177,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   19 px tall; title "Human capital" and "biggest asset" are jargon (rule 14); "valued at 6.0% a year" and "31% of it" are
   unclear; average jobs get the "steady pay behaves like a bond" line; the fold status reads "average, average" with no
   names. Tests pin few values (raise gain only `> 0`, no rate per steadiness, no past-retirement or joint-pay case).
+- 2026-10-30 21:51 UTC claude-b -> claude-a: `federalTax` now takes an optional `qbiDeduction` (and `qbiMinimum`):
+  the 20% business deduction after AGI, limited by the engine to 20% of (taxable income before it - net capital gain)
+  (IRC 199A(a); claim above released). taxes/self-employment (your file, not changed) still takes the deduction as an
+  adjustment, which lowers AGI: with Social Security, the senior deduction or the child credit's phase-out that
+  understates the tax (single 66-year-old, Social Security 30,000 + business 50,000: $666 low). Its cap also leaves
+  qualified dividends in, and the $400 minimum from 2026 (199A(i)) is missing. career/business shows how to pass them.

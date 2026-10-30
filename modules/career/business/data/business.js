@@ -4,11 +4,18 @@
 // income line where its limits begin, and the width over which they phase in: Rev. Proc. 2025-32 section 4.26 and IRC
 // 199A as amended by P.L. 119-21 section 70105 (permanent; $75,000 / $150,000 wide from 2026).
 export const HOME_OFFICE = { perSqft: 5, maxSqft: 300 };
+// small: the higher limits of IRC 408(p)(2)(E)(i)(I) for an employer with 25 or fewer employees (a one-person business);
+// general: the others (Notice 2025-67; Notice 2024-80 for 2025). The 60-to-63 catch-up is the same in both.
 export const SIMPLE = {
-  2026: { limit: 17000, catchUp: 4000, superCatchUp: { from: 60, to: 63, amount: 5250 }, match: 0.03 },
-  2025: { limit: 16500, catchUp: 3500, superCatchUp: { from: 60, to: 63, amount: 5250 }, match: 0.03 },
+  2026: { small: { limit: 18100, catchUp: 3850 }, general: { limit: 17000, catchUp: 4000 }, superCatchUp: { from: 60, to: 63, amount: 5250 }, match: 0.03 },
+  2025: { small: { limit: 17600, catchUp: 3850 }, general: { limit: 16500, catchUp: 3500 }, superCatchUp: { from: 60, to: 63, amount: 5250 }, match: 0.03 },
 };
+/** A new SIMPLE IRA for a year must be set up by October 1 of that year (IRS Publication 560), month-day. */
+export const SIMPLE_DEADLINE = "10-01";
+/** The smallest 20% business deduction from 2026 for an active business with at least $1,000 of it (IRC 199A(i), P.L. 119-21 section 70105). */
+export const QBI_MINIMUM = { 2025: { amount: 0, from: Infinity }, 2026: { amount: 400, from: 1000 } };
 export const QBI_LINE = {
+  2025: { single: 197300, head_of_household: 197300, married_joint: 394600, qualifying_surviving: 197300, married_separate: 197300, width: { married_joint: 100000, other: 50000 } },
   2026: { single: 201750, head_of_household: 201750, married_joint: 403500, qualifying_surviving: 201750, married_separate: 201775, width: { married_joint: 150000, other: 75000 } },
 };
 /** What running an S corporation adds a year (payroll service, the corporate return, state fees): an example to replace with real quotes. */
