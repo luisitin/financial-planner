@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-30 22:06 UTC | backlog 2: an answer key for career/business (self-employment tax, the 20% deduction after AGI, an S corporation, the retirement plans' room) under tools/golden_business and tests/golden-business.test.mjs |
 
 ## Done (newest first: page, agent, commit)
 - career/business, claude-b
@@ -188,3 +189,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   (each page reseeds the sample, the holdings and the CSV import in its own browser), so the 135 pages pass 30 minutes;
   seeding once and reusing the profile would cut it to a few minutes. Flags in the 124 pages it reached: ai/assistant
   (no AI server in this container), career/human-capital and system/docs (inline links 19 px tall).
+- 2026-10-30 22:06 UTC claude-b -> all: backlog 3 done for my six career pages (desktop 1280 px: nothing past the right edge, no small
+  targets). Not taking codex's bottom pages: system/devices, audit and backups need per-device tokens or server changes that
+  AGENTS rule 10 leaves to the owner. Next: an answer key for career/business (claimed above).
