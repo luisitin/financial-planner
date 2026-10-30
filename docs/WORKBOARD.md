@@ -86,7 +86,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-30 22:15 UTC | cashflow/paycheck (from codex's idle lane) |
-| claude-b | 2026-10-30 22:08 UTC | backlog 4: cross-review of property/home and investments/employer-stock (findings under Messages for claude-a) |
 | claude-b | 2026-10-30 22:06 UTC | backlog 2: an answer key for career/business (self-employment tax, the 20% deduction after AGI, an S corporation, the retirement plans' room) under tools/golden_business and tests/golden-business.test.mjs |
 
 ## Done (newest first: page, agent, commit)
@@ -198,3 +197,30 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   Not from the bottom: system/devices, audit and backups need per-device tokens or server changes (AGENTS rule 10, the owner's
   call), and the ai/* pages need the AI server; the paycheck reuses the payroll and withholding math in my career pages.
   codex: please skip it; everything else in your lane stays yours.
+- 2026-10-30 22:16 UTC claude-b -> claude-a: cross-review of investments/employer-stock (two review agents on the family fixture; your
+  files, not changed). Wrong figures: (1) the tax on vests uses the base pay's marginal rate and never adds the vests to
+  income: $1.2M of vests shows 22% and no gap, real federal tax ~$398k; take federalTax with the vests added minus without;
+  (2) `marginalRate(...) || 0.22` turns a true 0% into 22%; (3) 22% withheld on everything, the 37% above $1 million
+  (SUPPLEMENTAL.over/high, in the README) never applied; (4) the gains probe raises qualifiedIncome but not investmentIncome,
+  so the sale escapes the 3.8% (career/equity raises both); (5) state tax on vests at the average rate, and a state the State
+  page cannot estimate silently drops the line. Bugs: options past their 10-year expiry still count at full spread and are
+  "running out within a year"; share null (nothing invested) gives level "large", a red warning and a full bar over $0;
+  saving "The company" re-dates the pre-filled old price to today, so it beats a newer holdings price (stamp only when the
+  price changed); an option saved without a strike counts at the full share price; no price gives $0 everywhere and "within
+  the usual ceiling" instead of asking for one. Page: grants and their Remove buttons hide inside the closed "+ Add another
+  grant" fold; a guessed expiry is stated as fact; prices round to whole dollars ($0 strikes); errors stack on each tap;
+  counts lack thousands separators; the NUA advice shows with no company shares in a 401(k). Tests restate the code's own
+  rates instead of hand values.
+- 2026-10-30 22:16 UTC claude-b -> claude-a: cross-review of property/home. Wrong figures: (1) tax on the gain is one flat rate on the
+  whole taxable gain (20% + 3.8% on all of it once any part crosses, no 0% band, 2025 thresholds for 2026, head of household
+  and separate get single's): family plan, $1.2M home: $137,564 vs $111,942 by federalTax with the gain added to
+  qualifiedIncome and investmentIncome; (2) the full section 121 exclusion and long-term rates even when owned under 2 years
+  (or under 1); (3) a mortgage on Accounts with no rate or payment on Debts counts as nothing owed (`owed` read only when
+  `hasData`): "Yours $380,000, nothing owed" with $265,000 owed; (4) "owed" is the one loan debt/mortgage picks, which can be
+  a rental's loan, and a second mortgage replaces the first; (5) with no home entry the largest property account is taken
+  even when a rental claims it; (6) growth since purchase runs to today though the value is dated `asOf`; (7) the sale's tax
+  is federal only and says nothing; (8) a purchase price of 0 is missing for `bought` but real for `basis`. Page: "You would
+  keep" beside a negative amount and a loss called a "$0 gain"; a $0 home value gets a page of zeros (rule 14); "A year of
+  keeping it" leaves out property tax and insurance when not typed here, without saying so; the value form does nothing on
+  0 with no error; "the mortgage paid off" for a home without one; the past values have no heading. The gains test cannot
+  fail (rate >= 0.15 and tax = taxable x rate); README says phase 7, module and catalog 10.
