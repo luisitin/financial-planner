@@ -362,7 +362,7 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - what happened: F-020 sets money earmarked for goals aside so it is not counted as usable cash. Every household in `qa/households` (and the sample family) has a goal named "Emergency fund" (icon 🛟) funded by the savings account, so that very money is subtracted from the emergency fund: the family in `qa/fixtures/family-plan.mjs` has $15,700 of cash but the page counts $4,200 (0.9 months), and the goal and the page then track the same money twice with different targets ($20,000 vs 6 months = $27,470).
 - expected: a decision: is an emergency-fund goal the emergency fund?
 - suggestion: A) a goal whose name says "emergency" (or icon 🛟) is not earmarked: its money counts as usable cash, and the Emergency fund page shows the goal's target next to its own; B) leave it, and say on the Goals page that an emergency-fund goal is kept apart from the cash cushion; C) let the owner tick "this is my emergency fund" on a goal. A or C needs `qa/households/lib/expect.mjs` updated by the tester.
-- status: open
+- status: open (owner). 2026-10-30 builder: option C is built as an opt-in: goals/emergency-fund has "This goal is my emergency fund", and balance/liquidity skips earmarking for a ticked goal. Nothing changes until a goal is ticked, so `qa/households` expectations hold; A or B remain the owner's call.
 
 ### F-035  Printing any page prints the app around it (filed by the builder)
 - when: 2026-10-30 15:00   page: all   severity: idea

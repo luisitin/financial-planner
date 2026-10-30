@@ -33,7 +33,8 @@ export function compute(plan, params = {}) {
   const goals = (plan.goals ?? []).length ? computeGoals(plan, params) : null;
   const nowIds = new Set(accounts.filter((a) => a.tier === "now").map((a) => a.id));
   let earmarked = 0;
-  for (const g of goals?.goals ?? []) if ((g.fundedBy ?? []).some((id) => nowIds.has(id)) && g.status !== "no amount") earmarked += Math.max(0, Math.min(g.funded - (Number(g.saved) || 0), g.targetThen));
+  // F-034: a goal the owner marked as the emergency fund itself (goals/emergency-fund) is the cushion, not money set aside from it
+  for (const g of goals?.goals ?? []) if (!g.isEmergencyFund && (g.fundedBy ?? []).some((id) => nowIds.has(id)) && g.status !== "no amount") earmarked += Math.max(0, Math.min(g.funded - (Number(g.saved) || 0), g.targetThen));
   earmarked = Math.min(earmarked, nowAll);
   const now = nowAll - earmarked;
   const ex = (plan.expenses ?? []).length ? computeExpenses(plan, params) : null;

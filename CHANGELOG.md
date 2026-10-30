@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Emergency fund (`goals/emergency-fund`) is usable: the months this household should aim for and why (earners, pay that varies), the cushion against the target as a bar, when it is full at the emergency goal's pace, where to keep it (and what idle checking money would earn), and an opt-in "This goal is my emergency fund" tick that the Emergency fund page (balance/liquidity) now honours: option C of F-034, left open for the owner.
 - [builder] `docs/WORKBOARD.md`: three builders (claude-a, claude-b, codex) on one branch: lanes of the 47 remaining pages, claims, conflict rules, the checks before every push and a message log. AGENTS.md and TEAM.md point to it.
 - [builder] Goal prioritiser (`goals/prioritizer`) is usable: the money left each month for goals (from Next best action, or an amount you set) shared out must-haves first and by date, each goal's amount against what it needs and gets now, which arrive on time and how late the rest would be, and a button that sets the amounts on Goals.
 - [builder] Education (529) (`goals/education`) is usable: for each child, four years of a public in-state or private college (2025-26 College Board prices, rising 4% a year) when they get there, what is set aside (their college goal or 529 accounts), the monthly saving that covers the chosen share by the first bill, how much today's saving covers, and a button that sets the goal.
