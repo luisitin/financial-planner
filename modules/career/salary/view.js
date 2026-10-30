@@ -70,7 +70,7 @@ export function render(page, ctx) {
 
   // where the usual figures come from
   const b = d.benchmarks;
-  const src = [b.budget, b.promotion, b.switchers, b.peak].filter((x) => x && x.text);
+  const src = [b.budget, b.promotion, b.switchers, b.peak, b.prices].filter((x) => x && x.text);
   if (src.length) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "What raises usually are"), ui.h("span", { class: "fold-status" }, b.budget?.short ?? ""), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("ul", { class: "records" }, src.map((x) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.title), ui.h("span", { class: "rec-value" }, x.short)), ui.h("div", { class: "rec-sub" }, x.text), ui.h("div", { class: "sl-src" }, x.source))))));
 
@@ -136,7 +136,7 @@ export function render(page, ctx) {
     const fields = [
       { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: j.incomeGrowth > 0 ? `empty: the Income page's (${pct(j.incomeGrowth)})` : `empty: the Assumptions page's pay rise (${pct(plan.assumptions?.salaryGrowth ?? 0.03)})` },
       { key: "promoEvery", label: "A promotion every ... years", type: "number", min: 0, max: 20, step: "1", help: "empty or 0: no promotions" },
-      { key: "promoBump", label: "Raise that comes with a promotion", type: "percent", min: 0, max: 100, help: `${pct(DEFAULTS.promoBump, 0)} is only an example: use what your employer gives` },
+      { key: "promoBump", label: "Raise that comes with a promotion", type: "percent", min: 0, max: 100, help: `about ${pct(DEFAULTS.promoBump)} is usual for a one-level promotion (Mercer, 2026); use what your employer gives` },
       { key: "levelAge", label: "Pay stops gaining on prices at age", type: "number", min: 18, max: 80, step: "1", help: j.knownAge ? "empty: raises run until retirement; from this age pay only keeps up with prices" : "needs a birth date on People" },
     ];
     card.append(ui.h("details", { class: "fold", open: openJob === j.incomeId || null }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Raises and promotions"), ui.h("span", { class: "fold-status" }, s.promoEvery ? `${pct(s.raise)}, promotions` : pct(s.raise)), ui.h("span", { class: "fold-chev" }, "›")),

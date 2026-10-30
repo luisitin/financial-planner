@@ -27,8 +27,8 @@ each job: `{ incomeId, name, personId, personName, pay, ageNow, retireAge, retir
   `promoEvery`-th year also × (1 + promotion raise). From the year the holder reaches `levelAge`, the raise is the
   smaller of the raise and the inflation rate, and promotions stop (pay keeps up with prices, no more; a raise already
   under prices stays as it is). The age needs a birth date. The raise is the one typed here, else the
-  Income page's (when above 0), else `assumptions.salaryGrowth`. The promotion raise starts at 10%, only an example
-  to change (`data/benchmarks.js`); the form says so.
+  Income page's (when above 0), else `assumptions.salaryGrowth`. The promotion raise starts at 8.5%, what employers
+  expect to give for a one-level promotion (Mercer, March 2026 survey, reported by WorldatWork on 7 May 2026).
 - **Today's money.** real = pay ÷ (1 + inflation)^t, t = years from now. Real raise = (1 + raise) ÷ (1 + inflation) − 1.
 - **Pay still to come** (`lifetime`) = Σ pay × weight (dollars of each year) and Σ real × weight (today's money).
 - **Average growth** = (last year's pay ÷ today's pay)^(1 ÷ years between) − 1: the single raise that reaches the same
@@ -48,6 +48,12 @@ each job: `{ incomeId, name, personId, personName, pay, ageNow, retireAge, retir
   the state's rate from the State tax page (typed, last year's average rate, or the state's flat rate; 0 in states with
   no wage tax; not counted when unknown; the page says that last year's average understates the tax on a raise in
   states with brackets). Keep = raise − the three.
+
+- **What raises usually are** (`data/benchmarks.js`, a fold on the page; checked 2026-10-30): salary increase budgets
+  for 2027 of 3.4% (WTW, July 2026) to 3.5% (Mercer 31 Aug 2026, Payscale 4 Aug 2026, The Conference Board 3 Sep 2026,
+  WorldatWork 15 Jul 2026 median), merit alone 3.1% to 3.2%; pay growth of job switchers 4.7% against stayers 3.4%
+  (Atlanta Fed Wage Growth Tracker, September 2026); full-time weekly pay highest at 35 to 54 (BLS Usual Weekly
+  Earnings, third quarter 2026); prices up 3.7% in the year to September 2026 (BLS CPI).
 
 ## Edge cases
 - No salary on Income: an empty state pointing there. Bonuses (`type: "bonus"`) are not part of the path (their
