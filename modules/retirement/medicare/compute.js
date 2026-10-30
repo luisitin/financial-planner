@@ -27,6 +27,32 @@ export function enrollmentWindow(birthDate) {
 }
 
 /**
+ * The plan's income for means-tested costs (Medicare's surcharge, marketplace credits), year by year, in today's dollars:
+ * the plan run through the federal brackets; in a retired year, ordinary income + qualified dividends and gains + taxable
+ * Social Security (the brackets' own figures, conversions and required withdrawals included); in a working year (the
+ * engine works out no tax), the pay of whoever still works less their pre-tax 401(k) and IRA saving, plus the plan's other
+ * taxable income that year. -> { inputs, run, magiOf(row) } | { inputs: null, missing }. Shared with retirement/healthcare.
+ */
+export function planIncome(plan, { today } = {}) {
+  const p2 = JSON.parse(JSON.stringify(plan));
+  p2.retirement = { ...(p2.retirement ?? {}), taxMode: "brackets" };
+  const b = buildInputs(p2, { today });
+  if (!b.inputs) return { inputs: null, missing: b.missing ?? [] };
+  const I = b.inputs;
+  const run = project(I);
+  const inc = computeIncome(plan, { today }), con = computeContributions(plan, { today });
+  const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
+  const preTaxOf = (id) => (con.items ?? []).filter((c) => c.personId === id && ["401k", "ira"].includes(c.accountType)).reduce((s, c) => s + c.yearly, 0);
+  const magiOf = (row) => {
+    if (row?.retired && row.taxInfo) return (row.taxInfo.ordinary + row.taxInfo.qualified + row.taxInfo.taxableSocialSecurity) / row.priceLevel;
+    const working = I.people.reduce((s, p, k) => s + (row.ages[k] < p.retireAge ? Math.max(0, payOf(p.id) - preTaxOf(p.id)) : 0), 0);
+    const other = (row.incomeLines ?? []).filter((l) => !/'s pay$/.test(l.name) && !/Social Security/.test(l.name)).reduce((s, l) => s + l.amount, 0) / row.priceLevel;
+    return working + other;
+  };
+  return { inputs: I, run, magiOf };
+}
+
+/**
  * compute(plan, { today }) -> {
  *   ready, missing, year (of the figures), partB, deductible, partD, supplement, status,
  *   people: [{ id, name, medicareYear, signup: { from, month, to } }],
@@ -43,24 +69,9 @@ export function compute(plan, params = {}) {
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const people = adults.map((p) => ({ id: p.id, name: p.name, medicareYear: Number(p.birthDate.slice(0, 4)) + 65, signup: enrollmentWindow(p.birthDate), age: today ? ageOn(p.birthDate, today) : null }));
   const base = { year: YEAR, partB: PART_B, deductible: PART_B_DEDUCTIBLE, partD, supplement, status, people, latePenalty: LATE_PENALTY };
-  // the plan's income each year, through the federal brackets (so every row carries its taxable income)
-  const p2 = JSON.parse(JSON.stringify(plan));
-  p2.retirement = { ...(p2.retirement ?? {}), taxMode: "brackets" };
-  const b = buildInputs(p2, { today });
-  if (!b.inputs) return { ...base, ready: false, missing: b.missing ?? [] };
-  const I = b.inputs;
-  const r = project(I);
-  // income for the surcharge: the year's taxed income from the brackets; in working years (no tax worked out by the engine),
-  // the pay of whoever still works less their pre-tax retirement saving, plus the plan's other taxable income that year
-  const inc = computeIncome(plan, { today }), con = computeContributions(plan, { today });
-  const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
-  const preTaxOf = (id) => (con.items ?? []).filter((c) => c.personId === id && ["401k", "ira"].includes(c.accountType)).reduce((s, c) => s + c.yearly, 0);
-  const magiOf = (row) => {
-    if (row?.retired && row.taxInfo) return (row.taxInfo.ordinary + row.taxInfo.qualified + row.taxInfo.taxableSocialSecurity) / row.priceLevel;
-    const working = I.people.reduce((s, p, k) => s + (row.ages[k] < p.retireAge ? Math.max(0, payOf(p.id) - preTaxOf(p.id)) : 0), 0);
-    const other = (row.incomeLines ?? []).filter((l) => !/'s pay$/.test(l.name) && !/Social Security/.test(l.name)).reduce((s, l) => s + l.amount, 0) / row.priceLevel;
-    return working + other;
-  };
+  const pi = planIncome(plan, { today });
+  if (!pi.inputs) return { ...base, ready: false, missing: pi.missing };
+  const { inputs: I, run: r, magiOf } = pi;
   const byYear = new Map(r.rows.map((row) => [row.year, row]));
   const years = [];
   for (const row of r.rows) {

@@ -108,7 +108,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `retirement/monte-carlo` | Chance the money lasts | usable | 5 | The plan run thousands of times with returns drawn at random: the share of runs where the money lasts, and the range. | core/math/montecarlo, TPAW |
 | `retirement/historical` | If history repeated | usable | 5 | Your plan replayed from every start year since 1928 with the real returns and inflation of those years. | cFIREsim, Shiller |
 | `retirement/sequence-risk` | Order of returns | usable | 5 | Why bad years early in retirement hurt most: the same years of returns in three orders, on your plan. | - |
-| `retirement/healthcare` | Healthcare before 65 | planned | 5 | Shows what marketplace (ACA) health plans cost at each income level, the subsidy you get and where the cliffs are. | - |
+| `retirement/healthcare` | Healthcare before 65 | usable | 5 | Health cover between retiring and Medicare: the marketplace credit on your plan's own income, what is left to pay, and the cliff where the credit stops. | Rev. Proc. 2025-25 |
 | `retirement/medicare` | Medicare and IRMAA | usable | 5 | When to sign up for Medicare, what it costs over retirement, and the income surcharge (IRMAA) year by year from your plan's own income. | CMS 2026 |
 | `retirement/longevity` | How long to plan for | usable | 5 | The chance of reaching each age, for each of you and for at least one of a couple, and the age the plan should run to. | SSA life table |
 | `retirement/fire` | Financial independence | usable | 5 | The pot that could pay for your life without a paycheck, how far you are, and the years to get there at your pace. | FI Calc |
