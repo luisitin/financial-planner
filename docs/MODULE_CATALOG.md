@@ -166,7 +166,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `estate/beneficiaries` | Beneficiary audit | usable | 8 | Who is named on every retirement account, life policy and payable-on-death account, and what to fix: no one named, no backup, a child named directly. | ERISA spousal rule |
 | `estate/legacy` | Legacy goals | planned | 8 | Records what you want to leave to whom, which sets the amount your plan aims to have left at the end. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | planned | 8 | Shows whether your estate could owe federal or state estate tax and how much of the exemption you have used. | - |
-| `estate/gifting` | Gifting | planned | 8 | Plans gifts within the yearly tax-free limit and shows how to front-load a 529 college plan with five years of gifts at once. | - |
+| `estate/gifting` | Gifting | usable | 8 | Gifts within the yearly tax-free amount, what needs a gift tax return, and front-loading a 529 college plan with five years of gifts at once. | IRC 2001(c), 2503, 529(c) |
 | `estate/inheritance` | Expected inheritance | planned | 8 | Lets you model an inheritance you might receive as a what-if scenario rather than counting on it in your main plan. | scenarios/* |
 | `estate/digital` | Digital assets | planned | 8 | Records your online accounts, password manager and crypto keys, and who can get into each if something happens to you. | - |
 
