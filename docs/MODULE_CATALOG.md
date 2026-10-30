@@ -50,7 +50,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `cashflow/recurring` | Bills and regular payments | usable | 4 | The payments that come back every week, month or year, when the next one is due, and which look missed. | Actual schedules |
 | `cashflow/forecast` | Cash-flow forecast | usable | 4 | Where your everyday cash is heading over the next three months, day by day, and whether a shortfall is coming. | Actual |
 | `cashflow/sinking-funds` | Irregular expenses | usable | 4 | Yearly and one-time costs turned into a monthly amount to set aside so the money is there when the bill lands. | - |
-| `cashflow/paycheck` | Paycheck | planned | 4 | Follows your paycheck from gross to net: withholding, Social Security and Medicare taxes, pre-tax deductions and employer match. | taxes/* |
+| `cashflow/paycheck` | Paycheck | usable | 4 | Follows your paycheck from pay to take-home: what comes out before tax, the taxes withheld, Social Security and Medicare, and what your employer adds. | taxes/* |
 | `cashflow/subscriptions` | Subscriptions | usable | 4 | Every charge that renews by itself, what it costs you a year, and the ones to question. | - |
 | `cashflow/spending` | Where the money goes | usable | 3 | Spending by category and by payee for a month, against the month before. | - |
 | `cashflow/statement` | Cash-flow statement | usable | 4 | A year of your money the way a business reports it: living, investing and debts, adding up to what is left in cash. | - |
