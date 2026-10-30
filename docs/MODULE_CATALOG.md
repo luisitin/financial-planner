@@ -155,7 +155,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `insurance/term-vs-permanent` | Term vs permanent | usable | 8 | Whole life against buying term and investing the difference, with the illustration's own numbers: which is ahead, and the return that decides it. | - |
 | `insurance/cash-value` | Cash-value model | usable | 8 | A whole or universal life policy you own, as an investment: what it has really earned, what cashing in leaves after tax, and whether to keep it. | IRC 72(e) |
 | `insurance/disability` | Disability | usable | 8 | If you could not work: what your cover would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
-| `insurance/health` | Health plan compare | planned | 8 | Compares health plans on premiums plus expected out-of-pocket costs and flags which ones allow a health savings account. | - |
+| `insurance/health` | Health plan compare | usable | 8 | The health plans you can choose from, on what each really costs a year: premiums plus your share of the bills, less HSA money and tax savings, in a quiet, usual and bad year. | Rev. Proc. 2025-19 |
 | `insurance/ltc` | Long-term care | usable | 8 | The odds you will need care in later life, what it costs, and whether your plan could pay for it or a policy would help. | CareScout 2024 medians, ACL odds |
 | `insurance/property` | Auto, home, umbrella | usable | 8 | Whether your home, car and umbrella cover is enough for what you own: the cost to rebuild, the liability limits against your net worth, and the deductibles against your cash. | 11 USC 522(n), III umbrella costs |
 
