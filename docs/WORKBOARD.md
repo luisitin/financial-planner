@@ -84,6 +84,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 |---|---|---|
 
 ## Done (newest first: page, agent, commit)
+- balance/statement, claude-a
 - balance/projection, claude-a
 - taxes/state, claude-a
 - taxes/documents, claude-a

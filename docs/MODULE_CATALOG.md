@@ -37,7 +37,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `balance/assets` | Asset register | planned | 10 | Lists your property, vehicles and valuables with what you paid, how they lose value and which policy insures each. | - |
 | `balance/liabilities` | Debts | usable | 2 | Every loan and card with its rate and payment: what interest costs you and when each one is gone. | - |
 | `balance/projection` | Net worth projection | usable | 5 | Net worth in the years ahead: savings growing and spent in retirement, the home's value, debts paid down, in today's money. | TPAW |
-| `balance/statement` | Balance sheet | planned | 9 | Produces a formal, printable balance sheet split by owner and by how quickly each item can be turned into cash. | - |
+| `balance/statement` | Balance sheet | usable | 9 | Everything you own and owe on one printable page, by how fast it turns into cash and by owner, with the ratios. | - |
 
 ## cashflow
 | key | title | status | phase | purpose | seeds |
