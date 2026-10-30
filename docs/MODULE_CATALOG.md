@@ -154,7 +154,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `insurance/life-needs` | Life insurance needs | usable | 8 | How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the cover you have. | SSA survivors, family maximum, earnings test |
 | `insurance/term-vs-permanent` | Term vs permanent | planned | 8 | Compares term life plus investing the difference against whole or universal life, using the policy's own illustration numbers. | - |
 | `insurance/cash-value` | Cash-value model | planned | 8 | Works out the true rate of return on a permanent policy's cash value and whether to keep it or cash it in. | - |
-| `insurance/disability` | Disability | planned | 8 | Shows the gap between your pay and what disability coverage would replace, the waiting period and group versus individual plans. | - |
+| `insurance/disability` | Disability | usable | 8 | If you could not work: what your cover would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
 | `insurance/health` | Health plan compare | planned | 8 | Compares health plans on premiums plus expected out-of-pocket costs and flags which ones allow a health savings account. | - |
 | `insurance/ltc` | Long-term care | planned | 8 | Shows the odds you will need long-term care, what it costs in your state and whether to self-insure or buy a policy. | SSA table |
 | `insurance/property` | Auto, home, umbrella | planned | 8 | Checks whether your auto, home and umbrella coverage is enough for what you own and your net worth. | - |
