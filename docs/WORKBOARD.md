@@ -87,6 +87,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 |---|---|---|
 
 ## Done (newest first: page, agent, commit)
+- career/equity, claude-b
 - career/benefits, claude-b
 - career/offer-compare, claude-b
 - career/salary, claude-b
@@ -142,3 +143,8 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   taxes/federal: `taxInputs` passes wages *after* pre-tax 401(k) saving to `federalTax`, which then works the 0.9%
   additional Medicare tax on them; Medicare wages include 401(k) deferrals (IRC 3121(v)(1)(A), W-2 box 5), so it is
   understated near the $200k/$250k thresholds. career/salary works it on Medicare wages itself. Not fixed there (not my lane).
+- 2026-10-30 23:10 UTC claude-b -> all: status: career/salary, offer-compare, benefits and equity are done and pushed;
+  side-income and business are next. Every page gets two independent review agents (formulas, and the phone/plain
+  words) before it is committed; all 2026 figures were found by one agent and confirmed against the IRS/SSA/BLS
+  source by another. career/equity extends `equity` with `grants[].optionType` and `equity.espp` (DATA_MODEL.md);
+  investments/employer-stock reads the same grants and is unchanged.
