@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] State (`taxes/state`) is usable: this year's state income tax from your rate, last year's return or the state's 2026 flat rate (nine states with no wage tax, 13 flat ones), what it would save counted on the federal return (and a button to count it), what is left after withholding, and the same income in the other no-tax and flat-tax states.
 - [builder] Tax documents checklist (`taxes/documents`) is usable: the forms to gather for the tax year worked out from the plan (a W-2 per earner, the business 1099, 1099-INT, the brokerage composite, 1098s, SSA-1099, 1099-R, the HSA and IRA forms, 1095-A, 1098-T), grouped by when each arrives, ticked as each comes, with documents of your own.
 - [builder] Consolidation (`debt/consolidation`) is usable: the debts at 10% or more (or the ones chosen) rolled into a personal loan, a 0% balance-transfer card or a home-equity line, against paying as now: the payment, months to debt-free, interest and fees, the cheapest, and the risks (a transfer that outlasts its free months, the home securing a line).
 - [builder] Student loans (`debt/student-loans`) is usable: federal loans under the standard 10-year plan, IBR, the new Repayment Assistance Plan (from July 2026) and Public Service Loan Forgiveness, month by month on the household's income: the payment, how long, what is paid and forgiven, the tax on forgiveness (taxable again from 2026), and the cost in today's money that ranks them.

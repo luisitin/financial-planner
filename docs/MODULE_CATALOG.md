@@ -136,7 +136,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `taxes/federal` | Federal estimate | usable | 6 | This year's federal income tax from what the plan knows and what you type: the bill or refund, your effective and marginal rates. | UsTaxes, PolicyEngine |
-| `taxes/state` | State | planned | 6 | Estimates your state income tax, starting with the state you live in. | PolicyEngine |
+| `taxes/state` | State | usable | 6 | This year's state income tax: from last year's return, your state's flat rate or your own; what it saves on the federal return, and the same income in other states. | PolicyEngine (facts only) |
 | `taxes/withholding` | Withholding check | usable | 6 | Whether your paychecks are taking out enough federal tax: the refund or bill in April, and the W-4 change that fixes it. | - |
 | `taxes/capital-gains` | Capital gains | usable | 6 | Tax on what you sell this year: short against long, the 0/15/20% bands, the loss allowance, and how much gain still fits at 0%. | - |
 | `taxes/brackets` | Bracket explorer | usable | 6 | Which bracket your next dollar lands in, how much room is left before the next rate, and what a raise, bonus or conversion would really cost. | - |
