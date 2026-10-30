@@ -118,6 +118,8 @@ Pages: `scenarios/stress-tests`, `goal-seek`, `sensitivity`; `reports/plan-summa
 `overview/next-best-action`, `overview/benchmarks`, `overview/monthly-review`.
 **Done when:** a printable plan summary exists and the monthly review takes ten minutes.
 
+Done 2026-10-30: all fifteen pages usable. Overview: Life timeline (every moment to the end of the plan), Next best action (the money left each month and the order to use it in), Plan health score (seven parts from the pages that work them out), How am I doing (the Fed's 2025 Survey of Consumer Finances, Fidelity's savings multiples, the lenders' ratios), Monthly review (nine steps, then marked reviewed with a note; new plan section `reviews`). Scenarios: Stress tests (five real market crises as you retire or now, lower returns, a job loss, never working again, a death, a long life, a care home), Sensitivity (the tornado), Goal seek (six levers solved for a goal). Reports: Plan summary, Retirement, Tax, Financial statements, Annual review, Export (eleven tables as CSV); `modules/reports/report-kit.js` prints a report as a document of its own. The retirement engine gained what-if hooks (`events`, `spendingChanges`, calendar bounds) and `copyInputs`. The phase started by clearing F-028 to F-031: every answer key now agrees (12,000 tax returns, 12,700 retirement cases, 66,000 Social Security rows; 0 to-do tests). Left for later: `scenarios/compare` and `scenarios/advisor-plan` (Phase 8), print styles for the other pages (F-035), the emergency-fund goal question (F-034).
+
 ## Phase 10 -- polish and daily life  (ongoing)
 Offline service worker; live sync between devices; encryption at rest; per-device tokens;
 Spanish strings; `ai/explain` on every page; `ai/notes` (voice memo to entries);
