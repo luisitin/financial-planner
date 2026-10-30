@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Medicare and IRMAA (`retirement/medicare`) is usable: each person's sign-up window, Part B, drug-plan and supplement premiums over retirement, and the 2026 income surcharge tiers applied year by year to the plan's own income two years before (through the brackets, conversions included; pay less pre-tax saving in working years), with the room under the first line and the first year a conversion would trigger it.
 - [builder] Annuities (`retirement/annuities`) is usable: each income annuity quote (single or joint life, now or deferred, with or without a cost-of-living rider): the payout rate, the return it pays like over the likely lifetime, what a bond ladder paying the same to the plan's end would cost, and the plan with it bought (the chance it lasts, what it could spend, the guaranteed share of spending, what is left). Pensions gain optional `lumpSum`, `jointMonthly`, `survivorShare`.
 - [builder] Pensions (`retirement/pensions`) is usable: each pension (the editor for `retirement.pensions`, which the projection counts): what inflation does to it without raises, its expected lifetime value, a lump sum against the monthly payments (the return the pension pays like, the breakeven age and the chance of reaching it), and the survivor option weighted by both partners' survival.
 - [builder] Long-term care: the average years of care now follow the sex saved on How long to plan for (stored as "f"/"m"); the page was looking for "female"/"male" and always used 3 years.
