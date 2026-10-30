@@ -156,7 +156,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `insurance/cash-value` | Cash-value model | planned | 8 | Works out the true rate of return on a permanent policy's cash value and whether to keep it or cash it in. | - |
 | `insurance/disability` | Disability | usable | 8 | If you could not work: what your cover would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
 | `insurance/health` | Health plan compare | planned | 8 | Compares health plans on premiums plus expected out-of-pocket costs and flags which ones allow a health savings account. | - |
-| `insurance/ltc` | Long-term care | planned | 8 | Shows the odds you will need long-term care, what it costs in your state and whether to self-insure or buy a policy. | SSA table |
+| `insurance/ltc` | Long-term care | usable | 8 | The odds you will need care in later life, what it costs, and whether your plan could pay for it or a policy would help. | CareScout 2024 medians, ACL odds |
 | `insurance/property` | Auto, home, umbrella | planned | 8 | Checks whether your auto, home and umbrella coverage is enough for what you own and your net worth. | - |
 
 ## estate
