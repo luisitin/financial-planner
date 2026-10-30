@@ -75,7 +75,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `debt/payoff` | Pay off debts | usable | 4 | One plan for every loan and card: the same money each month, highest rate or smallest balance first, and the date each one is gone. | core/math amortization |
 | `debt/mortgage` | Mortgage | usable | 4 | Your mortgage's schedule, and what extra payments, paying every two weeks or a recast would save. | - |
 | `debt/refinance` | Refinance | usable | 4 | Whether a refinance offer pays: the new payment, when the closing costs are earned back, and the interest either way. | - |
-| `debt/student-loans` | Student loans | planned | 4 | Compares standard and income-driven student loan repayment plans and shows when forgiveness could arrive. | - |
+| `debt/student-loans` | Student loans | usable | 4 | Your federal student loans under each way to repay them: the payment, how long, what is forgiven and what each costs on your own income. | OBBBA 2025 (RAP) |
 | `debt/credit-cards` | Credit cards | usable | 4 | How much of your card limits you use, what paying the minimum really costs, and whether a balance transfer helps. | - |
 | `debt/ratios` | What lenders see | usable | 4 | Debt-to-income, housing and card-use ratios with the lines lenders draw, so you know what an application looks like. | - |
 | `debt/consolidation` | Consolidation | planned | 4 | Compares taking one consolidation loan against keeping the debts you have now. | - |

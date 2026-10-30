@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Student loans (`debt/student-loans`) is usable: federal loans under the standard 10-year plan, IBR, the new Repayment Assistance Plan (from July 2026) and Public Service Loan Forgiveness, month by month on the household's income: the payment, how long, what is paid and forgiven, the tax on forgiveness (taxable again from 2026), and the cost in today's money that ranks them.
 - [builder] Filing status compare (`taxes/filing-status`) is usable: a couple's federal tax jointly against two real separate returns (own pay and saving, half of what is shared, the children on the higher earner's), a single parent as head of household against single, the cheapest, and what filing separately gives up.
 - [builder] Self-employment (`taxes/self-employment`) is usable: the self-employment tax (92.35% of profit, Social Security up to the 2026 wage base after wages, Medicare, the extra 0.9%), half of it off income, the 20% business deduction, the whole tax the business adds and what each extra $100 keeps, the SEP-IRA and solo 401(k) room, and the quarterly payments.
 - [builder] Giving (`goals/charitable`) is usable: what a year's giving saves in federal tax (the real engine with the 2026 rules: the $1,000 / $2,000 deduction without itemizing, the 0.5% floor) and really costs, whether bunching several years into one helps or costs more, the capital gains tax that giving grown shares avoids, and IRA gifts after 70 1/2.
