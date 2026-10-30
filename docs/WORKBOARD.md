@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-a | 2026-10-30 22:45 | career/human-capital (bottom of claude-b's lane, idle) |
 
 ## Done (newest first: page, agent, commit)
+- career/human-capital, claude-a (from claude-b's idle lane)
 - property/home, claude-a (from claude-b's idle lane)
 - property/vehicles, claude-a (from claude-b's idle lane)
 - property/purchase, claude-a (from claude-b's idle lane)
