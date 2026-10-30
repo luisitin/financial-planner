@@ -112,7 +112,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `retirement/medicare` | Medicare and IRMAA | usable | 5 | When to sign up for Medicare, what it costs over retirement, and the income surcharge (IRMAA) year by year from your plan's own income. | CMS 2026 |
 | `retirement/longevity` | How long to plan for | usable | 5 | The chance of reaching each age, for each of you and for at least one of a couple, and the age the plan should run to. | SSA life table |
 | `retirement/fire` | Financial independence | usable | 5 | The pot that could pay for your life without a paycheck, how far you are, and the years to get there at your pace. | FI Calc |
-| `retirement/buckets` | Bucket strategy | planned | 5 | Sizes cash, bond and stock buckets by how many years of spending each one needs to cover. | - |
+| `retirement/buckets` | Bucket strategy | usable | 5 | Cash, bond and stock buckets sized in years of your plan's own withdrawals, and the stock share they leave against your plan's. | - |
 
 ## investments
 | key | title | status | phase | purpose | seeds |
