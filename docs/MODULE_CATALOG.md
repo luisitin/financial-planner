@@ -36,7 +36,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `balance/liquidity` | Emergency fund | usable | 2 | How many months of bills your cash covers, and whether your emergency fund is big enough. | - |
 | `balance/assets` | Asset register | planned | 10 | Lists your property, vehicles and valuables with what you paid, how they lose value and which policy insures each. | - |
 | `balance/liabilities` | Debts | usable | 2 | Every loan and card with its rate and payment: what interest costs you and when each one is gone. | - |
-| `balance/projection` | Net worth projection | planned | 5 | Projects your net worth 1 to 40 years ahead from your cash flow, investment returns and debt payoff. | TPAW |
+| `balance/projection` | Net worth projection | usable | 5 | Net worth in the years ahead: savings growing and spent in retirement, the home's value, debts paid down, in today's money. | TPAW |
 | `balance/statement` | Balance sheet | planned | 9 | Produces a formal, printable balance sheet split by owner and by how quickly each item can be turned into cash. | - |
 
 ## cashflow

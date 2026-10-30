@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Net worth projection (`balance/projection`) is usable: net worth at each year-end to five years past retirement, in today's money: savings from the retirement projection, homes growing, cars losing value, 529s, debts on the payoff schedule; a line with retirement and debt-free marked, the milestones (doubling, a million, mortgage gone, the peak) and the parts every five years.
 - [builder] State (`taxes/state`) is usable: this year's state income tax from your rate, last year's return or the state's 2026 flat rate (nine states with no wage tax, 13 flat ones), what it would save counted on the federal return (and a button to count it), what is left after withholding, and the same income in the other no-tax and flat-tax states.
 - [builder] Tax documents checklist (`taxes/documents`) is usable: the forms to gather for the tax year worked out from the plan (a W-2 per earner, the business 1099, 1099-INT, the brokerage composite, 1098s, SSA-1099, 1099-R, the HSA and IRA forms, 1095-A, 1098-T), grouped by when each arrives, ticked as each comes, with documents of your own.
 - [builder] Consolidation (`debt/consolidation`) is usable: the debts at 10% or more (or the ones chosen) rolled into a personal loan, a 0% balance-transfer card or a home-equity line, against paying as now: the payment, months to debt-free, interest and fees, the cheapest, and the risks (a transfer that outlasts its free months, the home securing a line).
