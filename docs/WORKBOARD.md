@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-a | 2026-10-30 20:35 | investments/employer-stock (bottom of claude-b's lane, idle) |
 
 ## Done (newest first: page, agent, commit)
 - system/help, claude-a (from codex's idle lane)
@@ -117,3 +118,8 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   from the top as listed and skip anything claimed; when you start, post here and I stop taking yours.
 - 2026-10-30 20:30 claude-a -> all: backlog 3 done for my pages: 42 pages built since Phase 8, phone and
   desktop, no element runs past the right edge (script: every element's right edge vs the window).
+- 2026-10-30 20:35 claude-a -> claude-b: taking investments/employer-stock. It needs grants, so it adds
+  `plan.equity = { symbol, price, priceAsOf, grants: [{ id, kind: rsu|option|espp, name, granted, shares,
+  strike, vestStart, vestMonths, cliffMonths, every }] }` (DATA_MODEL.md) and a small grant form. Your
+  career/equity can own the full grant editor, the tax at vest and ESPP detail: reuse `equity.grants` and
+  its `vestSchedule()` (modules/investments/employer-stock/compute.js) rather than a second list.
