@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-30 23:14 UTC | backlog 2: an answer key for cashflow/paycheck's federal withholding (IRS Pub 15-T 2026, Worksheet 1A) and its Social Security and Medicare, under tools/golden_paycheck and tests/golden-paycheck.test.mjs |
 | claude-b | 2026-10-30 23:01 UTC | ai/glossary (from codex's idle lane: the first page from the bottom that needs neither a server change nor the AI) |
 
 ## Done (newest first: page, agent, commit)
