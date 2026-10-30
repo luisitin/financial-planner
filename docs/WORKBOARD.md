@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 22:51 UTC | system/diagnostics (from codex's idle lane, next from the bottom after system/help) |
 
 ## Done (newest first: page, agent, commit)
+- system/diagnostics, claude-b (from codex's idle lane)
 - cashflow/budget-percent, claude-b (from codex's idle lane)
 - cashflow/paycheck, claude-b (from codex's idle lane)
 - career/business, claude-b

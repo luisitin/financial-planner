@@ -230,5 +230,5 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `system/backups` | Backups | planned | 10 | Lists the backups on your server, shows what changed between them and lets you restore any of them. | - |
 | `system/audit` | Change log | planned | 10 | Shows what changed in your data, when it changed and which device made the change. | - |
 | `system/devices` | Devices | planned | 1 | Manages the devices allowed into the app: name each one, revoke access or limit a device to read-only viewing. | - |
-| `system/diagnostics` | Diagnostics | planned | 10 | Shows on one page whether the server and AI are working, the test results and the versions in use. | - |
+| `system/diagnostics` | Diagnostics | usable | 10 | Checks on one page that your plan holds together (links to people, accounts and goals that are gone, dates that are not dates, rates typed as whole numbers), with a fix where one is safe; that every page can work out its numbers; and whether the PC and the AI helper answer. | - |
 | `system/help` | Help | usable | 10 | How the app works, the first steps and which are done, every page with what it is for, and the questions people ask. | - |
