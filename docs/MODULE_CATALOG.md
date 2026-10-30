@@ -163,7 +163,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `estate/documents` | Documents checklist | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
-| `estate/beneficiaries` | Beneficiary audit | planned | 8 | Lists the primary and backup beneficiaries on every account and finds any that are missing or out of date. | - |
+| `estate/beneficiaries` | Beneficiary audit | usable | 8 | Who is named on every retirement account, life policy and payable-on-death account, and what to fix: no one named, no backup, a child named directly. | ERISA spousal rule |
 | `estate/legacy` | Legacy goals | planned | 8 | Records what you want to leave to whom, which sets the amount your plan aims to have left at the end. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | planned | 8 | Shows whether your estate could owe federal or state estate tax and how much of the exemption you have used. | - |
 | `estate/gifting` | Gifting | planned | 8 | Plans gifts within the yearly tax-free limit and shows how to front-load a 529 college plan with five years of gifts at once. | - |
