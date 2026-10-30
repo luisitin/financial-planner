@@ -208,7 +208,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `reports/retirement` | Retirement report | planned | 9 | Pulls your retirement projections, Social Security, withdrawal plan and chance of success into one report. | - |
 | `reports/tax` | Tax report | planned | 9 | Reports your tax picture for this year alongside the multi-year projection. | - |
 | `reports/annual-review` | Annual review pack | planned | 9 | Rolls your monthly reviews up into a single year-in-review pack. | - |
-| `reports/export` | Export | planned | 9 | Exports any table in the app to a spreadsheet or a plain data file. | - |
+| `reports/export` | Export | usable | 9 | Any table in the app as a file a spreadsheet opens: accounts, transactions, income, expenses, debts, goals, holdings, the retirement plan and tax year by year, the life timeline. | - |
 
 ## ai
 | key | title | status | phase | purpose | seeds |

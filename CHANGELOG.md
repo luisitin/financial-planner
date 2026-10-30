@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Export (`reports/export`) is usable: eleven tables as spreadsheet files (CSV), made on the device: accounts, transactions, income, expenses, debts, goals, holdings, net-worth history, the retirement plan year by year, tax year by year and the life timeline; plus the whole plan as one JSON file.
 - [builder] Plan summary (`reports/plan-summary`) is usable: the whole plan as an advisor-style document, opening with a plain-words paragraph, then where you stand, each month's money, retirement with the chance the money lasts, the stress tests, goals, debts, the next ten years, next steps, plan health and the assumptions; "Print or save as PDF" prints the same sheet as a clean document of its own (`modules/reports/report-kit.js`, shared by the reports to come).
 - [builder] Next best action (`overview/next-best-action`) is usable: the money left each month after federal and payroll tax, spending and the saving already set up, then the well-known order (bills, starter cushion, employer match, debt at 10%+, full emergency fund, HSA, IRA, middling debt, 401(k), goals, your choice) with what is left on each step and about when the spare money gets it done.
 - [builder] Plan health score (`overview/health-score`) is usable: one score out of 100 from seven parts, each scored by its own page (cash cushion, saving, debt, retirement, protection through the stress tests, goals, a complete plan), with where the missing points are and what earns them. F-034 asks the owner whether a goal called "Emergency fund" is the emergency fund.
