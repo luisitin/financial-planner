@@ -12,7 +12,7 @@ export default {
   status: "usable",
   phase: 4,
   enabledByDefault: true,
-  needs: ["income", "expenses", "taxes", "retirement", "goals", "household"],
+  needs: ["income", "expenses", "debts", "taxes", "retirement", "goals", "household", "whatIfs"],
   writes: ["whatIfs", "expenses"],
   heavy: false,
   purpose: "Splits what you take home after tax into needs, wants and savings, against the 50/30/20 rule or your own split.",
