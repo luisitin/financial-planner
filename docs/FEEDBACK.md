@@ -338,6 +338,22 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - expected: the published SSA figures in the table; benefits exact to the dime; spouse and survivor amounts (the CSV has benchmark columns for both).
 - suggestion: add the 2025 wage index, the 2026 raise, the 2027 bend points and the 2027 earnings cap to `ssa.js`, each checked on ssa.gov (links in `tests/golden/retirement/ss-rules.md`; the answer key read them on 2026-10-26). Round in whole cents before the dime floor (or work in cents). Spouse and survivor amounts can come with the planned pages that need them.
 - evidence: `node --test tests/golden-social-security.test.mjs` (6 to-do); `tests/golden/retirement/ss-rules.md`; prompt `heavy-social-security-grid`.
+- status: fixed (2026-10-30, builder) — `data/ssa.js` (via `tools/extract-ssa.mjs`) has the 2025 wage index, the December 2026 COLA, the 2027 maximum and credit amount; the 2027 bend points now derive to $1,340 and $8,077; later years keep the last published maximum instead of none; every dime floor goes through `floorDime`; `compute()` returns `pia`, `spousalAtSameAge`, `survivor` per person and a `couple` block (top-ups, survivor income). The golden test now checks all 66,000 rows (not the 2% sample), every to-do is a normal test, 0 to-do. Two things the key gets wrong, recorded in the test and README: history `w12-h04-steady-y1957` is a dime low in the key (its generator floored 2,984.80 to 2,984.70), and its `survivor` column ignores the widow(er)'s limit (82.5% of the PIA when the worker claimed early); the test applies the limit. Filed as F-032 for whoever owns the key; showing the spouse and survivor amounts on the page is F-033 for the designer.
+
+### F-032  Social Security answer key: one history a dime low, and the survivor column misses the widow(er)'s limit (found by the builder)
+- when: 2026-10-30 12:00   page: tests/golden/retirement/ss-benefits.csv   severity: wrong number (in the key)
+- for: owner
+- what happened: replaying all 66,000 rows (F-031) agrees everywhere except (1) `w12-h04-steady-y1957`: the key has PIA 3,068.20; exact is 3,068.30 (2,912.00 x 1.025 = 2,984.80 exactly, the key floored a binary 2,984.7999... to 2,984.70), and the dime carries into every claiming age; (2) the `survivor` column is "the worker's benefit at that age" (ss-rules.md), but a survivor at full retirement age gets at least 82.5% of the worker's PIA when the worker claimed early (SSA POMS RS 00615.320, the widow(er)'s limit), so 16,616 early-claim rows understate it.
+- expected: the key's generator in Decimal arithmetic end to end, and the survivor column with the limit (or renamed "worker's benefit").
+- suggestion: the generator is not in the repo (pull request #3 shipped only the CSVs); regenerate with the two fixes and remove `KEY_DIME_LOW` and `survivorByLaw` from `tests/golden-social-security.test.mjs`.
+- evidence: `node --test tests/golden-social-security.test.mjs`; the comments above `KEY_DIME_LOW` and `survivorByLaw`.
+- status: open
+
+### F-033  Social Security: show the spouse and survivor amounts (filed by the builder)
+- when: 2026-10-30 12:00   page: retirement/social-security   severity: idea
+- for: designer
+- what happened: `compute()` now returns, per person, `spousalAtSameAge` and `survivor`, and for a couple `couple.spousal[personId]` (the top-up on the partner's record), `couple.survivorMonthly[personId]` (what that person keeps if the other dies first) and `couple.survivorYearly`. The page shows none of it yet.
+- suggestion: in each person's fold, a line "If Lee dies first, Sam keeps $2,475 a month" and, when a top-up is above 0, "On Lee's record, Sam gets $500 a month more once Lee has claimed". Plain words; no "PIA".
 - status: open
 
 ## Closed

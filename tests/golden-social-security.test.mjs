@@ -11,13 +11,11 @@ const histories = readRows("./golden/retirement/ss-histories.csv");
 const benefits = readRows("./golden/retirement/ss-benefits.csv");
 const byHistory = new Map(histories.map((row) => [row.history_id, row]));
 const benefitByKey = new Map(benefits.map((row) => [`${row.history_id}|${row.claim_age_years}|${row.claim_age_months}`, row]));
-const roundingTodoKeys = new Set([
-  "w01-h02-steady-y1951|63|6", "w01-h08-rising-y1957|64|0",
-  "w01-h11-late-start-y1960|64|6", "w01-h11-late-start-y1960|65|9",
-  "w01-h17-gaps-y1953|62|0", "w01-h21-part-time-y1957|64|0",
-  "w01-h30-taxable-max-y1953|63|9", "w01-h30-taxable-max-y1953|68|6",
-  "w01-h35-under-35-years-y1958|64|6",
-]);
+// Where the key itself is a dime off (checked by hand, F-031): its generator floored a binary 2,984.7999... to
+// 2,984.70 when 2,912.00 x 1.025 is exactly 2,984.80, and the missing dime carries through every claiming age of
+// this history (PIA 3,068.30, not 3,068.20). On these rows the app's figures are the key's or up to two dimes above
+// (a claim factor scales the missing dime: 0.725 of it at 62, 1.28 of it at 70).
+const KEY_DIME_LOW = new Set(["w12-h04-steady-y1957"]);
 const benefitsByHistory = new Map();
 for (const row of benefits) {
   if (!benefitsByHistory.has(row.history_id)) benefitsByHistory.set(row.history_id, []);
@@ -57,28 +55,39 @@ test("golden files contain 2,000 histories and 33 claiming ages for each", () =>
   }
 });
 
-test("2% compatibility sample: page compute agrees with the independent SSA key to the dime", () => {
-  // 40 of 2,000 histories. This is the published-data slice (1950–1962); later cohorts
-  // have missing AWI/COLA/bend-point values in the current app tables and are TODO below.
-  const sample = histories.slice(0, 40);
-  assert.equal(sample.length / histories.length, 0.02);
-  const observedRoundingTodos = new Set();
-  for (const h of sample) {
+// A survivor at their own full retirement age gets the worker's benefit, but when the worker claimed early never less
+// than 82.5% of the worker's primary insurance amount (the widow(er)'s limit, SSA POMS RS 00615.320). The key's
+// `survivor` column is defined as the worker's benefit at that age (ss-rules.md), so the limit is applied to it here.
+const fraMonths = (birthYear) => birthYear <= 1954 ? 66 * 12 : birthYear <= 1959 ? 66 * 12 + (birthYear - 1954) * 2 : 67 * 12;
+const survivorByLaw = (row, birthYear, month) => Number(row.monthly_benefit) > 0 && month < fraMonths(birthYear) ? Math.max(Number(row.survivor), Math.floor(Number(row.pia) * 0.825 * 10 + 1e-8) / 10) : Number(row.survivor);
+
+test("every history at every claiming age: page compute agrees with the independent SSA key to the dime", () => {
+  // All 2,000 histories (birth years 1950-1995) x 33 claiming ages, valued in October 2026, with SSA's tables through
+  // the 2025 wage index, the 2027 maximum and the COLA paid from January 2027 (not yet in an October 2026 amount).
+  const failed = [];
+  for (const h of histories) {
+    const birthYear = Number(h.birth_date.slice(0, 4));
+    const shift = KEY_DIME_LOW.has(h.history_id) ? 1 : 0;
     for (let month = 62 * 12; month <= 70 * 12; month += 3) {
       const [ageYears, ageMonths] = [Math.floor(month / 12), month % 12];
       const key = `${h.history_id}|${ageYears}|${ageMonths}`;
       const expected = benefitByKey.get(key);
       const actual = appResult(h, ageYears + ageMonths / 12);
-      assert.ok(expected, `missing golden row ${key}`);
-      sameDime(actual.estimate.aime, expected.aime, `${key} AIME`);
-      sameDime(actual.estimate.pia, expected.pia, `${key} PIA`);
-      if (roundingTodoKeys.has(key)) {
-        assert.equal(Math.round(actual.monthly * 10), Math.round(Number(expected.monthly_benefit) * 10) - 1, `${key} known one-dime floating-point floor`);
-        observedRoundingTodos.add(key);
-      } else sameDime(actual.monthly, expected.monthly_benefit, `${key} monthly`);
+      const dimes = (v) => Math.round(Number(v) * 10);
+      const checks = [
+        ["AIME", actual.estimate.aime, expected.aime, 0],
+        ["PIA", actual.estimate.pia, expected.pia, shift],
+        ["monthly", actual.monthly, expected.monthly_benefit, Number(expected.monthly_benefit) > 0 ? shift : 0],
+        ["spouse", actual.spousalAtSameAge, expected.spousal_at_same_age, Number(expected.spousal_at_same_age) > 0 ? shift : 0],
+        ["survivor", actual.survivor, survivorByLaw(expected, birthYear, month), Number(expected.monthly_benefit) > 0 ? shift : 0],
+      ];
+      for (const [label, got, want, dimeShift] of checks) {
+        const off = dimes(got) - dimes(want);
+        if (off !== 0 && !(dimeShift && off > 0 && off <= 2)) failed.push(`${key} ${label}: app ${got}, key ${want}${dimeShift ? " (key known a dime low)" : ""}`);
+      }
     }
   }
-  assert.deepEqual([...observedRoundingTodos].sort(), [...roundingTodoKeys].sort());
+  assert.deepEqual(failed.slice(0, 20), []);
 });
 
 // Independent source tables for the alternate calculation below. Figures are transcribed from SSA OACT:
@@ -437,38 +446,51 @@ test("every tenth history passes a second full calculation from SSA rules", () =
   }
 });
 
-test("TODO: binary floating-point can floor nine exact claim amounts one dime low", { todo: "The mathematically exact amount is $2,315.50; JavaScript currently floors the claim factor product to $2,315.40. The 2% sample asserts and lists all nine affected rows." }, () => {
+test("an exact $x.x0 is not floored a dime low by binary floating point ($2,315.50, not $2,315.40)", () => {
   const h = byHistory.get("w01-h02-steady-y1951");
   const expected = benefitByKey.get(`${h.history_id}|63|6`);
   const actual = appResult(h, 63.5);
   sameDime(actual.monthly, expected.monthly_benefit, "known rounding boundary");
 });
 
-test("TODO: index 2024 earnings with SSA's published 2025 AWI", { todo: "data/ssa.js stops at AWI 2024; a 1965 birth year indexes earnings to 2025 when age 60." }, () => {
+test("earnings are indexed with SSA's published 2025 wage index (a 1965 birth year turns 60 in 2025)", () => {
   const history = histories.find((row) => row.birth_date === "1965-07-01");
   const expected = benefitByKey.get(`${history.history_id}|62|0`);
   sameDime(appResult(history, 62).estimate.aime, expected.aime, "2025 AWI / age-60 indexing");
 });
 
-test("TODO: use the published 2027 bend points", { todo: "SSA lists $1,340 and $8,077 for 2027; the app falls back to AWI 2024 and derives $1,286 and $7,749." }, () => {
+test("the 2027 bend points come out at SSA's published $1,340 and $8,077", () => {
   const history = histories.find((row) => row.birth_date === "1965-07-01");
   assert.deepEqual(appResult(history, 62).estimate.bendPoints, [1340, 8077]);
 });
 
-test("TODO: apply the 2026 3.6% COLA in 2027 values", { todo: "SSA's 2026 COLA is 3.6%, payable from January 2027; data/ssa.js currently stops at 2025." }, () => {
+test("the 3.6% COLA effective December 2026 is in amounts valued in 2027", () => {
   const history = histories[0];
   const prior = benefitByKey.get(`${history.history_id}|62|0`);
   const expected = Math.floor(Number(prior.pia) * 1.036 * 10 + 1e-8) / 10;
   sameDime(appResult(history, 62, "2027-01-01").estimate.pia, expected, "2026 COLA");
 });
 
-test("TODO: cap 2027 earnings at the published $192,300 maximum", { todo: "The app's maximum table ends at 2026, so an input year 2027 is not capped." }, () => {
+test("2027 earnings are capped at the published $192,300 maximum, and later years at the last published one", () => {
   const estimate = estimateBenefit([{ year: 2027, earnings: 250000 }], { birthYear: 1965, futureEarnings: "none", today: "2027-01-01" });
   // 192,300 / 420 months, rounded down to the dollar.
   assert.equal(estimate.aime, 457);
+  assert.equal(estimateBenefit([{ year: 2031, earnings: 250000 }], { birthYear: 1965, futureEarnings: "none", today: "2031-01-01" }).aime, 457, "a year past the table keeps the last maximum");
 });
 
-test("TODO: compute survivor and spousal benefits in the page module", { todo: "compute.js currently returns neither spouse nor survivor estimates; the golden columns are hypothetical benchmarks documented in ss-rules.md." }, () => {
-  const page = compute(emptyPlan(), { today: "2026-10-26" });
+test("the page module returns spouse and survivor amounts for each person, and a couple's top-ups and survivor income", () => {
+  const plan = emptyPlan();
+  plan.household.people.push({ id: "a", name: "Pat", role: "self", birthDate: "1960-07-01" }, { id: "b", name: "Lou", role: "partner", birthDate: "1962-07-01" });
+  plan.retirement.socialSecurity = { a: { claimAge: 62, monthlyAtFRA: 3000 }, b: { claimAge: 67, monthlyAtFRA: 1000 } };
+  const page = compute(plan, { today: "2026-10-26" });
   assert.ok(page.people.every((person) => "spousalAtSameAge" in person && "survivor" in person));
+  const [pat, lou] = page.people;
+  assert.equal(pat.monthly, 2100, "62 is 60 months early: 30% less");
+  assert.equal(pat.spousalAtSameAge, 450, "a spouse the same age claiming at 62: half, less 25/36 of 1% x 36 months and 5/12 of 1% x 24: 15% of 3,000");
+  assert.equal(pat.survivor, 2475, "claimed early: the widow(er)'s limit, 82.5% of 3,000, beats 2,100");
+  assert.equal(page.couple.spousal.b, 500, "Lou: half of 3,000 less 1,000 of their own, at full retirement age");
+  assert.equal(page.couple.spousal.a, 0);
+  assert.equal(page.couple.survivorMonthly.b, 2475, "if Pat dies first Lou keeps the survivor amount");
+  assert.equal(page.couple.survivorMonthly.a, 2100, "if Lou dies first Pat keeps their own");
+  assert.equal(page.couple.survivorYearly, 2475 * 12);
 });
