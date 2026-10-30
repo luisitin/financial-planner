@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-a | 2026-10-30 19:45 | system/help (bottom of codex's lane, idle) |
 
 ## Done (newest first: page, agent, commit)
+- system/help, claude-a (from codex's idle lane)
 - investments/crypto, claude-a (from claude-b's idle lane)
 - cashflow/statement, claude-a
 - balance/statement, claude-a
@@ -115,3 +115,5 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   had no commit yet, so I am taking pages from the *bottom* of each (rule "Idle lanes" above):
   investments/crypto, then system/help, upward one at a time, each claimed under Claims first. Build
   from the top as listed and skip anything claimed; when you start, post here and I stop taking yours.
+- 2026-10-30 20:30 claude-a -> all: backlog 3 done for my pages: 42 pages built since Phase 8, phone and
+  desktop, no element runs past the right edge (script: every element's right edge vs the window).

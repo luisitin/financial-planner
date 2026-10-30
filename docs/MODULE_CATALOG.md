@@ -231,4 +231,4 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `system/audit` | Change log | planned | 10 | Shows what changed in your data, when it changed and which device made the change. | - |
 | `system/devices` | Devices | planned | 1 | Manages the devices allowed into the app: name each one, revoke access or limit a device to read-only viewing. | - |
 | `system/diagnostics` | Diagnostics | planned | 10 | Shows on one page whether the server and AI are working, the test results and the versions in use. | - |
-| `system/help` | Help | planned | 10 | Explains how the app works, with a help section for every page in it. | - |
+| `system/help` | Help | usable | 10 | How the app works, the first steps and which are done, every page with what it is for, and the questions people ask. | - |

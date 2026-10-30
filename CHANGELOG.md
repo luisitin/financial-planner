@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Help (`system/help`) is usable: how the app works in plain words, the seven first steps with a tick for each one the plan already has, a search over every page, every page by section with what it is for (and which are coming), and the questions people ask.
 - [builder] Crypto (`investments/crypto`) is usable: coins in crypto accounts and bitcoin or ether funds anywhere, value against cost, the share of net worth (flagged above 5%), what a 75% fall would take, each coin's lots with a quick price update, the tax if sold today, losses to bank (no wash-sale rule on coins), gains to wait on, and adding a coin.
 - [builder] Cash-flow statement (`cashflow/statement`) is usable: a printable year from the plan in three parts (living after tax, investing, debts split into interest and paying down) adding up to the cash left, with loan payments found among the expenses, and the last twelve months from the bank files.
 - [builder] Balance sheet (`balance/statement`) is usable: a printable sheet of what you own by how fast it turns into cash (today, days, with tax or a penalty, months), what each would bring if cashed in today, what you owe within a year and later, by owner, and the ratios (months of cash, quick ratio, debt to assets, invested share).
