@@ -130,6 +130,7 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
  *   adjustments (above the line: HSA, deductible IRA, ...), itemized (total itemized deductions after their caps, or 0),
  *   charitableCash (cash gifts to charity: from 2026 deductible up to 1,000 / 2,000 joint by people who do not itemize),
  *   ages65plus (you and a spouse), blind, dependentsUnder17, otherDependents, investmentIncome (for NIIT; default qualified income),
+ *   medicareWages (Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving, W-2 box 5; default wages),
  *   withheld, paid (estimated payments)
  * }
  */
@@ -189,7 +190,9 @@ export function federalTax(inputs, params) {
   const niitTh = params.niitThreshold?.[status] ?? 200000;
   const niit = 0.038 * Math.min(investment, Math.max(0, agi - niitTh));
   const medTh = params.additionalMedicareThreshold?.[status] ?? 200000;
-  const additionalMedicare = 0.009 * Math.max(0, wages - medTh);
+  // the 0.9% additional Medicare tax is on Medicare wages, which include 401(k) deferrals (IRC 3101(b)(2), 3121(v)(1)(A))
+  const medicareWages = inputs.medicareWages === undefined || inputs.medicareWages === null ? wages : pos(inputs.medicareWages);
+  const additionalMedicare = 0.009 * Math.max(0, medicareWages - medTh);
   const totalTax = Math.max(0, incomeTax - childTaxCredit) + niit + additionalMedicare - refundable;
   const withheld = pos(inputs.withheld), paid = pos(inputs.paid);
   const out = {

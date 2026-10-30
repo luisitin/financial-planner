@@ -85,6 +85,15 @@ test("net investment income tax and the additional Medicare tax", () => {
   assert.equal(federalTax({ filingStatus: "married_joint", wages: 240000 }, P).additionalMedicare, 0);
 });
 
+test("the additional Medicare tax is on Medicare wages (before 401(k) saving) when they are given", () => {
+  const P = paramsFor(FEDERAL, 2026);
+  // W-2 box 1 wages of 240,000 after a 20,000 401(k): box 5 Medicare wages are 260,000, 10,000 over the joint line
+  near(federalTax({ filingStatus: "married_joint", wages: 240000, medicareWages: 260000 }, P).additionalMedicare, 0.009 * 10000);
+  assert.equal(federalTax({ filingStatus: "married_joint", wages: 240000 }, P).additionalMedicare, 0, "without them, wages as before");
+  // the income tax itself still uses box 1 wages
+  near(federalTax({ filingStatus: "married_joint", wages: 240000, medicareWages: 260000 }, P).incomeTax, federalTax({ filingStatus: "married_joint", wages: 240000 }, P).incomeTax);
+});
+
 test("itemized deductions replace the standard one only when larger; withholding gives a balance", () => {
   const a = federalTax({ filingStatus: "single", wages: 80000, itemized: 12000 }, P);
   assert.equal(a.deduction.used, "standard");

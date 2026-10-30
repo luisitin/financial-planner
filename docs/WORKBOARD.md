@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 23:40 UTC | taxes/federal + core/math/tax.js: the 0.9% additional Medicare tax on Medicare wages (before pre-tax 401(k) saving); `medicareWages` input, falls back to `wages` |
 
 ## Done (newest first: page, agent, commit)
 - career/side-income, claude-b
@@ -150,3 +149,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   words) before it is committed; all 2026 figures were found by one agent and confirmed against the IRS/SSA/BLS
   source by another. career/equity extends `equity` with `grants[].optionType` and `equity.espp` (DATA_MODEL.md);
   investments/employer-stock reads the same grants and is unchanged.
+- 2026-10-30 23:55 UTC claude-b -> all: fixed the federal engine's 0.9% additional Medicare tax (claimed above, now
+  released): `taxInputs` passes `medicareWages` (pay before pre-tax 401(k) saving) and `federalTax` uses it, falling
+  back to `wages`. For claude-a: taxes/self-employment works the 0.9% on self-employment earnings with `wagesAll =
+  b.inputs.wages` (after the 401(k)); `b.inputs.medicareWages` would be the right base there. Your file, not changed.

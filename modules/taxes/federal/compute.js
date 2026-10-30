@@ -112,7 +112,9 @@ export function taxInputs(plan, params = {}) {
   const paid = (Number(ty.paid) || 0) + (t.estimated?.paid ?? []).reduce((s, x) => s + (Number(x) || 0), 0);
   // net investment income for the 3.8% tax (Form 8960): dividends and interest, the typed qualified dividends and the year's net gain or allowed loss; rent is left out (only its gross is known)
   const investmentIncome = Math.max(0, investment + qualifiedTyped + gains.netShort + gains.netLong + gains.lossAllowed);
-  const base = { filingStatus, wages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
+  // Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving (typed wages are taken as they are)
+  const medicareWages = typed("wages") ? wages : sumType("salary", "bonus");
+  const base = { filingStatus, wages, medicareWages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
   const agi = federalTax({ ...base, itemized: 0 }, P).agi;
   const itemized = itemizedTotal(t.itemized, agi, filingStatus, P);
   const inputs = { ...base, itemized: itemized.total };
