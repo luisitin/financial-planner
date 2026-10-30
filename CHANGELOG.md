@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Salary and raises (`career/salary`) is usable: each job's pay from now to its holder's retirement birthday, with the yearly raise, a promotion every few years and an age where pay stops gaining on prices, in today's money and in each year's dollars (a chart, the years ahead); the raise against prices; what the next raise keeps after federal tax, Social Security, Medicare and state tax; the pay still to come; what one more percent a year and a 5% raise won now are worth; and the career's average growth offered for the Income page.
 - [builder] Human capital (`career/human-capital`) is usable: each earner's pay to retirement valued in today's money at a rate set by how steady the job is, before and after tax, against the life cover on them; a chart of pay still to come falling as savings rise, the year they cross, and what it means for insurance, investing and raises.
 - [builder] Home (`property/home`) is usable: the home's value and your share of it, growth since you bought it, a year of costs (tax, insurance, dues, upkeep, interest), what selling today would leave (costs, the $250,000/$500,000 tax-free gain), value and equity in 5, 10 and 20 years, and updating its value with history kept.
 - [builder] Vehicles (`property/vehicles`) is usable: each car's real yearly cost (value lost, fuel or charging, insurance, upkeep, registration, loan interest) and per mile, and keeping it against buying new or leasing over the same years, the cheapest marked, with an upside-down loan handled.

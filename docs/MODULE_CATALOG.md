@@ -183,7 +183,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## career
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `career/salary` | Salary and raises | planned | 10 | Maps out how your salary could grow with raises and promotions, shown in today's dollars. | - |
+| `career/salary` | Salary and raises | usable | 10 | Maps out how your salary could grow with raises and promotions, shown in today's dollars. | - |
 | `career/equity` | Equity compensation | planned | 10 | Tracks your employer stock plans: vesting and purchase schedules, the taxes they trigger and how concentrated you are. | - |
 | `career/side-income` | Side income | planned | 10 | Models irregular income from gigs, freelance work and a small business so your plan can count on it sensibly. | - |
 | `career/business` | Small business | planned | 10 | Tracks your small business's profit and loss, what you pay yourself and your self-employed retirement plans. | taxes/self-employment |
