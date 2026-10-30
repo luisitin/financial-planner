@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Renovation (`property/renovation`) is usable: a project's cost against the value it adds (2024 Cost vs. Value averages or your own), and paying by cash, a home-equity line, a cash-out refinance or a personal loan, ranked by cost in today's money, with the cushion left and the equity there to borrow.
 - [builder] Rental analysis (`property/rental`) is usable: each rental from rent to after-tax cash (vacancy, running costs, net operating income, loan payments), cap rate, cash-on-cash, debt-service coverage, break-even occupancy, depreciation over 27.5 years, the $25,000 loss allowance shared across rentals, and what it adds to wealth; add, change and remove rentals.
 - [builder] Employer stock (`investments/employer-stock`) is usable: shares of your employer held anywhere, vested options and grants still to vest, the share of invested wealth against a 10% ceiling, what a halving would take while your pay depends on the same company, the next year's vests and the gap between the 22% withheld and your rate, and how to get under 10% (plan shares first, no tax); grants entered here (`equity.grants`).
 - [builder] Help (`system/help`) is usable: how the app works in plain words, the seven first steps with a tick for each one the plan already has, a search over every page, every page by section with what it is for (and which are coming), and the questions people ask.

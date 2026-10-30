@@ -178,7 +178,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `property/rental` | Rental analysis | usable | 10 | What a rental really earns: rent less empty months and costs, the loan and tax, the checks a lender makes, and what it adds to your wealth. | - |
 | `property/vehicles` | Vehicles | planned | 10 | Works out what each vehicle really costs to own and whether to lease, buy or keep the one you have. | - |
 | `property/purchase` | Big purchase planner | planned | 10 | Helps you plan any big purchase: whether to save up or finance it, and what it does to your other goals. | - |
-| `property/renovation` | Renovation | planned | 10 | Weighs a renovation's cost against the value it adds to your home and how you would pay for it. | - |
+| `property/renovation` | Renovation | usable | 10 | A home project against what it adds to the home's value, and the cheapest way to pay: cash, a home-equity line, a cash-out refinance or a loan. | - |
 
 ## career
 | key | title | status | phase | purpose | seeds |
