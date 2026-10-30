@@ -31,7 +31,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Medicare at 65"),
     ui.h("p", { class: "lede" }, `Medicare starts at 65 for nearly everyone. Hospital cover (Part A) is free for most people; doctors' cover (Part B) costs ${cents(d.partB)} a month in ${d.year}, and a drug plan (Part D) about ${cents(d.partD)}. With a higher income both cost more: the income surcharge, called IRMAA.`),
-    d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, `${p.name}: sign up between ${monthName(p.window.from)} and ${monthName(p.window.to)}, around the 65th birthday (${monthName(p.window.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
+    d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, `${p.name}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
     ui.h("p", { class: "muted small" }, `Still working with cover from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`)));
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the costs year by year, the plan needs: ${d.missing.join("; ")}.`))); return; }
 

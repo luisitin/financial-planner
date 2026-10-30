@@ -17,7 +17,7 @@ export function tierFor(magi, status) {
   return { index: k, partB: t[k][1], partDAdd: t[k][2], upTo: t[k][0], first: t[0][0] };
 }
 
-/** The sign-up window around the 65th birthday: three months before the birthday month to three months after (a birthday on the 1st moves it a month earlier). */
+/** The sign-up period around the 65th birthday: three months before the birthday month to three months after (a birthday on the 1st moves it a month earlier). */
 export function enrollmentWindow(birthDate) {
   const [y, m, d] = String(birthDate).split("-").map(Number);
   let month = m - (d === 1 ? 1 : 0), year = y + 65;
@@ -29,7 +29,7 @@ export function enrollmentWindow(birthDate) {
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, year (of the figures), partB, deductible, partD, supplement, status,
- *   people: [{ id, name, medicareYear, window: { from, month, to } }],
+ *   people: [{ id, name, medicareYear, signup: { from, month, to } }],
  *   years: [{ year, enrolled, magiYear, magiReal, tier, partBEach, partDAddEach, surchargeYearly, totalYearly, conversion }],
  *   lifetime (all premiums, today's dollars), surcharge (the IRMAA part of it), surchargeYears, firstSurcharge: { year, magiYear, over } | null, roomNow: { year, room } | null
  * }
@@ -41,7 +41,7 @@ export function compute(plan, params = {}) {
   const supplement = Number(m.supplementPremium) > 0 ? Number(m.supplementPremium) : 0;
   const status = plan.household?.filingStatus || "single";
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
-  const people = adults.map((p) => ({ id: p.id, name: p.name, medicareYear: Number(p.birthDate.slice(0, 4)) + 65, window: enrollmentWindow(p.birthDate), age: today ? ageOn(p.birthDate, today) : null }));
+  const people = adults.map((p) => ({ id: p.id, name: p.name, medicareYear: Number(p.birthDate.slice(0, 4)) + 65, signup: enrollmentWindow(p.birthDate), age: today ? ageOn(p.birthDate, today) : null }));
   const base = { year: YEAR, partB: PART_B, deductible: PART_B_DEDUCTIBLE, partD, supplement, status, people, latePenalty: LATE_PENALTY };
   // the plan's income each year, through the federal brackets (so every row carries its taxable income)
   const p2 = JSON.parse(JSON.stringify(plan));
