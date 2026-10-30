@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, withholdFederal, w4StatusFor, PAYROLL } from "./compute.js";
+import { compute, withholdFederal, w4StatusFor, hundred, PAYROLL } from "./compute.js";
+import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { PCT_METHOD } from "./data/withholding.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -22,6 +23,12 @@ test("the 2026 tables as printed in Publication 15-T: each base is the last plus
     });
     assert.equal(rows.length, 8, `${kind} ${status}`);
   }
+  // the tables start where the standard deduction (less line 1g) or half of it runs out: ties them to the year's figures
+  const F = FEDERAL[2026].status;
+  assert.equal(T.standard.married_joint[1].from, F.married_joint.standardDeduction - T.step1g.married_joint);
+  assert.equal(T.standard.single[1].from, F.single.standardDeduction - T.step1g.other);
+  assert.equal(T.standard.head_of_household[1].from, F.head_of_household.standardDeduction - T.step1g.other);
+  for (const s of ["married_joint", "single", "head_of_household"]) assert.equal(T.checkbox[s][1].from, F[s].standardDeduction / 2);
 });
 
 test("Worksheet 1A by hand: $2,000 every two weeks, single, nothing else on the W-4", () => {
@@ -60,19 +67,47 @@ test("the family: Ana's 401(k) comes off before income tax but not before Social
   assert.equal(a.federal.from, "estimate"); near(a.federal.amount, withholdFederal(a.wages.federal, 26, { status: "married_joint" }, 2026).perCheck);
   near(a.net, a.gross - a.pretaxTotal - a.federal.amount - a.ss - a.medicare - a.state.amount - a.aftertaxTotal);
   near(a.taxesTotal, a.federal.amount + a.ss + a.medicare + a.state.amount);
-  near(a.shares.net + a.shares.taxes + a.shares.saved + a.shares.benefits, 100 * (a.net + a.taxesTotal + a.pretaxTotal + a.aftertaxTotal) / a.gross, 1e-9);
+  assert.equal(a.shares.net + a.shares.taxes + a.shares.saved + a.shares.benefits, 100);
+  assert.equal(a.shares.saved, Math.round(100 * k.amount / 3900)); assert.equal(a.shares.taxes, Math.round(100 * a.taxesTotal / 3900));
   near(bo(d).gross, 5200); assert.equal(bo(d).paychecks, 12);
-  assert.ok(d.notes.some((n) => /both have "Married filing jointly"/.test(n)));
+  // nothing typed: the note says the W-4s are assumed; typed, it says so as a fact
+  assert.ok(d.notes.some((n) => /assume both W-4s say "Married filing jointly"/.test(n)));
+  const typed = compute(withPay((q) => { q.whatIfs = { paycheck: { "p-ana": { w4Status: "married_joint" }, "p-bo": { w4Status: "married_joint" } } }; }), { today: TODAY });
+  assert.ok(typed.notes.some((n) => /You both have "Married filing jointly"/.test(n)));
   assert.equal(a.state.from, "no-tax", "Texas has no income tax"); assert.equal(a.state.amount, 0);
 });
 
-test("health cover, the HSA, the FSAs and commuting come off before every tax; the Benefits page's elections fill the gaps", () => {
-  const p = withPay((q) => { q.whatIfs = { paycheck: { "p-ana": { health: 120 } }, benefits: { "p-ana": { fsaElect: 2600, dcfsaElect: 5200, transitMonthly: 130, hsaElect: 0 } } }; });
-  const a = ana(compute(p, { today: TODAY }));
+test("whole-dollar shares of $100 always add up to 100 (largest remainder)", () => {
+  assert.deepEqual(hundred({ a: 14.4, b: 12.4, c: 0.6, d: 72.6 }, 100), { a: 14, b: 12, c: 1, d: 73 });
+  assert.deepEqual(hundred({ a: 1, b: 1, c: 1 }, 3), { a: 34, b: 33, c: 33 });
+});
+
+test("health cover, the HSA, the FSAs and commuting come off before every tax; Benefits elections for this year fill the gaps", () => {
+  // in June the Benefits elections page plans this year, so its choices count
+  const JUNE = "2026-06-15";
+  const p = withPay((q) => { q.whatIfs = { paycheck: { "p-ana": { health: 120 } }, benefits: { "p-ana": { fsaElect: 2600, dcfsaElect: 5200, transitMonthly: 130 } } }; });
+  const a = ana(compute(p, { today: JUNE }));
   const k = a.pretax.find((x) => x.key === "k401").amount;
   const caf = 120 + 2600 / 26 + 5200 / 26 + 130 * 12 / 26;
   near(a.pretaxTotal, k + caf); near(a.wages.fica, 3900 - caf); near(a.wages.federal, 3900 - k - caf);
   assert.equal(a.pretax.find((x) => x.key === "fsa").from, "plan"); assert.equal(a.pretax.find((x) => x.key === "health").from, "typed");
+  // the elections are capped by the Benefits elections page's limits (2026: health FSA 3,400, child care 7,500, transit 340 a month)
+  const big = withPay((q) => { q.whatIfs = { benefits: { "p-ana": { fsaElect: 5000, dcfsaElect: 9000, transitMonthly: 500 } } }; });
+  const b = ana(compute(big, { today: JUNE }));
+  near(b.pretax.find((x) => x.key === "fsa").amount, 3400 / 26); near(b.pretax.find((x) => x.key === "dcfsa").amount, 7500 / 26); near(b.pretax.find((x) => x.key === "commuter").amount, 340 * 12 / 26);
+  // from October that page plans next year: left out, with a note
+  const oct = compute(big, { today: TODAY });
+  assert.equal(ana(oct).pretax.some((x) => x.key === "fsa"), false); assert.ok(oct.notes.some((n) => /next year's benefits/.test(n)));
+});
+
+test("the HSA and FSA page's figures are the first adult's; an HSA is state pay in California", () => {
+  const p = withPay((q) => { q.taxes = { ...(q.taxes ?? {}), hsa: { coverage: "family", contribution: 2600, employer: 520, fsa: 1300 } }; });
+  const a = ana(compute(p, { today: TODAY }));
+  near(a.pretax.find((x) => x.key === "hsa").amount, 100); near(a.pretax.find((x) => x.key === "fsa").amount, 50); near(a.employer.hsa, 20);
+  assert.equal(bo(compute(p, { today: TODAY })).pretax.some((x) => x.key === "hsa"), false);
+  const ca = withPay((q) => { q.household.state = "CA"; q.taxes = { ...(q.taxes ?? {}), hsa: { contribution: 2600 }, state: { rate: 0.05 } }; });
+  const c = ana(compute(ca, { today: TODAY }));
+  near(c.wages.state, c.wages.federal + 100);
 });
 
 test("Social Security stops at the wage base; the 0.9% starts above $200,000; the year's take-home counts both", () => {
@@ -84,6 +119,31 @@ test("Social Security stops at the wage base; the 0.9% starts above $200,000; th
   near(a.monthly, a.yearly.net / 12);
 });
 
+test("two jobs: each employer counts Social Security to the wage base and the 0.9% on its own pay", () => {
+  const p = withPay((q) => { q.retirement.contributions = []; q.income.find((x) => x.id === "i-ana").amount = 110000 / 26; q.income.push({ id: "i-ana2", name: "Second job", type: "salary", personId: "p-ana", amount: 110000 / 26, period: "biweekly", growth: 0, taxable: true }); });
+  const a = ana(compute(p, { today: TODAY }));
+  assert.equal(a.jobs, 2); assert.equal(a.ssStopsAfter, null); assert.equal(a.extraMedicareFrom, null);
+  near(a.yearly.ss, 0.062 * 220000, 0.01); near(a.yearly.medicare, 0.0145 * 220000, 0.01);
+});
+
+test("the pay stub's federal figure wins, then the W-4 typed here, then the Withholding check page's for the same paychecks", () => {
+  const p = withPay((q) => { q.taxes = { ...(q.taxes ?? {}), withholding: { self: { perPaycheck: 250, period: "monthly" } } }; });
+  assert.equal(ana(compute(p, { today: TODAY })).federal.from, "estimate", "12 a year on that page, 26 here: not the same paychecks");
+  const w4 = withPay((q) => { q.taxes = { ...(q.taxes ?? {}), withholding: { self: { perPaycheck: 250, period: "biweekly" } } }; q.whatIfs = { paycheck: { "p-ana": { step2: true } } }; });
+  const a = ana(compute(w4, { today: TODAY }));
+  assert.equal(a.federal.from, "estimate"); assert.equal(a.federal.period, "biweekly"); near(a.federal.onPage, 250); assert.equal(a.federal.onPageMatches, true);
+});
+
+test("the state: the State page's tax as a share of income (after its allowances), as typed, or none", () => {
+  const co = withPay((q) => { q.household.state = "CO"; });
+  const d = compute(co, { today: TODAY }), a = ana(d);
+  assert.ok(a.state.rate > 0 && a.state.rate < 0.044, `Colorado's 4.4% less its allowance: ${a.state.rate}`);
+  near(a.state.amount, a.state.rate * a.wages.state);
+  const typed = withPay((q) => { q.household.state = "CA"; q.whatIfs = { paycheck: { "p-ana": { state: 150 }, "p-bo": { state: 210 } } }; });
+  const t = compute(typed, { today: TODAY });
+  assert.equal(t.notes.some((n) => /state's income tax is not counted/.test(n)), false);
+});
+
 test("the pay stub's federal figure wins, then the Withholding page's; the state at its rate or as typed", () => {
   const typed = withPay((q) => { q.whatIfs = { paycheck: { "p-ana": { federal: 300, state: 90 } } }; q.taxes = { ...(q.taxes ?? {}), withholding: { self: { perPaycheck: 250, period: "biweekly" } } }; });
   const a = ana(compute(typed, { today: TODAY }));
@@ -93,7 +153,7 @@ test("the pay stub's federal figure wins, then the Withholding page's; the state
   const pa = withPay((q) => { q.household.state = "PA"; });
   const b = ana(compute(pa, { today: TODAY }));
   // Pennsylvania taxes pay before the 401(k) comes off
-  assert.equal(b.state.from, "rate"); near(b.state.rate, 0.0307); near(b.wages.state, 3900); near(b.state.amount, 0.0307 * 3900);
+  assert.equal(b.state.from, "rate"); near(b.wages.state, 3900); near(b.state.amount, b.state.rate * 3900);
 });
 
 test("the employer's part: the match from the plan's contributions, its own Social Security and Medicare", () => {
@@ -106,6 +166,7 @@ test("paychecks: the Income page's period, typed, or 26 assumed for yearly pay; 
   const p = withPay((q) => { q.income.find((x) => x.id === "i-bo").period = "annual"; q.income.find((x) => x.id === "i-bo").amount = 62400; q.whatIfs = { paycheck: { "p-ana": { paychecks: 24, roth: 100 } } }; });
   const d = compute(p, { today: TODAY });
   assert.equal(bo(d).paychecksFrom, "assumed"); assert.equal(bo(d).paychecks, 26); near(bo(d).gross, 62400 / 26);
+  assert.ok(d.notes.some((n) => /Bo's pay is entered as a yearly figure/.test(n)));
   const a = ana(d);
   assert.equal(a.paychecks, 24); near(a.gross, 3900 * 26 / 24);
   const roth = a.aftertax.find((x) => x.key === "roth");
@@ -117,4 +178,6 @@ test("not ready without pay; pay not linked to anyone", () => {
   const p = withPay((q) => { q.income.forEach((x) => { if (x.type === "salary") x.personId = ""; }); });
   const d = compute(p, { today: TODAY });
   assert.equal(d.ready, false); assert.equal(d.why, "no-person");
+  const kid = withPay((q) => { q.income.forEach((x) => { if (x.type === "salary") x.personId = "p-cy"; }); });
+  assert.equal(compute(kid, { today: TODAY }).why, "no-person", "pay linked to a child counts as no adult's");
 });
