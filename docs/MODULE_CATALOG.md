@@ -203,7 +203,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## reports
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `reports/plan-summary` | Plan summary | planned | 9 | Gives you a printable overview in the style of an advisor's plan: where you stand, goals, protection and next steps. | - |
+| `reports/plan-summary` | Plan summary | usable | 9 | Gives you a printable overview in the style of an advisor's plan: where you stand, goals, protection and next steps. | - |
 | `reports/statements` | Financial statements | planned | 9 | Bundles your balance sheet, income statement and cash-flow statement into one printable pack. | - |
 | `reports/retirement` | Retirement report | planned | 9 | Pulls your retirement projections, Social Security, withdrawal plan and chance of success into one report. | - |
 | `reports/tax` | Tax report | planned | 9 | Reports your tax picture for this year alongside the multi-year projection. | - |

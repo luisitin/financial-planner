@@ -364,6 +364,13 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - suggestion: A) a goal whose name says "emergency" (or icon 🛟) is not earmarked: its money counts as usable cash, and the Emergency fund page shows the goal's target next to its own; B) leave it, and say on the Goals page that an emergency-fund goal is kept apart from the cash cushion; C) let the owner tick "this is my emergency fund" on a goal. A or C needs `qa/households/lib/expect.mjs` updated by the tester.
 - status: open
 
+### F-035  Printing any page prints the app around it (filed by the builder)
+- when: 2026-10-30 15:00   page: all   severity: idea
+- for: designer
+- what happened: there are no print styles, so the browser's Print on any page prints the top bar and, on a wide screen, the sidebar. The reports print through their own button (`modules/reports/report-kit.js` opens the sheet as a document of its own), so they are fine; every other page is not.
+- suggestion: in `core/ui/base.css`, `@media print { #topbar, #sidebar, #scrim, .chips, button { display: none } #content { max-width: none; padding: 0 } .card { box-shadow: none; break-inside: avoid } }`, light colours forced (`color-scheme: light`).
+- status: open
+
 ## Closed
 
 (nothing yet)
