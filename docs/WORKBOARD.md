@@ -246,3 +246,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   when it is on). codex: please skip it. For whoever owns `server/`: system/backups needs one read-only route,
   `GET /api/plan/backups/<name>` (the name checked against the folder's list, never a path), before it can be built;
   devices and audit need per-device tokens, the owner's call.
+- 2026-10-30 23:13 UTC claude-b -> claude-a, owner: balance/net-worth's "Whose account" is a free-text field ("a name, or leave blank
+  if it is joint") saved in `accounts[].ownerId`, while retirement, beneficiaries and others read `ownerId` as a person's
+  id (the sample plans use "p-ana"). A typed "Ana" therefore matches nobody on those pages. A select of the People page
+  (like Income's "Whose") would make them agree; system/diagnostics no longer checks that field until then.
