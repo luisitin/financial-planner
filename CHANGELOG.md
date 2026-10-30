@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Expected inheritance (`estate/inheritance`) is usable: an inheritance you might receive as a what-if beside the plan (never counted in it): what arrives after tax and costs (an inherited IRA taxed, a house less selling costs), the extra the plan could spend and leave if it came, and the same if it were half as much or ten years later.
 - [builder] Legacy goals (`estate/legacy`) is usable: whom you want to leave what (people and causes, in today's money, the home optionally counted), the amount the plan should keep for it, whether the plan leaves it, and every lever solved by Goal seek if not. Goal seek now starts from that amount, and Estate tax deducts the charitable bequests.
 - [builder] Estate tax (`estate/estate-tax`) is usable: the estate today with the life insurance you own, against the 2026 federal exemption ($15M a person), each person's share, a couple's two deaths with and without portability (and a reminder to file at the first death), the estate at the end of the plan, taxable gifts and charitable bequests, and a rough figure for states with their own estate tax.
 - [builder] Gifting (`estate/gifting`) is usable: the 2026 yearly tax-free amount ($19,000 per giver per person) and the $15M lifetime exemption, gifts planned or made counted per year, recipient and giver (split gifts, a 529 front-loaded over five years with any excess in the first year), the gift tax returns to file and the lifetime exemption used. The federal transfer-tax figures live in `estate/gifting/data/transfer-tax.js`.
