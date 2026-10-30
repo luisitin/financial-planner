@@ -151,7 +151,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `insurance/policies` | Policies | usable | 8 | Every policy on one list: what it pays, what it costs a year, whom it covers, when it ends or renews, and what deserves a second look. | - |
-| `insurance/life-needs` | Life insurance needs | planned | 8 | Works out the life insurance you need two common ways and compares it with your current coverage. | - |
+| `insurance/life-needs` | Life insurance needs | usable | 8 | How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the cover you have. | SSA survivors, family maximum, earnings test |
 | `insurance/term-vs-permanent` | Term vs permanent | planned | 8 | Compares term life plus investing the difference against whole or universal life, using the policy's own illustration numbers. | - |
 | `insurance/cash-value` | Cash-value model | planned | 8 | Works out the true rate of return on a permanent policy's cash value and whether to keep it or cash it in. | - |
 | `insurance/disability` | Disability | planned | 8 | Shows the gap between your pay and what disability coverage would replace, the waiting period and group versus individual plans. | - |

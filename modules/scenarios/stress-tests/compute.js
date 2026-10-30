@@ -144,27 +144,12 @@ export function compute(plan, params = {}) {
   // the death of one of a couple: the plan rebuilt for the survivor alone, from this year
   if (adults.length >= 2) {
     for (const d of adults.slice(0, 2)) {
-      const survivor = adults.find((a) => a.id !== d.id);
-      const p2 = JSON.parse(JSON.stringify(plan));
-      p2.household.people = p2.household.people.filter((q) => q.id !== d.id).map((q) => (q.id === survivor.id ? { ...q, role: "self" } : q));
-      const kids = p2.household.people.some((q) => q.role === "dependent");
-      p2.household.filingStatus = kids ? "head_of_household" : "single";
-      p2.income = (p2.income ?? []).filter((x) => x.personId !== d.id);
-      if (p2.retirement) { p2.retirement.contributions = (p2.retirement.contributions ?? []).filter((c) => c.personId !== d.id); delete (p2.retirement.socialSecurity ?? {})[d.id]; }
-      const bd = buildInputs(p2, { today });
-      if (!bd.inputs) continue;
-      const S = bd.inputs;
-      S.spendingChanges = [...(S.spendingChanges ?? []), { fromYear: startYear, factor: SURVIVOR_SPENDING }];
-      const keep = ss.couple?.survivorMonthly?.[survivor.id] ?? 0;
-      const sline = S.incomes.find((x) => x.kind === "social");
-      const sp = ss.people.find((q) => q.id === survivor.id);
-      if (keep > 0) {
-        if (sline) sline.yearly = Math.max(sline.yearly, keep * 12);
-        else S.incomes.push({ name: `${survivor.name}'s survivor benefit`, yearly: keep * 12, personIndex: 0, startAge: Math.max(60, Math.floor(sp?.claimAge ?? 67)), cola: true, taxable: true, kind: "social" });
-      }
+      const sv = survivorInputs(plan, d.id, { today, ss });
+      if (!sv) continue;
+      const { inputs: S, survivor, keep, kids } = sv;
       const life = (plan.insurance?.policies ?? []).filter((x) => ["term", "whole"].includes(x.kind) && x.personId === d.id).reduce((s, x) => s + (Number(x.benefit) || 0), 0);
       S.events = [...(S.events ?? []), { year: startYear, amount: FUNERAL - life, label: "funeral and life insurance" }];
-      add({ id: `death-${d.id}`, group: "life", icon: "🕯️", title: `If ${d.name} died this year`, story: `${survivor.name} goes on alone: ${d.name}'s pay and saving stop, spending drops to about ${Math.round(SURVIVOR_SPENDING * 100)}% of the couple's, ${keep > 0 ? `Social Security becomes the larger of ${survivor.name}'s own and the survivor amount, about ${money(keep)} a month` : "no Social Security figures are in the plan"}, a funeral costs about ${money(FUNERAL)}${life > 0 ? `, and life insurance pays ${money(life)}` : ", and no life insurance is in the plan"}. Tax is filed as ${kids ? "head of household" : "single"}. Before retirement the plan assumes ${survivor.name}'s pay covers the household; if it would not, that gap comes on top.`, go: ["retirement", "social-security"] }, run(S));
+      add({ id: `death-${d.id}`, group: "life", icon: "🕯️", title: `If ${d.name} died this year`, story: `${survivor.name} goes on alone: ${d.name}'s pay and saving stop, spending drops to about ${Math.round(SURVIVOR_SPENDING * 100)}% of the couple's, ${keep > 0 ? `Social Security becomes the larger of ${survivor.name}'s own and the survivor amount, about ${money(keep)} a month` : "no Social Security figures are in the plan"}, a funeral costs about ${money(FUNERAL)}${life > 0 ? `, and life insurance pays ${money(life)}` : ", and no life insurance is in the plan"}. Tax is filed as ${kids ? "head of household" : "single"}. Before retirement the plan assumes ${survivor.name}'s pay covers the household; if it would not, that gap comes on top (Life insurance needs works it out).`, go: ["insurance", "life-needs"] }, run(S));
     }
   }
 
@@ -195,6 +180,38 @@ export function compute(plan, params = {}) {
 
   const passed = scenarios.filter((s) => s.success).length;
   return { ready: true, missing: [], when, hitYear, base, scenarios, passed, total: scenarios.length, years, notes, retireYear: I.retireYear, startYear };
+}
+
+/**
+ * The plan rebuilt for the one who outlives the other, from this year: the other's pay, retirement saving and
+ * Social Security record gone, spending at SURVIVOR_SPENDING of the couple's, the survivor's Social Security the
+ * larger of their own and the survivor amount on the other's record, filed single (head of household with
+ * children). The funeral and any life insurance are left to the caller. Shared with insurance/life-needs.
+ * -> { inputs, survivor: { id, name }, keep (survivor's Social Security a month), kids } | null (no partner, or the plan cannot be built)
+ */
+export function survivorInputs(plan, deceasedId, { today, ss = null } = {}) {
+  const adults = (plan.household?.people ?? []).filter((q) => q.role !== "dependent");
+  const survivor = adults.find((q) => q.id !== deceasedId);
+  if (!survivor || !adults.some((q) => q.id === deceasedId)) return null;
+  const p2 = JSON.parse(JSON.stringify(plan));
+  p2.household.people = p2.household.people.filter((q) => q.id !== deceasedId).map((q) => (q.id === survivor.id ? { ...q, role: "self" } : q));
+  const kids = p2.household.people.some((q) => q.role === "dependent");
+  p2.household.filingStatus = kids ? "head_of_household" : "single";
+  p2.income = (p2.income ?? []).filter((x) => x.personId !== deceasedId);
+  if (p2.retirement) { p2.retirement.contributions = (p2.retirement.contributions ?? []).filter((c) => c.personId !== deceasedId); delete (p2.retirement.socialSecurity ?? {})[deceasedId]; }
+  const bd = buildInputs(p2, { today });
+  if (!bd.inputs) return null;
+  const S = bd.inputs;
+  S.spendingChanges = [...(S.spendingChanges ?? []), { fromYear: S.startYear, factor: SURVIVOR_SPENDING }];
+  const social = ss ?? computeSocialSecurity(plan, { today });
+  const keep = social.couple?.survivorMonthly?.[survivor.id] ?? 0;
+  const sline = S.incomes.find((x) => x.kind === "social");
+  const sp = social.people.find((q) => q.id === survivor.id);
+  if (keep > 0) {
+    if (sline) sline.yearly = Math.max(sline.yearly, keep * 12);
+    else S.incomes.push({ name: `${survivor.name}'s survivor benefit`, yearly: keep * 12, personIndex: 0, startAge: Math.max(60, Math.floor(sp?.claimAge ?? 67)), cola: true, taxable: true, kind: "social" });
+  }
+  return { inputs: S, survivor: { id: survivor.id, name: survivor.name }, keep, kids };
 }
 
 function pctOne(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }
