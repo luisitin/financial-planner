@@ -141,7 +141,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `taxes/capital-gains` | Capital gains | usable | 6 | Tax on what you sell this year: short against long, the 0/15/20% bands, the loss allowance, and how much gain still fits at 0%. | - |
 | `taxes/brackets` | Bracket explorer | usable | 6 | Which bracket your next dollar lands in, how much room is left before the next rate, and what a raise, bonus or conversion would really cost. | - |
 | `taxes/estimated` | Estimated payments | usable | 6 | Quarterly estimated payments: the safe-harbour amount, what is due each quarter and when, and where you stand today. | - |
-| `taxes/self-employment` | Self-employment | planned | 6 | Works out self-employment tax, the small-business deduction and other deductions on your side income. | - |
+| `taxes/self-employment` | Self-employment | usable | 6 | What a business adds in tax, what each extra $100 keeps, the retirement room and the quarterly payments. | IRC 1401, 199A |
 | `taxes/projection` | Tax, year by year | usable | 6 | Federal tax in every year of the retirement plan through the real brackets: the totals, the worst years, and how the flat setting compares. | Owl |
 | `taxes/filing-status` | Filing status compare | planned | 6 | Compares filing jointly, filing separately or as head of household to see which costs you least. | - |
 | `taxes/documents` | Tax documents checklist | planned | 6 | Lists the tax documents you need to collect each year and where each one comes from. | - |

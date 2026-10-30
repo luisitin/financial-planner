@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Self-employment (`taxes/self-employment`) is usable: the self-employment tax (92.35% of profit, Social Security up to the 2026 wage base after wages, Medicare, the extra 0.9%), half of it off income, the 20% business deduction, the whole tax the business adds and what each extra $100 keeps, the SEP-IRA and solo 401(k) room, and the quarterly payments.
 - [builder] Giving (`goals/charitable`) is usable: what a year's giving saves in federal tax (the real engine with the 2026 rules: the $1,000 / $2,000 deduction without itemizing, the 0.5% floor) and really costs, whether bunching several years into one helps or costs more, the capital gains tax that giving grown shares avoids, and IRA gifts after 70 1/2.
 - [builder] Travel and events (`goals/travel`) is usable: trips (flights per person, nights, meals per person a day), weddings (guests and the main costs) and other big days priced from their parts, what to put aside each month to pay in cash by the date, and a button that makes each a linked goal. New optional plan section `events`.
 - [builder] Vehicle (`goals/vehicle`) is usable: the next car (from the car goal, or entered) paid in cash or financed: what to save a month to pay cash by the date, what is saved by then at the current pace, the loan, payment and interest for the rest, and the 20/4/10 checks against your income.
