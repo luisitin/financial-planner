@@ -53,7 +53,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `cashflow/paycheck` | Paycheck | planned | 4 | Follows your paycheck from gross to net: withholding, Social Security and Medicare taxes, pre-tax deductions and employer match. | taxes/* |
 | `cashflow/subscriptions` | Subscriptions | usable | 4 | Every charge that renews by itself, what it costs you a year, and the ones to question. | - |
 | `cashflow/spending` | Where the money goes | usable | 3 | Spending by category and by payee for a month, against the month before. | - |
-| `cashflow/statement` | Cash-flow statement | planned | 4 | Produces a printable cash-flow statement that splits your money movements into operating, investing and financing. | - |
+| `cashflow/statement` | Cash-flow statement | usable | 4 | A year of your money the way a business reports it: living, investing and debts, adding up to what is left in cash. | - |
 
 ## transactions
 | key | title | status | phase | purpose | seeds |

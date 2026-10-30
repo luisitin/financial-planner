@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Cash-flow statement (`cashflow/statement`) is usable: a printable year from the plan in three parts (living after tax, investing, debts split into interest and paying down) adding up to the cash left, with loan payments found among the expenses, and the last twelve months from the bank files.
 - [builder] Balance sheet (`balance/statement`) is usable: a printable sheet of what you own by how fast it turns into cash (today, days, with tax or a penalty, months), what each would bring if cashed in today, what you owe within a year and later, by owner, and the ratios (months of cash, quick ratio, debt to assets, invested share).
 - [builder] Net worth projection (`balance/projection`) is usable: net worth at each year-end to five years past retirement, in today's money: savings from the retirement projection, homes growing, cars losing value, 529s, debts on the payoff schedule; a line with retirement and debt-free marked, the milestones (doubling, a million, mortgage gone, the peak) and the parts every five years.
 - [builder] State (`taxes/state`) is usable: this year's state income tax from your rate, last year's return or the state's 2026 flat rate (nine states with no wage tax, 13 flat ones), what it would save counted on the federal return (and a button to count it), what is left after withholding, and the same income in the other no-tax and flat-tax states.
