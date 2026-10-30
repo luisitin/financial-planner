@@ -14,7 +14,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `overview/pages` | All pages | usable | 0 | Lets you search every page in the app and see which ones work today and which build phase the rest belong to. | - |
 | `overview/alerts` | Needs attention | usable | 2 | One list of what needs your attention, worst first, each opening the page where it is fixed. | Firefly III bills/rules |
 | `overview/next-best-action` | Next best action | usable | 9 | Tells you what to do with your next spare dollar, following the well-known order: employer match, high-interest debt, emergency fund, retirement, then the rest. | r/pf wiki, Bogleheads |
-| `overview/benchmarks` | How am I doing | planned | 9 | Compares your net worth, savings rate and debt ratios with people of your age and income. | Fed SCF |
+| `overview/benchmarks` | How am I doing | usable | 9 | Your net worth against families of your age, your retirement savings against the usual guideline for your age, and the rules of thumb for saving, cash, housing and debt. | Fed SCF 2025, Fidelity |
 | `overview/health-score` | Plan health score | usable | 9 | Your whole plan as one score from 0 to 100: cash cushion, saving, debt, retirement, protection, goals and how complete it is, with where the missing points are. | - |
 | `overview/timeline` | Life timeline | usable | 9 | Every moment from today to the end of your plan that changes your money: retiring, Social Security, Medicare, the last mortgage payment, children growing up, and whether the savings last. | - |
 | `overview/monthly-review` | Monthly review | planned | 9 | Walks you through the month: spending against budget, the change in net worth, goal progress and your to-dos. | - |
