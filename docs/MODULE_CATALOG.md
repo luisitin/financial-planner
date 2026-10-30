@@ -176,7 +176,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `property/home` | Home | planned | 10 | Tracks your home's value, your equity in it, what it costs to keep and how much you expect it to appreciate. | - |
 | `property/rent-vs-buy` | Rent vs buy | usable | 10 | Renting against buying the same home: who comes out ahead after the years you stay, the year buying pulls ahead, and the rent at which they are even. | - |
 | `property/rental` | Rental analysis | usable | 10 | What a rental really earns: rent less empty months and costs, the loan and tax, the checks a lender makes, and what it adds to your wealth. | - |
-| `property/vehicles` | Vehicles | planned | 10 | Works out what each vehicle really costs to own and whether to lease, buy or keep the one you have. | - |
+| `property/vehicles` | Vehicles | usable | 10 | What each car really costs a year and per mile, and keeping it against buying new or leasing over the same years. | - |
 | `property/purchase` | Big purchase planner | usable | 10 | Any big purchase: save up by the date you want it, finance it now or pay cash, and which goals would give way. | - |
 | `property/renovation` | Renovation | usable | 10 | A home project against what it adds to the home's value, and the cheapest way to pay: cash, a home-equity line, a cash-out refinance or a loan. | - |
 

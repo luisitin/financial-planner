@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Vehicles (`property/vehicles`) is usable: each car's real yearly cost (value lost, fuel or charging, insurance, upkeep, registration, loan interest) and per mile, and keeping it against buying new or leasing over the same years, the cheapest marked, with an upside-down loan handled.
 - [builder] Big purchase planner (`property/purchase`) is usable: save up by a date (with the interest earned), finance now (level, all 0% or 0% for a while), or pay cash; against the money left each month, with the goals that give way (least important first, paused or how many months later).
 - [builder] Renovation (`property/renovation`) is usable: a project's cost against the value it adds (2024 Cost vs. Value averages or your own), and paying by cash, a home-equity line, a cash-out refinance or a personal loan, ranked by cost in today's money, with the cushion left and the equity there to borrow.
 - [builder] Rental analysis (`property/rental`) is usable: each rental from rent to after-tax cash (vacancy, running costs, net operating income, loan payments), cap rate, cash-on-cash, debt-service coverage, break-even occupancy, depreciation over 27.5 years, the $25,000 loss allowance shared across rentals, and what it adds to wealth; add, change and remove rentals.
