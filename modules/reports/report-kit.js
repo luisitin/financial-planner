@@ -25,6 +25,10 @@ export const REPORT_CSS = `
 .rp-sheet .rp-ok { color: var(--ok); font-weight: 650; } .rp-sheet .rp-bad { color: var(--bad); font-weight: 650; } .rp-sheet .rp-warn { color: var(--warn); font-weight: 650; }
 .rp-sheet .rp-foot { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .rp-sheet section { break-inside: avoid-page; }
+.rp-sheet .rp-recs { list-style: none; margin: 6px 0 10px; padding: 0; }
+.rp-sheet .rp-recs li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.rp-sheet .rp-recs .rp-rh { display: flex; justify-content: space-between; gap: 10px; font-weight: 650; }
+.rp-sheet .rp-recs .rp-rs { color: var(--text-2); }
 `;
 
 // the print document's own palette (light, whatever the app's theme) and page setup
@@ -36,6 +40,7 @@ html, body { margin: 0; background: #fff; color: #111; font: 13px/1.5 system-ui,
 .rp-sheet { border: 0; box-shadow: none; padding: 0; max-width: 760px; margin: 0 auto; }
 .rp-sheet h2 { break-after: avoid; }
 svg { max-width: 100%; height: auto; }
+.only-narrow { display: none !important; } .only-wide { display: block !important; }
 `;
 
 /** The page's wrapper: scoped styles, a print button row, and the sheet the report is drawn into. */
@@ -66,6 +71,13 @@ export function printSheet(title, sheet) {
 
 /** Small builders for report content. */
 export const figs = (ui, items) => ui.h("div", { class: "rp-figs" }, items.filter(Boolean).map(([label, value, tone]) => ui.h("div", { class: `rp-fig${tone ? ` ${tone}` : ""}` }, ui.h("b", {}, value), ui.h("span", {}, label))));
+/** A wide table that becomes records on a phone: the first column is the record's title, the last its value, the rest a line under. The print copy always uses the table. */
+export const wideTable = (ui, cols, rows) => {
+  const mid = cols.slice(1, -1), last = cols[cols.length - 1];
+  const text = (v) => (v instanceof Node ? v.textContent : String(v ?? ""));
+  return ui.h("div", {}, ui.h("div", { class: "only-wide" }, rtable(ui, cols, rows)),
+    ui.h("ul", { class: "rp-recs only-narrow" }, rows.map((r) => ui.h("li", {}, ui.h("div", { class: "rp-rh" }, ui.h("span", {}, cols[0].get(r)), ui.h("span", {}, last.get(r))), ui.h("div", { class: "rp-rs" }, mid.map((c) => `${c.label ? `${c.label} ` : ""}${text(c.get(r))}`).filter((t) => t.trim() && !t.endsWith(" -")).join(" · "))))));
+};
 export const rtable = (ui, cols, rows) => ui.h("table", {}, ui.h("thead", {}, ui.h("tr", {}, cols.map((c) => ui.h("th", { class: c.num ? "num" : null }, c.label)))), ui.h("tbody", {}, rows.map((r) => ui.h("tr", {}, cols.map((c) => ui.h("td", { class: c.num ? "num" : null }, c.get(r)))))));
 export const section = (ui, title, ...body) => ui.h("section", {}, ui.h("h2", {}, title), ...body);
 export const list = (ui, items) => ui.h("ul", { class: "rp-list" }, items.filter(Boolean).map((t) => ui.h("li", {}, t)));
