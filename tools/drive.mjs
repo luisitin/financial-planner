@@ -49,13 +49,13 @@ const isUrl = /^[a-z]+:/i.test(page);
 const url = isUrl ? page : `${base}/${real ? "" : "?sandbox=1"}#/${page}`;
 const size = desktop ? { name: "desktop", w: 1280, h: 900, scale: 1, mobile: false } : { name: "phone", w: 390, h: 844, scale: 2, mobile: true };
 
-const browsers = ["C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"];
+const browsers = [process.env.CHROME, "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/opt/pw-browsers/chromium", "/usr/bin/chromium", "/usr/bin/google-chrome"].filter(Boolean);
 const browser = browsers.find((b) => fs.existsSync(b));
 if (!browser) { console.error("no Chrome/Edge found"); process.exit(1); }
 const profile = profileName ? path.join(OUT, `.qa-${profileName.replace(/[^a-z0-9-]+/gi, "-")}`) : fs.mkdtempSync(path.join(OUT, ".drive-"));
 fs.mkdirSync(profile, { recursive: true });
 try { fs.rmSync(path.join(profile, "DevToolsActivePort"), { force: true }); } catch { }
-const chrome = spawn(browser, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
+const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(process.platform === "linux" ? ["--no-sandbox"] : []), "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const wsUrl = await (async () => {
