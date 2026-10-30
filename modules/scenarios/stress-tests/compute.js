@@ -4,7 +4,7 @@
 // couple, a long life, years in a care home. Every shock is the plan's own engine with one thing
 // changed, so the answer is "this plan, if that happened", and the spending each version can still
 // carry says by how much to cut, or how much room there is.
-import { project, affordableSpending } from "../../../core/math/retirement.js";
+import { project, affordableSpending, copyInputs as cloneInputs } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
 import { RETURNS } from "../../retirement/historical/data/returns.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
@@ -35,7 +35,6 @@ export const CRISES = [
   { id: "both-down", from: 2022, years: 1, icon: "🧊", title: "Stocks and bonds fall together, like 2022" },
 ];
 
-const cloneInputs = (I) => ({ ...I, people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: I.contributions.map((c) => ({ ...c })), incomes: I.incomes.map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])] });
 const yearOf = (iso) => Number(String(iso).slice(0, 4));
 
 /** What a crisis did, in words, from its own years: the deepest stock fall, the years to get back, the inflation. */

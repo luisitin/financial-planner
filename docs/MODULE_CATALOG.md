@@ -197,8 +197,8 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `scenarios/compare` | Scenario compare | planned | 8 | Lets you copy your plan, change a few things and see the key results side by side. | - |
 | `scenarios/stress-tests` | Stress tests | usable | 9 | Your plan run through a crash the year you retire, a decade of high prices, a job loss, an illness, losing a partner and a long life: which ones it survives and what would fix the rest. | Damodaran history |
 | `scenarios/advisor-plan` | Advisor's plan | planned | 8 | Lets you enter your advisor's plan assumptions and recommendations as a scenario and compare them with your own plan. | - |
-| `scenarios/goal-seek` | Goal seek | planned | 9 | Works out what one input, such as savings rate, retirement age or return, would need to be to hit a target. | - |
-| `scenarios/sensitivity` | Sensitivity | planned | 9 | Shows which of your assumptions moves the result the most, ranked in a tornado chart. | - |
+| `scenarios/goal-seek` | Goal seek | usable | 9 | Set the goal (the money lasts and leaves what you want to leave) and see what each lever would have to be: what you can spend, when you can retire, what to save, the return it needs, when to claim Social Security. | - |
+| `scenarios/sensitivity` | Sensitivity | usable | 9 | Which of your numbers matter most: returns, inflation, when you retire, how much you save, Social Security, each nudged down and up, ranked by how much it moves what you can spend. | 2025 Trustees Report |
 
 ## reports
 | key | title | status | phase | purpose | seeds |

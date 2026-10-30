@@ -230,6 +230,11 @@ export function project(inputs, options = {}) {
   return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order };
 }
 
+/** A copy of `inputs` that a what-if can change without touching the original (the tax settings' functions are shared, not copied). */
+export function copyInputs(I) {
+  return { ...I, people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: (I.contributions ?? []).map((c) => ({ ...c, skipYears: c.skipYears ? [...c.skipYears] : undefined })), incomes: (I.incomes ?? []).map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, stdev: I.stdev ? { ...I.stdev } : I.stdev, rmd: I.rmd ? { ...I.rmd, owners: I.rmd.owners ? I.rmd.owners.map((o) => ({ ...o })) : undefined } : I.rmd, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])] };
+}
+
 /**
  * Real (today's-dollar) yearly spending the plan could afford: the largest fixed-real spending that still
  * succeeds, to the dollar. The ceiling doubles until it fails (so a first guess that is too low cannot cap
