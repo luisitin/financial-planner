@@ -68,7 +68,7 @@ export function emptyPlan() {
       rothConversion: { on: false, fillRate: 0.22, untilAge: null },   // brackets mode: fill that bracket with conversions before RMDs
       gainShare: 0.5, dividendYield: 0.02,   // how much of a taxable-account withdrawal is gain; yearly dividends on the taxable bucket
     },
-    scenarios: [],           // [{ id, name, overrides: {...partial plan...}, createdAt }]
+    scenarios: [],           // [{ id, name, changes: { lever or lever:personId: value }, createdAt }] (scenarios/compare)
     pageNotes: {},           // { "group/id": "what the owner wants this page to do" } -- typed on placeholder pages
     reviews: [],             // [{ month: "YYYY-MM", at: "YYYY-MM-DD", note }] one per month marked reviewed (overview/monthly-review)
     notes: "",

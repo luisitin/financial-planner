@@ -1,6 +1,6 @@
 // modules/scenarios/compare/compute.js -- PURE and heavy. Your plan and up to four copies of it with a few
 // things changed (retire earlier, spend less, save more, claim Social Security later, different returns
-// or inflation, a one-off sum, an adviser's fee), each run through the same engine: does the money last,
+// or inflation, a one-off sum, an advisor's fee), each run through the same engine: does the money last,
 // the chance it lasts across simulated markets, what it could spend, what it holds at retirement and at
 // the end. The changes live in plan.scenarios; the plan itself is never changed.
 import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
@@ -21,7 +21,7 @@ export const LEVERS = [
   { key: "returnStocks", label: "Stock return a year", type: "percent", get: (p) => p.assumptions?.returnStocks ?? 0.07, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), returnStocks: v }; } },
   { key: "returnBonds", label: "Bond return a year", type: "percent", get: (p) => p.assumptions?.returnBonds ?? 0.04, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), returnBonds: v }; } },
   { key: "inflation", label: "Inflation a year", type: "percent", get: (p) => p.assumptions?.inflation ?? 0.03, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), inflation: v }; } },
-  { key: "fee", label: "Adviser or fund fees a year", type: "percent", input: true, get: () => 0, apply: (I, v) => { I.returns = { ...I.returns, stocks: I.returns.stocks - v, bonds: I.returns.bonds - v }; } },
+  { key: "fee", label: "Advisor or fund fees a year", type: "percent", input: true, get: () => 0, apply: (I, v) => { I.returns = { ...I.returns, stocks: I.returns.stocks - v, bonds: I.returns.bonds - v }; } },
   { key: "lumpSum", label: "A one-off sum (+ in, − out)", type: "money", input: true, signed: true, get: () => 0, apply: (I, v, ch) => { I.events.push({ year: Number(ch.lumpYear) || I.startYear, amount: -v, label: "one-off" }); } },
   { key: "lumpYear", label: "Year of the one-off", type: "number", input: true, min: 1990, max: 2150, get: () => null, apply: () => {} },
 ];

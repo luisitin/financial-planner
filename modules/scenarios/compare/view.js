@@ -45,7 +45,7 @@ export function render(page, ctx) {
       spend > 0 ? { name: "Spend 10% less", changes: { spendingMonthly: Math.round(spend * 0.9 / 10) * 10 } } : null,
       { name: "Save $500 more a month", changes: { extraSavingMonthly: 500 } },
       { name: "Returns 1 point lower", changes: { returnStocks: Math.round((Number(d.current.returnStocks) - 0.01) * 1000) / 1000, returnBonds: Math.round((Number(d.current.returnBonds) - 0.01) * 1000) / 1000 } },
-      { name: "Pay a 1% adviser fee", changes: { fee: 0.01 } },
+      { name: "Pay a 1% advisor fee", changes: { fee: 0.01 } },
     ].filter(Boolean);
   };
 
@@ -87,7 +87,7 @@ export function render(page, ctx) {
       if (d.scenarios.length < MAX_SCENARIOS) host.append(ui.card("Another one", starters, ui.row(ui.button("+ Make your own", () => openEditor(null, d), { class: "secondary" }))));
     } else host.append(ui.card(null, ui.row(ui.button("+ Make your own", () => openEditor(null, d), { class: "secondary" }))));
     host.append(editorHost);
-    host.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "An adviser's plan"), ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
+    host.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "An advisor's plan"), ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
   }
 
   // make or change a scenario: only the levers filled in change; the placeholders show the plan's own values
