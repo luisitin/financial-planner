@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] Tax report (`reports/tax`) is usable: this year's federal estimate step by step, the rates and the room in the bracket, the bracket ladder, how the tax gets paid, gains and the HSA, and the tax the retirement plan pays year by year, as one printable document.
 - [builder] Retirement report (`reports/retirement`) is usable: the retirement pages as one printable document (the plan at expected returns, the range of simulated outcomes as a chart, history's hardest starting years, Social Security, how the money comes out, required withdrawals, the plan every five years, the market stress tests). The report kit gains `wideTable`: a table on paper and wide screens, records on a phone.
 - [builder] Monthly review (`overview/monthly-review`) is usable: the month in nine steps checked against the plan (fresh balances, the net-worth point, the bank files and filing them, the budget, where the money went, goals, what needs attention, the next step), then "mark reviewed" with a note; new plan section `reviews` (added to older plans on load).
 - [builder] How am I doing (`overview/benchmarks`) is usable: net worth against the median family of the same age (the Federal Reserve's 2025 Survey of Consumer Finances, out October 2026), retirement savings against Fidelity's multiple of pay for the age, saving 15%, 3 to 6 months of cash, housing under 28% and debt under 36% of gross income, each as a ruler with its source.
