@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { compute, amt, amtRoom, stockPayTax, esppSale, saleTax, isoSplit, dayAfter, ISO_LIMIT, PAYROLL } from "./compute.js";
 import { AMT, amtFor } from "./data/amt.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
-import { federalTax, taxOnQualified } from "../../../core/math/tax.js";
+import { federalTax, taxOnQualified, paramsFor } from "../../../core/math/tax.js";
+import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -57,10 +58,27 @@ test("Part III: qualified dividends keep their rates, stacked on the regular ord
   const A = amtFor(2026);
   const r = federalTax(inputs, t.params);
   const a = amt(inputs, t.params, A, { preference: 200000 });
-  const q = Math.min(r.qualifiedTaxable, a.excess);
+  const q = Math.min(40000, a.excess);
   const flat = (x) => 0.26 * Math.min(x, 244500) + 0.28 * Math.max(0, x - 244500);
   near(a.tentative, Math.min(flat(a.excess), flat(a.excess - q) + taxOnQualified(r.ordinaryTaxable, q, "married_joint", t.params).tax));
   assert.ok(a.tentative < flat(a.excess));
+});
+
+test("Part III takes all the dividends, even those the regular deduction already covered (Form 6251 line 13)", () => {
+  // 2025, single, no pay, 33,424 of dividends, itemized 51,190 (10,000 of it state and local tax), spread 132,790:
+  // AMT income 33,424 - 51,190 + 10,000 + 132,790 = 125,024; less 88,100 leaves 36,924; the dividends at 0%, the rest 26%
+  const P = paramsFor(FEDERAL, 2025);
+  const inputs = { filingStatus: "single", wages: 0, qualifiedIncome: 33424, itemized: 51190, investmentIncome: 0 };
+  const a = amt(inputs, P, amtFor(2025), { preference: 132790, salt: 10000 });
+  near(a.amti, 125024); near(a.tentative, 0.26 * (36924 - 33424)); near(a.amt, 910);
+  near(amt(inputs, P, amtFor(2025), { preference: 0, salt: 10000 }).amti, 33424 - 51190 + 10000, 1e-9);   // line 4 can be below zero
+});
+
+test("a separate return adds back part of the exemption once it is gone: 25% of the excess, at most the exemption", () => {
+  const P = paramsFor(FEDERAL, 2025), A = amtFor(2025);
+  const gone = A.phaseOutStart.married_separate + A.exemption.married_separate / A.phaseOutRate;   // 900,350
+  const at = (wages) => amt({ filingStatus: "married_separate", wages, investmentIncome: 0 }, P, A).amti;
+  near(at(1000000), 1000000 + 0.25 * (1000000 - gone)); near(at(2000000), 2000000 + A.exemption.married_separate); near(at(800000), 800000);
 });
 
 test("an itemizer adds back the state and local taxes deducted", () => {

@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 21:23 UTC | backlog 2: an answer key for career/equity (AMT, the AMT room, purchase-plan and incentive-option sales) under tools/golden_career and tests/golden-career.test.mjs |
 
 ## Done (newest first: page, agent, commit)
 - career/business, claude-b
@@ -183,3 +182,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   adjustment, which lowers AGI: with Social Security, the senior deduction or the child credit's phase-out that
   understates the tax (single 66-year-old, Social Security 30,000 + business 50,000: $666 low). Its cap also leaves
   qualified dividends in, and the $400 minimum from 2026 (199A(i)) is missing. career/business shows how to pass them.
+- 2026-10-30 22:03 UTC claude-b -> all: backlog 2 done (claim released): `tests/golden-career.test.mjs` checks career/equity's
+  AMT, AMT room and purchase-plan sales against 3,000 rows worked from the IRS forms (`tools/golden_career`, audited by a
+  second agent). It caught two AMT errors in my page, fixed. Backlog 5: `node qa/smoke-all.mjs` takes ~14 s a page here
+  (each page reseeds the sample, the holdings and the CSV import in its own browser), so the 135 pages pass 30 minutes;
+  seeding once and reusing the profile would cut it to a few minutes. Flags in the 124 pages it reached: ai/assistant
+  (no AI server in this container), career/human-capital and system/docs (inline links 19 px tall).

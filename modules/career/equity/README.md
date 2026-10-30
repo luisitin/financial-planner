@@ -35,13 +35,17 @@
 - **Alternative minimum tax** (`amt`, Form 6251 simplified): AMT income = AGI − the deduction taken (line 1, which can
   be below zero when pay is under the deduction) + the standard deduction (not allowed, IRC 56(b)(1)(E)) or, for an
   itemizer, the state and local taxes deducted (56(b)(1)(A)(ii)) less the 2026 limit on itemized deductions, which
-  does not apply to the AMT (56(b)(1)(F)) + the incentive-option spread at exercise (56(b)(3)); at least 0. Exemption =
-  the year's amount − `phaseOutRate` × (AMT income − the phase-out start), at least 0. Tentative tax = 26% up to the
-  28% line + 28% above, with qualified dividends and long-term gains at their own rates stacked on the regular
-  ordinary taxable income (Part III, `taxOnQualified`), never more than the flat figure. AMT = tentative − the regular
+  does not apply to the AMT (56(b)(1)(F)) + the incentive-option spread at exercise (56(b)(3)); it can be below zero
+  (line 4), which means none. A married person filing separately adds back, once the exemption is gone (AMT income
+  above the phase-out start + exemption ÷ `phaseOutRate`), `phaseOutRate` × the excess, at most the exemption (IRC
+  55(d); for 2026 read the same way at 50%, which the IRS has not yet confirmed). Exemption = the year's amount −
+  `phaseOutRate` × (AMT income − the phase-out start), at least 0. Tentative tax = 26% up to the 28% line + 28% above,
+  with qualified dividends and long-term gains at their own rates, all of them (line 13 takes them from the gains
+  worksheet's line 4, even the part the regular deduction covered), stacked on the regular ordinary taxable income
+  (Part III, `taxOnQualified`), never more than the flat figure. AMT = tentative − the regular
   income tax before credits. 2026 (Rev. Proc. 2025-32 §4.10): exemption $90,100 single / $140,200 joint / $70,100 separate; phase-out from
   $500,000 / $1,000,000 / $500,000 at 50 cents a dollar (P.L. 119-21 §70107); 28% above $244,500 ($122,250 separate).
-  2025 (Rev. Proc. 2024-40 §2.11): $88,100 / $137,000 / $68,500; from $626,350 / $1,252,700 at 25 cents; $239,100.
+  2025 (Rev. Proc. 2024-40 §3.11): $88,100 / $137,000 / $68,500; from $626,350 / $1,252,700 at 25 cents; $239,100.
   Not modelled: other AMT items (private-activity bond interest, depletion), the AMT foreign tax credit.
 - **AMT room** (`amtRoom`): the largest spread with AMT no more than today's + $0.50, by `largestAtOrUnder` on a
   doubling bracket, worked once for the year and shared across incentive grants from the oldest: each grant's
@@ -78,7 +82,8 @@
 
 ## Tests
 `module.test.mjs`: the AMT tables (and the complete phase-out they imply), the AMT by hand (26%, 28%, the exemption
-phase-out, a separate return), with no pay, Part III, an itemizer, the AMT room, pay from stock (owed, withheld, the
+phase-out, a separate return), with no pay, Part III (and dividends the deduction covered), a separate return's
+add-back, an itemizer, the AMT room, pay from stock (owed, withheld, the
 wage base, the 0.9% at the household and the employer, 37% above $1 million, nothing), holding periods (the day after
 the anniversary), the tax on a sale (the 3.8%, the household's loss limit), the family's units, incentive and
 nonqualified options with this year's vests in the base, two grants sharing the room, the $100,000 split, lots with
@@ -87,3 +92,8 @@ and without prices, no share price, next year's wage base, not ready.
 ## Ideas / not yet
 - Early exercise and the 83(b) election for restricted stock; the minimum tax credit year by year.
 - A sale plan: how many units to sell at each vest to get under 10%.
+
+## Answer key
+`tests/golden-career.test.mjs` checks `amt`, `amtRoom` and `esppSale` against 2,000 AMT rows and 1,000 purchase-plan
+sales worked independently from the IRS forms (`tools/golden_career`, `tests/golden/career/RULES.md`). It found the
+Part III and separate-return add-back errors fixed above.

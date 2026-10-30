@@ -36,18 +36,25 @@ export const dayAfter = (iso) => { const [y, m, d] = String(iso).split("-").map(
  * taxes deducted (56(b)(1)(A)(ii)) less the 2026 limit on itemized deductions, which does not apply to the AMT
  * (56(b)(1)(F)), + the incentive-option spread (56(b)(3)). Exemption less `phaseOutRate` of AMT income above the
  * start; 26% on the rest up to the 28% line, 28% above; qualified dividends and long-term gains keep their own rates,
- * stacked on the regular ordinary taxable income (Part III). AMT = the tentative tax less the regular income tax.
+ * all of them (line 13 takes them from the gains worksheet's line 4, not limited to regular taxable income), stacked on
+ * the regular ordinary taxable income (Part III). AMT = the tentative tax less the regular income tax.
  */
 export function amt(inputs, params, A, { preference = 0, salt = 0 } = {}) {
   const r = federalTax(inputs, params);
   const status = A.exemption[r.filingStatus] !== undefined ? r.filingStatus : "single";
   const addBack = r.deduction.used === "standard" ? r.deduction.standard : salt - (r.deduction.itemizedLimit ?? 0);
-  const amti = Math.max(0, r.agi - r.deduction.amount + addBack + preference);
+  let amti = r.agi - r.deduction.amount - (r.deduction.qbi ?? 0) + addBack + preference;   // line 4; below zero means none
+  // a married person filing separately adds back part of the exemption past the point where it is gone: the phase-out
+  // rate times the excess over that point, at most the exemption (IRC 55(d); the 2026 rate read the same way, 50%)
+  if (status === "married_separate") {
+    const ex = A.exemption.married_separate, gone = A.phaseOutStart.married_separate + ex / A.phaseOutRate;
+    if (amti > gone) amti += Math.min(A.phaseOutRate * (amti - gone), ex);
+  }
   const exemption = Math.max(0, A.exemption[status] - A.phaseOutRate * Math.max(0, amti - A.phaseOutStart[status]));
   const excess = Math.max(0, amti - exemption);
   const line = status === "married_separate" ? A.rate28From.married_separate : A.rate28From.all;
   const flat = (x) => 0.26 * Math.min(x, line) + 0.28 * Math.max(0, x - line);
-  const q = Math.min(r.qualifiedTaxable, excess);
+  const q = Math.min(r.income.qualified, excess);
   const tentative = q > 0 ? Math.min(flat(excess), flat(excess - q) + taxOnQualified(r.ordinaryTaxable, q, status, params).tax) : flat(excess);
   return { amti, exemption, excess, tentative, regular: r.incomeTax, amt: Math.max(0, tentative - r.incomeTax) };
 }
