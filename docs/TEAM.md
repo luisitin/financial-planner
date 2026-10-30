@@ -55,6 +55,9 @@ block and again before touching anything outside your lane.
 8. **Talk to the owner, not to each other.** Each session reports to the owner in its own
    window. This file and `docs/FEEDBACK.md` are the only channels between sessions.
 
+Builders working from other machines at the same time (claude-a, claude-b, codex) split the
+builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to each of them.
+
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|

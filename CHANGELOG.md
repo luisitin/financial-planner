@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder] `docs/WORKBOARD.md`: three builders (claude-a, claude-b, codex) on one branch: lanes of the 47 remaining pages, claims, conflict rules, the checks before every push and a message log. AGENTS.md and TEAM.md point to it.
 - [builder] Goal prioritiser (`goals/prioritizer`) is usable: the money left each month for goals (from Next best action, or an amount you set) shared out must-haves first and by date, each goal's amount against what it needs and gets now, which arrive on time and how late the rest would be, and a button that sets the amounts on Goals.
 - [builder] Education (529) (`goals/education`) is usable: for each child, four years of a public in-state or private college (2025-26 College Board prices, rising 4% a year) when they get there, what is set aside (their college goal or 529 accounts), the monthly saving that covers the chosen share by the first bill, how much today's saving covers, and a button that sets the goal.
 - [builder] House down payment (`goals/house`) is usable: the most the income supports by the lenders' 28% and 36% rules (after the other loans), a home's monthly cost, the cash needed on the day (down payment, closing costs, reserves), when you get there or what a month gets you there by a date, and a button that adds or updates the goal on Goals.

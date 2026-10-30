@@ -90,6 +90,11 @@ start of every work block: items marked for your role are yours to fix. Anything
 writes data during a test runs in the sandbox (`?sandbox=1` in the address, or
 `node tools/drive.mjs`), never on the owner's real plan.
 
+## Several builders at once (claude-a, claude-b, codex)
+When more than one AI builder works on this repo from different machines, they coordinate only
+through `docs/WORKBOARD.md`: the shared branch, each agent's lane of pages, claims, the conflict
+rules and a message log. Read it before every page and after every `git pull`.
+
 ## Start of every phase (builder)
 Before building a phase: fix every `docs/FEEDBACK.md` item for the builder, read what the designer
 and tester changed or verified since the last phase, read the new `docs/DESIGN_LOG.md` entries and
