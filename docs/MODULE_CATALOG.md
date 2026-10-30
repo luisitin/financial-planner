@@ -164,7 +164,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 |---|---|---|---|---|---|
 | `estate/documents` | Documents checklist | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
 | `estate/beneficiaries` | Beneficiary audit | usable | 8 | Who is named on every retirement account, life policy and payable-on-death account, and what to fix: no one named, no backup, a child named directly. | ERISA spousal rule |
-| `estate/legacy` | Legacy goals | planned | 8 | Records what you want to leave to whom, which sets the amount your plan aims to have left at the end. | TPAW legacy |
+| `estate/legacy` | Legacy goals | usable | 8 | What you want to leave and to whom, the amount your plan should keep for it, and what would get it there. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | usable | 8 | Whether your estate could owe federal or state estate tax, at each death for a couple and at the end of the plan, and how much of the exemption is left. | IRC 2001, 2010, 2056 |
 | `estate/gifting` | Gifting | usable | 8 | Gifts within the yearly tax-free amount, what needs a gift tax return, and front-loading a 529 college plan with five years of gifts at once. | IRC 2001(c), 2503, 529(c) |
 | `estate/inheritance` | Expected inheritance | planned | 8 | Lets you model an inheritance you might receive as a what-if scenario rather than counting on it in your main plan. | scenarios/* |

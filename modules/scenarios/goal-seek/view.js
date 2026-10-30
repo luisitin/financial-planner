@@ -1,7 +1,9 @@
 // modules/scenarios/goal-seek/view.js -- DOM only. Set the goal (the money lasts, leaving at least so
 // much), then every lever solved for it on its own: spending, retirement age, saving, the return
 // needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
-let legacy = 0;   // what the plan should leave; a view choice on this device, not saved in the plan
+import { legacyTarget } from "../../estate/legacy/compute.js";
+
+let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 
 const STYLE = `
 .gs-root .gs-lever { display: flex; flex-direction: column; gap: 6px; }
@@ -22,6 +24,7 @@ const PILL = { room: ["ok", "room to spare"], same: ["", "just right"], needs: [
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
+  if (legacy === null) legacy = legacyTarget(plan).target;
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
   const root = ui.h("div", { class: "gs-root" }, ui.h("style", {}, STYLE));
