@@ -20,13 +20,16 @@ export function render(page, ctx) {
   // the confirmation waits for the list (a restore reloads it), so the redraw after loading does not wipe it
   if (pending && (names !== null || failed)) { const n = ui.notice(pending.kind, pending.text); root.append(n); if (pending.kind === "ok") setTimeout(() => n.remove(), 8000); pending = null; }
   const redraw = () => { if (!root.isConnected) return; page.replaceChildren(); render(page, { ...ctx, plan: store.get() }); };
-  const at = (iso) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  // a copy's time; with seconds when another copy has the same minute (saves come seconds apart)
+  const short = (iso) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const at = (iso) => (listOf(names).filter((b) => short(b.when) === short(iso)).length > 1 ? new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "medium" }) : short(iso));
 
   root.append(ui.h("section", { class: "card" }, ui.h("h1", {}, "Earlier copies of your plan"),
     ui.h("p", { class: "lede" }, "Your PC keeps a copy of your plan each time it is saved, the most recent first. If something went wrong, pick a copy, see what is different from now, and put it back."),
     store.sandbox() ? ui.notice("warn", "You are in the sandbox (a pretend plan). The copies listed are your real plan's; putting one back changes only the pretend plan.") : null));
 
-  if (store.backend() !== "server") {
+  // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer
+  if (store.backend() !== "server" && !store.sandbox()) {
     root.append(ui.card("Not connected to your PC", ui.h("p", { class: "muted" }, "The copies are kept by the app's server on your PC. This browser is not connected to it right now, so your plan is saved here only. System > Settings shows how to connect."),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/system/settings" }, "Open Settings"))));
     return;
@@ -80,7 +83,7 @@ export function render(page, ctx) {
     box.append(ui.h("div", { class: "rec-foot" },
       diff.length ? ui.button("Put this copy back", () => {
         if (!ui.confirm(`Replace your plan with the copy from ${at(b.when)}? Your plan as it is now is saved as a new copy first, so you can come back to it.`)) return;
-        pending = { kind: "ok", text: `Your plan is back to the copy from ${at(b.when)}. The plan you had a moment ago is the newest copy in the list.` };
+        pending = { kind: "ok", text: store.sandbox() ? `Your pretend plan is now the copy from ${at(b.when)}. Your real plan and its copies are unchanged.` : `Your plan is back to the copy from ${at(b.when)}. The plan you had a moment ago is the newest copy in the list.` };
         picked = null; names = null; copies = {}; restoring = true;
         store.replace(copy);
       }) : null,

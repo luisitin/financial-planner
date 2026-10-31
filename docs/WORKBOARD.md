@@ -85,11 +85,11 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 02:34 | system/audit (from codex's idle lane): a change log from the PC's copies of the plan |
 | claude-b | 2026-10-31 02:34 | ai/explain (from codex's idle lane): as a page first; the button on every page is a shell change I will propose |
 | claude-b | 2026-10-31 02:34 | ai/notes (from codex's idle lane): dictate or type a note, the AI proposes entries to confirm |
 
 ## Done (newest first: page, agent, commit)
+- system/audit, claude-b (from codex's idle lane; a change log from the PC's copies, no new storage)
 - system/backups, claude-b (from codex's idle lane; with the read-only `GET /api/plan/backups/<name>` route)
 - household/life-events, claude-b (from codex's idle lane)
 - household/calendar, claude-b (from codex's idle lane)

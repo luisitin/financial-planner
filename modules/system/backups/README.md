@@ -20,7 +20,8 @@ in a temporary folder to check it, path tricks and a malformed name included).
 
 ## Rules
 - **A copy's time**: from its name, `plan-YYYY-MM-DDTHH-MM-SS.json`, which the server stamps in UTC
-  (`new Date().toISOString()` with ":" and "." replaced); shown in the browser's own time. Other names are left out.
+  (`new Date().toISOString()` with ":" and "." replaced); shown in the browser's own time, with seconds when two
+  copies share a minute. Other names are left out.
 - **What is different** (`diffPlans`, copy -> now), section by section, in the plain names of `SECTIONS`:
   - a list of records with an `id` (or `key`): records added (in now, not in the copy), removed, and changed (same id,
     different content);
@@ -35,7 +36,8 @@ in a temporary folder to check it, path tricks and a malformed name included).
 ## Edge cases
 - Not connected to the PC (the plan is saved in the browser only): a card saying so, with a link to Settings.
 - The sandbox: a notice that the copies are the real plan's and that putting one back changes only the pretend plan
-  (the store keeps the sandbox plan apart).
+  (the store keeps the sandbox plan apart, and its save notice says so). The store reports "local" in the sandbox,
+  so the page asks the PC anyway there instead of saying it is not connected (fixed 2026-10-31 with system/audit).
 - The list or a copy cannot be read: a plain error with "Try again" (the technical text under "Show details"), or
   "This copy is damaged and cannot be read."
 - No copies yet: says the first one is made at the next save.
