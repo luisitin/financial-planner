@@ -1,28 +1,30 @@
 // modules/balance/accounts/compute.js -- PURE. One account in detail: its balance over time (the points saved in
 // `accounts[].history`, from Net worth's "save today's totals" or added here, plus the balance on file at its date),
 // the change over that time, what went in and out of it from its transactions (the last 30 days and the last six
-// months), its latest transactions, and its last checked statement with what the lines since then add up to.
+// months), its latest transactions, its last checked statement with what the lines since then add up to, and the
+// side of its chart (clean round steps, labelled in thousands from 10,000).
 import { ACCOUNT_TYPES, isLiability } from "../net-worth/compute.js";
-import { isoOf, daysBetween } from "../../../core/math/dates.js";
+import { isoOf, daysBetween, isValidDate } from "../../../core/math/dates.js";
 
 /** Days counted as "the last 30 days". */
 export const RECENT_DAYS = 30;
 /** Months shown in the money in and out list. */
 export const MONTHS = 6;
 
-const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? ""));
+/** A real calendar day written YYYY-MM-DD (not 2026-13-01 or 2026-02-30). */
+export const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? "")) && isValidDate(s);
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const cents = (x) => Math.round((Number(x) || 0) * 100);
 const addDays = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); return isoOf(y, m, d + n); };
 
 /**
  * The balance points, oldest first, one per day: the saved history, and the balance on file at its `asOf` date (it wins
- * on that day). A debt's balance is what is owed (kept positive, as Net worth counts it).
+ * on that day). A debt's balance is what is owed (kept positive, as Net worth counts it). Each to the cent.
  */
 export function points(account) {
   if (!account) return [];
   const liability = isLiability(account.type);
-  const val = (b) => (liability ? Math.abs(b) : b);
+  const val = (b) => cents(liability ? Math.abs(b) : b) / 100;
   const byDay = new Map();
   for (const h of account.history ?? []) { const b = num(h?.balance); if (isDate(h?.date) && b !== null) byDay.set(h.date, val(b)); }
   const cur = num(account.balance);
@@ -59,7 +61,8 @@ export function flows(txs, today) {
  * or equal date, the difference between the two. -> { check, lines, ledgerBalance, onFile, onFileDate, gap } | null
  */
 export function sinceCheck(plan, account) {
-  const check = (plan.reconciliations ?? []).filter((x) => x.accountId === account.id && isDate(x.to) && num(x.endBalance) !== null).sort((a, b) => b.to.localeCompare(a.to))[0];
+  // the latest last day; on a tie the one saved later (records are added at the end)
+  const check = (plan.reconciliations ?? []).filter((x) => x?.accountId === account.id && isDate(x.to) && num(x.endBalance) !== null).reduce((best, x) => (!best || x.to >= best.to ? x : best), null);
   if (!check) return null;
   const sign = isLiability(account.type) ? -1 : 1;
   const onFileDate = isDate(account.asOf) && account.asOf >= check.to ? account.asOf : null;
@@ -109,11 +112,44 @@ export function addPoint(draft, accountId, date, balance) {
   a.history.sort((x, y) => String(x.date).localeCompare(String(y.date)));
   return true;
 }
-/** Remove the saved point of that day (the balance on file itself is changed on Net worth). -> true when one went */
+/**
+ * Save a balance typed on this page: the point of that day, and when the day is on or after the balance on file's
+ * (or there is no dated one), the balance on file too, so Net worth and the top of this page use it. A debt keeps the
+ * sign it is stored with (what is owed, typed either way). Changes `draft` in place. -> { saved, onFile }
+ */
+export function saveBalance(draft, accountId, date, balance) {
+  if (!addPoint(draft, accountId, date, balance)) return { saved: false, onFile: false };
+  const a = draft.accounts.find((x) => x.id === accountId), b = num(balance);
+  if (isDate(a.asOf) && date < a.asOf) return { saved: true, onFile: false };
+  a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(b) : Math.abs(b)) : b;
+  a.asOf = date;
+  return { saved: true, onFile: true };
+}
+/** Remove the saved point of that day (the balance on file itself is not touched). -> true when one went */
 export function removePoint(draft, accountId, date) {
   const a = (draft.accounts ?? []).find((x) => x.id === accountId);
   if (!a) return false;
   const n = (a.history ?? []).length;
   a.history = (a.history ?? []).filter((h) => h?.date !== date);
   return a.history.length < n;
+}
+
+/**
+ * The steps up the side of the chart: about three clean ones (1, 2, 2.5 or 5 × a power of ten) from at or below `lo`
+ * to at or above `hi`. A span under 2 (or under 2% of the size, for big balances) is widened around its middle, so a
+ * flat line gets whole-dollar steps and float noise cannot shrink a step to nothing. At most 8.
+ */
+export function ticks(lo, hi) {
+  const min = Math.max(2, Math.max(Math.abs(lo), Math.abs(hi)) * 0.02);
+  if (!(hi - lo >= min)) { const mid = (lo + hi) / 2; lo = mid - min / 2; hi = mid + min / 2; }
+  const raw = (hi - lo) / 3, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((s) => s >= raw);
+  const out = [];
+  for (let i = Math.floor(lo / step); out.length < 8; i++) { const v = Number((i * step).toFixed(6)); out.push(v); if (v >= hi) break; }
+  return out;
+}
+/** How to label the steps: in thousands ("K") from 10,000, with the decimals the step needs (0, 1 or 2); else whole dollars. */
+export function axisUnit(tk) {
+  const big = Math.max(...tk.map((v) => Math.abs(v))) >= 10000, step = tk[1] - tk[0];
+  return { big, digits: big ? (step % 1000 === 0 ? 0 : step % 100 === 0 ? 1 : 2) : 0 };
 }

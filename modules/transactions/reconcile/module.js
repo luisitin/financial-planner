@@ -5,7 +5,7 @@ import { render } from "./view.js";
 export default {
   id: "reconcile",
   group: "transactions",
-  title: "Reconcile",
+  title: "Check a statement",
   icon: "🧾",
   order: 60,
   version: 1,

@@ -1,17 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, points, change, flows, sinceCheck, addPoint, removePoint, RECENT_DAYS, MONTHS } from "./compute.js";
+import { compute, points, change, flows, sinceCheck, addPoint, saveBalance, removePoint, ticks, axisUnit, isDate, RECENT_DAYS, MONTHS } from "./compute.js";
 import { samplePlan } from "../../../qa/fixtures/sample-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
 const TODAY = "2026-09-30";
 
 test("the balance points: saved by day, plus the balance on file at its date (it wins that day); a debt's is what is owed", () => {
-  const a = { type: "checking", balance: 4200, asOf: "2026-09-15", history: [{ date: "2026-07-31", balance: 3000 }, { date: "2026-09-15", balance: 4100 }, { date: "2026-08-31", balance: "3500" }, { date: "bad", balance: 1 }, { date: "2026-06-30", balance: null }] };
-  assert.deepEqual(points(a), [{ date: "2026-07-31", balance: 3000 }, { date: "2026-08-31", balance: 3500 }, { date: "2026-09-15", balance: 4200 }]);
-  assert.deepEqual(points({ type: "credit", balance: -640, asOf: "2026-09-15", history: [{ date: "2026-08-15", balance: 900 }] }), [{ date: "2026-08-15", balance: 900 }, { date: "2026-09-15", balance: 640 }]);
+  const a = { type: "checking", balance: 4200, asOf: "2026-09-15", history: [{ date: "2026-07-31", balance: 3000 }, { date: "2026-09-15", balance: 4100 }, { date: "2026-08-31", balance: "3500" }, { date: "bad", balance: 1 }, { date: "2026-13-01", balance: 5 }, { date: "2026-02-30", balance: 7 }, { date: "2026-06-30", balance: null }] };
+  assert.deepEqual(points(a), [{ date: "2026-07-31", balance: 3000 }, { date: "2026-08-31", balance: 3500 }, { date: "2026-09-15", balance: 4200 }], "no impossible days");
+  assert.deepEqual(points({ type: "credit", balance: -640, asOf: "2026-09-15", history: [{ date: "2026-08-15", balance: -900 }] }), [{ date: "2026-08-15", balance: 900 }, { date: "2026-09-15", balance: 640 }], "a saved point of a debt too");
   assert.deepEqual(points({ type: "savings", balance: 100 }), [], "a balance with no date is not a point");
+  assert.deepEqual(points({ type: "savings", balance: 100, asOf: "2026-31-08" }), [], "nor one with an impossible date");
+  assert.deepEqual(points({ type: "checking", history: [{ date: "2026-08-31", balance: 1103.7700000000002 }] }), [{ date: "2026-08-31", balance: 1103.77 }], "to the cent");
   assert.deepEqual(points(null), []);
+  assert.equal(isDate("2026-02-28"), true); assert.equal(isDate("2026-02-30"), false); assert.equal(isDate(" 2026-02-28"), false);
 });
 
 test("the change: first to last point, in money and as a share, over how many days", () => {
@@ -33,6 +36,7 @@ test("money in and out: the last 30 days to today, and each of the last six mont
   assert.equal(f.months[2].count, 0);
   // a 30-day window that starts mid-month
   assert.equal(flows(mine, "2026-09-20").recent.count, 9, "August 22 to September 20: Shell on the 27th and the eight September lines to the 15th");
+  assert.equal(flows([{ date: "2026-09-01", amount: 1 }, { date: "2026-08-31", amount: 1 }], TODAY).recent.count, 1, "today and the 29 days before");
   // months across a new year
   assert.deepEqual(flows([], "2026-02-10").months.map((m) => m.month), ["2026-02", "2026-01", "2025-12", "2025-11", "2025-10", "2025-09"]);
 });
@@ -41,7 +45,9 @@ test("since the last checked statement: its end balance plus the lines after it,
   const p = samplePlan();
   const acct = p.accounts.find((a) => a.id === "chk");
   assert.equal(sinceCheck(p, acct), null);
-  p.reconciliations = [{ id: "r1", accountId: "chk", from: "2026-08-01", to: "2026-08-31", startBalance: 0, endBalance: 3000, lines: 4, at: "2026-09-02" }, { id: "r0", accountId: "chk", from: "2026-07-01", to: "2026-07-31", startBalance: 0, endBalance: 1, lines: 1 }];
+  // the latest check is not the first in the list; a line after the balance's date is not counted
+  p.reconciliations = [{ id: "r0", accountId: "chk", from: "2026-07-01", to: "2026-07-31", startBalance: 0, endBalance: 1, lines: 1 }, { id: "r1", accountId: "chk", from: "2026-08-01", to: "2026-08-31", startBalance: 0, endBalance: 3000, lines: 4, at: "2026-09-02" }];
+  p.transactions.push({ id: "t17", accountId: "chk", date: "2026-09-20", amount: -25, payee: "Late" });
   // the balance on file is dated September 15: the lines from September 1 to 15 count
   const s = sinceCheck(p, acct);
   assert.equal(s.check.id, "r1"); assert.equal(s.lines, 8); assert.equal(s.onFileDate, "2026-09-15");
@@ -53,9 +59,12 @@ test("since the last checked statement: its end balance plus the lines after it,
   const v = sinceCheck(p, visa);
   assert.ok(Math.abs(v.ledgerBalance - (640.22 - 640.22 + 42.17 + 42.17)) < 1e-9, "the payment lowers it, the two charges raise it");
   assert.ok(Math.abs(v.gap - (640 - 84.34)) < 1e-9);
+  // two checks with the same last day: the one saved later wins
+  p.reconciliations.push({ id: "r2", accountId: "chk", from: "2026-08-02", to: "2026-08-31", startBalance: 0, endBalance: 3096.23, lines: 3 });
+  assert.equal(sinceCheck(p, acct).check.id, "r2"); assert.equal(sinceCheck(p, acct).gap, 0);
   // a balance on file older than the check: no comparison
   acct.asOf = "2026-08-15";
-  assert.equal(sinceCheck(p, acct).gap, null); assert.equal(sinceCheck(p, acct).lines, 12 - 4, "every line after August 31");
+  assert.equal(sinceCheck(p, acct).gap, null); assert.equal(sinceCheck(p, acct).lines, 9, "every line after August 31, the 20th's too");
 });
 
 test("the page's data: the picker, the chosen account (or the first), its points, latest lines and owner", () => {
@@ -84,4 +93,49 @@ test("adding and removing a balance point (one per day; the balance on file is n
   assert.equal(removePoint(p, "chk", "2026-07-31"), true); assert.equal(removePoint(p, "chk", "2026-07-31"), false);
   assert.deepEqual(a.history, [{ date: "2026-08-31", balance: 3450.5 }]); assert.equal(a.balance, 4200);
   assert.equal(compute(p, { today: TODAY }).change.amount, 4200 - 3450.5);
+});
+
+test("saving a balance here: a day before the balance on file is a point; that day or later moves the balance on file too", () => {
+  const p = samplePlan();
+  const a = p.accounts.find((x) => x.id === "chk");
+  assert.deepEqual(saveBalance(p, "chk", "2026-08-31", 3500), { saved: true, onFile: false });
+  assert.equal(a.balance, 4200); assert.equal(a.asOf, "2026-09-15");
+  // the same day as the balance on file: it changes, so the chart and the top of the page agree
+  assert.deepEqual(saveBalance(p, "chk", "2026-09-15", 4100), { saved: true, onFile: true });
+  assert.equal(a.balance, 4100); assert.deepEqual(points(a).at(-1), { date: "2026-09-15", balance: 4100 });
+  // a later day: the balance on file and its date move to it
+  assert.deepEqual(saveBalance(p, "chk", "2026-09-30", 5000), { saved: true, onFile: true });
+  assert.equal(a.balance, 5000); assert.equal(a.asOf, "2026-09-30");
+  assert.equal(compute(p, { today: TODAY }).change.to.date, "2026-09-30");
+  // a card stored with the minus sign keeps it; one stored as owed stays positive
+  const v = p.accounts.find((x) => x.id === "visa");
+  v.balance = -640; saveBalance(p, "visa", "2026-09-30", 500); assert.equal(v.balance, -500);
+  v.balance = 640; saveBalance(p, "visa", "2026-10-01", -450); assert.equal(v.balance, 450);
+  // no dated balance yet: the first one becomes it
+  const s = p.accounts.find((x) => x.id === "sav"); s.asOf = null; s.balance = null;
+  assert.deepEqual(saveBalance(p, "sav", "2026-09-01", 11000), { saved: true, onFile: true }); assert.equal(s.balance, 11000);
+  assert.deepEqual(saveBalance(p, "chk", "bad", 1), { saved: false, onFile: false });
+});
+
+test("the side of the chart: clean steps over the balances, never stuck on a flat line or float noise, labelled without repeats", () => {
+  const label = (lo, hi) => { const tk = ticks(lo, hi), u = axisUnit(tk); return tk.map((v) => (u.big ? `${(v / 1000).toFixed(u.digits)}K` : String(v))); };
+  assert.deepEqual(ticks(3000, 4200), [3000, 3500, 4000, 4500]);
+  assert.deepEqual(ticks(-500, 250), [-500, -250, 0, 250], "an overdraft");
+  // float noise and a flat line: a few whole steps around it, and the loop ends
+  assert.deepEqual(ticks(1103.77, 1103.7700000000002), [1090, 1100, 1110, 1120]);
+  assert.deepEqual(ticks(4103.7699999999995, 4103.77), [4050, 4100, 4150]);
+  assert.deepEqual(ticks(0.3, 0.30000000000000004), [-1, 0, 1, 2]);
+  assert.deepEqual(label(4200, 4200), ["4150", "4200", "4250"]);
+  // in thousands from 10,000, with the decimals the step needs
+  assert.deepEqual(label(11500, 11500), ["11.3K", "11.4K", "11.5K", "11.6K", "11.7K"]);
+  assert.deepEqual(label(10200, 11500), ["10.0K", "10.5K", "11.0K", "11.5K"]);
+  assert.deepEqual(label(10000, 17000), ["10.0K", "12.5K", "15.0K", "17.5K"]);
+  assert.deepEqual(label(10000, 10700), ["10.00K", "10.25K", "10.50K", "10.75K"]);
+  assert.deepEqual(label(9800, 10200), ["9.8K", "10.0K", "10.2K"]);
+  assert.deepEqual(label(0, 250000), ["0K", "100K", "200K", "300K"]);
+  for (const [lo, hi] of [[11500, 11500], [250000, 250000], [9800, 10200], [10000, 17000], [50, 51], [100, 100.01], [999999, 1000001], [0, 0], [-640, -640]]) {
+    const tk = ticks(lo, hi), l = label(lo, hi);
+    assert.ok(tk[0] <= lo && tk.at(-1) >= hi && tk.length >= 2 && tk.length <= 8, `${lo}..${hi} covered`);
+    assert.equal(new Set(l).size, l.length, `${lo}..${hi}: no label twice`);
+  }
 });
