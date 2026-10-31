@@ -15,6 +15,8 @@ test("tax due dates move off weekends and the two holidays that can land on them
   assert.equal(dueDay("2029-01-15"), "2029-01-16", "January 15, 2029 is Martin Luther King Jr. Day");
   assert.equal(dueDay("2027-01-31"), "2027-02-01", "a Sunday");
   assert.deepEqual([...taxHolidays(2026)].sort(), ["2026-01-19", "2026-04-16"]);
+  assert.deepEqual([...taxHolidays(2026, "MA")].sort(), ["2026-01-19", "2026-04-16", "2026-04-20"], "Patriots' Day, the third Monday of April, in Maine and Massachusetts");
+  assert.equal(dueDay("2024-04-15", "ME"), "2024-04-17"); assert.equal(dueDay("2026-04-15", "MA"), "2026-04-15", "Patriots' Day 2026 is the 20th: no change");
 });
 
 test("dates on a period: weekly, every two weeks, monthly (the day kept, short months clamped), twice a month", () => {

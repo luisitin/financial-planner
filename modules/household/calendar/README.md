@@ -39,7 +39,10 @@ Also exported: `dueDay`, `taxHolidays`, `periodDates`, `toIcs`, `saveReminder`, 
     `taxes/estimated` QUARTERS), only when payments were made this year or there is business or rental income.
   The holidays that can land on those days: Martin Luther King Jr. Day (third Monday of January, 5 U.S.C. 6103) and
   District of Columbia Emancipation Day (April 16; on a Saturday it is kept the Friday before, on a Sunday the Monday
-  after; D.C. Code 1-612.02). State dates are not shown (the page says to check the state).
+  after; D.C. Code 1-612.02; IRS Notice 2011-17), and for a household in Maine or Massachusetts Patriots' Day (the
+  third Monday of April; IRS Publication 509 for 2024: "April 15 (April 17 in Maine or Massachusetts)"). State tax dates
+  are not shown (the page says to check the state). `tests/golden-tax-dates.test.mjs` checks the rule against due days
+  the IRS published (2018, 2023, 2024, with Maine and Massachusetts).
 - **Medicare open enrollment**: October 15 to December 7 every year (42 CFR 422.62(a)(2); Medicare.gov, *Open
   Enrollment*, https://www.medicare.gov/health-drug-plans/open-enrollment, read 2026-10-31), for anyone 65 or older by
   December 7.

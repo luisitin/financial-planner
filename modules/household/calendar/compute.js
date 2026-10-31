@@ -34,14 +34,18 @@ const nthWeekday = (y, m, wd, n) => { const first = dow(ymd(y, m, 1)); return ym
  * January 15 payment; 5 U.S.C. 6103) and District of Columbia Emancipation Day (April 16; a Saturday is kept on the
  * Friday before and a Sunday on the Monday after, D.C. Code 1-612.02), which moves the April deadline.
  */
-export function taxHolidays(year) {
+export function taxHolidays(year, state = "") {
   const em = ymd(year, 4, 16), d = dow(em);
-  return new Set([nthWeekday(year, 1, 1, 3), d === 6 ? ymd(year, 4, 15) : d === 0 ? ymd(year, 4, 17) : em]);
+  const days = new Set([nthWeekday(year, 1, 1, 3), d === 6 ? ymd(year, 4, 15) : d === 0 ? ymd(year, 4, 17) : em]);
+  // Patriots' Day (the third Monday of April) is a legal holiday in Maine and Massachusetts, which moves their April
+  // deadline (IRS Publication 509 for 2024: "April 15 (April 17 in Maine or Massachusetts)").
+  if (state === "ME" || state === "MA") days.add(nthWeekday(year, 4, 1, 3));
+  return days;
 }
 /** A due date on a Saturday, Sunday or legal holiday moves to the next business day (IRC 7503; IRS Pub 509). */
-export function dueDay(iso) {
+export function dueDay(iso, state = "") {
   let d = iso;
-  for (let i = 0; i < 7; i++) { const w = dow(d); if (w !== 0 && w !== 6 && !taxHolidays(Number(d.slice(0, 4))).has(d)) return d; d = addDays(d, 1); }
+  for (let i = 0; i < 7; i++) { const w = dow(d); if (w !== 0 && w !== 6 && !taxHolidays(Number(d.slice(0, 4)), state).has(d)) return d; d = addDays(d, 1); }
   return d;
 }
 
@@ -100,16 +104,18 @@ export function compute(plan, params = {}) {
     }
   }
 
-  // federal tax dates
+  // federal tax dates (the household's state matters only for Patriots' Day)
+  const st = String(plan.household?.state ?? "").toUpperCase();
+  const due = (iso) => dueDay(iso, st);
   const hasPay = (plan.income ?? []).some((x) => x?.type === "salary");
   const saver = (plan.accounts ?? []).some((a) => ["ira", "roth", "hsa"].includes(a.type));
   const estimates = (plan.taxes?.estimated?.paid ?? []).some((x) => Number(x) > 0) || (plan.income ?? []).some((x) => ["business", "rental"].includes(x?.type));
   for (const y of years) {
-    if (hasPay) add(dueDay(ymd(y, 1, 31)), "tax", "W-2 pay forms due from employers", { detail: `Your employer must send your ${y - 1} pay and tax form by now.`, go: ["taxes", "documents"] });
-    add(dueDay(ymd(y, 4, 15)), "tax", `Tax return for ${y - 1} due`, { detail: "File, or ask for more time (the tax owed is still due today).", go: ["taxes", "federal"] });
-    if (saver) add(dueDay(ymd(y, 4, 15)), "retire", `Last day to put money in an IRA or health savings account for ${y - 1}`, { go: ["taxes", "hsa-fsa"] });
-    add(dueDay(ymd(y, 10, 15)), "tax", `Tax return for ${y - 1} due if you asked for more time`, { go: ["taxes", "federal"] });
-    if (estimates) for (const [m, d, q, ty] of [[1, 15, 4, y - 1], [4, 15, 1, y], [6, 15, 2, y], [9, 15, 3, y]]) add(dueDay(ymd(y, m, d)), "tax", `Estimated tax payment ${q} of 4 for ${ty}`, { go: ["taxes", "estimated"] });
+    if (hasPay) add(due(ymd(y, 1, 31)), "tax", "W-2 pay forms due from employers", { detail: `Your employer must send your ${y - 1} pay and tax form by now.`, go: ["taxes", "documents"] });
+    add(due(ymd(y, 4, 15)), "tax", `Tax return for ${y - 1} due`, { detail: "File, or ask for more time (the tax owed is still due today).", go: ["taxes", "federal"] });
+    if (saver) add(due(ymd(y, 4, 15)), "retire", `Last day to put money in an IRA or health savings account for ${y - 1}`, { go: ["taxes", "hsa-fsa"] });
+    add(due(ymd(y, 10, 15)), "tax", `Tax return for ${y - 1} due if you asked for more time`, { go: ["taxes", "federal"] });
+    if (estimates) for (const [m, d, q, ty] of [[1, 15, 4, y - 1], [4, 15, 1, y], [6, 15, 2, y], [9, 15, 3, y]]) add(due(ymd(y, m, d)), "tax", `Estimated tax payment ${q} of 4 for ${ty}`, { go: ["taxes", "estimated"] });
   }
 
   // Medicare open enrollment, for anyone 65 or older by its last day
