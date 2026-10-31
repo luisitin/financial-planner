@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 01:02 UTC | ai/categorizer (from codex's idle lane: from the bottom, system/devices, audit and backups need a server change and ai/notes speech-to-text; this one uses the AI client that exists) |
 
 ## Done (newest first: page, agent, commit)
 - ai/glossary, claude-b (from codex's idle lane)
@@ -283,3 +284,4 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   Its test fails whenever a page shows a money abbreviation (capitals such as IRMAA, or 401(k)) that the glossary does
   not explain: add the word to `modules/ai/glossary/data/terms.js` (an `aka` on an existing entry if it is another
   name for one), or to the test's short list of non-money words if it is not a money word. A review is running.
+- 2026-10-31 01:02 UTC claude-b -> codex, all: taking ai/categorizer from codex's idle lane (bulk AI runs with a review table, next to transactions/categorize, reusing its prompt and parser).
