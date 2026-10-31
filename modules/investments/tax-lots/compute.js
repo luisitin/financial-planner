@@ -4,8 +4,17 @@
 // the order to sell in when you need cash (highest cost first: the least gain).
 import { compute as computeHoldings } from "../holdings/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
-import { marginalRate, federalTax } from "../../../core/math/tax.js";
-import { daysBetween } from "../../../core/math/dates.js";
+import { federalTax } from "../../../core/math/tax.js";
+import { daysBetween, addMonths, isoOf } from "../../../core/math/dates.js";
+
+/** The first day a lot bought on `date` is long-term: held more than one year by the calendar, counting from the day
+ *  after it was bought (IRS Pub 550), so the day after its first anniversary (a February 29 buy: March 1). */
+export function longOn(date) {
+  const a = addMonths(String(date).slice(0, 10), 12);
+  if (!a) return null;
+  const [y, m, d] = a.split("-").map(Number);
+  return isoOf(y, m, d + 1);
+}
 
 /** The lots of one enriched holding, with an "unassigned" lot for shares no lot covers. */
 export function lotsOf(h, today) {
@@ -13,8 +22,9 @@ export function lotsOf(h, today) {
   const rows = (h.lots ?? []).map((l) => {
     const shares = Number(l.shares) || 0, cost = Number(l.cost) || 0;
     const value = price !== null ? shares * price : cost;
-    const days = l.date && today ? daysBetween(String(l.date).slice(0, 10), today) : null;
-    return { id: l.id, date: l.date ?? null, shares, cost, costPerShare: shares > 0 ? cost / shares : 0, value, gain: value - cost, term: days === null ? "long" : days > 365 ? "long" : "short", daysToLong: days === null ? 0 : Math.max(0, 366 - days), assigned: true };
+    const from = l.date && today ? longOn(l.date) : null;   // no date (or no today): counted as long-term
+    const days = from ? daysBetween(today, from) : null;
+    return { id: l.id, date: l.date ?? null, shares, cost, costPerShare: shares > 0 ? cost / shares : 0, value, gain: value - cost, term: days === null || days <= 0 ? "long" : "short", daysToLong: days === null ? 0 : Math.max(0, days), longOn: from, assigned: true };
   });
   const covered = rows.reduce((s, l) => s + l.shares, 0), coveredCost = rows.reduce((s, l) => s + l.cost, 0);
   const rest = h.shares - covered;
@@ -37,9 +47,12 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const h = computeHoldings(plan, params);
   const ti = taxInputs(plan, params);
-  const marginal = Math.max(0.1, marginalRate(ti.inputs, ti.params) || 0.22);
+  // the tax on $1,000 more of short- or long-term gain, the 3.8% on investment income included (a true 0% stays 0%)
   const base = federalTax(ti.inputs, ti.params).totalTax;
-  const gainsRate = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: ti.inputs.qualifiedIncome + 1000 }, ti.params).totalTax - base) / 1000);
+  const invested = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
+  const rateOn = (more) => Math.max(0, (federalTax({ ...ti.inputs, ...more, investmentIncome: invested }, ti.params).totalTax - base) / 1000);
+  const marginal = rateOn({ otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000 });
+  const gainsRate = rateOn({ qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + 1000 });
   const holdings = h.items.map((x) => {
     const lots = lotsOf(x, today);
     return { id: x.id, symbol: x.symbol, name: x.name, account: x.accountName, bucket: x.bucket, priced: x.priced, price: x.price, shares: x.shares, lots, gain: lots.reduce((s, l) => s + l.gain, 0), unassignedShares: lots.find((l) => !l.assigned)?.shares ?? 0, cls: x.cls };
