@@ -168,6 +168,12 @@ async function handleApi(req, res, url) {
     writePlan(plan); return json(res, 200, { ok: true, savedAt: new Date().toISOString() });
   }
   if (route === "plan/backups" && req.method === "GET") return json(res, 200, { backups: fs.readdirSync(path.join(DATA, "backups")).sort().reverse() });
+  if (parts[1] === "plan" && parts[2] === "backups" && parts.length === 4 && req.method === "GET") {
+    // one backup, for system/backups: served only when the name is in the folder's own list (never a path)
+    let name = ""; try { name = decodeURIComponent(parts[3]); } catch { /* a malformed name is no backup */ }
+    if (!fs.readdirSync(path.join(DATA, "backups")).includes(name) || !/^plan-[\w-]+\.json$/.test(name)) return json(res, 404, { error: "no such backup" });
+    try { return json(res, 200, JSON.parse(fs.readFileSync(path.join(DATA, "backups", name), "utf8"))); } catch { return json(res, 422, { error: "that backup cannot be read" }); }
+  }
 
   if (parts[1] === "compute" && req.method === "POST") {
     const [group, id] = [parts[2], parts[3]];

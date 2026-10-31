@@ -70,7 +70,7 @@ The full contract is in `docs/CONVENTIONS.md`. The decisions behind it:
 
 * One object, `plan`, shaped by `core/schema/migrate.js` and described in `docs/DATA_MODEL.md`.
 * `core/store.js` owns it. Pages mutate through `store.update(draft => ...)`; the store clones, notifies, and saves (localStorage always; the server when connected, 400 ms debounced).
-* The server writes `data/plan.json` atomically (tmp + rename) and keeps the last N timestamped backups (`data.backups`, default 50). `GET /api/plan/backups` lists them; a restore page is planned.
+* The server writes `data/plan.json` atomically (tmp + rename) and keeps the last N timestamped backups (`data.backups`, default 50). `GET /api/plan/backups` lists them and `GET /api/plan/backups/<name>` returns one; System > Backups compares and restores them.
 * Export/import is plain JSON from System > Settings, so the plan is never locked in.
 * **Scenarios** are partial overlays (`scenarios[].overrides`) applied on top of the plan by the scenarios modules; they never fork the whole file.
 * **Planned:** IndexedDB instead of localStorage once transactions grow (localStorage caps around 5 MB); optional encryption at rest with a passphrase (AES-GCM via WebCrypto in the browser, so the server only ever sees ciphertext); a change log (`data/audit.log`) of what changed when.
@@ -133,6 +133,7 @@ model, or point at their own server.
 | `GET /api/config` | public view of the properties (never `auth.*` or `ai.apiKey`), plus `source` |
 | `GET /api/plan` / `PUT /api/plan` | the shared plan; PUT backs up the previous file first |
 | `GET /api/plan/backups` | list of backup files |
+| `GET /api/plan/backups/<name>` | one backup's plan, for system/backups; only a name in the backups folder's own list |
 | `POST /api/compute/<group>/<id>` | run that module's `compute(plan, params)` on the PC; body `{ params, plan? }` |
 | `GET /api/ai/models` | models the configured provider offers |
 | `POST /api/ai/chat` | `{ messages, model?, options? }` -> `{ content, model, provider }` |
