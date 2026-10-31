@@ -45,7 +45,7 @@ created timers, intervals or listeners outside `root`.
 ## The ctx object
 | field | what |
 |---|---|
-| `route` | `{ group, id, rest[] }` from the hash |
+| `route` | `{ group, id, rest[], query{} }` from the hash: `#/group/id[/rest...][?key=value&...]` (the query is optional; step-by-step guides add `?guide=<id>&step=<key>`, quick answers `?from=quick`) |
 | `plan` | the current plan (read-only by convention) |
 | `derived` | this module's `compute(plan)` result |
 | `module` | this module's own manifest (id, group, title, purpose, ...) |
@@ -59,7 +59,7 @@ created timers, intervals or listeners outside `root`.
 | `GROUPS` | the ordered group list |
 | `computeOf(key, params)` | run another module's compute() locally |
 | `computeRemote(key, params)` | same, but on the PC when the module is `heavy` and a server is connected |
-| `go(group, id)` | navigate |
+| `go(group, id, rest?, query?)` | navigate (`router.href(group, id, rest, query)` builds the same address as a string) |
 
 ## Input schemas (ui.form)
 ```js

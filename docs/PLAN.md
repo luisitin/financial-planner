@@ -180,7 +180,7 @@ layperson (a wall of 153 links). What replaced it:
   first, which is why it is CDP and not `--screenshot`.
 
 * The shell: top bar (menu, page title, status pill "PC | AI on"), a sidebar grouped by `core/groups.js` order, a content area. Mobile: the sidebar is a drawer.
-* Every page is reachable at `#/<group>/<id>`; the dashboard lists every enabled page; Settings toggles them.
+* Every page is reachable at `#/<group>/<id>` (plus an optional `?key=value` query inside the hash, e.g. a step-by-step guide's `?guide=debt&step=rates`); the dashboard lists every enabled page; Settings toggles them.
 * The UI kit (`core/ui/dom.js`) is deliberately small: cards, stats, tables, forms from an input schema. Charts come later via vendored uPlot, added per module.
 * Locale and currency are plan settings (`meta.locale`, `meta.currency`); formatting goes through `core/format.js` so a Spanish locale is one setting. Full string translation is planned as `core/i18n.js` with per-module string tables.
 * Dark mode follows the system.

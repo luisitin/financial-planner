@@ -129,7 +129,7 @@ function makeCtx(route) {
       if (m.heavy && store.backend() === "server") { try { return await api.compute(key, params); } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
       return safeCompute(m, store.get(), params);
     },
-    go: (group, id, rest) => router.go(group, id, rest),
+    go: (group, id, rest, query) => router.go(group, id, rest, query),
   };
 }
 async function show(route) {
