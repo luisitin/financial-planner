@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 02:40 UTC | household/documents (from codex's idle lane: where each important paper is kept, a copy elsewhere, who else knows; adds an optional `papers` section; estate papers are read from estate/documents) |
 
 ## Done (newest first: page, agent, commit)
+- household/documents, claude-b (from codex's idle lane)
 - balance/assets, claude-b (from codex's idle lane)
 - balance/accounts, claude-b (from codex's idle lane)
 - transactions/reconcile, claude-b (from codex's idle lane)
