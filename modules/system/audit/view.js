@@ -52,10 +52,10 @@ function draw(page, ctx) {
   }
   if (names === null || now === null) {
     root.append(ui.card("Changes", ui.h("p", { class: "muted" }, "Asking your PC for its copies…")));
-    Promise.all([
-      get("/api/plan/backups").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`the list: the PC answered ${r.status}`)))),
-      get("/api/plan").then((r) => (r.ok ? r.json() : r.status === 404 ? {} : Promise.reject(new Error(`the plan: the PC answered ${r.status}`)))),
-    ]).then(([l, p]) => { if (mine !== visit) return; names = l.backups ?? []; now = prepare(p); })
+    // the plan is asked for only when there are copies (a fresh PC has neither, and its 404 would be noise)
+    get("/api/plan/backups").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`the list: the PC answered ${r.status}`))))
+      .then((l) => (listOf(l.backups ?? []).length ? get("/api/plan").then((r) => (r.ok ? r.json() : r.status === 404 ? {} : Promise.reject(new Error(`the plan: the PC answered ${r.status}`)))) : Promise.resolve({}))
+        .then((p) => { if (mine !== visit) return; names = l.backups ?? []; now = prepare(p); }))
       .catch((e) => { if (mine === visit) failed = String(e.message ?? e); })
       .finally(redraw);
     return;
