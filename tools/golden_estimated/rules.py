@@ -266,6 +266,14 @@ def case_tax(year, status, other_income, births=()):
     for b in births:
         if is_65_or_older(b, year):
             raise ValueError('born %s is 65 or older at the end of %s; the case allows nobody 65+' % (b, year))
+    # married filing separately with two adults is two returns, each spouse with half the interest (the household's, in
+    # neither name) and their own standard deduction (Publication 501 (2025), How to file: "you generally report only your own income",
+    # read 2026-10-31; changed 2026-10-31 when the app took this up: the key
+    # first worked one combined return, the page's model then)
+    if status == 'married_separate' and len(list(births)) == 2:
+        # each return's tax is its own, to the cent (both spouses' returns are figured on their own), then added
+        half = _F(other_income) / 2
+        return 2 * round_half_up(regular_tax(year, status, max(F(0), half - standard_deduction(year, status))), CENT)
     return regular_tax(year, status, max(F(0), _F(other_income) - standard_deduction(year, status)))
 
 
@@ -688,9 +696,11 @@ def evaluate(case):
     out['tax'] = tax
     if given is None:
         inc = _F(case['other_income'])
-        ti = max(F(0), inc - standard_deduction(year, status))
-        out['law_tax_with_niit'] = tax + niit(status, inc, inc)
-        out['tax_table_tax'] = tax_table_tax(year, status, ti)
+        returns = 2 if status == 'married_separate' and len(list(births)) == 2 else 1   # separate: two returns, half each
+        part = inc / returns
+        ti = max(F(0), part - standard_deduction(year, status))
+        out['law_tax_with_niit'] = tax + returns * niit(status, part, part)
+        out['tax_table_tax'] = returns * tax_table_tax(year, status, ti)
     people = []
     for who in ('self', 'partner'):
         per, per_d = case.get('per_check_' + who), case.get('period_' + who)

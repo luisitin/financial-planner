@@ -151,3 +151,20 @@ test("federal: typed wages are the person's own W-2 box 1: nothing comes off the
   assert.equal(d.inputs.wages, 50000); assert.equal(d.inputs.medicareWages, 50000); assert.equal(d.fsa.offWages, 0);
   assert.ok(!d.notes.some((n) => /401\(k\) money is over|FSA election is over/.test(n)));
 });
+
+test("federal: filing separately, each spouse's return holds their own pay and business; the child goes on the higher earner's (Pub. 501)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-10-30");
+  p.household.filingStatus = "married_separate";
+  const d = compute(p, { today: "2026-10-30" });
+  const [ana, bo] = d.separate;
+  assert.equal(ana.personId, "p-ana"); assert.equal(bo.personId, "p-bo");
+  assert.equal(bo.selfEmployment, 7200); assert.equal(ana.selfEmployment, 0);   // the photography is Bo's
+  assert.equal(ana.dependentsUnder17, 1); assert.equal(bo.dependentsUnder17, 0);   // Ana's 101,400 of pay is the larger
+  assert.ok(Math.abs(ana.wages + bo.wages - d.inputs.wages) < 0.01);
+  assert.ok(Math.abs(d.result.separate[0].totalTax + d.result.separate[1].totalTax - d.result.totalTax) < 0.011);
+  assert.equal(d.standard, 2 * 16100);
+  assert.ok(d.notes.some((n) => /two returns: Ana's and Bo's/.test(n)));
+  p.household.filingStatus = "married_joint";
+  assert.equal(compute(p, { today: "2026-10-30" }).separate, null);
+});

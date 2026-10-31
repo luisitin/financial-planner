@@ -9,7 +9,8 @@
 // dividends stacked on ordinary income at 0/15/20% (the worksheet's last step included), a net
 // capital loss of up to 3,000 against any income, the taxation of Social Security benefits (the IRS
 // worksheet), the net investment income tax, the additional Medicare tax on wages, the child tax
-// credit with its phase-out and refundable part. Not modelled: AMT, the qualified business income
+// credit with its phase-out and refundable part. Married filing separately with `inputs.separate` is worked
+// as two returns, one per spouse, and added up (separateTax). Not modelled: AMT, the qualified business income
 // deduction, the earned income credit, education credits, self-employment tax.
 
 export const FILING_STATUSES = [
@@ -137,6 +138,7 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
  * }
  */
 export function federalTax(inputs, params) {
+  if (inputs.filingStatus === "married_separate" && Array.isArray(inputs.separate) && inputs.separate.length) return separateTax(inputs, params);
   const status = params.status[inputs.filingStatus] ? inputs.filingStatus : "single";
   const wages = pos(inputs.wages), otherOrdinary = pos(inputs.otherOrdinary), qualified = pos(inputs.qualifiedIncome), ss = pos(inputs.socialSecurity);
   const exempt = pos(inputs.taxExemptInterest), adjustments = pos(inputs.adjustments), itemized = pos(inputs.itemized);
@@ -166,7 +168,8 @@ export function federalTax(inputs, params) {
   // from 2026: people who take the standard deduction also deduct cash gifts to charity, up to 1,000 (2,000 joint) (IRC §170(p))
   const charityCap = params.charity?.nonItemizerCap?.[status] ?? params.charity?.nonItemizerCap?.single ?? 0;
   const nonItemizerCharity = Math.min(charitableCash, charityCap);
-  const useItemized = itemizedAfter > std + nonItemizerCharity;
+  // a married person filing separately whose spouse itemizes must itemize too (IRC 63(c)(6)(A)): `forceItemize`
+  const useItemized = inputs.forceItemize === true || itemizedAfter > std + nonItemizerCharity;
   const deduction = (useItemized ? itemizedAfter : std + nonItemizerCharity) + senior;
   // the 20% business deduction comes after AGI (Form 1040 line 13), at most 20% of taxable income before it less the net
   // capital gain, which counts qualified dividends (IRC 199A(a), 1(h)(11)); the active-business minimum (199A(i)) overrides that limit
@@ -216,6 +219,47 @@ export function federalTax(inputs, params) {
     withheld, paid, balance: money(totalTax - withheld - paid),
   };
   return out;
+}
+
+/** The amounts of `inputs` that add up across two separate returns (the others, such as ages and dependents, belong to one). */
+export const SEPARATE_FIELDS = ["wages", "medicareWages", "otherOrdinary", "qualifiedIncome", "capitalLoss", "socialSecurity", "taxExemptInterest", "adjustments", "itemized", "charitableCash", "investmentIncome", "selfEmployment", "qbiDeduction", "qbiMinimum", "withheld", "paid"];
+
+/**
+ * Married filing separately is two returns (IRS Pub. 501: "you generally report only your own income, credits, and
+ * deductions"), one per spouse, each on the separate schedule. `inputs.separate` holds each spouse's inputs ({ personId,
+ * name, ...inputs }); the top-level amounts are their sums. A page that changes a top-level amount (say $1,000 more
+ * income) has the difference land on one return: the spouse whose id is in `inputs.separateTo`, else the first. If one
+ * spouse itemizes, the other must too (IRC 63(c)(6)(A)). The result is the two returns added up, with `separate` holding
+ * each; the bracket figures (bracketRate, roomInBracket, nextRate, layers) are that one spouse's.
+ */
+function separateTax(inputs, params) {
+  const parts = inputs.separate.map((x) => ({ ...x, filingStatus: "married_separate", separate: undefined }));
+  const target = Math.max(0, parts.findIndex((x) => x.personId != null && x.personId === inputs.separateTo));
+  for (const k of SEPARATE_FIELDS) {
+    if (inputs[k] === undefined || inputs[k] === null) continue;
+    const delta = (Number(inputs[k]) || 0) - parts.reduce((s, x) => s + (Number(x[k]) || 0), 0);
+    if (Math.abs(delta) > 1e-9) parts[target] = { ...parts[target], [k]: (Number(parts[target][k]) || 0) + delta };
+  }
+  let results = parts.map((x) => federalTax(x, params));
+  if (results.some((r) => r.deduction.used === "itemized") && results.some((r) => r.deduction.used !== "itemized"))
+    results = parts.map((x, i) => results[i].deduction.used === "itemized" ? results[i] : federalTax({ ...x, forceItemize: true }, params));
+  const sum = (f) => results.reduce((s, r) => s + (Number(f(r)) || 0), 0);
+  const me = results[target];
+  const gross = sum((r) => r.income.gross), totalTax = money(sum((r) => r.totalTax));
+  return {
+    year: params.year ?? null, filingStatus: "married_separate",
+    income: Object.fromEntries(Object.keys(me.income).map((k) => [k, sum((r) => r.income[k])])),
+    agi: sum((r) => r.agi), adjustments: sum((r) => r.adjustments),
+    deduction: { standard: sum((r) => r.deduction.standard), itemized: sum((r) => r.deduction.itemized), itemizedBeforeLimit: sum((r) => r.deduction.itemizedBeforeLimit), itemizedLimit: sum((r) => r.deduction.itemizedLimit), charity: sum((r) => r.deduction.charity), used: results.some((r) => r.deduction.used === "itemized") ? "itemized" : "standard", senior: sum((r) => r.deduction.senior), amount: sum((r) => r.deduction.amount), qbi: sum((r) => r.deduction.qbi) },
+    taxableIncome: sum((r) => r.taxableIncome), ordinaryTaxable: sum((r) => r.ordinaryTaxable), qualifiedTaxable: sum((r) => r.qualifiedTaxable),
+    ordinaryTax: sum((r) => r.ordinaryTax), qualifiedTax: sum((r) => r.qualifiedTax), incomeTax: sum((r) => r.incomeTax), layers: me.layers, qualifiedLayers: me.qualifiedLayers,
+    credits: { childTaxCredit: sum((r) => r.credits.childTaxCredit), refundable: sum((r) => r.credits.refundable) },
+    niit: sum((r) => r.niit), additionalMedicare: sum((r) => r.additionalMedicare), totalTax,
+    effectiveRate: gross > 0 ? totalTax / gross : 0,
+    bracketRate: me.bracketRate, roomInBracket: me.roomInBracket, nextRate: me.nextRate,
+    withheld: sum((r) => r.withheld), paid: sum((r) => r.paid), balance: money(sum((r) => r.balance)),
+    separate: results.map((r, i) => ({ ...r, personId: parts[i].personId ?? null, name: parts[i].name ?? null })), separateTo: parts[target].personId ?? null,
+  };
 }
 
 /** What the next `delta` dollars of ordinary income really cost, as a rate (the bracket, plus Social Security and gains bumped along, plus phase-outs). */

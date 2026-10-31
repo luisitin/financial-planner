@@ -42,6 +42,18 @@ standard deduction applies. So:
 worked with the exact bracket formula (no Tax Table rounding), the same way the federal key does
 ("Tax is worked with the Tax Computation formula on exact amounts", `tests/golden/taxes/RULES.md` s.1).
 
+**Married filing separately is two returns** (since 2026-10-31). On a separate row with two adults, each
+spouse files a return of their own:
+
+> "If you file a separate return, you generally report only your own income, credits, and deductions."
+> (Publication 501 (2025), Married Filing Separately, How to file, https://www.irs.gov/publications/p501, read 2026-10-31)
+
+The case's interest is the household's, in neither name, so each return reports half of it and takes its own
+standard deduction; each return's tax is worked to the cent on its own, and the row's tax is the two added. The
+withholding, the estimates and last year's figures stay the household's, as the pages keep them (section 7
+notes where the law credits only the filer's own withholding). The key first worked one combined return at the
+separate rates, as the pages then did; both changed on the same day.
+
 **Brackets** (top of each bracket; 37% has no top). Rates 10, 12, 22, 24, 32, 35, 37%.
 
 | Year | Status | 10% to | 12% to | 22% to | 24% to | 32% to | 35% to | Source |
@@ -616,6 +628,8 @@ January 31, 2028.
    (more) or floor (less) of the exact quotient.
 9. 2027: due dates only.
 10. Nobody 65 or older: birth on or after January 2 of (year - 64).
+11. Married filing separately with two adults: half the household's interest on each return, each return's tax
+    to the cent, then added (section 1).
 
 ## 12. What could not be verified, and findings
 

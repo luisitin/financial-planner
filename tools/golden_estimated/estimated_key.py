@@ -388,8 +388,11 @@ def derive_2(c):
     today = date.fromisoformat(c['today'])
     sd = R.STANDARD_DEDUCTION[year][status] * U
     income = un(c['other_income'])
-    ti = max(0, income - sd)
+    returns = 2 if status == 'married_separate' and len(c['adults'].split('|')) == 2 else 1   # separate: two returns, half the interest each
+    ti = max(0, exact_div(income, returns) - sd)
     tax = tax_on_taxable_2(year, status, ti)
+    if returns == 2:                             # each spouse's return to the cent, then the two added
+        tax = 2 * rhu(F(tax, U // 100)) * (U // 100)
     ninety = exact_div(9 * tax, 10)
     pt, pa = un(c['prior_tax']), un(c['prior_agi'])
     if pt is None and MUT == 'blank_prior_is_zero':
@@ -492,7 +495,7 @@ def derive_2(c):
         'flag_est': needs and P + U < amount and late,
         'law': (not small) and (not zero) and bool(law_q),
         'small': small, 'zero': zero, 'law_quarters': tuple(law_q), 'law_short': tuple(law_s),
-        'tolerance_sensitive': sensitive, 'tax_table_tax': tax_table_2(year, status, ti),
+        'tolerance_sensitive': sensitive, 'tax_table_tax': returns * tax_table_2(year, status, ti),
         'page_dues': page_dues,
     }
     for k in range(4):

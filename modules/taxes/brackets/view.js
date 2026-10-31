@@ -11,9 +11,9 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today(), extra });
   const money = (n) => fmt.money(n, cur);
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.hasIncome ? `You are in the ${fmt.pct(d.bracketRate, 0)} bracket` : "Which bracket are you in?"),
+    ui.h("h1", {}, d.hasIncome ? `${d.whose ? `${d.whose} is` : "You are"} in the ${fmt.pct(d.bracketRate, 0)} bracket` : "Which bracket are you in?"),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${money(d.ordinaryTaxable)} of ordinary taxable income in ${d.year}${Number.isFinite(d.roomInBracket) ? `, with ${money(d.roomInBracket)} of room before the ${fmt.pct(d.nextRate, 0)} rate starts` : ", the top rate"}. Only the dollars inside each rung pay that rung's rate: overall you pay ${fmt.pct(d.effectiveRate, 1)}.${d.qualifiedNote ? ` ${d.qualifiedNote}` : ""}`
+      ? `${d.whose ? `Filing separately, each of you has your own ladder; this is ${d.whose}'s return. ` : ""}${money(d.ordinaryTaxable)} of ordinary taxable income in ${d.year}${Number.isFinite(d.roomInBracket) ? `, with ${money(d.roomInBracket)} of room before the ${fmt.pct(d.nextRate, 0)} rate starts` : ", the top rate"}. Only the dollars inside each rung pay that rung's rate: overall ${d.whose ? "the two of you pay" : "you pay"} ${fmt.pct(d.effectiveRate, 1)}.${d.qualifiedNote ? ` ${d.qualifiedNote}` : ""}`
       : "Brackets are steps: each slice of income pays its own rate, so moving up a bracket never costs you money on the dollars below it. Add income on the Income page or the Federal estimate page to see where you stand."),
   ));
   if (d.hasIncome) root.append(ui.card(null, ui.row(
@@ -22,6 +22,12 @@ export function render(root, ctx) {
     ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? "more than the bracket: benefits or gains get pulled along" : "what it really costs"),
     ui.stat("Deductions", money(d.deduction), "come off before the ladder"),
   )));
+  if (d.hasIncome && d.separate) root.append(ui.card("Two returns",
+    ui.h("ul", { class: "records" }, d.separate.map((x) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name ?? "Spouse"}'s return`, x.shown ? ui.h("span", { class: "pill accent" }, "shown here") : null), ui.h("span", { class: "rec-value" }, fmt.pct(x.bracketRate, 0))),
+      ui.h("div", { class: "rec-sub" }, `${money(x.taxableIncome)} taxable${Number.isFinite(x.roomInBracket) ? `, ${money(x.roomInBracket)} of room in the bracket` : ""}; ${money(x.totalTax)} of tax`)))),
+    ui.h("p", { class: "muted small" }, `More income below is added to ${d.whose}'s return. The overall rate above is for both returns together.`),
+  ));
   // what more income would cost
   const amounts = [5000, 10000, 25000, 50000, 100000];
   const chips = ui.h("div", { class: "chips" }, amounts.map((a) => ui.h("button", { type: "button", class: `chip${a === extra ? " on" : ""}`, onClick: () => { extra = a; root.replaceChildren(); render(root, ctx); } }, `+${fmt.money(a, cur)}`)));

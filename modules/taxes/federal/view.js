@@ -17,7 +17,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? `About ${money(r.totalTax)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(r.effectiveRate, 1)} of it overall; the next dollar you earn costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}).${owes !== null ? owes > 0 ? ` With ${money(r.withheld + r.paid)} already paid, you would owe about ${money(owes)} at filing time.` : ` With ${money(r.withheld + r.paid)} already paid, you would get about ${money(-owes)} back.` : ""}`
+      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(r.effectiveRate, 1)} of it overall; the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}).${owes !== null ? owes > 0 ? ` With ${money(r.withheld + r.paid)} already paid, you would owe about ${money(owes)} at filing time.` : ` With ${money(r.withheld + r.paid)} already paid, you would get about ${money(-owes)} back.` : ""}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
     ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice: no AMT, business deduction, education or earned-income credits, or state tax.`),
   ));
@@ -31,6 +31,12 @@ export function render(root, ctx) {
     ui.stat("On the next dollar", fmt.pct(d.marginal, 0), d.marginal > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount)} of deductions`),
   )));
+  if (r.separate) root.append(ui.card("Two returns",
+    ui.h("p", { class: "muted small" }, "Filing separately, each of you files your own return. The tax above is the two added up."),
+    ui.h("ul", { class: "records" }, r.separate.map((x) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name ?? "Spouse"}'s return`), ui.h("span", { class: "rec-value" }, money(x.totalTax))),
+      ui.h("div", { class: "rec-sub" }, `${money(x.income.gross)} of income, ${money(x.taxableIncome)} taxed after ${money(x.deduction.amount)} of deductions${x.deduction.used === "itemized" ? " (itemized)" : ""}; the ${fmt.pct(x.bracketRate, 0)} bracket`)))),
+  ));
   root.append(ui.card("From income to tax",
     ui.h("ul", { class: "records" }, d.steps.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < 0 ? `−${money(-s.amount)}` : money(s.amount))),
@@ -46,6 +52,9 @@ export function render(root, ctx) {
   root.append(figuresFold(ctx, d), deductionsFold(ctx, d), yearFold(ctx, d));
   root.append(ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
 }
+
+/** The spouse whose return the next dollar and the bracket figures are for (the engine's `separateTo`, else the first). */
+const firstName = (r) => (r.separate.find((x) => x.personId != null && x.personId === r.separateTo) ?? r.separate[0]).name ?? "the first spouse";
 
 function figuresFold(ctx, d) {
   const { ui, fmt, store, plan } = ctx;

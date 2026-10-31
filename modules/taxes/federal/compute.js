@@ -4,7 +4,7 @@
 // itemized deductions). Every other tax page starts from taxInputs() so they all agree.
 import { FEDERAL, TAX_YEARS } from "./data/federal.js";
 import { MAXIMUM_EARNINGS } from "../../retirement/social-security/data/ssa.js";
-import { federalTax, marginalRate, paramsFor, standardDeduction } from "../../../core/math/tax.js";
+import { federalTax, marginalRate, paramsFor, standardDeduction, SEPARATE_FIELDS } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { limitsFor, catchUpFor, hsaPicture, limitKind } from "../../retirement/contributions/compute.js";
@@ -175,12 +175,54 @@ export function taxInputs(plan, params = {}) {
   const base = { filingStatus, wages, medicareWages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
   const agi = federalTax({ ...base, itemized: 0 }, P).agi;
   const itemized = itemizedTotal(t.itemized, agi, filingStatus, P);
-  const inputs = { ...base, itemized: itemized.total };
+  let inputs = { ...base, itemized: itemized.total };
+  // married filing separately is two returns, one per spouse (IRS Pub. 501: each reports their own income, credits and
+  // deductions): each spouse's own pay, 401(k), IRA and HSA money and the income in their name; the household's income
+  // with no one named, the typed figures, the gains and the itemized amounts split in half (a sale's half on each return,
+  // so each has its own $1,500 loss limit, IRC 1211(b)); pay with no one named and the health FSA on the adult marked
+  // "Me"; the children on the higher earner's return (the Which way to file page's convention). The engine adds the two
+  // returns up (core/math/tax.js separateTax); `separate` holds each spouse's inputs.
+  let separate = null;
+  if (filingStatus === "married_separate" && adults.length >= 2) {
+    const two = adults.slice(0, 2);
+    const shareOf = (x, p, payLike) => { const o = adultOf(x.personId); return o ? (o === p ? 1 : 0) : payLike ? (p === me ? 1 : 0) : 0.5; };
+    const sumFor = (p, types, payLike = false) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly * shareOf(x, p, payLike), 0);
+    const halfGains = netGains((t.gains ?? []).map((g) => ({ ...g, proceeds: (Number(g.proceeds) || 0) / 2, basis: (Number(g.basis) || 0) / 2 })), filingStatus);
+    const halfItemized = Object.fromEntries(Object.entries(t.itemized ?? {}).map(([k, v]) => [k, typeof v === "number" ? v / 2 : v]));
+    const payOf = (p) => sumFor(p, ["salary", "bonus"], true);
+    const carrier = [...two].sort((a, b) => payOf(b) - payOf(a))[0];
+    const blindAll = Math.max(0, Math.round(Number(t.blind) || 0));
+    separate = two.map((p) => {
+      const i = adults.indexOf(p), k = k401People[i], ira = iraPeople[i], h = hsa.people[i];
+      const fsaOwn = p === me ? fsaExcluded : 0;
+      const hsaDeducted = Math.max(0, h.payroll - h.excess), hsaTaxed = Math.max(0, h.excess - h.payroll);
+      const ownWages = wagesTyped ? wages * (payTotal > 0 ? k.pay / payTotal : 1 / two.length) : Math.max(0, k.pay - k.excluded - fsaOwn) + hsaTaxed;
+      const ownBusiness = sumFor(p, ["business"]);
+      const part = {
+        filingStatus, wages: ownWages, medicareWages: wagesTyped ? ownWages : Math.max(0, k.pay - fsaOwn - h.payroll + h.excess),
+        otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort),
+        qualifiedIncome: Math.max(0, qualifiedTyped / 2 + halfGains.netLong), capitalLoss: halfGains.lossAllowed,
+        socialSecurity: typed("socialSecurity") ? socialSecurity / 2 : sumFor(p, ["social"]), taxExemptInterest: taxExemptInterest / 2,
+        adjustments: adjustmentsTyped / 2 + ira.deductible + hsaDeducted,
+        ages65plus: ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65 ? 1 : 0, blind: p === me ? Math.min(1, blindAll) : Math.max(0, blindAll - 1),
+        dependentsUnder17: p === carrier ? dependentsUnder17 : 0, otherDependents: p === carrier ? otherDependents : 0,
+        withheld: base.withheld / 2, paid: paid / 2, selfEmployment: ownBusiness,
+        investmentIncome: Math.max(0, sumFor(p, ["investment"]) + qualifiedTyped / 2 + halfGains.netShort + halfGains.netLong + halfGains.lossAllowed),
+        charitableCash: base.charitableCash / 2,
+      };
+      const partAgi = federalTax({ ...part, itemized: 0 }, P).agi;
+      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total };
+    });
+    const sums = Object.fromEntries(SEPARATE_FIELDS.map((f) => [f, separate.reduce((s, x) => s + (Number(x[f]) || 0), 0)]));
+    inputs = { ...inputs, ...sums, separate, separateTo: me ? me.id : separate[0].personId };   // an amount another page adds lands on Me's return
+    notes.push(`Filing separately is two returns: ${separate.map((x) => x.name).join("'s and ")}'s, each with their own pay, saving and income; income in neither name and the figures typed here are split in half${dependentsUnder17 + otherDependents > 0 ? `, and ${dependentsUnder17 + otherDependents === 1 ? "the child is" : "the children are"} on ${carrier.name}'s return` : ""}.`);
+  }
   if (!active.length && !typed("wages")) notes.push("Nothing on the Income page yet: the estimate is built from what you type below.");
   if (adults.length >= 2 && filingStatus === "single") notes.push("Two adults but the filing status is Single (People page). Married couples usually file together.");
   if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, tick that under Year and people.");
   return {
-    year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, standard: standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }), gains,
+    year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, gains, separate,
+    standard: separate ? separate.reduce((s, x) => s + standardDeduction(filingStatus, P, { ages65plus: x.ages65plus, blind: x.blind }), 0) : standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }),
     k401: { people: k401People, excluded: pretax401k, inIncome: k401Over, year: L.kindYear["401k"] },
     ira: { people: iraPeople, deductible: iraDeductible, over: iraOver, year: L.kindYear.ira },
     fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null },

@@ -24,7 +24,7 @@ to 9) is the spec; where the law says otherwise the main column follows the law 
 dates.csv) keeps the page's way. The script works every row in two separate ways, both in exact arithmetic. It
 refuses to write either CSV if an amount differs by more than a cent, or any other value (date, status, verdict,
 flag, count, basis) differs at all, between the two. In fact the two agree exactly, before rounding, on every value
-of every row: 53,331 amounts and 96,320 other values in households.csv, 505 values in dates.csv.
+of every row: 53,279 amounts and 96,288 other values in households.csv, 505 values in dates.csv.
 
 ## Run
 
@@ -70,6 +70,7 @@ one of the pages' documented conventions (the $1 tolerance, the $500 and $1,000 
 | P509_26, P509_27 | Publication 509 (2026); Publication 509 (2027) DRAFT | the IRS's own lists of legal holidays (rebuilt by `rules.check_tables()`); the January dates; the 2027 installment dates |
 | RP2440, RP2532, PL11921 | Rev. Proc. 2024-40 s.2.01; Rev. Proc. 2025-32 s.3.01, s.4.01, s.4.14; Pub. L. 119-21 s.70102 | the 2025 and 2026 brackets and standard deductions |
 | I1040 | Instructions for Form 1040 (2025) | the day-before rule for age 65; the Tax Table under $100,000 (contrast column) |
+| P501 | Publication 501 (2025), Married Filing Separately (read 2026-10-31) | a separate return reports only the filer's own income: two returns on a separate row with two adults, half the interest each |
 | USC1411, USC55 | 26 U.S.C. 1411(a)(1), (b); 55(b)(1), (d) | the net investment income tax lines the generator stays under; the AMT can never apply here (`rules.check_tables()`) |
 | IRSET, IRSNEWS | IRS "Estimated taxes" page; the 2025 and 2026 filing-season releases, Tax Tips 2024-30 and 2022-47 | the three conditions for no estimated tax; no Patriots' Day statement for estimated payments in 2025-2027 |
 | FEDKEY | `tests/golden/taxes/RULES.md` sections 1-2 | comparison only (same figures; its Rev. Proc. 2024-40 section numbers are s.2.01 / s.2.15, not s.3.01 / s.3.15) |
@@ -97,6 +98,11 @@ one of the pages' documented conventions (the $1 tolerance, the $500 and $1,000 
 - **households.csv.** One tax return for 2025 or 2026: one filer (single, head of household, married filing
   separately) or a couple filing jointly, nobody 65 or older at the end of the year. `adults` lists each adult's
   birth date; on a married-filing-separately row a second adult is the spouse, who files his or her own return.
+  Since 2026-10-31 such a row is two returns (the page took this up that day): each spouse reports half the
+  interest (the household's, in neither name), takes their own standard deduction and works their own tax to the
+  cent, and the row's tax is the two added. The withholding and estimates stay the household's, as the page keeps
+  them (married filing separately splits them only on the returns themselves). Before that day the key, like the
+  page, worked one combined return at the separate rates.
   The only income is taxable interest (`other_income`), there are no dependents, no credits, and the standard
   deduction applies. `prior_tax` and `prior_agi` are last year's total tax and adjusted gross income as typed
   (blank = not typed). Withholding is either nothing at all, or per-paycheck amounts for the filer and (joint
@@ -142,7 +148,7 @@ Written separately in this file, in integers of 1e-8 dollar, without calling a `
   rules instead. Patriots' Day is "a Monday in April on the 15th to the 21st". The skipped days and why are
   compared too.
 
-The guard compares the two on 53,331 amounts and 96,320 other values in households.csv and 505 values in
+The guard compares the two on 53,279 amounts and 96,288 other values in households.csv and 505 values in
 dates.csv. No amount differs at all before rounding, and the largest gap is 0.
 
 ### Rounding
@@ -248,49 +254,49 @@ Random rows:
 
 | | Rows |
 |---|---|
-| total | 3,000 (126 edge, 2,874 random; 2,884 random draws, 10 redrawn) |
+| total | 3,000 (126 edge, 2,874 random; 2,883 random draws, 9 redrawn) |
 | year 2025 / 2026 | 1,471 / 1,529 |
-| single / joint / separate / head of household | 932 / 1,018 / 461 / 589 |
-| one adult / two | 1,783 / 1,217 |
-| state MA / ME / DC / CA / other (51 codes in all) | 313 / 346 / 309 / 276 / 1,756 |
-| today in Jan / Feb / Mar / Apr / May / Jun / Jul / Aug / Sep / Oct / Nov / Dec / January after | 216 / 96 / 95 / 403 / 88 / 414 / 109 / 107 / 377 / 121 / 95 / 198 / 681 |
-| today on the Q1 / Q2 / Q3 / Q4 due date | 160 / 171 / 150 / 162 |
-| today the day after the Q1 / Q2 / Q3 / Q4 due date | 114 / 94 / 95 / 99 |
-| today Jan 1 / Dec 31 / Jan 1-14 next year / Jan 16-31 next year | 121 / 117 / 313 / 206 |
-| last-year tax blank / 0 / under 2,000 / over 1.5 x this year / other | 663 / 375 / 708 / 406 / 848 |
-| last-year AGI at or under the line / over / blank with a typed tax | 1,353 / 808 / 176 |
-| last-year AGI exactly 150,000.00 / 150,000.01 (not separate) | 87 / 78 |
-| last-year AGI exactly 75,000.00 / 75,000.01 (separate) | 22 / 17 |
-| basis this year / last year at 100% / last year at 110% | 1,839 / 773 / 388 (124 ties named last year) |
-| withholding nothing typed / typed | 1,267 / 1,733 |
-| so far blank / typed / typed 0 | 618 / 1,035 / 80 |
-| paychecks for the filer / both / the partner only / nobody (so far only) | 1,419 / 218 / 95 / 1 |
-| periods weekly / biweekly / semimonthly / monthly (people) | 407 / 777 / 378 / 388 |
-| estimates none typed | 1,140 |
-| every past-due box with its quarter, up to $1 over (on time) | 320 |
-| a past-due box blank (late or not typed) / under its quarter (short) | 647 / 253 |
-| a box more than $1 above its quarter (over) / typed before its due date | 1,130 / 791 |
-| total paid at or above the amount | 811 |
-| Q1 status paid / short / due / upcoming | 2,260 / 469 / 99 / 172 |
-| Q2 status paid / short / due / upcoming | 1,941 / 454 / 117 / 488 |
-| Q3 status paid / short / due / upcoming | 1,638 / 402 / 104 / 856 |
-| Q4 status paid / short / due / upcoming | 1,359 / 76 / 226 / 1,339 |
-| behind above 0 / no next payment | 746 / 1,435 |
-| estimates needed yes / no / the amount-only reading differs | 1,590 / 1,410 / 320 |
-| tax minus withholding under $1,000 / last-year tax 0 | 1,117 / 375 |
+| single / joint / separate / head of household | 933 / 1,016 / 464 / 587 |
+| one adult / two | 1,782 / 1,218 |
+| state MA / ME / DC / CA / other (51 codes in all) | 309 / 346 / 310 / 270 / 1,765 |
+| today in Jan / Feb / Mar / Apr / May / Jun / Jul / Aug / Sep / Oct / Nov / Dec / January after | 215 / 97 / 98 / 409 / 84 / 408 / 111 / 110 / 378 / 124 / 93 / 194 / 679 |
+| today on the Q1 / Q2 / Q3 / Q4 due date | 159 / 170 / 150 / 161 |
+| today the day after the Q1 / Q2 / Q3 / Q4 due date | 118 / 89 / 96 / 101 |
+| today Jan 1 / Dec 31 / Jan 1-14 next year / Jan 16-31 next year | 122 / 114 / 312 / 206 |
+| last-year tax blank / 0 / under 2,000 / over 1.5 x this year / other | 662 / 393 / 708 / 416 / 821 |
+| last-year AGI at or under the line / over / blank with a typed tax | 1,354 / 807 / 177 |
+| last-year AGI exactly 150,000.00 / 150,000.01 (not separate) | 87 / 76 |
+| last-year AGI exactly 75,000.00 / 75,000.01 (separate) | 21 / 18 |
+| basis this year / last year at 100% / last year at 110% | 1,836 / 771 / 393 (143 ties named last year) |
+| withholding nothing typed / typed | 1,268 / 1,732 |
+| so far blank / typed / typed 0 | 620 / 1,030 / 82 |
+| paychecks for the filer / both / the partner only / nobody (so far only) | 1,418 / 220 / 93 / 1 |
+| periods weekly / biweekly / semimonthly / monthly (people) | 410 / 781 / 373 / 387 |
+| estimates none typed | 1,150 |
+| every past-due box with its quarter, up to $1 over (on time) | 311 |
+| a past-due box blank (late or not typed) / under its quarter (short) | 642 / 250 |
+| a box more than $1 above its quarter (over) / typed before its due date | 1,135 / 791 |
+| total paid at or above the amount | 810 |
+| Q1 status paid / short / due / upcoming | 2,270 / 459 / 98 / 173 |
+| Q2 status paid / short / due / upcoming | 1,956 / 447 / 113 / 484 |
+| Q3 status paid / short / due / upcoming | 1,656 / 396 / 104 / 844 |
+| Q4 status paid / short / due / upcoming | 1,378 / 78 / 220 / 1,324 |
+| behind above 0 / no next payment | 732 / 1,456 |
+| estimates needed yes / no / the amount-only reading differs | 1,572 / 1,428 / 315 |
+| tax minus withholding under $1,000 / last-year tax 0 | 1,138 / 393 |
 | tax minus withholding exactly 999.99 / 1,000.00 | 1 / 1 |
-| balance (with withholding figures) under 1,000 / 1,000 or more | 1,076 / 657 |
+| balance (with withholding figures) under 1,000 / 1,000 or more | 1,082 / 650 |
 | balance exactly 999.99 / 1,000.00 / 500.00 / 499.99 / -499.99 / -500.00 | 2 / 2 / 1 / 1 / 1 / 1 |
-| verdict unknown / about right / owe / refund | 1,267 / 483 / 828 / 422 |
-| suggestion more / less / use estimates / use estimates (ambiguous) / none | 607 / 297 / 1 (`est-edge-096`) / 220 / 1,875 |
-| suggestion for the partner / "less" larger than the per-paycheck amount | 45 / 143 |
-| withholding page flag / estimates page flag / law exposure | 548 / 761 / 803 (the withholding flag uses the law's $1,000 test since 2026-10-31: tax less withholding only) |
-| law on, estimates page off / estimates page on, law off | 42 / 0 (impossible, see open point 9) |
-| law on, withholding page off / withholding page on, law off | 501 / 246 |
-| tax 0 / income with cents / largest tax | 239 / 835 / $37,468.00 |
-| Tax Table differs from the formula by a cent or more (largest $6) | 2,202 |
+| verdict unknown / about right / owe / refund | 1,268 / 496 / 817 / 419 |
+| suggestion more / less / use estimates / use estimates (ambiguous) / none | 593 / 295 / 1 (`est-edge-096`) / 223 / 1,888 |
+| suggestion for the partner / "less" larger than the per-paycheck amount | 43 / 142 |
+| withholding page flag / estimates page flag / law exposure | 540 / 753 / 793 (the withholding flag uses the law's $1,000 test since 2026-10-31: tax less withholding only) |
+| law on, estimates page off / estimates page on, law off | 40 / 0 (impossible, see open point 9) |
+| law on, withholding page off / withholding page on, law off | 493 / 240 |
+| tax 0 / income with cents / largest tax | 275 / 829 / $37,468.00 |
+| Tax Table differs from the formula by a cent or more (largest $6) | 2,165 |
 | tolerance-sensitive (labelled edge rows only) | 4 (`est-edge-038`, `-048`, `-050`, `-114`) |
-| written amounts exactly on a half cent before rounding | 1,316 |
+| written amounts exactly on a half cent before rounding | 1,304 |
 
 ## CSV columns
 

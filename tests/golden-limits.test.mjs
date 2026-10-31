@@ -57,10 +57,8 @@
 // the verdict of a check against the sources: "app wrong" (the law says otherwise and the page's README does not claim the
 // shortcut) or "simplification" (a modelling choice the page's README or code states, the law says otherwise). When a
 // cause is fixed, delete its list and those rows must then pass. On 2026-10-31 the pages took up the law for every cause
-// but one (README of investments/limits, taxes/hsa-fsa, taxes/federal and retirement/contributions), and those lists were
-// deleted. The one left, taxsaved-separate-as-one-return, is the only gap on its 190 rows: worked as two returns from the
-// Federal estimate's own per-person figures (each spouse's pay, 401(k) and IRA kept out of income, HSA money and excess,
-// the FSA on A, half the interest), the tax saved agrees with the key on all 498 separate-return rows of 2025 and 2026.
+// (README of investments/limits, taxes/hsa-fsa, taxes/federal, retirement/contributions and core/math/tax.js: married
+// filing separately is now two returns, one per spouse), and the lists were deleted: todo.json is empty.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -82,9 +80,7 @@ const runs = (row, part) => !(ONLY_2025_2026.has(part) && row.year === "2027");
 
 // Where the pages and the key part ways (tests/golden/limits/RULES.md section 12 and tools/golden_limits/README.md).
 // The gaps are those of each cause alone (the switched copy with every other cause fixed).
-const REASONS = {
-  "taxsaved-separate-as-one-return": "app wrong: filing separately is two returns, each spouse's own income on the separate schedule; the page works one return on both spouses' income at the separate brackets, which nobody files, so the tax saved is off by $2.44 to $2,406.68",
-};
+const REASONS = {};   // every cause the key found was fixed on 2026-10-31
 const todoLists = JSON.parse(read("todo.json"));
 const TODO = {};   // "<case_id> <part>" -> reason
 for (const [cause, ids] of Object.entries(todoLists)) {

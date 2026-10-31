@@ -161,3 +161,26 @@ test("years without a table are indexed from the latest one; unindexed threshold
   assert.equal(paramsFor(FEDERAL, 2025).indexed, false);
   assert.equal(paramsFor(FEDERAL, 2010).status.single.standardDeduction, 14600);   // before the first table: the first table as is
 });
+
+test("married filing separately is two returns: each spouse's tax on their own, added (Pub. 501); one itemizing makes both (IRC 63(c)(6)(A))", () => {
+  const P = paramsFor(FEDERAL, 2026);
+  const ana = { personId: "a", name: "Ana", wages: 120000 }, bo = { personId: "b", name: "Bo", wages: 30000 };
+  const alone = (x) => federalTax({ ...x, filingStatus: "married_separate" }, P).totalTax;
+  const two = federalTax({ filingStatus: "married_separate", wages: 150000, separate: [ana, bo] }, P);
+  assert.equal(two.separate.length, 2);
+  assert.equal(two.totalTax, Math.round((alone(ana) + alone(bo)) * 100) / 100);
+  assert.equal(two.deduction.standard, 2 * 16100);
+  // one combined return at the separate rates would tax 133,900 through one set of brackets: more
+  assert.ok(federalTax({ filingStatus: "married_separate", wages: 150000 }, P).totalTax > two.totalTax + 1000);
+  // a figure added on top of the parts (the next dollar, a typed amount) lands on the named spouse's return, else the first
+  const more = federalTax({ filingStatus: "married_separate", wages: 160000, separate: [ana, bo], separateTo: "b" }, P);
+  assert.equal(more.separate[1].income.wages, 40000); assert.equal(more.separate[0].income.wages, 120000);
+  const first = federalTax({ filingStatus: "married_separate", wages: 160000, separate: [ana, bo] }, P);
+  assert.equal(first.separate[0].income.wages, 130000);
+  // Ana itemizes 25,000; Bo's 2,000 of itemized deductions must then be his deduction, not the 16,100 standard one
+  const it = federalTax({ filingStatus: "married_separate", wages: 150000, separate: [{ ...ana, itemized: 25000 }, { ...bo, itemized: 2000 }] }, P);
+  assert.equal(it.separate[0].deduction.used, "itemized"); assert.equal(it.separate[1].deduction.used, "itemized");
+  assert.equal(it.separate[1].deduction.amount, 2000); assert.equal(it.deduction.amount, 27000);
+  // with no parts, or another status, it is one return as before
+  assert.equal(federalTax({ filingStatus: "married_joint", wages: 150000, separate: [ana, bo] }, P).separate, undefined);
+});

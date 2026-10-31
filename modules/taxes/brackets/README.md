@@ -12,6 +12,8 @@ Everything the Federal estimate reads (`taxInputs`); `extra` (page state: the ex
 ## Formulas
 `bracketsFor`, `taxOnOrdinary` and `federalTax` in `core/math/tax.js`. The extra income is priced as the difference between two full returns, so benefits taxation, gains stacking and credit phase-outs are included.
 
+Filing separately with two adults is two returns (the Federal estimate's `separate`, Publication 501): each spouse has a ladder of their own, so the page shows the return of the adult marked "Me" (the one more income lands on, `whose`), lists both returns' bracket, room and tax in `separate`, and keeps the household's tax and overall rate. The extra income is priced on the household's total, which adds it to that return.
+
 ## Edge cases
 Qualified income is not on the ladder (it stacks above at the gains rates; a note says so). The top rung has no limit.
 
