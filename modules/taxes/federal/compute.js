@@ -63,6 +63,23 @@ export function todaysReturn(plan, today) {
 }
 
 /**
+ * `inputs` with `add` (amounts such as { wages, medicareWages, otherOrdinary, qualifiedIncome, investmentIncome }, negative to
+ * take off) added; filing separately, on the return of `personId` (both the total and that spouse's part, so the engine's
+ * top-up rule in separateTax does not move it), or on the return `separateTo` names when that person has no return of their
+ * own. Used by Employer stock, Home and Capital gains.
+ */
+export function addIncome(inputs, personId, add) {
+  const plus = (o, k, v) => (Number(o[k] ?? (k === "medicareWages" ? o.wages : 0)) || 0) + v;
+  const next = { ...inputs };
+  for (const [k, v] of Object.entries(add)) if (v) next[k] = plus(inputs, k, v);
+  if (Array.isArray(inputs.separate)) {
+    const i = inputs.separate.findIndex((x) => x.personId != null && x.personId === personId);
+    if (i >= 0) next.separate = inputs.separate.map((x, j) => (j !== i ? x : { ...x, ...Object.fromEntries(Object.entries(add).filter(([, v]) => v).map(([k, v]) => [k, plus(x, k, v)])) }));
+  }
+  return next;
+}
+
+/**
  * The capital loss carried to next year (IRC 1212(b)), by the Capital Loss Carryover Worksheet (Pub. 550 Worksheet 4-1):
  * taxable income (negative when it would be), the loss allowed this year (at most 3,000, 1,500 filing separately), the
  * year's net short-term and long-term results (Schedule D lines 7 and 15). Line 3 = taxable income + the allowed loss (the
@@ -178,7 +195,7 @@ export function taxInputs(plan, params = {}) {
   if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
   for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${x.name}'s health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? `${x.name}'s` : "your"} pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
-  const gains = netGains(t.gains, filingStatus);
+  let gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
   const otherOrdinary = Math.max(0, business + rental + pension + investment + other + otherTyped + gains.netShort);
   if (pension) sources.push({ key: "pension", label: "Pensions", amount: pension, from: "plan", detail: "Income page" });
@@ -233,7 +250,8 @@ export function taxInputs(plan, params = {}) {
   let separate = null;
   if (filingStatus === "married_separate" && adults.length >= 2) {
     const two = adults.slice(0, 2);
-    const shareOf = (x, p, payLike) => { const o = adultOf(x.personId); return o ? (o === p ? 1 : 0) : payLike ? (p === me ? 1 : 0) : 0.5; };
+    // a row named for someone on neither return (a third adult) is treated as in neither name, as a joint return would count it
+    const shareOf = (x, p, payLike) => { const o = adultOf(x.personId); const own = o && two.includes(o) ? o : null; return own ? (own === p ? 1 : 0) : payLike ? (p === me ? 1 : 0) : 0.5; };
     const sumFor = (p, types, payLike = false) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly * shareOf(x, p, payLike), 0);
     const gainsOf = (p) => netGains((t.gains ?? []).map((g) => { const s = shareOf(g, p, false); return { ...g, proceeds: (Number(g.proceeds) || 0) * s, basis: (Number(g.basis) || 0) * s }; }), filingStatus);
     const halfItemized = Object.fromEntries(Object.entries(t.itemized ?? {}).map(([k, v]) => [k, typeof v === "number" ? v / 2 : v]));
@@ -260,8 +278,17 @@ export function taxInputs(plan, params = {}) {
         charitableCash: base.charitableCash / 2,
       };
       const partAgi = federalTax({ ...part, itemized: 0 }, P).agi;
-      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal } };
+      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal }, gains: { netShort: halfGains.netShort, netLong: halfGains.netLong, netLoss: halfGains.netLoss, lossAllowed: halfGains.lossAllowed } };
     });
+    // the household's gains figures (the sources, the steps, the carryover, Capital gains, Tax lots, Crypto) as the two returns
+    // have them: each return nets its own sales, so a gain on one return and a loss on the other do not cancel
+    const per = separate.map((x) => x.gains);
+    const add = (k) => per.reduce((t, x) => t + x[k], 0);
+    gains = { ...gains, netShort: add("netShort"), netLong: add("netLong"), netLoss: add("netLoss"), lossAllowed: add("lossAllowed"), carryForward: add("netLoss") - add("lossAllowed"), byReturn: separate.map((x) => ({ personId: x.personId, name: x.name, ...x.gains })) };
+    for (let k = sources.length - 1; k >= 0; k--) if (["shortGains", "longGains", "loss"].includes(sources[k].key)) sources.splice(k, 1);
+    if (gains.netShort > 0) sources.push({ key: "shortGains", label: "Short-term gains", amount: gains.netShort, from: "plan", detail: "Capital gains page, each return's own" });
+    if (gains.netLong > 0) sources.push({ key: "longGains", label: "Long-term gains", amount: gains.netLong, from: "plan", detail: "Capital gains page, each return's own" });
+    if (gains.netLoss < 0) sources.push({ key: "loss", label: "Capital loss allowed", amount: gains.lossAllowed, from: "plan", detail: "Capital gains page, each return's own" });
     const sums = Object.fromEntries(SEPARATE_FIELDS.map((f) => [f, separate.reduce((s, x) => s + (Number(x[f]) || 0), 0)]));
     inputs = { ...inputs, ...sums, separate, separateTo: me ? me.id : separate[0].personId };   // an amount another page adds lands on Me's return
     notes.push(`Filing separately is two returns: ${separate.map((x) => x.name).join("'s and ")}'s, each with their own pay, saving and income; income in neither name and the figures typed here are split in half${dependentsUnder17 + otherDependents > 0 ? `, and ${dependentsUnder17 + otherDependents === 1 ? "the child is" : "the children are"} on ${carrier.name}'s return` : ""}.`);
@@ -299,7 +326,7 @@ export function compute(plan, params = {}) {
   const r = result;
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });
-  if (r.income.capitalLoss < 0) steps.push({ label: "Capital loss", amount: r.income.capitalLoss, sub: `a net loss on sales comes off any income, up to ${fmtInt(b.filingStatus === "married_separate" ? 1500 : 3000)} a year${b.gains.carryForward < 0 ? `; ${fmtInt(-b.gains.carryForward)} carries to next year` : ""}` });
+  if (r.income.capitalLoss < 0) steps.push({ label: "Capital loss", amount: r.income.capitalLoss, sub: `a net loss on sales comes off any income, up to ${fmtInt(b.filingStatus === "married_separate" ? 1500 : 3000)} a year${b.separate ? " on each return" : ""}${b.gains.carryForward < 0 ? `; ${fmtInt(-b.gains.carryForward)} carries to next year` : ""}` });
   if (r.adjustments > 0) steps.push({ label: "Adjustments", amount: -r.adjustments, sub: "IRA, HSA and other above-the-line deductions" });
   steps.push({ label: "Adjusted gross income", amount: r.agi, sub: "" });
   const dsub = r.deduction.used === "itemized"

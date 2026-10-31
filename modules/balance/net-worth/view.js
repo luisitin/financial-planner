@@ -10,8 +10,15 @@ const FIELDS = [
   { key: "institution", label: "Institution", type: "text" },
   { key: "balance", label: "Current balance", type: "money", required: true, help: "for a loan or card, the amount still owed" },
   { key: "asOf", label: "Balance as of", type: "date" },
-  { key: "ownerId", label: "Whose account", type: "text", help: "a name, or leave blank if it is joint" },
 ];
+// Whose account: one of the people on the People page, saved as their id (the tax pages put an account's sales and
+// contributions on its owner's return); "Joint or shared" saves "". A name typed before this was a choice stays selectable.
+const ownerField = (plan, current) => {
+  const people = plan.household?.people ?? [];
+  const options = [{ value: "", label: "Joint or shared" }, ...people.map((p) => ({ value: p.id, label: p.name || "Unnamed" }))];
+  if (current && !people.some((p) => p.id === current)) options.push({ value: current, label: `${current} (typed before; choose a person)` });
+  return { key: "ownerId", label: "Whose account", type: "select", options, help: people.length ? "" : "add the household's people on the People page to choose" };
+};
 
 export function render(root, ctx) {
   const { ui, fmt, store, derived: d, plan } = ctx;
@@ -46,7 +53,7 @@ export function render(root, ctx) {
     }
     const values = editing ? { ...editing } : { type: "checking", asOf: fmt.today() };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an account"));
-    formHost.append(ui.form(FIELDS, values, (v) => {
+    formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
       store.update((p) => {
         if (editing) { const i = p.accounts.findIndex((a) => a.id === editing.id); if (i >= 0) p.accounts[i] = { ...p.accounts[i], ...v }; }
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });

@@ -74,7 +74,7 @@ export function render(page, ctx) {
 
   // tax
   const t = d.tax;
-  const limitText = `up to ${money(t.lossLimit)} off other income${t.lossLimit === 1500 ? " (filing separately)" : ""}`;
+  const limitText = t.returns > 1 ? `up to ${money(t.lossLimit)} off other income on each of your returns (${money(t.lossLimit * t.returns)} between you; a loss in one spouse's account only uses that spouse's ${money(t.lossLimit)})` : `up to ${money(t.lossLimit)} off other income${t.lossLimit === 1500 ? " (filing separately)" : ""}`;
   const carryText = (lead) => t.carry > 0.5 ? ` ${lead}${money(t.carry)} carries to next year, where it can cancel future gains.` : "";
   const added = [t.addLong > 0.5 ? `${money(t.addLong)} of gains held over a year` : null, t.addShort > 0.5 ? `${money(t.addShort)} held a year or less, taxed like pay` : null].filter(Boolean);
   const cancelled = [t.addLong < -0.5 ? `${money(-t.addLong)} of this year's other gains held over a year` : null, t.addShort < -0.5 ? `${money(-t.addShort)} of those held a year or less` : null].filter(Boolean);
@@ -83,8 +83,8 @@ export function render(page, ctx) {
     even: "No change this year: the gains and losses cancel out.",
     zero: t.net > 0 ? "No tax this year: with your other income, these gains are taxed at 0% (they stay under your deductions or in the 0% band for gains held over a year)." : `No change this year: the net loss of ${money(-t.net)} only cancels this year's other gains that are taxed at 0%.${carryText("")}`,
     carry: "No change this year: the gains use up part of a loss from this year's other sales that would otherwise carry to next year.",
-    limit: `No change this year: this year's other sales already take the whole ${money(t.lossLimit)} a net loss can take off other income${t.lossLimit === 1500 ? " (filing separately)" : ""}.${carryText("So all ")}`,
-    under: `No change this year: a net loss of ${money(-t.net)}, and your other income is already under your deductions.${carryText("")}`,
+    limit: `No change this year: this year's other sales already take the whole ${money(t.lossLimit)} a net loss can take off other income${t.returns > 1 ? " on each return it would go on" : t.lossLimit === 1500 ? " (filing separately)" : ""}.${carryText("So all ")}`,
+    under: `No change this year: a net loss of ${money(-t.net)}, and ${t.returns > 1 ? "on the return it would go on, income is already under the deductions" : "your other income is already under your deductions"}.${carryText("")}`,
   };
   const taxText = t.total > 0.5
     ? `About ${money(t.total)} more federal tax this year.${added.length ? ` After losses cancel gains, this year's other sales included, it adds ${added.join(" and ")}${cancelled.length ? `, and cancels ${cancelled.join(" and ")}` : ""}.` : ""}`

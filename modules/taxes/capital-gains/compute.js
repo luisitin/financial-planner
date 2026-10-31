@@ -2,7 +2,7 @@
 // loss allowance and carry-forward, the tax the gains add on top of the rest of your return
 // (0/15/20% for long-term, ordinary rates for short-term, the 3.8% surtax), how much long-term
 // gain still fits in the 0% band, and what one more sale would cost.
-import { taxInputs, netGains, lossCarryover } from "../federal/compute.js";
+import { taxInputs, netGains, lossCarryover, addIncome } from "../federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 
 /**
@@ -30,7 +30,12 @@ export function compute(plan, params = {}) {
     zeroRoom = Math.max(0, zeroRoom - (ti - thresholds.zero));
   }
   zeroRoom = Math.round(zeroRoom);
-  const short = g.netShort > 0 ? federalTax({ ...b.inputs, otherOrdinary: Math.max(0, b.inputs.otherOrdinary - g.netShort) }, b.params) : null;
+  // the tax the short-term gains add: the return without them less with them; filing separately, each return's own net
+  // short-term gain comes off that return (a gain on one spouse's return is not taken off the other's)
+  const withoutShort = b.separate && g.byReturn
+    ? g.byReturn.reduce((inp, x) => (x.netShort > 0 ? addIncome(inp, x.personId, { otherOrdinary: -x.netShort }) : inp), b.inputs)
+    : { ...b.inputs, otherOrdinary: Math.max(0, b.inputs.otherOrdinary - g.netShort) };
+  const short = g.netShort > 0 ? federalTax(withoutShort, b.params) : null;
   const shortTax = short ? withGains.totalTax - short.totalTax : 0;
   let extra = null;
   const ex = params.extra;

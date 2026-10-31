@@ -17,6 +17,13 @@ Sums. Liability balances are stored as positive amounts owed and subtracted. The
 `ACCOUNT_TYPES` (this module's compute.js) is the single source of truth for what is an asset,
 what is liquid and which tax bucket a type belongs to; other modules import it.
 
+## Whose account
+The form's "Whose account" is a choice of the people on the People page, saved as the person's id ("Joint or shared" saves
+""), because the tax pages put an account's contributions and sales on its owner's return (`ownerId` in DATA_MODEL). Until
+2026-10-31 it was a typed name, which never matched an id; `migrate` (`ownersToIds`) now turns a typed name that matches
+exactly one person's name into their id when the plan is opened, and a name that matches no one stays selectable in the
+form marked "typed before; choose a person".
+
 ## Edge cases
 Unknown `type` is treated as `other_asset`. Non-numeric balances count as 0. One snapshot per
 calendar day (the later one wins).

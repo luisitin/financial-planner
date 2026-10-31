@@ -5,9 +5,8 @@
 // the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
 // years as it grows and the mortgage shrinks.
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
-import { taxInputs, todaysReturn } from "../../taxes/federal/compute.js";
+import { taxInputs, todaysReturn, addIncome } from "../../taxes/federal/compute.js";
 import { longOn } from "../../investments/tax-lots/compute.js";
-import { addIncome } from "../../investments/employer-stock/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";

@@ -96,5 +96,22 @@ export function migrate(input) {
   for (const k of ["thisYear", "itemized", "priorYear", "estimated", "hsa"]) plan.taxes[k] = { ...base.taxes[k], ...(plan.taxes[k] ?? {}) };
   plan.retirement.rothConversion = { ...base.retirement.rothConversion, ...(plan.retirement.rothConversion ?? {}) };
   plan.meta = { ...base.meta, ...(plan.meta ?? {}) };
+  ownersToIds(plan);
+  return plan;
+}
+
+/**
+ * An account's `ownerId` is a person's id (DATA_MODEL). Net worth asked for a typed name until 2026-10-31, so a name that
+ * matches exactly one person's name (ignoring case and spaces at the ends) becomes that person's id; anything else is left
+ * as it was. Same meaning and shape, so no version bump; running it again changes nothing.
+ */
+export function ownersToIds(plan) {
+  const people = plan.household?.people ?? [];
+  const norm = (x) => String(x ?? "").trim().toLowerCase();
+  for (const a of plan.accounts ?? []) {
+    if (!a || !a.ownerId || people.some((p) => p.id === a.ownerId)) continue;
+    const match = people.filter((p) => norm(p.name) && norm(p.name) === norm(a.ownerId));
+    if (match.length === 1) a.ownerId = match[0].id;
+  }
   return plan;
 }

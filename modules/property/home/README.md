@@ -51,7 +51,7 @@
   250,000): 26 CFR 1.121-2(a)(2), Joint owners: "If taxpayers jointly own a principal residence but file separate returns,
   each taxpayer may exclude from gross income up to $250,000 of gain that is attributable to each taxpayer's interest in the
   property, if the requirements of section 121 have otherwise been met" (read 2026-10-31; the federal estimate halves income
-  in neither name the same way). Each half is added to that spouse's return (`addIncome` from Employer stock).
+  in neither name the same way). Each half is added to that spouse's return (`addIncome` in taxes/federal).
 - Later on 2026-10-31 a review found: filing separately one $250,000 was set against the whole gain on Me's return; no
   purchase date was assumed met without a word; the short-term sentence hid the 3.8%; the 3.8% line said 200,000 for a
   qualifying surviving spouse. All fixed.

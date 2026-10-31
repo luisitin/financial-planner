@@ -12,7 +12,7 @@
   is kept equal to its coins (shares × price) whenever they change here.
 
 ## Outputs
-`{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
+`{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
 
 ## Formulas
 - Kind (`cryptoKind`): a bitcoin or ether fund (`FUNDS`) is a fund wherever it is held, a crypto account included; any other
@@ -30,6 +30,10 @@
 - **Whose return**: filing separately, each lot is on the return of its account's owner (IRS Pub. 501: each spouse reports
   their own income), through the sale's `personId`; a lot in a joint account or one with no owner is split in half, so each
   return has its own $1,500 loss limit (IRC 1211(b)).
+  Filing separately as two returns, the gains the sale adds (`addShort`, `addLong`) are each return's own netting added up
+  (the Federal estimate's `gains.byReturn`), and the page says the loss limit is $1,500 on each return ($3,000 between them;
+  a loss in one spouse's account only uses that spouse's), `returns` = 2. An account's owner is a person's id since Net worth
+  offers the people to choose from (2026-10-31); before that a typed name never matched, so every lot was halved.
 - **Tax if sold today**, taxable accounts only: the Federal estimate's total tax with every crypto lot sold today (each
   lot's gain or loss added to the year's sales, short or long by its term) less the total without. The engine nets them
   with the year's other sales the way Schedule D does (short against short, long against long, then across), stacks
@@ -53,7 +57,9 @@
 - **Why nothing changes** (`why`, when the tax moves by 50 cents or less): `none` nothing gained or lost; `even` the gains
   and losses cancel; with a net gain, `carry` it uses up a loss from other sales that would carry (the carryover falls),
   else `zero` it is taxed at 0% (under the deductions or in the 0% band); with a net loss, `limit` the year's other sales
-  already take the whole $3,000 (each return's $1,500 filing separately), `under` taxable income is already 0 or less,
+  already take the whole $3,000 (each return's $1,500 filing separately), `under` taxable income is already 0 or less
+  (filing separately, both judged on the returns the sold lots land on: a lot in neither name is half on each; until a review
+  on 2026-10-31 the household's income was used, so a loss on a spouse with no income was said to fall on 0% gains),
   else `zero` it only cancels other gains taxed at 0%.
 - The rates shown (`marginal`, `gainsRate`): the federal tax on $1,000 more pay-like income or long-term gain, with the 3.8%
   where it applies, as Tax lots works them (no 10% floor any more). Shown when the sale adds tax or a gain could wait for

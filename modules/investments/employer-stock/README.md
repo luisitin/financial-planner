@@ -33,7 +33,7 @@
   valued at today's price, as `career/equity` does: the price on each vest day is not stored) go into the employee's wages and
   Medicare wages first, then the vests in view are added, less the total without them. So it crosses brackets, the standard
   deduction and phase-outs, and includes the 0.9% Additional Medicare Tax. Each vest takes its share by value (`owed`). Filing
-  separately, the wages go on the employee's own return (`addIncome`), or on the return the estimate puts added income on
+  separately, the wages go on the employee's own return (`addIncome`, in taxes/federal), or on the return the estimate puts added income on
   when that person has none. Vests more than 12 months out are not counted, in any year.
 - **Withheld** (`supplementalWithholding`): IRS Pub. 15 (2026), section 7: "Withhold a flat 22% (no other percentage
   allowed)" on supplemental wages identified separately, and "If a supplemental wage payment, together with other

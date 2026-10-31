@@ -88,7 +88,7 @@ export function lotsOf(h, today) {
  *   ready, holdings: [{ id, symbol, name, account, bucket, priced, price, lots: [lot], gain, unassignedShares }],
  *   harvest: [{ symbol, account, lot, loss, taxSaved (the loss at its rate, orders the list), allowed, disallowed, washedBy }], harvestTotal (every loss),
  *   taxSavedTotal (what selling them all today cuts this year's federal tax by), disallowedTotal / allowedTotal (wash sales),
- *   carry: { short, long, total } (the loss carried to next year if harvested), carryAdded (the part the harvest adds), capLimit,
+ *   carry: { short, long, total } (the loss carried to next year if harvested), carryAdded (the part the harvest adds), capLimit, returns (2 filing separately as two returns),
  *   sellFirst: [{ symbol, account, lot }] (taxable, lowest gain per share first), shortLosses, longLosses, marginal, gainsRate, notes
  * }
  */
@@ -142,5 +142,6 @@ export function compute(plan, params = {}) {
   if (h.hasData && unassigned) notes.push(`${unassigned} taxable holding${unassigned === 1 ? " has" : "s have"} shares not split into lots: they are treated as one long-term lot holding whatever cost your typed lots leave over. Type the lots (date, shares, cost) from the brokerage's cost-basis page for the real picture.`);
   if (harvest.length) notes.push("Buying the same fund within 30 days before or after you sell it at a loss, in any of your accounts (an IRA too) or your spouse's, cancels the loss on that many shares (the wash-sale rule). Buy something similar but not the same, such as another company's total-market fund, or wait 31 days.");
   const capLimit = ti.filingStatus === "married_separate" ? 1500 : 3000;
-  return { ready: h.hasData, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
+  const returns = ti.separate?.length || 1;   // filing separately as two returns: the limit is on each
+  return { ready: h.hasData, returns, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
 }

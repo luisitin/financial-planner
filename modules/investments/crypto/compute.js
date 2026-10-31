@@ -132,18 +132,23 @@ export function compute(plan, params = {}) {
   const carryOf = (c) => Math.max(0, c.total - baseCarry.total);
   // why selling everything would not change this year's tax
   const net = allSales.reduce((s, x) => s + x.gain, 0);
-  const limitUsed = -(Number(r0.income?.capitalLoss) || 0) >= lossLimit * (r0.separate?.length || 1) - 0.005;
+  // filing separately, judged on the returns the sold lots land on (a lot in neither spouse's name is half on each)
+  const parts = r0.separate ?? null;
+  const onReturn = (x) => !parts || !parts.some((p) => p.personId === x.personId);
+  const touched = parts ? parts.filter((p) => allSales.some((x) => Math.abs(x.gain) > 0.5 && (onReturn(x) || x.personId === p.personId))) : [r0];
+  const limitUsed = touched.length > 0 && touched.every((x) => -(Number(x.income?.capitalLoss) || 0) >= lossLimit - 0.005);
+  const under = touched.length > 0 && touched.every((x) => x.taxableIncome <= 0);
   let why = null;
   if (Math.abs(sold.change) <= 0.5) {
     if (!allSales.some((x) => Math.abs(x.gain) > 0.5)) why = "none";
     else if (Math.abs(net) <= 0.5) why = "even";
     else if (net > 0) why = sold.carry.total < baseCarry.total - 0.5 ? "carry" : "zero";
-    else why = limitUsed ? "limit" : r0.taxableIncome <= 0 ? "under" : "zero";
+    else why = limitUsed ? "limit" : under ? "under" : "zero";
   }
   return {
     ready: true, items, total, cost, gain, volatile: vol, share, level, netWorth: nw.netWorth,
     stress: { drop: STRESS_DROP, loss, share: nw.netWorth > 0 ? loss / nw.netWorth : null },
-    tax: { shortGain, longGain, net, addShort: sold.short, addLong: sold.long, total: sold.change, carry: carryOf(sold.carry), disallowed: soldFunds.reduce((s, c) => s + c.disallowed, 0), lossLimit, why, year: yr.year, otherYear: yr.other, marginal, gainsRate },
+    tax: { shortGain, longGain, net, addShort: sold.short, addLong: sold.long, total: sold.change, carry: carryOf(sold.carry), disallowed: soldFunds.reduce((s, c) => s + c.disallowed, 0), lossLimit, returns: parts?.length || 1, why, year: yr.year, otherYear: yr.other, marginal, gainsRate },
     harvest: harvest.sort((a, b) => b.saved - a.saved), harvestSaved: Math.max(0, -banked.change), harvestCarry: carryOf(banked.carry), harvestDisallowed: harvest.reduce((s, x) => s + x.disallowed, 0),
     waitLong: waitLong.sort((a, b) => a.longOn.localeCompare(b.longOn)), staleCount: items.filter((i) => i.stale).length,
   };

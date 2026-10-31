@@ -8,7 +8,8 @@ import { compute as computeHoldings } from "../holdings/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
-import { taxInputs, todaysReturn } from "../../taxes/federal/compute.js";
+import { taxInputs, todaysReturn, addIncome } from "../../taxes/federal/compute.js";
+export { addIncome };   // it lived here first; the federal estimate keeps it now
 import { marginalRate, federalTax } from "../../../core/math/tax.js";
 
 /** Share of invested wealth in one company: up to 10% is the usual ceiling for a single stock; above 25% is a large bet. */
@@ -23,22 +24,6 @@ export function supplementalWithholding(value, before = 0) {
   const low = Math.max(0, Math.min(value, SUPPLEMENTAL.over - before));
   return low * SUPPLEMENTAL.rate + (value - low) * SUPPLEMENTAL.high;
 }
-/**
- * `ti.inputs` with `add` ({ wages, medicareWages, qualifiedIncome, investmentIncome }) added; filing separately, on the return of
- * `personId` (both the total and that spouse's part, so the engine's top-up rule does not move it), or on the return the
- * engine's `separateTo` names when that person has no return of their own.
- */
-export function addIncome(inputs, personId, add) {
-  const plus = (o, k, v) => (Number(o[k] ?? (k === "medicareWages" ? o.wages : 0)) || 0) + v;
-  const next = { ...inputs };
-  for (const [k, v] of Object.entries(add)) if (v) next[k] = plus(inputs, k, v);
-  if (Array.isArray(inputs.separate)) {
-    const i = inputs.separate.findIndex((x) => x.personId != null && x.personId === personId);
-    if (i >= 0) next.separate = inputs.separate.map((x, j) => (j !== i ? x : { ...x, ...Object.fromEntries(Object.entries(add).filter(([, v]) => v).map(([k, v]) => [k, plus(x, k, v)])) }));
-  }
-  return next;
-}
-
 /** The state tax `extra` income adds, from the state estimate (`taxes/state`): its rate on the part above its allowance, last year's share of income, or nothing where there is no rate. */
 export function stateExtra(st, extra) {
   if (!st || !(st.rate > 0) || !(extra > 0)) return 0;
