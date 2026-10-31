@@ -49,3 +49,7 @@ digits tools/golden_health/rules.py 07880790079307950798080008030805080808100813
 # estate answer key: part of a source document's SHA-256 (26 U.S.C. 6018 as fetched)
 digits tests/golden/estate/RULES.md 039464829
 digits tools/golden_estate/rules.py 039464829
+digits tests/golden/limits/RULES.md 919086579
+digits tests/golden/limits/RULES.md 829726970
+digits tools/golden_limits/rules.py 919086579
+digits tools/golden_limits/rules.py 829726970
