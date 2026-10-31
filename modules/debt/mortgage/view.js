@@ -33,7 +33,9 @@ export function render(root, ctx) {
     ui.stat(`Extra ${fmt.money(d.withExtra.extra, cur)} a month`, d.withExtra.monthsSaved ? `${monthsText(d.withExtra.monthsSaved)} sooner` : "no change", d.withExtra.interestSaved ? `saves ${fmt.money(d.withExtra.interestSaved, cur)} of interest; ends ${d.withExtra.endDate ? fmt.date(d.withExtra.endDate) : monthsText(d.withExtra.months)}` : "type an extra amount above"),
     ui.stat("Half a payment every two weeks", d.biweekly.monthsSaved ? `${monthsText(d.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(d.biweekly.interestSaved, cur)}`),
     d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)}/mo`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
-    d.pmi ? ui.stat("Mortgage insurance", d.pmi.monthsUntilDrop === 0 ? "can go now" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, `you owe ${fmt.pct(d.pmi.ltv, 0)} of the home's ${fmt.money(d.pmi.homeValue, cur)}; insurance usually ends at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}`) : null,
+    d.pmi ? ui.stat("Mortgage insurance", d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
+      ? `you owe ${fmt.pct(d.pmi.ltv, 0)} of the ${fmt.money(d.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}; it ends by itself at 78%${d.pmi.dateAuto && d.pmi.monthsUntilAuto ? `, around ${fmt.date(d.pmi.dateAuto)}` : ""}`
+      : `you owe ${fmt.pct(d.pmi.ltv, 0)} of the home's ${fmt.money(d.pmi.homeValue, cur)} today. The law counts from the price you paid: enter it on Your home for the dates. A lender may also drop it on a new appraisal`) : null,
   )));
   if (d.schedule.length) root.append(ui.card("Year by year, with the extra above",
     ui.h("ul", { class: "page-list" }, d.schedule.map((y) => ui.h("li", {},

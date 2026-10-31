@@ -21,10 +21,17 @@ import { ageOn } from "../../../core/math/dates.js";
 
 /** Social Security on a worker who dies: each child under 18 gets 75% of the worker's full benefit (PIA); a parent caring for a child under 16 gets 75% too (SSA, "Survivors Benefits", publication 05-10084). */
 export const CHILD_SHARE = 0.75, PARENT_SHARE = 0.75, CHILD_UNTIL = 18, CARE_UNTIL = 16;
-/** The family maximum: 150% / 272% / 134% / 175% of the PIA across three bend points, 1979's $230, $332 and $433 scaled by the wage index (SSA POMS RS 00615.742; Social Security Act 203(a)). */
+/** The family maximum: 150% / 272% / 134% / 175% of the PIA across three bend points, 1979's $230, $332 and $433 scaled by the wage index (SSA POMS RS 00615.736 B.1 (TN 57, 12/14/2023); Social Security Act 203(a)(1); ssa.gov/oact/cola/familymax.html; read 2026-10-31). */
 export const FAMILY_MAX_BENDS_1979 = [230, 332, 433], FAMILY_MAX_RATES = [1.5, 2.72, 1.34, 1.75];
-/** The earnings test under full retirement age: $1 withheld for every $2 earned over this in 2026 (SSA, ssa.gov/oact/cola/rtea.html). */
-export const EARNINGS_TEST_EXEMPT = 24480;
+/**
+ * The earnings test under full retirement age: $1 withheld for every $2 earned over this a year (SSA, "Exempt Amounts Under
+ * the Earnings Test", ssa.gov/oact/cola/rtea.html, read 2026-10-31): 2026 $24,480, 2027 $25,560. The plan's first year
+ * picks its figure; a year after the newest holds the newest (the plan is in today's dollars).
+ */
+export const EARNINGS_TEST_BY_YEAR = { 2026: 24480, 2027: 25560 };
+export const earningsTestExempt = (year) => { const ys = Object.keys(EARNINGS_TEST_BY_YEAR).map(Number).sort((a, b) => a - b); return EARNINGS_TEST_BY_YEAR[ys.filter((y) => y <= Number(year)).at(-1) ?? ys[0]]; };
+/** The 2026 figure, kept for older readers. */
+export const EARNINGS_TEST_EXEMPT = EARNINGS_TEST_BY_YEAR[2026];
 /** What the one who dies spent on themself: the other side of SURVIVOR_SPENDING; the family keeps the rest of the take-home pay. */
 export const OWN_SHARE = 1 - SURVIVOR_SPENDING;
 /** Children are usually through school by 22: the end of the cover most families buy. */
@@ -61,7 +68,7 @@ export function familyBenefits({ pia, year, deathYear, children, parentPay }) {
   const total = kids.reduce((s, x) => s + x, 0) + parent;
   const cut = total > fm ? fm / total : 1;
   const kidsYearly = kids.reduce((s, x) => s + x, 0) * cut * 12;
-  const parentYearly = Math.max(0, parent * cut * 12 - Math.max(0, parentPay - EARNINGS_TEST_EXEMPT) / 2);
+  const parentYearly = Math.max(0, parent * cut * 12 - Math.max(0, parentPay - earningsTestExempt(deathYear)) / 2);
   return { children: kidsYearly, parent: parentYearly, familyMaxMonthly: fm };
 }
 

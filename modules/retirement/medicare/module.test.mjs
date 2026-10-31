@@ -51,3 +51,9 @@ test("big Roth conversions push income over a line: the surcharge two years late
   near(hit.totalYearly, (hit.partBEach + 50 + hit.partDAddEach + 150) * 12 * hit.enrolled);
   near(hit.surchargeYearly, ((hit.partBEach - PART_B) + hit.partDAddEach) * 12 * hit.enrolled);
 });
+
+test("the 2027 drug-plan base premium is the 2026 one raised by the 6% yearly cap (CMS, July 28, 2026)", async () => {
+  const { PART_D_BASE_NEXT } = await import("./data/medicare.js");
+  assert.equal(PART_D_BASE_NEXT.year, 2027); assert.equal(PART_D_BASE_NEXT.amount, 41.33);
+  assert.equal(Math.round(PART_D_BASE * 1.06 * 100) / 100, PART_D_BASE_NEXT.amount);
+});

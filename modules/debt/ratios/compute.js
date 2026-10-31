@@ -32,7 +32,7 @@ export function compute(plan, params = {}) {
   const monthsOfIncomeOwed = incomeMonthly ? debts.owed / incomeMonthly : null;
   const grades = { dti: grade("dti", dti), housing: grade("housing", housingRatio), utilisation: grade("utilisation", utilisation) };
   const rows = [
-    { key: "dti", label: "Debt payments out of income", value: dti, kind: "pct", grade: grades.dti, why: "all required debt payments a month, divided by gross monthly income. Lenders like it under 36% and rarely go past 43%." },
+    { key: "dti", label: "Debt payments out of income", value: dti, kind: "pct", grade: grades.dti, why: "all required debt payments a month, divided by gross monthly income. Lenders like it under 36%. Many approve up to 43 to 50% (with a good credit score and savings), but above 43% the payments get tight." },
     { key: "housing", label: "Housing out of income", value: housingRatio, kind: "pct", grade: grades.housing, why: "the mortgage payment (or rent) divided by gross monthly income. The old rule is 28%." },
     { key: "utilisation", label: "Card limits in use", value: utilisation, kind: "pct", grade: grades.utilisation, why: "card balances divided by card limits. Under 30% keeps your credit score healthy; under 10% is best." },
     { key: "months", label: "Months of income owed", value: monthsOfIncomeOwed, kind: "months", grade: null, why: "everything you owe divided by one month's income: how long it would take to pay it all with every dollar." },

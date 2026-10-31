@@ -1,7 +1,7 @@
 // modules/insurance/life-needs/view.js -- DOM only. For each adult: what the family would need if they
 // died this year, against the cover they have, then the three ways of counting it side by side, what
 // Social Security would pay the family, and how long the cover should last. Runs on the PC when connected.
-import { FUNERAL, SURVIVOR_SPENDING, EARNINGS_TEST_EXEMPT, SCHOOL_DONE } from "./compute.js";
+import { FUNERAL, SURVIVOR_SPENDING, earningsTestExempt, SCHOOL_DONE } from "./compute.js";
 
 const STYLE = `
 .ln-root .ln-ways { list-style: none; margin: 4px 0 0; padding: 0; }
@@ -80,7 +80,7 @@ export function render(page, ctx) {
       const kids = d.children.map((c) => c.name);
       const parts = [];
       if (b.childMonthly > 0) parts.push(`${kids.length === 1 ? kids[0] : "the children"} about ${money(b.childMonthly)} a month until ${b.childUntil}`);
-      parts.push(b.parentMonthly > 0 ? `${p.survivorName} about ${money(b.parentMonthly)} a month while caring for a child under 16${p.plan.survivorPay > EARNINGS_TEST_EXEMPT ? ` (most of it is held back because ${p.survivorName} earns over ${money(EARNINGS_TEST_EXEMPT)} a year)` : ""}` : `${p.survivorName} nothing while working (the benefit for a parent caring for a child under 16 is held back on pay over ${money(EARNINGS_TEST_EXEMPT)} a year)`);
+      parts.push(b.parentMonthly > 0 ? `${p.survivorName} about ${money(b.parentMonthly)} a month while caring for a child under 16${p.plan.survivorPay > earningsTestExempt(d.startYear) ? ` (most of it is held back because ${p.survivorName} earns over ${money(earningsTestExempt(d.startYear))} a year)` : ""}` : `${p.survivorName} nothing while working (the benefit for a parent caring for a child under 16 is held back on pay over ${money(earningsTestExempt(d.startYear))} a year)`);
       card.append(ui.h("h3", { style: { margin: "16px 0 4px" } }, "Social Security for the family"), ui.h("p", {}, `On ${p.name}'s record Social Security would pay ${parts.join(", and ")}. This is in your plan's answer.`));
     }
 

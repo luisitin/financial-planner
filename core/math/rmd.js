@@ -1,7 +1,9 @@
 // core/math/rmd.js -- required minimum distributions from pre-tax retirement accounts. PURE.
 // Source: IRS Publication 590-B, Table III (Uniform Lifetime Table), the version in effect from
 // 2022 (vendor/data/irs-p590b.pdf). Start age: 73 for people born 1951-1959, 75 for people born
-// 1960 or later (SECURE 2.0 Act); 72 for people born July 1949 to 1950; 70½ before July 1, 1949.
+// 1960 or later (SECURE 2.0 Act); 72 for people born July 1949 to 1950; 70½ before July 1, 1949. The start ages by birth
+// date: 26 CFR 1.401(a)(9)-2(b)(2)(ii)-(iv), (vi) (70½, 72, 73 for 1951-1958, 75 from 1960) and, for 1959, the proposed
+// 1.401(a)(9)-2(b)(2)(v) (89 FR 58644, July 19, 2024: 73), which the final rule left open (read 2026-10-31).
 // Each owner's withdrawal is worked on their own accounts at their own age; life-insurance cash
 // value is not an IRA (IRC §408(a)(3)) and has none.
 // Roth IRAs have no lifetime RMD; Roth 401(k)s stopped having one in 2024.
@@ -16,7 +18,7 @@ export const rmdFactor = (age) => age < 72 ? Infinity : UNIFORM_LIFETIME[Math.mi
 /**
  * The age RMDs begin, from the year of birth or the birth date ("YYYY-MM-DD"): 70½ for people born before
  * July 1, 1949 (a year alone counts as January 1), 72 for the rest born in 1949-1950, 73 for 1951-1959,
- * 75 from 1960 (Pub. 590-B; SECURE 2.0 §107).
+ * 75 from 1960 (SECURE 2.0 §107; 26 CFR 1.401(a)(9)-2(b)(2); 1959 under the proposed (b)(2)(v)).
  */
 export function rmdStartAge(birth) {
   const s = String(birth ?? ""), year = Number(s.slice(0, 4)), month = Number(s.slice(5, 7)) || 1;

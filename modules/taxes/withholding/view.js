@@ -16,7 +16,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, d.verdict === "unknown"
       ? `The plan estimates ${money(d.totalTax)} of federal tax for ${d.year}. Type what one paycheck withholds and it will say whether the year's paychecks cover it, or leave you a bill or a refund.`
       : `${d.year}: about ${money(d.totalTax)} of federal tax, ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
-    d.penaltyRisk ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.basis === "last year" ? "100% of last year's tax" : "90% of this year's"}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
+    d.penaltyRisk ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }

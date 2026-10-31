@@ -8,8 +8,8 @@ const TODAY = "2026-10-30";
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 const BO_POLICY = { id: "l", name: "Bo's care policy", kind: "ltc", personId: "p-bo", benefit: 4500, premium: 150, period: "monthly", benefitYears: 3 };
 
-test("the 2024 national medians", () => {
-  assert.equal(CARE.nursing.yearly, 127750); assert.equal(CARE.semi.yearly, 111325); assert.equal(CARE.assisted.yearly, 70800); assert.equal(CARE.home.yearly, 77792); assert.equal(CARE.day.yearly, 26000);
+test("the 2025 national medians (CareScout 2025: $355 and $315 a day, $6,200 a month, $35 an hour x 44 x 52, $95 a day x 5 x 52)", () => {
+  assert.equal(CARE.nursing.yearly, 355 * 365); assert.equal(CARE.semi.yearly, 315 * 365); assert.equal(CARE.assisted.yearly, 6200 * 12); assert.equal(CARE.home.yearly, 35 * 44 * 52); assert.equal(CARE.day.yearly, 95 * 5 * 52);
 });
 
 test("settings: the defaults, and the years from the person's sex", () => {
@@ -45,7 +45,7 @@ test("the family: three years in a nursing home from 85, the most the plan can c
   const d = compute(p, { today: TODAY });
   assert.equal(d.ready, true); assert.equal(d.base.success, true); assert.equal(d.primary, "Ana");
   const [ana, bo] = d.people;
-  assert.equal(ana.startAge, 85); assert.equal(ana.fromYear, 1990 + 85); assert.equal(ana.costTotal, 3 * 127750);
+  assert.equal(ana.startAge, 85); assert.equal(ana.fromYear, 1990 + 85); assert.equal(ana.costTotal, 3 * CARE.nursing.yearly);
   assert.equal(ana.self.success, true); assert.equal(ana.shortToday, 0);
   assert.ok(ana.maxYears > 3 && ana.maxYears < MAX_YEARS, String(ana.maxYears));
   assert.ok(ana.reachChance > 0 && ana.reachChance < 1);

@@ -29,7 +29,7 @@ They do not import the application. Every tenth row has a second calculation
 or conservation check recorded beside its source.
 
 Bracket ceilings and deductions are from [IRS Rev. Proc. 2025-32](https://www.irs.gov/irb/2025-45_IRB).
-The temporary age-65 deduction uses [IRC 151(d)(5)(C)](https://uscode.house.gov/us/usc/119-120/t26/s151/)
+The temporary age-65 deduction uses [IRC 151(d)(5)(C)](https://www.law.cornell.edu/uscode/text/26/151)
 and [IRS Schedule 1-A instructions](https://www.irs.gov/instructions/i1040gi).
 Taxable traditional-IRA distributions and conversions are described in
 [IRS Publication 590-B](https://www.irs.gov/publications/p590b).

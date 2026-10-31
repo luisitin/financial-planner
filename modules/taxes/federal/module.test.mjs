@@ -22,3 +22,28 @@ test("federal: the 0.9% additional Medicare tax is worked on pay before pre-tax 
   const typed = familyPlan("2026-10-30"); typed.taxes.thisYear.wages = 255000;
   assert.equal(compute(typed, { today: "2026-10-30" }).inputs.medicareWages, 255000, "typed wages are taken as they are");
 });
+
+test("federal: filing separately, Social Security is taxed from the first dollar unless the spouses lived apart all year (IRC 86(c))", () => {
+  const p = emptyPlan();
+  p.household.filingStatus = "married_separate";
+  p.taxes.thisYear.socialSecurity = 30000; p.taxes.thisYear.otherOrdinary = 5000;
+  const together = compute(p, { today: "2026-10-30" });
+  assert.equal(together.result.income.taxableSocialSecurity, 0.85 * (5000 + 15000));   // 17,000
+  assert.ok(together.notes.some((n) => /lived apart all year/.test(n)));
+  p.taxes.livedApart = true;
+  const apart = compute(p, { today: "2026-10-30" });
+  assert.equal(apart.livedApart, true);
+  assert.equal(apart.result.income.taxableSocialSecurity, 0);   // provisional 20,000 under the single base of 25,000
+  p.household.filingStatus = "married_joint";
+  assert.equal(compute(p, { today: "2026-10-30" }).livedApart, false);   // the tick counts only on a separate return
+});
+
+test("federal: a year past the tables takes SSA's published wage base (2027: $192,300), later years inflate", () => {
+  const p = emptyPlan();
+  p.taxes.year = 2027;
+  assert.equal(compute(p, { today: "2026-10-30" }).params.ssWageBase, 192300);
+  p.taxes.year = 2026;
+  assert.equal(compute(p, { today: "2026-10-30" }).params.ssWageBase, 184500);
+  p.taxes.year = 2029;
+  assert.ok(compute(p, { today: "2026-10-30" }).params.ssWageBase > 184500);
+});

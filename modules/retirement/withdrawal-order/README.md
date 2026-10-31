@@ -48,7 +48,7 @@ model has no field for that fact. Net investment income tax follows the
 above $200,000 single/head-of-household, $250,000 joint/surviving-spouse,
 or $125,000 married-separate. These thresholds are not indexed.
 
-The temporary senior deduction follows [IRC 151(d)(5)(C)](https://uscode.house.gov/us/usc/119-120/t26/s151/)
+The temporary senior deduction follows [IRC 151(d)(5)(C)](https://www.law.cornell.edu/uscode/text/26/151)
 and [IRS Schedule 1-A instructions](https://www.irs.gov/instructions/i1040gi).
 For 2025 through 2028, each eligible person starts with $6,000; that person's
 amount falls by 6% of income above $75,000, or $150,000 on a joint return.

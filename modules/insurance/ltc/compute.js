@@ -10,15 +10,20 @@ import { compute as computePolicies } from "../policies/compute.js";
 import { largestWhere, smallestWhere } from "../../scenarios/goal-seek/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 
-/** National medians, a year, 2024 (CareScout / Genworth Cost of Care Survey 2024, released March 2025). Home care is 44 hours a week; adult day care 5 days a week. */
+/**
+ * National medians, a year, 2025 (CareScout / Genworth Cost of Care Survey 2025, collected July to November 2025, released
+ * March 2, 2026; read 2026-10-31): a private room $355 a day, a shared room $315 a day, assisted living $6,200 a month,
+ * in-home care (the survey's "non-medical caregiver", which now includes home health aides) $35 an hour for 44 hours a
+ * week, adult day care $95 a day for 5 days a week, 52 weeks.
+ */
 export const CARE = {
-  nursing:  { label: "Nursing home, private room", short: "a nursing home", yearly: 127750 },
-  semi:     { label: "Nursing home, shared room", short: "a shared nursing-home room", yearly: 111325 },
-  assisted: { label: "Assisted living", short: "assisted living", yearly: 70800 },
-  home:     { label: "Home health aide, 44 hours a week", short: "a home health aide", yearly: 77792 },
-  day:      { label: "Adult day care, 5 days a week", short: "adult day care", yearly: 26000 },
+  nursing:  { label: "Nursing home, private room", short: "a nursing home", yearly: 129575 },
+  semi:     { label: "Nursing home, shared room", short: "a shared nursing-home room", yearly: 114975 },
+  assisted: { label: "Assisted living", short: "assisted living", yearly: 74400 },
+  home:     { label: "Caregiver at home, 44 hours a week", short: "a caregiver at home", yearly: 80080 },
+  day:      { label: "Adult day care, 5 days a week", short: "adult day care", yearly: 24700 },
 };
-export const COST_YEAR = 2024;
+export const COST_YEAR = 2025;
 /** Almost 70% of people turning 65 will need some long-term care; women for 3.7 years on average, men 2.2 (US Administration for Community Living, "How much care will you need?"). */
 export const CHANCE_AFTER_65 = 0.7, AVERAGE_YEARS = { f: 3.7, m: 2.2 }, AVERAGE_YEARS_ANY = 3;
 /** The usual settings: a private nursing-home room from 85. */

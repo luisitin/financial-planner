@@ -96,6 +96,9 @@ test("withholding: paychecks left in the year, the projected total, a refund and
 
 test("estimated payments: the safe harbour, no instalments when withholding covers it, four instalments when it does not", () => {
   const h = safeHarbour(20000, 15000, 100000, "single"); assert.equal(h.required, 15000); assert.equal(h.basis, "last year");
+  assert.equal(h.label, "100% of last year's tax");
+  const h1 = safeHarbour(20000, 15000, 200000, "single"); near(h1.required, 16500); assert.equal(h1.label, "110% of last year's tax");   // last year's income over 150,000 (IRC 6654(d)(1)(C))
+  assert.equal(safeHarbour(20000, 15000, 80000, "married_separate").label, "110% of last year's tax");   // 75,000 filing separately
   const h2 = safeHarbour(20000, 19000, 200000, "single"); near(h2.required, 18000); assert.equal(h2.basis, "this year");   // 110% of 19,000 is more than 90% of 20,000
   const d = estimated(taxPlan(), { today: TODAY });
   assert.equal(d.needsEstimates, false); near(d.harbour.required, 0.9 * 9730); assert.equal(d.nextDue, null); assert.equal(d.paid, 300);

@@ -17,10 +17,10 @@
 | Saving for retirement | contributions with the employer's money / pay | 15% | Fidelity's 15% guideline |
 | Cash for emergencies | the Emergency fund page's months of must-pay bills | 3 months (ahead from 3; the usual range is 3 to 6) | common rule |
 | Housing cost | housing expenses / gross monthly income | 28% or less | lenders' front-end ratio |
-| Debt payments | Debts page's debt-to-income | 36% or less (43%: the qualified-mortgage line) | lenders' back-end ratio |
+| Debt payments | Debts page's debt-to-income | 36% or less | lenders' back-end ratio: Fannie Mae's manual maximum (45% with a strong credit score and reserves, 50% through its automated approval; Selling Guide B3-6-02). The CFPB removed the 43% limit from the General Qualified Mortgage rule (12 CFR 1026.43(e)(2), price test since 2021). Read 2026-10-31 |
 Verdicts: "ahead" 10% or more past the benchmark (7% for rates), "on par" within it, "behind" short of it; cash is ahead from 3 months, on par from 2.1.
 
-The SCF figures were read on 2026-10-30 from news reports of the release (federalreserve.gov was not reachable from the build session); the reports agree except the 75-and-over median ($504,900 in most, $504,600 in one). The survey is every three years: update `data/scf.js` when the 2028 survey is out (2029).
+The SCF figures match Table 2 of the Federal Reserve's report (thousands of 2025 dollars, p. 12), checked on 2026-10-31; they were first typed on 2026-10-30 from news reports of the release. The survey is every three years: update `data/scf.js` when the 2028 survey is out (2029).
 
 ## Tests
 `module.test.mjs`: the age groups and the savings multiple, not ready without a birth date, the family's six items and verdicts.

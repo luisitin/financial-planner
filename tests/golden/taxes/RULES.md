@@ -127,7 +127,7 @@ cap(AGI) = max(floor, cap - 30% x max(0, AGI - start)). **For married_separate t
 |---|---|---|
 | single, head_of_household | 25,000 | 34,000 (extra 9,000) |
 | married_joint | 32,000 | 44,000 (extra 12,000) |
-| married_separate | 25,000 | 34,000 — assumed lived apart all year (the living-together rule, base 0, is out of the engine's scope) |
+| married_separate | 25,000 | 34,000 — assumed lived apart all year, which takes the single figures (living together at any time in the year the base is 0, IRC §86(c)(1)(C)(ii); since 2026-10-31 that is the engine's default, so `tests/golden-federal.test.mjs` feeds these rows the lived-apart figures) |
 
 Social Security Benefits Worksheet (Form 1040 instructions): provisional = all other income in AGI
 (wages, interest, all dividends, allowed capital gain or loss, pensions, IRA) + half the benefits

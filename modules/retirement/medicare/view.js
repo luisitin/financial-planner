@@ -1,7 +1,7 @@
 // modules/retirement/medicare/view.js -- DOM only. When each of you signs up, what Medicare costs over
 // retirement, the income surcharge (IRMAA) year by year from the plan's own income, the tiers with yours
 // marked, and the drug-plan and supplement premiums to plan for.
-import { tiersFor } from "./data/medicare.js";
+import { tiersFor, YEAR, PART_D_BASE, PART_D_BASE_NEXT } from "./data/medicare.js";
 import { compute } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -50,7 +50,7 @@ export function render(page, ctx) {
   const t = tiersFor(d.status);
   surcharge.append(ui.h("h3", { style: { margin: "12px 0 4px" } }, `The lines for ${d.status === "married_joint" ? "a joint return" : d.status === "married_separate" ? "married filing separately" : "a single return"} (${d.year})`),
     ui.h("ul", { class: "mc-list" }, t.map(([upTo, b, dAdd], i) => ui.h("li", { class: used.has(i) ? "on" : null }, ui.h("span", {}, i === 0 ? `Up to ${money(upTo)}` : upTo === Infinity ? `Over ${money(t[i - 1][0])}` : `${money(t[i - 1][0])} to ${money(upTo)}`, ui.h("span", { class: "mc-s" }, used.has(i) ? "your plan reaches this" : "")), ui.h("b", {}, `${cents(b)} + ${cents(dAdd)}`, ui.h("span", { class: "mc-s" }, "Part B + drug surcharge")))) ),
-    ui.h("p", { class: "muted small" }, "Income here is modified adjusted gross income: the adjusted gross income on the return plus tax-free interest. The lines rise with prices from 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44."));
+    ui.h("p", { class: "muted small" }, "Income here is modified adjusted gross income: the adjusted gross income on the return plus tax-free interest. The lines rise with prices every year, except the top one ($500,000; $750,000 joint), which starts rising in 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44."));
   root.append(surcharge);
 
   // the first years, one line each
@@ -63,7 +63,7 @@ export function render(page, ctx) {
   const m = plan.retirement?.medicare ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Your plans' premiums"), ui.h("span", { class: "fold-status" }, `drug ${cents(d.partD)}${d.supplement ? `, supplement ${cents(d.supplement)}` : ""}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
-      { key: "partDPremium", label: "Drug plan (Part D) premium a month", type: "money", min: 0, help: `empty: the national base premium, ${cents(38.99)}` },
+      { key: "partDPremium", label: "Drug plan (Part D) premium a month", type: "money", min: 0, help: `empty: the national base premium, ${cents(PART_D_BASE)} in ${YEAR} (${cents(PART_D_BASE_NEXT.amount)} in ${PART_D_BASE_NEXT.year})` },
       { key: "supplementPremium", label: "Supplement (Medigap) or Advantage plan premium a month", type: "money", min: 0, help: "a supplement covers what Medicare does not; an Advantage plan replaces Parts A and B" },
     ], { partDPremium: m.partDPremium ?? "", supplementPremium: m.supplementPremium ?? "" }, (v) => {
       pending = "Saved.";

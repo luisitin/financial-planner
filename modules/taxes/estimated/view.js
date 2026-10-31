@@ -16,7 +16,7 @@ export function render(root, ctx) {
       ? "Money that arrives without withholding (self-employment, pensions, IRA withdrawals, investment income, a Roth conversion) has to be paid in four instalments through the year or the IRS charges interest. Add income first."
       : !d.needsEstimates
         ? `${d.year}: about ${money(d.totalTax)} of federal tax, ${money(d.withholding)} of it withheld from pay${d.paid > 0 ? ` and ${money(d.paid)} already paid in estimates` : ""}. ${d.balanceAfterWithholding < 1000 ? "The balance at filing time is under 1,000, so no instalments are required." : "Withholding alone reaches the safe-harbour amount, so no instalments are required."}`
-        : `${d.year}: about ${money(d.totalTax)} of federal tax and ${d.withholdingFrom === "paycheck" ? `about ${money(d.withholding)} withheld from pay (estimated from your paychecks)` : `only ${money(d.withholding)} withheld`}. To stay clear of the penalty you need ${money(d.harbour.required)} paid in during the year (${d.harbour.basis === "last year" ? "100% of last year's tax" : "90% of this year's"}), so ${money(d.toPayByEstimates)} in four payments of ${money(d.perQuarter)}. ${money(d.paid)} paid so far, ${money(d.remaining)} to go.`),
+        : `${d.year}: about ${money(d.totalTax)} of federal tax and ${d.withholdingFrom === "paycheck" ? `about ${money(d.withholding)} withheld from pay (estimated from your paychecks)` : `only ${money(d.withholding)} withheld`}. To stay clear of the penalty you need ${money(d.harbour.required)} paid in during the year (${d.harbour.label}), so ${money(d.toPayByEstimates)} in four payments of ${money(d.perQuarter)}. ${money(d.paid)} paid so far, ${money(d.remaining)} to go.`),
     d.behind > 0 && d.nextDue ? ui.h("p", {}, `Then ${money(d.nextDue.amount)} by ${fmt.date(d.nextDue.due)}.`) : null,
     d.penaltyRisk ? ui.h("p", { class: "muted small" }, `${d.overdue ? `Payments from the ${d.overdue.label} (due ${fmt.date(d.overdue.due)}) on are behind` : "A quarter is already behind"}: the penalty runs like interest from each due date, so paying now costs less than waiting.`) : null,
   ));
@@ -25,7 +25,7 @@ export function render(root, ctx) {
   root.append(out);
   for (const n of d.notes) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
-    ui.stat("Safe amount", money(d.harbour.required), d.harbour.basis === "last year" ? "100% of last year's tax" : "90% of this year's"),
+    ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
     ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : "Withholding check page"),
     ui.stat("By estimates", money(d.toPayByEstimates), d.needsEstimates ? `${money(d.perQuarter)} a quarter` : "none needed"),
     ui.stat("At filing time", money(Math.abs(d.balanceAtFiling)), d.balanceAtFiling >= 0 ? "still to pay" : "refund"),

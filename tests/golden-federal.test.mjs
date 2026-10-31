@@ -83,7 +83,9 @@ function mismatches(row, params) {
 for (const year of YEARS) {
   const file = new URL(`./golden/taxes/federal-${year}.csv`, import.meta.url);
   const rows = toObjects(parseCsv(fs.readFileSync(file, "utf8")));
-  const params = FEDERAL[year];
+  // the key works separate returns as spouses who lived apart all year (RULES.md section 6), which takes the single
+  // Social Security figures; the tables hold the living-together zero (IRC 86(c)(1)(C)(ii)), checked in tests/tax.test.mjs
+  const params = { ...FEDERAL[year], ssTaxation: { ...FEDERAL[year].ssTaxation, married_separate: FEDERAL[year].ssTaxation.single } };
 
   test(`golden federal ${year}: the file holds 4,000 cases`, () => {
     assert.equal(rows.length, 4000);

@@ -92,3 +92,10 @@ test("one adult and no children: no one depends on the income", () => {
   assert.equal(d.people.length, 1); assert.equal(ana.dependants, false); assert.equal(ana.plan, null);
   assert.equal(ana.dime.income, 0); assert.equal(ana.dime.education, 0);
 });
+
+test("the earnings test by the plan's first year (SSA: $24,480 in 2026, $25,560 in 2027; later years hold the newest)", async () => {
+  const { earningsTestExempt } = await import("./compute.js");
+  assert.equal(earningsTestExempt(2026), 24480); assert.equal(earningsTestExempt(2027), 25560); assert.equal(earningsTestExempt(2035), 25560);
+  const in2027 = familyBenefits({ pia: 2650, year: 2028, deathYear: 2027, children: [{ birthDate: "2020-03-03" }], parentPay: 69600 });
+  near(in2027.parent, 0.75 * 2650 * 12 - (69600 - 25560) / 2);
+});

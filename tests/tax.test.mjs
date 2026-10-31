@@ -52,6 +52,15 @@ test("qualified income inside the 0% band pays nothing", () => {
 test("Social Security worksheet: 30,000 of benefits with a 20,000 pension -> 5,350 taxable; senior deduction and age allowance apply", () => {
   near(taxableSocialSecurity(30000, 20000, 0, "single", P), 5350);
   assert.equal(taxableSocialSecurity(30000, 5000, 0, "single", P), 0);          // provisional 20,000 < 25,000
+  // filing separately and living together: no base amount, 85% of the provisional income up to 85% of the benefits
+  // (IRC 86(c)(1)(C)(ii), (c)(2)(C); the 1040 worksheet's line 16 = 85% of line 8): 0.85 x (5,000 + 15,000) = 17,000
+  assert.equal(P.ssTaxation.married_separate.base, 0);
+  near(taxableSocialSecurity(30000, 5000, 0, "married_separate", P), 17000);
+  near(taxableSocialSecurity(30000, 100000, 0, "married_separate", P), 25500);
+  // a qualifying surviving spouse's return is not a joint return: the child credit phases out over $200,000 (IRC 24(b)(2));
+  // wages 230,000 -> AGI 230,000: 30 x $50 = $1,500 off the 2025 table's $2,200, leaving $700
+  assert.equal(P.childTaxCreditPhaseOut.qualifying_surviving, 200000);
+  near(federalTax({ filingStatus: "qualifying_surviving", wages: 230000, dependentsUnder17: 1 }, P).credits.childTaxCredit, (P.childTaxCredit ?? 2000) - 1500);
   near(taxableSocialSecurity(30000, 100000, 0, "single", P), 25500);          // capped at 85%
   const r = federalTax({ filingStatus: "single", otherOrdinary: 20000, socialSecurity: 30000, ages65plus: 1 }, P);
   near(r.income.taxableSocialSecurity, 5350); near(r.agi, 25350);

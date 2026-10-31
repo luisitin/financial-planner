@@ -6,6 +6,15 @@ import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { LIMITS } from "./data/limits.js";
 
 const LIMIT_KIND = { "401k": "401k", ira: "ira", roth: "ira", hsa: "hsa" };   // Roth and traditional IRA share one limit; Roth 401(k) counts with the 401(k)
+/**
+ * Which yearly limit a contribution counts against. The Roth account type covers a Roth IRA and a Roth 401(k)/403(b): it is
+ * a Roth 401(k) (the employee's limit, shared with pre-tax deferrals, IRC 402A(c)(2)) when it has an employer match or its
+ * name says 401(k), 403(b), 457 or TSP, and otherwise a Roth IRA (the IRA limit, 408A(c)(2)).
+ */
+export function limitKind(accountType, accountName = "", match = 0) {
+  if (accountType === "roth") return Number(match) > 0 || /\b(?:401\s*\(?k\)?|403\s*\(?b\)?|457|tsp|thrift)/i.test(String(accountName ?? "")) ? "401k" : "ira";
+  return LIMIT_KIND[accountType] ?? null;
+}
 
 /**
  * compute(plan, { today }) -> {
@@ -25,7 +34,7 @@ export function compute(plan, params = {}) {
     const acct = accounts.find((a) => a.id === c.accountId);
     const person = people.find((p) => p.id === c.personId);
     const yearly = perYear(c.amount, c.period), matchYearly = Number(c.employerMatch) || 0;
-    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
+    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, limitKind: limitKind(acct?.type, acct?.name, matchYearly), typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
   });
   const warnings = [];
   const byPerson = people.filter((p) => p.role !== "dependent").map((p) => {
@@ -34,7 +43,7 @@ export function compute(plan, params = {}) {
     const limits = [];
     for (const [kind, def] of Object.entries(L.kinds)) {
       // an employer's HSA deposits share the HSA limit (IRS Pub. 969); a 401(k) match has its own, much higher, overall limit
-      const used = mine.filter((i) => LIMIT_KIND[i.accountType] === kind).reduce((s, i) => s + i.yearly + (kind === "hsa" ? i.matchYearly : 0), 0);
+      const used = mine.filter((i) => i.limitKind === kind).reduce((s, i) => s + i.yearly + (kind === "hsa" ? i.matchYearly : 0), 0);
       if (!used) continue;
       let limit = def.limit, catchUp = 0;
       if (age !== null && def.catchUpAge && age >= def.catchUpAge) { catchUp = def.catchUp; if (def.superCatchUp && age >= def.superCatchUp.from && age <= def.superCatchUp.to) catchUp = def.superCatchUp.amount; limit += catchUp; }

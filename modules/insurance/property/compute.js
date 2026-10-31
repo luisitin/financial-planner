@@ -15,8 +15,18 @@ export const UMBRELLA_UNDER = { auto: 500000, home: 300000 };
 export const HOME_LIABILITY_DEFAULT = 100000;
 /** Home policies pay partial losses in full only when the dwelling cover is at least 80% of the cost to rebuild (the coinsurance clause). */
 export const COINSURANCE = 0.8;
-/** Umbrellas come in steps of $1 million; the first million usually costs $150 to $300 a year (Insurance Information Institute). */
-export const UMBRELLA_STEP = 1000000, UMBRELLA_COST = [150, 300];
+/**
+ * Umbrellas come in steps of $1 million: the first million usually costs $150 to $300 a year, the second about $75 more and
+ * each one after about $50 (Insurance Information Institute, "Liability and safety tips for dog owners", read 2026-10-31).
+ */
+export const UMBRELLA_STEP = 1000000, UMBRELLA_COST = [150, 300], UMBRELLA_SECOND = 75, UMBRELLA_MORE = 50;
+/** The usual yearly cost of an umbrella of `amount`: [low, high]. */
+export function umbrellaCost(amount) {
+  const millions = Math.ceil(Math.max(0, amount) / UMBRELLA_STEP);
+  if (!millions) return [0, 0];
+  const extra = (millions >= 2 ? UMBRELLA_SECOND : 0) + Math.max(0, millions - 2) * UMBRELLA_MORE;
+  return [UMBRELLA_COST[0] + extra, UMBRELLA_COST[1] + extra];
+}
 /** Out of a creditor's reach: 401(k)s and other employer plans in full (ERISA); IRAs in bankruptcy up to $1,711,975 (11 U.S.C. 522(n), from April 1, 2025). */
 export const IRA_LIMIT = 1711975;
 const IRA_TYPES = ["ira", "roth"];
@@ -84,7 +94,7 @@ export function compute(plan, params = {}) {
       text: `Your net worth is ${money(nw.netWorth)}; ${shielded > 0 ? `${money(shielded)} of it is in retirement accounts, which are mostly out of a creditor's reach, leaving ${money(exposed)} exposed` : `all of it is exposed`}. Cover for someone hurt: ${[autos.length ? `${money(inCar)} in a car accident` : null, homesPol.length ? `${money(atHome)} at home${homeLiabilityKnown ? "" : ` (${money(HOME_LIABILITY_DEFAULT)} assumed for the home policy: enter its liability limit below)`}` : null].filter(Boolean).join(", ")}${umbrella > 0 ? `, the umbrella's ${money(umbrella)} included` : ""}.${okLiab ? "" : suggestedUmbrella > 0 ? " An umbrella policy closes the gap (below)." : ` Raising the ${autos.length && inCar === weakest ? "car" : "home"} policy's liability limit to ${money(Math.max(exposed, autos.length && inCar === weakest ? AUTO_MIN : UMBRELLA_UNDER.home))} closes it and usually costs little.`}`, go: null });
   }
   // 4. an umbrella
-  if (suggestedUmbrella > 0) add({ id: "umbrella", ok: false, title: `An umbrella policy of ${money(suggestedUmbrella)}`, text: `It adds liability cover on top of the car and home policies, for about ${money(UMBRELLA_COST[0] * suggestedUmbrella / UMBRELLA_STEP)} to ${money(UMBRELLA_COST[1] * suggestedUmbrella / UMBRELLA_STEP)} a year. Insurers usually want ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} on the home underneath it.`, go: null });
+  if (suggestedUmbrella > 0) add({ id: "umbrella", ok: false, title: `An umbrella policy of ${money(suggestedUmbrella)}`, text: `It adds liability cover on top of the car and home policies, for about ${money(umbrellaCost(suggestedUmbrella)[0])} to ${money(umbrellaCost(suggestedUmbrella)[1])} a year. Insurers usually want ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} on the home underneath it.`, go: null });
   else if (umbrella > 0) {
     const shortUnder = (autos.length && autoLiability < UMBRELLA_UNDER.auto) || (homesPol.length && homeLiability < UMBRELLA_UNDER.home);
     add({ id: "umbrella", ok: !shortUnder, title: `Umbrella: ${money(umbrella)}`, text: shortUnder ? `Check the limits underneath it: umbrella insurers usually require ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} on the home, and a gap below them is yours to pay.` : "The car and home limits underneath meet what umbrella insurers usually require.", go: null });

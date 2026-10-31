@@ -86,7 +86,7 @@ export function compute(plan, params = {}) {
       sentence: `${money(housing)} a month on housing is ${pctW(housing / gross)} of gross income; lenders like ${pctW(RULES.housing)} or less.`, source: "The lenders' front-end ratio (28%)", go: ["cashflow", "expenses"] });
     const li = computeLiabilities(plan, { today });
     if (li.dti !== null) add({ id: "debt", title: "Debt payments", you: li.dti, benchmark: RULES.debt, unit: "share", better: "lower", verdict: verdictOf(li.dti, RULES.debt, "lower", 0.07),
-      sentence: `${money(li.payments)} a month on loans and cards is ${pctW(li.dti)} of gross income; under ${pctW(RULES.debt)} is comfortable, 43% is where many lenders stop.`, source: "The lenders' back-end ratio (36%; 43% for a qualified mortgage)", go: ["debt", "ratios"] });
+      sentence: `${money(li.payments)} a month on loans and cards is ${pctW(li.dti)} of gross income; under ${pctW(RULES.debt)} is comfortable; many mortgage lenders approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.`, source: "Fannie Mae's limit for loans checked by hand (36%; up to 45 to 50% with strong credit and savings)", go: ["debt", "ratios"] });
   }
 
   const judged = items.filter((x) => x.verdict !== "unknown");

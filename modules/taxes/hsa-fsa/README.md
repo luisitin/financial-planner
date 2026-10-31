@@ -10,10 +10,10 @@
 `hsa` (limit with catch-ups, contribution, employer, total, room, over, taxSaved through the brackets, ficaSaved at 7.65%, marginal, years to 65, growthRate, futureValue of this year's amount repeated, balance grown, atSixtyFive), `fsa` (election, limit, spent, unspent, daysLeft, carryover, taxSaved, over), `notes`.
 
 ## Formulas
-Limits from `modules/retirement/contributions/data/limits.js` (HSA: Rev. Proc. 2024-32 / 2025-19; FSA: Rev. Proc. 2024-40 / 2025-32; 1,000 catch-up per person 55+, two on family coverage). Tax saved = the return without the contribution less the return with it (it is an adjustment), plus payroll tax when it comes from pay. Growth: the plan's blended expected return, future value of a level yearly amount.
+Limits from `modules/retirement/contributions/data/limits.js` (HSA: Rev. Proc. 2024-25 (2025) / 2025-19 (2026), 2027 in Rev. Proc. 2026-24; FSA: Rev. Proc. 2024-40 / 2025-32; 1,000 catch-up per person 55+, two on family coverage). Tax saved = the return without the contribution less the return with it (it is an adjustment), plus payroll tax when it comes from pay. Growth: the plan's blended expected return, future value of a level yearly amount.
 
 ## Edge cases
-A general-purpose FSA and an HSA in the same year get a warning (only a limited-purpose FSA is allowed). Over-contributions are flagged (6% excise). The Medicare six-month look-back is text only.
+A general-purpose FSA and an HSA in the same year get a warning (only a limited-purpose FSA is allowed). Over-contributions are flagged (6% excise). Medicare is text only: no HSA money from the first month of Medicare entitlement (IRC 223(b)(7)); Part A is backdated up to six months, not before 65, when someone applies after 65 (medicare.gov, "Working past 65"; read 2026-10-31).
 
 ## Tests
 `tests/tax-pages.test.mjs`, `module.test.mjs`.

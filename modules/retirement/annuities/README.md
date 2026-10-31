@@ -19,7 +19,7 @@
 
 ## Edge cases
 - The whole payment is taxed (as from an IRA); bought with taxed savings part of it would be a return of principal (the exclusion ratio): the page says so.
-- State guaranty limits are mentioned, not modelled.
+- State guaranty limits are mentioned, not modelled: usually $250,000 of an annuity's present value per person, per failed insurer, with an overall cap; some states go higher (up to $500,000) (NOLHGA, "How You're Protected", state table based on information as of June 1, 2025; read 2026-10-31).
 
 ## Tests
 `module.test.mjs`: not ready, no quotes, a quote (payout rate, the implied return by hand, the ladder by hand, savings and the guaranteed share with it), joint life against single and a later start.

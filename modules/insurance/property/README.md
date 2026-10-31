@@ -14,7 +14,7 @@
 - Home: dwelling cover / rebuild cost; "ok" from 100%, "low" from `COINSURANCE` 80% (the coinsurance clause: below it most policies also cut partial-loss payments), "under" below. Without a rebuild cost the page explains that the sale price includes land.
 - Car: liability per accident (the policy's benefit) against `AUTO_MIN` $300,000 (the common 100/300/100 advice).
 - Liability: in a car accident = car limit + umbrella; at home = home liability (`HOME_LIABILITY_DEFAULT` $100,000 when not entered) + umbrella. Protected when the weaker of the two >= exposed.
-- Umbrella suggested when there is none and exposed > the higher underlying limit: rounded up to `UMBRELLA_STEP` $1,000,000; cost $150 to $300 a year per million (Insurance Information Institute). An umbrella on file is checked against what insurers usually require underneath (`UMBRELLA_UNDER`: $500,000 per accident on cars, $300,000 on the home).
+- Umbrella suggested when there is none and exposed > the higher underlying limit: rounded up to `UMBRELLA_STEP` $1,000,000; cost (`umbrellaCost`) $150 to $300 a year for the first million, about $75 more for the second and $50 for each one after (Insurance Information Institute, "Liability and safety tips for dog owners", read 2026-10-31). An umbrella on file is checked against what insurers usually require underneath (`UMBRELLA_UNDER`: $500,000 per accident on cars, $300,000 on the home).
 - Deductibles: the sum of the home and car deductibles entered against usable cash (Emergency fund's "now"); with three times that in cash, a higher deductible is suggested.
 
 ## Edge cases

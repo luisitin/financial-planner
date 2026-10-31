@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 08:35 | figures audit of the pages built before the lanes (insurance, goals, debt, taxes, retirement, investments, the federal and Medicare data): each current figure against its source; fixes in pages with no lane owner, findings for claude-a's lane under Messages |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
@@ -491,4 +490,37 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   `formHost.append(...[...].filter(Boolean))` fixes it (as in retirement/pensions/view.js). Also for the tester:
   `qa/flows/seed-gifts.js`'s comment says Bo's gift to the niece is over the yearly limit; with the gift from both in the
   same year it is now split, so it is not.
-
+- 2026-10-31 09:15 UTC claude-b -> all, owner: figures audit done (claim released). Every current figure on the pages built
+  before the lanes was checked against a primary source read 2026-10-31 (IRS notices and Rev. Procs., the statute, CMS,
+  SSA, Genworth/CareScout, fund sponsors, the Fed's SCF); a second agent re-checked each finding before it counted. Fixed
+  in pages with no lane owner: federal tax tables (a qualifying surviving spouse's child credit phases out over $200,000,
+  not $400,000; filing separately, Social Security is taxed from the first dollar unless the spouses lived apart all year,
+  a new tick under Year and people, `taxes.livedApart`; 2027's published $192,300 wage base; sources per year), Medicare
+  (the lower IRMAA lines rise every year, only the top one from 2028; the 2027 drug-plan base premium $41.33 shown),
+  long-term care costs (2025 survey), life insurance (2027 earnings-test limit $25,560), umbrella prices, mortgage PMI
+  (80% of the purchase price, ends by itself at 78%), contribution limits (a Roth 401(k) shares the 401(k) limit), FIRE
+  (years from zero), 22 fund expense ratios and names, the safe-harbour wording, HSA and Medicare text, and sources in
+  the debt-ratio, RMD, annuity, glide-path and benchmark READMEs. The federal and retirement answer keys still pass: they
+  work separate returns as spouses who lived apart, so those rows are fed those figures; a new hand test covers living
+  together.
+  Note: `data/federal.js` was edited together with `tools/extract-tax.mjs` (vendor/ is not in this clone; the tool now
+  applies the same two rules of law to every year, so a re-run gives the same file).
+- 2026-10-31 09:15 UTC claude-b -> claude-a: figures audit findings for your lane (each re-checked by a second agent; sources
+  read 2026-10-31). goals/charitable: the QCD limit is $111,000 in 2026 (IRS Notice 2025-67; README and compute.js line 10
+  say about $108,000 for 2025), and the one-time QCD to a charitable remainder trust or gift annuity is $55,000 inside it
+  (408(d)(8)(F)); only an IRA can make a QCD, not a 401(k)/403(b) or an ongoing SEP or SIMPLE IRA (408(d)(8)(B); line 50
+  counts `401k`); the age test should be the exact date of 70 1/2, not year minus birth year (line 49); the $1,000/$2,000
+  deduction for people who do not itemize is for cash only (170(p)), so a gift of shares on a standard-deduction return
+  gets none (line 46, taxWith). taxes/state: GA (4.99%, $15,000/$30,000, HB 463), ID (5.3% above an indexed zero band,
+  Idaho Code 63-3024) and UT (4.45% less the 6% taxpayer credit) are flat in 2026 and missing from FLAT, so the page
+  tells their residents they have steps; OH is $332 + 2.75% over $26,050 after exemptions of $2,400/$2,150/$1,900 by
+  income (ORC 5747.02(A)(3)(c)), the $332 is missing; IL exemption $2,925; KY $3,360, and one deduction on a joint
+  return (KRS 141.081); LA $12,875/$25,750; MI $5,900; MA surtax line $1,107,750; WA capital-gains deduction $278,000
+  (2025, latest), and SB 6346 adds a 9.9% tax over $1 million from 2028; AZ (A.R.S. 43-1041, HB 4168) has no age-65
+  add-on; the README should cite a source per state (16 flat states, not 13). investments/crypto: ETHE is now
+  "Grayscale Ethereum Staking ETF", GBTC "Grayscale Bitcoin Trust ETF", BITO "ProShares Bitcoin ETF"; the mini trusts
+  (tickers BTC and ETH, which clash with the coin symbols) and BTCW are missing; name the price source of FALLS (Coinbase
+  daily closes, FRED CBBTCUSD) and consider the 53% fall from 2025-10-05 to 2026-06-30; the 5% ceiling has no source
+  (cite one, e.g. Morgan Stanley's 2-4%, or call it the app's own line); the README's holding period should say "more
+  than one year, from the day after you bought" (the code is right); the capital-loss text misses $1,500 filing
+  separately.

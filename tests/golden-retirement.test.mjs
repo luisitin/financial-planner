@@ -111,6 +111,9 @@ for (const page of pages) {
           // Expected tax tables/numbers came from primary sources in the worker scripts.
           const slot = { taxOnOrdinary: 2, taxOnQualified: 3, taxableSocialSecurity: 4, standardDeduction: 1, federalTax: 1, bracketTop: 2, roomUnder: 1 }[row.target];
           if (slot !== undefined && data.params.taxYear !== undefined) data.arg[slot] = tax.paramsFor(FEDERAL, data.params.taxYear, { inflation: data.params.inflation ?? 0 });
+          // rows the key worked for separate filers who lived apart all year take the single Social Security figures; the
+          // tables hold the living-together zero (IRC 86(c)(1)(C)(ii)), the federal page's default since 2026-10-31
+          if (/lived apart all year/.test(row.note ?? '') && data.arg[slot]?.ssTaxation) data.arg[slot] = { ...data.arg[slot], ssTaxation: { ...data.arg[slot].ssTaxation, married_separate: data.arg[slot].ssTaxation.single } };
           const value = helper(...data.arg);
           actual = value !== null && typeof value === 'object' ? value : { value };
         }

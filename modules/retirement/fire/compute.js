@@ -9,10 +9,24 @@ import { buildInputs } from "../projection/compute.js";
 import { realRate } from "../../../core/math/finance.js";
 
 /**
+ * Years from nothing saved to financial independence when a share `rate` of income is saved each year (added at the year's
+ * end) and grows at `realReturn` a year after inflation, until the pot pays the rest of income (1 - rate) at
+ * `withdrawalRate`. Income itself drops out. null past 100 years.
+ */
+export function yearsFromZero(rate, realReturn, withdrawalRate) {
+  if (!(rate > 0) || !(withdrawalRate > 0)) return null;
+  const target = (1 - rate) / withdrawalRate;
+  let pot = 0;
+  for (let y = 1; y <= 100; y++) { pot = pot * (1 + realReturn) + rate; if (pot >= target - 1e-12) return y; }
+  return null;
+}
+
+/**
  * compute(plan, { today, withdrawalRate = 0.04 }) -> {
  *   ready, spendingYearly, withdrawalRate, fiNumber, invested (retirement money today), progress, gap,
  *   savingYearly (contributions + what is left over each month), savingsRate (of income), realReturn,
- *   yearsToFi, fiAge, fiYear, coast: { number, reached }, retireAge, yearsToRetire, hasIncome
+ *   yearsToFi, fiAge, fiYear, coast: { number, reached }, retireAge, yearsToRetire, hasIncome,
+ *   fromZero: { half, tenth } (years from nothing saved at half and a tenth of income saved, at this growth and withdrawal rate)
  * }
  */
 export function compute(plan, params = {}) {
@@ -47,5 +61,6 @@ export function compute(plan, params = {}) {
     ready: true, spendingYearly, withdrawalRate: wr, fiNumber, invested, progress: Math.min(1, invested / fiNumber), gap: Math.max(0, fiNumber - invested),
     savingYearly, savingsRate, realReturn, yearsToFi, fiAge: yearsToFi !== null && age !== null ? age + yearsToFi : null, fiYear: yearsToFi !== null ? year + yearsToFi : null,
     coast: coastNumber !== null ? { number: coastNumber, reached: invested >= coastNumber } : null, retireAge, yearsToRetire, age, hasIncome: !!income,
+    fromZero: { half: yearsFromZero(0.5, realReturn, wr), tenth: yearsFromZero(0.1, realReturn, wr) },
   };
 }

@@ -13,12 +13,12 @@
 ## Data
 | care | a year | basis |
 |---|---|---|
-| Nursing home, private room | $127,750 | |
-| Nursing home, shared room | $111,325 | |
-| Assisted living | $70,800 | one bedroom |
-| Home health aide | $77,792 | 44 hours a week, 52 weeks |
-| Adult day care | $26,000 | 5 days a week, 52 weeks |
-National medians, CareScout / Genworth Cost of Care Survey 2024 (collected July to December 2024, released March 2025). Update `CARE` and `COST_YEAR` each spring.
+| Nursing home, private room | $129,575 | $355 a day |
+| Nursing home, shared room | $114,975 | $315 a day |
+| Assisted living | $74,400 | $6,200 a month, one bedroom |
+| Caregiver at home | $80,080 | $35 an hour, 44 hours a week, 52 weeks (the survey's "non-medical caregiver", which now includes home health aides) |
+| Adult day care | $24,700 | $95 a day, 5 days a week, 52 weeks |
+National medians, CareScout / Genworth Cost of Care Survey 2025 (collected July to November 2025, released March 2, 2026: investor.genworth.com press release 1054, read 2026-10-31). Update `CARE` and `COST_YEAR` each spring.
 
 Odds: "almost 70%" of people turning 65 will need some long-term care; women for 3.7 years on average, men for 2.2 (US Administration for Community Living, "How much care will you need?"; acl.gov was not reachable from the build session, so the figures were read from reports quoting it).
 

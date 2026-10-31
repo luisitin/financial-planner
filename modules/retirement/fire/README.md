@@ -14,12 +14,13 @@ Spending (the retirement figure or today's expenses), invested money (taxable + 
 - Saving a year = contributions (own + employer) + max(0, left over each month x 12 - own contributions) so nothing is counted twice.
 - Real return = the stock/bond blend at `stocksNow` deflated by inflation. Years to FI: grow the invested pot by the real return plus the yearly saving until it reaches the number (80-year cap).
 - Coast number = FI number / (1 + real return)^(years to the retirement age).
+- Years from nothing (`yearsFromZero(rate, realReturn, withdrawalRate)`), shown for saving half and a tenth of income: save `rate` of income at each year's end, grow at the real return, until the pot reaches (1 - rate) / withdrawal rate; income drops out (the idea of Mr. Money Mustache's "The Shockingly Simple Math Behind Early Retirement", 2012, worked with the page's own assumptions; at 5% and 4%: 17 and 52 years).
 
 ## Tests
 `tests/retirement-pages.test.mjs`.
 
 ## Ideas / not yet
-- Barista variant (part-time income), the classic savings-rate-to-years table, a chart of the path.
+- Barista variant (part-time income), the full savings-rate-to-years table, a chart of the path.
 
 ## Independent answer-key audit
 

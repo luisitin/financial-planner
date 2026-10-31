@@ -64,3 +64,9 @@ test("deductibles against usable cash", () => {
   const big = compute(withPolicies([{ ...HOME, deductible: 50000 }]), { today: TODAY });
   assert.equal(big.deductibles.ok, false);
 });
+
+test("an umbrella's cost: $150 to $300 for the first million, about $75 for the second and $50 for each one after (III)", async () => {
+  const { umbrellaCost } = await import("./compute.js");
+  assert.deepEqual(umbrellaCost(0), [0, 0]); assert.deepEqual(umbrellaCost(1000000), [150, 300]);
+  assert.deepEqual(umbrellaCost(2000000), [225, 375]); assert.deepEqual(umbrellaCost(3000000), [275, 425]); assert.deepEqual(umbrellaCost(5000000), [375, 525]);
+});

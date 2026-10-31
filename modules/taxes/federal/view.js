@@ -44,7 +44,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
   ));
   root.append(figuresFold(ctx, d), deductionsFold(ctx, d), yearFold(ctx, d));
-  root.append(ui.h("p", { class: "muted small" }, "Brackets, deductions and thresholds: IRS figures for 2024 and 2025 (via the UsTaxes project), 2026 from IRS Revenue Procedure 2025-32. Later years are inflated from the last table."));
+  root.append(ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
 }
 
 function figuresFold(ctx, d) {
@@ -108,10 +108,12 @@ function yearFold(ctx, d) {
     { key: "otherDependents", label: "Other dependents", type: "number", min: 0, step: "1", help: "blank = counted from the People page" },
     { key: "blind", label: "Blind (you or your spouse)", type: "number", min: 0, max: 2, step: "1", help: "adds the same allowance as age 65" },
   ];
-  const values = { year: String(d.year), dependentsUnder17: t.dependentsUnder17 ?? null, otherDependents: t.otherDependents ?? null, blind: t.blind || null };
+  const separate = d.filingStatus === "married_separate";
+  if (separate) FIELDS.push({ key: "livedApart", label: "We lived apart all year", type: "checkbox", help: "filing separately: Social Security is then taxed as for a single person" });
+  const values = { year: String(d.year), dependentsUnder17: t.dependentsUnder17 ?? null, otherDependents: t.otherDependents ?? null, blind: t.blind || null, livedApart: t.livedApart === true };
   const form = ui.form(FIELDS, values, (v) => {
     pending = "Saved.";
-    store.update((p) => { p.taxes.year = Number(v.year) === thisYear ? null : Number(v.year); p.taxes.dependentsUnder17 = v.dependentsUnder17 ?? null; p.taxes.otherDependents = v.otherDependents ?? null; p.taxes.blind = v.blind ?? 0; });
+    store.update((p) => { p.taxes.year = Number(v.year) === thisYear ? null : Number(v.year); p.taxes.dependentsUnder17 = v.dependentsUnder17 ?? null; p.taxes.otherDependents = v.otherDependents ?? null; p.taxes.blind = v.blind ?? 0; if (separate) p.taxes.livedApart = v.livedApart ? true : null; });
   }, { submitLabel: "Save" });
   return ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Year and people"), ui.h("span", { class: "fold-status" }, `${d.year}`), ui.h("span", { class: "fold-chev" }, "›")),

@@ -1,8 +1,8 @@
 // modules/overview/benchmarks/data/scf.js -- median family net worth by the age of the family's head,
 // from the Federal Reserve's Survey of Consumer Finances 2025 ("Changes in U.S. Family Finances from
-// 2022 to 2025", published October 2026), in 2025 dollars. Read on 2026-10-30 from news reports of the
-// release (Kiplinger, Yahoo Finance, Daybreak Wire; federalreserve.gov was not reachable from the build
-// session); the reports agree except the 75-and-over median ($504,900 in most, $504,600 in one).
+// 2022 to 2025", published October 2026), in 2025 dollars: Table 2 (thousands of 2025 dollars), p. 12 of the
+// report on federalreserve.gov, checked against every value here on 2026-10-31 (first typed on 2026-10-30
+// from news reports of the release).
 // The survey is every three years; the next (2028) comes out in 2029. Check this file then.
 export const SCF_YEAR = 2025;
 export const MEDIAN_NET_WORTH_BY_AGE = [

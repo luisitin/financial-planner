@@ -54,7 +54,7 @@ export function render(root, ctx) {
     ui.h("ul", { class: "records" }, [
       ["Three tax breaks, not two", "A 401(k) skips tax going in and pays it coming out; a Roth is the reverse. The HSA skips both, and the payroll tax as well when it comes from a paycheck."],
       ["Pay cash now, reimburse later", "Receipts never expire: pay today's medical bills from your own pocket, let the HSA grow for decades, and reimburse yourself tax-free whenever you like."],
-      ["Medicare and the deadline", "Contributions must stop six months before Medicare starts. Contributions for a year can be made until the April filing deadline."],
+      ["Medicare and the deadline", "No HSA money can go in from the month Medicare starts. Signing up for Medicare after 65 backdates Part A up to six months (not before the month you turn 65), so stop six months before you apply. Contributions for a year can be made until the April filing deadline."],
       ["FSA is different", "An FSA is a spending account, not a savings account: the money is spent within the year, and unspent balances are forfeited apart from the small carryover."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
   ));

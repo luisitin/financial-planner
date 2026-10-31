@@ -1,7 +1,10 @@
 // modules/retirement/contributions/data/limits.js -- IRS contribution limits by year (the
 // employee's own money; employer matches do not count against the 401(k) elective limit).
 // Sources: IRS notices announcing cost-of-living adjustments (Notice 2024-80 for 2025, Notice
-// 2025-67 for 2026) and Rev. Proc. 2025-19 for HSAs. Check every January and add the new year.
+// 2025-67 for 2026); HSAs Rev. Proc. 2024-25 sec. 2.01(1) (2025) and Rev. Proc. 2025-19 sec. 2.01(1) (2026); health FSAs
+// Rev. Procs. 2024-40 and 2025-32 (all read 2026-10-31). Check every January and add the new year. The 2027 HSA limits
+// ($4,500 / $9,000, Rev. Proc. 2026-24 sec. 3.01(1)) came out in May 2026, before the rest of 2027: they are in
+// insurance/health's HDHP_BY_YEAR and career/benefits until the whole 2027 year is added here.
 export const LIMITS = {
   2025: {
     kinds: {

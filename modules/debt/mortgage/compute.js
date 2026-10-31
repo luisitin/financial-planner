@@ -11,7 +11,8 @@ import { addMonths } from "../../../core/math/dates.js";
  *   mortgage: { id, name, balance, rate, payment, extra, termMonths, startDate } | null, home: { value } | null,
  *   base: { months, endDate, totalInterest, payment }, withExtra: { months, endDate, totalInterest, monthsSaved, interestSaved },
  *   biweekly: { months, endDate, totalInterest, monthsSaved, interestSaved }, recast: { newPayment, monthlySaving } | null,
- *   pmi: { ltv, dropAtBalance, monthsUntilDrop, dateDrop } | null, schedule: [{ year, balance, interestPaid, principalPaid }], hasData
+ *   pmi: { basis ("price": the price paid, from the Home page; "today": today's value, when no price is entered), basisValue, ltv (owed / basisValue),
+ *     dropAtBalance (80%: you can ask to cancel), monthsUntilDrop, dateDrop, autoAtBalance (78%: it ends by itself), monthsUntilAuto, dateAuto, homeValue } | null, schedule: [{ year, balance, interestPaid, principalPaid }], hasData
  * }
  */
 export function compute(plan, params = {}) {
@@ -38,14 +39,21 @@ export function compute(plan, params = {}) {
   const biweekly = { months: bwMonths, endDate: date(bwMonths), totalInterest: bwInterest, monthsSaved: Number.isFinite(bwMonths) ? baseMonths - bwMonths : 0, interestSaved: Number.isFinite(bwInterest) ? Math.round((baseInterest - bwInterest) * 100) / 100 : 0 };
   // recast: pay a lump sum, keep the end date, the lender recalculates a lower payment
   const recast = lump > 0 && Number.isFinite(baseMonths) ? (() => { const np = pmt(r, baseMonths, Math.max(0, balance - lump)); return { lump, newPayment: Math.round(np * 100) / 100, monthlySaving: Math.round((required - np) * 100) / 100 }; })() : null;
-  // mortgage insurance usually ends at 80% of the home's value
+  // mortgage insurance (the Homeowners Protection Act, 12 U.S.C. 4901-4902): you can ask to cancel it once the balance
+  // reaches 80% of the home's original value (the price paid, or the appraisal if lower), counting extra payments; it ends
+  // by itself when the original schedule reaches 78%. Original value: the price on the Home page; without one, today's value
+  // stands in (a lender may also drop it on a new appraisal, under its own rules).
   const home = (plan.accounts ?? []).find((a) => a.type === "property" && Number(a.balance) > 0) ?? null;
   let pmi = null;
   if (home) {
-    const value = Number(home.balance) || 0, ltv = value ? balance / value : null, dropAt = value * 0.8;
-    let m = 0, b = balance;
-    if (ltv !== null && balance > dropAt) { while (b > dropAt && m < 600) { b = b * (1 + r) - (required + extra); m++; } }
-    pmi = { ltv, dropAtBalance: dropAt, monthsUntilDrop: balance > dropAt ? m : 0, dateDrop: date(balance > dropAt ? m : 0), homeValue: value };
+    const value = Number(home.balance) || 0;
+    const entry = (plan.property ?? []).find((e) => e && e.accountId === home.id && (e.kind ?? "home") === "home");
+    const price = Number(entry?.purchasePrice) > 0 ? Number(entry.purchasePrice) : null;
+    const basisValue = price ?? value;
+    const monthsTo = (line, pay) => { let m = 0, b = balance; while (b > line + 0.005 && m < 600) { b = b * (1 + r) - pay; m++; } return m; };
+    const dropAt = basisValue * 0.8, autoAt = basisValue * 0.78;
+    const mDrop = basisValue ? monthsTo(dropAt, required + extra) : 0, mAuto = basisValue ? monthsTo(autoAt, required) : 0;
+    pmi = { basis: price ? "price" : "today", basisValue, ltv: basisValue ? balance / basisValue : null, dropAtBalance: dropAt, monthsUntilDrop: mDrop, dateDrop: date(mDrop), autoAtBalance: autoAt, monthsUntilAuto: mAuto, dateAuto: date(mAuto), homeValue: value };
   }
   // year-by-year balance at the required payment plus extra
   const sched = Number.isFinite(exMonths) ? amortization({ principal: balance, annualRate: rate, years: exMonths / 12 + 1, payment: required + extra }).schedule : [];

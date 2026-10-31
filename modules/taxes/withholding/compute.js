@@ -13,9 +13,10 @@ import { daysBetween } from "../../../core/math/dates.js";
  */
 export function safeHarbour(thisYearTax, priorTax, priorAgi, filingStatus) {
   const ninety = 0.9 * Math.max(0, thisYearTax);
-  const prior = priorTax !== null && priorTax !== undefined && priorTax !== "" ? Math.max(0, Number(priorTax)) * ((Number(priorAgi) || 0) > (filingStatus === "married_separate" ? 75000 : 150000) ? 1.1 : 1) : null;
+  const priorShare = (Number(priorAgi) || 0) > (filingStatus === "married_separate" ? 75000 : 150000) ? 1.1 : 1;   // IRC 6654(d)(1)(C)
+  const prior = priorTax !== null && priorTax !== undefined && priorTax !== "" ? Math.max(0, Number(priorTax)) * priorShare : null;
   const required = prior === null ? ninety : Math.min(ninety, prior);
-  return { required, ninety, prior, basis: prior !== null && prior <= ninety ? "last year" : "this year" };
+  return { required, ninety, prior, priorShare, basis: prior !== null && prior <= ninety ? "last year" : "this year", label: prior !== null && prior <= ninety ? `${Math.round(priorShare * 100)}% of last year's tax` : "90% of this year's" };
 }
 
 /** Paychecks left in `year` after `today` for a pay period (a whole year when today is not in that year). */

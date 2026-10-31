@@ -3,6 +3,7 @@
 // plus the figures only the owner knows (typed on the page: dividends, interest, withholding,
 // itemized deductions). Every other tax page starts from taxInputs() so they all agree.
 import { FEDERAL, TAX_YEARS } from "./data/federal.js";
+import { MAXIMUM_EARNINGS } from "../../retirement/social-security/data/ssa.js";
 import { federalTax, marginalRate, paramsFor, standardDeduction } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
@@ -58,8 +59,14 @@ export function taxInputs(plan, params = {}) {
   const today = params.today ?? null;
   const t = plan.taxes ?? {}, ty = t.thisYear ?? {};
   const year = Number(t.year) || (today ? Number(String(today).slice(0, 4)) : new Date().getFullYear());
-  const P = paramsFor(FEDERAL, year, { inflation: Number(plan.assumptions?.inflation ?? 0.03) });
-  const filingStatus = P.status[plan.household?.filingStatus] ? plan.household.filingStatus : "single";
+  const P0 = paramsFor(FEDERAL, year, { inflation: Number(plan.assumptions?.inflation ?? 0.03) });
+  // a year past the last tax table inflates the wage base; SSA publishes next year's every October (2027: $192,300), so a published one wins
+  const P1 = MAXIMUM_EARNINGS[year] ? { ...P0, ssWageBase: MAXIMUM_EARNINGS[year] } : P0;
+  const filingStatus = P1.status[plan.household?.filingStatus] ? plan.household.filingStatus : "single";
+  // filing separately, Social Security is taxed from the first dollar (base 0) unless the spouses lived apart all year,
+  // when the single figures apply (IRC 86(c)(1)(C)(ii) and (c)(2)(C); the tables hold the living-together zero)
+  const livedApart = filingStatus === "married_separate" && t.livedApart === true;
+  const P = livedApart ? { ...P1, ssTaxation: { ...P1.ssTaxation, married_separate: P1.ssTaxation.single } } : P1;
   const inc = computeIncome(plan, { today });
   const active = inc.active.filter((x) => x.taxable !== false);
   const sumType = (...types) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly, 0);
@@ -120,7 +127,8 @@ export function taxInputs(plan, params = {}) {
   const inputs = { ...base, itemized: itemized.total };
   if (!active.length && !typed("wages")) notes.push("Nothing on the Income page yet: the estimate is built from what you type below.");
   if (adults.length >= 2 && filingStatus === "single") notes.push("Two adults but the filing status is Single (People page). Married couples usually file together.");
-  return { year, params: P, filingStatus, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, standard: standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }), gains };
+  if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, tick that under Year and people.");
+  return { year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, standard: standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }), gains };
 }
 
 /**

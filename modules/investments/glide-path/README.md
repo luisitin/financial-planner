@@ -10,7 +10,7 @@ The People page (ages, retirement age, plan end), `retirement.stocksNow` / `stoc
 `rows[]` by age (`plan`, `age110`, `targetDate` stock shares), `actual`, `suggested`, `gap`, `verdict`, `milestones[]` (every five years plus retirement), `ruleLabel`, `notes`.
 
 ## Formulas
-The plan's path: stocksNow gliding linearly to stocksRetired by the retirement year, flat after (the same path the retirement engine uses). 110 minus age. The target-date shape from `targetDateMix` (90% to 50% at retirement to 30% seven years after).
+The plan's path: stocksNow gliding linearly to stocksRetired by the retirement year, flat after (the same path the retirement engine uses). 110 minus age. The target-date shape from `targetDateMix` (90% to 50% at retirement to 30% seven years after, stocks about 60% U.S. and 40% international): Vanguard Target Retirement's path (summary prospectuses, allocations as of 2025-09-30: the 2050 fund about 91% stocks, the Income fund about 30%; read 2026-10-31), applied to every target-date name; other families differ by a few points.
 
 ## Edge cases
 Without a birth date the path starts 20 years before the plan's retirement age. "On path" is within five points.

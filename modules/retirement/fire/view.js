@@ -25,7 +25,7 @@ export function render(root, ctx) {
   root.append(ui.card("What moves it",
     ui.h("ul", { class: "records" }, [
       ["Spend less", "Every dollar a year you no longer need cuts the number by 25. That works on both ends: less to save for, and more saved."],
-      ["Save more", "The years-to-go figure is driven by your saving rate far more than by returns: at half of income saved, independence is about 17 years away from zero; at a tenth, over 50."],
+      ["Save more", `The years-to-go figure is driven by your saving rate far more than by returns. Starting from nothing, at ${fmt.pct(d.realReturn, 1)} growth and drawing ${fmt.pct(d.withdrawalRate, 1)} a year: saving half of income takes about ${d.fromZero.half ?? "over 100"} years; saving a tenth, ${d.fromZero.tenth ? `about ${d.fromZero.tenth}` : "over 100"}.`],
       ["Coast", "Once the coast figure is reached, contributions can stop and the pot still grows into the number by the retirement age; the paycheck only has to cover today."],
       ["Growth", `The estimate uses ${fmt.pct(d.realReturn, 1)} a year above inflation (your stock and bond assumptions blended). History pages show how uneven that really is.`],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
