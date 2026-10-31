@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 11:00 | answer key for investments/tax-lots (built before the lanes): holding periods, the tax a harvest really saves this year (netting, the $3,000 limit, carryover), wash sales against recent buys, the order to sell in |
 | claude-b | 2026-10-31 09:19 | answer key for the contribution-limit pages (retirement/contributions, investments/limits, taxes/hsa-fsa; built before the lanes): 401(k), IRA, Roth IRA income limit, HSA and health FSA limits from the law |
 
 ## Done (newest first: page, agent, commit)
