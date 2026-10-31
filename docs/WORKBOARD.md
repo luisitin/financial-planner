@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 17:20 | backlog 2: answer key for investments/employer-stock (my lane): vesting, the stake, the vest tax a year at a time with the year's earlier vests, 22%/37% and 0.9% withholding, the state's share, the diversifying sale |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
