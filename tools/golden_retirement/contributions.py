@@ -23,10 +23,14 @@ LABELS = {'weekly': 'Every week', 'biweekly': 'Every two weeks',
           'once': 'One time only', 'unknown': 'Every month'}
 # IRS Notice 2024-80 (2025) and Notice 2025-67 (2026), elective/IRA limits.
 # IRS Rev. Proc. 2024-25 / 2025-19: self-only HSA caps. Pub.969: age-55 $1,000.
+# IRS Rev. Proc. 2026-24 s.3.01(1) (dated 2026-05-29, read 2026-10-31): 2027 self-only HSA cap $4,500. The 2027
+# elective and IRA limits were not published by 2026-10-31, so 2027 has the HSA only.
 BASE = {2025: {'401k': 23500, 'ira': 7000, 'hsa': 4300},
-        2026: {'401k': 24500, 'ira': 7500, 'hsa': 4400}}
+        2026: {'401k': 24500, 'ira': 7500, 'hsa': 4400},
+        2027: {'hsa': 4500}}
 CATCH = {2025: {'401k': 7500, 'ira': 1000, 'hsa': 1000},
-         2026: {'401k': 8000, 'ira': 1100, 'hsa': 1000}}
+         2026: {'401k': 8000, 'ira': 1100, 'hsa': 1000},
+         2027: {'hsa': 1000}}
 SOURCE = {'401k': 'IRS Notices 2024-80/2025-67, sections 402(g),414(v)',
           'ira': 'IRS Notices 2024-80/2025-67, section 219; traditional+Roth combined',
           'hsa': 'IRS Rev.Procs.2024-25/2025-19 and Publication969, self-only + age55 catch-up'}
@@ -36,9 +40,16 @@ def m(x):
     return f'{D(x):.2f}'
 
 
+def table_year(kind, year):
+    """The newest published year at or before `year` that has this kind (the first year before any); later years
+    freeze it: no future figure is invented."""
+    years = sorted(y for y in BASE if kind in BASE[y])
+    return max([y for y in years if y <= year] or [years[0]])
+
+
 def cap(kind, year, age):
     """Statutory base plus appropriate additional contribution."""
-    y = 2025 if year == 2025 else 2026
+    y = table_year(kind, year)
     base = D(BASE[y][kind])
     extra = D(0)
     if age is not None and age >= (55 if kind == 'hsa' else 50):
@@ -48,13 +59,13 @@ def cap(kind, year, age):
 
 def second_cap(kind, year, age):
     """Independent direct total-cap lookup, rather than base+catch-up arithmetic."""
-    y = 2025 if year == 2025 else 2026
+    y = table_year(kind, year)
     if kind == '401k':
         totals = (23500, 31000, 34750) if y == 2025 else (24500, 32500, 35750)
         return totals[0 if age is None or age < 50 else 2 if age in (60, 61, 62, 63) else 1]
     if kind == 'ira':
         return (7000 if y == 2025 else 7500) if age is None or age < 50 else (8000 if y == 2025 else 8600)
-    return (4300 if y == 2025 else 4400) if age is None or age < 55 else (5300 if y == 2025 else 5400)
+    return {2025: 4300, 2026: 4400, 2027: 4500}[y] if age is None or age < 55 else {2025: 5300, 2026: 5400, 2027: 5500}[y]
 
 
 def person(age, year, ident='a', role='self', birthday='12-31'):
@@ -188,7 +199,8 @@ def make_limit_cases(rule, kind, ages):
             excess = used-D(direct) if used>D(direct) else D(0)
             eq(excess,max(D(0),used-limit))
             return f'direct total-cap table gives {direct}; account sum {m(first)}+{m(second)}={m(used)}; excess {m(excess)}'
-        add(rule,i,expected,f'{SOURCE[kind]}; age reached={age}; statutory cap {m(limit-extra)}+{m(extra)}={m(limit)}; invented own {m(used)}. Future year freezes latest known 2026 table (model assumption).',
+        frozen = 'Future year uses the newest published HSA figure, 2027 (Rev.Proc.2026-24 s.3.01(1)), frozen after (model assumption).' if kind == 'hsa' else 'Future year freezes latest known 2026 table (model assumption).'
+        add(rule,i,expected,f'{SOURCE[kind]}; age reached={age}; statutory cap {m(limit-extra)}+{m(extra)}={m(limit)}; invented own {m(used)}. {frozen}',
             plan=plan(household,entries,accounts),params={'today':(date(year,1,1)+timedelta(days=i)).isoformat()},check=check)
 
 

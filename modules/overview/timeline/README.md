@@ -17,7 +17,7 @@ Reads (through the other pages' computes, so every date matches theirs): `househ
 | moment | when | source |
 |---|---|---|
 | Retires | the person's retirement age birthday; before 65 it names the years until Medicare | People page |
-| Can save more for retirement | 50, while working, with retirement saving or accounts: the 401(k) and IRA catch-up from `retirement/contributions/data/limits.js` | IRS notices (in that file) |
+| Can save more for retirement | 50, while working, with retirement saving or accounts: the 401(k) and IRA catch-up from `retirement/contributions/data/limits.js` (through `limitsFor`) | IRS notices (in that file) |
 | Four bigger catch-up years | 60, while working, with a 401(k): the 60-63 catch-up | SECURE 2.0 §109, same file |
 | HSA limit rises | 55, while working, with an HSA | Rev. Proc. in that file |
 | Draw on retirement accounts freely | 59½ (the 59th birthday plus six months), with an IRA, 401(k) or Roth | IRC §72(t) |

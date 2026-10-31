@@ -6,9 +6,8 @@
 import { taxInputs } from "../federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { compute as computeContributions } from "../../retirement/contributions/compute.js";
+import { compute as computeContributions, limitsFor } from "../../retirement/contributions/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
 
 /** Self-employment tax (IRC 1401, 1402): 92.35% of net profit is taxed at 12.4% (Social Security, up to the wage base less wages) and 2.9% (Medicare); nothing under $400. */
 export const SE = { base: 0.9235, ss: 0.124, medicare: 0.029, floor: 400, addlMedicare: 0.009 };
@@ -47,7 +46,7 @@ export function compute(plan, params = {}) {
   const wageBase = maximumEarnings(year);
   const owners = [...new Set(biz.map((x) => x.personId || people.find((p) => p.role === "self")?.id || ""))];
   const grossAll = biz.reduce((t, x) => t + x.yearly, 0);
-  const L = (LIMITS[year] ?? LIMITS[Math.max(...Object.keys(LIMITS).map(Number))]).kinds;
+  const L = limitsFor(year).kinds;
   const total415 = TOTAL_ADDITIONS[year] ?? TOTAL_ADDITIONS[2026];
   const rows = owners.map((id) => {
     const gross = biz.filter((x) => (x.personId || owners[0]) === id).reduce((t, x) => t + x.yearly, 0);

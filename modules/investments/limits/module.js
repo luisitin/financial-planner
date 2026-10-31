@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 7,
   enabledByDefault: true,
-  needs: ["household", "retirement", "taxes"],
+  needs: ["household", "accounts", "retirement", "income", "taxes"],
   writes: [],
   heavy: false,
   purpose: "This year’s limits for 401(k)s, IRAs, HSAs, FSAs and 529 gifts against what is going in, the room left, the Roth income check and the deadlines.",

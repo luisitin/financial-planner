@@ -173,7 +173,8 @@ def contributions(row):
         for kind in ['401k','ira','hsa','fsa']:
             used=sum(x['yearly']+(x['matchYearly'] if kind=='hsa' and row['rule']=='hsa-employer-cap' else 0) for x in mine if {'401k':'401k','ira':'ira','roth':'ira','hsa':'hsa'}.get(x['accountType'])==kind)
             if not used:continue
-            base={'401k':23500 if y==2025 else 24500,'ira':7000 if y==2025 else 7500,'hsa':4300 if y==2025 else 4400,'fsa':3300 if y==2025 else 3400}[kind];extra=0
+            # the HSA has a published 2027 figure (Rev. Proc. 2026-24 s.3.01(1)), the other kinds stop at 2026
+            base={'401k':23500 if y==2025 else 24500,'ira':7000 if y==2025 else 7500,'hsa':4300 if y==2025 else 4400 if year<2027 else 4500,'fsa':3300 if y==2025 else 3400}[kind];extra=0
             if age is not None and age >= (55 if kind=='hsa' else 50):extra=11250 if kind=='401k' and 60<=age<=63 else {'401k':7500 if y==2025 else 8000,'ira':1000 if y==2025 else 1100,'hsa':1000,'fsa':0}[kind]
             lim=base+extra;limits.append(dict(kind=kind,limit=lim,used=used,over=max(0,used-lim),catchUp=extra))
             if used>lim:warnings.append(1)

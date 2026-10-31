@@ -53,10 +53,10 @@ this page's documented feature set.
 | 401k-base | elective cap below age 50: 2025 23,500; 2026 24,500 | Notices 2024-80 / 2025-67, §402(g) |
 | 401k-catchup | age ≥50 outside 60–63: 2025 23,500+7,500=31,000; 2026 24,500+8,000=32,500 | Same notices, §414(v) |
 | 401k-super-catchup | ages 60,61,62,63 replace ordinary catch-up with 11,250: total 34,750 / 35,750; age 59/64 use ordinary catch-up | Same notices, §414(v)(2)(E)(i) |
-| hsa-self-catchup | self-only 2025 4,300; 2026 4,400; age ≥55 adds 1,000; family values 8,550 / 8,750 are documented constants but no family selector exists | Rev. Procs. 2024-25 / 2025-19; Publication 969 “Additional contribution” |
+| hsa-self-catchup | self-only 2025 4,300; 2026 4,400; 2027 and later 4,500 (the newest published figure, frozen after); age ≥55 adds 1,000; family values 8,550 / 8,750 / 9,000 are documented constants; the cases carry no `taxes.hsa`, which the page reads as self-only cover of the adult marked "Me" | Rev. Procs. 2024-25 / 2025-19 / 2026-24 s.3.01(1) (dated 2026-05-29, read 2026-10-31); Publication 969 “Additional contribution” |
 | hsa-employer-cap | used = employee + employer; excess = max(0, employee + employer − limit); allowed employee amount = limit − employer | Publication 969 “Employer contributions”; contradicts README blanket exclusion |
 | age-reached | year of test − birth year; birthday need not have occurred; leap-day births count normally | README “The age reached in the year is what counts”; IRS year-end age rules |
-| table-year | 2025→2025, 2026→2026; later years freeze the latest known 2026 limits | explicit planning assumption; no prediction of future law |
+| table-year | 2025→2025, 2026→2026; later years freeze the latest known limits of each kind (2026 for the 401(k) and IRA; the HSA has 2027, published first) | explicit planning assumption; no prediction of future law |
 | empty-input | absent/empty entries mean empty items, zero totals, false hasData, no warnings; adults may still have zero summaries | module input/output contract and empty-sum identity |
 | dependent-exclusion | dependent entries count in household sums but no dependent byPerson summary | application presentation contract, not an IRA eligibility assertion |
 | missing-account-person | missing account retains entered sums, null accountType and one warning per dangling entry; missing person label is Household and no person assignment | application input/error contract |

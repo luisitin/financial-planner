@@ -3,7 +3,7 @@
 // out-of-pocket maximum), less the employer's HSA money and the tax a health savings account saves,
 // in a quiet year, your usual year and a bad year. Which plan wins at which level of bills, and which
 // plans can have an HSA.
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 
@@ -74,7 +74,7 @@ export function compute(plan, params = {}) {
   // the year's rules: the HSA plan limits and how much can go in (the contributions page's table when it has the year)
   const limitsYear = hdhpYear(b.year);
   const rules = HDHP_BY_YEAR[limitsYear][tier];
-  const L = LIMITS[limitsYear]?.kinds?.hsa;
+  const L = limitsFor(limitsYear).kinds.hsa;
   const hsaLimit = L ? (tier === "family" ? L.family : L.limit) : rules.hsa;
   const opts = { hsaRoom: hsaLimit, taxRate };
   const warnings = [];

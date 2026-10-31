@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 5,
   enabledByDefault: true,
-  needs: ["household", "accounts", "retirement"],
+  needs: ["household", "accounts", "retirement", "taxes"],
   writes: ["retirement"],
   heavy: false,
   purpose: "What goes into 401(k)s, IRAs, Roths and HSAs each year, with the employer match and this year's limits.",

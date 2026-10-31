@@ -7,8 +7,8 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
-import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM, HSA_AHEAD } from "./data/benefits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
+import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM } from "./data/benefits.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -27,7 +27,6 @@ export const DEFAULTS = { paychecks: 26, esppDiscount: 0.15, esppLookback: true,
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const pos = (v) => Math.max(0, num(v) ?? 0);
 const yearTable = (T, year) => T[year] ?? T[Math.max(...Object.keys(T).map(Number).filter((y) => y <= year))] ?? T[Math.min(...Object.keys(T).map(Number))];
-const latestYear = (T, year) => (T[year] ? year : Math.max(...Object.keys(T).map(Number).filter((y) => y <= year)));
 
 /** The match as a share of pay for putting in `pct` of pay: tiers [{ rate, upTo }], each `upTo` the top of its band (cumulative share of pay). */
 export function matchAt(pct, tiers) {
@@ -111,7 +110,9 @@ export function compute(plan, params = {}) {
   const s = all[person.id] ?? {};
   // open enrollment in the autumn picks next year's benefits
   const planYear = num(s.planYear) ?? (month >= DEFAULTS.enrollFromMonth ? year + 1 : year);
-  const limitsYear = latestYear(LIMITS, planYear);
+  // each kind of limit from the newest year that has it (the HSA's come out in the spring, the others in the autumn)
+  const LF = limitsFor(planYear);
+  const limitsYear = LF.fullYear;
   const birthYear = /^\d{4}-\d{2}-\d{2}$/.test(String(person.birthDate ?? "")) ? Number(person.birthDate.slice(0, 4)) : null;
   const age = birthYear !== null ? planYear - birthYear : null;   // the age reached in the plan year (the catch-up rules)
   const salaries = salaryOf(person.id);
@@ -122,7 +123,7 @@ export function compute(plan, params = {}) {
   const paychecks = num(s.paychecks) ?? fromPeriod ?? DEFAULTS.paychecks;
   if (num(s.paychecks) === null && !fromPeriod) notes.push(`Your pay is entered as a ${salaries[0].period === "annual" ? "yearly" : "quarterly"} figure, so ${DEFAULTS.paychecks} paychecks a year are assumed: set yours under "Your employer's match".`);
   // the HSA limits come out in the spring, the others in October and November
-  const hsaAhead = limitsYear !== planYear ? HSA_AHEAD[planYear] ?? null : null;
+  const hsaAhead = limitsYear !== planYear && LF.kindYear.hsa === planYear;
   if (limitsYear !== planYear) notes.push(`The ${planYear} limits${hsaAhead ? " for the 401(k), the flexible spending accounts and commuting" : ""} are not in the app yet, so ${limitsYear}'s are shown; the IRS publishes them in October and November.${hsaAhead ? ` The health savings account's ${planYear} limits are in.` : ""}`);
 
   const ti = taxInputs(plan, { today });
@@ -131,8 +132,9 @@ export function compute(plan, params = {}) {
   const code = String(plan.household?.state ?? "").toUpperCase();
   if (st.rate === null) notes.push("Your state's income tax is not counted in the savings: set its rate on the State tax page.");
   const wageBase = maximumEarnings(year);
-  const T = { inputs: ti.inputs, params: ti.params, personPay: pay, wageBase, stateRate };
-  const L = yearTable(LIMITS, planYear).kinds;
+  // the plan's tax position with the health FSA put back in wages: each choice below is worked from no election
+  const T = { inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + (ti.fsa?.offWages ?? 0) }, params: ti.params, personPay: pay, wageBase, stateRate };
+  const L = LF.kinds;
   const B = yearTable(BENEFITS, planYear);
 
   // the 401(k)
@@ -152,7 +154,8 @@ export function compute(plan, params = {}) {
   const stateTaxed401k = K401_TAXED_STATES.includes(code);
   const rothCatchUp = planYear >= ROTH_CATCHUP_FROM && lim.catchUp > 0 && pay > B.rothCatchUpWages;
   // what a choice costs: the plan's wages already have today's 401(k) taken off; compare each choice with no 401(k)
-  const base = { ...T, inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + nowYearly } };
+  const kOff = ti.k401?.people?.find((x) => x.id === person.id)?.excluded ?? nowYearly;   // what the Federal estimate took off wages for it
+  const base = { ...T, inputs: { ...T.inputs, wages: (Number(T.inputs.wages) || 0) + kOff } };
   const option = (key, pct) => {
     const yearly = Math.min(lim.limit, pct * pay);
     const roth = rothCatchUp ? Math.max(0, yearly - L["401k"].limit) : 0;   // the catch-up part goes in after tax
@@ -176,11 +179,11 @@ export function compute(plan, params = {}) {
   // the cafeteria-plan choices (through the paycheck: no income tax, no Social Security or Medicare)
   const hs = plan.taxes?.hsa ?? {};
   const eligible = s.hsaEligible ?? (Number(hs.contribution) > 0 || Number(hs.employer) > 0);
-  const hsaBase = { ...T, inputs: { ...ti.inputs, adjustments: Math.max(0, (Number(ti.inputs.adjustments) || 0) - pos(hs.contribution)) } };
+  const hsaBase = { ...T, inputs: { ...T.inputs, adjustments: Math.max(0, (Number(ti.inputs.adjustments) || 0) - Math.min(pos(hs.contribution), ti.hsa?.deducted ?? pos(hs.contribution))) } };
   let hsa = null;
   if (eligible) {
     const coverage = (s.hsaCoverage ?? hs.coverage) === "family" ? "family" : "self";
-    const H = { ...L.hsa, ...hsaAhead };
+    const H = L.hsa;
     const limit = (coverage === "family" ? H.family : H.limit) + (age !== null && age >= H.catchUpAge ? H.catchUp : 0);
     const employer = num(s.hsaEmployer) ?? pos(hs.employer);
     const room = Math.max(0, limit - employer);
@@ -211,7 +214,7 @@ export function compute(plan, params = {}) {
     const cap = ESPP.yearlyStock * (1 - discount);   // the most that buys $25,000 of stock at the offering price, prices flat
     const yearly = Math.min(pct * pay, cap);
     const gain = yearly * (1 / (1 - discount) - 1);
-    const fed = federalTax({ ...ti.inputs, otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + gain }, ti.params).totalTax - federalTax(ti.inputs, ti.params).totalTax;
+    const fed = federalTax({ ...T.inputs, otherOrdinary: (Number(T.inputs.otherOrdinary) || 0) + gain }, ti.params).totalTax - federalTax(T.inputs, ti.params).totalTax;
     const taxOnGain = fed + gain * stateRate;
     espp = { offered: true, pct, discount, lookback: s.esppLookback ?? DEFAULTS.esppLookback, yearly, perCheck: yearly / paychecks, cap, capped: pct * pay > cap, gain, taxOnGain, afterTax: gain - taxOnGain };
   }
@@ -221,7 +224,7 @@ export function compute(plan, params = {}) {
   const cover = pos(s.lifeCover);
   if (cover > GROUP_LIFE.free) {
     const imputed = groupLifeImputed(cover, age, pos(s.lifePaid));
-    const a = federalTax(ti.inputs, ti.params), b = federalTax({ ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + imputed }, ti.params);
+    const a = federalTax(T.inputs, ti.params), b = federalTax({ ...T.inputs, wages: (Number(T.inputs.wages) || 0) + imputed }, ti.params);
     const ss = PAYROLL.ss * Math.max(0, Math.min(pay + imputed, wageBase) - Math.min(pay, wageBase));
     life = { cover, imputed, tax: (b.totalTax - b.additionalMedicare) - (a.totalTax - a.additionalMedicare) + ss + imputed * (PAYROLL.medicare + stateRate), ageKnown: age !== null };
   }
@@ -229,7 +232,7 @@ export function compute(plan, params = {}) {
   // the paycheck: the 401(k) now first, then the cafeteria-plan choices together on the wages it leaves
   const k = options.find((o) => o.key === "now");
   const cafeteria = (hsa?.elect ?? 0) + fsaElect + dcElect + (transit + parking) * 12;
-  const afterK = { ...hsaBase, inputs: { ...hsaBase.inputs, wages: Math.max(0, (Number(ti.inputs.wages) || 0) + nowYearly - (k ? k.yearly - k.roth : 0)) } };
+  const afterK = { ...hsaBase, inputs: { ...hsaBase.inputs, wages: Math.max(0, (Number(T.inputs.wages) || 0) + kOff - (k ? k.yearly - k.roth : 0)) } };
   const together = taxSaved(cafeteria, { ...afterK, state: false });
   const cafeteriaState = (cafeteria - (hsa?.stateTaxed ? hsa.elect : 0)) * stateRate;
   const pretaxYearly = (k?.yearly ?? 0) + cafeteria;

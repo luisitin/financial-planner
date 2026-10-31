@@ -7,6 +7,7 @@ import { MAXIMUM_EARNINGS } from "../../retirement/social-security/data/ssa.js";
 import { federalTax, marginalRate, paramsFor, standardDeduction } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { limitsFor, catchUpFor, hsaPicture, limitKind } from "../../retirement/contributions/compute.js";
 
 export { TAX_YEARS };
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
@@ -71,16 +72,64 @@ export function taxInputs(plan, params = {}) {
   const active = inc.active.filter((x) => x.taxable !== false);
   const sumType = (...types) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly, 0);
   const accounts = plan.accounts ?? [];
-  const typeOf = (id) => accounts.find((a) => a.id === id)?.type;
-  const contribs = (plan.retirement?.contributions ?? []).map((c) => ({ ...c, yearly: perYear(c.amount, c.period), accountType: typeOf(c.accountId) }));
-  const pretax401k = contribs.filter((c) => c.accountType === "401k").reduce((s, c) => s + c.yearly, 0);
-  const iraDeductible = contribs.filter((c) => c.accountType === "ira").reduce((s, c) => s + c.yearly, 0);
-  const hsaContrib = Math.max(0, Number(t.hsa?.contribution) || 0) || contribs.filter((c) => c.accountType === "hsa").reduce((s, c) => s + c.yearly, 0);
   const notes = [], sources = [];
   const typed = (k) => ty[k] !== null && ty[k] !== undefined && ty[k] !== "";
-  const wagesAuto = Math.max(0, sumType("salary", "bonus") - pretax401k);
-  const wages = typed("wages") ? Number(ty.wages) : wagesAuto;
-  sources.push({ key: "wages", label: "Wages", amount: wages, from: typed("wages") ? "typed" : "plan", detail: typed("wages") ? "as typed" : pretax401k > 0 ? `pay and bonuses on the Income page, less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : "pay and bonuses on the Income page" });
+  const L = limitsFor(year);
+  // the people: each adult's pay and contributions, for the limits that are per person (401(k), IRA)
+  const people = plan.household?.people ?? [];
+  const ageAtYearEnd = (p) => p?.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null;
+  const adults = people.filter((p) => p.role !== "dependent");
+  const me = adults.find((p) => p.role === "self") ?? adults[0] ?? null;
+  const adultOf = (id) => adults.find((p) => p.id === id) ?? null;
+  // a row or pay that names no adult is the household's: it goes on the adult marked "Me"
+  const contribs = (plan.retirement?.contributions ?? []).map((c) => {
+    const acct = accounts.find((a) => a.id === c.accountId);
+    return { ...c, yearly: perYear(c.amount, c.period), accountType: acct?.type, kind: limitKind(acct?.type, acct?.name, Number(c.employerMatch) || 0), owner: adultOf(c.personId) ?? adultOf(acct?.ownerId) ?? me };
+  });
+  const payItems = active.filter((x) => x.type === "salary" || x.type === "bonus");
+  const payTotal = payItems.reduce((s, x) => s + x.yearly, 0);
+  const businessItems = active.filter((x) => x.type === "business");
+  const sumOf = (rows) => rows.reduce((s, c) => s + c.yearly, 0);
+  const K = L.kinds["401k"], I = L.kinds.ira;
+  const k401People = (adults.length ? adults : [null]).map((p) => {
+    const mine = contribs.filter((c) => c.owner === p);
+    const pretax = sumOf(mine.filter((c) => c.accountType === "401k")), roth = sumOf(mine.filter((c) => c.accountType === "roth" && c.kind === "401k"));
+    const ownOf = (items) => (p ? items.filter((x) => (adultOf(x.personId) ?? me) === p) : items).reduce((s, x) => s + x.yearly, 0);
+    const pay = ownOf(payItems);
+    // compensation for the catch-up cap is 415(c)(3)'s: the pay, and for someone self-employed the earned income
+    // (415(c)(3)(B), 401(c)(2)), here the Income page's business figure, so a solo 401(k) keeps its catch-up
+    const compensation = pay + ownOf(businessItems);
+    // the catch-up is at most the compensation left after the other deferrals (IRC 414(v)(2)(A)(ii)); pre-tax money over
+    // the limit plus the catch-up is pay this year, Roth money counting as the excess first (402(g)(1)(A), last sentence)
+    const catchUp = Math.min(catchUpFor(K, ageAtYearEnd(p)), Math.max(0, compensation - Math.min(pretax + roth, K.limit)));
+    const limit = K.limit + catchUp, excluded = Math.min(pretax, limit);
+    return { id: p?.id ?? null, name: p?.name ?? "You", age: ageAtYearEnd(p), pay, compensation, pretax, roth, limit, catchUp, excluded, inIncome: pretax - excluded };
+  });
+  const pretax401k = k401People.reduce((s, x) => s + x.excluded, 0);
+  const k401Over = k401People.reduce((s, x) => s + x.inIncome, 0);
+  // the traditional IRA: deducted (assumed deductible) up to each person's IRA limit plus catch-up (219(b)(1), (b)(5))
+  const iraPeople = (adults.length ? adults : [null]).map((p) => {
+    const traditional = sumOf(contribs.filter((c) => c.owner === p && c.accountType === "ira"));
+    const limit = I.limit + catchUpFor(I, ageAtYearEnd(p));
+    return { id: p?.id ?? null, name: p?.name ?? "You", traditional, limit, deductible: Math.min(traditional, limit) };
+  });
+  const iraDeductible = iraPeople.reduce((s, x) => s + x.deductible, 0);
+  const iraOver = iraPeople.reduce((s, x) => s + x.traditional - x.deductible, 0);
+  // the health FSA election is a cafeteria-plan salary reduction, not wages, up to the year's limit (IRC 125(i), 3121(a)(5)(G))
+  const fsaElection = Math.max(0, Number(t.hsa?.fsa) || 0), fsaLimit = L.kinds.fsa?.limit ?? Infinity;
+  const fsaExcluded = Math.min(fsaElection, fsaLimit);
+  // HSA money through pay is kept out of income and payroll tax only up to the household's limit for its cover (106(d)(1),
+  // 223(b); none without a high-deductible plan); the excess is pay, the employer's part of it included (Pub. 969)
+  const hsa = hsaPicture(plan, year);
+  const hsaPayroll = hsa.household.payroll, hsaExcess = hsa.household.excess;
+  const hsaContrib = Math.max(0, hsaPayroll - hsaExcess), hsaEmployerTaxed = Math.max(0, hsaExcess - hsaPayroll);
+  const wagesTyped = typed("wages");
+  const wagesAuto = Math.max(0, payTotal - pretax401k - fsaExcluded) + hsaEmployerTaxed;
+  const wages = wagesTyped ? Number(ty.wages) : wagesAuto;
+  const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null, hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
+  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? "as typed" : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
+  if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
+  if (!wagesTyped && fsaElection > fsaExcluded) notes.push(`The health FSA election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(fsaExcluded)} comes off your pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   const gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
@@ -103,13 +152,14 @@ export function taxInputs(plan, params = {}) {
   const taxExemptInterest = Number(ty.taxExemptInterest) || 0;
   const adjustmentsTyped = Number(ty.adjustments) || 0;
   const adjustments = adjustmentsTyped + iraDeductible + hsaContrib;
-  if (iraDeductible) sources.push({ key: "ira", label: "IRA contributions", amount: -iraDeductible, from: "plan", detail: "Contributions page; assumed deductible" });
-  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: "HSA page or Contributions page" });
+  if (iraDeductible) sources.push({ key: "ira", label: "IRA contributions", amount: -iraDeductible, from: "plan", detail: `Contributions page; assumed deductible${iraOver > 0 ? `; ${fmtInt(iraOver)} over the IRA limit is not deducted` : ""}` });
+  if (iraOver > 0) notes.push(`${fmtInt(iraOver)} of traditional IRA money is over this year's limit, so it is not deducted. Take it out (with what it earned) before the filing deadline to avoid a 6% tax each year it stays.`);
+  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: `HSA page or Contributions page${hsaExcess > 0 ? `; ${fmtInt(hsaExcess)} over the limit for your cover is taxed as pay` : ""}` });
+  if (hsaExcess > 0) notes.push(hsa.household.limit === 0 && hsa.coverage === "none"
+    ? `${fmtInt(hsaExcess)} goes into an HSA, but the HSA page says you have no high-deductible health plan, so it is taxed as pay.`
+    : `${fmtInt(hsaExcess)} of HSA money is over the limit for your cover, so it is taxed as pay. The HSA and FSA page shows who is over.`);
   if (adjustmentsTyped) sources.push({ key: "adjustments", label: "Other adjustments", amount: -adjustmentsTyped, from: "typed" });
   // the people: age allowances and dependents by age at the end of the tax year
-  const people = plan.household?.people ?? [];
-  const ageAtYearEnd = (p) => p.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null;
-  const adults = people.filter((p) => p.role !== "dependent");
   const ages65plus = adults.filter((p) => ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65).length;
   const deps = people.filter((p) => p.role === "dependent");
   const under17Auto = deps.filter((p) => ageAtYearEnd(p) === null || ageAtYearEnd(p) < 17).length;
@@ -119,8 +169,9 @@ export function taxInputs(plan, params = {}) {
   const paid = (Number(ty.paid) || 0) + (t.estimated?.paid ?? []).reduce((s, x) => s + (Number(x) || 0), 0);
   // net investment income for the 3.8% tax (Form 8960): dividends and interest, the typed qualified dividends and the year's net gain or allowed loss; rent is left out (only its gross is known)
   const investmentIncome = Math.max(0, investment + qualifiedTyped + gains.netShort + gains.netLong + gains.lossAllowed);
-  // Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving (typed wages are taken as they are)
-  const medicareWages = typed("wages") ? wages : sumType("salary", "bonus");
+  // Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving (IRC 3121(v)(1)(A)), less the
+  // health FSA and the HSA payroll money within the limit (3121(a)(5)(G)); typed wages are taken as they are
+  const medicareWages = wagesTyped ? wages : Math.max(0, payTotal - fsaExcluded - hsaPayroll + hsaExcess);
   const base = { filingStatus, wages, medicareWages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
   const agi = federalTax({ ...base, itemized: 0 }, P).agi;
   const itemized = itemizedTotal(t.itemized, agi, filingStatus, P);
@@ -128,7 +179,14 @@ export function taxInputs(plan, params = {}) {
   if (!active.length && !typed("wages")) notes.push("Nothing on the Income page yet: the estimate is built from what you type below.");
   if (adults.length >= 2 && filingStatus === "single") notes.push("Two adults but the filing status is Single (People page). Married couples usually file together.");
   if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, tick that under Year and people.");
-  return { year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, standard: standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }), gains };
+  return {
+    year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, standard: standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }), gains,
+    k401: { people: k401People, excluded: pretax401k, inIncome: k401Over, year: L.kindYear["401k"] },
+    ira: { people: iraPeople, deductible: iraDeductible, over: iraOver, year: L.kindYear.ira },
+    fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null },
+    hsa: { picture: hsa, payroll: hsaPayroll, employer: hsa.household.employer, excess: hsaExcess, deducted: hsaContrib, employerTaxed: wagesTyped ? 0 : hsaEmployerTaxed },
+    payTotal, wagesTyped,
+  };
 }
 
 /**

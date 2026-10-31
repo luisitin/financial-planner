@@ -51,9 +51,9 @@
   Proc. 2025-19), $4,500 / $9,000 in 2027 (Rev. Proc. 2026-24 §3.01(1), posted 2026-05-29, read 2026-10-31), + $1,000
   from 55, which is in the law and not indexed (IRC 223(b)(3)); room = limit − employer money; the election is capped
   at the room. The IRS puts out the HSA limits in the spring and the others in October and November, so in open
-  enrollment the next year's HSA limit can be known before the 401(k)'s: `HSA_AHEAD` in `data/benefits.js` holds it
-  until `retirement/contributions/data/limits.js` (not this page's file) has the year, and the page's note says which
-  limits are the next year's. "Use these on the HSA page" saves next year's choice on a page that shows this year, so
+  enrollment the next year's HSA limit can be known before the 401(k)'s: `retirement/contributions/data/limits.js`
+  (not this page's file) holds such a year in part (2027: the HSA only), the page reads it through `limitsFor(planYear)`
+  (each kind from the newest year that has it), and the page's note says which limits are the next year's. "Use these on the HSA page" saves next year's choice on a page that shows this year, so
   the page says that page checks it against this year's limits until January. From 2026 bronze and
   catastrophic marketplace plans qualify (P.L. 119-21; IRS Notice 2026-5). Tax saved through payroll = federal (the
   household's tax with the HSA page's figure taken back out, then the election off wages) + 7.65% payroll tax (6.2% only

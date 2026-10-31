@@ -55,3 +55,11 @@ test("no expensive debt, no HSA, no 401(k): those steps are done or left out", (
   assert.equal(step(d, "match"), undefined); assert.equal(step(d, "max-401k"), undefined); assert.equal(step(d, "hsa"), undefined);
   assert.ok(HIGH_RATE === 0.10);
 });
+
+test("an HSA account but no high-deductible plan this year: no HSA step (IRC 223(c)(1))", () => {
+  const p = familyPlan();
+  if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: p.household.people[0].id });
+  assert.ok(step(compute(p, { today: TODAY }), "hsa"), "with self-only cover the step is there");
+  p.taxes.hsa = { ...p.taxes.hsa, coverage: "none" };
+  assert.equal(step(compute(p, { today: TODAY }), "hsa"), undefined);
+});

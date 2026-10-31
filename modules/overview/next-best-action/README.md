@@ -16,7 +16,7 @@ The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bog
 2. The whole employer match: anyone with pay and a 401(k) but no contribution on file is a "check".
 3. Expensive debt: `HIGH_RATE` 10% or more, mortgages aside, highest rate first.
 4. A full emergency fund: the plan's target months (Emergency fund page's gap).
-5. The HSA (only with an HSA account): this year's room (self-only or family).
+5. The HSA (only with an HSA account, and not when the HSA page says there is no high-deductible plan: then nobody may put money in, IRC 223(c)(1)): this year's room (self-only or family).
 6. An IRA for each adult with earned income: this year's room, catch-up at 50.
 7. Middling debt: `MODERATE_RATE` 4% up to 10%, mortgages aside.
 8. The 401(k) to the limit: this year's room (the employee's own money).
@@ -29,7 +29,7 @@ Payroll tax (`FICA`): Social Security 6.2% of pay up to the year's wage base and
 The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money. Interest on the debts and next year's new limits are left out, so the dates are about right.
 
 ## Edge cases
-Not ready without income and expenses. Spare money below zero: the bills are the next step and no dates are given. No 401(k): no match or 401(k) step; no HSA account: no HSA step; no goals: no goals step. Money set aside for goals is not usable cash (F-020), so a goal called "Emergency fund" is not counted toward the emergency fund (F-034 asks the owner).
+Not ready without income and expenses. Spare money below zero: the bills are the next step and no dates are given. No 401(k): no match or 401(k) step; no HSA account, or no high-deductible plan: no HSA step; no goals: no goals step. Money set aside for goals is not usable cash (F-020), so a goal called "Emergency fund" is not counted toward the emergency fund (F-034 asks the owner).
 
 ## Tests
 `module.test.mjs`: the spare money line by line, the family's order and next step, the gap dates in order, the IRA and 401(k) room, overspending, a household with no expensive debt, 401(k) or HSA.

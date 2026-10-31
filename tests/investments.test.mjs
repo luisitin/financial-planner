@@ -150,7 +150,10 @@ test("limits: each person's limits with catch-ups against the contributions, the
   assert.equal(l.limitsYear, 2026);
   const sam = l.people.find((p) => p.name === "Sam");
   assert.deepEqual(sam.rows.map((r) => [r.kind, r.limit, r.used]), [["401k", 32500, 18000], ["ira", 8600, 7000], ["hsa", 9750, 6000]]);   // family HSA limit plus Sam's own 55+ catch-up (Lee's goes in Lee's HSA)
-  assert.equal(l.totals.used, 44000); assert.equal(l.totals.limit, 101700);
+  // the HSA page's 6,000 (5,000 + 1,000 from the employer) is Sam's, the covered adult marked "Me", not each adult's; Lee's
+  // share of the family limit is what Sam leaves: 1,000 catch-up + 8,750 - (6,000 - 1,000) (IRC 223(b)(4), (b)(5))
+  assert.equal(l.people.find((p) => p.name === "Lee").rows[2].limit, 4750);
+  assert.equal(l.totals.used, 38000); assert.equal(l.totals.limit, 91950);
   assert.equal(l.roth.status, "ok"); assert.equal(l.deadlines[0].date, "2027-04-15");
   const p = investmentsPlan(); p.taxes.thisYear.wages = 300000; assert.equal(limits(p, { today: TODAY }).roth.status, "over");
   assert.ok(limits(emptyPlan(), { today: TODAY }).notes.length);

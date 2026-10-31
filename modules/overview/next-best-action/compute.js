@@ -100,9 +100,9 @@ export function compute(plan, params = {}) {
   add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: "Enough must-pay bills in cash to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
     detail: fullGap > 0 ? `${money(fullGap)} more reaches ${liq.targetMonths} months of must-pay bills (${money(liq.target)}).` : `Usable cash covers ${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
 
-  // 5. the HSA, for those who have one
+  // 5. the HSA, for those who have one and a high-deductible plan this year (none: nobody may put money in, IRC 223(c)(1))
   const hsaUsed = (con.byPerson ?? []).flatMap((p) => p.limits).filter((l) => l.kind === "hsa").reduce((s, l) => s + l.used, 0);
-  if (accounts.some((a) => a.type === "hsa")) {
+  if (accounts.some((a) => a.type === "hsa") && con.hsa?.coverage !== "none") {
     const family = plan.taxes?.hsa?.coverage === "family";
     const hsaLimit = family ? L.hsa.family : L.hsa.limit;
     const room = Math.max(0, hsaLimit - hsaUsed);

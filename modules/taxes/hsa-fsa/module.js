@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 6,
   enabledByDefault: true,
-  needs: ["household", "taxes"],
+  needs: ["household", "accounts", "retirement", "income", "taxes"],
   writes: ["taxes"],
   heavy: false,
   purpose: "The health savings account: its limit, the room left, the tax it saves, what it grows into; and the FSA use-it-or-lose-it deadline.",

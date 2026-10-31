@@ -8,7 +8,7 @@ import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { compute as computeEquity } from "../../investments/employer-stock/compute.js";
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
 import { benefitsFor } from "../benefits/data/benefits.js";
 import { federalTax, paramsFor } from "../../../core/math/tax.js";
 import { addMonths } from "../../../core/math/dates.js";
@@ -26,7 +26,6 @@ export const DEFAULTS = { years: 4, hoursWeek: 40, ptoDays: 19, officeDays: 5 };
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const pos = (v) => Math.max(0, num(v) ?? 0);
-const latest = (T, year) => T[year] ?? T[Math.max(...Object.keys(T).map(Number).filter((y) => y <= year))] ?? T[Math.min(...Object.keys(T).map(Number))];
 
 /**
  * The employer's retirement money a year: typed as an amount, else match rate x what you put in up to the cap, where
@@ -146,7 +145,7 @@ export function compute(plan, params = {}) {
     const base = taxYear(0, { ...T, stateRate: 0 });
     return { T, base, baseTotal: base.federal + base.extraMedicare };
   });
-  const lim = latest(LIMITS, year).kinds["401k"].limit;
+  const lim = limitsFor(year).kinds["401k"].limit;
   const caps = { compLimit: benefitsFor(year).compLimit, deferralLimit: lim };
 
   const build = (o, current, factor = 1) => {

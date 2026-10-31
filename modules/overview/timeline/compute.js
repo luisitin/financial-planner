@@ -14,7 +14,7 @@ import { compute as computeSocialSecurity, fullRetirementAge } from "../../retir
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeFire } from "../../retirement/fire/compute.js";
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
 
 /** What each kind of moment is about; the chips on the page filter by `topic`. */
 export const KINDS = {
@@ -86,7 +86,7 @@ export function compute(plan, params = {}) {
   const self = adults.find((p) => p.role === "self") ?? adults[0];
   const ordered = [self, ...adults.filter((p) => p !== self)];
   const endYear = Math.max(...ordered.map((p) => yearOf(p.planEndDate)));
-  const limits = LIMITS[startYear] ?? LIMITS[Math.max(...Object.keys(LIMITS).map(Number))];
+  const limits = limitsFor(startYear);
   const accounts = plan.accounts ?? [];
   const owns = (p, a) => a.ownerId === p.id || (p === self && !adults.some((q) => q.id === a.ownerId));
   const hasType = (p, types) => accounts.some((a) => types.includes(a.type) && owns(p, a));
@@ -115,7 +115,7 @@ export function compute(plan, params = {}) {
     const working = (age) => !p.retired && age < p.retirementAge;
     if (working(50) && (contributes(p) || hasType(p, ["401k", "ira", "roth"]))) {
       const k = limits.kinds["401k"], ira = limits.kinds.ira;
-      add({ id: `catchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 50), personId: p.id, title: `${name} can save more for retirement`, detail: `From 50 the limits rise: ${fmtMoney(k.catchUp, cur)} more a year into a 401(k) and ${fmtMoney(ira.catchUp, cur)} more into an IRA (${limits === LIMITS[startYear] ? startYear : "latest"} figures).`, go: ["investments", "limits"] });
+      add({ id: `catchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 50), personId: p.id, title: `${name} can save more for retirement`, detail: `From 50 the limits rise: ${fmtMoney(k.catchUp, cur)} more a year into a 401(k) and ${fmtMoney(ira.catchUp, cur)} more into an IRA (${limits.kindYear["401k"] === startYear && limits.kindYear.ira === startYear ? startYear : "latest"} figures).`, go: ["investments", "limits"] });
     }
     if (working(60) && hasType(p, ["401k"]) && limits.kinds["401k"].superCatchUp) {
       const sc = limits.kinds["401k"].superCatchUp;

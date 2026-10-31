@@ -28,7 +28,7 @@ perHour, overYears: { gross, afterTax, commute, net }, stockYears, stockShare, i
   min(salary, $360,000), $24,500), assuming you put in at least the cap (the usual advice: never leave match money
   behind). A plan can figure the match only on pay up to the compensation limit (IRC 401(a)(17): $360,000 in 2026,
   Notice 2025-67, in `career/benefits/data/benefits.js`), and you can put in at most the deferral limit (IRC 402(g):
-  $24,500 in 2026, `retirement/contributions/data/limits.js`).
+  $24,500 in 2026, `retirement/contributions/data/limits.js`, through `limitsFor`).
 - **Pay and benefits a year** = salary + bonus + stock + match + employer health-account money + other benefits −
   the health premiums you pay.
 - **Tax** (`taxYear`), each year: the wages taxed = salary + bonus + stock (+ the sign-on in year one) − premiums (paid

@@ -51,7 +51,7 @@ function figuresFold(ctx, d) {
   const { ui, fmt, store, plan } = ctx;
   const ty = plan.taxes?.thisYear ?? {};
   const FIELDS = [
-    { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) contributions)" },
+    { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) money and the health FSA)" },
     { key: "otherOrdinary", label: "Other ordinary income", type: "money", min: 0, help: "interest, non-qualified dividends, IRA withdrawals, Roth conversions" },
     { key: "qualifiedIncome", label: "Qualified dividends", type: "money", min: 0, help: "taxed at the lower gains rates; long-term gains come from the Capital gains page" },
     { key: "taxExemptInterest", label: "Tax-exempt interest", type: "money", min: 0, help: "municipal bonds; counts toward Social Security taxation only" },

@@ -8,7 +8,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { compute as computeSelfEmployment, seTax, SE, QBI, TOTAL_ADDITIONS } from "../../taxes/self-employment/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
-import { LIMITS } from "../../retirement/contributions/data/limits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { perYear } from "../../../core/math/periods.js";
 import { daysBetween } from "../../../core/math/dates.js";
@@ -47,7 +47,7 @@ const catchFor = (age, L) => (age === null || age < (L.catchUpAge ?? 50) ? 0 : L
  * = the deferral, at most 3% of pay.
  */
 export function planRooms({ profit, seHalf, age = null, deferralLeft, year }) {
-  const L401 = forYear(LIMITS, year).kinds["401k"];
+  const L401 = limitsFor(year).kinds["401k"];
   const total415 = TOTAL_ADDITIONS[year] ?? TOTAL_ADDITIONS[Math.max(...Object.keys(TOTAL_ADDITIONS).map(Number).filter((y) => y <= year))];
   const left = deferralLeft ?? L401.limit;
   const earned = Math.max(0, profit - seHalf);
@@ -203,7 +203,7 @@ export function compute(plan, params = {}) {
   const se = computeSelfEmployment(plan, { today });
   const row = se.ready ? se.people.find((p) => p.id === (person?.id ?? se.people[0]?.id)) ?? se.people[0] : null;
   const age = person?.birthDate ? year - Number(String(person.birthDate).slice(0, 4)) : null;   // catch-ups go by the age reached by December 31
-  const L401 = forYear(LIMITS, year).kinds["401k"];
+  const L401 = limitsFor(year).kinds["401k"];
   const deferralLeft = row ? row.deferralLeft : L401.limit;
   const R = planRooms({ profit, seHalf: sole.se.half, age, deferralLeft, year });
   const { earned, simpleComp } = R;
