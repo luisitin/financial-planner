@@ -54,3 +54,16 @@ test("zero balances are skipped; empty input", () => {
   const r = payoffPlan([{ id: "z", name: "Done", balance: 0, rate: 0.1, minPayment: 50 }], { extra: 100 });
   assert.equal(r.months, 0); assert.deepEqual(r.debts, []); assert.equal(payoffPlan([]).months, 0);
 });
+test("minimum-only: 2% of the month's opening balance (Regulation Z appendix M2), never only when it cannot amortize", () => {
+  const pct = { percentOfBalance: 0.02, floor: 25 };
+  // $3,000 at 18%: month 1 pays 2% of $3,000 = $60 (not 2% of $3,045), month 2 2% of $3,030 = $60.60, ...
+  const one = minimumOnly(3000, 0.18, 0, { ...pct, maxMonths: 1 });
+  assert.equal(one.interest, 45);
+  const a = minimumOnly(3000, 0.18, 0, pct);
+  assert.deepEqual([a.months, a.interest], [268, 6327.77]);   // tools/golden_debt cc-edge-001 (RULES.md example 2)
+  // 2% of the balance at 30% (2.5% a month) never catches the interest: never, from the first month
+  assert.equal(minimumOnly(2000, 0.30, 0, pct).months, Infinity);
+  // 23.99% (1.999% a month): 2% barely beats the interest; paid off in month 1,350, not "never" at 100 years
+  const slow = minimumOnly(1260, 0.2399, 0, pct);
+  assert.deepEqual([slow.months, slow.interest], [1350, 32570.08]);   // cc-edge-009
+});

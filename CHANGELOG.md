@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Credit cards: "paying only the usual minimum" now takes 2% of what you owe at the start of each month, as card statements must (Regulation Z), so it no longer finishes sooner and cheaper than it really would; a card that pays off very slowly shows how long it takes instead of "it never ends" after 100 years. Found by a new answer key for the debt pages (Pay off debts, Credit cards, Mortgage: 3,500 cases worked from the math and the rules), which now agrees everywhere.
 - [builder:claude-b] Tax lots (and Crypto, which uses them): a lot turns long-term the day after its first anniversary, counted by the calendar as the IRS does, so a February 29 in between no longer makes it a day early; the tax rates on a gain include the 3.8% on investment income, and a true 0% rate is no longer shown as 22%.
 - [builder:claude-b] Answer key for Student loans: 2,000 loans worked from the law and the regulations (standard plan, income-based repayment, the Repayment Assistance Plan) by a script that never reads the app, and a test that compares the page with it; the five places they part ways are listed as to-do for the page's owner.
 - [builder:claude-b] Change log: asks your PC for the plan only when it has copies, so a fresh install no longer gets a "not found" answer (found by the phone smoke pass).

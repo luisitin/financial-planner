@@ -56,14 +56,20 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
     timeline, neverPaysOff: done ? [] : list.filter((d) => bal[d.id] > 0.005).map((d) => d.id),
   };
 }
-/** Months and interest when only the required payment is ever made on one debt (the "minimum payment trap"). */
-export function minimumOnly(balance, rate, minPayment, { floor = 25, percentOfBalance = null, maxMonths = 1200 } = {}) {
+/**
+ * Months and interest when only the required payment is ever made on one debt (the "minimum payment trap"). A
+ * percentage minimum is worked from the month's opening (statement) balance, before that month's interest, and again
+ * every month (Regulation Z, 12 CFR 1026 Appendix M1 (b)(1) and (b)(3), and the loop in Appendix M2). A payment at or
+ * below the month's interest never pays the debt off (1026.7(b)(12)(ii)); `maxMonths` only stops a runaway loop.
+ */
+export function minimumOnly(balance, rate, minPayment, { floor = 25, percentOfBalance = null, maxMonths = 6000 } = {}) {
   let b = Number(balance) || 0, months = 0, interest = 0;
   while (b > 0.005 && months < maxMonths) {
     months++;
-    const i = b * (Number(rate) || 0) / 12; b += i; interest += i;
-    const pay = Math.min(b, percentOfBalance ? Math.max(floor, b * percentOfBalance) : Math.max(0, Number(minPayment) || 0));
-    if (pay <= i && percentOfBalance === null && pay < b) return { months: Infinity, interest: Infinity };
+    const open = b;
+    const i = open * (Number(rate) || 0) / 12; b += i; interest += i;
+    const pay = Math.min(b, percentOfBalance ? Math.max(floor, open * percentOfBalance) : Math.max(0, Number(minPayment) || 0));
+    if (pay <= i && pay < b) return { months: Infinity, interest: Infinity };
     b -= pay;
   }
   return { months: b > 0.005 ? Infinity : months, interest: Math.round(interest * 100) / 100 };

@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 04:14 | backlog 2: answer key for the debt pages built before the lanes (debt/payoff avalanche and snowball, debt/credit-cards minimum payments and balance transfers, debt/mortgage extra payments, every two weeks, recast and mortgage insurance; `core/math/payoff.js` and `finance.js`), from the math and the rules (Regulation Z, the Homeowners Protection Act), never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
@@ -438,3 +437,15 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   crypto review: `investments/tax-lots` `lotsOf` now counts long-term by the calendar (IRS Pub 550 (2025): count from the day after
   the buy; the sale day counts), so a lot bought 2027-03-15 is long-term from 2028-03-16 (crypto's "wait until" line follows),
   and its rates include the 3.8% on investment income with a true 0% kept at 0 (crypto has its own copies of both bugs).
+- 2026-10-31 05:53 UTC claude-b -> all: backlog 2 done (claim released): `tests/golden-debt.test.mjs` checks debt/payoff, debt/credit-cards and
+  debt/mortgage (through their own `compute`) against 3,500 cases from `tools/golden_debt`, written from Regulation Z (1026.7(b)(12),
+  appendices M1 and M2), the Homeowners Protection Act (12 U.S.C. 4901-4902), Fannie Mae's Servicing Guide and the CFPB without
+  reading the app, two exact methods on two rounding tracks. Avalanche, snowball, plus 100, the baseline and every mortgage figure
+  agreed to the cent from the start. Two causes were in the shared `core/math/payoff.js` `minimumOnly`, now fixed with tests: the 2%
+  minimum was taken after adding the month's interest (Appendix M2 takes it from the opening balance), so it ended up to 285 months
+  sooner and a card at 24.18% paid off where the rule says never; and a card past 1,200 months read "never" though it amortizes (the
+  cap is now 6,000; "never" means a payment at or below the month's interest). The key now agrees on every row, no to-do. Open points
+  for whoever looks after the debt pages (not changed): Mortgage's "removable at 80% of the home's value" is the original value in
+  the law (4901(2)), with automatic removal at 78% on the original schedule; Fannie Mae's current-value route needs 75% within 2 to 5
+  years; Credit cards' transfer fee has no fixed minimum, which real fees often have; and the payoff page breaks ties by name (no
+  source decides; the key accepts either).
