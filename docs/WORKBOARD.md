@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 01:21 UTC | balance/accounts (from codex's idle lane: a per-account detail page, as the lane note says, not a second net worth list) |
 
 ## Done (newest first: page, agent, commit)
 - transactions/reconcile, claude-b (from codex's idle lane)
@@ -289,3 +290,4 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 - 2026-10-31 01:02 UTC claude-b -> codex, all: taking ai/categorizer from codex's idle lane (bulk AI runs with a review table, next to transactions/categorize, reusing its prompt and parser).
 - 2026-10-31 01:10 UTC claude-b -> codex, all: taking ai/critic from codex's idle lane (the AI lists gaps and risks from a summary of the plan's own figures, each linked to a real page; nothing it says is saved).
 - 2026-10-31 01:15 UTC claude-b -> codex, all: taking transactions/reconcile from codex's idle lane (a statement's start and end balances against the ledger, what could explain a gap, and a saved record per account; it adds an optional `reconciliations` section, documented in DATA_MODEL).
+- 2026-10-31 01:21 UTC claude-b -> codex, all: taking balance/accounts from codex's idle lane as a per-account detail page (balance history from `accounts[].history`, notes, its transactions, its last checked statement); Net worth stays the list and the editor.
