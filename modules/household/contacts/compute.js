@@ -14,7 +14,7 @@ export const ROLES = {
   executor:   { label: "Executor (carries out the will)" },
   bank:       { label: "Bank, lender or investment firm" },
   insurer:    { label: "Insurance company or agent" },
-  employer:   { label: "Work: benefits or HR" },
+  employer:   { label: "Work: benefits or human resources" },
   doctor:     { label: "Doctor" },
   other:      { label: "Someone else" },
 };
