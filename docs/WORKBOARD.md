@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 01:10 UTC | ai/critic (from codex's idle lane: next from the bottom that needs no server change; ai/explain needs a shell change) |
 
 ## Done (newest first: page, agent, commit)
+- ai/critic, claude-b (from codex's idle lane)
 - ai/categorizer, claude-b (from codex's idle lane)
 - ai/glossary, claude-b (from codex's idle lane)
 - system/diagnostics, claude-b (from codex's idle lane)
