@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  compute, aliases, accountAliases, hideTerms, hide, restore, anonymise, plainWords, partLine, papersLine, factSheet,
-  allowedPages, buildPrompt, findList, readAnswer, cut, MAX_POINTS, MAX_TITLE, LEVELS, SOMEONE, ALWAYS_PAGES,
+  compute, aliases, accountAliases, outsiders, hideTerms, hide, restore, anonymise, plainWords, partLine, papersLine, factSheet,
+  allowedPages, buildPrompt, findList, readAnswer, cut, MAX_POINTS, MAX_TITLE, LEVELS, SOMEONE, OUTSIDER, ALWAYS_PAGES,
 } from "./compute.js";
 import { compute as computeHealth } from "../../overview/health-score/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -49,11 +49,67 @@ test("hiding typed text: whole words in any alphabet and letter case, first name
   assert.equal(hide("Jo$&e's car", hideTerms([{ name: "Jo$&e", alias: "Adult 1" }])), "Adult 1's car");
 });
 
+test("accounts' stand-ins, numbered: never an everyday phrase, even for the only one of a kind (the fact sheet's copy uses these)", () => {
+  const p = familyPlan(TODAY);
+  const by = Object.fromEntries(accountAliases(p, { numbered: true }).map((a) => [a.name, a.alias]));
+  assert.deepEqual([by["Visa card"], by["Car loan"], by.House, by["Ana's 401(k)"], by["Bo's old 401(k)"]], ["credit card 1", "loan 1", "property 1", "401(k) 1", "401(k) 2"]);
+  assert.equal(accountAliases(p)[0].alias, "the checking account", "without the option: as before (ai/notes uses these)");
+  const { names } = anonymise(p, { today: TODAY });
+  assert.equal(restore("The loan on your house is the biggest debt; the property tax is not on this page.", names), "The loan on your house is the biggest debt; the property tax is not on this page.",
+    "the AI's own words are not taken for an account");
+  assert.equal(restore("Loan 1 costs less than credit card 1.", names), "Loan 1 (Car loan) costs less than credit card 1 (Visa card).");
+});
+
+test("hiding typed text: with or without accents, a digit or '_' next to a name, any spaces inside it, curly apostrophes, every part of a name", () => {
+  const t = hideTerms([{ name: "José", alias: "Adult 1" }, { name: "Zoë", alias: "Child 1" }, { name: "Bo", alias: "Adult 2" }]);
+  assert.equal(hide("Can Jose afford his truck? JOSE'S TRUCK; ZOE CAR FUND; Zoé", t), "Can Adult 1 afford his truck? Adult 1'S TRUCK; Child 1 CAR FUND; Child 1", "bank text is plain capitals");
+  assert.equal(hide("Bo2 car; Bo_Ana_joint.csv; 2Bo; Bo-car; Bob; Bolt", t), "Adult 2 2 car; Adult 2_Ana_joint.csv; 2 Adult 2; Adult 2-car; Bob; Bolt", "a digit or '_' does not make a name part of a word; a letter does");
+  assert.equal(hide("Café José; naïve", t), "Café Adult 1; naïve", "the rest of the text keeps its accents");
+  const family = [{ name: "Ana  María López", alias: "Adult 1" }, { name: "Mary-Kate", alias: "Adult 2" }, { name: "D'Arcy de la Cruz", alias: "Child 1" }, { name: "Cy López Jr.", alias: "Child 2" }];
+  const u = hideTerms(family, [], { surnames: true });
+  assert.equal(hide("Ana María's fund; ANA MARIA LOPEZ; Mary's laptop; Kate's bike; D’Arcy’s college; Cruz; de la; Jr.", u), "Adult 1's fund; Adult 1; Adult 2's laptop; Adult 2's bike; Child 1’s college; Child 1; de la; Jr.",
+    "a double space in the stored name, hyphenated first names, the iPhone's apostrophe, surnames; particles and suffixes stay");
+  assert.equal(hide("López family reunion; Salary (Lopez, A.)", u), `${SOMEONE} family reunion; Salary (${SOMEONE}, A.)`, "a surname two people share names neither");
+  assert.equal(hide("López family reunion", hideTerms([{ name: "Ana López", alias: "Adult 1" }], [], { surnames: true })), "Adult 1 family reunion");
+  assert.equal(hide("Mary-Kate's bike; Garcia-Lopez fund; Lopez car", hideTerms([{ name: "Mary-Kate Garcia-Lopez", alias: "Adult 1" }], [], { surnames: true })), "Adult 1's bike; Adult 1 fund; Adult 1 car", "a hyphenated word is one stand-in, and each of its parts too");
+  // without `surnames` (ai/notes reads payees out of a note): first names only, so a shop that shares a surname stays a shop
+  const firsts = hideTerms(family);
+  assert.equal(hide("Ana María's fund; Mary's laptop; Kate's bike; D’Arcy’s college; Cruz; López family reunion", firsts), "Adult 1 María's fund; Adult 2's laptop; Adult 2's bike; Child 1’s college; Cruz; López family reunion");
+  assert.equal(hide("Paid Price Chopper 42.17 yesterday with the Visa. Ana paid.", hideTerms([{ name: "Ana Price", alias: "Adult 1" }])), "Paid Price Chopper 42.17 yesterday with the Visa. Adult 1 paid.");
+  const p = familyPlan(TODAY); person(p, "p-ana").name = "Ana Price"; p.goals[0].name = "Price family reunion";
+  assert.ok(factSheet(p, { today: TODAY }).lines.join("\n").includes("Adult 1 family reunion"), "the fact sheet's copy hides surnames in goal names");
+});
+
+test("people outside the household: listed from the plan, hidden by their whole name before a household first name", () => {
+  const p = familyPlan(TODAY);
+  p.estate = {
+    gifts: [{ id: "g1", to: "Tomas Quintero", from: "both", amount: 5000, year: 2026, kind: "cash" }],
+    legacy: { bequests: [{ id: "b1", to: "Fernwood Rescue", kind: "charity", amount: 100 }] },
+    beneficiaries: [{ key: "account:a-401", accountId: "a-401", primary: [{ name: "Bo", personId: "p-bo", share: 1 }], contingent: [{ name: "Ana Quintero", personId: "", share: 1 }] }, { key: "account:a-roth", primary: "Raul Quintero" }],
+    inheritance: { items: [{ id: "h1", from: "Grandma Ines", amount: 1000, year: 2030, kind: "cash" }] },
+    digital: [{ id: "d1", kind: "email", name: "x", contact: " Raul  Quintero " }],
+  };
+  p.contacts = [{ id: "c1", role: "attorney", name: "Kevin Park" }];
+  assert.deepEqual(outsiders(p), [{ name: "Tomas Quintero", role: "person" }, { name: "Fernwood Rescue", role: "charity" }, { name: "Ana Quintero", role: "person" }, { name: "Raul Quintero", role: "person" },
+    { name: "Grandma Ines", role: "giver" }, { name: "Raul Quintero", role: "contact" }, { name: "Kevin Park", role: "contact" }], "a beneficiary in the household is not an outsider");
+  const t = hideTerms(aliases(p, { today: TODAY }), [], { outsiders: ["Ana Quintero", { name: "Tomas Quintero", alias: "Person 1" }, "Ana"] });
+  assert.equal(hide("Zelle to Ana Quintero; Ana's car; tomas quintero's gift", t), `Zelle to ${OUTSIDER}; Adult 1's car; Person 1's gift`, "the aunt is not the household's Ana; a household name wins");
+  p.goals[0].name = "Help Ana Quintero move";
+  const all = factSheet(p, { today: TODAY }).lines.join("\n");
+  assert.ok(all.includes(`Help ${OUTSIDER} move`), "the copy hides them in typed text");
+  assert.ok(anonymise(p, { today: TODAY }).terms.some((x) => x.term === "Ana Quintero"), "anonymise hands back its words, for more typed text");
+});
+
 test("putting names back: any letter case, $ in a name taken as it is, accounts keep their stand-in and get their name after it", () => {
   const names = [{ name: "Jo$&e", alias: "Adult 1", kind: "person" }, { name: "Ke$'ha", alias: "Adult 2", kind: "person" }, { name: "", alias: "Child 1", kind: "person" },
     { name: "Visa card", alias: "the credit card", kind: "account" }, { name: "Ana's 401(k)", alias: "the 401(k)", kind: "account" }, { name: "Mortgage", alias: "the mortgage", kind: "account" }];
   assert.equal(restore("Adult 1 should act; adult 1's car; Adult 2 too; Adult 12 is not a person; Child 1 has no name", names), "Jo$&e should act; Jo$&e's car; Ke$'ha too; Adult 12 is not a person; Child 1 has no name");
   assert.equal(restore("The credit card first, then the 401(k) and the mortgage.", names), "The credit card (Visa card) first, then the 401(k) (Ana's 401(k)) and the mortgage.");
+  // a stand-in that ends in letters is put back only with its letters in capitals: the AI's own "room a bit" or "tag a payment" stays
+  const lettered = [{ name: "Zelda's room", alias: "room A", kind: "other" }, { name: "Den", alias: "room ZB", kind: "other" }, { name: "Zelle to Zelda Quorn", alias: "Payee 1", kind: "other" }, { name: "Ana's IRA", alias: "the traditional IRA", kind: "account" }];
+  assert.equal(restore("There is still room a bit lower. Room A and ROOM ZB are insured; room Zb is not a room.", lettered), "There is still room a bit lower. Zelda's room and Den are insured; room Zb is not a room.");
+  assert.equal(restore("Your biggest payee 1 was rent; payee 12 is not one.", lettered), "Your biggest Zelle to Zelda Quorn was rent; payee 12 is not one.");
+  assert.equal(restore("The traditional ira and the traditional IRA.", lettered), "The traditional ira (Ana's IRA) and the traditional IRA (Ana's IRA).", "an account's stand-in in any letter case");
 });
 
 test("the fact sheet: stand-ins and birthday-aware ages, the health score's parts, the next steps, the legal papers", () => {
@@ -63,7 +119,7 @@ test("the fact sheet: stand-ins and birthday-aware ages, the health score's part
   assert.equal(s.lines[0], "Household: Adult 1 (age 36), Adult 2 (age 37), Child 1 (age 6); files taxes as married filing jointly; lives in TX.", "Bo turns 38 on 2 November");
   const all = s.lines.join("\n");
   assert.match(all, /Plan health score: \d+ of 100/);
-  for (const t of ["Cash cushion (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (the credit card).", "Emergency fund, Replace Adult 2's car, Child 1's college, Japan trip need more each month",
+  for (const t of ["Cash cushion (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (credit card 1).", "Emergency fund, Replace Adult 2's car, Child 1's college, Japan trip need more each month",
     "Will and other legal papers: 0 of 11 done. Missing for each adult: Will, Financial power of attorney, Health care power of attorney, Living will and Medical records release (HIPAA). Missing for the household: Guardian for the children.",
     "Warning about the legal papers: No guardian is named for Child 1. If both parents died, a court would choose who raises Child 1."]) assert.ok(all.includes(t), `has "${t}"`);
   assert.ok(!/\(fine\)[^\n]*To fix:/.test(all), "a part that is fine is not followed by 'To fix'");
@@ -135,9 +191,9 @@ test("full names, lower-case names and accounts named in goals are hidden there;
   p.goals.find((g) => g.id === "g-trip").name = "Pay off Chase Sapphire Preferred";
   const s = sheet(p), all = s.lines.join("\n");
   for (const n of ["Ana", "Bo", "Cyrus", "Lopez", "Chase", "Sapphire"]) assert.ok(!word(n).test(all), `"${n}" is not sent`);
-  assert.ok(all.includes("replace Adult 2's car, Child 1'S COLLEGE, Pay off the credit card need more each month"));
-  assert.deepEqual(readAnswer('[{"title":"Help adult 2 replace the car","why":"The credit card costs the most."}]', [], s.names),
-    [{ title: "Help Bo Lopez replace the car", why: "The credit card (Chase Sapphire Preferred) costs the most.", page: null, level: "medium" }]);
+  assert.ok(all.includes("replace Adult 2's car, Child 1'S COLLEGE, Pay off credit card 1 need more each month"));
+  assert.deepEqual(readAnswer('[{"title":"Help adult 2 replace the car","why":"Credit card 1 costs the most."}]', [], s.names),
+    [{ title: "Help Bo Lopez replace the car", why: "Credit card 1 (Chase Sapphire Preferred) costs the most.", page: null, level: "medium" }]);
 });
 
 test("people with the same name, no name, or an empty entry", () => {

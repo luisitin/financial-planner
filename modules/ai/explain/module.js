@@ -5,7 +5,7 @@ import { render } from "./view.js";
 export default {
   id: "explain",
   group: "ai",
-  title: "Explain this page",
+  title: "Explain a page",
   icon: "🤖",
   order: 20,
   version: 1,

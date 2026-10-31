@@ -13,12 +13,15 @@ it is never saved.
 ## Outputs
 `compute(plan)` -> `{ ready (an adult in the household), people, adults }`. The fact sheet is built only when the fold
 opens or the person asks, because it runs the health score (about a tenth of a second on the family plan).
-Also exported: `aliases(plan, { today })`, `accountAliases(plan)`, `hideTerms(people, accounts, { keep })`,
-`hide(text, terms)`, `restore(text, names)`, `anonymise(plan, { today })` -> `{ plan, names }`, `plainWords(text)`,
+Also exported: `aliases(plan, { today })`, `accountAliases(plan, { numbered })`, `outsiders(plan)` ->
+`[{ name, role }]`, `hideTerms(people, accounts, { keep, outsiders, surnames })`, `hide(text, terms)`, `restore(text, names)`,
+`anonymise(plan, { today, outsiders })` -> `{ plan, names, terms }`, `plainWords(text)`,
 `partLine(part)`, `papersLine(docs, adultCount)`, `factSheet(plan, { today })` -> `{ lines, names, related, ready }`,
 `allowedPages(pages, related)`, `buildPrompt(lines, pages)` -> `{ system, user }`, `findList(text)`,
 `readAnswer(text, pages, names)` -> `[{ title, why, page, level }]` or `null`, `cut(text, max)`, `MAX_POINTS`,
-`MAX_TITLE`, `MAX_WHY`, `LEVELS`, `KIND_NOUNS`, `ALWAYS_PAGES`, `SOMEONE`.
+`MAX_TITLE`, `MAX_WHY`, `LEVELS`, `KIND_NOUNS`, `ALWAYS_PAGES`, `SOMEONE`, `OUTSIDER`. `ai/explain` and `ai/notes`
+use the hiding helpers too; `accountAliases` without `numbered` keeps the older "the credit card", and `hideTerms`
+without `surnames` hides first names only, both for `ai/notes`.
 
 ## Formulas
 No money math: every figure the AI reads was worked out by another page.
@@ -26,24 +29,45 @@ No money math: every figure the AI reads was worked out by another page.
   - each person is their stand-in, by household order, named or not (`aliases`): adults "Adult 1", "Adult 2"...;
     a dependent "Child 1"... when under 18 or with no birth date (`core/math/dates.js` `ageOn`, the rule
     `estate/documents` uses for minors), else "Dependent 1"...; empty entries are skipped;
-  - each account is its kind in plain words (`accountAliases`, `KIND_NOUNS`: "the credit card", "the Roth account",
-    "the health savings account"; other kinds use their label with a small first letter), numbered in plan order when
-    several share a kind ("401(k) 1", "401(k) 2") so the AI can tell them apart;
-  - goal, income and expense names, the only typed text the pages write into their sentences, go through `hide()`.
+  - each account is its kind in plain words and a number in plan order (`accountAliases` with `numbered`,
+    `KIND_NOUNS`: "credit card 1", "Roth account 1", "401(k) 1", "401(k) 2"; other kinds use their label with a small
+    first letter), numbered even when it is the only one of its kind, so a stand-in is never an everyday phrase: with
+    "the loan" as a stand-in, the AI's own "the loan on your house" came back as "the loan (Car loan) on your house";
+  - goal, income and expense names, the only typed text the pages write into their sentences, go through `hide()`
+    (`hideTerms` with `surnames`: "Price family reunion" for Ana Price is "Adult 1 family reunion"),
+    with the names of people outside the household the plan knows of too (`outsiders`: the people gifts go to,
+    bequests, beneficiaries not in the household, the people an inheritance comes from, digital-legacy contacts,
+    contacts), each as "someone outside the household" (`OUTSIDER`) unless the caller gives each its own stand-in.
   The pages then write the stand-ins themselves, so the app's own words ("Will", "Cash cushion", "Retirement on
   track", "A starter emergency fund") are never searched and replaced, and no figure changes (a test checks the
   score and every part's points). A probe that marks every name, label, note and title in the plan finds only goal
   names in the sheet.
-- **Hiding typed text** (`hideTerms`, `hide`): people's whole names, then their first names (2 or more letters, when
-  the first name is not someone's whole name), longest first; then account names (2 or more letters; not one that is
-  a person's name, says nothing more than its kind such as "Mortgage", or is also a goal's name such as "Emergency
-  fund", so that goal keeps its meaning). Whole words in any alphabet (`(?<![\p{L}\p{N}_])...(?![\p{L}\p{N}_])`
-  with the `u` flag, so "Jo" is not found in "Joël"), any letter case, text normalised to NFC. A name or first name
-  two people share becomes "someone in the household". People's names are swapped before account names, so an
-  account named "Cy" cannot turn "Cy's college" into an account.
-- **Putting names back** (`restore`): in the AI's answer, any letter case, the same whole-word guards, one pass, the
-  name inserted as it is (a "$" in a name stays a "$"): "Adult 1" becomes the person's name; an account's stand-in
-  keeps its words and gets the account's name after it ("the credit card (Visa card)"). Unnamed people, and
+- **Hiding typed text** (`hideTerms`, `hide`): first people's whole names and the outsiders' whole names, longest
+  first, so "Zelle to Ana Quintero" (an aunt) becomes "Zelle to someone outside the household" and never "Adult 1
+  Quintero"; a household name wins over an outsider's. Then each person's first name: its first word, and the parts
+  of a hyphenated one ("Mary" and "Kate" of "Mary-Kate"). With `surnames` (the fact sheet's copy, and `ai/explain`'s
+  copy and question) every other part too: middle names, surnames, a hyphenated word whole and each of its parts
+  (2 or more letters; not a particle or suffix such as de, da, del, van, von, der, la, le, Jr.; not someone's whole
+  name), longest first. Without it (`ai/notes`, which reads payees out of a spoken note) a shop that shares a
+  surname stays a shop: "Paid Price Chopper" for Ana Price is sent as said, never "Paid Adult 1 Chopper". A name or
+  a part two people share (a family name) becomes "someone in the household". Then account names (2 or more letters;
+  not one that is a person's name, says nothing more than its kind such as "Mortgage", or is also a goal's name such
+  as "Emergency fund", so that goal keeps its meaning). People's names are swapped before account names, so an
+  account named "Cy" cannot turn "Cy's college" into an account. Surnames are hunted for in typed text only: Price,
+  King or Young are everyday words in the app's own sentences, which never go through `hide()`.
+  How a term is found: on the text with its accents dropped (NFD, marks removed, both sides), so "Jose" and "JOSE"
+  are José and "ZOE" is Zoë (bank text is mostly plain capitals), while the rest of the text keeps its accents; whole
+  words in any alphabet with the `u` flag (`(?<!\p{L})...(?!\p{L})`: "Jo" is not found in "Joël", but "Bo2" and
+  "Bo_car" are Bo, a stand-in next to a digit getting a space, "Adult 2 2 car"); any run of spaces (non-breaking ones
+  too) between a name's words, so a name stored as "Ana  María" is still found; any of ' ’ ‘ ʼ for an apostrophe
+  (the iPhone types ’); any letter case; text normalised to NFC. Two parts of one person's name in a row ("Ana
+  María's") give one stand-in, "Adult 1's".
+- **Putting names back** (`restore`): in the AI's answer, any letter case, whole words with a digit or "_" counted as
+  part of a word (so "Adult 1" is not found in "Adult 12"), one pass, the name inserted as it is (a "$" in a name
+  stays a "$"): "Adult 1" becomes the person's name; an account's stand-in keeps its words and gets the account's
+  name after it ("credit card 1 (Visa card)"); any other stand-in (`ai/explain`'s "Payee 1", "home 1") becomes the
+  name, and one that ends in capital letters (`ai/explain`'s rooms, "room A") only with those letters in capitals as
+  written: "room a bit lower" or "tag a payment" in the AI's own words is never taken for a stand-in. Unnamed people, and
   accounts whose name says nothing more than the stand-in, stay as they are. The fold shows the key on screen only
   ("On this page Adult 1 is ...").
 - **The fact sheet** (`factSheet`), one line each:
@@ -70,7 +94,7 @@ No money math: every figure the AI reads was worked out by another page.
   built), turned on, not this one, and only the `related` ones (about ten, key, title and purpose; the whole list of
   140 pages was most of a 24,000-character prompt). It asks for a JSON list of at most 8 points
   `{ title, why, page, level: high | medium | low }`, most important first, using only the facts and the stand-ins'
-  words, no invented numbers and no named products. Sent with `options: { num_ctx: 8192 }`, which both routes pass to
+  words exactly as written, number included ("credit card 1"), no invented numbers and no named products. Sent with `options: { num_ctx: 8192 }`, which both routes pass to
   Ollama (the server's `/api/ai/chat` and the direct call), so a small default context window does not cut off the
   instructions and the facts.
 - **Finding the list** (`findList`): a reasoning model's `<think>...</think>` (or everything up to a lone
@@ -88,6 +112,9 @@ No money math: every figure the AI reads was worked out by another page.
   is a small line under the list; when the plan changed after asking, the page says so.
 
 ## Behaviour (view)
+- The fold "What the AI will read" still says accounts are called by their kind ("the credit card"); the fact sheet
+  numbers them ("credit card 1", see above), so that sentence should read "by their kind and a number (“credit card
+  1”)", as on Explain a page. `view.js` is not part of this change (asked of its owner).
 - One question at a time: the button is disabled from the first tap ("Checking the AI helper…", then "Reading your
   plan… this can take a minute"). A re-render while asking shows the disabled button and redraws when the answer
   comes. A render that is no longer on screen never redraws (`shown` counts renders and leaves; the shell's
@@ -108,15 +135,22 @@ No money math: every figure the AI reads was worked out by another page.
 - A provider other than the PC (Settings): the same fact sheet goes there; the fold's note says so.
 
 ## Not hidden (known)
-- Goal names other than the people's and accounts' names in them (a place, a company, someone outside the
-  household); the fold says goal names go as typed. Nicknames ("Cy" for "Cyrus") and surnames when the household
-  holds full names are not hunted for in goal names either.
+- Goal names other than the names the plan knows in them (a place, a company, someone outside the household whom
+  the plan does not list, or only their first name); the fold says goal names go as typed. Nicknames ("Cy" for
+  "Cyrus") are not hunted for either.
 
 ## Tests
-`module.test.mjs` (20): stand-ins for people (order, unnamed, Child or Dependent, empty entries) and accounts
-(kinds, numbering); hiding typed text (Joël, Zoë's, Anaïs, a separate accent mark, lower case, full and first names,
-a one-letter name, shared names, an account named like a person, its kind or a goal, "$" in a name); putting names
-back ("adult 1", "$&" and "$'" in names, "Adult 12", accounts with brackets); the family's fact sheet (exact household
+`module.test.mjs` (23): stand-ins for people (order, unnamed, Child or Dependent, empty entries) and accounts
+(kinds, numbering, always numbered in the copy, "the loan on your house" left alone); hiding typed text (Joël, Zoë's,
+Anaïs, a separate accent mark, lower case, full and first names, a one-letter name, shared names, an account named
+like a person, its kind or a goal, "$" in a name; Jose and JOSE for José, ZOE for Zoë, Bo2 and Bo_car, a double
+space, Mary-Kate, the curly apostrophe, middle names and surnames with `surnames`, a hyphenated surname, particles and
+"Jr." left, a shared surname; without `surnames` first names only, "Price Chopper" left as said; the fact sheet's
+copy hiding a surname in a goal name);
+people outside the household (the list, an aunt sharing a first name, a household name winning, goal names in the
+copy, the terms handed back); putting names
+back ("adult 1", "$&" and "$'" in names, "Adult 12", accounts with brackets, "room A" but not "room a bit", "payee 1"
+but not "payee 12", an account ending in IRA in any case); the family's fact sheet (exact household
 line with Bo still 37, health parts, "Could still improve", legal papers per person, the warning); no person or
 account name (escaped, whole-word) and no id of any record; the marker probe (only goal names go as typed); the same
 score on the copy; Will, A, accounts named Cy, Retirement, Cash and Debt; full names and goals naming people and an
