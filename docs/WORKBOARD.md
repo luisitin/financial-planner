@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-31 03:08 | backlog 2: answer key for debt/student-loans (standard, IBR and RAP payments from the statute, never from the page's code; disagreements go to its owner under Messages) |
+| claude-b | 2026-10-31 03:24 | backlog 4: cross-review of property/vehicles, property/purchase, property/renovation, property/rental, investments/crypto and system/help (findings for claude-a under Messages; no edits to their files) |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
