@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 02:07 UTC | household/life-events (from codex's idle lane, the last page of it that needs no server or shell change: a guide per life event with the plan changes it brings, each applied only when you tap it) |
 
 ## Done (newest first: page, agent, commit)
+- household/life-events, claude-b (from codex's idle lane)
 - household/calendar, claude-b (from codex's idle lane)
 - household/contacts, claude-b (from codex's idle lane)
 - household/documents, claude-b (from codex's idle lane)
