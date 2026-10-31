@@ -34,13 +34,19 @@
   "For debt secured after December 15, 2017, the limit is $750,000 ($375,000 if married filing separately)"). The share of
   the interest that counts (`deductibleShare`) = 1 up to the limit, else limit ÷ home debt, by the balances at the start
   (Pub. 936's worksheet uses each year's average balances; an older mortgage under the $1 million limit is not told apart).
-  Line: saved = interest × the share of (mortgage + cost) × top rate. Refinance: the closing costs rolled in were not used
+  Line: saved = (interest × the share of (mortgage + cost) − the mortgage's interest while the line runs × what its own
+  share falls by) × top rate: Pub. 936 Table 1 puts the limit's share on all the home's interest (lines 12-15, "Divide the
+  amount on line 11 by the amount on line 12 ... Multiply the amount on line 13 by the decimal amount on line 14"), so a
+  line that takes the home debt past the limit also costs the mortgage part of its deduction (until 2026-10-31, only the
+  line's interest was limited). Refinance: the closing costs rolled in were not used
   to buy, build or improve, so their interest never counts (Pub. 936: "Any additional debt not used to buy, build, or
   substantially improve a qualified home isn't home acquisition debt"): saved = (the new loan's interest × min(mortgage +
   cost, limit) ÷ new loan − the old mortgage's interest × its share) × top rate, negative when the refinance gives up
   deduction. Only if the federal estimate itemizes. Until 2026-10-31 there was no limit, the closing costs' interest
   counted and a lost deduction showed as 0.
 - Cushion: usable cash − cost, in months of essential spending.
+- Blank inputs take `DEFAULTS`: the line 8% over 10 years, the refinance 6.5% over 30 years with 3% costs, the personal
+  loan 12% over 5 years, the line's 85% combined limit, the refinance's 80%.
 
 ## Edge cases
 - No home: no line or refinance offered. No mortgage with a payment: no refinance. Not enough equity or cash: shown, not ranked.

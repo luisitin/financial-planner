@@ -88,8 +88,13 @@ export function compute(plan, params = {}) {
   const cushion = { now: liq.now ?? 0, after: (liq.now ?? 0) - cost, months: liq.runwayMonths ?? null, monthsAfter: monthlyNeed > 0 ? ((liq.now ?? 0) - cost) / monthlyNeed : null, target: liq.target ?? null };
   ways.push({ id: "cash", label: "Pay cash from savings", monthly: 0, interest: 0, fees: 0, deductible: false, taxSaved: 0, today: 0, note: "no interest and nothing owed", risk: cushion.after < 0 ? "There is not this much cash." : cushion.target && cushion.after < cushion.target ? "It leaves less usable cash than your emergency target." : null, fits: cushion.after >= 0 });
   if (home) {
-    const h = loanCost(cost, x.helocRate, x.helocYears, discount), lineShare = deductibleShare((mortgage?.owed ?? 0) + cost, limit);
-    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, deductibleShare: lineShare, taxSaved: ded(h.interest * lineShare), today: h.pv - cost - ded(h.pvInterest * lineShare), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually floats`, risk: "The home secures it.", fits: home.borrowable >= cost });
+    const h = loanCost(cost, x.helocRate, x.helocYears, discount), owed = mortgage?.owed ?? 0, lineShare = deductibleShare(owed + cost, limit);
+    // the limit's share applies to all of the home's interest (Pub. 936 Table 1, lines 12-15), so a line that takes the home
+    // debt past it also costs the mortgage part of its own deduction while the line runs
+    let lineInterest = h.interest * lineShare, linePv = h.pvInterest * lineShare;
+    const lost = owed > 0 ? deductibleShare(owed, limit) - lineShare : 0;
+    if (lost > 1e-12) { const mi = schedule(owed, mortgage.rate ?? 0, mortgage.payment, discount, x.helocYears * 12); lineInterest -= mi.interest * lost; linePv -= mi.pvInterest * lost; }
+    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, deductibleShare: lineShare, taxSaved: ded(lineInterest), today: h.pv - cost - ded(linePv), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually floats`, risk: "The home secures it.", fits: home.borrowable >= cost });
     if (mortgage && mortgage.payment > 0) {
       // a cash-out refinance: the old mortgage and the project in one new loan; compare against keeping the old mortgage and paying cash
       const fees = (mortgage.owed + cost) * x.refiCosts, principal = mortgage.owed + cost + fees;

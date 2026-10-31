@@ -104,5 +104,8 @@ test("deductible interest by the law: the first $750,000 of home debt, never the
   big.accounts.find((a) => a.id === "a-mort").balance = 740000; big.accounts.find((a) => a.id === "a-home").balance = 1200000;
   big.debts.find((x) => x.id === "d-mort").minPayment = 5000;
   const bh = compute(big, { today: TODAY }).ways.find((w) => w.id === "heloc");
-  near(bh.deductibleShare, 750000 / 770000, 1e-12); near(bh.taxSaved, bh.interest * 750000 / 770000 * compute(big, { today: TODAY }).marginal);
+  // Pub. 936 Table 1 puts that share on all the home's interest: while the line runs, the mortgage loses 20/770 of its own
+  const bd = compute(big, { today: TODAY }), cap = 750000 / 770000, mi = schedule(740000, 0.0625, 5000, bd.discount, DEFAULTS.helocYears * 12);
+  near(bh.deductibleShare, cap, 1e-12);
+  near(bh.taxSaved, (bh.interest * cap - mi.interest * (1 - cap)) * bd.marginal);
 });

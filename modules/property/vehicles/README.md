@@ -27,7 +27,13 @@
   is paid; a negative one is paid off, as for buy) + due at signing for each lease started in the period + payments every
   month + miles over the allowance × the charge + running costs at today's prices (upkeep halved: under warranty); back = 0.
   Until 2026-10-31 a positive trade-in was not credited, which made leasing look dearer by the car's whole equity.
-- Cost = paid − back; monthly = cost ÷ months. The cheapest is marked. No discounting: the periods are the same length.
+- Buy, a trade-in (with any cash down) worth more than the new car's price with tax: nothing is borrowed and the rest
+  comes back as cash (`cashBack`, taken off what is paid), as the lease credits the whole equity (until 2026-10-31 the part
+  past the price was dropped).
+- Cost = paid − back; monthly = cost ÷ months. The cheapest is marked: keep, buy, lease in that order, a later one winning
+  only when cheaper by more than $1. No discounting: the periods are the same length.
+- Blank inputs take `DEFAULTS` (a new car: $35,000, 6% tax, 32 mpg, 7% over 60 months, $500 upkeep; a lease: $450 a month,
+  $3,000 at signing, 36 months, 12,000 miles, $0.25 a mile over; upkeep rising 10%).
 
 ## Edge cases
 - No vehicle account or entry: a hero and the add form. A car worth less than its loan: said, and paid off in the

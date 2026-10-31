@@ -84,6 +84,14 @@ test("keep: what the old loan still owes at the end comes off the car's value; t
   near(under.leaseCredit, 0); near(under.options[2].out, 1000 + x.leaseDue + x.leaseMonthly * 12 + run);
 });
 
+test("buy: a trade-in worth more than the new car comes back as cash (the lease credits all of it too)", () => {
+  // a 40,000 car with no loan against a 20,000 new car with 6% tax (21,200): nothing to borrow, 18,800 back
+  const x = { ...DEFAULTS.compare, years: 1, newPrice: 20000, newSalesTax: 0.06, newDown: 0 };
+  const c = compare({ ...SEDAN, value: 40000 }, null, x);
+  const run = 11000 / x.newMpg * 3.4 + 1300 * x.newInsuranceShare + 180 + x.newMaintenanceYear;
+  near(c.financed, 0); near(c.cashBack, 18800); near(c.options[1].out, -18800 + run); near(c.leaseCredit, 40000);
+});
+
 test("buy and lease: a new car's running costs are flat over the years; only the kept car's upkeep rises", () => {
   const x = { ...DEFAULTS.compare, years: 3, newPrice: 30000, newSalesTax: 0, newDown: 30000 };
   const c = compare({ ...SEDAN, value: 0 }, null, x);

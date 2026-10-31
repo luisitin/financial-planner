@@ -40,7 +40,7 @@ export function yearCost(car, loan) {
   return { lines, total, monthly: total / 12, perMile: miles > 0 ? total / miles : null };
 }
 
-/** Keep, buy new or lease over `years` (whole years): { years, tradeIn, loanLeft, oldOwedAtEnd, newPayment, financed, leaseCredit, options: [{ id, label, out (money paid), back (what you own at the end, less any loan), cost (out − back), monthly, endValue, owedAtEnd, terms }] }. */
+/** Keep, buy new or lease over `years` (whole years): { years, tradeIn, loanLeft, oldOwedAtEnd, newPayment, financed, cashBack, leaseCredit, options: [{ id, label, out (money paid), back (what you own at the end, less any loan), cost (out − back), monthly, endValue, owedAtEnd, terms }] }. */
 export function compare(car, loan, x) {
   const c = { ...DEFAULTS.car, ...Object.fromEntries(Object.entries(car).filter(([, v]) => v !== null && v !== undefined && v !== "")) };
   const years = Math.max(1, Math.round(num(x.years, 5))), months = years * 12;
@@ -59,8 +59,10 @@ export function compare(car, loan, x) {
   const price = x.newPrice * (1 + x.newSalesTax);
   const tradeIn = value - loanLeft;
   const financed = Math.max(0, price - Math.max(0, tradeIn) - x.newDown);
+  // a trade-in (with any cash down) worth more than the new car: the rest comes back as cash, as the lease credits it all
+  const cashBack = Math.max(0, Math.max(0, tradeIn) + x.newDown - price);
   const payment = financed > 0 ? (x.newRate > 0 ? pmt(x.newRate / 12, x.newTermMonths, financed) : financed / x.newTermMonths) : 0;
-  let buyOut = x.newDown + Math.max(0, -tradeIn) + payment * Math.min(months, x.newTermMonths);
+  let buyOut = x.newDown + Math.max(0, -tradeIn) - cashBack + payment * Math.min(months, x.newTermMonths);
   for (let t = 0; t < years; t++) buyOut += fuel(x.newMpg) + ins * x.newInsuranceShare + reg + x.newMaintenanceYear;
   const buyEnd = valueAfter(x.newPrice, years, { first: DEFAULTS.newLoss[0], after: DEFAULTS.newLoss[1] });
   let owedAtEnd = 0;
@@ -72,7 +74,7 @@ export function compare(car, loan, x) {
   for (let t = 0; t < years; t++) leaseOut += fuel(x.newMpg) + ins * x.newInsuranceShare + reg + x.newMaintenanceYear * 0.5;
   const row = (id, label, out, back, extra) => ({ id, label, out, back, cost: out - back, monthly: (out - back) / months, ...extra });
   return {
-    years, tradeIn, loanLeft, oldOwedAtEnd, newPayment: payment, financed, leaseCredit,
+    years, tradeIn, loanLeft, oldOwedAtEnd, newPayment: payment, financed, cashBack, leaseCredit,
     options: [
       row("keep", "Keep it", keepOut, keepEnd - oldOwedAtEnd, { endValue: keepEnd, owedAtEnd: oldOwedAtEnd }),
       row("buy", "Buy a new one", buyOut, buyEnd - owedAtEnd, { endValue: buyEnd, owedAtEnd }),
