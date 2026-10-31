@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 07:40 | backlog 2: answer key for estate/estate-tax and estate/gifting (the IRC 2001(c) schedule, the lifetime and yearly exclusions by year, gift splitting, the 529 five-year election, portability), from the Code, the IRS revenue procedures and Form 709/706 instructions, never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
