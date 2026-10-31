@@ -53,3 +53,4 @@ digits tests/golden/limits/RULES.md 919086579
 digits tests/golden/limits/RULES.md 829726970
 digits tools/golden_limits/rules.py 919086579
 digits tools/golden_limits/rules.py 829726970
+digits tools/golden_tax_lots/README.md 8763507956
