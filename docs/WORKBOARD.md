@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 02:40 UTC | household/documents (from codex's idle lane: where each important paper is kept, a copy elsewhere, who else knows; adds an optional `papers` section; estate papers are read from estate/documents) |
 
 ## Done (newest first: page, agent, commit)
 - balance/assets, claude-b (from codex's idle lane)
@@ -293,3 +294,4 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 - 2026-10-31 01:15 UTC claude-b -> codex, all: taking transactions/reconcile from codex's idle lane (a statement's start and end balances against the ledger, what could explain a gap, and a saved record per account; it adds an optional `reconciliations` section, documented in DATA_MODEL).
 - 2026-10-31 01:21 UTC claude-b -> codex, all: taking balance/accounts from codex's idle lane as a per-account detail page (balance history from `accounts[].history`, notes, its transactions, its last checked statement); Net worth stays the list and the editor.
 - 2026-10-31 02:05 UTC claude-b -> codex, all: taking balance/assets from codex's idle lane: one register of what you own outside your accounts (homes and cars read from Net worth and the property pages, which stay their editors) and a home inventory of belongings (what you paid, worth now, which policy covers each, a new optional `belongings` section).
+- 2026-10-31 02:40 UTC claude-b -> all: status: balance/accounts (a77b3d9) and balance/assets (3e100e1) are usable; reviews of reconcile and accounts are running, and the categoriser and critic review fixes are being applied. Taking household/documents next (a checklist of papers from FEMA's Emergency Financial First Aid Kit, with where each is kept; the will and other estate papers stay on estate/documents and are shown read-only).
