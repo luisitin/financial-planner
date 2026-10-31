@@ -8,13 +8,21 @@ import { compute as computeHoldings } from "../holdings/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, todaysReturn } from "../../taxes/federal/compute.js";
 import { marginalRate, federalTax } from "../../../core/math/tax.js";
 
 /** Share of invested wealth in one company: up to 10% is the usual ceiling for a single stock; above 25% is a large bet. */
 export const LIMIT = { ok: 0.10, large: 0.25 };
-/** Federal withholding on supplemental wages such as vesting RSUs: 22% flat, 37% on the part above $1 million in a year (IRS Publication 15). */
+/** Federal withholding on supplemental wages such as vesting RSUs: 22% flat, 37% on the part of the year's supplemental wages above $1 million (IRS Publication 15; 26 CFR 31.3402(g)-1). */
 export const SUPPLEMENTAL = { rate: 0.22, over: 1e6, high: 0.37 };
+/** The employer withholds the 0.9% Additional Medicare Tax on an employee's wages above $200,000 in a calendar year, whatever the filing status (IRC 3102(f)). */
+export const ADDITIONAL_MEDICARE = { rate: 0.009, over: 200000 };
+
+/** Federal income tax withheld on supplemental wages `value` when `before` of the year's supplemental wages came earlier: 22%, and 37% on the part past $1 million. */
+export function supplementalWithholding(value, before = 0) {
+  const low = Math.max(0, Math.min(value, SUPPLEMENTAL.over - before));
+  return low * SUPPLEMENTAL.rate + (value - low) * SUPPLEMENTAL.high;
+}
 export const STRESS_DROP = 0.5;
 export const DEFAULT_GRANT = { vestMonths: 48, cliffMonths: 12, every: 3 };
 
@@ -45,8 +53,9 @@ export function vestSchedule(g) {
  *   grants: [{ id, kind, name, shares, strike, vested, unvested, vestedValue, unvestedValue, next, expires, schedule }],
  *   owned (held + vested options' value), unvested, exposure, invested, share (exposure of invested wealth incl. unvested), level,
  *   pay (yearly salary at the company), stress: { drop, loss, payAtRisk },
- *   vests: [{ date, grant, shares, value, withheld, owed, gap }] (RSUs, the next 12 months), vestGap,
- *   diversify: { sell, fromTaxable, fromPlans, tax, after } | null, rates: { marginal, state, gains }
+ *   vests: [{ date, grant, shares, value, withheld, owed, gap, stateOwed }] (RSUs, the next 12 months), vestYears: [{ year, value,
+ *   owed, withheld, over1m, medicare }], vestGap, diversify: { sell, fromTaxable, fromPlans, gain, tax, after } | null,
+ *   rates: { marginal, state, gains }, year, otherYear
  * }
  */
 export function compute(plan, params = {}) {
@@ -90,20 +99,44 @@ export function compute(plan, params = {}) {
   const rsuAndHeld = heldValue + grants.filter((g) => g.kind === "rsu").reduce((s, g) => s + g.unvestedValue, 0);
   const loss = rsuAndHeld * STRESS_DROP + (optionsAt(price) - optionsAt(price * (1 - STRESS_DROP)));
 
-  // tax: vesting RSUs are pay; 22% is withheld federally
-  const ti = taxInputs(plan, { today });
-  const marginal = Math.max(0.1, marginalRate(ti.inputs, ti.params) || 0.22);
+  // tax: vesting units are wages at their value that day (IRC 83(a); IRS Pub. 525). The tax a year's vests add = the federal
+  // estimate for that year with their value added to the person's wages and Medicare wages, less without (so it crosses
+  // brackets, phase-outs and the 0.9% Additional Medicare Tax); each vest takes its share by value. Withheld = 22% federal,
+  // 37% on the year's supplemental wages past $1 million (counted from the vests in view), plus the employer's 0.9% on the
+  // person's wages from it past $200,000 in the year (IRC 3102(f)). A sale today and this year's vests use today's tax year.
+  const yr = todaysReturn(plan, today);
+  const inputsFor = (year) => {
+    const t = year === yr.year ? taxInputs(yr.plan, { today }) : taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), year, gains: [] } }, { today });
+    return t.separate && who ? { ...t, inputs: { ...t.inputs, separateTo: who } } : t;   // filing separately, on the employee's return
+  };
+  const ti = inputsFor(yr.year);
+  const marginal = Math.max(0, marginalRate(ti.inputs, ti.params) || 0);
   const base = federalTax(ti.inputs, ti.params).totalTax;
-  const gains = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: (ti.inputs.qualifiedIncome ?? 0) + 1000 }, ti.params).totalTax - base) / 1000);
+  const gains = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: (ti.inputs.qualifiedIncome ?? 0) + 1000, investmentIncome: (Number(ti.inputs.investmentIncome) || 0) + 1000 }, ti.params).totalTax - base) / 1000);
   const st = computeState(plan, { today });
   const stateRate = st.effective ?? 0;
   const horizon = today ? addMonths(today, 12) : null;
   const vests = [];
-  for (const g of grants.filter((x) => x.kind === "rsu")) for (const e of g.schedule) if (today && e.date > today && e.date <= horizon) {
-    const value = e.shares * price, withheld = value * SUPPLEMENTAL.rate, owed = value * marginal;
-    vests.push({ date: e.date, grant: g.name, shares: e.shares, value, withheld, owed, gap: owed - withheld, stateOwed: value * stateRate });
-  }
+  for (const g of grants.filter((x) => x.kind === "rsu")) for (const e of g.schedule) if (today && e.date > today && e.date <= horizon) vests.push({ date: e.date, grant: g.name, shares: e.shares, value: e.shares * price });
   vests.sort((a, b) => a.date.localeCompare(b.date));
+  const vestYears = [];
+  for (const y of [...new Set(vests.map((v) => Number(v.date.slice(0, 4))))]) {
+    const inYear = vests.filter((v) => Number(v.date.slice(0, 4)) === y), total = inYear.reduce((s, v) => s + v.value, 0);
+    const t = inputsFor(y), before = federalTax(t.inputs, t.params).totalTax;
+    const after = federalTax({ ...t.inputs, wages: (Number(t.inputs.wages) || 0) + total, medicareWages: (Number(t.inputs.medicareWages ?? t.inputs.wages) || 0) + total }, t.params).totalTax;
+    const owedYear = Math.max(0, after - before);
+    const medicareHeld = ADDITIONAL_MEDICARE.rate * (Math.max(0, pay + total - ADDITIONAL_MEDICARE.over) - Math.max(0, pay - ADDITIONAL_MEDICARE.over));
+    let supplementalSoFar = 0;
+    for (const v of inYear) {
+      const income = supplementalWithholding(v.value, supplementalSoFar);
+      supplementalSoFar += v.value;
+      v.withheld = income + (total > 0 ? medicareHeld * v.value / total : 0);
+      v.owed = total > 0 ? owedYear * v.value / total : 0;
+      v.gap = v.owed - v.withheld;
+      v.stateOwed = v.value * stateRate;
+    }
+    vestYears.push({ year: y, value: total, owed: owedYear, withheld: inYear.reduce((s, v) => s + v.withheld, 0), over1m: supplementalSoFar > SUPPLEMENTAL.over, medicare: medicareHeld });
+  }
 
   // getting under the ceiling: sell inside retirement plans first (no tax), then taxable shares (gains tax on the gain)
   let diversify = null;
@@ -113,13 +146,17 @@ export function compute(plan, params = {}) {
     const fromPlans = Math.min(need, plans), fromTaxable = need - fromPlans;
     const taxable = held.filter((h) => h.bucket === "taxable");
     const tv = taxable.reduce((s, h) => s + h.value, 0), tg = taxable.reduce((s, h) => s + Math.max(0, h.gain), 0);
-    const tax = tv > 0 ? fromTaxable * (tg / tv) * gains : 0;
-    diversify = { sell: need, fromPlans, fromTaxable, tax, after: invested > 0 ? (exposure - need) / invested : null, stillOver: need < exposure - LIMIT.ok * invested - 0.5 };
+    // the gain on what is sold (the brokerage shares' average gain), as a long-term gain: the federal estimate with it added
+    // to the year's gains and investment income less without, so it is stacked through the 0/15/20% bands and the 3.8%
+    // (IRC 1(h), 1411)
+    const gain = tv > 0 ? fromTaxable * (tg / tv) : 0;
+    const tax = gain > 0 ? Math.max(0, federalTax({ ...ti.inputs, qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + gain, investmentIncome: (Number(ti.inputs.investmentIncome) || 0) + gain }, ti.params).totalTax - base) : 0;
+    diversify = { sell: need, fromPlans, fromTaxable, gain, tax, after: invested > 0 ? (exposure - need) / invested : null, stillOver: need < exposure - LIMIT.ok * invested - 0.5 };
   }
   return {
     ready: true, symbol, price, priceAsOf, held, heldValue, grants, owned, unvested, exposure, invested, share, level,
     person: people.find((p) => p.id === who)?.name ?? null, pay, stress: { drop: STRESS_DROP, loss, payAtRisk: pay },
-    vests, vestGap: vests.reduce((s, v) => s + v.gap, 0), diversify, rates: { marginal, state: stateRate, gains },
+    vests, vestYears, vestGap: vests.reduce((s, v) => s + v.gap, 0), diversify, rates: { marginal, state: stateRate, gains }, year: yr.year, otherYear: yr.other,
     expiringSoon: options.filter((g) => g.expires && today && g.expires <= addMonths(today, 12) && g.vested > 0),
   };
 }

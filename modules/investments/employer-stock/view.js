@@ -1,6 +1,6 @@
 // modules/investments/employer-stock/view.js -- DOM only. Your employer's stock: how much of your invested
 // wealth rides on it (owned and still to vest), what a halving would take while your pay depends on the same
-// company, the next year's vests and the tax gap at 22%, how to get under 10% and what it costs; the company
+// company, the next year's vests and the tax they add against what is withheld, how to get under 10% and what it costs; the company
 // and the grants in folds.
 import { compute, LIMIT, SUPPLEMENTAL, DEFAULT_GRANT } from "./compute.js";
 
@@ -60,9 +60,12 @@ export function render(page, ctx) {
   // the next year's vests
   if (d.vests.length) {
     const tot = d.vests.reduce((s, v) => s + v.value, 0), stateOwed = d.vests.reduce((s, v) => s + v.stateOwed, 0);
+    const withheld = d.vests.reduce((s, v) => s + v.withheld, 0), owed = d.vests.reduce((s, v) => s + v.owed, 0);
     root.append(ui.card("Vesting in the next year", ui.h("ul", { class: "records" }, d.vests.map((v) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${shortDate(v.date)} · ${v.shares} units`), ui.h("span", { class: "rec-value" }, money(v.value))), ui.h("div", { class: "rec-sub" }, `${v.grant}; ${money(v.withheld)} federal tax withheld`)))),
-      ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Employers withhold ${pct(SUPPLEMENTAL.rate)} for federal tax; your top rate is ${pct(d.rates.marginal)}.`),
-      d.vestGap > 1 ? ui.h("p", { class: "es-flag" }, `Set aside about ${money(d.vestGap)} more for April${stateOwed > 0 ? `, plus about ${money(stateOwed)} of state tax if your employer withholds none` : ""}.`) : ui.h("p", { class: "es-d" }, `The ${pct(SUPPLEMENTAL.rate)} withheld covers the federal tax at your rate.`),
+      ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Your employer withholds ${pct(SUPPLEMENTAL.rate)} for federal tax${d.vestYears.some((y) => y.over1m) ? ` (${pct(SUPPLEMENTAL.high)} on bonus-type pay past $1 million in a year)` : ""}${d.vestYears.some((y) => y.medicare > 0.5) ? ", plus 0.9% for Medicare on pay past $200,000" : ""}: ${money(withheld)} in all. Added to your other income they raise your federal tax by about ${money(owed)}${d.vestYears.length > 1 ? `, worked in ${d.vestYears.map((y) => y.year).join(" and ")} each on its own` : ""}.`),
+      d.vestGap > 1 ? ui.h("p", { class: "es-flag" }, `Set aside about ${money(d.vestGap)} more for tax time${stateOwed > 0 ? `, plus about ${money(stateOwed)} of state tax if your employer withholds none` : ""}.`)
+        : d.vestGap < -1 ? ui.h("p", { class: "es-d" }, `The withholding is about ${money(-d.vestGap)} more than the federal tax they add: that comes back as a refund unless other income uses it.`)
+        : ui.h("p", { class: "es-d" }, "The withholding about covers the federal tax they add."),
       ui.h("p", { class: "es-d" }, "Selling units the day they vest costs no more tax: their cost is the value they were taxed at.")));
   }
 
@@ -72,7 +75,7 @@ export function render(page, ctx) {
     root.append(ui.card(`Getting under ${pct(LIMIT.ok)}`, ui.h("p", {}, `Selling about ${money(x.sell)} of the shares you hold and spreading it over a broad fund brings the stake to ${x.after === null ? "—" : pct(x.after)}.`),
       ui.h("ul", {},
         x.fromPlans > 0 ? ui.h("li", {}, `${money(x.fromPlans)} inside your retirement plan: no tax at all; switch funds on the plan's site.`) : null,
-        x.fromTaxable > 0 ? ui.h("li", {}, `${money(x.fromTaxable)} in the brokerage: about ${money(x.tax)} of tax on the gain (${pct(d.rates.gains)} for shares held over a year).`) : null,
+        x.fromTaxable > 0 ? ui.h("li", {}, `${money(x.fromTaxable)} in the brokerage: about ${money(x.tax)} of federal tax on its ${money(x.gain)} gain, as a gain on shares owned over a year (taxed at 0%, 15% or 20% by your income, plus 3.8% on high incomes).`) : null,
         x.stillOver ? ui.h("li", {}, "Even then it stays above the ceiling because of grants still to vest or options not yet exercised: sell new units as they vest, and plan when to exercise options.") : null),
       ui.h("p", { class: "es-d" }, "Company stock with a large gain inside a 401(k): before selling it, ask about net unrealized appreciation (NUA), which can tax that gain at the lower rate when you leave the job. Selling a little every quarter on a fixed plan avoids guessing the best day.")));
   }

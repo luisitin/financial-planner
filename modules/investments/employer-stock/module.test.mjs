@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, vestSchedule, LIMIT, SUPPLEMENTAL, STRESS_DROP } from "./compute.js";
+import { compute, vestSchedule, supplementalWithholding, LIMIT, SUPPLEMENTAL, STRESS_DROP } from "./compute.js";
+import { emptyPlan } from "../../../core/schema/migrate.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 
@@ -79,4 +80,62 @@ test("a small stake needs no selling", () => {
   const p = acme(); p.equity.grants = []; p.holdings = [{ id: "h1", accountId: "a-brk", symbol: "ACME", shares: 50, price: 120, priceAsOf: "2026-10-29", costBasis: 5000, lots: [] }];
   const d = compute(p, { today: TODAY });
   assert.ok(d.share <= LIMIT.ok); assert.equal(d.level, "ok"); assert.equal(d.diversify, null);
+});
+
+// one adult filing single in 2026, paid `pay` by the company, one RSU grant vesting all at once on `vestOn` (price 100)
+function single(pay, units, vestOn = "2026-12-01", more = {}) {
+  const p = emptyPlan();
+  p.household.people = [{ id: "a1", name: "Adult 1", role: "self", birthDate: "1980-01-01" }];
+  p.household.filingStatus = "single"; p.household.state = "";
+  p.income = [{ id: "pay", name: "Pay", type: "salary", personId: "a1", amount: pay, period: "annual", taxable: true }];
+  const start = `${Number(vestOn.slice(0, 4)) - 1}${vestOn.slice(4)}`;
+  p.equity = { symbol: "ZZCO", price: 100, priceAsOf: TODAY, personId: "a1", grants: [{ id: "g", kind: "rsu", name: "Units", granted: start, vestStart: start, shares: units, vestMonths: 12, cliffMonths: 12, every: 3 }], ...more };
+  return p;
+}
+
+test("withholding on supplemental wages: 22%, and 37% on the part of the year's past $1 million (IRS Pub. 15)", () => {
+  near(supplementalWithholding(100000), 22000);
+  near(supplementalWithholding(500000, 800000), 200000 * 0.22 + 300000 * 0.37);
+  near(supplementalWithholding(100000, 1200000), 37000);
+});
+
+test("a $100,000 vest on $90,000 of pay crosses from 22% into 24%: 23,364 owed against 22,000 withheld (Rev. Proc. 2025-32)", () => {
+  // 2026 single: taxable income 73,900 -> 173,900; tax 10,970 -> 34,334 (5,800 + 22% to 105,700 + 24% above)
+  const d = compute(single(90000, 1000), { today: TODAY });
+  assert.equal(d.vests.length, 1); near(d.vests[0].value, 100000);
+  near(d.vests[0].owed, 23364); near(d.vests[0].withheld, 22000); near(d.vestGap, 1364);
+});
+
+test("the 0.9% Medicare tax on pay past $200,000: owed and withheld by the employer (IRC 3101(b)(2), 3102(f))", () => {
+  // pay 180,000 + a 100,000 vest: 80,000 past 200,000, 720 withheld and 720 owed (single); income tax at 24%, then 32% past
+  // 201,775 and 35% past 256,225 (2026 single)
+  const d = compute(single(180000, 1000), { today: TODAY });
+  const v = d.vests[0];
+  near(v.withheld, 22000 + 720);
+  const incomeTax = (r) => 5800 + 0.22 * 55300 + 0.24 * (Math.min(r, 201775) - 105700) + 0.32 * Math.max(0, Math.min(r, 256225) - 201775) + 0.35 * Math.max(0, r - 256225);
+  near(v.owed, incomeTax(280000 - 16100) - incomeTax(180000 - 16100) + 720);
+});
+
+test("vests of $1.2 million in a year: 37% withheld on the part past $1 million", () => {
+  const d = compute(single(150000, 12000), { today: TODAY });
+  near(d.vests[0].withheld, 1000000 * 0.22 + 200000 * 0.37 + 0.009 * (150000 + 1200000 - 200000));
+  assert.equal(d.vestYears[0].over1m, true);
+});
+
+test("vests in two calendar years are worked in their own years", () => {
+  const p = single(90000, 1000);
+  p.equity.grants.push({ id: "g2", kind: "rsu", name: "More", granted: "2026-03-01", vestStart: "2026-03-01", shares: 400, vestMonths: 12, cliffMonths: 12, every: 3 });
+  const d = compute(p, { today: TODAY });
+  assert.deepEqual(d.vestYears.map((y) => [y.year, y.value]), [[2026, 100000], [2027, 40000]]);
+});
+
+test("a diversifying sale is stacked through the gains bands: part at 0%, the rest at 15% (IRC 1(h))", () => {
+  // single, pay 40,000 in 2026: taxable income 23,900; 0% band to 49,450, so of a 50,000 gain 25,550 is at 0% and 24,450 at 15%
+  const p = single(40000, 0, "2026-12-01", { grants: [] });
+  p.accounts = [{ id: "brk", name: "Brokerage", type: "brokerage", balance: 100000 }];
+  p.holdings = [{ id: "h", accountId: "brk", symbol: "ZZCO", shares: 1000, price: 100, priceAsOf: TODAY, costBasis: 50000, lots: [] }];
+  const d = compute(p, { today: TODAY });
+  // the whole stake is in the brokerage and is the only investment: selling down to 10% sells 90,000 (gain 45,000)
+  near(d.diversify.fromTaxable, 90000); near(d.diversify.gain, 45000);
+  near(d.diversify.tax, (45000 - 25550) * 0.15);
 });
