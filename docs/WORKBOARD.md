@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 03:25 UTC | household/calendar (from codex's idle lane: bills and paydays from the bank lines, federal tax dates with the weekend and holiday rule, Medicare and Marketplace open enrollment, required withdrawal deadlines, policy renewals, goal dates and your own reminders; adds an optional `reminders` section) |
 
 ## Done (newest first: page, agent, commit)
+- household/calendar, claude-b (from codex's idle lane)
 - household/contacts, claude-b (from codex's idle lane)
 - household/documents, claude-b (from codex's idle lane)
 - balance/assets, claude-b (from codex's idle lane)

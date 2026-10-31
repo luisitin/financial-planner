@@ -26,7 +26,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `household/life-events` | Life events | planned | 10 | Guides you through marriage, a baby, a job change, a move, an inheritance or divorce and proposes the plan changes each brings. | - |
 | `household/documents` | Document vault index | usable | 10 | Keeps track of where your will, insurance policies, deeds and tax returns are kept (the locations, not the files themselves). | - |
 | `household/contacts` | Contacts | usable | 10 | Lists your advisor, accountant, attorney and insurers, plus the last four digits of each account number. | - |
-| `household/calendar` | Money calendar | planned | 10 | Puts your bills, paydays, tax deadlines, open enrolment, required minimum distribution dates and policy renewals on one calendar. | - |
+| `household/calendar` | Money calendar | usable | 10 | Puts your bills, paydays, tax deadlines, open enrolment, required minimum distribution dates and policy renewals on one calendar. | - |
 
 ## balance
 | key | title | status | phase | purpose | seeds |

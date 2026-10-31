@@ -56,7 +56,8 @@ export function render(page, ctx) {
     det.addEventListener("toggle", () => { if (det.open) opened.add(g.key); else opened.delete(g.key); });
     const item = (r) => (r.key === editing ? ui.h("li", {}, editForm(r)) : record(r));
     const main = g.rows.filter((r) => !r.optional), extra = g.rows.filter((r) => r.optional);
-    det.append(ui.h("p", { class: "dv-what" }, g.what), main.length ? ui.h("ul", { class: "records" }, main.map(item)) : null);
+    det.append(ui.h("p", { class: "dv-what" }, g.what));
+    if (main.length) det.append(ui.h("ul", { class: "records" }, main.map(item)));
     if (extra.length) {
       const noted = extra.filter((r) => r.done).length;
       det.append(ui.h("div", { class: "folds dv-extra" }, ui.h("details", { class: "fold", open: extra.some((r) => r.key === editing) ? true : null },
