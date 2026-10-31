@@ -17,9 +17,9 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.harvest.length ? `${money(d.harvestTotal)} of losses could be harvested` : d.taxableCount ? "No losses to harvest right now" : "Tax lots"),
     ui.h("p", { class: "lede" }, d.harvest.length
-      ? `Selling the ${d.harvest.length} losing lot${d.harvest.length === 1 ? "" : "s"} in your taxable accounts books ${money(d.harvestTotal)} of losses (${money(d.shortLosses)} short-term, ${money(d.longLosses)} long-term), worth about ${money(d.taxSavedTotal)} of tax against gains and up to 3,000 a year of income; the rest carries forward. Buy something similar the same day and the mix does not change.`
+      ? `Selling the ${d.harvest.length} losing lot${d.harvest.length === 1 ? "" : "s"} in your taxable accounts books ${money(d.harvestTotal)} of losses (${money(d.shortLosses)} short-term, ${money(d.longLosses)} long-term)${d.disallowedTotal > 0.5 ? `, of which ${money(d.disallowedTotal)} does not count because of a recent purchase (below)` : ""}. This year that cuts your federal tax by about ${money(d.taxSavedTotal)}: losses first cancel this year's gains, then up to ${money(d.capLimit)} of other income${d.capLimit === 1500 ? " (married filing separately)" : ""}.${d.carryAdded.total > 0.5 ? ` The other ${money(d.carryAdded.total)} carries to next year, where it can cancel future gains.` : ""} Buy something similar the same day and the mix does not change.`
       : d.taxableCount ? "Every lot in a taxable account sits above its cost. Come back after a fall: that is when harvesting pays." : "All your holdings are in retirement accounts, where lots do not matter for tax: sales there are never taxed on their own."),
-    ui.h("p", { class: "muted small" }, `Short-term losses (held a year or less) offset gains taxed at your ${fmt.pct(d.marginal, 0)} rate; long-term ones offset gains at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`),
+    ui.h("p", { class: "muted small" }, `A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. Your next dollar of pay is taxed at ${fmt.pct(d.marginal, 0)}, of long-term gains at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -28,10 +28,13 @@ export function render(root, ctx) {
   if (d.harvest.length) root.append(ui.card("Worth harvesting",
     ui.h("ul", { class: "records" }, d.harvest.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${x.lot.shares} shares`, ui.h("span", { class: x.lot.term === "short" ? "pill warn" : "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, `−${money(x.loss)}`)),
-      ui.h("div", { class: "rec-sub" }, `${x.account} · bought ${x.lot.date ? fmt.date(x.lot.date) : "date unknown"} at ${money(x.lot.costPerShare)} a share · saves about ${money(x.taxSaved)} of tax`)))),
+      ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share`),
+      ...x.washedBy.map((m) => ui.h("div", { class: "rec-sub" }, m.bucket === "taxable"
+        ? `You bought ${fmt.num(m.shares, 3)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of this loss does not count now; it is added to that purchase's cost.`
+        : `You bought ${fmt.num(m.shares, 3)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of this loss is lost for good.`))))),
   ));
   if (d.sellFirst.length) root.append(ui.card("If you need cash, sell these first",
-    ui.h("p", { class: "muted small" }, "Highest cost first: the smallest gain (or the biggest loss) per share. Tell the brokerage which lot when you sell (\"specific identification\"), or it sells the oldest."),
+    ui.h("p", { class: "muted small" }, "The smallest gain per share first (the biggest losses at the top). Tell the brokerage which lot when you sell (\"specific identification\"), or it sells the oldest."),
     ui.h("ul", { class: "records" }, d.sellFirst.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${x.lot.shares} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
       ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} days` : ""}`)))),
@@ -57,7 +60,7 @@ export function render(root, ctx) {
   };
   drawForm();
   for (const x of d.holdings) root.append(ui.card(`${x.symbol} · ${x.account}`,
-    ui.h("p", { class: "muted small" }, `${x.name ? `${x.name} · ` : ""}${x.priced ? `${money(x.price)} a share` : "no price on file"}${x.bucket !== "taxable" ? " · retirement account: lots do not affect tax" : ""}`),
+    ui.h("p", { class: "muted small" }, `${x.name ? `${x.name} · ` : ""}${x.priced ? `${money(x.price)} a share` : "no price on file"}${x.bucket !== "taxable" ? " · retirement account: sales here are not taxed, but buying a fund here within 30 days of selling it at a loss elsewhere cancels that loss" : ""}`),
     ui.h("ul", { class: "records" }, x.lots.map((l) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, l.assigned ? `${l.shares} shares, ${l.date ? fmt.date(l.date) : "no date"}` : `${fmt.num(l.shares, 3)} shares not in a lot`, ui.h("span", { class: "pill" }, l.term)), ui.h("span", { class: "rec-value", style: l.gain < 0 ? { color: "var(--bad)" } : null }, signed(l.gain))),
       ui.h("div", { class: "rec-sub" }, `cost ${money(l.cost)} (${money(l.costPerShare)} a share) · worth ${money(l.value)}`),

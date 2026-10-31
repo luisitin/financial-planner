@@ -165,7 +165,10 @@ test("tax lots: gains per lot, short against long, the losses worth harvesting a
   assert.equal(vti.lots.length, 2); assert.equal(vti.lots[0].term, "long"); assert.equal(vti.lots[1].term, "short"); near(vti.lots[1].gain, -3000); assert.equal(vti.unassignedShares, 0);
   const bnd = t.holdings.find((h) => h.symbol === "BND"); assert.equal(bnd.lots.length, 1); assert.equal(bnd.lots[0].assigned, false); near(bnd.lots[0].gain, -4900);
   assert.deepEqual(t.harvest.map((h) => [h.symbol, Math.round(h.loss), h.lot.term]), [["BND", 4900, "long"], ["VTI", 3000, "short"]]);
-  near(t.harvestTotal, 7900); near(t.taxSavedTotal, 4900 * t.gainsRate + 3000 * t.marginal, 0.01);
+  near(t.harvestTotal, 7900);
+  // the year's sales: +8,000 long, -5,000 short, a net 3,000 long-term gain at 15% (450). The harvest (-3,000 short, -4,900
+  // long) turns that into a net 4,900 loss: 3,000 of it comes off pay at 12% (360), 1,900 carries as short-term (IRC 1211(b), 1212(b))
+  near(t.taxSavedTotal, 450 + 360, 0.01); near(t.carry.short, 1900); near(t.carry.long, 0); near(t.carryAdded.total, 1900);
   assert.equal(t.sellFirst[0].symbol, "VTI"); assert.ok(t.notes.some((n) => n.includes("wash")));
   assert.equal(taxLots(emptyPlan(), { today: TODAY }).ready, false);
 });

@@ -4,9 +4,9 @@
 // six decimals, half away from zero; the page's two rates come from federal totals rounded to the cent, as a total of tax
 // is money (RULES.md R2, revised 2026-10-31 after a first run: no source decides how a rate is rounded). The page works in
 // floating point, so every amount is compared within a cent and every rate within half a unit of the sixth decimal (5e-7).
-// Dates, terms, day counts, lot keys and orders are compared exactly. Checked on 2026-10-31: 13,006 tests, 11,495 pass,
-// 0 fail, 1,511 to-do: 124 (period 9, lots 115) under feb28-before-leap, 1,387 saved rows under loss-limit (1,297) and
-// wash-sale (171), 21 of them under both and 9 passing today (the reasons below say why).
+// Dates, terms, day counts, lot keys and orders are compared exactly. On 2026-10-31 the first run found three causes
+// (a February 28 holding period, the tax a harvest saves this year, wash sales against purchases on file), all fixed the
+// same day: every row of every part agrees.
 //
 // lots.csv: one lot per row, fed to longOn(acquired) and to lotsOf() as a one-lot holding (price 10, 1 share, cost 5) on the
 // row's today. households.csv: each row is one plan, emptyPlan() with the filing status, one adult (self) born 1980-01-01,
@@ -32,27 +32,26 @@
 //                           shares not split into lots" note (the key's taxable holdings with an "i|u" lot)
 //                  rates    marginal against marginal_rate, gainsRate against gains_rate
 //                  harvest  the candidates (the set of lot keys; the page sorts them by tax saved, the key lists them in lot
-//                           order), each one's loss and taxSaved against page_tax_saved (the README's per-lot convention:
-//                           loss x rate), harvest.length, harvestTotal, shortLosses, longLosses, and the wash-sale note shown
-//                           when there is a candidate
-//                  saved    taxSavedTotal, the figure the hero calls what the losses are "worth ... of tax", against
+//                           order), each one's loss and taxSaved against page_tax_saved (the per-lot loss x rate that orders
+//                           the list; not shown), its wash sale (any share matched) and disallowed loss, harvest.length,
+//                           harvestTotal, shortLosses, longLosses, disallowedTotal, the allowed short and long losses, every
+//                           wash-sale match (the sold lot, the replacement lot, shares, disallowed loss, the replacement's
+//                           account kind) against wash_matches, and the wash-sale note shown when there is a candidate
+//                  saved    taxSavedTotal, what the hero says selling them cuts this year's federal tax by, against
 //                           harvest_tax_saved_law: the year's federal tax without the harvest less with every candidate sold
 //                           today (0 when there is no candidate)
+//                  carry    carry.short / carry.long (the loss carried to next year if harvested) against harvest_carryover_*,
+//                           and carryAdded against carryover_added_* (the part the harvest adds)
 //                  sell     sellFirst (the first eight taxable lots) against sell_first, key for key and in order; the 7
 //                           sell_first_tie rows included (the page's sort is stable, as the key's input order on ties)
 // Reported only (no pass or fail; the page has no such figure or follows its own documented convention):
 //   - the key's page-convention columns (lots.csv long_on_page / term_page / days_to_long_page, households.csv
 //     lot_page_contrast) against the app, as counts: the app follows them wherever the law column differs;
-//   - findings beside the saved part: how far apart the page's total and the law's are, the carryover to next year
-//     (harvest_carryover_*; the page shows no amount and says "up to 3,000 a year of income", which is 1,500 filing
-//     separately, 26 U.S.C. 1211(b)(1)), wash sales against purchases already made (harvest[].wash_sale and disallowed,
-//     wash_matches; the page lists every candidate at its full loss and its note covers only buying back after the sale)
-//     and the tax-per-dollar order (sell_first_tax_per_dollar, against the page's sellFirst: a convention, no source decides
-//     which lot to sell for cash).
+//   - the brief's plain wash-sale test (wash_plain_test) against the share-for-share match, and the tax-per-dollar order
+//     (sell_first_tax_per_dollar, against the page's sellFirst: a convention, no source decides which lot to sell for cash).
 // Not compared (the page has no such figure): page_tax_saved_total (the per-lot page_tax_saved figures are, and the saved
-// part holds the total to the law), disallowed_total, short_losses_allowed, long_losses_allowed, tax_without,
-// tax_with, niit_without, niit_with, ratio_law_to_page, carryover_without_*, carryover_added_*, wash_plain_test,
-// wash_basis_note, same_day_sensitive (it moves only the key's allowed short / long split, which is not compared), the
+// part holds the total to the law), tax_without, tax_with, niit_without, niit_with, ratio_law_to_page,
+// carryover_without_* (carry less carryAdded), wash_basis_note (words), same_day_sensitive, the
 // holding_results value and cost (the page's holding carries only shares and gain; its lots' value and cost are compared),
 // lots.csv today_is, law_page_differ and note, households.csv row_kind and note.
 //
@@ -83,18 +82,14 @@ const items = (v) => (blank(v) ? [] : v.split(";").map((s) => s.split("|")));
 
 const SETS = {
   "lots.csv": ["period"],
-  "households.csv": ["lots", "rates", "harvest", "saved", "sell"],
+  "households.csv": ["lots", "rates", "harvest", "saved", "carry", "sell"],
 };
 const PART_OF = Object.fromEntries(Object.entries(SETS).flatMap(([f, parts]) => parts.map((p) => [p, f])));
 const idOf = (f, row) => row.case_id;
 
 // Where the page and the key part ways (tests/golden/tax-lots/RULES.md sections 3 and 6, tools/golden_tax_lots/README.md
 // open points 1 and 3). A cause is "<part>-<why>"; the reason is the why's.
-const WHY = {
-  "feb28-before-leap": "app wrong: longOn() takes the day after the calendar anniversary, which for a lot bought on February 28 of the year before a leap year (2019, 2023, 2027) is February 29; but the holding period starts the day after the buy (Publication 550 (2025) p.81: \"begin counting on the date after the day you acquired the property\"), so March 1, and a year counted from March 1 runs to the last day of February, so the lot is held \"more than 1 year\" (26 U.S.C. 1222(3)) only from March 1 (Rev. Rul. 66-7: a lot bought on a month's last day must be held until the first day of the month after the period; the key read it in a secondary copy only). The README derives its rule from the same Pub. 550 sentence, which gives the day after the anniversary for every other date. A sale on that February 29 is short-term, not long-term (term-0014: 2023-02-28 sold 2024-02-29; term-0288: 2027-02-28 sold 2028-02-29); in households.csv (2025 and 2026) only longOn (not shown on the page) of 2019 and 2023 February 28 lots moves, never a term or a day count. The fix: count a year from the day after the buy (isoOf(y + 1, m, d) of that day, which rolls a February 29 start to March 1)",
-  "loss-limit": "app wrong: taxSavedTotal, which the hero calls what the losses are \"worth about ... of tax\" (and each lot \"saves about\" its share), prices every harvested loss at a rate (loss x the marginal rate if short-term, x the gains rate if long-term), but a capital loss first cancels this year's gains, short against short and long against long, then across (26 U.S.C. 1222; Schedule D lines 7, 15, 16), and a net loss counts against other income only up to $3,000, $1,500 filing separately (1211(b): losses \"shall be allowed only to the extent of the gains from such sales or exchanges, plus ... the lower of (1) $3,000 ($1,500 in the case of a married individual filing a separate return), or (2) the excess of such losses over such gains\"); the rest is carried to next year (1212(b)(1)) and saves nothing this year. So the page says the harvest saves tax this year where the law saves none (lots-2026-mfj-1929: page $364,126.07, law $0.00, the year's own losses already use the $3,000) and prices a long-term loss at the 0% gains rate when it in fact comes off ordinary income (RULES.md 10.3: page $0, law $96). The fix: the federal total now less the federal total with every candidate's loss added to the year's sales (the app's own engine already nets and limits them), shown as this year's saving next to the carryover",
-  "wash-sale": "app wrong: the page lists every candidate at its full loss and counts it in what the harvest is worth, though a purchase of the same ticker in the 30 days before today, in any of the household's accounts, already disallows the loss on as many shares (26 U.S.C. 1091(a): \"within a period beginning 30 days before the date of such sale ... the taxpayer has acquired ... substantially identical stock or securities, then no deduction shall be allowed\"; Pub. 550: a wash sale also when you \"Acquire substantially identical stock for your individual retirement arrangement (IRA) or Roth IRA\" or \"your spouse ... buys\"; Rev. Rul. 2008-5: the IRA case is lost for good). The page has every lot's date, so it can see these purchases, and its note only warns about buying back after the sale. Matching share for share, earliest purchase first (26 CFR 1.1091-1(b)-(e)), with the key's conventions W1-W4 (same ticker = substantially identical; lots sold in the same harvest are not replacements; undated lots are sold first and are never replacements). The fix: before pricing the harvest, cut each candidate's loss by its matched shares and say which purchase did it. 21 rows are listed under both causes (the whole loss is washed and the year's own losses already use the $3,000, so either fix alone gives the law's $0), and 9 wash-sale rows pass today only because the page's 0% gains rate prices at $0 a loss the law also takes away; they fail once loss-limit alone is fixed",
-};
+const WHY = {};   // feb28-before-leap, loss-limit and wash-sale were found and fixed on 2026-10-31 (the page's README says how)
 const reasonOf = (cause) => WHY[cause.slice(cause.indexOf("-") + 1)];
 const todoLists = JSON.parse(read("todo.json"));
 const TODO = {};   // "<id> <part>" -> reason
@@ -193,18 +188,33 @@ function householdMismatches(row, part) {
     const want = items(row.harvest), app = new Map(d.harvest.map((x) => [keyOf.get(x.lot), x]));
     same(out, "candidates", [...app.keys()].sort().join(";"), want.map((w) => `${w[0]}|${w[1]}`).sort().join(";"));
     same(out, "harvest_count", d.harvest.length, num(row.harvest_count));
-    for (const [h, j, loss, saved] of want) {
+    for (const [h, j, loss, saved, wash, disallowed] of want) {
       const x = app.get(`${h}|${j}`);
       if (!x) continue;
       near(out, `${h}|${j} loss`, x.loss, loss);
       near(out, `${h}|${j} page_tax_saved`, x.taxSaved, saved);
+      same(out, `${h}|${j} wash_sale`, x.washedBy.length > 0, yes(wash));
+      near(out, `${h}|${j} disallowed`, x.disallowed, disallowed);
     }
     near(out, "harvest_total", d.harvestTotal, row.harvest_total);
     near(out, "short_losses", d.shortLosses, row.short_losses);
     near(out, "long_losses", d.longLosses, row.long_losses);
-    same(out, "the wash-sale note (shown with any candidate)", d.notes.some((n) => n.startsWith("Harvesting:")), num(row.harvest_count) > 0);
+    near(out, "disallowed_total", d.disallowedTotal, row.disallowed_total);
+    near(out, "short_losses_allowed", d.harvest.filter((x) => x.lot.term === "short").reduce((s, x) => s + x.allowed, 0), row.short_losses_allowed);
+    near(out, "long_losses_allowed", d.harvest.filter((x) => x.lot.term === "long").reduce((s, x) => s + x.allowed, 0), row.long_losses_allowed);
+    const matches = d.harvest.flatMap((x) => x.washedBy.map((m) => [keyOf.get(x.lot), keyOf.get(m.lot), m]));
+    // wash_matches: sold key | replacement key | shares | disallowed | account kind | new basis (a key is "holding|lot")
+    same(out, "wash_matches (sold|replacement|shares|account)", matches.map(([a, b, m]) => `${a}|${b}|${show(m.shares)}|${m.bucket === "taxable" ? "taxable" : "ira"}`).sort().join(";"), items(row.wash_matches).map((w) => `${w[0]}|${w[1]}|${w[2]}|${w[3]}|${show(num(w[4]))}|${w[6]}`).sort().join(";"));
+    for (const [a, b, m] of matches) { const w = items(row.wash_matches).find((v) => `${v[0]}|${v[1]}` === a && `${v[2]}|${v[3]}` === b); if (w) near(out, `${a} by ${b} disallowed`, m.disallowed, w[5]); }
+    same(out, "the wash-sale note (shown with any candidate)", d.notes.some((n) => n.includes("(the wash-sale rule)")), num(row.harvest_count) > 0);
   }
   if (part === "saved") near(out, "taxSavedTotal against harvest_tax_saved_law (this year's federal tax without the harvest less with it)", d.taxSavedTotal, row.harvest_tax_saved_law);
+  if (part === "carry") {
+    near(out, "carry.short against harvest_carryover_short", d.carry.short, row.harvest_carryover_short);
+    near(out, "carry.long against harvest_carryover_long", d.carry.long, row.harvest_carryover_long);
+    near(out, "carryAdded.short against carryover_added_short", d.carryAdded.short, row.carryover_added_short);
+    near(out, "carryAdded.long against carryover_added_long", d.carryAdded.long, row.carryover_added_long);
+  }
   if (part === "sell") same(out, "sell_first", d.sellFirst.map((x) => keyOf.get(x.lot)).join(";"), row.sell_first);
   return out;
 }
@@ -249,8 +259,7 @@ for (const [f, rows] of Object.entries(ROWS)) {
 }
 
 // ---- reported only: the page's own convention, and the law's figures the page does not work ----
-const money2 = (n) => Math.round(n * 100) / 100;
-test("reported: the app against the key's page-convention columns (the day after the calendar anniversary), as counts", (t) => {
+test("reported: the app against the key's page-convention columns (the day after the calendar anniversary, the page's way before 2026-10-31), as counts", (t) => {
   let rows = 0, agree = 0, lots = 0, lotsAgree = 0;
   for (const row of ROWS["lots.csv"]) {
     const l = oneLot(row);
@@ -269,54 +278,16 @@ test("reported: the app against the key's page-convention columns (the day after
   t.diagnostic(`lots.csv: the app's longOn, term and days to long-term equal long_on_page, term_page and days_to_long_page on ${agree} of ${rows} rows`);
   t.diagnostic(`households.csv lot_page_contrast: the app equals the page column on ${lotsAgree} of ${lots} lots (the law's first long-term day differs on each)`);
 });
-test("reported: the law's figures the page does not work (findings, not failures), as counts", (t) => {
+test("reported: the brief's plain wash-sale test and the tax-per-dollar order (conventions, not failures), as counts", (t) => {
   const H = ROWS["households.csv"];
-  // the tax the harvest saves this year: the page's taxSavedTotal against harvest_tax_saved_law
-  const c = { rows: 0, within: 0, higher: 0, lower: 0, higherBy: 0, lowerBy: 0, lawNothing: 0 }, why = { carry: 0, wash: 0 };
-  let worst = null;
+  // the brief's plain test: any other lot of the ticker dated today - 30 to today, sold in the harvest or not
+  let plain = 0, plainDiffers = 0, candidates = 0, washed = 0;
   for (const row of H) {
-    const { d } = pageOf(row);
-    if (!d.harvest.length) continue;
-    c.rows++;
-    const law = num(row.harvest_tax_saved_law), diff = d.taxSavedTotal - law;
-    if (Math.abs(diff) <= 1) c.within++;
-    else if (diff > 0) {
-      c.higher++; c.higherBy += diff;
-      if (num(row.carryover_added_short) + num(row.carryover_added_long) > 0) why.carry++;
-      if (num(row.disallowed_total) > 0) why.wash++;
-      if (law <= 1) c.lawNothing++;
-    } else { c.lower++; c.lowerBy -= diff; }
-    if (!worst || Math.abs(diff) > Math.abs(worst.diff)) worst = { id: row.case_id, diff, app: d.taxSavedTotal, law };
-  }
-  t.diagnostic(`tax saved this year: rows with candidates ${c.rows}; the page's taxSavedTotal within $1 of harvest_tax_saved_law on ${c.within}, above it by more than $1 on ${c.higher} (by ${money2(c.higherBy).toLocaleString("en-US")} in all; ${why.carry} of them leave more loss to carry to next year, ${why.wash} lose part of a loss to a wash sale, ${c.lawNothing} save $1 or less by law), below it on ${c.lower} (by ${money2(c.lowerBy).toLocaleString("en-US")}); the widest gap ${worst?.id}: page ${money2(worst?.app ?? 0)}, law ${money2(worst?.law ?? 0)}`);
-  // the carryover to next year
-  let carry = 0, carryAdded = 0, carryShort = 0, carryLong = 0, withCandidates = 0, separate = 0;
-  for (const row of H) {
-    if (!pageOf(row).d.harvest.length) continue;
-    withCandidates++;
-    if (row.filing_status === "married_separate") separate++;
-    const s = num(row.harvest_carryover_short), l = num(row.harvest_carryover_long);
-    if (s + l > 0) { carry++; if (s > 0) carryShort++; if (l > 0) carryLong++; }
-    if (num(row.carryover_added_short) + num(row.carryover_added_long) > 0) carryAdded++;
-  }
-  t.diagnostic(`carryover: the page shows no amount ("the rest carries forward"); harvesting every candidate leaves a loss to carry to next year on ${carry} of the ${withCandidates} rows with candidates (short ${carryShort}, long ${carryLong}), ${carryAdded} of them more than without the harvest; the hero's "up to 3,000 a year of income" is 1,500 on the ${separate} married-filing-separately rows with candidates (26 U.S.C. 1211(b)(1))`);
-  // wash sales against purchases already made
-  let washCandidates = 0, washRows = 0, ira = 0, taxable = 0, disallowed = 0, plain = 0, plainDiffers = 0, candidates = 0;
-  for (const row of H) {
-    const { d, keyOf } = pageOf(row), listed = new Set(d.harvest.map((x) => keyOf.get(x.lot)));
     const want = items(row.harvest), plainSet = new Set(items(row.wash_plain_test).map((x) => `${x[0]}|${x[1]}`));
     candidates += want.length;
-    const washed = want.filter((w) => yes(w[4]));
-    washCandidates += washed.length;
-    for (const w of want) { if (plainSet.has(`${w[0]}|${w[1]}`)) plain++; if (plainSet.has(`${w[0]}|${w[1]}`) !== yes(w[4])) plainDiffers++; }
-    assert.ok(washed.every((w) => listed.has(`${w[0]}|${w[1]}`)), `${row.case_id}: a wash-sale candidate the page does not list`);
-    if (washed.length) washRows++;
-    disallowed += num(row.disallowed_total);
-    const accounts = new Set(items(row.wash_matches).map((m) => m[6]));
-    if (accounts.has("ira")) ira++;
-    if (accounts.has("taxable")) taxable++;
+    for (const w of want) { if (yes(w[4])) washed++; if (plainSet.has(`${w[0]}|${w[1]}`)) plain++; if (plainSet.has(`${w[0]}|${w[1]}`) !== yes(w[4])) plainDiffers++; }
   }
-  t.diagnostic(`wash sales: the page tests none and lists every candidate at its full loss; of ${candidates} candidates the law disallows part or all of ${washCandidates} (${washRows} rows, ${money2(disallowed).toLocaleString("en-US")} of loss in all) because the same ticker was bought in the 30 days before today, in an IRA on ${ira} rows (lost for good) and in a taxable account on ${taxable}; the brief's plain test (any other lot of the ticker dated today - 30 to today) says yes on ${plain} and differs from the share-for-share match on ${plainDiffers}`);
+  t.diagnostic(`wash sales: of ${candidates} candidates the share-for-share match (the page and the key) takes part or all of the loss of ${washed}; the brief's plain test says yes on ${plain} and differs on ${plainDiffers}`);
   // the order to sell
   let orderRows = 0, orderDiffers = 0;
   for (const row of H) {

@@ -68,8 +68,9 @@ Options:
 
 That is how the table under "Deliberate mistakes" was made.
 
-`tests/golden/tax-lots/todo.json` will list, by cause, the rows where the page disagrees with this key. It is empty
-(`{}`) until the key is checked against the page.
+`tests/golden/tax-lots/todo.json` lists, by cause, the rows where the page disagrees with this key. The first check
+against the page (2026-10-31) found three causes (open point 15); the page fixed all three the same day, and the list is
+empty (`{}`) again.
 
 ## Sources
 
@@ -492,6 +493,11 @@ Outputs:
     - Verdicts: the February 28 holding period (open point 1), the page's "worth about ... of tax" total against the
       law (2) and wash sales against purchases already on file (8) are the page's errors; the order to sell (10) is a
       convention.
+    - The same day the page took up all three: the holding period counts a year from the day after the buy, wash sales
+      are matched share for share against the household's lots (W1-W4), the tax saved this year is the federal tax
+      without the harvest less with it, and the page shows the carryover by the worksheet (`harvest_carryover_*` and
+      `carryover_added_*` are now compared too, with each candidate's wash sale, disallowed loss and every match).
+      Every row agrees.
 
 ## What the key leaves out (on purpose)
 
