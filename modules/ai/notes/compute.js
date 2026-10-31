@@ -296,9 +296,15 @@ function partOfName(s, start, end, people, everyday = true) {
   const word = w[2].toLowerCase().replace(/['’]s$/, "");
   if (NAME_NOUNS.test(word)) return true;
   if (NOT_A_NAME.test(word) || people.has(word)) return false;
+  if (everyday && OWNED_BEFORE.test(before)) return false;   // "on my card Black Friday": the household's own card
+  // after a card, checking or savings, a small word is a thing bought ("on card games", "savings jars", "the card
+  // table"), unless my, our, from, with... point at the account first (above: "with my checking debit")
+  if (everyday && /^\p{Ll}/u.test(w[2])) return true;
   return /^\p{Lu}/u.test(w[2]) || (!everyday && /\bthe\s+$/i.test(before));
 }
 
+// words before a card, checking or savings that make it the household's account ("my card", "from the savings")
+const OWNED_BEFORE = /\b(?:my|our|your|his|her|their|from|with|using|via|into|out\s+of)\s+(?:the\s+)?(?:(?:credit|debit|joint|old|new|main|other|business|personal)\s+)?$/i;
 // words before an account that say the money came out of it or went into it: "Paid the mortgage from checking"
 const SOURCE = /\b(?:from|with|using|via|out of|into)\s+(?:the\s+|my\s+|our\s+)?$/i;
 
@@ -437,7 +443,9 @@ const goesOn = (head, tail) => {
   if (MONTH_DOT.test(head) && /^\d/.test(tail)) return true;
   const small = /^\p{Ll}/u.test(tail) && !STARTS_SENTENCE.test(tail);
   if (NUMBER_DOT.test(head)) return small || /^\d/.test(tail);
-  const nameGoesOn = () => !STARTS_SENTENCE.test(tail) && !DAY_START.test(tail) && NAME_GOES_ON.test(tail.split(/(?<=[.!?;])\s/)[0]);
+  // a name goes on only into words with no number ("Main St. Cafe for lunch", "Lee, Dr. Kim and Bo"); a sentence with
+  // an amount or a day of its own is a new entry ("Lee, Dr. Went to Target and spent 20", "Need to pay rent on the 1st")
+  const nameGoesOn = () => { const next = tail.split(/(?<=[.!?;])\s/)[0]; return !STARTS_SENTENCE.test(tail) && !DAY_START.test(tail) && !/\d/.test(next) && NAME_GOES_ON.test(next); };
   if (AFTER_NAME_DOT.test(head)) return small;
   // a title after a name: after a comma ("Lee, Dr."), or after a word in capitals that does not start the sentence
   // ("to Kim Lee Dr."; but "Paid Dr. Lee" and "Then Dr. Lee" are titles)
@@ -514,14 +522,17 @@ const DONE = /\b(?:spent|paid|bought|charged|received|earned|got|tipped|deposite
 // what already happened: was, were, had, did... or a word in -ed in small letters ("cancelled", "dropped"; a name
 // such as United is no verb), but not one that says what is to come ("scheduled", "expected", "owed")
 const HAPPENED = /\b(?:was|were|had|did|went|came|happened)\b/;
-const HAPPENED_ED = /\b(?!(?:need|feed|seed|speed|shed|bleed|breed|scheduled|expected|planned|needed|required|owed|agreed|signed)\b)[a-z]{2,}ed\b/;
+const HAPPENED_ED = /\b(?!(?:need|feed|seed|speed|shed|bleed|breed|scheduled|expected|planned|needed|required|owed|agreed|signed|deferred|increased|reduced|revised|updated|estimated|prorated|automated|combined|itemized|itemised|discounted)\b)[a-z]{2,}ed\b/;
 // the day said is today or later; a time with no one day counts unless it looks back ("last month", "a while ago")
 const ahead = (s, today) => {
   const d = readDate(s, today, "future");
   return !!d && (d.date ? d.date >= today : !/\b(?:last|past|previous|prior|ago|back|earlier|recently|lately|other|before|since)\b/.test(d.match));
 };
 const isReminder = (s, low, today) => REMIND.test(low) || (DUE_TO.test(low) && !DONE.test(low) && !HAPPENED.test(low)
-  && !HAPPENED_ED.test(s.charAt(0).toLowerCase() + s.slice(1)) && ahead(s, today));
+  && !HAPPENED_ED.test(beforeDueTo(s)) && ahead(s, today));
+// the words before "due to" (where the verb of what happened sits: "Flight cancelled due to rain"), first letter small;
+// words after it ("as discussed", "it is automated") say nothing about whether the bill is still to come
+const beforeDueTo = (s) => { const t = s.charAt(0).toLowerCase() + s.slice(1), i = t.toLowerCase().search(/\bdue\s+to\b/); return i < 0 ? t : t.slice(0, i); };
 const BALANCE = /\b(?:balance|is at|has|have|is now|stands at|is|shows)\b/;
 // a payment, a fee or a rate said about an account is not its balance
 const NOT_BALANCE = /\b(?:spent|paid|bought|charged|received|earned|payments?|fees?|rate|interest|apr|minimum|limit|due|bills?)\b/;
@@ -531,7 +542,9 @@ const IN_WORDS = /\b(?:received|earned|deposit(?:ed)?|refund(?:ed)?|made)\b/;
 const OUT_WORDS = /\b(?:spent|spend|paid|pay|bought|buy|cost|costs|charged|tipped|payment)\b/;
 // a fee said with a deposit and no other word of money in is money out: "Overdraft fee of 35 due to a late deposit"
 const FEE_OUT = /\b(?:fees?|penalty)\b/;
-const IN_NOT_DEPOSIT = /\b(?:received|earned|refund(?:ed)?|made|back)\b/;
+const IN_NOT_DEPOSIT = /\b(?:received|earned|refund(?:ed)?|made|back|paycheck|pay\s?check|salary|payroll|wages)\b/;
+// a fee said as not charged: "no fees this time", "the fee was waived", "fee free", "without a fee"
+const NO_FEE = /\bno\s+(?:\w+\s+)?(?:fees?|penalty)\b|\b(?:fees?|penalty)\s+(?:was|were|is|are|got)\s+(?:waived|refunded|removed)\b|\bwaived\b|\bfee[-\s]?free\b|\b(?:without|zero)\s+(?:a\s+|any\s+)?(?:fees?|penalty)\b/;
 const PAYCHECK = /\b(?:got|get|gets|getting|was|were)\s+paid\b|\bpaycheck\b|\bsalary\b|\bwages\b/;
 
 /**
@@ -560,6 +573,8 @@ export function quickRead(text, plan, today) {
     if (isReminder(s, low, today)) {
       const day = readDate(s, today, "future");
       let name = s;
+      // a remark after a comma right behind the day is no part of the name ("Rent is due on the 1st, as discussed")
+      if (day?.match) { const at = name.search(new RegExp(`${esc(day.match)}\\s*,`, "i")); if (at > 0) name = name.slice(0, at + day.match.length); }
       for (const c of [day?.match, money?.match]) if (c) name = name.replace(new RegExp(esc(c), "i"), " ");
       name = clean(name.replace(/\b(?:please\s+)?(?:remind me to|remind me about|remind me|remember to|don'?t forget to|don'?t forget|do not forget to|do not forget)\b/gi, " ").replace(/\b(?:every month|monthly|every year|yearly|annually|each month|each year)\b/gi, " ").replace(/[.!?;,]+/g, " "));
       // the words left around the day and the amount ("pay the registration of on") go
@@ -573,14 +588,14 @@ export function quickRead(text, plan, today) {
     }
     const acct = findAccount(s, plan);
     if (acct.named && money && BALANCE.test(low) && !NOT_BALANCE.test(low)) {
-      out.push({ kind: "balance", accountId: acct.account?.id ?? "", amount: money.amount, date: readDate(s, today, "past")?.date ?? today, source: s });
+      out.push({ kind: "balance", accountId: acct.account?.id ?? "", amount: money.amount, date: dayOf(s, today)?.date ?? today, source: s });
       continue;
     }
     const sure = IN_SURE.test(low), paidOut = OUT_WORDS.test(low.replace(new RegExp(IN_SURE.source, "g"), " "));
-    const feeOut = !sure && FEE_OUT.test(low) && /\bdeposit/.test(low) && !IN_NOT_DEPOSIT.test(low);
+    const feeOut = !sure && FEE_OUT.test(low) && !NO_FEE.test(low) && /\bdeposit/.test(low) && !IN_NOT_DEPOSIT.test(low);
     const kind = !money ? null : sure || (IN_WORDS.test(low) && !paidOut && !feeOut) ? "income" : paidOut || feeOut ? "spend" : null;
     if (kind) {
-      const day = readDate(s, today, "past");
+      const day = dayOf(s, today);
       const payee = readPayee(withoutAccount(s, acct), [day?.match, money.phrase]) || (kind === "income" && PAYCHECK.test(low) ? "Paycheck" : "");
       // an account the note names but that fits none (or several) is asked for, never swapped for the usual one
       const into = acct.account ?? (acct.named ? null : defaultAccount(plan, kind));
@@ -590,6 +605,21 @@ export function quickRead(text, plan, today) {
     out.push({ kind: "note", text: s, source: s });
   }
   return out.map((p) => finish(p, plan, today, text));
+}
+
+// a day the note talks about that readDate could not read ("2 weeks before", "on Veterans Day", "on the first of the
+// month"), or a looking-back word beside the day it did read ("a month ago today"); "next year's insurance" says what
+// a payment is for, not when
+const TIME_HINT = /\b(?:ago|before|since|prior|fortnight|weekend|holidays?|weeks?|months?|years?)\b(?!['’])|\bon\s+the\s+(?:first|last|\d{1,2}(?:st|nd|rd|th)?)\s+of\b|\bon\s+(?:\p{Lu}[\p{L}'’.]*\s+){1,3}(?:Day|Eve|Sunday|Monday|Night)\b/u;
+const BACK_HINT = /\b(?:ago|before|since|prior)\b/i;
+// holidays of one word or with no fixed day the rules do not work out (a day is asked for)
+const OTHER_HOLIDAYS = /\b(?:on|at|around|over|during|for)\s+(?:the\s+)?(?:juneteenth|hanukkah|chanukah|kwanzaa|passover|diwali|ramadan|eid|rosh hashanah|yom kippur|lunar new year|chinese new year)\b/i;
+/** The day something happened (readDate, "past"); { date: "", match } (asked for) when the note talks about a day the rules cannot read; null when it names none (today). */
+function dayOf(s, today) {
+  const d = readDate(s, today, "past");
+  if (!d) return TIME_HINT.test(s) || OTHER_HOLIDAYS.test(s) ? { date: "", match: "" } : null;
+  if (d.date && BACK_HINT.test(s.toLowerCase().replace(String(d.match).toLowerCase(), " "))) return { date: "", match: d.match };
+  return d;
 }
 
 /** The amounts written in a note (commas dropped), to tell whether an amount the AI gives is really in it. */

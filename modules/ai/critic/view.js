@@ -73,7 +73,7 @@ export function render(page, ctx) {
     const s = getSheet();
     const key = s.names.filter((n) => n.kind === "person" || /\d$/.test(n.alias)).map((n) => `${n.alias} is ${n.name}`);
     foldBody.append(
-      ui.h("p", { class: "muted small" }, "This is everything the AI gets, word for word, plus the names of the pages it can point you to. People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind (\"the credit card\"). Your goal names are sent as you typed them, with those names swapped in them too. The AI helper runs on your PC, unless you picked an online AI service in Settings; then these lines go to that service."),
+      ui.h("p", { class: "muted small" }, "This is everything the AI gets, word for word, plus the names of the pages it can point you to. People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind and a number (\"credit card 1\"). Your goal names are sent as you typed them, with those names swapped in them too. The AI helper runs on your PC, unless you picked an online AI service in Settings; then these lines go to that service."),
       key.length ? ui.h("p", { class: "small" }, `On this page ${key.join(", ")}. The AI only ever sees Adult 1, Adult 2 and so on.`) : null,
       ui.h("ul", { class: "cr-facts" }, s.lines.map((l) => ui.h("li", {}, l))));
   });

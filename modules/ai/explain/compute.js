@@ -461,7 +461,12 @@ export function copyFor(plan, { today } = {}) {
   // names of two or more words, the first stand-in for a name winning (an outsider's own, before a rule naming them as a payee)
   const known = new Set(others.map((o) => lower(o.name)));
   const long = things.filter((t) => / /.test(t.name) && !known.has(lower(t.name)) && known.add(lower(t.name)));
-  return { copy, names: [...base, ...things], terms: hideTerms(people, accountAliases(plan, { numbered: true }).filter(Boolean), { keep, outsiders: [...others, ...long], surnames: true }), swap: payeeSwap(plan) };
+  // a payee of two or more words inside a longer name of the household's own ("Pay back <a friend>", "Rent from <a
+  // tenant>") is swapped here, before any page says it: the digest counts the texts a page says without payees as its
+  // own words. A name typed exactly like a payee ("Mortgage payment") is the household's own word and stays.
+  const swap = payeeSwap(plan), inside = payeesInside(swap);
+  if (inside) for (const list of [copy.goals, copy.income, copy.expenses]) for (const x of Array.isArray(list) ? list.filter(isObj) : []) if (typeof x.name === "string" && !swap.has(squash(x.name))) x.name = x.name.replace(inside, (m) => swap.get(m));
+  return { copy, names: [...base, ...things], terms: hideTerms(people, accountAliases(plan, { numbered: true }).filter(Boolean), { keep, outsiders: [...others, ...long], surnames: true }), swap };
 }
 
 /**
@@ -518,11 +523,16 @@ export function buildMessages({ title, purpose, lines, question = "", terms = []
   ];
 }
 
-/** The answer as shown: a reasoning model's <think> part dropped, the real names put back, spaces tidied, cut to MAX_ANSWER. "" when there is nothing. */
+/**
+ * The answer as shown: a reasoning model's <think> part dropped (and everything after a <think> that never closes: a
+ * model cut off while still thinking has not answered yet), the real names put back, spaces tidied, cut to MAX_ANSWER.
+ * "" when there is nothing.
+ */
 export function readAnswer(text, names = []) {
   let s = String(text ?? "").replace(/<think>[\s\S]*?<\/think>/gi, "");
   const end = s.toLowerCase().lastIndexOf("</think>");
   if (end >= 0) s = s.slice(end + 8);
+  s = s.replace(/<think>[\s\S]*$/i, "");
   s = s.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   return s ? cut(restore(s, names), MAX_ANSWER) : "";
 }

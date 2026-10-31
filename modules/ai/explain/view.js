@@ -170,7 +170,7 @@ export function render(page, ctx) {
  * that is not an item belongs to the item above it. A blank line ends a paragraph; **bold** and *italic* are shown
  * as such; a "#" heading reads as a line of its own. Built from text nodes, never HTML.
  */
-function answerBlocks(ui, text) {
+export function answerBlocks(ui, text) {
   const marks = (t, re, tag, rest) => t.split(re).map((part, i) => (i % 2 ? ui.h(tag, {}, part) : rest(part)));
   const inline = (t) => marks(t, /\*\*(.+?)\*\*/, "strong", (p) => marks(p, /\*([^*\s](?:[^*]*?[^*\s])?)\*/, "em", (x) => x.replace(/\*\*/g, ""))).flat();
   const out = [];
@@ -221,7 +221,7 @@ function message(ui, m, chosen) {
   if (m.kind === "unreachable") return box("warn", "The AI helper did not respond. If it runs on your PC, check that the PC is on and awake and that Ollama (the AI program) is open on it. Settings, under “AI assistant”, shows how it is set up.", [settings, open]);
   if (m.kind === "empty") return box("info", "This page has no numbers to explain yet. Open it and fill it in first, then come back.", [open]);
   if (m.kind === "page") return box("error", "This page could not work out its numbers just now, so there is nothing to send. Open the page to see what it says.", [open]);
-  if (m.kind === "blank") return box("info", "The AI sent back an empty answer. Tap the Explain button to try again. If it keeps happening, the AI model may be too small for this page; whoever set up the AI can choose a bigger one.");
+  if (m.kind === "blank") return box("info", "The AI sent back no answer, or stopped before it finished one. Tap the Explain button to try again. If it keeps happening, the AI model may be too small for this page; whoever set up the AI can choose a bigger one.");
   // the AI answered with a problem (out of memory, model not found...) or the line dropped: a retry may or may not help
   return box("error", `The AI helper ran into a problem and could not finish the explanation. Try again in a minute; a shorter question can help. If it keeps happening, ${m.detail ? "open “Show details” below and pass it to whoever set up the AI." : "tell whoever set up the AI."}`, [],
     m.detail ? ui.h("details", { class: "notice-details" }, ui.h("summary", {}, "Show details"), ui.h("p", {}, `For whoever set up the AI helper: ${m.detail}`)) : null);

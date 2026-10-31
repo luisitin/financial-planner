@@ -112,9 +112,8 @@ No money math: every figure the AI reads was worked out by another page.
   is a small line under the list; when the plan changed after asking, the page says so.
 
 ## Behaviour (view)
-- The fold "What the AI will read" still says accounts are called by their kind ("the credit card"); the fact sheet
-  numbers them ("credit card 1", see above), so that sentence should read "by their kind and a number (“credit card
-  1”)", as on Explain a page. `view.js` is not part of this change (asked of its owner).
+- The fold "What the AI will read" says accounts are called by their kind and a number ("credit card 1"), as the fact
+  sheet names them and as on Explain a page.
 - One question at a time: the button is disabled from the first tap ("Checking the AI helper…", then "Reading your
   plan… this can take a minute"). A re-render while asking shows the disabled button and redraws when the answer
   comes. A render that is no longer on screen never redraws (`shown` counts renders and leaves; the shell's

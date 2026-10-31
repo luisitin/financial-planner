@@ -62,8 +62,12 @@ of the pages that own them.
   day or two ago", "earlier in the week"; a season ("last summer", "in the fall", "this spring", "summer 2025",
   "spring break"; "the Spring Market" and "summer camp" are names); "over the holidays", "around Christmas",
   "Christmas time", "Labor Day weekend", "on payday", "on my birthday"; and any other "... ago" ("ages ago", "two
-  Fridays ago"). What a payment is for is no day ("next year's insurance", "last week's groceries"). With none of
-  these words the day is today.
+  Fridays ago"). What a payment is for is no day ("next year's insurance", "last week's groceries"). For money and a
+  balance (`dayOf`), a day the note talks about that none of this reads is asked for too, never taken as today: no
+  day read but a word of time in the sentence (ago, before, since, prior, fortnight, weekend, holiday, week, month,
+  year; "on the first of the month"; "on Veterans Day", "on St. Patrick's Day", "on ... Eve"; Juneteenth, Hanukkah,
+  Kwanzaa, Passover, Diwali, Ramadan, Eid, Rosh Hashanah, Yom Kippur, Lunar New Year), or a day read with a
+  looking-back word beside it ("a month ago today"). With none of these words the day is today.
 - **Amounts** (`readAmount`): "$42.17", "42 dollars", "40 bucks", or a number right after a money word (spent, paid,
   cost, charged, got, received, earned, is, is at, is now, has, have, shows, balance, stands at), else right after of,
   at, for or to ("registration of 85", "shoes for 80"): in "Dinner for 4, paid 60 at Joe's" the amount is 60.
@@ -84,9 +88,11 @@ of the pages that own them.
   a word in capitals that is not a person in the plan, a day, a month or a small word ("the Mortgage Shop", "the
   Brokerage Bar", "Brokerage Partners"); and, for an account money is not spent from day to day (a house, a loan,
   investments), after "the", by any other word that does not go on the sentence ("the house cleaner"). A card,
-  checking or savings followed by anything else stays the account, so it is never swapped for the usual one: "on my
-  card again", "too", "online", "first", "while shopping", "with the card ending 1234" (the "ending 1234" leaves the
-  payee too), "on the credit card I share with Bo", "on the card my wife uses", "from savings just now". When a
+  checking or savings after my, our, your, from, with, using, via, into or out of is the household's own account
+  whatever follows ("on my card again", "on my card Black Friday", "with my checking debit", "from savings just
+  now"), and so it is followed by a word that goes on the sentence ("with the card ending 1234", the "ending 1234"
+  leaving the payee too; "on the credit card I share with Bo"; "on the card my wife uses"); followed by any other
+  word in small letters it is a thing bought, not the account ("on card games", "the card table", "savings jars"). When a
   sentence names two accounts, the one after from, with, using, via, out of or into is the one the money moved
   through: "Paid the mortgage from checking, 1,980 dollars" is money spent from checking, to "Mortgage".
 - **Where new money goes** (`defaultAccount`, both for the plain rules and for an AI entry with no account): only
@@ -103,8 +109,10 @@ of the pages that own them.
   sentence starts with: "Acme Inc. for the parts" goes on, "Acme Inc. Spent 20" and "Acme Corp. 50 of it was tax" are
   two; after a street (St. as a street, Ave., Rd., Blvd.) or a title that follows a name (after a comma, "Lee, Dr.",
   or after a word in capitals that does not start the sentence, "to Kim Lee Dr.") when the next word starts with a
-  small letter, or when capitals follow that go on a name up to the end of that sentence or to a small word such as
-  for, at, on, and: "the Main St. Cafe." and "Main St. Cafe for lunch" go on, "Lee, Dr. Kim and Bo" goes on, but "5
+  small letter, or when capitals with no number in them follow that go on a name up to the end of that sentence or to
+  a small word such as for, at, on, and: "the Main St. Cafe." and "Main St. Cafe for lunch" go on, "Lee, Dr. Kim and
+  Bo" goes on, but a next sentence with an amount or a day of its own is a new entry ("Lee, Dr. Went to Target and
+  spent 20", "12 Main St. Need to pay rent on the 1st"), and "5
   Oak St. Lunch was nice", "Oak St. Target was busy", "Lee, Dr. Rent is due", "Lee, Dr. Tomorrow remind me",
   "Lee, Dr. Yesterday I spent 20" and "Lee, Dr. Bo spent 20" are two; after vs. or approx. before a small letter or
   a number ("20 vs. 30"); after Jan. ... Dec. before a day ("on Dec. 1"). "No." is a word, so "I said no. Spent 30"
@@ -115,12 +123,15 @@ of the pages that own them.
   "remind", "remember to", "don't forget" or "due" make a reminder; so does "due to", but only when a day from today
   on is said (or a time with no one day that does not look back, as "in April" or "next month" do and "last month"
   does not), nothing was spent, paid, bought, charged, received or got, and nothing already happened (was, were,
-  had, did, went, came, or a word in -ed in small letters other than scheduled, expected, planned, needed, required,
-  owed, agreed, signed): "Visa payment due to Chase on the 15th" and "Card payment due to United on the 1st" are
+  had, did, went, came, or, before "due to", a word in -ed in small letters other than scheduled, expected, planned,
+  needed, required, owed, agreed, signed, deferred, increased, reduced, revised, updated, estimated, prorated,
+  automated, combined, itemized, discounted; words after it, "as discussed", "it is automated", say nothing about
+  that): "Visa payment due to Chase on the 15th" and "Card payment due to United on the 1st" are
   reminders; "Due to the rain, spent 20" is money spent; "cancelled due to rain", "The game was cancelled due to rain
   on Friday" (or last Friday) and "Due to a refund, my balance dropped yesterday" are notes; "Late fee of 25 due to
   the late payment yesterday" is money spent that day. A reminder's name is the sentence without
-  those words, the day, the amount and "every month/year", which set how it repeats. An account named with
+  those words, the day, the amount and "every month/year", which set how it repeats, and without a remark after a
+  comma right behind the day ("Rent is due to the landlord on the 1st, as discussed": "Rent is due to the landlord"). An account named with
   "balance", "is", "is at", "has", "is now" or "stands at" and an amount make that account's balance (its day read as
   under Days; when the words fit no account or more than one, the account is asked for), but never a sentence about
   a payment, a fee, a rate, interest, an APR, a minimum, a limit, a due date or a bill. Money in or out: "got paid",
@@ -128,7 +139,9 @@ of the pages that own them.
   "refund" or "made" make money in only when nothing was paid out ("Made a payment of 200", "Paid a deposit of 500"
   and "Received the bill and paid 120" are money spent); "spent", "paid", "bought", "cost", "charged", "tipped" or
   "payment" and an amount make money spent, and so does a fee said with a deposit and no other word of money in
-  ("Overdraft fee of 35 due to a late deposit yesterday"; "Paycheck" for money in that names no one). Who it was paid
+  (paycheck, salary, payroll and wages are such words) unless the fee was not charged ("no fees", "the fee was
+  waived", "fee free", "without a fee"): "Overdraft fee of 35 due to a late deposit yesterday" is money spent,
+  "Deposited my paycheck of 1,950, no fees this time" money in ("Paycheck" for money in that names no one). Who it was paid
   to (or came from) is the words after at, from, to, for or on (not "due to", "thanks to"), once the day, the amount
   with its for/of/at, the account's words ("from savings", "on my card", "to the visa", "the card ending 1234"; only
   where they named the account, so "at the Savings Mart from savings" keeps "Savings Mart") and a count ("for 4

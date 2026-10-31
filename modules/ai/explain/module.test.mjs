@@ -441,3 +441,48 @@ test("the stand-ins: in the order handed out; one per payee, outsider, room; the
   assert.deepEqual([c.meta.name, c.policies?.[0]?.insurer ?? c.insurance.policies[0].insurer, c.imports[0].fileName, c.debts[0].securedBy, c.reminders[0].name, c.reminders[0].note], ["", "", "", "home 1", "reminder 1", ""]);
   assert.equal(c.categories[0].label, `${"someone in the household"} dues`);
 });
+
+test("a payee of two or more words inside the household's own names (a goal, an income, an expense) goes as its stand-in on every page, and comes back in the answer", () => {
+  const p = plan();
+  p.transactions = [
+    { id: "t-zq", date: "2026-10-05", amount: -120, payee: "Zelda Quorn", rawPayee: "ZELLE TO ZELDA QUORN", accountId: "a-chk", category: "", tags: [], note: "" },
+    { id: "t-pp", date: "2026-10-06", amount: -60, payee: "Penhallow Pediatrics", rawPayee: "PENHALLOW PEDS", accountId: "a-chk", category: "", tags: [], note: "" },
+  ];
+  p.goals.push({ id: "g-zq", name: "Pay back Zelda Quorn", icon: "", target: 1200, targetDate: "2027-06-01", priority: 3, saved: 0, fundedBy: [], monthly: 100 });
+  p.expenses.push({ id: "e-zq", name: "Zelda Quorn tutoring", category: "childcare", amount: 120, period: "monthly", essential: false });
+  p.expenses.push({ id: "e-pp", name: "Penhallow Pediatrics copays", category: "health", amount: 60, period: "monthly", essential: true });
+  p.income.push({ id: "i-zq", name: "Rent from Zelda Quorn", type: "rental", personId: "", amount: 900, period: "monthly" });
+  for (const { key } of PAGES) {
+    const lines = page(structuredClone(p), key).lines;
+    assert.deepEqual(lines.filter((l) => /Zelda|Quorn|Penhallow/i.test(l)), [], key);
+  }
+  const s = page(structuredClone(p), "goals/goals");
+  const alias = s.lines.join("\n").match(/Pay back (Payee \w+)/)?.[1];
+  assert.ok(alias, "the goal goes with the payee's stand-in in its name");
+  assert.equal(readAnswer(`Saving for Pay back ${alias} is on track.`, s.names), "Saving for Pay back Zelda Quorn is on track.");
+});
+
+test("the answer: a reasoning model cut off while still thinking has not answered (nothing is shown as its answer)", () => {
+  const names = [{ alias: "Adult 1", name: "Ana" }];
+  assert.equal(readAnswer("<think>Okay, the user wants Adult 1 numbers", names), "");
+  assert.equal(readAnswer("<THINK>still going", names), "");
+  assert.equal(readAnswer("<think>done</think>Adult 1 saves well.", names), "Ana saves well.");
+  assert.equal(readAnswer("Adult 1 saves well. <think>and then", names), "Ana saves well.");
+});
+
+test("the answer on screen: paragraphs, lists numbered from their first number, items nested by indent, bold and italic", async () => {
+  const { answerBlocks } = await import("./view.js");
+  const h = (tag, attrs, ...kids) => ({ tag, attrs: attrs ?? {}, kids: kids.flat(Infinity).filter((k) => k !== null && k !== undefined), append(...more) { this.kids.push(...more.flat(Infinity)); } });
+  const flat = (n) => (typeof n === "string" ? n : `<${n.tag}${n.attrs.start ? ` start=${n.attrs.start}` : ""}>${n.kids.map(flat).join("")}</${n.tag}>`);
+  const show = (t) => answerBlocks({ h }, t).map(flat).join("");
+  assert.equal(show("First line\nsame paragraph\n\nSecond"), "<p>First line\nsame paragraph</p><p>Second</p>");
+  assert.equal(show("1. one\n1. two\n1. three"), "<ol><li>one</li><li>two</li><li>three</li></ol>");   // "1. 1. 1." counts 1, 2, 3
+  assert.equal(show("Intro\n3. three\n4. four"), "<p>Intro</p><ol start=3><li>three</li><li>four</li></ol>");
+  assert.equal(show("- a\n\n- b"), "<ul><li>a</li><li>b</li></ul>");   // a blank line between items keeps the list
+  assert.equal(show("- a\n  - a1\n  - a2\n- b"), "<ul><li>a<ul><li>a1</li><li>a2</li></ul></li><li>b</li></ul>");
+  assert.equal(show("- a\n  more about a\n- b"), "<ul><li>a\nmore about a</li><li>b</li></ul>");
+  assert.equal(show("**Net worth** is *up*"), "<p><strong>Net worth</strong> is <em>up</em></p>");
+  assert.equal(show("## What it shows\nText"), "<p>What it shows\nText</p>");   // a heading reads as a line of its own
+  const html = answerBlocks({ h }, "<b>not html</b>");
+  assert.deepEqual(html.map((n) => [n.tag, n.kids]), [["p", ["<b>not html</b>"]]]);   // text, never HTML
+});

@@ -590,3 +590,56 @@ test("the plain rules: \"due to\" with a day gone by or something that happened 
   assert.deepEqual(pay("Spent 30 at 7 Eleven"), [["spend", 30, "7 Eleven", true]], "a name that starts with a number stays");
   assert.deepEqual(pay("Spent 50 on the 4th of July at the lake"), [["spend", 50, "Lake", true]]);
 });
+
+test("the plain rules keep every entry and its sign: a name runs on only into words with no number; a fee not charged; 'due to' read from the words before it; 'card games' is a thing bought", () => {
+  const T = "2026-10-31", p = familyPlan(T);
+  const read = (n) => quickRead(n, p, T).map((e) => [e.kind, e.amount ?? null, e.accountId || null]);
+  // after "Lee, Dr." or a street, a sentence with an amount or a day of its own is its own entry (no entry lost or re-dated)
+  assert.deepEqual(read("Paid 150 to Lee, Dr. Went to Target and spent 20."), [["spend", 150, "a-chk"], ["spend", 20, "a-chk"]]);
+  assert.deepEqual(read("Paid 150 to Lee, Dr. Bo and I spent 20 at Target."), [["spend", 150, "a-chk"], ["spend", 20, "a-chk"]]);
+  assert.deepEqual(quickRead("Paid 150 to Lee, Dr. Need to pay rent on the 1st.", p, T).map((e) => [e.kind, e.date || null]), [["spend", T], ["note", null]]);
+  assert.deepEqual(read("Paid 30 at 12 Main St. Went to Target and spent 20."), [["spend", 30, "a-chk"], ["spend", 20, "a-chk"]]);
+  assert.equal(quickRead("Spent 12 at the Main St. Cafe for lunch.", p, T)[0].payee, "Main St. Cafe");   // a name with no number goes on
+  // a deposit that says no fee was charged is money in
+  assert.deepEqual(read("Deposited my paycheck of 1,950, no fees this time"), [["income", 1950, "a-chk"]]);
+  assert.deepEqual(read("Deposit of 500 at the ATM, the fee was waived"), [["income", 500, "a-chk"]]);
+  assert.deepEqual(read("Mobile deposit of 200, fee free"), [["income", 200, "a-chk"]]);
+  // "due to": only a verb before it says the thing already happened
+  for (const n of ["Rent is due to the landlord on the 1st, as discussed", "Visa payment due to Chase on the 15th, it is automated", "The deferred payment is due to the bank on the 1st", "Payment of 300 due to Chase on the 15th, autopay is turned off"]) assert.equal(quickRead(n, p, T)[0].kind, "reminder", n);
+  assert.equal(quickRead("Flight cancelled due to rain on Friday", p, T)[0].kind, "note");
+  // a card, checking or savings followed by an everyday word is a thing bought, unless my, our, from, with... point at the account
+  assert.deepEqual(read("Spent 30 on card games at Target"), [["spend", 30, "a-chk"]]);
+  assert.deepEqual(read("Spent 30 on the card table at Ikea"), [["spend", 30, "a-chk"]]);
+  assert.deepEqual(read("Spent 20 on savings jars at Target"), [["spend", 20, "a-chk"]]);
+  assert.deepEqual(read("Spent 30 at Target on my card again"), [["spend", 30, "a-visa"]]);
+  assert.deepEqual(read("Spent 30 at Target from savings just now"), [["spend", 30, "a-sav"]]);
+  assert.deepEqual(read("Spent 40 at Target on the credit card"), [["spend", 40, "a-visa"]]);
+});
+
+test("a day the note talks about but the rules cannot read is asked for, never taken as today", () => {
+  const T = "2026-10-31", p = familyPlan(T);
+  for (const n of ["Spent 40 at the dentist 2 weeks before", "Spent 40 at the dentist a month ago today", "Spent 40 at the dentist on the first of the month", "Spent 40 at the dentist on Veterans Day", "Spent 40 at the dentist on St. Patrick's Day", "Spent 40 at the dentist on Juneteenth"]) {
+    const [x] = quickRead(n, p, T);
+    assert.deepEqual([x.kind, x.date, x.ready], ["spend", "", false], n);
+  }
+  // a day it reads, or none at all, as before
+  assert.equal(quickRead("Spent 40 at the dentist 2 weeks ago", p, T)[0].date, "2026-10-17");
+  assert.equal(quickRead("Spent 40 at the store the Friday before last", p, T)[0].date, "2026-10-23");
+  assert.equal(quickRead("Spent 40 on Amazon", p, T)[0].date, T);
+  assert.equal(quickRead("Paid 1,200 for next year's insurance", p, T)[0].date, T);
+});
+
+test("after my, our, from or with, a card, checking or savings is the household's own, whatever word follows", () => {
+  const T = "2026-10-31", p = familyPlan(T);
+  assert.equal(quickRead("Spent 30 at Target on my card Black Friday", p, T)[0].accountId, "a-visa");
+  assert.equal(quickRead("Spent 30 at Target on my card Christmas Eve", p, T)[0].accountId, "a-visa");
+  assert.equal(quickRead("Spent 30 at Target with my checking debit", p, T)[0].accountId, "a-chk");
+  assert.equal(quickRead("Bought groceries at the Savings Mart for 40", p, T)[0].payee, "Savings Mart");   // a place, not the account
+});
+
+test("a reminder's name stops at its day when a remark follows after a comma", () => {
+  const T = "2026-10-31", p = familyPlan(T);
+  assert.equal(quickRead("Rent is due to the landlord on the 1st, as discussed", p, T)[0].name, "Rent is due to the landlord");
+  assert.equal(quickRead("Visa payment due to Chase on the 15th, it is automated", p, T)[0].name, "Visa payment due to Chase");
+  assert.equal(quickRead("Remind me to buy milk, eggs and bread tomorrow", p, T)[0].name, "Buy milk eggs and bread");   // a comma before the day stays
+});

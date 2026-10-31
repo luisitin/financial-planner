@@ -41,7 +41,9 @@ moved (or `null`, or `true`), `dayless(text)`, `sheetFor(plan, run, { today })` 
     bank's own text), so a stand-in there would change their figures. The digest says them instead (`payeeSwap`): a text
     that is a payee as typed, or a bank's text, is sent as its payee's stand-in, and a payee of two or more words
     inside a longer text too (as typed, whole words; one word alone, such as "Rent" or "Target", could be the app's
-    own word). **The page's own words stay** (`payeeFree`, `own`): when a page says a payee's text, it is worked out
+    own word). Such a payee inside a longer goal, income or expense name of the household's own ("Pay back <a
+    friend>", "Rent from <a tenant>") is swapped in the copy itself, before any page says it (`copyFor`), since those
+    names are also the page's own words below; a name typed exactly like a payee ("Mortgage payment") stays. **The page's own words stay** (`payeeFree`, `own`): when a page says a payee's text, it is worked out
     once more on a copy where every payee, bank text and rule's payee name is a made-up word ("Zqa"); a text the
     page says there too is its own (an account's kind "Mortgage" or "Checking", the budget's Needs, Wants and
     Savings, an expense "Mortgage payment", the alert "Emergency fund is thin") and goes as it is, whatever a payee
