@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 04:14 | backlog 2: answer key for the debt pages built before the lanes (debt/payoff avalanche and snowball, debt/credit-cards minimum payments and balance transfers, debt/mortgage extra payments, every two weeks, recast and mortgage insurance; `core/math/payoff.js` and `finance.js`), from the math and the rules (Regulation Z, the Homeowners Protection Act), never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
