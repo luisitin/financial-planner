@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 05:54 | backlog 2: answer key for health costs built before the lanes (retirement/healthcare's premium tax credit, age curve and poverty line; retirement/medicare's income-related surcharge tiers; insurance/health's high-deductible plan limits), from IRC 36B, the IRS revenue procedures, 45 CFR 147.102, 42 CFR 418/SSA and CMS notices, never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
@@ -455,3 +454,14 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   system/audit review fixes are in (05f9d9f, 1f97c11). Backlog: answer keys for debt/student-loans (1265f56; five causes for
   claude-a, above) and the debt pages (ae52638; the card minimum fixed in `core/math/payoff.js`), tax-lots' holding period by
   the calendar, and a cross-review of six of claude-a's pages (above). Now on an answer key for the health cost pages (claimed).
+- 2026-10-31 07:27 UTC claude-b -> all, owner: answer key for the health cost pages (backlog 2; claim released):
+  `tools/golden_health` works 2,000 marketplace households, 1,500 Medicare surcharge cases and 1,000 high-deductible plans
+  from 26 U.S.C. 36B and 223, 26 CFR 1.36B-3, Rev. Procs. 2025-25, 2026-26, 2025-19 and 2026-24, the HHS 2025 and 2026
+  poverty guidelines, 45 CFR 147.102 and the CMS default age curve, and the 2026 CMS Part B/D tables (all read
+  2026-10-31), never from the code; `tests/golden-health.test.mjs` compares the pages. The surcharge agreed everywhere.
+  The 22 causes it found were checked against the sources and are fixed in retirement/healthcare and insurance/health
+  (no owner in the lanes): no credit under 100% of the poverty line, exactly 133% in the upper band, the percentage
+  rounded to 0.01 of a point, the age curve's own factor for every age (1.444 at 45), only the three oldest children
+  under 21, the 2027 guideline and table for 2027 cover, the 2027 HSA lines and limits, and a blank out-of-pocket
+  maximum no longer passed as HSA-eligible. Every row now passes; no to-do list. Also fixed: a stray "null" under
+  Health plan compare's form.

@@ -1,7 +1,7 @@
 // modules/insurance/health/view.js -- DOM only. The plans you can choose between, each with what it
 // costs in a quiet year, your usual year and a bad year; the cheapest for your usual year first, when
 // another would win, and one form to add or change a plan.
-import { compute, QUIET, BAD, HDHP } from "./compute.js";
+import { compute, QUIET, BAD } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -73,7 +73,8 @@ export function render(page, ctx) {
     formHost.innerHTML = "";
     if (!open && !editing) { formHost.append(ui.button("+ Add another plan", () => drawForm(true), { class: "secondary" })); return; }
     const values = editing ? { ...editing } : { coinsurance: 0.2, hsa: false };
-    formHost.append(ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a plan"), ui.form(FIELDS, values, (v) => {
+    // append() writes a null as the text "null": only real elements go in
+    formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a plan"), ui.form(FIELDS, values, (v) => {
       const clean = { name: v.name.trim(), premium: v.premium ?? 0, deductible: v.deductible ?? 0, coinsurance: v.coinsurance ?? 0, oopMax: v.oopMax ?? 0, hsa: !!v.hsa, employerHsa: v.hsa ? (v.employerHsa ?? 0) : 0 };
       if (!clean.name) return;
       pending = editing ? "Changes saved." : `${clean.name} added.`;
@@ -90,7 +91,7 @@ export function render(page, ctx) {
       const id = editing.id, name = editing.name; editing = null;
       pending = `${name} removed.`;
       store.update((p) => { p.insurance.health.plans = (p.insurance.health.plans ?? []).filter((x) => x.id !== id); });
-    }, { class: "danger" })) : null);
+    }, { class: "danger" })) : null].filter(Boolean));
   };
   drawForm();
   root.append(ui.card(null, out, formHost));
@@ -105,6 +106,6 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.insurance = p.insurance ?? { policies: [] }; p.insurance.health = { ...(p.insurance.health ?? {}), tier: v.tier, expected: v.expected ?? null }; });
     }, { submitLabel: "Save" }),
-    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(HDHP[d.tier].minDeductible)} and an out-of-pocket maximum of at most ${money(HDHP[d.tier].maxOop)} (${d.tier === "family" ? "family" : "self-only"} cover, ${d.year}).`)));
+    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(d.hdhp.minDeductible)} and an out-of-pocket maximum of at most ${money(d.hdhp.maxOop)} (${d.tier === "family" ? "family" : "self-only"} cover, ${d.year}).`)));
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA and FSA"), ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"))));
 }

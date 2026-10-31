@@ -3,42 +3,51 @@
 // own income, what is left to pay, and the cliff: under the law as it stands for 2026, a household with income
 // over four times the poverty line gets no credit at all, so a dollar more can cost thousands.
 import { planIncome } from "../medicare/compute.js";
-import { FPL, SCHEDULES, AGE_CURVE, BENCHMARK_40 } from "./data/aca.js";
+import { FPL_BY_YEAR, FIRST_YEAR, LAW_BY_YEAR, SCHEDULES, AGE_CURVE, CHILDREN_COUNTED, BENCHMARK_40 } from "./data/aca.js";
 
-/** A premium's age factor (relative to 21): flat under 15, straight-line between the curve's ages from 15, 3 from 64. */
+/** The coverage year whose figures apply: the year itself when published, else the nearest (later years hold the newest, in today's dollars). */
+const yearOf = (year, table) => { const ys = Object.keys(table).map(Number).sort((a, b) => a - b); const y = Math.trunc(Number(year)) || ys[0]; return ys.filter((x) => x <= y).at(-1) ?? ys[0]; };
+/** A premium's age factor (relative to 21): the federal default curve's own factor for the whole age (0-14 one rate, 64 and older 3). */
 export function ageFactor(age) {
-  if (age >= 64) return 3;
-  if (age < 15) return AGE_CURVE[0][1];   // children under 15: one flat rate
-  for (let i = AGE_CURVE.length - 1; i >= 0; i--) {
-    const [a0, f0] = AGE_CURVE[i];
-    if (age >= a0) { const next = AGE_CURVE[i + 1]; return next ? f0 + (age - a0) / (next[0] - a0) * (next[1] - f0) : f0; }
-  }
-  return AGE_CURVE[0][1];
+  const a = Math.floor(Number(age) || 0);
+  return AGE_CURVE[Math.min(64, Math.max(14, a))];
 }
-/** The poverty line for a household of n. */
-export const povertyLine = (n) => FPL.base + FPL.each * Math.max(0, n - 1);
-/** The share of income expected toward the benchmark plan at a multiple of the poverty line; null over the cliff (no credit). */
-export function expectedShare(multiple, rules = "law") {
+/** The poverty line for a household of n, for coverage in `year` (the guidelines of the year before; FIRST_YEAR when none is given). */
+export const povertyLine = (n, year = FIRST_YEAR) => { const f = FPL_BY_YEAR[yearOf(year, FPL_BY_YEAR)]; return f.base + f.each * Math.max(0, n - 1); };
+/**
+ * The share of income expected toward the benchmark plan at a multiple of the poverty line, for coverage in `year`:
+ * straight-line inside its band, rounded to the nearest one-hundredth of one percent (26 CFR 1.36B-3(g)(1)); null when
+ * there is no credit: under 100% of the poverty line (36B(c)(1)(A)) or over the cliff.
+ */
+export function expectedShare(multiple, rules = "law", year = FIRST_YEAR) {
   const s = SCHEDULES[rules] ?? SCHEDULES.law;
-  if (multiple > s.cliff) return null;
-  const band = s.bands.find(([from, to]) => multiple <= to) ?? s.bands[s.bands.length - 1];
+  const bands = s === SCHEDULES.law ? LAW_BY_YEAR[yearOf(year, LAW_BY_YEAR)] : s.bands;
+  if (!(multiple >= 1 - 1e-12) || multiple > s.cliff) return null;
+  // "at least" a band's start and "less than" its end; the last band takes its end too (4 under the law)
+  const band = bands.find(([from, to]) => multiple < to - 1e-12) ?? bands[bands.length - 1];
   const [from, to, a, b] = band;
-  return to === Infinity || to === from ? a : a + (Math.max(from, multiple) - from) / (to - from) * (b - a);
+  const share = to === Infinity || to === from ? a : a + (Math.min(to, Math.max(from, multiple)) - from) / (to - from) * (b - a);
+  return Math.floor(share * 10000 + 0.5 + 1e-9) / 10000;
 }
-/** The credit on a year's income: { multiple, share, contribution, credit, cost } for a benchmark a year. */
-export function credit({ magi, size, benchmarkYearly, rules = "law" }) {
-  const multiple = magi / povertyLine(size);
-  const share = expectedShare(multiple, rules);
+/** The credit on a year's income for coverage in `year`: { multiple, share, contribution, credit, cost } for a benchmark a year. */
+export function credit({ magi, size, benchmarkYearly, rules = "law", year = FIRST_YEAR }) {
+  const multiple = magi / povertyLine(size, year);
+  const share = expectedShare(multiple, rules, year);
   const contribution = share === null ? Infinity : share * magi;
   const c = share === null ? 0 : Math.max(0, benchmarkYearly - contribution);
   return { multiple, share, contribution, credit: c, cost: benchmarkYearly - c };
+}
+/** The ages a family's benchmark counts: every adult and child 21 to 25, and only the three oldest children under 21. */
+export function countedAges(ages) {
+  const young = ages.filter((a) => a < 21).sort((x, y) => y - x);
+  return [...ages.filter((a) => a >= 21), ...young.slice(0, CHILDREN_COUNTED)];
 }
 
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, rules, rulesLabel, benchmark40, size, cliffIncome (the household's income at the cliff), people: [{ name, retireAge, bridgeYears }],
- *   years: [{ year, covered: [names], magi, multiple, benchmark, credit, cost, overCliff (income over the cliff), lostCredit (the credit at an income just at the cliff, lost by going over), room (income still under the cliff) }],
- *   total, totalCredit, cliffYears, onWorkPlan: [{ year, covered, worker }] (years a working partner's job plan can cover the retired one), noBridge (no marketplace years)
+ *   years: [{ year, covered: [names], magi, multiple, underLine (under the poverty line), benchmark, credit, cost, overCliff (income over the cliff), lostCredit (the credit at an income just at the cliff, lost by going over), room (income still under the cliff) }],
+ *   total, totalCredit, cliffYears, underLineYears (years under the poverty line: no credit), onWorkPlan: [{ year, covered, worker }] (years a working partner's job plan can cover the retired one), noBridge (no marketplace years)
  * }
  */
 export function compute(plan, params = {}) {
@@ -63,15 +72,16 @@ export function compute(plan, params = {}) {
     const workers = I.people.filter((p, k) => row.ages[k] < p.retireAge).map((p) => p.name);
     if (workers.length) { onWorkPlan.push({ year: row.year, covered: adults.map((a) => a.p.name), worker: workers[0] }); continue; }
     const kids = household.filter((q) => q.role === "dependent" && q.birthDate).map((q) => ({ name: q.name, age: row.year - Number(q.birthDate.slice(0, 4)) })).filter((k) => k.age < 26);
-    const benchmark = 12 * ratio40 * [...adults.map((a) => a.age), ...kids.map((k) => k.age)].reduce((s, a) => s + ageFactor(a), 0);
+    const benchmark = 12 * ratio40 * countedAges([...adults.map((a) => a.age), ...kids.map((k) => k.age)]).reduce((s, a) => s + ageFactor(a), 0);
     const magi = magiOf(row);
     const famSize = I.people.filter((p, k) => row.ages[k] <= p.endAge).length + kids.filter((k) => k.age < 19).length;
-    const c = credit({ magi, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules });
-    const cliff = SCHEDULES[rules].cliff === Infinity ? null : povertyLine(Math.max(1, famSize)) * SCHEDULES[rules].cliff;
-    years.push({ year: row.year, covered: [...adults.map((a) => a.p.name), ...kids.map((k) => k.name)], magi, size: famSize, multiple: c.multiple, benchmark, credit: c.credit, cost: c.cost, cliff, overCliff: cliff !== null && magi > cliff ? magi - cliff : 0, lostCredit: cliff !== null && magi > cliff ? credit({ magi: cliff, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules }).credit : 0, room: cliff !== null && magi <= cliff ? cliff - magi : null, conversion: (row.conversion ?? 0) / row.priceLevel });
+    const year = row.year;   // that year's poverty line and table, the newest held for later years
+    const c = credit({ magi, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules, year });
+    const cliff = SCHEDULES[rules].cliff === Infinity ? null : povertyLine(Math.max(1, famSize), year) * SCHEDULES[rules].cliff;
+    years.push({ year: row.year, covered: [...adults.map((a) => a.p.name), ...kids.map((k) => k.name)], magi, size: famSize, multiple: c.multiple, underLine: c.multiple < 1, benchmark, credit: c.credit, cost: c.cost, cliff, overCliff: cliff !== null && magi > cliff ? magi - cliff : 0, lostCredit: cliff !== null && magi > cliff ? credit({ magi: cliff, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules, year }).credit : 0, room: cliff !== null && magi <= cliff ? cliff - magi : null, conversion: (row.conversion ?? 0) / row.priceLevel });
   }
   const people = I.people.map((p) => ({ name: p.name, retireAge: p.retireAge, bridgeYears: Math.max(0, 65 - p.retireAge) }));
   // the cliff as it will apply: the first marketplace year's household, when there is one
   if (years.length) { base.size = years[0].size; base.cliffIncome = years[0].cliff; }
-  return { ...base, ready: true, missing: [], benchmark40: ratio40 * ageFactor(40), people, years, total: years.reduce((s, y) => s + y.cost, 0), totalCredit: years.reduce((s, y) => s + y.credit, 0), cliffYears: years.filter((y) => y.overCliff > 0).length, onWorkPlan, noBridge: !years.length };
+  return { ...base, ready: true, missing: [], benchmark40: ratio40 * ageFactor(40), people, years, total: years.reduce((s, y) => s + y.cost, 0), totalCredit: years.reduce((s, y) => s + y.credit, 0), cliffYears: years.filter((y) => y.overCliff > 0).length, underLineYears: years.filter((y) => y.underLine).length, onWorkPlan, noBridge: !years.length };
 }
