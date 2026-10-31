@@ -61,6 +61,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
+| builder (claude-b) | 2026-10-31 | `modules/overview/{start,guide,quick}/` (view.js and frame.js included) | the owner's start screen and step-by-step guides: a review pass after the build; released on the WORKBOARD when done |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
@@ -113,3 +114,10 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
   from a plain terminal will fail until the official installer is run.
 - 2026-09-15 builder: `core/format.js` now parses `YYYY-MM-DD` as a local day (dates
   showed one day early in the Americas). No page change needed.
+- 2026-10-31 builder (claude-b): opening the app with no page in the address on an empty plan now shows Get started
+  (`#/overview/start`); every address that names a page is unchanged. Addresses may carry a query inside the hash:
+  guide steps look like `#/balance/liabilities?guide=debt&step=rates`, quick answers add `?from=quick`
+  (`ctx.route.query`, `ctx.go(group, id, rest, query)`). Every page now renders into its own `<div data-page>` inside
+  `#content`; the step-by-step guide's bar and next-step card are drawn by the shell around it (`overview/guide`
+  `frame`, CONVENTIONS "Shell hook: frame"), so pages need no change. `qa.pageText()` and `qa.smallTargets()` include
+  the frame when a guide is followed.

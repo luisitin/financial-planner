@@ -12,6 +12,9 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 |---|---|---|---|---|---|
 | `overview/dashboard` | Dashboard | usable | 0 | Welcomes you with start-here actions, the setup steps still to do and a look at what is coming next. | - |
 | `overview/pages` | All pages | usable | 0 | Lets you search every page in the app and see which ones work today and which build phase the rest belong to. | - |
+| `overview/start` | Get started | usable | 10 | Pick what you came to do: a quick answer, one goal or the whole plan, then follow it step by step. | Material self-select, GOV.UK start pages |
+| `overview/quick` | Quick answers | usable | 10 | Questions you can answer in a minute with your own numbers, with nothing to set up first. | NerdWallet, Vanguard tools hubs |
+| `overview/guide` | Step by step | usable | 10 | Short guides that take you through the pages for one goal, in order, and remember where you stopped. | GOV.UK task list, NN/g wizards |
 | `overview/alerts` | Needs attention | usable | 2 | One list of what needs your attention, worst first, each opening the page where it is fixed. | Firefly III bills/rules |
 | `overview/next-best-action` | Next best action | usable | 9 | Tells you what to do with your next spare dollar, following the well-known order: employer match, high-interest debt, emergency fund, retirement, then the rest. | r/pf wiki, Bogleheads |
 | `overview/benchmarks` | How am I doing | usable | 9 | Your net worth against families of your age, your retirement savings against the usual guideline for your age, and the rules of thumb for saving, cash, housing and debt. | Fed SCF 2025, Fidelity |

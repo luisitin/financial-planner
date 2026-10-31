@@ -8,7 +8,8 @@ export function startSteps(plan) {
   const people = plan.household?.people ?? [];
   const has = (k) => (plan[k] ?? []).length > 0;
   const debts = (plan.accounts ?? []).filter((a) => ["credit", "loan", "mortgage", "student_loan", "other_liability"].includes(a.type) && Number(a.balance) !== 0);
-  const debtDetail = new Set((plan.debts ?? []).filter((d) => Number(d.rate) > 0 && Number(d.minPayment) > 0).map((d) => d.accountId));
+  // a 0% card or a family loan has its rate (0) saved too; Liabilities counts any saved detail
+  const debtDetail = new Set((plan.debts ?? []).filter((d) => d.rate !== null && d.rate !== undefined && d.rate !== "" && Number(d.rate) >= 0 && Number(d.minPayment) > 0).map((d) => d.accountId));
   return [
     { id: "people", title: "Who is in the household", why: "Ages drive retirement, Social Security, Medicare and tax.", done: people.some((p) => p.role !== "dependent" && p.birthDate), go: ["household", "people"] },
     { id: "accounts", title: "What you own and owe", why: "Every account, the home and each debt, with today's balance.", done: has("accounts"), go: ["balance", "accounts"] },

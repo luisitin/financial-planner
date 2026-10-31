@@ -25,6 +25,15 @@ test("a debt without its rate or payment leaves that step open", () => {
   assert.equal(startSteps(p).find((s) => s.id === "debts").done, false);
 });
 
+test("a 0% loan with its rate and payment saved counts; a blank rate does not", () => {
+  const p = familyPlan(TODAY);
+  const car = p.debts.find((x) => x.accountId === "a-car");
+  car.rate = 0;
+  assert.equal(startSteps(p).find((s) => s.id === "debts").done, true);
+  car.rate = null;
+  assert.equal(startSteps(p).find((s) => s.id === "debts").done, false);
+});
+
 test("every step points at a page that exists", async () => {
   const keys = new Set(MODULES.map((m) => `${m.group}/${m.id}`));
   for (const s of startSteps(emptyPlan())) assert.ok(keys.has(s.go.join("/")), s.go.join("/"));

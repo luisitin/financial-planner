@@ -60,6 +60,16 @@ created timers, intervals or listeners outside `root`.
 | `computeOf(key, params)` | run another module's compute() locally |
 | `computeRemote(key, params)` | same, but on the PC when the module is `heavy` and a server is connected |
 | `go(group, id, rest?, query?)` | navigate (`router.href(group, id, rest, query)` builds the same address as a string) |
+| `announce(text)` | read a short confirmation out to screen readers (a live region outside `#content`) |
+| `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
+
+## Shell hook: frame
+A manifest may export `frame(ctx, page) -> { before, after } | null`. The shell calls it only on `overview/guide`
+(the step-by-step guides), for every page it renders, and draws `before` above the page and `after` below it. The page
+itself renders into its own plain `<div data-page="group/id">` (`page` above) inside `#content`, so a page that clears
+and redraws its root never wipes them, and pages never need to know. It draws the guide bar and the next-step card
+while a guide is followed (`?guide=<id>&step=<key>` in the address, or `plan.guide.active`), and "‹ Quick answers"
+on a page opened from Quick answers (`?from=quick`).
 
 ## Input schemas (ui.form)
 ```js

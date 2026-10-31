@@ -13,7 +13,7 @@ export const SECTIONS = {
   reconciliations: "Checked statements", netWorthHistory: "Net worth history", assumptions: "Assumptions", whatIfs: "Calculator inputs",
   scenarios: "Scenarios", events: "Trips and big days", equity: "Work stock", investments: "Investment targets", pageNotes: "Page notes",
   reviews: "Monthly reviews", notes: "Notes", imports: "Bank files brought in", importProfiles: "How bank files are read",
-  recurringIgnored: "Payments marked not a bill", debtPlan: "Debt payoff plan", advisor: "Advisor's plan",
+  recurringIgnored: "Payments marked not a bill", debtPlan: "Debt payoff plan", advisor: "Advisor's plan", guide: "Guided steps",
 };
 /** Never counted as a change: the format's version, and the stamps every save writes into meta. */
 const IGNORE = new Set(["schemaVersion"]);

@@ -19,6 +19,8 @@ const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
 let cleanup = null;                 // the current page's cleanup function
 let current = null;                 // current route
+let renderSeq = 0;                  // a newer show() wins over a slow one still rendering
+let rerender = null;                // the re-render a store update schedules (show() cancels it: it would be redundant)
 const NAV_KEY = "planner.nav";      // { open: {groupId: bool}, showSoon: bool }
 const nav = (() => { try { return { open: {}, showSoon: true, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { open: {}, showSoon: true }; } })();
 const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav)); } catch { } };
@@ -112,12 +114,24 @@ function setToggleIcon(open) {
   b.setAttribute("aria-label", open ? "Close menu" : "Menu"); b.title = open ? "Close menu" : "Menu";
 }
 function closeDrawer() { document.getElementById("sidebar").classList.remove("open"); document.getElementById("scrim").classList.remove("show"); setToggleIcon(false); }
+function openSearch() {   // ctx.openSearch(): the menu with the cursor in its search box (on a phone the drawer opens)
+  const side = document.getElementById("sidebar");
+  if (!matchMedia("(min-width: 960px)").matches && !side.classList.contains("open")) toggleDrawer();
+  side.querySelector(".nav-search")?.focus();
+}
 function toggleDrawer() { const open = document.getElementById("sidebar").classList.toggle("open"); document.getElementById("scrim").classList.toggle("show", open); setToggleIcon(open); }
 
 // ---------------------------------------------------------------- pages
 function safeCompute(m, plan, params) {
   if (typeof m.compute !== "function") return null;
   try { return m.compute(plan, params ?? {}); } catch (e) { console.error(`[planner] compute failed in ${m.group}/${m.id}`, e); return { error: String(e) }; }
+}
+/** ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on every render). */
+function announce(text) {
+  const el = document.getElementById("announce");
+  if (!el) return;
+  el.textContent = "";
+  setTimeout(() => { el.textContent = String(text ?? ""); }, 60);
 }
 function makeCtx(route) {
   const plan = store.get();
@@ -130,9 +144,13 @@ function makeCtx(route) {
       return safeCompute(m, store.get(), params);
     },
     go: (group, id, rest, query) => router.go(group, id, rest, query),
+    openSearch,
+    announce,
   };
 }
 async function show(route) {
+  clearTimeout(rerender);
+  const seq = ++renderSeq;
   current = route;
   let m = modules.get(`${route.group}/${route.id}`);
   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
@@ -159,9 +177,22 @@ async function show(route) {
   }
   const ctx = makeCtx(route);
   ctx.module = m;
+  // The page draws into its own plain <div data-page>, so a page that clears and redraws itself never wipes
+  // what the shell puts around it: the step-by-step guide's bar and next-step card (overview/guide `frame`,
+  // docs/CONVENTIONS.md "Shell hook: frame").
+  const page = ui.h("div", { dataset: { page: `${m.group}/${m.id}` } });
+  const gm = modules.get("overview/guide");
+  let frame = null;
+  if (gm?.frame && isReady(gm) && features.enabled(gm)) { try { frame = gm.frame(ctx, page); } catch (e) { console.warn("[planner] guide frame failed", e); } }
+  if (frame?.before) root.append(frame.before);
+  root.append(page);
   ctx.derived = safeCompute(m, ctx.plan);
-  try { cleanup = (await m.render(root, ctx)) ?? null; }
-  catch (e) { console.error(e); root.append(ui.notice("error", `This page failed to render: ${e}`)); }
+  let c = null;
+  try { c = (await m.render(page, ctx)) ?? null; }
+  catch (e) { console.error(e); page.append(ui.notice("error", `This page failed to render: ${e}`)); }
+  if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
+  cleanup = c;
+  if (frame?.after) root.append(frame.after);
 }
 
 async function refreshStatus() {
@@ -186,13 +217,26 @@ async function boot() {
   await features.init();
   await store.load();
   buildNav();
+  const live = document.createElement("div");   // ctx.announce()'s live region, visually hidden
+  live.id = "announce"; live.setAttribute("aria-live", "polite");
+  Object.assign(live.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" });
+  document.body.append(live);
   document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
   document.getElementById("scrim").addEventListener("click", closeDrawer);
   document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
-  let t = null;
-  store.subscribe(() => { clearTimeout(t); t = setTimeout(() => { if (current) show(current); }, 50); });
+  store.subscribe(() => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current); }, 50); });
+  // a tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap
+  // here never saves an old copy over today's changes
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible" || store.backend() !== "server") return;
+    try { const p = await api.getPlan(); if ((p?.meta?.updatedAt ?? "") > (store.get()?.meta?.updatedAt ?? "")) store.reconnect(); } catch { }
+  });
   addEventListener("planner:features", () => buildNav());
   addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); if (current) show(current); }); });
+  // First visit (an empty plan, "look around" never chosen) or a guide still followed before any account: an address
+  // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
+  const sm = modules.get("overview/start");
+  if (sm && isReady(sm) && features.enabled(sm) && /^#?\/?$/.test(location.hash) && safeCompute(sm, store.get(), { today: fmt.today() })?.opensHere) history.replaceState(null, "", "#/overview/start");
   router.start(show);
   refreshStatus();
   setInterval(refreshStatus, 30000);
