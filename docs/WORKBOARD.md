@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 05:54 | backlog 2: answer key for health costs built before the lanes (retirement/healthcare's premium tax credit, age curve and poverty line; retirement/medicare's income-related surcharge tiers; insurance/health's high-deductible plan limits), from IRC 36B, the IRS revenue procedures, 45 CFR 147.102, 42 CFR 418/SSA and CMS notices, never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
