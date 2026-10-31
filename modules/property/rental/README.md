@@ -38,12 +38,20 @@
   least 0 (469(i)(3)(E): "without regard to (i) any amount includible in gross income under section 86, ... (iii) the
   amounts allowable as a deduction under sections 219, 221, and 250, and (iv) any passive activity loss"; Form 8582 line 6;
   quoted from the answer key's RULES.md, read 2026-10-31). The student loan interest deduction (221) is in the typed
-  adjustments, which are not split out, so it stays in.
+  adjustments, which are not split out, so it stays in. Filing separately (two returns), the rentals' result goes on the
+  return the federal estimate puts added income on (the adult marked Me), and the allowance is worked on that return's own
+  modified AGI, not the two added up (469(i)(5)(A); Form 8582 is one per return). The page's sentences take the figures in
+  use (`rule`: 25,000 / 100,000 / 150,000, or 12,500 / 50,000 / 75,000 filing separately).
 - **The tax** (`tax`): the federal estimate's total tax with the rentals' allowed net result added (a profit as ordinary
   income and as investment income for the 3.8% tax, IRC 1411(c)(1)(A)(i), Form 8960 line 4a; a loss off income) less the
   total without, so it crosses brackets and the standard deduction and adds the 3.8% on the lesser of the net rent and the
-  income over 200,000 / 250,000 joint / 125,000 separate; plus the state's share at its effective rate. Each rental's line
-  is its part of the allowed net result (its profit, or minus its allowed loss) ÷ the net result × the household's change.
+  income over the line for the filing status (`rates.niitLine`, the engine's table: 250,000 for a qualifying surviving spouse
+  too); plus the state's share at its effective rate. **Each rental's line**: the profits' side is the estimate with the
+  profits alone added less without, shared by the size of each profit; the losses' side is the rest of the household's
+  change, shared by each rental's allowed loss; the state's share goes the same way. The two sides add up to the change and
+  stay steady when profits and losses nearly cancel (+8,000 and -8,000 at 24%: 1,920 and -1,920; until a review on
+  2026-10-31 each line was the change × its part ÷ the net result, which jumped near a net of 0: -1,920 each way at a net of
+  +1, and -10,224 on an 8,000 profit when a child-credit step moved the change by 63.90 on a net of 50).
 - Until 2026-10-31 the page set each loss against the allowance alone in the order typed, gave the allowance to a couple
   filing separately who lived together, and priced the result at one marginal rate without the 3.8%; the answer key found
   all five (below).
@@ -58,7 +66,9 @@
 `module.test.mjs`: depreciation (first year, full years, the end), the allowance, not ready, the duplex by hand, a loss
 shared by two rentals, linked accounts, no loan, the netting and the pro-rata split, the answer key's worked examples (Jun's
 two rentals: -4,840 at 90,000 and 12,000 waiting with -2,364 at 130,000; Kit filing separately: nothing counts living
-together, -900 living apart; the 3.8% of 329.05 on Ivo's duplex), the IRA deduction left out of modified AGI.
+together, -900 living apart; the 3.8% of 329.05 on Ivo's duplex), the IRA deduction left out of modified AGI, two adults
+filing separately and living apart (the allowance on Me's 45,000: -1,200), the lines steady at a net of 0 and +1, the 3.8%
+line for a qualifying surviving spouse.
 `tests/golden-property.test.mjs`: an independent answer key (`tools/golden_property`, 1,500 depreciation rows and 2,000
 households with 3,489 rentals for 2025 and 2026 worked from IRC 168, 469 and 1411, 26 CFR 1.469-1T, Pubs. 527, 925 and 946,
 Form 8582 and the Rev. Procs., never from this code; `tests/golden/property/RULES.md`). Every row agrees since 2026-10-31,

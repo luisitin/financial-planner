@@ -7,6 +7,7 @@
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
 import { taxInputs, todaysReturn } from "../../taxes/federal/compute.js";
 import { longOn } from "../../investments/tax-lots/compute.js";
+import { addIncome } from "../../investments/employer-stock/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";
@@ -53,7 +54,8 @@ export function growthRate(from, to, months) {
  * compute(plan, { today }) -> {
  *   ready, name, value, owed, equity, equityShare, ltv, details, bought: { price, date, years, growth } | null,
  *   history: [{ date, value }], costs: { lines, total, monthly }, sale: { costs, basis, gain, cap, exclusion (the most that can be tax-free), excluded (the part of the gain that is), taxable, term, longOn,
- *   test: { days, months, meets, from } | null, reduced, rate (tax / taxable), tax, niit, incomeTax, year, otherYear, filingStatus, net },
+ *   capEach (one return's most), owners (returns the gain is on: 2 filing separately for a home in neither name),
+ *   test: { days, months, meets, from } | null, reduced, dateMissing, rate (tax / taxable), tax, niit, niitLine, incomeTax, year, otherYear, filingStatus, net },
  *   ahead: [{ years, year, value, owed, equity }], appreciation
  * }
  */
@@ -94,7 +96,14 @@ export function compute(plan, params = {}) {
   const yr = todaysReturn(plan, today);
   const ti = taxInputs(yr.plan, { today });
   const status = ti.filingStatus;
-  const cap = status === "married_joint" ? EXCLUSION.married_joint : EXCLUSION.single;
+  // filing separately (two returns), the gain is on the return of the spouse whose name the home is in, with their own
+  // $250,000; in neither name, half on each return, each half with its own $250,000 (26 CFR 1.121-2(a)(2), Joint owners: "each
+  // taxpayer may exclude from gross income up to $250,000 of gain that is attributable to each taxpayer's interest")
+  const parts = Array.isArray(ti.inputs.separate) ? ti.inputs.separate : null;
+  const owner = parts && parts.some((x) => x.personId === acct.ownerId) ? acct.ownerId : null;
+  const shares = !parts ? [[null, 1]] : owner ? [[owner, 1]] : parts.map((x) => [x.personId, 1 / parts.length]);
+  const capEach = status === "married_joint" ? EXCLUSION.married_joint : EXCLUSION.single;
+  const cap = capEach * shares.length;
   const sellCosts = value * n(e.sellCosts, DEFAULTS.sellCosts);
   const basis = price !== null ? price + n(e.improvements, 0) : null;
   const gain = basis !== null ? value - sellCosts - basis : null;
@@ -103,8 +112,10 @@ export function compute(plan, params = {}) {
   // full months, whichever is larger (26 CFR 1.121-3(g)(1): "expressed in days or months")
   const test = date && today ? twoYearTest(date, today) : null;
   const reduced = test && !test.meets && e.reducedReason === true ? Math.min(1, Math.max(test.days / USE.days, test.months / USE.months)) : null;
-  const exclusion = !test || test.meets ? cap : reduced !== null ? cap * reduced : 0;
-  const taxable = gain !== null ? Math.max(0, gain - exclusion) : 0;
+  const exclusionEach = !test || test.meets ? capEach : reduced !== null ? capEach * reduced : 0;
+  const exclusion = exclusionEach * shares.length;
+  const pieces = shares.map(([id, k]) => ({ id, gain: gain !== null ? gain * k : 0 })).map((x) => ({ ...x, taxable: Math.max(0, x.gain - exclusionEach), excluded: Math.min(exclusionEach, Math.max(0, x.gain)) }));
+  const taxable = pieces.reduce((t, x) => t + x.taxable, 0);
   // held more than a year (from the day after the purchase) is long-term (IRC 1222(3); Tax lots' longOn); a year or less is
   // short-term and taxed like pay. The gain is investment income for the 3.8% tax (1411(c)(1)(A)(iii)); the excluded part is not
   // (1.1411-4(d)(3)(ii) Example 3). The engine stacks a long-term gain through the year's 0/15/20% bands and charges the 3.8% on
@@ -112,9 +123,10 @@ export function compute(plan, params = {}) {
   const longFrom = date ? longOn(date) : null;
   const term = longFrom && today && today < longFrom ? "short" : "long";
   const r0 = federalTax(ti.inputs, ti.params);
-  const r1 = taxable > 0 ? federalTax({ ...ti.inputs, ...(term === "short" ? { otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + taxable } : { qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + taxable }), investmentIncome: (Number(ti.inputs.investmentIncome) || 0) + taxable }, ti.params) : r0;
+  const withGain = pieces.reduce((inp, x) => x.taxable > 0 ? addIncome(inp, x.id, { [term === "short" ? "otherOrdinary" : "qualifiedIncome"]: x.taxable, investmentIncome: x.taxable }) : inp, ti.inputs);
+  const r1 = taxable > 0 ? federalTax(withGain, ti.params) : r0;
   const tax = Math.max(0, r1.totalTax - r0.totalTax), niit = Math.max(0, (r1.niit || 0) - (r0.niit || 0));
-  const sale = { costs: sellCosts, basis, gain, cap, exclusion, excluded: gain !== null ? Math.min(exclusion, Math.max(0, gain)) : 0, taxable, term, longOn: longFrom, test, reduced, rate: taxable > 0 ? tax / taxable : 0, tax, niit, incomeTax: tax - niit, year: yr.year, otherYear: yr.other, filingStatus: status, net: value - sellCosts - owed - tax };
+  const sale = { costs: sellCosts, basis, gain, cap, capEach, owners: shares.length, exclusion, excluded: pieces.reduce((t, x) => t + x.excluded, 0), taxable, term, longOn: longFrom, test, reduced, dateMissing: price !== null && !date, rate: taxable > 0 ? tax / taxable : 0, tax, niit, niitLine: ti.params.niitThreshold?.[status] ?? 200000, incomeTax: tax - niit, year: yr.year, otherYear: yr.other, filingStatus: status, net: value - sellCosts - owed - tax };
 
   // ahead: the value growing, the mortgage on its schedule
   const appreciation = n(e.appreciation, DEFAULTS.appreciation);

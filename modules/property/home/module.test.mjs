@@ -101,3 +101,35 @@ test("Quinn's long-held home: 450,000 taxable, stacked through 15% and 20%, the 
   near(d.sale.gain, 700000); assert.equal(d.sale.test.meets, true); near(d.sale.taxable, 450000);
   near(d.sale.incomeTax, 70920); near(d.sale.niit, 16340); near(d.sale.tax, 87260); near(d.sale.net, 890740);
 });
+
+// filing separately, two adults with 90,000 of wages each (typed 180,000), the home worth 700,000, bought 2010 for 300,000
+function separateHome(ownerId) {
+  const p = keyHome(180000, { purchasePrice: 300000, purchaseDate: "2010-06-15" }, 700000);
+  p.household.people.push({ id: "a2", name: "Adult 2", role: "spouse", birthDate: "1980-01-01" });
+  p.household.filingStatus = "married_separate";
+  p.accounts[0].ownerId = ownerId;
+  return p;
+}
+
+test("filing separately: a home in neither name is half each, each half with its own $250,000 (26 CFR 1.121-2(a)(2))", () => {
+  // gain 700,000 - 42,000 of costs - 300,000 = 358,000: 179,000 on each return, under each $250,000
+  const d = compute(separateHome(""), { today: TODAY });
+  near(d.sale.gain, 358000); assert.equal(d.sale.owners, 2); near(d.sale.cap, 500000); near(d.sale.taxable, 0); near(d.sale.tax, 0);
+  // in Adult 1's name: one $250,000; 108,000 on their return: all at 15% (ordinary taxable 73,900 is past the 49,450 line) = 16,200,
+  // plus 3.8% of the 73,000 of income over the 125,000 separate line = 2,774
+  const e = compute(separateHome("a1"), { today: TODAY });
+  assert.equal(e.sale.owners, 1); near(e.sale.taxable, 108000); near(e.sale.niit, 2774); near(e.sale.tax, 18974);
+});
+
+test("no purchase date: the sale is worked as if the two years were met, and the page is told the date is missing", () => {
+  const d = compute(keyHome(95000, { purchasePrice: 400000, improvements: 5000 }, 800000), { today: TODAY });
+  assert.equal(d.sale.dateMissing, true); assert.equal(d.sale.test, null);
+  assert.equal(compute(keyHome(95000, { purchasePrice: 400000, purchaseDate: "2020-01-01" }, 800000), { today: TODAY }).sale.dateMissing, false);
+});
+
+test("the 3.8% line comes from the engine: $250,000 for a qualifying surviving spouse (IRC 1411(b)(1))", () => {
+  const p = keyHome(95000, { purchasePrice: 400000, purchaseDate: "2020-01-01" }, 800000);
+  p.household.filingStatus = "qualifying_surviving"; p.household.people.push({ id: "k", name: "Child", role: "dependent", birthDate: "2015-01-01" });
+  assert.equal(compute(p, { today: TODAY }).sale.niitLine, 250000);
+  assert.equal(compute(keyHome(95000, { purchasePrice: 400000 }, 800000), { today: TODAY }).sale.niitLine, 200000);
+});

@@ -136,3 +136,33 @@ test("modified AGI for the allowance leaves out the IRA deduction (469(i)(3)(E))
   const d = compute(p, { today: "2026-11-16" });
   near(d.rates.magi, 110000); near(d.lossRoom, 20000);   // AGI is 103,000; the allowance is worked on 110,000
 });
+
+test("filing separately and living apart: the allowance is worked on the return the rentals are on, not both incomes (469(i)(5)(A))", () => {
+  // two adults, typed wages 90,000 (45,000 on each return); Kit's -10,000 rental on Adult 1's return: 12,500 of room at 45,000
+  const kit = { purchasePrice: 275000, purchaseDate: "2016-09-01", value: 350000, rentMonthly: 1500, propertyTax: 1500, insurance: 900, utilitiesMonthly: 100, loanBalance: 240000, loanRate: 0.05, loanPayment: 1000 };
+  const p = keyHousehold("married_separate", 2025, 90000, [kit], { livedApart: true });
+  p.household.people.push({ id: "a2", name: "Adult 2", role: "spouse", birthDate: "1980-01-01" });
+  const d = compute(p, { today: "2025-12-01" });
+  near(d.rates.magi, 45000); near(d.lossRoom, 12500); near(d.rentals[0].lossUsable, 10000);
+  near(d.tax.total, -1200);   // 10,000 off 29,250 of taxable income, all in the 12% band (2025 separate)
+  assert.deepEqual(d.rule, { max: 12500, from: 50000, to: 75000 });
+});
+
+test("each rental's tax stays steady when profits and losses nearly cancel: the profit's side alone, the rest on the losses", () => {
+  // single at 160,000: +8,000 is 1,920 at 24% on its own; a -8,000 rental cancels it (net 0); at -7,999 the net is +1
+  const plus = { value: 200000, rentMonthly: 1000, propertyTax: 4000, vacancy: 0, maintenance: 0 };
+  const minus = (tax) => ({ value: 200000, rentMonthly: 1000, propertyTax: tax, vacancy: 0, maintenance: 0 });
+  const even = compute(keyHousehold("single", 2026, 160000, [plus, minus(20000)]), { today: "2026-11-16" });
+  near(even.rentals[0].taxable, 8000); near(even.rentals[1].taxable, -8000);
+  near(even.tax.total, 0); near(even.rentals[0].tax, 1920); near(even.rentals[1].tax, -1920);
+  const one = compute(keyHousehold("single", 2026, 160000, [plus, minus(19999)]), { today: "2026-11-16" });
+  near(one.tax.total, 0.24); near(one.rentals[0].tax, 1920); near(one.rentals[1].tax, 0.24 - 1920);
+  near(one.rentals[0].tax + one.rentals[1].tax, one.tax.total);
+});
+
+test("the 3.8% line comes from the engine: $250,000 for a qualifying surviving spouse (IRC 1411(b)(1))", () => {
+  const p = keyHousehold("qualifying_surviving", 2026, 300000, [JUN_A]);
+  p.household.people.push({ id: "k", name: "Child", role: "dependent", birthDate: "2015-01-01" });
+  assert.equal(compute(p, { today: "2026-11-16" }).rates.niitLine, 250000);
+  assert.deepEqual(compute(keyHousehold("single", 2026, 90000, [JUN_A]), { today: "2026-11-16" }).rule, { max: 25000, from: 100000, to: 150000 });
+});
