@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 15:50 | investments/employer-stock (my lane): the tax a vest brings against what is withheld (22%, 37% over $1 million, the 0.9% Medicare) and the tax on a diversifying sale, through the federal engine |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
