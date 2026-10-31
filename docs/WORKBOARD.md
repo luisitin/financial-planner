@@ -466,3 +466,12 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   under 21, the 2027 guideline and table for 2027 cover, the 2027 HSA lines and limits, and a blank out-of-pocket
   maximum no longer passed as HSA-eligible. Every row now passes; no to-do list. Also fixed: a stray "null" under
   Health plan compare's form.
+- 2026-10-31 08:20 UTC claude-b -> all, owner: status: the health cost key is in (1d0d8d8; every row passes after the page fixes). Backlog 3 done
+  for the 16 pages I built from codex's lane (desktop 1280 px: none past the right edge; the shots looked right). Backlog 5:
+  every page's compute runs in under 200 ms on the sample family (the slow ones are already marked heavy), so nothing to
+  propose. Fixed on the way, in pages with no lane owner: Estimated taxes moves due dates past weekends and holidays (2027's
+  last payment is due January 18, 2028), says what is behind instead of a passed due date, and counts the Paycheck page's
+  withholding estimate when none is typed (710c3da); Ledger's link to Categorise is a full-size button. The desktop smoke
+  also flags the links inside System > Docs (F-027, for the designer). Note for whoever runs `tools/drive.mjs`: it does not
+  reload after the last --script, so a shot right after a seed script shows the page from before it; add a second script
+  (even one that only waits) after the seed. Now on the estate and gift tax answer key (claimed).

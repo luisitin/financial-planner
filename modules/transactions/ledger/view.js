@@ -60,7 +60,8 @@ export function render(root, ctx) {
     root.append(ui.h("details", { class: "card fold fold-card", open: filtered ? true : null },
       ui.h("summary", {}, ui.h("h2", {}, "Showing"), ui.h("span", { class: "fold-status" }, showing), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search)))));
-    if (d.uncategorisedAll && state.category !== "none") root.append(ui.notice("info", ui.h("span", {}, `${d.uncategorisedAll} transaction${d.uncategorisedAll === 1 ? " has" : "s have"} no category yet. `, ui.h("a", { href: "#/transactions/categorize" }, "File them in a few taps"), ".")));
+    // the way to Categorise is a full-size button, not a link inside the sentence (44 px to tap)
+    if (d.uncategorisedAll && state.category !== "none") root.append(ui.notice("info", [ui.h("div", {}, `${d.uncategorisedAll} transaction${d.uncategorisedAll === 1 ? " has" : "s have"} no category yet.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/transactions/categorize" }, "File them in a few taps"))]));
   }
 
   const formCard = ui.card(null);
