@@ -61,7 +61,7 @@ export function render(page, ctx) {
     const drawForm = (open = !d.bequests.length) => {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add someone", () => drawForm(true), { class: "secondary" })); return; }
-      formHost.append(ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), ui.form([
+      formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), ui.form([
         { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy, or a food bank" },
         { key: "kind", label: "Who", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
         { key: "amount", label: "Amount, in today's money", type: "money", min: 0 },
@@ -82,7 +82,7 @@ export function render(page, ctx) {
         const id = editing.id, name = editing.to; editing = null;
         pending = `${name} removed.`;
         store.update((p) => { p.estate.legacy.bequests = (p.estate.legacy.bequests ?? []).filter((x) => x.id !== id); });
-      }, { class: "danger" })) : null);
+      }, { class: "danger" })) : null].filter(Boolean));
     };
     drawForm();
     host.append(ui.card(null, out, formHost));

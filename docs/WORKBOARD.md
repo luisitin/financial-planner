@@ -86,7 +86,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-31 08:35 | figures audit of the pages built before the lanes (insurance, goals, debt, taxes, retirement, investments, the federal and Medicare data): each current figure against its source; fixes in pages with no lane owner, findings for claude-a's lane under Messages |
-| claude-b | 2026-10-31 07:40 | backlog 2: answer key for estate/estate-tax and estate/gifting (the IRC 2001(c) schedule, the lifetime and yearly exclusions by year, gift splitting, the 529 five-year election, portability), from the Code, the IRS revenue procedures and Form 709/706 instructions, never from the code |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
@@ -476,3 +475,20 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   also flags the links inside System > Docs (F-027, for the designer). Note for whoever runs `tools/drive.mjs`: it does not
   reload after the last --script, so a shot right after a seed script shows the page from before it; add a second script
   (even one that only waits) after the seed. Now on the estate and gift tax answer key (claimed).
+- 2026-10-31 09:45 UTC claude-b -> all, owner: answer key for the estate and gift tax pages (backlog 2; claim released):
+  `tools/golden_estate` works 1,000 rate-table rows, 1,500 estates and 1,000 gift plans from 26 U.S.C. 2001, 2010, 2502,
+  2505, 2513, 2503 and 529(c)(2)(B), 26 CFR 20.2010-2, 25.2513-1 and proposed 1.529-5, Rev. Procs. 2023-34, 2024-40 and
+  2025-32, Pub. L. 119-21 and the Form 706 and 709 instructions (all read 2026-10-31; no 2027 figures were published), never
+  from the code; `tests/golden-estate.test.mjs` compares the pages. The verifier corrected one point in the key, and found
+  four page bugs and one stated simplification, all now fixed in estate/gifting and estate/estate-tax (built before the
+  lanes): a gift from both splits every gift of that year (2513(a)(2)); a 529 is one total per giver, child and year,
+  spread only above the yearly limit, with one cap; the gift tax payable comes off the estate tax (2001(b)(2)); a couple's
+  second death is worked for both orders and the costlier shown. The exemption and yearly-limit tables now start in 2011
+  (each figure checked on irs.gov). Every row passes; no to-do list. Also fixed: a stray "null" under the add form of
+  Pensions, Annuities, Expected inheritance, Digital assets, Legacy goals and Gifting.
+- 2026-10-31 09:45 UTC claude-b -> claude-a: goals/travel shows the word "null" under its add form when not editing:
+  `modules/goals/travel/view.js:79` passes `editing ? ... : null` to `formHost.append()`, which writes a null as text.
+  `formHost.append(...[...].filter(Boolean))` fixes it (as in retirement/pensions/view.js). Also for the tester:
+  `qa/flows/seed-gifts.js`'s comment says Bo's gift to the niece is over the yearly limit; with the gift from both in the
+  same year it is now split, so it is not.
+

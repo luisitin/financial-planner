@@ -57,3 +57,24 @@ test("charity left in the will comes off; a state with its own estate tax, a rou
   assert.equal(d.state.estateTax, true); near(d.state.tax, 0.16 * (d.estateToday - 1000000 - 2000000));
   p.household.state = "PA"; assert.equal(compute(p, { today: TODAY }).state.inheritanceTax, true);
 });
+
+test("gift tax already payable comes off (IRC 2001(b)(2)); a couple shows the costlier real order of death", async () => {
+  const { estateTax, giftTaxOn } = await import("./compute.js");
+  // $16,000,000 of lifetime gifts against $15,000,000: $400,000 of gift tax was payable on them; an estate of $5,000,000 more
+  assert.equal(giftTaxOn(16000000, 15000000), 400000); assert.equal(giftTaxOn(14000000, 15000000), 0);
+  near(estateTax(5000000, 16000000, 15000000, giftTaxOn(16000000, 15000000)), 2000000);   // 40% x 6,000,000 - 400,000
+  near(estateTax(5000000, 16000000, 15000000), 2400000, 1e-6);                            // without the subtraction
+  // one person on the page: lifetime gifts over the exemption
+  const one = familyPlan(TODAY); one.household.people = one.household.people.filter((q) => q.role === "self");
+  one.accounts.push({ id: "x", name: "Business", type: "other_asset", balance: 5000000, ownerId: "" });
+  one.estate.gifts = [{ id: "g", to: "Niece", from: one.household.people[0].id, amount: 16019000, year: 2026, kind: "cash" }];
+  const s = compute(one, { today: TODAY });
+  near(s.single.giftTax, 400000); near(s.single.tax, 0.4 * (s.single.taxable + 16000000 - 15000000) - 400000);
+  // a couple without portability: the survivor's own gifts count, so the order where the one who gave more survives costs more
+  const p = familyPlan(TODAY); p.accounts.push({ id: "x", name: "Business", type: "other_asset", balance: 28000000, ownerId: "" });
+  p.estate.gifts = [{ id: "g", to: "Niece", from: "p-bo", amount: 3019000, year: 2026, kind: "cash" }];
+  const d = compute(p, { today: TODAY }), T = d.pair.secondDeath.taxable;
+  near(d.pair.secondDeath.taxWithout, 0.4 * (T + 3000000 - 15000000));   // Bo survives: his $3,000,000 added back
+  // with portability both orders give 40% x (T + 3,000,000 - 30,000,000 + ...) the same way; the page used to add Bo's gifts and carry Bo's smaller unused part
+  near(d.pair.secondDeath.tax, Math.max(0, 0.4 * (T + 3000000 - 30000000)));
+});

@@ -10,17 +10,24 @@ import { buildInputs } from "../../retirement/projection/compute.js";
 import { project } from "../../../core/math/retirement.js";
 import { exclusionFor, tentativeTax, STATE_ESTATE_TAX, STATE_INHERITANCE_TAX } from "../gifting/data/transfer-tax.js";
 
-/** The federal estate tax on a taxable estate, with lifetime taxable gifts added back, less the credit for an exemption: IRC 2001(b) and 2010. */
-export function estateTax(taxable, gifts, exemption) {
-  return Math.max(0, tentativeTax(Math.max(0, taxable) + Math.max(0, gifts)) - tentativeTax(exemption));
+/**
+ * The federal estate tax: the tentative tax on the taxable estate plus lifetime taxable gifts, less the gift tax payable
+ * on those gifts (IRC 2001(b)(1)-(2)), less the credit for the exemption, never below zero (IRC 2010(a), (d)).
+ */
+export function estateTax(taxable, gifts, exemption, giftTax = 0) {
+  const before = Math.max(0, tentativeTax(Math.max(0, taxable) + Math.max(0, gifts)) - Math.max(0, giftTax));
+  return Math.max(0, before - tentativeTax(exemption));
 }
+/** The gift tax payable on lifetime taxable gifts against the giver's own exemption, at today's rates (IRC 2001(b)(2) and (g); 2502, 2505): 0 until the gifts pass the exemption. */
+export const giftTaxOn = (gifts, exemption) => Math.max(0, tentativeTax(Math.max(0, gifts)) - tentativeTax(exemption));
 
 /**
  * compute(plan, { today }) -> {
  *   year, exclusion, couple, people: [{ id, name, estate, lifeCover, gifts, exemptionLeft }],
  *   estateToday (net worth + life cover), lifeCover, charity,
- *   single: { taxable, tax } | null,
- *   pair: { firstDeath: { tax: 0, dsue: [per person] }, secondDeath: { estate, exemption, exemptionWithout, tax, taxWithout } } | null,
+ *   single: { taxable, giftTax, tax } | null,
+ *   pair: { firstDeath: { tax: 0, dsue: [per person] }, secondDeath: { estate, taxable, exemption (the survivor's own + the first to die's unused one, in the
+ *     costlier order), exemptionWithout, tax, taxWithout (the costlier of the two orders of death, with and without portability), firstToDie (that order's first, by index) } } | null,
  *   end: { year, estate, tax } | null (at the end of the plan, today's dollars),
  *   headroom (exemption(s) - estate today), state: { code, estateTax, inheritanceTax, exemption, rate, tax } , warnings
  * }
@@ -56,15 +63,24 @@ export function compute(plan, params = {}) {
   if (!couple) {
     const g = byPerson[0]?.gifts ?? 0;
     const taxable = Math.max(0, estateToday - charity);
-    single = { taxable, tax: estateTax(taxable, g, exclusion) };
+    const giftTax = giftTaxOn(g, exclusion);
+    single = { taxable, giftTax, tax: estateTax(taxable, g, exclusion, giftTax) };
   } else {
     // first death: everything to the spouse (the unlimited marital deduction), no tax; the unused exemption can carry over
+    // (portability): the exemption less that person's lifetime taxable gifts (IRC 2010(c)(4); 26 CFR 20.2010-2(c))
     const dsue = byPerson.map((p) => Math.max(0, exclusion - p.gifts));
-    // second death: the whole estate in one; the survivor's own exemption plus the first's unused one (the smaller carry-over, to be safe)
-    const carry = Math.min(...dsue);
-    const survivorGifts = Math.max(...byPerson.map((p) => p.gifts));
+    // second death: the whole estate in one, with the survivor's own gifts added back and their gift tax subtracted,
+    // against the survivor's exemption plus the first to die's unused one. Who dies first is not known: both orders are
+    // worked and the costlier one is shown (with portability, and again without it).
     const taxable = Math.max(0, estateToday - charity);
-    pair = { firstDeath: { tax: 0, dsue }, secondDeath: { estate: estateToday, taxable, exemption: exclusion + carry, exemptionWithout: exclusion, tax: estateTax(taxable, survivorGifts, exclusion + carry), taxWithout: estateTax(taxable, survivorGifts, exclusion) } };
+    const orders = [[0, 1], [1, 0]].slice(0, byPerson.length).map(([first, last]) => {
+      const gifts = byPerson[last].gifts, giftTax = giftTaxOn(gifts, exclusion);
+      return { first, exemption: exclusion + dsue[first], tax: estateTax(taxable, gifts, exclusion + dsue[first], giftTax), taxWithout: estateTax(taxable, gifts, exclusion, giftTax) };
+    });
+    // with portability the two orders often cost the same (40% x (estate + both people's gifts - 2 exemptions)): then the
+    // order carrying the smaller unused exemption is the one shown
+    const worst = orders.reduce((a, b) => (b.tax > a.tax + 0.005 || (Math.abs(b.tax - a.tax) <= 0.005 && b.exemption < a.exemption) ? b : a));
+    pair = { firstDeath: { tax: 0, dsue }, secondDeath: { estate: estateToday, taxable, exemption: worst.exemption, exemptionWithout: exclusion, tax: worst.tax, taxWithout: Math.max(...orders.map((o) => o.taxWithout)), firstToDie: worst.first } };
   }
   // at the end of the plan: the investments the projection leaves (today's dollars) plus the homes and other things it does not spend
   let end = null;

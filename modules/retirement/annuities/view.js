@@ -72,7 +72,7 @@ export function render(page, ctx) {
     const drawForm = (open = !d.quotes.length) => {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add a quote", () => drawForm(true), { class: "secondary" })); return; }
-      formHost.append(ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a quote"), ui.form(fields, editing ? { ...editing } : { personId: people.find((p) => p.role === "self")?.id ?? "", startAge: 65 }, (v) => {
+      formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a quote"), ui.form(fields, editing ? { ...editing } : { personId: people.find((p) => p.role === "self")?.id ?? "", startAge: 65 }, (v) => {
         const clean = { name: v.name.trim(), insurer: (v.insurer ?? "").trim(), personId: v.personId, premium: v.premium ?? 0, monthly: v.monthly ?? 0, startAge: v.startAge ?? 65, joint: !!v.joint, cola: !!v.cola };
         if (!clean.name) return;
         pending = editing ? "Changes saved." : `${clean.name} added.`;
@@ -88,7 +88,7 @@ export function render(page, ctx) {
         const id = editing.id, name = editing.name; editing = null;
         pending = `${name} removed.`;
         store.update((p) => { p.retirement.annuities = (p.retirement.annuities ?? []).filter((y) => y.id !== id); });
-      }, { class: "danger" })) : null);
+      }, { class: "danger" })) : null].filter(Boolean));
     };
     drawForm();
     host.append(ui.card(null, out, formHost));

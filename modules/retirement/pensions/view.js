@@ -72,7 +72,7 @@ export function render(page, ctx) {
     formHost.innerHTML = "";
     if (!open && !editing) { formHost.append(ui.button("+ Add a pension", () => drawForm(true), { class: "secondary" })); return; }
     const values = editing ? { ...editing, survivorShare: editing.survivorShare ? String(editing.survivorShare) : "", cola: editing.cola !== false } : { personId: people.find((p) => p.role === "self")?.id ?? "", startAge: 65, cola: false };
-    formHost.append(ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a pension"), ui.form(fields, values, (v) => {
+    formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a pension"), ui.form(fields, values, (v) => {
       const clean = { name: v.name.trim(), personId: v.personId, monthly: v.monthly ?? 0, startAge: v.startAge ?? 65, cola: !!v.cola, endAge: v.endAge ?? null, lumpSum: v.lumpSum ?? null, jointMonthly: v.jointMonthly ?? null, survivorShare: v.survivorShare ? Number(v.survivorShare) : null };
       if (!clean.name) return;
       pending = editing ? "Changes saved." : `${clean.name} added.`;
@@ -89,7 +89,7 @@ export function render(page, ctx) {
       const id = editing.id, name = editing.name; editing = null;
       pending = `${name} removed.`;
       store.update((p) => { p.retirement.pensions = (p.retirement.pensions ?? []).filter((y) => y.id !== id); });
-    }, { class: "danger" })) : null);
+    }, { class: "danger" })) : null].filter(Boolean));
   };
   drawForm();
   root.append(ui.card(null, out, formHost));

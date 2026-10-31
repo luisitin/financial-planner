@@ -70,13 +70,13 @@ export function render(page, ctx) {
       });
     }, { submitLabel: editing ? "Save changes" : "Add", resetAfter: !editing, onCancel: (editing || d.count) ? () => { editing = null; drawForm(false); } : null });
     form.querySelector("select[name=kind]")?.addEventListener("change", (e) => { tip.textContent = KINDS[e.target.value]?.tip ?? ""; });
-    formHost.append(ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add an account"), tip, form,
+    formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add an account"), tip, form,
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
         if (!ui.confirm(`Remove ${editing.name}?`)) return;
         const id = editing.id, name = editing.name; editing = null;
         pending = `${name} removed.`;
         store.update((p) => { p.estate.digital = (p.estate.digital ?? []).filter((x) => x.id !== id); });
-      }, { class: "danger" })) : null);
+      }, { class: "danger" })) : null].filter(Boolean));
   };
   drawForm();
   root.append(ui.card(null, out, formHost));

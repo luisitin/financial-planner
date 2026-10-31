@@ -55,6 +55,6 @@ export function render(page, ctx) {
   }
   root.append(stateCard);
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How the tax is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, `The tax on the estate plus lifetime taxable gifts, from the rate table (18% on the first $10,000 up to 40% over $1,000,000), less a credit equal to the tax on the exemption: in practice 40% of whatever is over the exemption. The table has ${RATE_SCHEDULE.length} steps (Internal Revenue Code section 2001). Values are today's; the exemption rises with prices from 2027.`)));
+    ui.h("p", { class: "muted small" }, `The tax on the estate plus lifetime taxable gifts, from the rate table (18% on the first $10,000 up to 40% over $1,000,000), less any gift tax already due on those gifts, less a credit equal to the tax on the exemption: in practice 40% of whatever is over the exemption. The table has ${RATE_SCHEDULE.length} steps (Internal Revenue Code section 2001). For a couple the page works out both orders (either of you dying first) and shows the costlier one. Values are today's; the exemption rises with prices from 2027.`)));
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"), ui.h("a", { class: "btn secondary", href: "#/estate/legacy" }, "Legacy goals"))));
 }

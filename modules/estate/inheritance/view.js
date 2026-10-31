@@ -58,7 +58,7 @@ export function render(page, ctx) {
     const drawForm = (open = !d.items.length) => {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add another", () => drawForm(true), { class: "secondary" })); return; }
-      formHost.append(ui.h("h2", {}, editing ? "Change it" : "Add what you might receive"), ui.form([
+      formHost.append(...[ui.h("h2", {}, editing ? "Change it" : "Add what you might receive"), ui.form([
         { key: "from", label: "From", type: "text", placeholder: "e.g. Mum and Dad" },
         { key: "amount", label: "About how much, in today's money", type: "money", min: 0 },
         { key: "year", label: "About when (year)", type: "number", min: 1990, max: 2150, step: "1" },
@@ -79,7 +79,7 @@ export function render(page, ctx) {
         const id = editing.id; editing = null;
         pending = "Removed.";
         store.update((p) => { p.estate.inheritance.items = (p.estate.inheritance.items ?? []).filter((x) => x.id !== id); });
-      }, { class: "danger" })) : null);
+      }, { class: "danger" })) : null].filter(Boolean));
     };
     drawForm();
     host.append(ui.card(null, out, formHost));

@@ -2,7 +2,7 @@
 // made against it (what needs a gift tax return), the five-year 529 front-load, and one form to add or
 // change a gift.
 import { compute, KINDS } from "./compute.js";
-import { SUPERFUND_YEARS } from "./data/transfer-tax.js";
+import { SUPERFUND_YEARS, FIRST_YEAR } from "./data/transfer-tax.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -34,6 +34,7 @@ export function render(page, ctx) {
     ui.h("p", { class: d.count ? "" : "lede" }, `In ${d.year} ${each}, with no tax and no paperwork. Above that a gift tax return (Form 709) is filed, but no tax is due: the extra only uses part of the ${money(d.lifetimeExclusion)} lifetime exemption. School tuition and medical bills paid straight to the school or the hospital do not count at all.`),
     ui.h("p", { class: "muted small" }, `A 529 college plan can take ${SUPERFUND_YEARS} years of gifts at once: up to ${money(d.superfund.perGiver)} from one giver${d.couple ? `, ${money(d.superfund.couple)} from a couple` : ""}, per child, counted a fifth a year.`)));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
+  for (const n of d.notes) root.append(ui.notice("info", n));
 
   if (d.count) {
     const t = d.thisYear;
@@ -45,7 +46,7 @@ export function render(page, ctx) {
       const overRows = d.byYear.filter((b) => g.years.includes(b.year)).flatMap((b) => b.rows.filter((r) => r.over > 0 && r.to.toLowerCase() === String(g.to ?? "").trim().toLowerCase() && g.givers.some((f) => f.id === r.giverId)).map((r) => `${r.giverName} ${money(r.over)} over in ${b.year}`));
       return ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.gifts ?? []).find((y) => y.id === g.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("div", { class: "gf-body" }, ui.h("div", { class: "gf-t" }, `${g.to || "Someone"}: ${KINDS[g.kind] ?? KINDS.cash}`),
-          ui.h("div", { class: "gf-d" }, [g.givers.map((f) => f.name).join(" and "), g.spread > 1 ? `${g.year} to ${g.year + g.spread - 1}, spread over ${g.spread} years` : String(g.year)].join(" · ")),
+          ui.h("div", { class: "gf-d" }, [g.givers.map((f) => f.name).join(" and ") + (g.splitByElection ? " (split, as every gift that year)" : ""), g.spread > 1 ? `${g.year} to ${g.year + g.spread - 1}, spread over ${g.spread} years` : String(g.year)].join(" · ")),
           overRows.length ? ui.h("div", { class: "gf-d gf-over" }, `Gift tax return: ${overRows.join("; ")}`) : null),
         ui.h("div", { class: "gf-v" }, money(g.amount)));
     }));
@@ -60,7 +61,7 @@ export function render(page, ctx) {
   const fields = [
     { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy" },
     { key: "amount", label: "Amount", type: "money", min: 0 },
-    { key: "year", label: "Year", type: "number", min: 1990, max: 2100, step: "1" },
+    { key: "year", label: "Year", type: "number", min: FIRST_YEAR, max: 2100, step: "1", help: `${FIRST_YEAR} or later` },
     { key: "from", label: "From", type: "select", options: [...d.givers.map((g) => ({ value: g.id, label: g.name })), ...(d.couple ? [{ value: "both", label: "Both of us (split, half each)" }] : [])] },
     { key: "kind", label: "What", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
     { key: "superfund", label: `529 only: spread it over ${SUPERFUND_YEARS} years (front-load)`, type: "checkbox" },
@@ -70,7 +71,8 @@ export function render(page, ctx) {
     formHost.innerHTML = "";
     if (!open && !editing) { formHost.append(ui.button("+ Add another gift", () => drawForm(true), { class: "secondary" })); return; }
     const values = editing ? { ...editing } : { year: d.year, from: d.couple ? "both" : d.givers[0]?.id ?? "", kind: "cash", superfund: false };
-    formHost.append(ui.h("h2", {}, editing ? `Change the gift to ${editing.to}` : "Add a gift"), ui.form(fields, values, (v) => {
+    // append() writes a null as the text "null": only real elements go in
+    formHost.append(...[ui.h("h2", {}, editing ? `Change the gift to ${editing.to}` : "Add a gift"), ui.form(fields, values, (v) => {
       const clean = { to: v.to.trim(), amount: v.amount ?? 0, year: v.year ?? d.year, from: v.from, kind: v.kind, superfund: v.kind === "529" && !!v.superfund, notes: v.notes ?? "" };
       if (!clean.to) return;
       pending = editing ? "Changes saved." : `Gift to ${clean.to} added.`;
@@ -87,7 +89,7 @@ export function render(page, ctx) {
       const id = editing.id; editing = null;
       pending = "Gift removed.";
       store.update((p) => { p.estate.gifts = (p.estate.gifts ?? []).filter((x) => x.id !== id); });
-    }, { class: "danger" })) : null);
+    }, { class: "danger" })) : null].filter(Boolean));
   };
   drawForm();
   root.append(ui.card(null, out, formHost));
