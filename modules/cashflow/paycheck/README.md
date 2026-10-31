@@ -10,7 +10,7 @@ and Medicare, and what your employer adds.
   twice a month 24, monthly 12; a yearly or quarterly figure assumes 26, said so).
 - `retirement.contributions[]` of the person: to a `401k` account = the 401(k) before tax; to an `hsa` account = the HSA;
   `employerMatch` (a year) = what the employer adds.
-- `taxes.hsa` (taxes/hsa-fsa, "HSA and FSA"): `contribution`, `fsa` and `employer`, counted for the first adult.
+- `taxes.hsa` (taxes/hsa-fsa, "HSA and FSA"): `contribution`, `fsa` and `employer`, counted for the first adult (the adult marked "Me"); `fsaPartner`, the other adult's own health FSA, for that adult.
 - The Benefits elections page (`career/benefits` `compute`, run for each person): its HSA, health FSA, child care FSA,
   transit and parking and stock-purchase-plan figures, already capped by its limits, only when its plan year is the
   paycheck's year (from October it plans next year's, and a note says they are left out).

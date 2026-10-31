@@ -159,3 +159,25 @@ test("typed wages are W-2 box 1, which already leaves the HSA money out: not ded
   assert.equal(withoutHsaPayroll(typed, { wagesAddBack: 4400 }).taxes.thisYear.wages, typed.taxes.thisYear.wages + 4400);
   assert.equal(withoutHsaPayroll(auto, { wagesAddBack: 4400 }).taxes.thisYear.wages ?? null, auto.taxes.thisYear.wages ?? null);   // nothing typed: untouched
 });
+
+test("each spouse elects their own health FSA, up to the limit each (IRC 125(i); Notice 2012-40)", async () => {
+  const { compute: federal } = await import("../federal/compute.js");
+  const two = () => planOf({ status: "married_joint", cover: "family", people: [
+    { id: "ana", name: "Ana", birth: "1985-02-01", pay: 120000 }, { id: "bo", name: "Bo", birth: "1984-03-01", pay: 90000 }] });
+  const base = federal(two(), { today: "2026-10-30" }).inputs.wages;
+  const p = two(); p.taxes.hsa.fsa = 3400; p.taxes.hsa.fsaPartner = 3400;
+  const f = federal(p, { today: "2026-10-30" });
+  near(f.inputs.wages, base - 6800);   // both within the 2026 limit of 3,400: 6,800 off pay, not 3,400
+  assert.deepEqual(f.fsa.people.map((x) => [x.id, x.excluded]), [["ana", 3400], ["bo", 3400]]);
+  // Bo elects 5,000: only 3,400 of it comes off his pay, and the note names him
+  p.taxes.hsa.fsaPartner = 5000;
+  const g = federal(p, { today: "2026-10-30" });
+  near(g.inputs.wages, base - 6800); assert.ok(g.notes.some((n) => /^Bo's health FSA election is over/.test(n)));
+  const d = compute(p, { today: "2026-10-30" });
+  assert.equal(d.fsa.election, 8400); assert.equal(d.fsa.excluded, 6800); assert.equal(d.fsa.over, 1600);
+  assert.deepEqual(d.fsa.people.map((x) => [x.name, x.over]), [["Ana", 0], ["Bo", 1600]]);
+  // the saving: income tax on 6,800 at their 22% bracket, and 7.65% payroll tax on each person's own 3,400
+  near(d.fsa.incomeTaxSaved, 6800 * 0.22, 0.5); near(d.fsa.payrollTaxSaved, 6800 * 0.0765, 0.01);
+  // each person's payroll-tax wages come down by their own FSA
+  assert.equal(d.hsa.people.find((x) => x.id === "bo").fsaOff, 3400);
+});

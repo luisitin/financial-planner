@@ -116,7 +116,9 @@ export function compute(plan, params = {}) {
     const isSelf = p.role === "self" || (!adults.some((a) => a.role === "self") && p.id === adults[0]?.id);
     const pick = (typedPerCheck, ...fallbacks) => { if (num(typedPerCheck) !== null) return { amount: pos(typedPerCheck), from: "typed" }; const y = fallbacks.find((f) => f > 0); return y ? { amount: per(y), from: "plan" } : { amount: 0, from: null }; };
     const hsa = pick(s.hsa, isSelf ? pos(hs.contribution) : 0, hsaContrib, B.hsa);
-    const fsa = pick(s.fsa, isSelf ? pos(hs.fsa) : 0, B.fsa);
+    const selfAdult = adults.find((a) => a.role === "self") ?? adults[0];
+    const isPartner = !isSelf && p.id === adults.find((a) => a !== selfAdult)?.id;   // the HSA and FSA page's second FSA (fsaPartner)
+    const fsa = pick(s.fsa, isSelf ? pos(hs.fsa) : isPartner ? pos(hs.fsaPartner) : 0, B.fsa);
     const dcfsa = pick(s.dcfsa, B.dcfsa);
     const commuter = pick(s.commuter, B.commuter);
     const health = pick(s.health);

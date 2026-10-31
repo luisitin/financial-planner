@@ -41,7 +41,7 @@
 - MAGI = the Federal estimate's AGI + the traditional IRA deduction it took (219(g)(3)(A): AGI "without regard to ... the deduction allowable under this section"; applied to Roth IRAs by 408A(c)(3)(B)(i)). It is worked to the cent.
 - **Filing separately** (two adults), each spouse's own MAGI is built from:
   - their pay less the pre-tax 401(k) kept out of income (up to limit + catch-up, from `taxInputs().k401`; 402(g)(1)(A));
-  - less the health FSA, on the adult marked "Me" (the answer key puts it on A's employer);
+  - less their own health FSA (`fsa` for the adult marked "Me", `fsaPartner` for the other; the answer key puts its one FSA on A's employer); typed wages are box 1, which already leaves out the FSA and HSA money, so nothing more comes off them;
   - less their HSA payroll money, plus their HSA excess;
   - plus the Income page's other income that names them;
   - plus half of the household's remaining income (typed income, gains and income that names no one). This halving is the answer key's convention, RULES.md 2.2 "half the other income". Pub. 501: "If you file a separate return, you generally report only your own income".

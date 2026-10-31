@@ -51,7 +51,7 @@ export function render(root, ctx) {
   ));
   if (d.hasFsa) root.append(ui.card("Flexible spending account",
     ui.row(
-      ui.stat("Elected", money(F.election), `limit ${money(F.limit)}`),
+      ui.stat("Elected", money(F.election), F.people.filter((x) => x.election > 0).length > 1 ? `${F.people.filter((x) => x.election > 0).map((x) => `${x.name} ${money(x.election)}`).join(", ")}; limit ${money(F.limit)} each` : `limit ${money(F.limit)}`),
       ui.stat("Unspent", money(F.unspent), F.daysLeft !== null ? `${F.daysLeft} days left in ${d.year}` : ""),
       ui.stat("Tax saved", money(F.taxSaved), "income and payroll tax"),
     ),
@@ -59,18 +59,20 @@ export function render(root, ctx) {
   ));
   const h = plan.taxes?.hsa ?? {};
   const adults = H.people.filter((p) => p.id !== null);
+  const meAdult = adults.find((p) => p.role === "self") ?? adults[0], meName = meAdult?.name ?? "Your", partnerName = adults.find((p) => p !== meAdult)?.name ?? "Partner";
   const FIELDS = [
     { key: "coverage", label: "Health plan for the HSA", type: "select", options: [{ value: "self", label: "High-deductible, self-only" }, { value: "family", label: "High-deductible, family" }, { value: "none", label: "No high-deductible plan" }], help: "only a high-deductible health plan allows an HSA" },
     adults.length > 1 ? { key: "coveredId", label: "Who the plan covers", type: "select", options: adults.map((p) => ({ value: p.id, label: p.name })), help: "with self-only cover only this person can have an HSA" } : null,
     { key: "contribution", label: "You put in this year", type: "money", min: 0, help: "your own money for the year, taken from pay; the HSA rows on the Contributions page count if they are more" },
     { key: "employer", label: "Employer puts in", type: "money", min: 0, help: "counts against the same limit" },
-    { key: "fsa", label: "FSA election this year", type: "money", min: 0, help: "leave blank if you have no FSA" },
+    { key: "fsa", label: adults.length > 1 ? `${meName}'s FSA election this year` : "FSA election this year", type: "money", min: 0, help: "leave blank if you have no FSA" },
+    adults.length > 1 ? { key: "fsaPartner", label: `${partnerName}'s FSA election this year`, type: "money", min: 0, help: "through their own employer; each person can put in up to the limit" } : null,
     { key: "fsaSpent", label: "FSA spent so far", type: "money", min: 0 },
   ].filter(Boolean);
   const coveredNow = H.coveredId ?? adults.find((p) => p.role === "self")?.id ?? adults[0]?.id ?? "";
-  const form = ui.form(FIELDS, { coverage: H.coverage, coveredId: coveredNow, contribution: h.contribution || null, employer: h.employer || null, fsa: h.fsa || null, fsaSpent: h.fsaSpent || null }, (v) => {
+  const form = ui.form(FIELDS, { coverage: H.coverage, coveredId: coveredNow, contribution: h.contribution || null, employer: h.employer || null, fsa: h.fsa || null, fsaPartner: h.fsaPartner || null, fsaSpent: h.fsaSpent || null }, (v) => {
     pending = "Saved.";
-    store.update((p) => { p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: v.coverage, ...(v.coveredId ? { coveredId: v.coveredId } : {}), contribution: v.contribution ?? 0, employer: v.employer ?? 0, fsa: v.fsa ?? 0, fsaSpent: v.fsaSpent ?? 0 }; });
+    store.update((p) => { p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: v.coverage, ...(v.coveredId ? { coveredId: v.coveredId } : {}), contribution: v.contribution ?? 0, employer: v.employer ?? 0, fsa: v.fsa ?? 0, ...(adults.length > 1 ? { fsaPartner: v.fsaPartner ?? 0 } : {}), fsaSpent: v.fsaSpent ?? 0 }; });
   }, { submitLabel: "Save" });
   // "Who the plan covers" matters only for self-only cover: shown while that is the choice
   const coverSelect = form.querySelector('select[name="coverage"]'), whoField = form.querySelector('select[name="coveredId"]')?.closest(".field");

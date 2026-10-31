@@ -118,8 +118,8 @@ export function compute(plan, params = {}) {
     const magiAll = cents(federalTax(ti.inputs, ti.params).agi + ti.ira.deductible);
     const who = adults.length ? adults : [{ id: null, name: "You", birthDate: null }];
     const me = who.find((p) => p.role === "self") ?? who[0];
-    // filing separately, each spouse's own: their pay less the pre-tax 401(k) kept out of income, the health FSA (on the
-    // adult marked "Me"), their HSA payroll money within the limit, and the other income on the Income page that names
+    // filing separately, each spouse's own: their pay less the pre-tax 401(k) kept out of income, their own health FSA,
+    // their HSA payroll money within the limit, and the other income on the Income page that names
     // them (business, rent, pension, dividends, other); the household's other income (typed, gains, unnamed) split in half
     const own = new Map();
     if (separate && who.length === 2) {
@@ -127,9 +127,9 @@ export function compute(plan, params = {}) {
       const share = (p) => (ti.payTotal > 0 ? (ti.k401.people.find((x) => x.id === p.id)?.pay ?? 0) / ti.payTotal : 0.5);
       for (const p of who) {
         const k = ti.k401.people.find((x) => x.id === p.id), h = ti.hsa.picture.people.find((x) => x.id === p.id);
-        const wages = ti.wagesTyped ? ti.inputs.wages * share(p) : (k?.pay ?? 0) - (k?.excluded ?? 0) - (p === me ? ti.fsa.offWages : 0);
+        const wages = ti.wagesTyped ? ti.inputs.wages * share(p) : (k?.pay ?? 0) - (k?.excluded ?? 0) - (ti.fsa.people?.find((x) => x.id !== null && x.id === p.id)?.offWages ?? (p === me ? ti.fsa.offWages : 0));
         const income = named.filter((x) => x.personId === p.id).reduce((s, x) => s + x.yearly, 0);
-        own.set(p, wages - (h?.payroll ?? 0) + (h?.excess ?? 0) + income);
+        own.set(p, wages - (ti.wagesTyped ? 0 : (h?.payroll ?? 0) - (h?.excess ?? 0)) + income);   // typed wages are box 1: the HSA money is already out
       }
       const other = magiAll - [...own.values()].reduce((s, x) => s + x, 0);
       for (const p of who) own.set(p, own.get(p) + other / 2);

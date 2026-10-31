@@ -190,3 +190,10 @@ test("not ready without pay; pay not linked to anyone", () => {
   const kid = withPay((q) => { q.income.forEach((x) => { if (x.type === "salary") x.personId = "p-cy"; }); });
   assert.equal(compute(kid, { today: TODAY }).why, "no-person", "pay linked to a child counts as no adult's");
 });
+
+test("each adult's own health FSA from the HSA and FSA page comes off their own paycheck (fsa for Me, fsaPartner for the other)", () => {
+  const p = familyPlan("2026-10-30"); p.taxes.hsa = { ...(p.taxes.hsa ?? {}), fsa: 1300, fsaPartner: 2400 };
+  const d = compute(p, { today: "2026-10-30" });
+  const fsaOf = (name) => d.people.find((x) => x.name === name).pretax.find((y) => y.key === "fsa").amount;
+  assert.equal(fsaOf("Ana"), 1300 / 26); assert.equal(fsaOf("Bo"), 2400 / 12);   // Ana is paid every two weeks, Bo monthly
+});

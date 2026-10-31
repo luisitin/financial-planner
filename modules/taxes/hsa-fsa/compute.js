@@ -11,7 +11,7 @@ import { daysBetween } from "../../../core/math/dates.js";
 
 /** Employee payroll tax: Social Security 6.2% up to the year's pay limit (IRC 3101(a), 3121(a)(1)), Medicare 1.45% on all pay (3101(b)(1)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
-const FICA = PAYROLL.ss + PAYROLL.medicare;   // the FSA's own saving keeps the flat 7.65%
+const FICA = PAYROLL.ss + PAYROLL.medicare;   // with no pay on file, money kept out of pay saves the full 7.65%
 
 /**
  * payrollTaxSaved(without, withIt, wageBase) -> { socialSecurity, medicare, total }: what one person's payroll tax falls by
@@ -51,7 +51,8 @@ const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
  *     futureContributions, balance, balanceGrown, atSixtyFive, aboveWageBase: [names],
  *     people: [{ id, name, role, age, eligible, catchUp, limit, payroll, employer, used, room, over, excess, pay, ficaWith,
  *       ficaWithout, socialSecuritySaved, medicareSaved, ficaSaved, aboveWageBase }] },
- *   fsa: { election, limit, spent, unspent, daysLeft, carryover, taxSaved, over },
+ *   fsa: { election (everyone's), excluded (within each person's limit), limit (each person's), spent, unspent, daysLeft, carryover, taxSaved,
+ *     incomeTaxSaved, payrollTaxSaved, over, people: [{ id, name, election, over }] },
  *   hasHsa, hasFsa, notes, selfName
  * }
  */
@@ -86,14 +87,14 @@ export function compute(plan, params = {}) {
   const me = pic.people.find((p) => p.role === "self") ?? pic.people[0] ?? null;
   const people = pic.people.map((p, i) => {
     const p0 = b0.hsa.picture.people[i];
-    const pay = payOf.get(p.id) ?? 0, fsaOff = p === me ? b.fsa.excluded : 0;
+    const pay = payOf.get(p.id) ?? 0, fsaOff = b.fsa.people.find((x) => x.id !== null && x.id === p.id)?.excluded ?? (p === me ? b.fsa.excluded : 0);
     const ficaWith = pay - fsaOff - p.payroll + p.excess, ficaWithout = pay - fsaOff + (p0?.excess ?? 0);
     // no pay on the Income page: where the pay sits against the Social Security limit is not known, so the money within the
     // limit saves the full 7.65%
     const s = knownPay ? payrollTaxSaved(ficaWithout, ficaWith, wageBase) : { socialSecurity: PAYROLL.ss * Math.max(0, ficaWithout - ficaWith), medicare: PAYROLL.medicare * Math.max(0, ficaWithout - ficaWith) };
     const aboveWageBase = knownPay && ficaWithout > wageBase && ficaWithout - ficaWith > 0;
     return { id: p.id, name: p.name, role: p.role, age: p.age, eligible: p.eligible, catchUp: p.catchUp, limit: p.limit, payroll: p.payroll, employer: p.employer, used: p.used, room: p.room, over: p.over, excess: p.excess,
-      pay, ficaWith, ficaWithout, socialSecuritySaved: s.socialSecurity, medicareSaved: s.medicare, ficaSaved: s.socialSecurity + s.medicare, aboveWageBase };
+      pay, ficaWith, ficaWithout, socialSecuritySaved: s.socialSecurity, medicareSaved: s.medicare, ficaSaved: s.socialSecurity + s.medicare, aboveWageBase, fsaOff };
   });
   const socialSecuritySaved = people.reduce((s, p) => s + p.socialSecuritySaved, 0), medicareSaved = people.reduce((s, p) => s + p.medicareSaved, 0);
   const ficaSaved = socialSecuritySaved + medicareSaved;
@@ -115,13 +116,27 @@ export function compute(plan, params = {}) {
     taxSaved, ficaSaved, socialSecuritySaved, medicareSaved, savedTotal: taxSaved + ficaSaved, marginal, years, growthRate, kept, futureValue, futureContributions: kept * years,
     balance: hsaBalance, balanceGrown, atSixtyFive: futureValue + balanceGrown, aboveWageBase: people.filter((p) => p.aboveWageBase).map((p) => p.name), people,
   };
-  const election = Math.max(0, Number(h.fsa) || 0), spent = Math.max(0, Number(h.fsaSpent) || 0);
+  // the health FSA: each employee elects their own, up to the limit each (IRC 125(i); Notice 2012-40: "each spouse may elect
+  // ... up to $2,500 (as indexed for inflation) to his or her health FSA"): the adult marked "Me" (`fsa`), the other (`fsaPartner`)
+  const fsaPeople = b.fsa.people ?? [];
+  const election = fsaPeople.reduce((t, x) => t + x.election, 0), excluded = fsaPeople.reduce((t, x) => t + x.excluded, 0), spent = Math.max(0, Number(h.fsaSpent) || 0);
   const fsaLimit = L.fsa?.limit ?? 3300;
   const daysLeft = today ? Math.max(0, daysBetween(today, `${year}-12-31`)) : null;
-  // the Federal estimate already takes the FSA off wages: put it back for the return without it
-  const noFsa = { ...b.inputs, wages: b.inputs.wages + (b.fsa?.offWages ?? 0), medicareWages: (b.inputs.medicareWages ?? b.inputs.wages) + (b.fsa?.offWages ?? 0) };
-  const fsaWithout = federalTax(noFsa, b.params).totalTax, fsaWith = federalTax({ ...noFsa, wages: Math.max(0, noFsa.wages - election) }, b.params).totalTax;
-  const fsa = { election, limit: fsaLimit, spent, unspent: Math.max(0, election - spent), daysLeft, carryover: L.fsa?.carryover ?? 660, taxSaved: election > 0 ? Math.max(0, fsaWithout - fsaWith) + election * FICA : 0, over: Math.max(0, election - fsaLimit) };
+  // income tax saved: the return without anyone's FSA (typed wages, box 1, raised by what it left out) against the plan's own
+  let fsaIncomeSaved = 0, fsaPayrollSaved = 0;
+  if (excluded > 0) {
+    const t = plan.taxes ?? {}, ty = t.thisYear ?? {};
+    const typedWages = b.wagesTyped ? { thisYear: { ...ty, wages: Number(ty.wages) + excluded } } : {};
+    const bf = taxInputs({ ...plan, taxes: { ...t, ...typedWages, hsa: { ...(t.hsa ?? {}), fsa: 0, fsaPartner: 0 } } }, params);
+    fsaIncomeSaved = Math.max(0, federalTax(bf.inputs, bf.params).totalTax - withIt);
+    // payroll tax, each person's own FSA against their own pay and the Social Security limit (pay unknown: the full 7.65%)
+    for (const x of fsaPeople) {
+      const pp = people.find((q) => q.id !== null && q.id === x.id);
+      fsaPayrollSaved += knownPay && pp ? payrollTaxSaved(pp.ficaWith + x.excluded, pp.ficaWith, wageBase).total : x.excluded * FICA;
+    }
+  }
+  const fsa = { election, excluded, limit: fsaLimit, spent, unspent: Math.max(0, election - spent), daysLeft, carryover: L.fsa?.carryover ?? 660, taxSaved: fsaIncomeSaved + fsaPayrollSaved, incomeTaxSaved: fsaIncomeSaved, payrollTaxSaved: fsaPayrollSaved,
+    over: fsaPeople.reduce((t, x) => t + Math.max(0, x.election - fsaLimit), 0), people: fsaPeople.map((x) => ({ id: x.id, name: x.name, election: x.election, over: Math.max(0, x.election - fsaLimit) })) };
   const notes = [];
   if (coverage === "none" && total > 0) notes.push(`${fmtInt(total)} is going into an HSA, but you said you have no high-deductible health plan. Only someone covered by one can put money in an HSA, so all of it is taxed as pay and charged 6% a year until it is taken out. Take it out before the tax filing deadline, or change the cover below if you do have such a plan.`);
   else {
@@ -134,6 +149,6 @@ export function compute(plan, params = {}) {
     if (!outside.length && insideExcess > over + 0.005) notes.push(`In all ${fmtInt(insideExcess)} is over the limit: the extra ${fmtInt(pic.catchUpAmount)} from age ${pic.catchUpAge} can go only into that person's own HSA, not the other's.`);
   }
   if (election > 0 && total > 0) notes.push("A general-purpose health FSA and an HSA cannot run in the same year; with an HSA the FSA has to be the limited-purpose kind (dental and vision only).");
-  if (fsa.over > 0) notes.push(`The FSA election is over the ${fsaYear} limit of ${fsaLimit.toLocaleString("en-US")}.`);
+  for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${x.name}'s FSA election` : "The FSA election"} is over the ${fsaYear} limit of ${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
   return { year, limitsYear, fsaYear, wageBase, hsa, fsa, hasHsa: total > 0 || hsaBalance > 0, hasFsa: election > 0, notes, selfName: owner && owner.id !== null ? owner.name : "you" };
 }

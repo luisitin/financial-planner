@@ -141,9 +141,15 @@ export function taxInputs(plan, params = {}) {
   });
   const iraDeductible = iraPeople.reduce((s, x) => s + x.deductible, 0);
   const iraOver = iraPeople.reduce((s, x) => s + x.traditional - x.deductible, 0);
-  // the health FSA election is a cafeteria-plan salary reduction, not wages, up to the year's limit (IRC 125(i), 3121(a)(5)(G))
-  const fsaElection = Math.max(0, Number(t.hsa?.fsa) || 0), fsaLimit = L.kinds.fsa?.limit ?? Infinity;
-  const fsaExcluded = Math.min(fsaElection, fsaLimit);
+  // the health FSA election is a cafeteria-plan salary reduction, not wages, up to the year's limit (IRC 125(i), 3121(a)(5)(G)),
+  // a limit for each employee
+  // each employee elects their own FSA up to the limit (Pub. 969): the adult marked "Me" (`fsa`) and the other adult (`fsaPartner`)
+  const fsaLimit = L.kinds.fsa?.limit ?? Infinity;
+  const partnerAdult = adults.find((p) => p !== me) ?? null;
+  const fsaPeople = [{ who: me, election: Math.max(0, Number(t.hsa?.fsa) || 0) }, { who: partnerAdult, election: partnerAdult ? Math.max(0, Number(t.hsa?.fsaPartner) || 0) : 0 }]
+    .filter((x, i) => i === 0 || x.who).map((x) => ({ id: x.who?.id ?? null, name: x.who?.name ?? null, election: x.election, excluded: Math.min(x.election, fsaLimit) }));
+  const fsaElection = fsaPeople.reduce((s, x) => s + x.election, 0), fsaExcluded = fsaPeople.reduce((s, x) => s + x.excluded, 0);
+  const fsaOf = (p) => fsaPeople.find((x) => x.id !== null && x.id === p?.id)?.excluded ?? 0;
   // HSA money through pay is kept out of income and payroll tax only up to the household's limit for its cover (106(d)(1),
   // 223(b); none without a high-deductible plan); the excess is pay, the employer's part of it included (Pub. 969)
   const hsa = hsaPicture(plan, year);
@@ -157,7 +163,7 @@ export function taxInputs(plan, params = {}) {
   const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null, hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
   sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA and FSA money from pay are already left out)` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
   if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
-  if (!wagesTyped && fsaElection > fsaExcluded) notes.push(`The health FSA election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(fsaExcluded)} comes off your pay before tax.`);
+  for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${x.name}'s health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? `${x.name}'s` : "your"} pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   const gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
@@ -222,7 +228,7 @@ export function taxInputs(plan, params = {}) {
     const blindAll = Math.max(0, Math.round(Number(t.blind) || 0));
     separate = two.map((p) => {
       const i = adults.indexOf(p), k = k401People[i], ira = iraPeople[i], h = hsa.people[i];
-      const fsaOwn = p === me ? fsaExcluded : 0;
+      const fsaOwn = fsaOf(p);
       const hsaDeducted = Math.max(0, h.payroll - h.excess), hsaTaxed = Math.max(0, h.excess - h.payroll);
       const ownWages = wagesTyped ? wages * (payTotal > 0 ? k.pay / payTotal : 1 / two.length) : Math.max(0, k.pay - k.excluded - fsaOwn) + hsaTaxed;
       const ownBusiness = sumFor(p, ["business"]);
@@ -253,7 +259,7 @@ export function taxInputs(plan, params = {}) {
     standard: separate ? separate.reduce((s, x) => s + standardDeduction(filingStatus, P, { ages65plus: x.ages65plus, blind: x.blind }), 0) : standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }),
     k401: { people: k401People, excluded: pretax401k, inIncome: k401Over, year: L.kindYear["401k"] },
     ira: { people: iraPeople, deductible: iraDeductible, over: iraOver, year: L.kindYear.ira },
-    fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null },
+    fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null, people: fsaPeople.map((x) => ({ ...x, offWages: wagesTyped ? 0 : x.excluded })) },
     hsa: { picture: hsa, payroll: hsaPayroll, employer: hsa.household.employer, excess: hsaExcess, deducted: hsaContrib, employerTaxed: wagesTyped ? 0 : hsaEmployerTaxed },
     payTotal, wagesTyped,
   };
