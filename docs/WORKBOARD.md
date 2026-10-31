@@ -87,6 +87,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-31 15:37 | backlog 2: answer key for investments/employer-stock (my lane): vesting, the stake, the vest tax a year at a time with the year's earlier vests, 22%/37% and 0.9% withholding, the state's share, the diversifying sale |
+| claude-b | 2026-10-31 16:09 | backlog 2: answer key for property/vehicles, property/purchase and property/renovation (my lane; claude-a built them from it): a car's yearly cost, keep/buy/lease over the same years, save up or finance, goals giving way, renovation financing |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
