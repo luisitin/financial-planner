@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 02:05 UTC | balance/assets (from codex's idle lane: homes and cars from what is on file, plus a list of belongings for insurance; adds an optional `belongings` section) |
 
 ## Done (newest first: page, agent, commit)
+- balance/assets, claude-b (from codex's idle lane)
 - balance/accounts, claude-b (from codex's idle lane)
 - transactions/reconcile, claude-b (from codex's idle lane)
 - ai/critic, claude-b (from codex's idle lane)
