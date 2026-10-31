@@ -77,11 +77,13 @@ export function stepForPage(status, pageKey, stepKey) {
   return pick ? { step: pick, viaAlt: !on(pick) } : null;
 }
 
-/** prev: the step before in order (numbered, then extras). next: the first step after this one still to do or skipped, else the first such before it (wrapped), else null. */
+/** prev: the step before in order (numbered, then extras). next: the first step after this one still to do or skipped (one that needs an earlier step only when no other is left), else the first such before it (wrapped), else null. */
 export function neighbours(status, step) {
   const i = status.steps.findIndex((s) => s.key === step.key);
   const open = (s) => s.state === "todo" || s.state === "later";
-  const after = status.steps.slice(i + 1).find(open), before = status.steps.slice(0, Math.max(0, i)).find(open);
+  const ready = (s) => open(s) && !s.blockedBy;   // a step that needs an earlier one only when nothing else is left
+  const pick = (list) => list.find(ready) ?? list.find(open);
+  const after = pick(status.steps.slice(i + 1)), before = pick(status.steps.slice(0, Math.max(0, i)));
   const next = after ?? before ?? null;
   return { prev: i > 0 ? status.steps[i - 1] : null, next, wrapped: !after && !!before };
 }
@@ -146,13 +148,19 @@ const ensure = (draft, id) => {
   return j;
 };
 const touch = (draft, today) => { if (today) draft.guide.activeAt = today; };
-/** Follow guide `id`. No change when it is already followed and started. */
+/** Follow guide `id`. No change when it is already followed, started and was tapped today (a guide gone quiet comes back). */
 export function startGuide(draft, id, today) {
   if (!journeyById(id)) return false;
-  if (draft.guide?.active === id && draft.guide?.journeys?.[id]?.startedAt) return false;
+  if (draft.guide?.active === id && draft.guide?.journeys?.[id]?.startedAt && (!today || draft.guide.activeAt === today)) return false;
   const j = ensure(draft, id);
   j.startedAt = j.startedAt ?? today;
   draft.guide.active = id; touch(draft, today);
+  return true;
+}
+/** A tap inside the followed guide (Next, All steps...): remember the day, at most once a day, so the guide does not go quiet while it is used. */
+export function touchGuide(draft, today) {
+  if (!draft.guide?.active || !today || draft.guide.activeAt === today) return false;
+  draft.guide.activeAt = today;
   return true;
 }
 /** Tick a look-only step (Next on it). */

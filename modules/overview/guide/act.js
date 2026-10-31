@@ -15,3 +15,19 @@ export function change(ctx, fn) {
 }
 /** First letter lower-cased, to follow "On this page: ". */
 export const lowerFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+/** A form control's value as compared by isDirty (a tick box by its tick). */
+export const controlValue = (c) => (c.type === "checkbox" || c.type === "radio" ? c.checked : c.value);
+/**
+ * Typing that is not saved yet: a control still on the page whose value differs from the one it had when first
+ * focused (`starts`, a Map or WeakMap filled on focus). A control that saves on change makes the shell redraw the
+ * page, which replaces it, so it never counts; a cancelled form is gone from the page too. Search and file boxes,
+ * and anything marked data-nodirty, never count. Works on plain objects shaped like controls (tested in Node).
+ */
+export function isDirty(controls, starts) {
+  for (const c of controls) {
+    if (!c || c.isConnected === false || !starts.has(c)) continue;
+    if (c.type === "search" || c.type === "file" || (c.dataset && "nodirty" in c.dataset)) continue;
+    if (controlValue(c) !== starts.get(c)) return true;
+  }
+  return false;
+}

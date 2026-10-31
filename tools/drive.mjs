@@ -86,7 +86,9 @@ const waitEvent = (method, sessionId, ms = 15000) => new Promise((res) => {
 async function killBrowser() {
   try { await send("Browser.close"); } catch { }
   try { ws.close(); } catch { }
-  try { chrome.kill(); } catch { }
+  // let Chrome exit by itself first: it writes localStorage to disk a few seconds late, and a kept --profile needs it
+  await Promise.race([new Promise((r) => chrome.once("exit", r)), sleep(5000)]);
+  if (chrome.exitCode === null && chrome.signalCode === null) try { chrome.kill(); } catch { }
   if (!profileName) for (let i = 0; i < 20; i++) { await sleep(250); try { fs.rmSync(profile, { recursive: true, force: true }); break; } catch { } }
 }
 

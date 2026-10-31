@@ -6,6 +6,7 @@ import { startGuide } from "../guide/compute.js";
 import { offKeys, usable, change } from "../guide/act.js";
 
 const STYLE = `
+.go-root h1 { text-wrap: balance; }
 .go-root .go-kicker { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-bottom: 4px; }
 .go-root .go-lede { color: var(--text-2); margin: 6px 0 16px; }
 .go-root .go-feature { position: relative; padding: 16px; border-radius: var(--radius); background: var(--accent-soft); margin-bottom: 8px; }
@@ -61,7 +62,7 @@ export function render(root, ctx) {
     ui.h("h1", {}, "What would you like to do?"),
     ui.h("p", { class: "go-lede" }, "Pick one. Each one takes you through a few short pages, one at a time. You can come back here any time: it is in the menu ☰ under Overview."),
     ui.h("div", { class: "go-feature" },
-      d.empty ? ui.h("div", { class: "go-fk" }, "Not sure? Start here.") : null,
+      f.state === "new" ? ui.h("div", { class: "go-fk" }, "Not sure? Start here.") : null,
       ui.h("div", { class: "t", id: fid }, "Build my whole plan"),
       ui.h("div", { class: "d", id: fdid }, f.line),
       ui.h("a", { href: f.href, class: r ? "btn secondary" : "btn", "aria-describedby": `${fid} ${fdid}`, onClick: () => choose("whole-plan", f.state === "done" ? null : "whole-plan") }, f.label)),

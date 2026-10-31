@@ -28,8 +28,14 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
   "Following: Pay off what I owe · Step 2 of 3 ›", only while that step is still to do; nothing once the guide is done.
 - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
   question>" (session storage, wrapped in try/catch).
-- Typing that is not saved: tapping Next, Skip or All steps first warns ("tap its Save or Add button first, or tap
-  again to leave without it"); a second tap goes. Only inputs inside a `<form>` count, so a page's filters do not.
+- Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,
+  Compare...) first, or tap again to leave without it"); a second tap goes. A control counts when it is still on the
+  page and its value differs from the one it had when first focused (`act.js` `isDirty`), inside a `<form>` or not
+  (Payoff, Social Security and Beneficiaries build theirs without one). A control that saves on change makes the
+  shell redraw the page, which replaces it, so filters never count; nor do a cancelled form, search boxes, file
+  pickers or anything marked `data-nodirty`.
+- When a step page's own link or button moves on to a page that is not a step (Import goes to Categorize after a bank
+  file), that next page shows "‹ Back to the guide: <name>" for one page, back to the step, which then says it is done.
 
 ## Where progress lives
 In the plan (`plan.guide`, docs/DATA_MODEL.md), not in the browser, so a guide started on the PC shows on the phone,
@@ -60,7 +66,13 @@ plan to the PC and leaves a backup copy there.
   can afford", then "Set down payment goal").
 - **Guide mode only for the followed guide:** after "Stop following this guide", Back to an old step address shows
   nothing; every way into a step (the step rows, "Do step N", Get started) starts the guide first.
-- **Goes quiet:** after 30 days with no tap in it, the followed guide's bar stops showing.
+- **Goes quiet:** after 30 days with no tap in it, the followed guide's bar stops showing. Any tap in it (Next, Skip,
+  All steps, a step row, "Do step N", "Continue my plan") remembers the day, at most one save a day, and brings a
+  quiet guide back.
+- **Skip:** "Skip to" goes to the next step that can be done now; a step that needs the skipped one only when nothing
+  else is left. It marks the step "Skipped for now" and says so at the top of the next page.
+- **Look-only steps** are ticked by Next (and All steps), never while they still need an earlier step: a page that
+  cannot answer yet must not count as looked at.
 - **Needs:** a step whose page needs an earlier one (Social Security needs a person) says "This step needs step 1
   first" with a link, on the page and in the list.
 
@@ -72,11 +84,19 @@ Done checks in words (`journeys.js`):
 | Pay off what I owe | add, rates, order, [cards, student, one-loan] | a liability account; every loan and card with a balance has its details saved, a 0% one too (Liabilities' own `detail`); a payoff order saved; [looked / saved] |
 | Spend less and save more | income, accounts, spending, budget, cushion, [sort] | an income; a checking, savings, cash or card account; an expense or a bank row; an envelope or a 50/30/20 split; a goal named emergency / rainy day / cushion or with the 🛟 icon (Emergency fund's own test); [90% of bank rows sorted, or looked] |
 | Buy a home | afford, pay, lenders, goal, [rent-buy, fit] | Home affordability's inputs saved; an income; looked; a goal named "down payment" (what its "Make it a goal" saves) or a 🏠 goal named for the home, never "Home repairs"; [saved or looked; looked] |
-| Plan my retirement | people, savings, spend, ss, saving, pension, chance | every adult has a birth date; a savings or retirement account (not a loan); retirement spending saved, or "use what I spend now"; a Social Security amount or record, or "won't get it"; a contribution, or "not saving now"; a pension, or "don't have one"; looked |
+| Plan my retirement | people, savings, spend, ss, saving, pension, chance | every adult has a birth date; a savings or retirement account (not a loan); retirement spending saved, or bills on Expenses (its other page); a Social Security amount or record, or "won't get it"; a contribution, or "not saving now"; a pension, or "don't have one"; looked, once people, savings and spending are in (the chance page cannot answer before) |
 | Sort out my taxes | people, income, estimate, paychecks, state, [room] | a person; an income or typed wages; tax withheld typed, or looked; one paycheck's tax, or "none taken"; a state; [looked] |
-| Protect my family | people, policies, life, papers, contacts, [who-gets] | a person; a policy, or "none"; looked; any paper noted (even "not made yet"), or "none of these yet"; a contact; [a beneficiary saved] |
+| Protect my family | people, policies, savings, spend, life, papers, contacts, [who-gets] | an adult with a birth date; a policy, or "none"; an account; an expense (Life insurance needs works from the retirement projection's inputs: accounts, spending, adults' birth dates, so the guide gathers them); looked, once those are in; any paper noted (even "not made yet"), or "none of these yet"; a contact; [a beneficiary saved] |
 
 The minutes are rough judgements of the time to fill each guide's pages, not measured.
+
+## Review after the build (2026-10-31)
+Four reviewers (code, hands-on flows, a first-time user, visual design) and two skeptics who tried to refute each
+finding: 24 of 39 findings held and are fixed. Among them: a guide could never come back after 30 quiet days; typing on
+pages without a `<form>` was not protected; the retirement and protect guides could "finish" with their answer pages
+still saying they needed more; Skip could land on a step needing the skipped one; a blocked look-only step could be
+ticked; a finished step's bar kept its instruction; plus wording (each "does not apply" says what was said; Quick
+answers' rows; "a baby or a move" first in More guides).
 
 ## Choices made (no owner input; noted per the builder instructions)
 The spec (2026-10-31) was checked by three critics before building (an engineer against the code, a first-time user of
@@ -85,8 +105,8 @@ The spec (2026-10-31) was checked by three critics before building (an engineer 
 - Numbered steps never hide; anything that can hide is an extra (step numbers no longer shift mid-guide).
 - "On this page:" plus the page's own button name, in 15 px body text, instead of the step title repeated in small grey.
 - One way forward in the card ("Skip to" / "Next"), no separate Back and Skip buttons; Undo for "does not apply".
-- "Stop following this guide" and "Look over the steps again" instead of "Leave the guide" and "Go through it again",
-  which sounded like losing work.
+- "Stop following this guide" instead of "Leave the guide", which sounded like losing work. A finished guide offers
+  "Show all the steps" (it opens the folded list), not a restart that would clear the person's "does not apply" answers.
 - Budget's emergency-fund step opens Goals (Emergency fund cannot create a goal), with Emergency fund as "See how big
   it should be"; Protect's papers step counts any paper noted, since someone with no will notes "none".
 - Help: "Ask the app a question" only while the AI answers; otherwise "Questions? See the help".

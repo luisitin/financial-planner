@@ -5,7 +5,7 @@ import { journeyById, journeyStatus, activeSummary, guideHref } from "../guide/c
 
 /** Every choice the page offers (written to plan.guide.chosen when tapped). */
 export const CHOICE_IDS = ["whole-plan", "quick", "debt", "budget", "home", "retire", "more", "look"];
-const QUICK = { id: "quick", icon: "⚡", title: "Get a quick answer", line: "Work out one thing, like the real cost of a car or a trip. Nothing to set up.", href: "#/overview/quick" };
+const QUICK = { id: "quick", icon: "⚡", title: "Get a quick answer", line: "Work out one thing, like paying cash for a car or borrowing, or which health plan costs least. Nothing to set up.", href: "#/overview/quick" };
 /** The rows under the featured panel, in order: a quick answer, then four guides. */
 export const ROWS = ["quick", "debt", "budget", "home", "retire"];
 export const MORE = { id: "more", label: "More guides: taxes, protecting your family, a baby or a move ›", href: "#/overview/guide?more=1" };
@@ -35,8 +35,10 @@ export function setChosen(draft, id, today) {
 export function featured(plan, { off = [] } = {}) {
   const s = journeyStatus(journeyById("whole-plan"), plan, { off });
   if (s.complete) return { state: "done", label: "Look over my plan", line: `All ${s.total} steps are done. See what to look at next.`, href: s.guideHref, doneCount: s.doneCount, total: s.total };
-  if (s.doneCount === 0) return { state: "new", label: "Start my plan", line: `Your accounts, family, income, bills and goals, put in once. ${s.total} short steps, about ${s.minutes} minutes in all; stop any time.`, href: s.next.href, doneCount: 0, total: s.total };
-  return { state: "started", label: "Continue my plan", line: `${s.doneCount} of ${s.total} steps are done. Next: ${s.next.short.toLowerCase()}.`, href: s.next.href, doneCount: s.doneCount, total: s.total };
+  if (s.doneCount === 0 && !s.started) return { state: "new", label: "Start my plan", line: `Your accounts, family, income, bills and goals, put in once. ${s.total} short steps, about ${s.minutes} minutes in all; stop any time.`, href: s.next.href, doneCount: 0, total: s.total };
+  const skipped = s.steps.filter((x) => x.state === "later").length;
+  const line = s.doneCount === 0 && skipped ? `You skipped ${skipped} step${skipped === 1 ? "" : "s"} for now. Next: ${s.next.short.toLowerCase()}.` : `${s.doneCount} of ${s.total} steps are done. Next: ${s.next.short.toLowerCase()}.`;
+  return { state: "started", label: "Continue my plan", line, href: s.next.href, doneCount: s.doneCount, total: s.total };
 }
 
 /** compute(plan, { today?, off? }) -> { empty, firstRun, opensHere, featured, rows, more, resume, hasAccounts } */

@@ -5,6 +5,7 @@
 //   store.subscribe(fn)    fn(plan) after every update; returns unsubscribe
 //   store.backend()        "server" (PC holds the plan, shared by every device) or "local"
 //   store.sandbox()        true when the page was opened with ?sandbox=1 (pretend plan, this browser only)
+//   store.adopt(plan)      take a newer plan read from the PC, staying connected
 //
 // Persistence: the PC server's data/plan.json when reachable, else this browser's
 // localStorage (per device -- the phone and the PC would then hold different plans,
@@ -46,6 +47,8 @@ export const store = {
     return plan;
   },
   async reconnect() { backend = "local"; return this.load().then(() => notify()); },
+  /** Take a newer plan read from the PC, staying connected to it (a tab that comes back into view). */
+  adopt(p) { plan = migrate(p); writeLocal(plan); notify(); },
   get() { return plan; },
   backend() { return backend; },
   sandbox() { return SANDBOX; },

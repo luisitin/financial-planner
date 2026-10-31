@@ -1,7 +1,7 @@
 // modules/overview/guide/view.js -- DOM only. #/overview/guide: the list of guides. #/overview/guide/<id>: one guide,
 // its steps (the whole row is the link; the next step also gets the page's only filled button, as the dashboard's
 // setup steps do), and when every numbered step is done, a finish card.
-import { compute, journeyById, startGuide, leaveGuide, restartGuide, finishGuide } from "./compute.js";
+import { compute, journeyById, startGuide, leaveGuide, finishGuide } from "./compute.js";
 import { offKeys, usable, change } from "./act.js";
 
 let pending = null;   // { id, text }: a green line shown once on the next render of that guide
@@ -58,15 +58,18 @@ function renderList(wrap, ctx) {
   const d = compute(ctx.plan, { off: offKeys(ctx), today: ctx.fmt.today() });
   let list = d.journeys;
   const more = route.query?.more === "1";
-  if (more) list = [...list.filter((j) => ["taxes", "protect"].includes(j.id)), ...list.filter((j) => !["taxes", "protect"].includes(j.id))];
+  const lifeRow = { guideHref: "#/household/life-events", icon: "👪", title: "Something big is happening", line: "Marriage, a baby, a new job, a move, an inheritance or a divorce, step by step.", status: null };
+  const lifeFirst = more && usable(ctx, "household/life-events");
+  // from Get started's "More guides: taxes, protecting your family, a baby or a move": those three first
+  if (more) list = [...list.filter((j) => ["taxes", "protect"].includes(j.id)), ...(lifeFirst ? [lifeRow] : []), ...list.filter((j) => !["taxes", "protect"].includes(j.id))];
   wrap.append(ui.h("section", { class: "card" },
     ui.h("h1", {}, "Step-by-step guides"),
     ui.h("p", { class: "gd-lede" }, "Each guide takes you through a few pages in order, one at a time. Stop any time; it remembers where you were."),
-    ui.h("ul", { class: "page-list" }, list.map((s) => rowLink(ui, s.guideHref, s.icon, s.title, s.line, statusLine(s))))));
+    ui.h("ul", { class: "page-list" }, list.map((s) => rowLink(ui, s.guideHref, s.icon, s.title, s.line, s === lifeRow ? null : statusLine(s))))));
   const others = [
-    usable(ctx, "household/life-events") ? ["#/household/life-events", "👪", "Something big is happening", "Marriage, a baby, a new job, a move, an inheritance or a divorce, step by step."] : null,
+    usable(ctx, "household/life-events") && !lifeFirst ? ["#/household/life-events", "👪", "Something big is happening", "Marriage, a baby, a new job, a move, an inheritance or a divorce, step by step."] : null,
     usable(ctx, "overview/monthly-review") && (ctx.plan.accounts ?? []).length ? ["#/overview/monthly-review", "🗓️", "Check in on the month", "Ten minutes to bring the numbers up to date."] : null,
-    usable(ctx, "overview/quick") ? ["#/overview/quick", "⚡", "Get a quick answer", "Work out one thing, like the real cost of a car or a trip. Nothing to set up."] : null,
+    usable(ctx, "overview/quick") ? ["#/overview/quick", "⚡", "Get a quick answer", "Work out one thing, like paying cash for a car or borrowing, or which health plan costs least. Nothing to set up."] : null,
   ].filter(Boolean);
   if (others.length) wrap.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Other places to start"), ui.h("ul", { class: "page-list" }, others.map((o) => rowLink(ui, ...o)))));
 }
@@ -106,7 +109,7 @@ function renderOne(wrap, ctx, id) {
     const status = st.state === "none" ? "Does not apply" : st.state === "later" ? "Skipped for now" : st.blockedBy && st.state === "todo" ? (st.blockedBy.index ? `Needs step ${st.blockedBy.index}` : "Needs an earlier step") : null;
     const hint = st.optional && st.why ? st.why : null;
     return ui.h("li", { class: cls },
-      ui.h("a", { href: st.href, class: "step-link", "aria-current": isNext ? "step" : null, onClick: () => { if (!active) follow(); } },
+      ui.h("a", { href: st.href, class: "step-link", "aria-current": isNext ? "step" : null, onClick: () => follow() },
         ui.h("span", { class: "num", "aria-hidden": "true" }, num),
         ui.h("span", { class: "lbl" }, st.title, ui.h("span", { class: "vh" }, ` ${isNext ? "Next step." : STATE_WORDS[st.state]}`), hint ? ui.h("span", { class: "hint" }, hint) : null),
         status ? ui.h("span", { class: "st" }, status) : null,
@@ -130,8 +133,8 @@ function renderOne(wrap, ctx, id) {
       ui.h("div", { class: "steps-cta" },
         usable(ctx, fin.page) ? ui.h("a", { href: `#/${fin.page}`, class: "btn", onClick: () => change(ctx, (q) => finishGuide(q, id, today)) }, fin.label) : null,
         ui.h("a", { href: "#/overview/guide", class: "btn secondary", onClick: () => change(ctx, (q) => finishGuide(q, id, today)) }, "Pick another guide"),
-        ui.h("button", { type: "button", class: "gd-textbtn", onClick: () => { pending = { id, text: "Back to step 1. Everything already in your plan still counts." }; change(ctx, (q) => restartGuide(q, id, today)); } }, "Look over the steps again"))));
-    wrap.append(ui.h("details", { class: "card fold fold-card" },
+        ui.h("button", { type: "button", class: "gd-textbtn", onClick: () => { const f = wrap.querySelector("details.gd-all"); if (f) { f.open = true; f.scrollIntoView({ block: "start" }); } } }, "Show all the steps"))));
+    wrap.append(ui.h("details", { class: "card fold fold-card gd-all" },
       ui.h("summary", {}, ui.h("h2", {}, s.extrasLeft ? "Main steps done ✓" : `All ${s.total + s.extrasTotal} steps done ✓`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, stepsBody())));
   } else {

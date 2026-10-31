@@ -18,8 +18,8 @@ export const MOST_ASKED = [
 ];
 export const MORE = [
   { key: "career/offer-compare", icon: "💼", title: "Which job offer pays more?", line: "Pay, bonus, stock, benefits and the commute side by side, after tax." },
-  { key: "investments/risk", icon: "🎢", title: "How rough could the ride be?", line: "The worst year and the deepest fall history has dealt a mix like yours." },
-  { key: "insurance/term-vs-permanent", icon: "🛡️", title: "Whole life or term?", line: "Whole life against term plus investing the difference, with your quote's numbers." },
+  { key: "investments/risk", icon: "🎢", title: "How much could my savings drop in a bad year?", line: "The worst year and the deepest fall that history has dealt the mix of stocks and bonds you pick." },
+  { key: "insurance/term-vs-permanent", icon: "🛡️", title: "Whole life or term life insurance?", line: "Whole life against cheaper term insurance plus investing the difference, using the prices you were quoted." },
 ];
 /** Questions whose answer needs your own numbers first: they open the step-by-step guide that gathers them. */
 export const NEEDS_FIRST = [

@@ -229,7 +229,9 @@ async function boot() {
   // here never saves an old copy over today's changes
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || store.backend() !== "server") return;
-    try { const p = await api.getPlan(); if ((p?.meta?.updatedAt ?? "") > (store.get()?.meta?.updatedAt ?? "")) store.reconnect(); } catch { }
+    const typing = () => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
+    if (typing()) return;   // never redraw over what someone is typing; the next return to the tab checks again
+    try { const p = await api.getPlan(); if ((p?.meta?.updatedAt ?? "") > (store.get()?.meta?.updatedAt ?? "") && !typing()) store.adopt(p); } catch { }
   });
   addEventListener("planner:features", () => buildNav());
   addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); if (current) show(current); }); });

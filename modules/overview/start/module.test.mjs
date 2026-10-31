@@ -56,6 +56,10 @@ test("the featured panel follows the dashboard's six steps: start, continue, loo
   f = featured(fam);
   assert.deepEqual([f.label, f.doneCount, f.total], ["Continue my plan", dashboard(fam).doneCount, 6]);
   assert.equal(f.line, "5 of 6 steps are done. Next: check the assumptions.");
+  const sk = empty(); startGuide(sk, "whole-plan", "2026-10-31");
+  sk.guide.journeys["whole-plan"].later = { accounts: "2026-10-31" };
+  f = featured(sk);
+  assert.deepEqual([f.label, f.state, f.line], ["Continue my plan", "started", "You skipped 1 step for now. Next: add your household."], "started and skipped step 1: not 'Start my plan'");
   fam.assumptions = { ...(fam.assumptions ?? {}), reviewedAt: "2026-10-31" };
   f = featured(fam);
   assert.deepEqual([f.label, f.href], ["Look over my plan", "#/overview/guide/whole-plan"]);

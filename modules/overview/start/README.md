@@ -31,7 +31,8 @@ icon, title, line, href, status }], more: { label, href }, resume: activeSummary
 
 ## Rules (tested)
 - **Featured panel** = the whole-plan guide, which is exactly the dashboard's six setup steps, so the count is the
-  dashboard's: none done "Start my plan" (it goes straight to the next step, not to another list), some done
+  dashboard's: none done and the guide never started "Start my plan" (it goes straight to the next step, not to another list; the
+  "Not sure? Start here." line shows only then), some done or some skipped
   "Continue my plan" ("5 of 6 steps are done. Next: check the assumptions."), all done "Look over my plan" (the guide
   page). The number of steps comes from the data, never typed as "six".
 - **Rows**: a quick answer, then Pay off what I owe, Spend less and save more, Buy a home, Plan my retirement. A row's
@@ -51,7 +52,8 @@ From the spec's three critics (an engineer, a first-time user of 60 on a phone, 
 - "Skip this, I will look around" (it is not a tour), reading "Go to my dashboard" once the plan has data.
 - The lede tells where to find this page again (the menu, under Overview) and no longer promises "nothing you type is
   lost", which was untrue for typing not yet saved.
-- The quick row's example is a car or a trip, not "what home you can afford", which "Buy a home" two rows down promises.
+- The quick row's examples are questions Quick answers really has (paying cash for a car or borrowing, which health plan
+  costs least), not "what home you can afford", which "Buy a home" two rows down promises.
 - "Everything stays on your own computer and phone. Nothing goes to the cloud." (one wording everywhere).
 - Order 3 in Overview: Get started, Quick answers and Step by step sort before Alerts in the menu, so before anything
   has been opened the drawer's "Ready now" list shows them instead of Health score, Timeline and Monthly review.

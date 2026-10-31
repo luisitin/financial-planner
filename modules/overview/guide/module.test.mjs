@@ -6,8 +6,9 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   JOURNEYS, journeyById, visibleSteps, stepState, journeyStatus, stepForPage, neighbours, barFor, activeSummary, stepHref,
-  startGuide, markLooked, markNone, markLater, clearMark, leaveGuide, restartGuide, finishGuide, compute, activeJourney, OWN_PAGES,
+  startGuide, markLooked, markNone, markLater, clearMark, leaveGuide, restartGuide, finishGuide, touchGuide, compute, activeJourney, OWN_PAGES,
 } from "./compute.js";
+import { isDirty } from "./act.js";
 import { WHOLE_PLAN_TEXT, houseGoal, detailed, emergencyGoal } from "./journeys.js";
 import { compute as dashboard } from "../dashboard/compute.js";
 import { router } from "../../../core/router.js";
@@ -126,13 +127,13 @@ test("journeyStatus on an empty plan: nothing done, step 1 next, not started; ne
     assert.equal(s.doneCount, 0); assert.equal(s.finished, false); assert.equal(s.started, false);
     assert.equal(s.next.index, 1);
   }
-  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [6, 3, 5, 4, 7, 5, 5]);
+  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [6, 3, 5, 4, 7, 5, 7]);
   const r = journeyStatus(J("retire"), empty());
   assert.deepEqual(st(r, "spend").blockedBy, { key: "people", index: 1, short: "Add birth dates", href: "#/household/people?guide=retire&step=people" });
   assert.equal(st(r, "pension").blockedBy, null);
 });
 test("journeyStatus on the family plan (worked by hand from qa/fixtures): counts and which steps", () => {
-  const want = { "whole-plan": [5, 6, ["accounts", "people", "income", "expenses", "goals"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 4, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [1, 5, ["people"]] };
+  const want = { "whole-plan": [5, 6, ["accounts", "people", "income", "expenses", "goals"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 4, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
   const p = family();
   for (const j of JOURNEYS) {
     const s = journeyStatus(j, p);
@@ -158,7 +159,7 @@ test("journeyStatus: does-not-apply counts; finished once every numbered step is
 });
 test("finishedAt keeps a guide Done when new data reopens a step", () => {
   const p = family();
-  for (const k of ["policies", "life", "papers", "contacts"]) markNone(p, "protect", k, "2026-10-31");
+  for (const k of ["policies", "life", "papers", "contacts"]) markNone(p, "protect", k, "2026-10-31");   // people, savings and spend are in the family plan
   assert.equal(journeyStatus(J("protect"), p).complete, true);
   finishGuide(p, "protect", "2026-10-31");
   clearMark(p, "protect", "contacts");
@@ -188,6 +189,41 @@ test("neighbours: no previous on step 1; next jumps done steps; wraps to an earl
   const s2 = journeyStatus(J("budget"), p);
   assert.equal(neighbours(s2, st(s2, "budget")).next, null);
 });
+test("neighbours: Skip goes to a step that can be done now; one that needs the skipped step only when nothing else is left", () => {
+  const home = journeyStatus(J("home"), empty());
+  assert.equal(st(home, "lenders").blockedBy.key, "pay");
+  assert.equal(neighbours(home, st(home, "pay")).next.key, "rent-buy", "not lenders, which needs pay");
+  const debt = journeyStatus(J("debt"), empty());
+  assert.equal(neighbours(debt, st(debt, "add")).next.key, "rates", "every later step needs add: the next in order");
+});
+test("the retirement and protect guides do not finish before their pages can answer", () => {
+  const p = empty();
+  p.household.people = [{ id: "me", name: "Me", birthDate: "1966-05-01" }];
+  p.accounts = [{ id: "s", type: "savings", balance: 1000 }];
+  let r = journeyStatus(J("retire"), p);
+  assert.equal(st(r, "chance").blockedBy.key, "spend", "no spending yet: the chance page cannot answer");
+  assert.equal(st(r, "spend").none, undefined, "spending cannot be waved away");
+  p.expenses = [{ id: "e", name: "Rent", amount: 900, frequency: "monthly" }];
+  r = journeyStatus(J("retire"), p);
+  assert.equal(st(r, "spend").state, "done"); assert.equal(st(r, "chance").blockedBy, null);
+  const q = empty(); q.household.people = [{ id: "me", name: "Me" }];
+  const pr = journeyStatus(J("protect"), q);
+  assert.equal(st(pr, "people").state, "todo", "an adult needs a birth date");
+  assert.deepEqual(st(pr, "life").blockedBy.key, "people");
+});
+test("isDirty: a control on the page whose value changed since it was focused; gone, unchanged, search and marked controls do not count", () => {
+  const c = (o) => ({ type: "text", value: "", isConnected: true, ...o });
+  const a = c({}), b = c({ type: "checkbox", checked: false }), gone = c({ isConnected: false }), find = c({ type: "search" }), filt = c({ dataset: { nodirty: "" } });
+  const starts = new Map([[a, ""], [b, false], [gone, ""], [find, ""], [filt, "x"]]);
+  assert.equal(isDirty([a, b, gone, find, filt], starts), false);
+  gone.value = "typed"; find.value = "typed"; filt.value = "y";
+  assert.equal(isDirty([a, b, gone, find, filt], starts), false);
+  b.checked = true;
+  assert.equal(isDirty([a, b], starts), true);
+  b.checked = false; a.value = "250";
+  assert.equal(isDirty([a, b], starts), true);
+  assert.equal(isDirty([c({ value: "250" })], starts), false, "never focused: not typed here");
+});
 test("barFor: nothing without a followed guide; guide mode only for the followed guide; compact elsewhere; quick", () => {
   const p = family();
   const q = { guide: "debt", step: "rates" };
@@ -214,6 +250,12 @@ test("barFor: a followed guide goes quiet after 30 days without a tap; once comp
   assert.ok(barFor(p, { page: "debt/payoff", today: "2026-09-20" }));
   assert.equal(activeJourney(p, "2026-10-05"), null);
   assert.equal(barFor(p, { page: "debt/payoff", today: "2026-10-05" }), null);
+  // Continue, Do step N or a step row brings it back; a tap in the guide keeps it awake, at most one save a day
+  assert.equal(startGuide(p, "debt", "2026-10-05"), true);
+  assert.equal(p.guide.activeAt, "2026-10-05"); assert.equal(p.guide.journeys.debt.startedAt, "2026-09-01");
+  assert.ok(barFor(p, { page: "debt/payoff", today: "2026-10-05" }));
+  assert.equal(touchGuide(p, "2026-10-05"), false);
+  assert.equal(touchGuide(p, "2026-10-20"), true); assert.equal(p.guide.activeAt, "2026-10-20");
   const q = family(); startGuide(q, "debt", "2026-10-31"); q.debtPlan = { order: "avalanche" };
   assert.equal(barFor(q, { page: "debt/payoff" }), null);
   assert.equal(barFor(q, { page: "debt/payoff", query: { guide: "debt", step: "order" } }).mode, "guide");
@@ -231,13 +273,15 @@ test("activeSummary and stepHref; the router reads a step's address back", () =>
 test("changes: say whether they changed anything, keep progress, and touch nothing outside plan.guide", () => {
   const p = family(), before = JSON.stringify({ ...p, guide: undefined });
   assert.equal(startGuide(p, "debt", "2026-10-30"), true);
-  assert.equal(startGuide(p, "debt", "2026-10-31"), false, "already followed: no save");
+  assert.equal(startGuide(p, "debt", "2026-10-30"), false, "already followed and tapped today: no save");
+  assert.equal(startGuide(p, "debt", "2026-10-31"), true, "a new day: remember it");
   assert.equal(p.guide.journeys.debt.startedAt, "2026-10-30");
   assert.equal(startGuide(p, "nope", "2026-10-31"), false);
   assert.equal(markLooked(p, "debt", "cards", "2026-10-31"), true);
   assert.equal(markLooked(p, "debt", "cards", "2026-10-31"), false);
   assert.equal(p.guide.activeAt, "2026-10-31");
   assert.equal(leaveGuide(p), true); assert.equal(leaveGuide(p), false);
+  assert.equal(touchGuide(p, "2026-11-05"), false, "nothing followed: nothing to touch");
   assert.equal(p.guide.journeys.debt.done.cards, "2026-10-31", "leaving keeps progress");
   assert.equal(restartGuide(p, "debt", "2026-11-01"), true);
   assert.deepEqual([p.guide.active, p.guide.journeys.debt.startedAt, p.guide.journeys.debt.done], ["debt", "2026-11-01", {}]);
