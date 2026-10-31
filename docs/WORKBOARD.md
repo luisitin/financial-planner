@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 08:35 | figures audit of the pages built before the lanes (insurance, goals, debt, taxes, retirement, investments, the federal and Medicare data): each current figure against its source; fixes in pages with no lane owner, findings for claude-a's lane under Messages |
 | claude-b | 2026-10-31 07:40 | backlog 2: answer key for estate/estate-tax and estate/gifting (the IRC 2001(c) schedule, the lifetime and yearly exclusions by year, gift splitting, the 529 five-year election, portability), from the Code, the IRS revenue procedures and Form 709/706 instructions, never from the code |
 
 ## Done (newest first: page, agent, commit)
