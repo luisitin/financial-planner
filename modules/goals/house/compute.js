@@ -12,15 +12,34 @@ export const DEFAULTS = { price: 400000, downShare: 0.2, closingShare: 0.03, rat
 /** The lenders' ratios: housing up to 28% of gross monthly income (front end), all debt payments up to 36% (back end). */
 export const FRONT = 0.28, BACK = 0.36;
 /**
- * The house goal on Goals: a down payment, or a goal named for a house or home, but never one for work on a home you
- * already have ("Home repairs", "Home office", "Home insurance"), which "Make it a goal" must not overwrite. The
- * step-by-step guide's "Set down payment goal" step uses the same test, so the page and the step always agree.
+ * The house goal on Goals: saving to buy a home, never a goal for a home you already have or for a car. Each goal gets
+ * a rank, and the highest wins (the first of equals), so a real down-payment goal beats "Our home" listed before it:
+ *   3  a name with "down payment" (what "Make it a goal" saves), unless it names a car, boat or the like
+ *   2  the 🏠 icon, or a name for buying a home ("home buying", "homeowner"), unless the name is turned away below
+ *   1  a name with house, home or condo, also run into another word ("Townhouse", "Farmhouse"), unless turned away
+ *   0  anything else, and any name about work on, paying for or a trip to a home you have: repairs, remodel, paint,
+ *      pay off, mortgage, rent, insurance, office, gym, trip, visit, holiday... ("Pay off the house", "Trip home")
+ * The step-by-step guide's "Set down payment goal" step uses the same test, so the page and the step always agree.
  */
-export const isHouseGoal = (g) => {
+const DOWN = /down[ -]?payment/i;
+const VEHICLE = /\b(car|cars|auto|vehicle|truck|van|suv|boat|rv|motorcycle|bike|tractor)\b/i;
+const BUYING = /\bhome[ -]?(buy|own|purchas)|\b(buy|buying|purchase)\b.*\b(house|home|condo)/i;
+const HOUSE = /(\b|town|farm|row)(house|home)s?\b|\bcondo(minium)?s?\b/i;
+const NOT_BUYING = /repair|remodel|renovat|improve|\breno\b|roof|paint|insur|warrant|mainten|upkeep|school|office|\bgym\b|pay ?-?off|payoff|mortgage|\bloans?\b|\btrips?\b|visit|holiday|vacation|flight|\brent(al|als|ing|s)?\b|\bhoa\b|\btax|furnish|furnitur|decor|garden|landscap|kitchen|bath|clean|equity|heloc|\bbills?\b|utilit|internet|security|alarm|solar|theat(er|re)|\btv\b|appliance|hvac|fence|\bpool\b|deck|patio|windows?|floor|carpet|nursing|\bcare\b|warming|party/i;
+export function houseGoalRank(g) {
   const n = g?.name ?? "";
-  if (/down ?payment/i.test(n)) return true;
-  return /\b(house|home)\b/i.test(n) && !/\b(house|home) ?(repairs?|office|improvements?|renovations?|insurance|warranty|maintenance|upkeep|school(ing)?)\b/i.test(n);
-};
+  if (DOWN.test(n)) return VEHICLE.test(n) ? 0 : 3;
+  if (NOT_BUYING.test(n) || VEHICLE.test(n)) return 0;
+  if (g?.icon === "🏠" || BUYING.test(n)) return 2;
+  return HOUSE.test(n) ? 1 : 0;
+}
+export const isHouseGoal = (g) => houseGoalRank(g) > 0;
+/** The best house goal in a list (highest rank, the first of equals), or null. */
+export function findHouseGoal(goals) {
+  let best = null, top = 0;
+  for (const g of goals ?? []) { const r = houseGoalRank(g); if (r > top) { best = g; top = r; } }
+  return best;
+}
 
 /** The monthly cost of a home at a price: principal and interest, property tax, insurance, HOA. */
 export function monthlyCost(price, x) {
@@ -61,7 +80,7 @@ export function compute(plan, params = {}) {
   cash.total = cash.down + cash.closing + cash.reserves;
   // what is set aside: the figure entered, else the house goal on Goals
   const g = computeGoals(plan, { today });
-  const goal = g.goals.find(isHouseGoal) ?? null;
+  const goal = findHouseGoal(g.goals);
   const saved = x.saved !== null ? x.saved : goal ? goal.funded : 0;
   const monthlySaving = x.monthly !== null ? x.monthly : goal ? Number(goal.monthly) || 0 : 0;
   const rate = Number(plan.assumptions?.returnCash ?? 0.02) / 12;

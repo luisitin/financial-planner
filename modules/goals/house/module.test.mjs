@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, monthlyCost, priceFor, solveMonths, DEFAULTS, FRONT, BACK, isHouseGoal } from "./compute.js";
+import { compute, monthlyCost, priceFor, solveMonths, DEFAULTS, FRONT, BACK, isHouseGoal, houseGoalRank, findHouseGoal } from "./compute.js";
 import { pmt, pmtToReach } from "../../../core/math/finance.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -32,10 +32,21 @@ test("the family: the lenders' limits on their income and other debts, the cash 
 });
 
 test("the house goal is a down payment or a home, never work on a home you have (Make it a goal must not overwrite it)", () => {
-  for (const n of ["House down payment", "New home fund", "Saving for a house", "Home", "Down payment"]) assert.equal(isHouseGoal({ name: n }), true, n);
-  for (const n of ["Home repairs", "Home office", "Homeschool", "Home insurance", "House renovation", "Car", ""]) assert.equal(isHouseGoal({ name: n }), false, n);
+  for (const n of ["House down payment", "Down-payment fund", "New home fund", "Saving for a house", "Home", "Down payment", "Townhouse fund", "Townhome savings", "Homebuying fund", "Homeownership fund", "Farmhouse", "Condo fund", "Buy a house"]) assert.equal(isHouseGoal({ name: n }), true, n);
+  for (const n of ["Home repairs", "Home-repairs", "Repairs on the house", "Home office", "Homeschool", "Home insurance", "House renovation", "Home remodel", "Paint the house", "Pay off the house early", "Mortgage-free home", "Trip home for Christmas", "Home for the holidays", "Home gym", "Beach house rental", "Housewarming party", "Warehouse", "Greenhouse", "Homecoming", "Car down payment", "Car", ""]) assert.equal(isHouseGoal({ name: n }), false, n);
+  assert.equal(isHouseGoal({ name: "Nest", icon: "🏠" }), true, "the icon Make it a goal uses");
+  assert.equal(isHouseGoal({ name: "Home repairs", icon: "🏠" }), false, "the icon does not rescue a repairs goal");
   const d = compute(withHouse({ price: 400000 }, [{ id: "r", name: "Home repairs", target: 5000, targetDate: "2027-01-01", saved: 1000, monthly: 100, priority: 2, fundedBy: [] }]), { today: TODAY });
   assert.equal(d.goal, null, "a repairs goal is not offered for update");
+});
+test("with several house goals the clearest wins: a down payment, then the icon or buying, then a name", () => {
+  assert.deepEqual(["House down payment", "Homebuying fund", "Our home", "Pay off the house"].map((name) => houseGoalRank({ name })), [3, 2, 1, 0]);
+  assert.equal(findHouseGoal([{ name: "Our home" }, { name: "House down payment" }]).name, "House down payment");
+  assert.equal(findHouseGoal([{ name: "Our home" }, { name: "Townhouse fund" }]).name, "Our home", "the first of equals");
+  assert.equal(findHouseGoal([{ name: "Home remodel" }, { name: "Car" }]), null);
+  const g = (id, name, saved) => ({ id, name, target: 100000, targetDate: "2030-01-01", saved, monthly: 100, priority: 2, fundedBy: [] });
+  const d = compute(withHouse({ price: 400000 }, [g("a", "Home remodel", 2000), g("b", "Our home", 9000), g("c", "House down payment", 30000)]), { today: TODAY });
+  assert.equal(d.goal.id, "c", "the down payment, not the remodel listed first");
 });
 test("a house goal on Goals supplies what is set aside and saved; entered figures win; warnings", () => {
   const goals = [{ id: "g", name: "New home fund", target: 100000, targetDate: "2030-01-01", saved: 20000, monthly: 2000, priority: 2, fundedBy: [] }];

@@ -90,6 +90,9 @@ test("done checks: a 0% loan counts as detailed; Home repairs is not a down paym
   assert.equal(houseGoal(g("Our new home", "🏠")), true);
   assert.equal(houseGoal(g("Home", "🎯")), true, "by name, as Home affordability finds it");
   assert.equal(houseGoal(g("Home office", "🏠")), false);
+  assert.equal(houseGoal(g("Pay off the house", "🎯")), false, "paying a home off is not saving to buy one");
+  assert.equal(houseGoal(g("Trip home for Christmas", "✈️")), false);
+  assert.equal(houseGoal(g("Townhouse fund", "🎯")), true, "a home run into another word");
   assert.equal(emergencyGoal(g("Rainy day", "🎯")), true);
   assert.equal(emergencyGoal(g("Anything", "🛟")), true);
   assert.equal(emergencyGoal(g("Car", "🚗")), false);

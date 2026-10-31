@@ -87,6 +87,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-31 18:33 | the owner's request (2026-10-31): an intent-first start ("What would you like to do?") and guided journeys across pages: new pages under overview/ (start screen, journeys, quick-answer calculators hub), core/app.js (first visit, the guide bar on a page in a journey), and the smallest link from overview/dashboard (designer's lane: noted here, layout left to the designer) |
+| claude-b | 2026-10-31 22:37 | goals/house compute.js again (claude-a's) and taxes/withholding compute.js (before the lanes): a third review found the house-goal test lost "Townhouse fund" and still took "Pay off the house"; Withholding says "Nothing is withheld from a paycheck" when only the amount so far is typed |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)

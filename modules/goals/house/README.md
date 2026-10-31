@@ -4,7 +4,7 @@
 **Purpose:** How much home the household's income supports by the lenders' rules, what a home costs a month, the cash needed on the day, and when you will have it; one tap puts the cash target on the Goals page.
 
 ## Inputs
-`income` (gross monthly), `accounts` and `debts` (other debt payments, not the mortgage), `goals` (a goal named for a house, home or down payment, `isHouseGoal`, supplies what is set aside, the monthly amount and the date), `assumptions.returnCash`, `whatIfs.house`. Writes `whatIfs.house = { price, downShare, closingShare, rate, termYears, taxRate, insuranceRate, hoaMonthly, reserveMonths, saved, monthly, targetDate }` and, on "Make it a goal", adds or updates a goal (target = the cash needed, rounded to $100).
+`income` (gross monthly), `accounts` and `debts` (other debt payments, not the mortgage), `goals` (the house goal, `findHouseGoal`: a down payment or a home to buy, supplies what is set aside, the monthly amount and the date), `assumptions.returnCash`, `whatIfs.house`. Writes `whatIfs.house = { price, downShare, closingShare, rate, termYears, taxRate, insuranceRate, hoaMonthly, reserveMonths, saved, monthly, targetDate }` and, on "Make it a goal", adds or updates a goal (target = the cash needed, rounded to $100).
 
 ## Outputs
 `compute(plan, { today })` -> `{ inputs, grossMonthly, otherDebtMonthly, maxFront, maxBack, maxPrice, rule, monthly, parts, frontShare, backShare, cash: { down, closing, reserves, total }, saved, goal, monthlySaving, monthsToGo, readyDate, target, neededMonthly, warnings }`.
@@ -15,13 +15,20 @@
 - Cash = down payment + closing costs (3%) + reserves (2 months of the monthly cost).
 - Months to go: set-aside money grown at the cash return each month plus the monthly saving, until it reaches the cash needed (`solveMonths`, up to 100 years). Monthly needed by a date = pmtToReach(cash return / 12, months, cash needed, set aside).
 - Warnings: under 20% down (mortgage insurance), a price over what the rules suggest.
-- The house goal (`isHouseGoal`, exported): a name with "down payment", or one naming a house or home, but never work on
-  a home you already have (repairs, office, improvement, renovation, insurance, warranty, maintenance, upkeep, school).
-  Until 2026-10-31 any name containing "home" counted, so "Make it a goal" offered to update, and overwrote, a "Home
-  repairs" goal. The step-by-step guide's "Set down payment goal" step uses the same test.
+- The house goal (`houseGoalRank`, `isHouseGoal`, `findHouseGoal`, exported): saving to buy a home, never a goal for a
+  home you already have or for a car. Each goal gets a rank and the highest wins (the first of equals), so a real
+  down-payment goal beats "Our home" listed before it, and "Home remodel" is never read or overwritten: 3 a name with
+  "down payment" (what "Make it a goal" saves) unless it names a car, boat or the like; 2 the 🏠 icon, or a name for
+  buying a home ("Homebuying fund", "Buy a house"); 1 house, home or condo in the name, also run into another word
+  ("Townhouse fund", "Farmhouse"); 0 anything else, and any name about work on, paying for or a trip to a home you have
+  (repairs, remodel, paint, pay off, mortgage, rent, insurance, office, gym, trip, visit, holiday, housewarming...).
+  "Beach house" counts (most likely saving to buy one); "Beach house rental" does not. History: until 2026-10-31 any
+  name containing "home" counted, so "Make it a goal" overwrote a "Home repairs" goal; the first fix needed house or
+  home as a whole word, which lost "Townhouse fund" and "Homebuying fund" and still took "Pay off the house" (found by
+  a third review the same day). The step-by-step guide's "Set down payment goal" step uses the same test.
 
 ## Tests
-`module.test.mjs`: the monthly cost and its inverse, months to save, the family's limits, cash and monthly needed, the house goal test (a repairs goal is never offered), a house goal supplying the figures, entered figures winning, the warnings, no income.
+`module.test.mjs`: the monthly cost and its inverse, months to save, the family's limits, cash and monthly needed, the house goal test (a repairs, pay-off or trip goal is never offered; the clearest of several wins), a house goal supplying the figures, entered figures winning, the warnings, no income.
 
 ## Ideas / not yet
 - Mortgage insurance in the cost; first-time buyer programs; the down payment drawn from a 401(k) loan or an IRA's first-home exception.

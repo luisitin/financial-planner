@@ -44,3 +44,11 @@ test("withholding: the $1,000 test counts withholding only, not estimated paymen
   assert.ok(d.balance < 1000);                       // 1,960 - 900 - 200 = 860 after the estimate
   assert.equal(d.penaltyRisk, true);                 // but tax less withholding is 1,060 and 1,100 paid misses 90% (1,764)
 });
+test("withholding: an amount so far with no paycheck figure says the figure is missing, not that nothing is withheld", () => {
+  const p = interestPlan((q) => { q.taxes.thisYear.otherOrdinary = 34500; q.taxes.thisYear.withheld = 900; });
+  const d = compute(p, { today: "2026-06-30" });
+  assert.equal(d.verdict, "owe");
+  assert.equal(d.suggestion.kind, "estimates");
+  assert.match(d.suggestion.text, /^No paycheck figure is typed yet/);
+  assert.match(d.suggestion.text, /What a paycheck withholds/);
+});
