@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 12:50 | answer key for property/rental and property/home (my lane): depreciation (27.5 years, mid-month), the $25,000 rental-loss allowance and its phase-out (separate returns too), the year's loan split, the ratios; the tax on selling a home (121 exclusion, the gain through the brackets, the 3.8%) |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
