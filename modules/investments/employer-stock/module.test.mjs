@@ -5,6 +5,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
+import { FLAT } from "../../taxes/state/compute.js";
 
 const TODAY = "2026-10-30";
 const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -212,13 +213,72 @@ test("the employer's 0.9% from the wages typed on the Federal estimate, or from 
   near(compute(joint, { today: TODAY }).vests[0].withheld, 22000 + 900);
 });
 
-test("the state's share at its rate on the vests above today's income, in every case (Illinois 4.95%, $2,850 a person)", () => {
+test("the state's share at its rate on the vests above today's income, in every case (Illinois 4.95%, its exemption a person from taxes/state)", () => {
   const il = single(40000, 500); il.household.state = "IL";
   near(compute(il, { today: TODAY }).vests[0].stateOwed, 0.0495 * 50000);
   const none = single(0, 3000); none.income = []; none.household.state = "IL";
-  near(compute(none, { today: TODAY }).vests[0].stateOwed, 0.0495 * (300000 - 2850));
+  near(compute(none, { today: TODAY }).vests[0].stateOwed, 0.0495 * (300000 - FLAT.IL.person));
   assert.equal(stateExtra({ method: "prior", rate: 0.05, agi: 0, allowance: 0 }, 1000), 50);
   assert.equal(stateExtra({ method: "none", rate: 0 }, 1000), 0);
+});
+
+test("filing separately in Illinois: the state's share starts from the employee's own return (35 ILCS 5/502(c)(1)(C))", () => {
+  // B works at the company and has no salary; A earns 100,000. B's own Illinois return has no other income, so B's exemption
+  // is still unused when the 50,000 vest lands: 4.95% x (50,000 - one exemption), not 4.95% x 50,000 on both returns' income
+  const p = emptyPlan();
+  p.household.people = [{ id: "a", name: "A", role: "self", birthDate: "1980-01-01" }, { id: "b", name: "B", role: "spouse", birthDate: "1980-01-01" }];
+  p.household.filingStatus = "married_separate"; p.household.state = "IL";
+  p.income = [{ id: "pa", type: "salary", name: "A pay", personId: "a", amount: 100000, period: "annual", taxable: true }];
+  p.equity = { symbol: "ZZCO", price: 100, priceAsOf: TODAY, personId: "b", grants: [{ id: "g", kind: "rsu", name: "Units", granted: "2025-12-01", vestStart: "2025-12-01", shares: 500, vestMonths: 12, cliffMonths: 12, every: 3 }] };
+  const d = compute(p, { today: TODAY });
+  near(d.vests[0].value, 50000);
+  near(d.vests[0].stateOwed, 0.0495 * (50000 - FLAT.IL.person));
+  // filing jointly the vest stacks on the couple's 100,000, past both exemptions: the whole 50,000 at 4.95%
+  p.household.filingStatus = "married_joint";
+  near(compute(p, { today: TODAY }).vests[0].stateOwed, 0.0495 * 50000);
+});
+
+test("no stake and nothing invested: no share and no level, not \"a large bet\"", () => {
+  const p = single(40000, 0);
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.ready, true); assert.equal(d.exposure, 0); assert.equal(d.share, null); assert.equal(d.level, null);
+  // options under water are worth nothing today: still no stake
+  p.equity.grants = [{ id: "o", kind: "option", name: "Options", granted: "2020-01-01", vestStart: "2020-01-01", shares: 100, strike: 500 }];
+  assert.equal(compute(p, { today: TODAY }).level, null);
+});
+
+test("a sale at a loss: up to $3,000 off other income this year, the rest carried over (IRC 1211(b), 1212(b))", () => {
+  // single, pay 40,000, no vests; 1,000 shares at 100 bought for 150,000: sell 90,000 of them at a 45,000 loss. Taxable
+  // income 23,900 falls to 20,900, all in the 12% band (2026: 12,400 to 50,400), so 360 less tax; 42,000 carries over
+  const p = single(40000, 0);
+  p.accounts = [{ id: "brk", name: "Brokerage", type: "brokerage", balance: 100000 }];
+  p.holdings = [{ id: "h", accountId: "brk", symbol: "ZZCO", shares: 1000, price: 100, priceAsOf: TODAY, costBasis: 150000, lots: [] }];
+  const d = compute(p, { today: TODAY });
+  near(d.diversify.fromTaxable, 90000); near(d.diversify.gain, -45000); near(d.diversify.tax, -360); near(d.diversify.carry, 42000);
+  // a gain typed on the Federal estimate this year is cancelled first: a 10,000 long-term gain leaves 35,000 of loss, still 3,000 off pay
+  // (alone it was taxed at 0%: 23,900 + 10,000 is under the 0% top of 49,450, so the loss again saves the 360 on pay)
+  p.taxes.gains = [{ id: "s", description: "Fund", proceeds: 20000, basis: 10000, held: "long" }];
+  const e = compute(p, { today: TODAY });
+  near(e.diversify.carry, 32000); near(e.diversify.tax, -360);
+  // filing separately the loss is on the account owner's return, at most 1,500 a year there: A (taxable 23,900, 12%) saves 180
+  const m = emptyPlan();
+  m.household.people = [{ id: "a", name: "A", role: "self", birthDate: "1980-01-01" }, { id: "b", name: "B", role: "spouse", birthDate: "1980-01-01" }];
+  m.household.filingStatus = "married_separate"; m.household.state = "";
+  m.income = [{ id: "pa", type: "salary", name: "A pay", personId: "a", amount: 40000, period: "annual", taxable: true }, { id: "pb", type: "salary", name: "B pay", personId: "b", amount: 300000, period: "annual", taxable: true }];
+  m.accounts = [{ id: "brk", name: "A brokerage", type: "brokerage", ownerId: "a", balance: 100000 }];
+  m.holdings = [{ id: "h", accountId: "brk", symbol: "ZZCO", shares: 1000, price: 100, priceAsOf: TODAY, costBasis: 150000, lots: [] }];
+  m.equity = { symbol: "ZZCO", price: 100, priceAsOf: TODAY, personId: "b", grants: [] };
+  const f = compute(m, { today: TODAY });
+  near(f.diversify.gain, -45000); near(f.diversify.tax, -180); near(f.diversify.carry, 43500);
+});
+
+test("the year's tax tables not yet published are marked as an estimate; no pay on file is flagged", () => {
+  assert.equal(compute(single(150000, 1000), { today: TODAY }).vestYears[0].estimated, false);
+  const later = compute(single(150000, 1000, "2027-03-01"), { today: TODAY });
+  assert.equal(later.vestYears[0].year, 2027); assert.equal(later.vestYears[0].estimated, true);
+  assert.equal(compute(single(150000, 1000), { today: TODAY }).payOnFile, true);
+  const none = single(0, 1000); none.income = [];
+  assert.equal(compute(none, { today: TODAY }).payOnFile, false);
 });
 
 test("a diversifying sale this year is stacked on this year's vests too (IRC 1(h), 83(a))", () => {

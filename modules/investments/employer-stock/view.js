@@ -41,11 +41,12 @@ export function render(page, ctx) {
   root.append(ui.card(null, ui.row(
     ui.stat(`${d.symbol || "Company"} stock, yours and promised`, money(d.exposure), `${money(d.owned)} yours now, ${money(d.unvested)} still to vest`),
     ui.stat("Of your invested wealth", d.share === null ? "—" : pct(d.share), `the usual ceiling for one company is ${pct(LIMIT.ok)}`),
-  ), ui.h("div", { class: "es-bar", role: "img", "aria-label": `${d.share === null ? "" : pct(d.share)} of invested wealth, against a ${pct(LIMIT.ok)} ceiling` }, ui.h("span", { style: { width: `${barShare * 100}%` } }), ui.h("i", { style: { left: `${LIMIT.ok * 100}%` } })),
-  d.level !== "ok" ? ui.h("p", { class: d.level === "large" ? "es-bad" : "es-flag" }, d.level === "large" ? "A large bet on one company: if it struggles, your savings fall just when your job is at risk." : "Above the usual ceiling for a single company.") : ui.h("p", { class: "es-d" }, "Within the usual ceiling.")));
+  ), d.level === null || d.exposure <= 0 ? ui.h("p", { class: "es-d" }, "None of your money rides on this company's stock right now. Add the shares you hold on Holdings, or a grant below, to see how big the bet is.") : [
+    ui.h("div", { class: "es-bar", role: "img", "aria-label": `${d.share === null ? "" : pct(d.share)} of invested wealth, against a ${pct(LIMIT.ok)} ceiling` }, ui.h("span", { style: { width: `${barShare * 100}%` } }), ui.h("i", { style: { left: `${LIMIT.ok * 100}%` } })),
+    d.level !== "ok" ? ui.h("p", { class: d.level === "large" ? "es-bad" : "es-flag" }, d.level === "large" ? "A large bet on one company: if it struggles, your savings fall just when your job is at risk." : "Above the usual ceiling for a single company.") : ui.h("p", { class: "es-d" }, "Within the usual ceiling.")]));
 
   // the double risk
-  root.append(ui.card("If the company had a bad year", ui.h("p", {}, ui.h("b", {}, `If the price halved, you would lose about ${money(d.stress.loss)}`), d.pay > 0 ? `, at the same time as ${d.person ? `${d.person}'s` : "your"} ${money(d.pay)} a year of pay depends on the same company.` : "."),
+  if (d.exposure > 0) root.append(ui.card("If the company had a bad year", ui.h("p", {}, ui.h("b", {}, `If the price halved, you would lose about ${money(d.stress.loss)}`), d.pay > 0 ? `, at the same time as ${d.person ? `${d.person}'s` : "your"} ${money(d.pay)} a year of pay depends on the same company.` : "."),
     ui.h("p", { class: "es-d" }, "Companies that fail often take their staff's savings with them: Enron's employees in 2001 lost their jobs and much of their 401(k)s, which held mostly Enron stock.")));
 
   // what is held and granted
@@ -53,7 +54,7 @@ export function render(page, ctx) {
     ...d.held.map((h) => ({ title: `${h.shares} shares in ${h.account}`, value: h.value, sub: `${h.bucket === "taxable" ? `paid ${money(h.cost)}; ${h.gain >= 0 ? "gain" : "loss"} ${money(Math.abs(h.gain))} (taxed if sold)` : "inside a retirement plan: no tax to sell and switch funds"}` })),
     ...d.grants.map((g) => ({ title: g.name, value: g.vestedValue + g.unvestedValue, sub: `${g.kind === "option" ? `${g.shares} options at ${money(g.strike)}` : `${g.shares} units`}: ${g.vested} vested, ${g.unvested} to come${g.next ? `; next ${g.next.shares} on ${shortDate(g.next.date)}` : ""}${g.kind === "option" ? `; worth the price above ${money(g.strike)}${g.expires ? `, until ${shortDate(g.expires)}` : ""}` : "; vested units are counted once they are listed on Holdings"}` })),
   ];
-  root.append(ui.card(`What you hold at ${money(d.price)} a share`, ui.h("ul", { class: "records" }, recs.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.title), ui.h("span", { class: "rec-value" }, money(r.value))), ui.h("div", { class: "rec-sub" }, r.sub)))),
+  if (recs.length) root.append(ui.card(`What you hold at ${money(d.price)} a share`, ui.h("ul", { class: "records" }, recs.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.title), ui.h("span", { class: "rec-value" }, money(r.value))), ui.h("div", { class: "rec-sub" }, r.sub)))),
     d.priceAsOf ? ui.h("p", { class: "muted small" }, `Price from ${shortDate(d.priceAsOf)}.`) : null,
     d.expiringSoon.length ? ui.h("p", { class: "es-flag" }, `${d.expiringSoon.map((g) => `${g.name} (${shortDate(g.expires)})`).join(", ")}: these options run out within a year, and any not exercised by then are lost.`) : null));
 
@@ -72,8 +73,10 @@ export function render(page, ctx) {
     };
     root.append(ui.card("Vesting in the next year", ui.h("ul", { class: "records" }, d.vests.map((v) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${shortDate(v.date)} · ${v.shares} units`), ui.h("span", { class: "rec-value" }, money(v.value))), ui.h("div", { class: "rec-sub" }, `${v.grant}; ${money(v.withheld)} federal tax withheld`)))),
       ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Your employer withholds ${pct(SUPPLEMENTAL.rate)} for federal tax${d.vestYears.some((y) => y.over1m) ? ` (${pct(SUPPLEMENTAL.high)} on bonus-type pay past $1 million in a year)` : ""}${d.vestYears.some((y) => y.medicare > 0.5) ? ", plus 0.9% for Medicare on pay past $200,000" : ""}: ${money(withheld)} in all. Added to your other income they raise your federal tax by about ${money(owed)}${two ? `, worked in ${d.vestYears.map((y) => y.year).join(" and ")} each on its own` : ""}.`),
+      d.payOnFile ? null : ui.h("p", { class: "es-d" }, `The ${pct(SUPPLEMENTAL.rate)} assumes your employer already holds back tax from your salary. There is no pay from this employer on Income: if it holds back nothing from your pay, it uses its regular tables on the vests instead, often more than ${pct(SUPPLEMENTAL.rate)}.`),
       earlier ? ui.h("p", { class: "es-d" }, `Counted on top of the ${money(earlier.earlier)} of units that already vested in ${earlier.year} (at today's price), which are wages in the same year.`) : null,
       ...(two && d.vestYears.every((y) => Math.abs(y.gap) <= 1) ? [ui.h("p", { class: "es-d" }, "In both years the withholding about covers the federal tax they add.")] : d.vestYears.map(yearLine)),
+      ...d.vestYears.filter((y) => y.estimated).map((y) => ui.h("p", { class: "es-d" }, `The IRS has not published ${y.year}'s tax tables yet, so ${y.year}'s figures use the latest ones raised for inflation.`)),
       stateOwed > 0.5 ? ui.h("p", { class: "es-d" }, `State income tax on them comes to about ${money(stateOwed)} more; check your pay slip for how much your employer holds back for it.`) : null,
       ui.h("p", { class: "es-d" }, "Selling units the day they vest costs no more tax: their cost is the value they were taxed at.")));
   }
@@ -84,7 +87,9 @@ export function render(page, ctx) {
     root.append(ui.card(`Getting under ${pct(LIMIT.ok)}`, ui.h("p", {}, `Selling about ${money(x.sell)} of the shares you hold and spreading it over a broad fund brings the stake to ${x.after === null ? "—" : pct(x.after)}.`),
       ui.h("ul", {},
         x.fromPlans > 0 ? ui.h("li", {}, `${money(x.fromPlans)} inside your retirement plan: no tax at all; switch funds on the plan's site.`) : null,
-        x.fromTaxable > 0 ? ui.h("li", {}, `${money(x.fromTaxable)} in the brokerage: about ${money(x.tax)} of federal tax on its ${money(x.gain)} gain, as a gain on shares owned over a year (taxed at 0%, 15% or 20% by your income, plus 3.8% on high incomes).`) : null,
+        x.fromTaxable > 0 ? ui.h("li", {}, x.gain >= 0
+          ? `${money(x.fromTaxable)} in the brokerage: about ${money(Math.max(0, x.tax))} of federal tax on its ${money(x.gain)} gain, as a gain on shares owned over a year (taxed at 0%, 15% or 20% by your income, plus 3.8% on high incomes).`
+          : `${money(x.fromTaxable)} in the brokerage, sold at a ${money(-x.gain)} loss: ${-x.tax >= 0.5 ? `it lowers this year's federal tax by about ${money(-x.tax)}` : "it does not lower this year's federal tax"}${x.carry > 0.5 ? `, and ${money(x.carry)} of the loss carries to later years` : ""}. A loss first cancels the year's gains, then comes off other income up to $3,000 a year ($1,500 each filing separately).`) : null,
         x.stillOver ? ui.h("li", {}, "Even then it stays above the ceiling because of grants still to vest or options not yet exercised: sell new units as they vest, and plan when to exercise options.") : null),
       ui.h("p", { class: "es-d" }, "Company stock with a large gain inside a 401(k): before selling it, ask about net unrealized appreciation (NUA), which can tax that gain at the lower rate when you leave the job. Selling a little every quarter on a fixed plan avoids guessing the best day.")));
   }

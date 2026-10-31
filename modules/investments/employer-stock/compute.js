@@ -8,7 +8,7 @@ import { compute as computeHoldings } from "../holdings/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
-import { taxInputs, todaysReturn, addIncome } from "../../taxes/federal/compute.js";
+import { taxInputs, todaysReturn, addIncome, lossCarryover } from "../../taxes/federal/compute.js";
 export { addIncome };   // it lived here first; the federal estimate keeps it now
 import { marginalRate, federalTax } from "../../../core/math/tax.js";
 
@@ -60,10 +60,12 @@ export function vestSchedule(g) {
  * compute(plan, { today }) -> {
  *   ready, symbol, price, priceAsOf, held: [{ account, bucket, shares, value, cost, gain }], heldValue,
  *   grants: [{ id, kind, name, shares, strike, vested, unvested, vestedValue, unvestedValue, next, expires, schedule }],
- *   owned (held + vested options' value), unvested, exposure, invested, share (exposure of invested wealth incl. unvested), level,
- *   pay (yearly salary at the company), stress: { drop, loss, payAtRisk },
+ *   owned (held + vested options' value), unvested, exposure, invested, share (exposure of invested wealth incl. unvested), level
+ *   ("ok" | "medium" | "large", null with no share and no stake), pay (yearly salary at the company), payOnFile, stress: { drop, loss, payAtRisk },
  *   vests: [{ date, grant, shares, value, withheld, owed, gap, stateOwed }] (RSUs, the next 12 months), vestYears: [{ year, value,
- *   owed, withheld, over1m, medicare }], vestGap, diversify: { sell, fromTaxable, fromPlans, gain, tax, after } | null,
+ *   earlier, owed, withheld, gap, state, over1m, medicare, estimated (that year's tax tables are not published yet) }], vestGap,
+ *   diversify: { sell, fromTaxable, fromPlans, gain (negative for a loss), tax (negative when the sale lowers it), carry (the
+ *   loss it adds to next year's carryover), after, stillOver } | null,
  *   rates: { marginal, state, gains }, year, otherYear
  * }
  */
@@ -98,7 +100,8 @@ export function compute(plan, params = {}) {
   const nw = computeNetWorth(plan, { today });
   const invested = nw.investable + options.reduce((s, g) => s + g.vestedValue, 0) + unvested;
   const share = invested > 0 ? exposure / invested : null;
-  const level = share === null ? "large" : share <= LIMIT.ok ? "ok" : share <= LIMIT.large ? "medium" : "large";
+  // no level without a share: nothing invested and no stake is not a bet (the share is shown as "—" then)
+  const level = share === null ? (exposure > 0 ? "large" : null) : share <= LIMIT.ok ? "ok" : share <= LIMIT.large ? "medium" : "large";
 
   // the pay that depends on the same company. Who works there is an adult: the one named, else the first adult with a salary,
   // else the adult marked Me; pay that names no adult counts as Me's (the federal estimate's rule, taxes/federal taxInputs)
@@ -132,6 +135,10 @@ export function compute(plan, params = {}) {
   const gains = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: (ti.inputs.qualifiedIncome ?? 0) + 1000, investmentIncome: (Number(ti.inputs.investmentIncome) || 0) + 1000 }, ti.params).totalTax - federalTax(ti.inputs, ti.params).totalTax) / 1000);
   const st = computeState(plan, { today });
   const stateRate = st.effective ?? 0;
+  // filing separately the vests are on the employee's own state return too (Illinois: 35 ILCS 5/502(c)(1)(C), each spouse with
+  // their own income and exemption), so the state share starts from that return's income, not both returns added up
+  const ownReturn = ti.inputs.separate ? federalTax(ti.inputs, ti.params).separate?.find((x) => x.personId != null && x.personId === who) : null;
+  const stOwn = ownReturn ? { ...st, agi: Math.max(0, Number(ownReturn.agi) || 0) } : st;
   // the employer's wages to the employee, for the 0.9% it withholds past $200,000: their pay on Income; without any, the wages
   // typed on the Federal estimate (their own return's when filing separately, else split evenly between the adults on it)
   const wagesOf = (t) => {
@@ -157,7 +164,7 @@ export function compute(plan, params = {}) {
     const paid = wagesOf(t) + earlier;
     const medicareHeld = ADDITIONAL_MEDICARE.rate * (Math.max(0, paid + total - ADDITIONAL_MEDICARE.over) - Math.max(0, paid - ADDITIONAL_MEDICARE.over));
     // the state's share: its rate on the vests above today's income (and this year's earlier vests), from the state estimate
-    const stateYear = stateExtra(st, total + (y === yr.year ? earlier : 0)) - stateExtra(st, y === yr.year ? earlier : 0);
+    const stateYear = stateExtra(stOwn, total + (y === yr.year ? earlier : 0)) - stateExtra(stOwn, y === yr.year ? earlier : 0);
     let supplementalSoFar = earlier;
     for (const v of inYear) {
       const income = supplementalWithholding(v.value, supplementalSoFar);
@@ -168,7 +175,7 @@ export function compute(plan, params = {}) {
       v.stateOwed = total > 0 ? stateYear * v.value / total : 0;
     }
     const withheld = inYear.reduce((s, v) => s + v.withheld, 0);
-    vestYears.push({ year: y, value: total, earlier, owed: owedYear, withheld, gap: owedYear - withheld, state: stateYear, over1m: supplementalSoFar > SUPPLEMENTAL.over, medicare: medicareHeld });
+    vestYears.push({ year: y, value: total, earlier, owed: owedYear, withheld, gap: owedYear - withheld, state: stateYear, over1m: supplementalSoFar > SUPPLEMENTAL.over, medicare: medicareHeld, estimated: !!t.params.indexed });
   }
 
   // getting under the ceiling: sell inside retirement plans first (no tax), then taxable shares (gains tax on the gain)
@@ -178,30 +185,35 @@ export function compute(plan, params = {}) {
     const plans = held.filter((h) => h.bucket !== "taxable").reduce((s, h) => s + h.value, 0);
     const fromPlans = Math.min(need, plans), fromTaxable = need - fromPlans;
     const taxable = held.filter((h) => h.bucket === "taxable");
-    const tv = taxable.reduce((s, h) => s + h.value, 0), tg = taxable.reduce((s, h) => s + Math.max(0, h.gain), 0);
-    // the gain on what is sold (the brokerage shares' average gain), as a long-term gain: today's tax year with this year's vests
-    // in the employee's wages (the earlier ones and those in view), then the gain added to gains and investment income, less
-    // without, so it is stacked through the 0/15/20% bands and the 3.8% (IRC 1(h), 1411). Filing separately, each account's
-    // share is on its owner's return (Pub. 501), half on each when the account names neither spouse.
+    const tv = taxable.reduce((s, h) => s + h.value, 0), tg = taxable.reduce((s, h) => s + h.gain, 0);
+    // the gain or loss on what is sold (the brokerage shares' average result), as long-term sales added to today's tax year on
+    // the Federal estimate, with this year's vests in the employee's wages (the earlier ones and those in view); the tax with
+    // them less without. So a gain is stacked through the 0/15/20% bands and the 3.8% (IRC 1(h), 1411), and a loss nets with
+    // the year's other sales, comes off other income up to $3,000 ($1,500 filing separately) and carries over the rest (IRC
+    // 1211(b), 1212(b)). Filing separately each account's share is on its owner's return (Pub. 501), half on each when the
+    // account names neither spouse (taxes/federal taxInputs).
     const gain = tv > 0 ? fromTaxable * (tg / tv) : 0;
-    let tax = 0;
-    if (gain > 0) {
+    let tax = 0, carry = 0;
+    if (Math.abs(gain) > 0.005) {
       const yearVests = earlierIn(yr.year) + vests.filter((v) => Number(v.date.slice(0, 4)) === yr.year).reduce((s, v) => s + v.value, 0);
-      const saleBase = addIncome(ti.inputs, who, wagesAdd(yearVests));
-      const owners = ti.inputs.separate ? ti.inputs.separate.map((x) => x.personId) : [null];
-      let withSale = saleBase;
-      for (const h of taxable) {
-        const g = gain * h.value / tv, owner = adultOf(accounts.find((a) => a.id === h.accountId)?.ownerId)?.id ?? null;
-        const on = !ti.inputs.separate ? [[null, g]] : owners.includes(owner) ? [[owner, g]] : owners.map((o) => [o, g / owners.length]);
-        for (const [o, x] of on) withSale = addIncome(withSale, o, { qualifiedIncome: x, investmentIncome: x });
-      }
-      tax = Math.max(0, federalTax(withSale, ti.params).totalTax - federalTax(saleBase, ti.params).totalTax);
+      const rows = taxable.map((h, n) => {
+        const sold = fromTaxable * h.value / tv, g = gain * h.value / tv, owner = adultOf(accounts.find((a) => a.id === h.accountId)?.ownerId)?.id ?? null;
+        return { id: `employer-stock-${n}`, description: "Employer stock", proceeds: Math.max(0, sold), basis: Math.max(0, sold - g), held: "long", ...(owner ? { personId: owner } : {}) };
+      });
+      const run = (extra) => {
+        const t = extra.length ? taxInputs({ ...yr.plan, taxes: { ...(yr.plan.taxes ?? {}), gains: [...(yr.plan.taxes?.gains ?? []), ...extra] } }, { today }) : ti;
+        const r = federalTax(addIncome(t.inputs, who, wagesAdd(yearVests)), t.params);
+        return { r, carry: lossCarryover(t, r).total };
+      };
+      const without = run([]), withSale = run(rows);
+      tax = withSale.r.totalTax - without.r.totalTax;
+      carry = Math.max(0, withSale.carry - without.carry);
     }
-    diversify = { sell: need, fromPlans, fromTaxable, gain, tax, after: invested > 0 ? (exposure - need) / invested : null, stillOver: need < exposure - LIMIT.ok * invested - 0.5 };
+    diversify = { sell: need, fromPlans, fromTaxable, gain, tax, carry, after: invested > 0 ? (exposure - need) / invested : null, stillOver: need < exposure - LIMIT.ok * invested - 0.5 };
   }
   return {
     ready: true, symbol, price, priceAsOf, held, heldValue, grants, owned, unvested, exposure, invested, share, level,
-    person: worker?.name ?? null, pay, stress: { drop: STRESS_DROP, loss, payAtRisk: pay },
+    person: worker?.name ?? null, pay, payOnFile: pay > 0, stress: { drop: STRESS_DROP, loss, payAtRisk: pay },
     vests, vestYears, vestGap: vests.reduce((s, v) => s + v.gap, 0), diversify, rates: { marginal, state: stateRate, gains }, year: yr.year, otherYear: yr.other,
     expiringSoon: options.filter((g) => g.expires && today && g.expires <= addMonths(today, 12) && g.vested > 0),
   };
