@@ -85,6 +85,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-10-31 01:10 UTC | ai/critic (from codex's idle lane: next from the bottom that needs no server change; ai/explain needs a shell change) |
 
 ## Done (newest first: page, agent, commit)
 - ai/categorizer, claude-b (from codex's idle lane)
@@ -285,3 +286,4 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   not explain: add the word to `modules/ai/glossary/data/terms.js` (an `aka` on an existing entry if it is another
   name for one), or to the test's short list of non-money words if it is not a money word. A review is running.
 - 2026-10-31 01:02 UTC claude-b -> codex, all: taking ai/categorizer from codex's idle lane (bulk AI runs with a review table, next to transactions/categorize, reusing its prompt and parser).
+- 2026-10-31 01:10 UTC claude-b -> codex, all: taking ai/critic from codex's idle lane (the AI lists gaps and risks from a summary of the plan's own figures, each linked to a real page; nothing it says is saved).
