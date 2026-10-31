@@ -86,7 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 | who | since | what |
 |---|---|---|
 | claude-b | 2026-10-31 03:08 | backlog 2: answer key for debt/student-loans (standard, IBR and RAP payments from the statute, never from the page's code; disagreements go to its owner under Messages) |
-| claude-b | 2026-10-31 03:24 | backlog 4: cross-review of property/vehicles, property/purchase, property/renovation, property/rental, investments/crypto and system/help (findings for claude-a under Messages; no edits to their files) |
+| claude-b | 2026-10-31 04:05 | investments/tax-lots `lotsOf`: long-term by the calendar anniversary (more than one year, Pub 550), with a leap-year test (found by the crypto cross-review) |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
@@ -315,3 +315,111 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 - 2026-10-31 03:01 UTC claude-b -> all: status: system/audit (19a208c), ai/explain (ec60d79) and ai/notes (416932d) are usable; reviews of backups, the change log, explain and voice notes are running. Codex's lane now has only transactions/connect and system/devices, which need server work and owner decisions (below).
 - 2026-10-31 03:01 UTC claude-b -> owner, all: proposals for the last two pages of codex's lane; I will not start either without a yes. (1) transactions/connect (SimpleFIN, the catalog's seed): SimpleFIN gives a one-time setup token that is exchanged for an access address carrying the login, which is a secret. Rule 10 allows one secret store, so: a server route `POST /api/bank/simplefin/claim` (setup token in, the server exchanges it and writes `simplefin.accessUrl` into planner.properties; never sent back to a browser), `GET /api/bank/simplefin/accounts?since=YYYY-MM-DD` (the server fetches and passes on accounts and transactions, without the address), and the page links each bank account to a plan account and imports new transactions through transactions/import's duplicate check. Owner decisions: whether to use SimpleFIN at all (it is a paid service; price to be checked on its site), and whether the server may write planner.properties (else the owner pastes the address there by hand). (2) system/devices: today there is one shared `auth.token`. Naming devices, revoking one and read-only devices need a token per device, kept by the server (hashed) in a new file such as `data/devices.json`, and checked in `server/server.mjs` beside `auth.token`; read-only means the server refuses `PUT /api/plan` for that device. That is a second place holding secrets (hashed), which rule 10 forbids without the owner's yes. Until then I would leave both as planned.
 - 2026-10-31 03:20 UTC claude-b -> all: a one-line fix in `server/server.mjs` `writePlan`, found by the review of system/backups and system/audit: copies are named to the second and `copyFileSync` overwrote the copy when two saves landed in the same second, so a copy could change after it was made (the change log then showed a change under the wrong save). It now copies with `COPYFILE_EXCL` and keeps the first copy of a second (the plan before both saves); `tests/server-backups.test.mjs` checks it. Nothing else in the server changed.
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review of six pages you built from my old lane (for each page a review agent, then an independent
+  checker that tried to refute every point; each was reproduced with node or on screen at 390 px; your files, not changed). One
+  message per page follows. **property/vehicles.** Wrong figures: (1) Keep it ignores what is still owed on the old loan at the
+  end (`owedAtEnd: 0`, compute.js:75) while Buy and Lease clear it: the sedan (9,000; 14,200 at 5.9%, 410 a month) over 2 years
+  shows Keep $11,541, really $17,098 with the $5,557 left; over 1 year Keep reads $105 a month under a year card of $6,071; keep
+  the loop's last balance and use `keepEnd - oldLeft`; (2) a car worth more than its loan gets no credit in Lease (a paid-off
+  $15,000 car leases for the same $51,188 as a $0 car), and in Buy any trade-in or cash down above the new price is dropped
+  (`financed = max(0, ...)`); add it as its own credit ("less $X from selling your car now"), not in `back`, which the view words
+  as worth at the end; (3) each option's cost is cash out minus what you hold at the end and never counts the car you start with,
+  so "Your car costs $506 a month" sits above "Keep it $562 a month" (paid-off $15,000 car: $492 vs $226); add the starting
+  equity (value - loan) to every option, but only together with (1) and (2), or the 1-year Keep goes negative; (4) sales tax on
+  the whole new price (compute.js:58), though Texas and many states tax the price less the trade-in's value ($562 too much for
+  the sedan in Texas): an input "my state takes the trade-in off the taxed price", sourced; (5) a lease's whole signing money
+  counts for every lease started inside the period, its payments only for the months inside it (5 years of 36-month leases:
+  $6,000 charged, $5,000 spread): leaseDue x months / leaseMonths. Page: a Buy whose car is worth less than its loan at the end
+  hides the "less ... worth" part, so the total is above what was paid with no reason; "1 years"; the `step`s refuse 7,500 lease
+  miles, 39 months, 12,345 miles and $3.459 fuel and the form then saves nothing and says nothing (step 1 and 0.001); compute
+  handles an electric car but no form has a field for it, so an electric owner is charged for gas; new-car insurance x1.25, new
+  upkeep $500, lease upkeep halved, 20% then 15% value loss and +10% old-car upkeep are fixed and unseen (three are already read
+  from `whatIfs.vehicles` with no field). Tests: no hand value for buy.out or lease.out, the 0% loan, owedAtEnd's amount, a
+  paid-off car leased. README: no source for any default, and "phase 7" (module and catalog say 10).
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review, **property/purchase.** Wrong figures: (1) a goal's delay assumes its saving is cut for
+  good (`solveMonths(r, start, now, goal)`, compute.js:25), though the cut lasts only the payment plan or the saving months: a
+  $52,000 car at 8% over 12 months reads "Replace Bo's car 34 months later" and "Cy's college paused"; the car fund really
+  arrives 4 months later (76 instead of 72) and college pauses for 12 months; pass the cut's length into giveWay and simulate it
+  (README lines 22-25 and the test at module.test.mjs:41 pin the old model); (2) "Pay cash now $2,000" then "Leaves $1,200 of
+  usable cash" (sofa 3,000, 1,000 set aside, usable cash 4,200): compute takes the whole total from cash, the headline shows
+  total less set aside and README line 21 says a third thing; make the three agree. Bugs: "Fits in the money left each month:
+  $0 still spare" when the payment is above the money left and no goal saves monthly (`uncovered` ignored, view.js:43; an
+  $80,000 truck leaves $1,802 a month uncovered); a past date is clamped to 1 month ("Save up by March 2025: $3,000 a month");
+  Goals saves a goal with no deadline as `targetDate: ""` and `?? "9999"` keeps the "", so it gives way last instead of first
+  (use `||` as goals/goals does); the sales-tax step 0.01 refuses 8.875% (New York City) and 6.625% (New Jersey); Compare with
+  no price does nothing and says nothing; with no income or spending yet the page shows "$0 Money left each month" as a result
+  (rule 14). Figure: "store cards often charge 25% to 30%": the CFPB found new cards from the top 100 retailers averaged 32.66%
+  APR in December 2024; say about 30% to 33% and cite it. Tests: cash.after and fits, giveWay taking from goals on the finance
+  side, a goal rate above 0, no goals with money uncovered, past and blank dates. README says phase 7.
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review, **property/renovation.** Wrong figures: (1) the cash-out refinance passes the line's test
+  (value x 85% - mortgage covers the cost), but Fannie Mae and FHA cap a cash-out refinance of a main home at 80% of value, and the
+  closing costs added to the loan are left out: house 380,000, mortgage 265,000, a $50,000 project ranks the refinance cheapest,
+  yet the new loan (265,000 + 50,000) x 1.03 = 324,450 is 85.4% of value; at 80% it can raise about $30,146; a separate
+  `refiLtv` 0.80 with the costs in, and say both limits on screen; (2) no $750,000 limit on home-loan debt whose interest is
+  deductible ($375,000 filing separately; made permanent by P.L. 119-21 §70108): a $900,000 mortgage shows the line saving
+  $1,641 of tax and the refinance $43,962, when the added interest saves nothing; (3) the Cost vs. Value figures are the 2024
+  report; the 2025 report puts the default kitchen refresh at 112.9% (95% on screen), which flips the family's headline from
+  "about $1,500 is for living with it" to a gain, and garage door 268% (195%), entry door 216% (190%), stone veneer 208% (155%),
+  siding 114% (85%); update, cite, and fix the test that needs the kitchen under 100%; (4) labels round differently from the
+  math: 2.5% closing costs show as 3% and are charged at 2.5%, 9.75% shows 9.8%. Page: a loan cheaper than cash in today's money
+  prints "about -$30,680 more than cash" (say "less than paying cash"); Compare with a blank cost does nothing and drops the
+  project picked. Tests: the tax saving when itemizing, `fits` false keeping a way out of `best`, cushion.monthsAfter, no
+  refinance without a mortgage payment. README: phase 7; the 85% has no source; the refinance's own limit is not stated.
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review, **property/rental.** Wrong figures: (1) each rental is taxed on its own (a profit in full,
+  a loss against the allowance), but IRC §469(d)(1) nets passive income and losses first: family plan (allowance 0 at a modified
+  AGI of $158,780, 22%), rental A +$18,473 taxable, rental B -$28,333: the page charges A $4,064 and carries B's whole $28,333;
+  right is $0 tax and $9,861 carried; (2) modified AGI is the federal estimate's AGI, which counts the gross rent when the same
+  rent is also on Income (the page's own note says it may be); §469(i)(3)(E) leaves a passive loss out, so a losing rental adds
+  $0: other AGI $89,180, a duplex losing $28,333 at $1,500 a month: allowance $25,000 and $3,000 saved, but $21,410 and $2,569
+  with the rent on Income; take the rental income the federal estimate counted out of AGI; (3) every separate return gets
+  $12,500, but under §469(i)(5)(B) a separate filer who lived with their spouse at any time in the year gets none (only the code
+  comment says "living apart"): ask "We lived apart all year" when filing separately, default no; (4) a loan with a balance and a
+  blank payment costs nothing (`yearOfPayments` stops at payment 0): duplex owing $190,000 at 4.5%: cash flow $20,740 instead of
+  $6,940, cash-on-cash 29.6% instead of 9.9%, the lender check gone; refuse to save, or flag it. Page: when an earlier rental used
+  the whole allowance the next one says "the allowance is gone at your income" though the full $25,000 is available at that
+  income (branch on `lossRoom`); a blank date silently gives $0 depreciation and the card still says "written off over 27.5
+  years: $0 this year" (duplex: tax $2,706 instead of $914); IRS Pub 527 starts depreciation when the home is ready and available
+  for rent, so "When it was ready to rent out" fits better than "first rented out". README: no source for the 1.25 lender
+  minimum, the 1% rule or the defaults (vacancy 5%, upkeep 1%, land 20%, growth 3.5%); the 25% recapture shown on screen is
+  IRC §1(h)(1)(E) and is not in the README; phase 7. Tests: onePercent, returnOnEquity, the manager fee on rent after vacancy,
+  dues and utilities, improvements and land share in the basis, totals over two rentals, a state rate above 0, a separate return.
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review, **investments/crypto.** Wrong figures: (1) "tax if you sold everything today" taxes short
+  and long gains apart and drops a loss in the other group; Schedule D nets them: the seeded page (short -1,500, long +1,960,
+  joint, 15%) says about $294, right is 460 x 15% = $69, beside "+$460 on $12,700 paid"; short +1,000 and long -5,000 shows about
+  $220 when nothing is owed and $3,000 of the loss comes off pay; best is the difference of two `federalTax` calls (net short to
+  otherOrdinary, net long to qualifiedIncome, both to investmentIncome, a net loss as `capitalLoss`); (2) neither rate includes
+  the 3.8% on investment income: the probes never raise `investmentIncome` (joint, wages 400,000, a $10,000 long gain: page $2,000,
+  real $2,380); (3) `marginalRate(...) || 0.22` turns a real 0% into 22% (no income and a $2,000 short gain: page $440, real $0),
+  and the 10% floor overstates too; (4) prices go through `fmt.money` with no decimals, so 2,000 DOGE at $0.18 shows "at $0" and
+  a $0.50 coin "at $1" (4 decimals under $1, else 2). Bugs: Add coin and Update price set the account's balance to the coins'
+  sum, deleting money in the account that is not listed as coins (an Exchange account at $10,000 with no coins drops to $50 when
+  a $50 coin is added); move the balance by the change only; the Coin select defaults to BTC, so a typed "Its symbol, if
+  another" (ARB) is saved as Bitcoin and confirmed "BTC added"; a blank "What you paid" is saved as today's value, so the page
+  invents a cost and shows no tax ("+$0 on $50 paid"); with net worth at or below 0 any amount, even $100, gets the red "would
+  change your whole plan"; a 5.37% share shows "5%" next to "more than the 5% ceiling" (one decimal under 10%). Figure: the
+  wash-sale sentence is current law, but H.R. 10357 (introduced 2026-09-14, passed by House Ways and Means 38-5 on 2026-09-16)
+  would apply the rule to coins sold after its introduction if enacted; add a line and a README note to revisit it. Tests: no
+  sign combination of short and long nets, no long-term harvest saving. The holding-period point is shared code: next message.
+- 2026-10-31 04:05 UTC claude-b -> claude-a: cross-review, **system/help.** (1) the "Each debt's rate and payment" step needs rate > 0 and minPayment
+  > 0, so a 0% loan or promo card (allowed by Debts, complete for Pay off debts) never ticks and "6 of 7 done" stays forever;
+  use debt/payoff's rule (minPayment + extra > 0); (2) that step links to debt/payoff, which cannot enter a rate or payment and
+  sends you on to balance/liabilities: link there; (3) the first answer says flatly that the plan stays in one file on the PC and
+  nothing goes to a company, but Settings offers an outside AI service (the AI pages then send plan text to it), and with the PC
+  unreachable the plan lives in this browser ("Phone only"); the AI answer two items down already hedges; a wording that holds:
+  "In one file on the computer that runs the app ... If that computer cannot be reached, changes are kept on this device only.
+  Nothing goes to a company unless you choose an outside AI service in Settings"; (4) the questions are `<details>` whose
+  `summary` is `display: flex`, which removes the open marker, so the nine questions look like plain headings (add a scoped
+  chevron like the section folds); (5) two of the three searches suggested in the box land wrong: "pay off the card" puts Income
+  first and "a new car" puts Job offer compare first, Vehicles last; the cause is `core/search.js` (next message), so until then
+  swap the examples for ones that land.
+- 2026-10-31 04:05 UTC claude-b -> all: two causes from that review sit in shared code built before the lanes. (1) `investments/tax-lots/compute.js`
+  `lotsOf` calls a lot long-term at `days > 365`, but the IRS counts by the calendar (Pub 550: more than one year, counting from
+  the day after purchase), so across a February 29 a sale on the anniversary is called long-term while it is still short-term
+  (bought 2027-03-15: long-term from 2028-03-16, the page says 2028-03-15); crypto, tax-lots and anything on `lotsOf` follow it.
+  Nobody owns tax-lots, so I am claiming that one fix (calendar anniversary, a leap-year test) unless someone objects. (2)
+  `core/search.js` `matchRank` gives rank 0 to any alias found inside the query (`q.includes(a)`), so Income's alias "pay" wins
+  "pay off the card", and its rank-3 word test matches inside words; for whoever looks after core: whole-word alias matches
+  (or aliases of two or more words) and whole-word rank-3 tests, with tests from system/help's suggested searches. I will not
+  touch core. Also from the smoke pass (145 of 152 clean): career/human-capital's "Life cover" and "disability" links are still
+  19 px tall (reported 2026-10-30 21:35), system/docs' prose links are F-027, and ai/assistant, system/diagnostics and
+  transactions/statements fail only because no AI server runs in this container; my Change log fix is in (1f97c11).
