@@ -61,11 +61,20 @@ export function render(page, ctx) {
   if (d.vests.length) {
     const tot = d.vests.reduce((s, v) => s + v.value, 0), stateOwed = d.vests.reduce((s, v) => s + v.stateOwed, 0);
     const withheld = d.vests.reduce((s, v) => s + v.withheld, 0), owed = d.vests.reduce((s, v) => s + v.owed, 0);
+    const earlier = d.vestYears.find((y) => y.earlier > 0.5);
+    const two = d.vestYears.length > 1;
+    // one sentence per tax year: withholding in one year cannot pay another year's tax
+    const yearLine = (y) => {
+      const lead = two ? `For ${y.year}: ` : "";
+      if (y.gap > 1) return ui.h("p", { class: "es-flag" }, two ? `${lead}set aside about ${money(y.gap)} more by April 15, ${y.year + 1}, when that return is due.` : `Set aside about ${money(y.gap)} more for the ${y.year} return, due April 15, ${y.year + 1}.`);
+      if (y.gap < -1) return ui.h("p", { class: "es-d" }, `${lead}${two ? "the" : "The"} withholding is about ${money(-y.gap)} more than the federal tax they add: it comes back when you file in ${y.year + 1}, unless other income uses it.`);
+      return ui.h("p", { class: "es-d" }, `${lead}${two ? "the" : "The"} withholding about covers the federal tax they add.`);
+    };
     root.append(ui.card("Vesting in the next year", ui.h("ul", { class: "records" }, d.vests.map((v) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${shortDate(v.date)} · ${v.shares} units`), ui.h("span", { class: "rec-value" }, money(v.value))), ui.h("div", { class: "rec-sub" }, `${v.grant}; ${money(v.withheld)} federal tax withheld`)))),
-      ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Your employer withholds ${pct(SUPPLEMENTAL.rate)} for federal tax${d.vestYears.some((y) => y.over1m) ? ` (${pct(SUPPLEMENTAL.high)} on bonus-type pay past $1 million in a year)` : ""}${d.vestYears.some((y) => y.medicare > 0.5) ? ", plus 0.9% for Medicare on pay past $200,000" : ""}: ${money(withheld)} in all. Added to your other income they raise your federal tax by about ${money(owed)}${d.vestYears.length > 1 ? `, worked in ${d.vestYears.map((y) => y.year).join(" and ")} each on its own` : ""}.`),
-      d.vestGap > 1 ? ui.h("p", { class: "es-flag" }, `Set aside about ${money(d.vestGap)} more for tax time${stateOwed > 0 ? `, plus about ${money(stateOwed)} of state tax if your employer withholds none` : ""}.`)
-        : d.vestGap < -1 ? ui.h("p", { class: "es-d" }, `The withholding is about ${money(-d.vestGap)} more than the federal tax they add: that comes back as a refund unless other income uses it.`)
-        : ui.h("p", { class: "es-d" }, "The withholding about covers the federal tax they add."),
+      ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Your employer withholds ${pct(SUPPLEMENTAL.rate)} for federal tax${d.vestYears.some((y) => y.over1m) ? ` (${pct(SUPPLEMENTAL.high)} on bonus-type pay past $1 million in a year)` : ""}${d.vestYears.some((y) => y.medicare > 0.5) ? ", plus 0.9% for Medicare on pay past $200,000" : ""}: ${money(withheld)} in all. Added to your other income they raise your federal tax by about ${money(owed)}${two ? `, worked in ${d.vestYears.map((y) => y.year).join(" and ")} each on its own` : ""}.`),
+      earlier ? ui.h("p", { class: "es-d" }, `Counted on top of the ${money(earlier.earlier)} of units that already vested in ${earlier.year} (at today's price), which are wages in the same year.`) : null,
+      ...(two && d.vestYears.every((y) => Math.abs(y.gap) <= 1) ? [ui.h("p", { class: "es-d" }, "In both years the withholding about covers the federal tax they add.")] : d.vestYears.map(yearLine)),
+      stateOwed > 0.5 ? ui.h("p", { class: "es-d" }, `State income tax on them comes to about ${money(stateOwed)} more; check your pay slip for how much your employer holds back for it.`) : null,
       ui.h("p", { class: "es-d" }, "Selling units the day they vest costs no more tax: their cost is the value they were taxed at.")));
   }
 
