@@ -9,23 +9,27 @@ import { compute as computePaycheck } from "../../cashflow/paycheck/compute.js";
 /**
  * The IRS quarters of a tax year: the income period each covers and the day the payment is due (IRC 6654(c)(2):
  * April 15, June 15, September 15 and January 15 of the next year), moved to the next business day when that falls on
- * a Saturday, Sunday or legal holiday (IRC 7503; the Money calendar's dueDay, with the state's own April holiday).
+ * a Saturday, Sunday or legal holiday (IRC 7503; the Money calendar's dueDay with the District of Columbia's holidays).
+ * A state's own holiday does not move them: Patriots' Day moves a Maine or Massachusetts resident's return, not an
+ * estimated payment (Rev. Rul. 2015-13; Form 1040-ES (2024) printed April 15, 2024 for everyone). The second argument is
+ * accepted and ignored.
  */
-export const QUARTERS = (year, state = "") => [
-  { n: 1, label: "1st quarter", covers: `Jan to Mar ${year}`, due: dueDay(`${year}-04-15`, state) },
-  { n: 2, label: "2nd quarter", covers: `Apr and May ${year}`, due: dueDay(`${year}-06-15`, state) },
-  { n: 3, label: "3rd quarter", covers: `Jun to Aug ${year}`, due: dueDay(`${year}-09-15`, state) },
-  { n: 4, label: "4th quarter", covers: `Sep to Dec ${year}`, due: dueDay(`${year + 1}-01-15`, state) },
+export const QUARTERS = (year) => [
+  { n: 1, label: "1st quarter", covers: `Jan to Mar ${year}`, due: dueDay(`${year}-04-15`) },
+  { n: 2, label: "2nd quarter", covers: `Apr and May ${year}`, due: dueDay(`${year}-06-15`) },
+  { n: 3, label: "3rd quarter", covers: `Jun to Aug ${year}`, due: dueDay(`${year}-09-15`) },
+  { n: 4, label: "4th quarter", covers: `Sep to Dec ${year}`, due: dueDay(`${year + 1}-01-15`) },
 ];
 
 /**
  * compute(plan, { today }) -> {
  *   year, totalTax, withholding (projected for the year), withholdingFrom ("typed": the Withholding check page or the year so far; "paycheck": estimated
  *   from pay on the Paycheck page; "none"), harbour: safeHarbour, toPayByEstimates (required - withholding, floor 0),
- *   perQuarter, quarters: [{ n, label, covers, due, paid, share (cumulative required), status: "paid" | "due" | "short" | "upcoming" }],
+ *   perQuarter, quarters: [{ n, label, covers, due, paid, share, cumulative (required by its due date), status: "paid" | "due" | "short" | "upcoming"
+ *   (from everything paid so far), late (its own and earlier boxes were short on its due date) }],
  *   paid (total so far), remaining (still to pay for the year), behind (the share of quarters already past due that is not paid),
- *   overdue: { due (the first of them), amount: behind } | null, nextDue: { due, label, amount (that quarter's share on top of what is behind) } | null
- *   (the next quarter not yet past), balanceAtFiling (total tax - withholding - paid),
+ *   overdue: { due (the first quarter not covered), amount: behind } | null, nextDue: { due, label, amount (that quarter's share on top of what is behind) } | null
+ *   (the next quarter not yet past), balanceAtFiling (total tax - withholding - paid), lateQuarter: the first late quarter | null,
  *   penaltyRisk: bool, needsEstimates: bool, hasPrior, priorTax, priorAgi, notes
  * }
  */
@@ -48,12 +52,14 @@ export function compute(plan, params = {}) {
   const balanceAfterWithholding = totalTax - wh.projected;
   const needsEstimates = balanceAfterWithholding >= 1000 && toPayByEstimates > 0;
   const perQuarter = needsEstimates ? toPayByEstimates / 4 : 0;
-  let cum = 0, cumPaid = 0;
-  const quarters = QUARTERS(fed.year, String(plan.household?.state ?? "").toUpperCase()).map((q, i) => {
-    cum += perQuarter; cumPaid += paidList[i];
+  // a quarter is covered when everything paid so far reaches its cumulative share (a payment counts against the earliest
+  // unpaid quarter, IRC 6654(b)(3)); it was late when its own and the earlier boxes fell short on its due date (6654(b))
+  let cum = 0, cumBoxes = 0;
+  const quarters = QUARTERS(fed.year).map((q, i) => {
+    cum += perQuarter; cumBoxes += paidList[i];
     const past = today ? today > q.due : false;
-    const status = !needsEstimates ? "none" : cumPaid >= cum - 1 ? "paid" : past ? "short" : today && today >= q.due.slice(0, 8) + "01" ? "due" : "upcoming";
-    return { ...q, paid: paidList[i], share: perQuarter, cumulative: cum, status };
+    const status = !needsEstimates ? "none" : paid >= cum - 1 ? "paid" : past ? "short" : today && today >= q.due.slice(0, 8) + "01" ? "due" : "upcoming";
+    return { ...q, paid: paidList[i], share: perQuarter, cumulative: cum, status, late: needsEstimates && past && cumBoxes < cum - 1 };
   });
   const remaining = Math.max(0, toPayByEstimates - paid);
   // behind: what the quarters already past due required and was not paid; the next payment is the first quarter not yet past
@@ -68,5 +74,7 @@ export function compute(plan, params = {}) {
   if (!fed.hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
   if (withholdingFrom === "paycheck") notes.push("Withholding is estimated from your pay on the Paycheck page. Type what your pay stubs withhold on the Withholding check page for a firmer figure.");
   if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
-  return { year: fed.year, totalTax, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && quarters.some((q) => q.status === "short"), needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
+  // the penalty is figured for each due date on its own (Form 2210 instructions): a quarter paid late counts even once caught up
+  const lateQuarter = quarters.find((q) => q.late) ?? null;
+  return { year: fed.year, totalTax, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
 }

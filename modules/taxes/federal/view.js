@@ -60,10 +60,10 @@ function figuresFold(ctx, d) {
     { key: "withheld", label: "Federal tax withheld so far", type: "money", min: 0, help: "from paystubs or last year's W-2 as a guide" },
     { key: "paid", label: "Other payments", type: "money", min: 0, help: "quarterly payments are on the Estimated payments page" },
   ];
-  const values = { wages: ty.wages ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheld || null, paid: ty.paid || null };
+  const values = { wages: ty.wages ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheldTyped === true ? (ty.withheld ?? 0) : ty.withheld || null, paid: ty.paid || null };
   const form = ui.form(FIELDS, values, (v) => {
     pending = "Figures saved.";
-    store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: v.wages ?? null, otherOrdinary: v.otherOrdinary ?? 0, qualifiedIncome: v.qualifiedIncome ?? 0, taxExemptInterest: v.taxExemptInterest ?? 0, socialSecurity: v.socialSecurity ?? null, adjustments: v.adjustments ?? 0, withheld: v.withheld ?? 0, paid: v.paid ?? 0 }; });
+    store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: v.wages ?? null, otherOrdinary: v.otherOrdinary ?? 0, qualifiedIncome: v.qualifiedIncome ?? 0, taxExemptInterest: v.taxExemptInterest ?? 0, socialSecurity: v.socialSecurity ?? null, adjustments: v.adjustments ?? 0, withheld: v.withheld ?? 0, withheldTyped: v.withheld !== null && v.withheld !== undefined, paid: v.paid ?? 0 }; });
   }, { submitLabel: "Save figures" });
   const typedCount = Object.values(values).filter((v) => v !== null && v !== 0).length;
   return ui.h("details", { class: "card fold fold-card", open: d.hasIncome ? null : true },

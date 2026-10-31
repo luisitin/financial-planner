@@ -104,7 +104,8 @@ export function compute(plan, params = {}) {
     }
   }
 
-  // federal tax dates (the household's state matters only for Patriots' Day)
+  // federal tax dates (the household's state matters only for Patriots' Day, which moves a Maine or Massachusetts
+  // resident's return and the IRA and HSA deadline tied to it, never an estimated payment: Rev. Rul. 2015-13)
   const st = String(plan.household?.state ?? "").toUpperCase();
   const due = (iso) => dueDay(iso, st);
   const hasPay = (plan.income ?? []).some((x) => x?.type === "salary");
@@ -115,7 +116,7 @@ export function compute(plan, params = {}) {
     add(due(ymd(y, 4, 15)), "tax", `Tax return for ${y - 1} due`, { detail: "File, or ask for more time (the tax owed is still due today).", go: ["taxes", "federal"] });
     if (saver) add(due(ymd(y, 4, 15)), "retire", `Last day to put money in an IRA or health savings account for ${y - 1}`, { go: ["taxes", "hsa-fsa"] });
     add(due(ymd(y, 10, 15)), "tax", `Tax return for ${y - 1} due if you asked for more time`, { go: ["taxes", "federal"] });
-    if (estimates) for (const [m, d, q, ty] of [[1, 15, 4, y - 1], [4, 15, 1, y], [6, 15, 2, y], [9, 15, 3, y]]) add(due(ymd(y, m, d)), "tax", `Estimated tax payment ${q} of 4 for ${ty}`, { go: ["taxes", "estimated"] });
+    if (estimates) for (const [m, d, q, ty] of [[1, 15, 4, y - 1], [4, 15, 1, y], [6, 15, 2, y], [9, 15, 3, y]]) add(dueDay(ymd(y, m, d)), "tax", `Estimated tax payment ${q} of 4 for ${ty}`, { go: ["taxes", "estimated"] });
   }
 
   // Medicare open enrollment, for anyone 65 or older by its last day

@@ -85,7 +85,6 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 09:30 | answer key for the estimated-tax and withholding pages (taxes/estimated, taxes/withholding; built before the lanes): the penalty-safe amount, the four payments and their due dates, behind and next, the year-end balance, from IRC 6654 and 7503 |
 | claude-b | 2026-10-31 09:19 | answer key for the contribution-limit pages (retirement/contributions, investments/limits, taxes/hsa-fsa; built before the lanes): 401(k), IRA, Roth IRA income limit, HSA and health FSA limits from the law |
 
 ## Done (newest first: page, agent, commit)
@@ -526,3 +525,13 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   (cite one, e.g. Morgan Stanley's 2-4%, or call it the app's own line); the README's holding period should say "more
   than one year, from the day after you bought" (the code is right); the capital-loss text misses $1,500 filing
   separately.
+- 2026-10-31 10:55 UTC claude-b -> all: answer key for Estimated payments and Withholding check (backlog 2; claim released):
+  `tools/golden_estimated` works every due date for 2024-2027 and 3,000 households from IRC 6654 and 7503, 26 CFR
+  301.7503-1, D.C. Code 1-612.02, Rev. Rul. 2015-13 and the Form 1040-ES and 2210 instructions (read 2026-10-31), never
+  from the code; `tests/golden-estimated.test.mjs` compares both pages. A verifier corrected two points in the key and
+  confirmed five page bugs, all fixed (pages built before the lanes): a quarter's status now counts everything paid (no
+  more "$0 next payment" or a wrong overdue date), a quarter paid late still raises the penalty note (the penalty is per
+  due date), Patriots' Day no longer moves the April estimated payment in MA and ME (it moves only the return; the Money
+  calendar too), no paychecks are counted in the January after the year, and a typed $0 withheld so far counts
+  (`taxes.thisYear.withheldTyped`, optional, set by the Federal estimate page). The Withholding check's penalty warning
+  now uses the law's $1,000 test (tax less withholding, not estimates). Every row passes; no to-do list.

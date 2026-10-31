@@ -19,10 +19,15 @@ export function safeHarbour(thisYearTax, priorTax, priorAgi, filingStatus) {
   return { required, ninety, prior, priorShare, basis: prior !== null && prior <= ninety ? "last year" : "this year", label: prior !== null && prior <= ninety ? `${Math.round(priorShare * 100)}% of last year's tax` : "90% of this year's" };
 }
 
-/** Paychecks left in `year` after `today` for a pay period (a whole year when today is not in that year). */
+/**
+ * Paychecks left in `year` after `today` for a pay period: a whole year before the year starts, none once it is over
+ * (January's paychecks count for the next year: tax withheld in a calendar year is a credit for the year beginning in it, IRC 31(a)(2)).
+ */
 export function paychecksLeft(period, today, year) {
   const perYear = (PERIODS[period] ?? PERIODS.biweekly).perYear || 12;
-  if (!today || Number(String(today).slice(0, 4)) !== year) return perYear;
+  const todayYear = today ? Number(String(today).slice(0, 4)) : null;
+  if (!today || todayYear < year) return perYear;
+  if (todayYear > year) return 0;
   const daysLeft = Math.max(0, daysBetween(today, `${year}-12-31`));
   return Math.max(0, Math.min(perYear, Math.floor(daysLeft / 365.25 * perYear)));
 }
@@ -30,12 +35,15 @@ export function paychecksLeft(period, today, year) {
 /**
  * projectedWithholding(plan, { today }) -> { projected, soFar, rest, people: [{ key, name, perPaycheck, period, left, rest, yearly }], hasSetup }
  * "So far" is the figure typed on the Federal estimate page; when it is blank, the whole year runs at the per-paycheck rate.
+ * A typed 0 counts as typed (`taxes.thisYear.withheldTyped`, set when the field is saved with a figure; plans from before
+ * the flag only count a figure above 0).
  */
 export function projectedWithholding(plan, params = {}) {
   const today = params.today ?? null;
   const t = plan.taxes ?? {};
   const year = Number(t.year) || (today ? Number(String(today).slice(0, 4)) : new Date().getFullYear());
   const soFar = Math.max(0, Number(t.thisYear?.withheld) || 0);
+  const soFarTyped = t.thisYear?.withheldTyped === true || soFar > 0;
   const w = t.withholding ?? {};
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const people = [];
@@ -48,8 +56,8 @@ export function projectedWithholding(plan, params = {}) {
     people.push({ key, name: who?.name ?? (key === "self" ? "You" : "Partner"), perPaycheck: Number(cfg.perPaycheck), period, left, rest: Number(cfg.perPaycheck) * left, yearly: Number(cfg.perPaycheck) * perYear });
   }
   const rest = people.reduce((s, p) => s + p.rest, 0);
-  const projected = soFar > 0 ? soFar + rest : people.reduce((s, p) => s + p.yearly, 0);
-  return { projected, soFar, rest, people, hasSetup: people.length > 0 || soFar > 0, year };
+  const projected = soFarTyped ? soFar + rest : people.reduce((s, p) => s + p.yearly, 0);
+  return { projected, soFar, soFarTyped, rest, people, hasSetup: people.length > 0 || soFar > 0, year };
 }
 
 /**
@@ -68,7 +76,8 @@ export function compute(plan, params = {}) {
   const estimatedPaid = (t.estimated?.paid ?? []).reduce((s, x) => s + (Math.max(0, Number(x)) || 0), 0);
   const balance = totalTax - wh.projected - estimatedPaid;
   const harbour = safeHarbour(totalTax, t.priorYear?.tax, t.priorYear?.agi, fed.filingStatus);
-  const penaltyRisk = wh.hasSetup && balance >= 1000 && wh.projected + estimatedPaid < harbour.required;   // nothing to say until a paycheck figure is in
+  // the $1,000 test counts withholding only, not estimated payments (IRC 6654(e)(1); Form 2210 line 6); nothing to say until a paycheck figure is in
+  const penaltyRisk = wh.hasSetup && totalTax - wh.projected >= 1000 && wh.projected + estimatedPaid < harbour.required;
   const verdict = !wh.hasSetup ? "unknown" : Math.abs(balance) < 500 ? "about right" : balance > 0 ? "owe" : "refund";
   const main = wh.people[0] ?? null;
   let suggestion = { kind: "none", perPaycheck: 0, paychecks: 0, text: "" };

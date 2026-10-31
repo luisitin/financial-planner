@@ -100,3 +100,12 @@ test("the calendar file: one all-day event each, escaped and folded (RFC 5545)",
   assert.equal(ics.match(/BEGIN:VEVENT/g).length, 2);
   assert.ok(ics.includes("DTEND;VALUE=DATE:20280101"), "the day after December 31");
 });
+
+test("estimated payments keep their federal date in Maine and Massachusetts; the return moves for Patriots' Day", () => {
+  const p = familyPlan("2024-01-10");
+  p.household.state = "MA"; p.taxes.estimated.paid = [500, 0, 0, 0];
+  const d = compute(p, { today: "2024-01-10", range: "year" });
+  const ev = (re) => (d.events ?? d.items ?? []).find((e) => re.test(e.title ?? e.label ?? "") && String(e.date).startsWith("2024-04"));
+  assert.equal(ev(/Estimated tax payment 1 of 4/)?.date, "2024-04-15");
+  assert.equal(ev(/Tax return for 2023 due/)?.date, "2024-04-17");
+});

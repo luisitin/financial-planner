@@ -49,3 +49,24 @@ test("estimated: with no withholding typed, the Paycheck page's estimate; what i
   p.taxes.withholding = { self: { perPaycheck: 400, period: "biweekly" } };
   assert.equal(compute(p, { today: "2026-10-31" }).withholdingFrom, "typed");
 });
+
+import { QUARTERS } from "./compute.js";
+
+test("estimated: Patriots' Day does not move an estimated payment (Rev. Rul. 2015-13); D.C.'s holidays do", () => {
+  assert.equal(QUARTERS(2024, "MA")[0].due, "2024-04-15");   // the return moved to April 17 in MA and ME; the payment did not
+  assert.equal(QUARTERS(2027)[3].due, "2028-01-18");         // Saturday the 15th, Martin Luther King Jr. Day on the 17th
+});
+
+test("estimated: a quarter's status counts everything paid; a payment made late still flags the penalty for its quarter", () => {
+  // single, 30,000 of interest: tax 1,420; safe amount 90% = 1,278, a quarter 319.50 (no withholding)
+  const plan = (paid) => { const p = emptyPlan(); p.household.filingStatus = "single"; p.taxes.thisYear.otherOrdinary = 30000; p.taxes.estimated.paid = paid; return p; };
+  // July 20: nothing in the first box, 700 typed in the second: both past quarters are covered by the total
+  const d = compute(plan([0, 700, 0, 0]), { today: "2026-07-20" });
+  assert.deepEqual(d.quarters.map((q) => q.status), ["paid", "paid", "upcoming", "upcoming"]);
+  assert.equal(d.behind, 0); assert.equal(d.overdue, null);
+  assert.equal(d.nextDue.due, "2026-09-15"); assert.ok(Math.abs(d.nextDue.amount - (958.5 - 700)) < 1e-9);   // never a $0 next payment
+  // the first quarter's own box was empty on April 15: late, so the penalty note shows, though nothing is behind now
+  assert.equal(d.quarters[0].late, true); assert.equal(d.lateQuarter.n, 1); assert.equal(d.penaltyRisk, true);
+  // the whole year paid: nothing left to warn about
+  assert.equal(compute(plan([0, 1278, 0, 0]), { today: "2026-07-20" }).penaltyRisk, false);
+});
