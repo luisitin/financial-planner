@@ -19,13 +19,27 @@
 - Share = crypto ÷ net worth; small up to 5% (a common planner's ceiling for crypto), large above 20%.
 - Swing: a fall of 75% on everything but stablecoins, between bitcoin's two deepest recent falls (about 84% from
   December 2017 to December 2018, about 77% from November 2021 to November 2022, peak to low on daily closes).
-- Lots (`investments/tax-lots` `lotsOf`): held more than 365 days is long-term (IRS Publication 550). Tax if sold
-  today, taxable accounts only = max(0, net short gain) × the top rate on pay + max(0, net long gain) × the rate on
-  the next $1,000 of long-term gains (both from the federal estimate, as Tax lots does).
-- A lot with a loss can be sold to bank the loss: saved = loss × its rate. Coins are property, not securities, so the
-  wash-sale rule (IRC §1091) does not apply to them as of 2026; it does to the funds.
-- A short-term lot with a gain that turns long-term within 90 days: wait until the day after its first year;
-  saved = gain × (top rate − gains rate).
+- Lots (`investments/tax-lots` `lotsOf`): long-term when held more than one year, counted from the day after the buy
+  (IRS Publication 550; IRC 1222(3)); a February 29 or a February 28 before a leap year is long-term from March 1.
+- **Tax if sold today**, taxable accounts only: the Federal estimate's total tax with every crypto lot sold today (each
+  lot's gain or loss added to the year's sales, short or long by its term) less the total without. The engine nets them
+  with the year's other sales the way Schedule D does (short against short, long against long, then across), stacks
+  long-term gains on top at 0/15/20% (IRC 1(h)), adds the 3.8% on investment income over its line (IRC 1411) and lets a
+  net loss take at most $3,000 off other income, $1,500 filing separately (IRC 1211(b)); what is left carries to next year
+  (`lossCarryover`, Pub. 550 Worksheet 4-1; `tax.carry` is the part the sale adds). Below 0 the sale lowers this year's tax.
+  Until 2026-10-31 this was the net short gain x the rate on pay + the net long gain x the rate on long-term gains, which
+  missed the netting across terms, the 0% band and the $3,000 limit.
+- The rates shown (`marginal`, `gainsRate`): the federal tax on $1,000 more pay-like income or long-term gain, with the 3.8%
+  where it applies, as Tax lots works them (no 10% floor any more).
+- **A loss to bank**: a lot with a loss over $1. Saved (`saved`, that lot alone; `harvestSaved`, all of them together) = the
+  federal tax now less the tax with the lot sold, so a loss first cancels this year's gains and then at most $3,000 of
+  other income; `harvestCarry` carries to next year. Coins are property, not securities, so the wash-sale rule (IRC §1091)
+  does not apply to them as of 2026. A fund is a security: the same fund bought in the 30 days before today, in any account
+  (an IRA too: Pub. 550; Rev. Rul. 2008-5), cancels the loss on that many shares, matched share for share (Tax lots'
+  `washSales`, 26 CFR 1.1091-1); the page names the purchase and says whether the cancelled loss is added to its cost
+  (taxable account) or lost for good (IRA).
+- **A short-term lot with a gain that turns long-term within 90 days**: wait until its first long-term day; saved = the
+  federal tax with the gain sold short-term less with it sold long-term.
 - A price older than 7 days is flagged (stablecoins aside).
 - 1099-DA (Treasury final regulations, 2024): brokers report gross proceeds on sales from 2025 and cost for coins
   bought from 2026.
@@ -36,7 +50,8 @@
 - A coin with no lots: its whole cost is one long-term lot ("unassigned", as on Tax lots).
 
 ## Tests
-`module.test.mjs`: kinds, not ready, totals and share and swing, stale prices, tax by lot with the loss and the wait,
+`module.test.mjs`: kinds, not ready, totals and share and swing, stale prices, the tax if sold with the loss and the wait
+(hand-worked for the family example), a big loss against the $3,000 limit with its carryover, a fund washed by an IRA purchase,
 a fund in an IRA, account balances beyond the coins.
 
 ## Ideas / not yet

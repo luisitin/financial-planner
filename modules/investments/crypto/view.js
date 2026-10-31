@@ -75,20 +75,26 @@ export function render(page, ctx) {
   // tax
   const t = d.tax;
   const taxCard = ui.card("If you sold everything today", ui.h("p", {}, t.total > 0.5
-    ? `About ${money(t.total)} of federal tax: ${money(Math.max(0, t.longGain))} of gains held over a year at ${pct(t.gainsRate)}, ${money(Math.max(0, t.shortGain))} held under a year at ${pct(t.marginal)} like pay.`
-    : t.shortGain + t.longGain < 0 ? `No tax: a net loss of ${money(-(t.shortGain + t.longGain))}, which lowers other tax (up to $3,000 a year against pay, the rest carried forward).` : "No tax: nothing has gained."),
-    ui.h("p", { class: "muted small" }, "Funds in a 401(k) or IRA are left out: selling inside them is not taxed."));
-  if (d.harvest.length) taxCard.append(ui.h("p", {}, `Banking the loss on ${d.harvest.map((h) => `${h.symbol} (${money(h.loss)})`).join(", ")} would save about ${money(d.harvestSaved)}. ${d.harvest.some((h) => h.kind === "coin") ? "Coins held directly are property, not securities, so as of 2026 the wash-sale rule does not stop you buying the same coin back at once; for a fund it does (wait 31 days)." : "For a fund, the wash-sale rule means waiting 31 days before buying it back."}`));
-  for (const w of d.waitLong) taxCard.append(ui.h("p", {}, `${w.symbol} bought ${shortDate(w.date)}: wait until ${shortDate(w.longOn)} to sell and its ${money(w.gain)} gain is taxed at ${pct(t.gainsRate)} instead of ${pct(t.marginal)}, about ${money(w.saved)} less.`));
+    ? `About ${money(t.total)} more federal tax this year: ${money(Math.max(0, t.longGain))} of gains held over a year and ${money(Math.max(0, t.shortGain))} held a year or less, after any losses on the other lots and this year's other sales.`
+    : t.total < -0.5 ? `It would lower this year's federal tax by about ${money(-t.total)}: a net loss cancels this year's other gains, then takes up to $3,000 off other income.${t.carry > 0.5 ? ` The other ${money(t.carry)} carries to next year.` : ""}`
+    : t.shortGain + t.longGain < 0 ? `No change this year: a net loss of ${money(-(t.shortGain + t.longGain))}, and your other income is already under your deductions.${t.carry > 0.5 ? ` ${money(t.carry)} carries to next year.` : ""}` : "No tax: nothing has gained."),
+    ui.h("p", { class: "muted small" }, `Gains held over a year are taxed at ${pct(t.gainsRate)} on your next dollar, those held a year or less at ${pct(t.marginal)}, like pay. Funds in a 401(k) or IRA are left out: selling inside them is not taxed.`));
+  if (d.harvest.length) {
+    taxCard.append(ui.h("p", {}, `Banking the loss on ${d.harvest.map((h) => `${h.symbol} (${money(h.loss)})`).join(", ")} would lower this year's federal tax by about ${money(d.harvestSaved)}${d.harvestCarry > 0.5 ? `; the other ${money(d.harvestCarry)} of loss carries to next year, where it can cancel future gains` : ""}. ${d.harvest.some((h) => h.kind === "coin") ? "Coins held directly are property, not securities, so as of 2026 the wash-sale rule does not stop you buying the same coin back at once; for a fund it does (wait 31 days)." : "For a fund, the wash-sale rule means waiting 31 days before buying it back."}`));
+    for (const h of d.harvest) for (const m of h.washedBy ?? []) taxCard.append(ui.h("p", { class: "small" }, m.bucket === "taxable"
+      ? `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} does not count now; it is added to that purchase's cost.`
+      : `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} is lost for good.`));
+  }
+  for (const w of d.waitLong) taxCard.append(ui.h("p", {}, `${w.symbol} bought ${shortDate(w.date)}: wait until ${shortDate(w.longOn)} to sell and its ${money(w.gain)} gain is taxed as a long-term gain instead of like pay, about ${money(w.saved)} less.`));
   root.append(taxCard);
 
   root.append(ui.card("Worth knowing", ui.h("ul", {},
     ui.h("li", {}, "Every sale, swap of one coin for another, or purchase paid in crypto is a sale for tax. Exchanges send a 1099-DA: gross proceeds for sales from 2025, and what you paid for coins bought from 2026."),
     ui.h("li", {}, "Coins on an exchange are not insured like a bank account; coins in your own wallet are lost with the recovery phrase."),
-    ui.h("li", {}, ui.h("span", {}, "Write down where the recovery phrase is kept, so your family can find it: "), ui.h("a", { href: "#/estate/digital" }, "Digital estate"), "."))));
+    ui.h("li", {}, "Write down where the recovery phrase is kept, so your family can find it: the Digital estate page below has a place for it."))));
 
   root.append(addForm(false));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/tax-lots" }, "Tax lots"))));
+  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/tax-lots" }, "Tax lots"), ui.h("a", { class: "btn secondary", href: "#/estate/digital" }, "Digital estate"))));
 
   // adding a coin: a holding in a crypto account (made if there is none), the account's balance kept equal to its coins
   function addForm(open) {

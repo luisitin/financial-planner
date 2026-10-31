@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, cryptoKind, STRESS_DROP, SHARE } from "./compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
-import { marginalRate, federalTax } from "../../../core/math/tax.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 
 const TODAY = "2026-10-30";
@@ -51,20 +49,40 @@ test("an old price is flagged, a stablecoin's is not", () => {
   assert.equal(d.staleCount, 1);
 });
 
-test("tax if sold: lot by lot, short against long; the loss to bank and the gain to wait on", () => {
-  const p = withCoins();
-  const d = compute(p, { today: TODAY });
-  const ti = taxInputs(p, { today: TODAY });
-  const marginal = Math.max(0.1, marginalRate(ti.inputs, ti.params));
-  const base = federalTax(ti.inputs, ti.params).totalTax;
-  const gainsRate = (federalTax({ ...ti.inputs, qualifiedIncome: ti.inputs.qualifiedIncome + 1000 }, ti.params).totalTax - base) / 1000;
+test("tax if sold: the federal tax with the lots sold less without; the loss to bank and the gain to wait on", () => {
+  // Ana and Bo file jointly in 2026: taxable income 126,580, in the 22% bracket and above the 98,900 top of the 0% band for
+  // long-term gains, AGI under the 250,000 line of the 3.8% tax
+  const d = compute(withCoins(), { today: TODAY });
   // BTC: 0.08 long (+5,740), 0.04 short (+1,820); ETH short (-1,500); IBIT long (+600); USDC long (0)
   near(d.tax.longGain, 0.08 * 98000 - 2100 + 600); near(d.tax.shortGain, 0.04 * 98000 - 2100 - 1500);
-  near(d.tax.total, d.tax.shortGain * marginal + d.tax.longGain * gainsRate);
-  assert.deepEqual(d.harvest.map((h) => h.symbol), ["ETH"]); near(d.harvest[0].saved, 1500 * marginal);
+  near(d.tax.marginal, 0.22, 1e-9); near(d.tax.gainsRate, 0.15, 1e-9);
+  near(d.tax.total, 320 * 0.22 + 6340 * 0.15);   // the short net 320 like pay, the long 6,340 at 15%: 1,021.40
+  assert.deepEqual(d.harvest.map((h) => h.symbol), ["ETH"]); near(d.harvest[0].saved, 1500 * 0.22); near(d.harvestSaved, 330);
   assert.equal(d.waitLong.length, 1); assert.equal(d.waitLong[0].symbol, "BTC");
   assert.equal(d.waitLong[0].longOn, "2026-12-05", "the day after a year is up");
-  near(d.waitLong[0].saved, 1820 * (marginal - gainsRate));
+  near(d.waitLong[0].saved, 1820 * (0.22 - 0.15));
+});
+
+test("a big loss: only $3,000 of a net loss comes off pay this year, the rest carries (IRC 1211(b), 1212(b))", () => {
+  const p = withCoins();
+  p.holdings.find((h) => h.symbol === "ETH").lots[0].cost = 16300; p.holdings.find((h) => h.symbol === "ETH").costBasis = 16300;   // an 11,500 short-term loss
+  const d = compute(p, { today: TODAY });
+  // banked alone: 3,000 off pay at 22% = 660 this year; 8,500 carries to next year
+  near(d.harvestSaved, 660); near(d.harvestCarry, 8500);
+  // sold with everything: the short loss first cancels the short gain (1,820), then the long gains (6,340); 3,340 net loss: 3,000 off pay, 340 carries
+  near(d.tax.total, -3000 * 0.22); near(d.tax.carry, 340);
+});
+
+test("a fund bought again within 30 days, an IRA included, cancels the loss on that many shares; a coin does not (IRC 1091; Rev. Rul. 2008-5)", () => {
+  const p = withCoins();
+  const ibit = p.holdings.find((h) => h.symbol === "IBIT"); ibit.costBasis = 3200; ibit.lots[0].cost = 3200;   // 40 shares at a 1,000 loss
+  p.accounts.push({ id: "a-ira2", name: "IRA", type: "ira", balance: 550, history: [] });
+  p.holdings.push({ id: "c5", accountId: "a-ira2", symbol: "IBIT", shares: 10, price: 55, priceAsOf: ago(1), costBasis: 560, lots: [{ id: "l5", date: ago(10), shares: 10, cost: 560 }] });
+  const d = compute(p, { today: TODAY });
+  const h = d.harvest.find((x) => x.symbol === "IBIT");
+  near(h.disallowed, 250); near(h.allowed, 750); assert.equal(h.washedBy[0].shares, 10);   // 10 of the 40 shares
+  assert.equal(d.harvest.find((x) => x.symbol === "ETH").disallowed, 0);
+  near(d.harvestDisallowed, 250);
 });
 
 test("a fund in a retirement account is counted but never taxed", () => {

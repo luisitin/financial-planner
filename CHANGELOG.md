@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Crypto: the tax if you sold today, the saving from banking a loss and the saving from waiting for a year are now worked through the federal estimate, so a loss first cancels this year's gains and only $3,000 of it comes off pay (the rest carries to next year). A bitcoin or ether fund bought again within 30 days, in an IRA too, now cancels the loss on that many shares, and the page says which purchase did it.
 - [builder:claude-b] HSA and FSA, Federal estimate, Paycheck and Contribution limits: each of you can have your own health FSA, up to the limit each (the HSA and FSA page asks for the second person's election). Each comes off that person's own pay. The FSA's tax saved now leaves out any amount over the limit, and its payroll tax saving stops at the Social Security pay limit.
 - [builder:claude-b] Federal estimate, Capital gains and the Tax report: the loss carried to next year follows the IRS carryover worksheet, so in a year when your income is under your deductions the whole loss carries (it showed only the part over $3,000).
 - [builder:claude-b] Federal estimate and HSA and FSA: wages typed from a W-2 already leave out the HSA money taken from pay, so the estimate no longer takes it off a second time, and the HSA page's tax saved is the same whether the wages are typed or come from the Income page.
