@@ -215,7 +215,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 |---|---|---|---|---|---|
 | `ai/assistant` | Ask the plan | usable | 0 | Lets you chat with an AI assistant that has a summary of your plan in front of it. | Maybe assistant |
 | `ai/explain` | Explain this page | planned | 10 | Adds a button to every page that sends its numbers to the AI and gets back a plain-language explanation. | - |
-| `ai/categorizer` | Categoriser | planned | 3 | Categorises transactions in bulk with the AI, shows how confident it is about each and gives you a table to review. | - |
+| `ai/categorizer` | Categoriser | usable | 3 | Categorises transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed. | - |
 | `ai/reader` | Document reader | usable | 8 | Paste a pay stub, a statement, a Social Security statement or an advisor's plan: the figures it holds and what each would change, accepted one by one. | pdf.js |
 | `ai/critic` | Plan critic | planned | 10 | Asks the AI to list the gaps and risks it sees in your plan, each linked to the page where you can fix it. | - |
 | `ai/glossary` | Glossary | usable | 10 | Explains every money word used in the app in plain words, with an example and the pages that use it, and lets you search for any of them. | - |

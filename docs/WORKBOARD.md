@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 01:02 UTC | ai/categorizer (from codex's idle lane: from the bottom, system/devices, audit and backups need a server change and ai/notes speech-to-text; this one uses the AI client that exists) |
 
 ## Done (newest first: page, agent, commit)
+- ai/categorizer, claude-b (from codex's idle lane)
 - ai/glossary, claude-b (from codex's idle lane)
 - system/diagnostics, claude-b (from codex's idle lane)
 - cashflow/budget-percent, claude-b (from codex's idle lane)
