@@ -83,7 +83,7 @@ export function frame(ctx, page) {
     return {
       before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "card gb-root gb-quick", "aria-label": "Quick answers" },
         ui.h("a", { href: "#/overview/quick", class: "gb-back" }, "‹ Quick answers"),
-        q ? ui.h("p", { class: "gb-task" }, ui.h("b", {}, q.title), " Type your own numbers below.") : null)),
+        q ? ui.h("p", { class: "gb-task" }, ui.h("b", {}, q.title), ` ${q.hint ?? "Type your own numbers below."}`) : null)),
       after: ui.h("section", { class: "card gn-root", "aria-labelledby": "gn-q-h" },
         ui.h("h2", { id: "gn-q-h" }, "Another question?"),
         ui.h("div", { class: "gn-main" }, ui.h("a", { href: "#/overview/quick", class: "btn secondary" }, "Back to quick answers"))),
@@ -94,15 +94,6 @@ export function frame(ctx, page) {
   const where = step.optional ? "Extra step" : `Step ${bar.index} of ${bar.total}`;
   const stepHrefFull = `#/${bar.viaAlt && step.alt ? step.alt.page : step.page}?guide=${j.id}&step=${step.key}`;
 
-  if (bar.mode === "compact") {
-    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": `Guide: ${j.title}` },
-      ui.h("span", {}, `Following: ${j.title}`),
-      ui.h("a", { href: stepHrefFull }, `${where} ›`, ui.h("span", { class: "vh" }, ` of ${j.title}: show what to do here`)))), after: null };
-  }
-
-  // ---- full guide mode
-  // remembered for one page, in case this page's own link or button moves on to a page that is not a step
-  writeGuideTrail({ journey: j.id, title: j.title, page: key, href: stepHrefFull });
   // typing that is not saved yet: each control's value when first focused, compared when a guide link is tapped
   const starts = new WeakMap();
   page.addEventListener("focusin", (e) => { const c = e.target; if (c?.matches?.("input, select, textarea") && !starts.has(c)) starts.set(c, controlValue(c)); });
@@ -118,6 +109,17 @@ export function frame(ctx, page) {
     ctx.announce?.(WARN);
     return false;
   };
+
+  if (bar.mode === "compact") {
+    // its link redraws this page with the guide's bar, so it is guarded like the bar's own links
+    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": `Guide: ${j.title}` },
+      ui.h("span", {}, `Following: ${j.title}`),
+      ui.h("a", { href: stepHrefFull, onClick: (e) => guard(e) }, `${where} ›`, ui.h("span", { class: "vh" }, ` of ${j.title}: show what to do here`))), slot()), after: null };
+  }
+
+  // ---- full guide mode
+  // remembered for one page, in case this page's own link or button moves on to a page that is not a step
+  writeGuideTrail({ journey: j.id, title: j.title, page: key, href: stepHrefFull });
   const blocked = !!bar.blockedBy && step.state === "todo";
   const isLooked = step.looked && step.state === "todo" && !blocked;
   const touch = () => change(ctx, (q) => touchGuide(q, today));
@@ -147,7 +149,7 @@ export function frame(ctx, page) {
     ui.h("nav", { class: "card gb-root", "aria-label": `Guide: ${j.title}` },
       ui.h("div", { class: "gb-head" },
         ui.h("span", { class: "gb-name" }, j.title),
-        nav(bar.guideHref, [allLabel, ui.h("span", { class: "vh" }, ` of ${j.title}`)], "gb-all", tickLooked)),
+        nav(bar.guideHref, ["All steps ›", ui.h("span", { class: "vh" }, ` of ${j.title}`)], "gb-all", tickLooked)),
       ui.h("div", { class: "gb-sub" }, step.optional ? `Extra step · ${bar.doneCount} of ${bar.total} main steps done` : `${where} · ${bar.doneCount} done`),
       ui.h("div", { class: "gb-track", "aria-hidden": "true" }, ui.h("span", { style: { width: `${pct}%` } })),
       task, barNext, slot()));
@@ -157,7 +159,7 @@ export function frame(ctx, page) {
     : step.state === "none" ? [noneSaid, " ", undo()]
       : step.state === "later" ? ["Skipped for now. ", undo()]
         : blocked ? [needLine]
-          : isLooked && !step.check ? ["Have a look above. When you are done, tap the button below; that counts this step as done."]
+          : isLooked && !step.hasCheck ? ["Have a look above. When you are done, tap the button below; that counts this step as done."]
             : [ui.h("b", {}, "Not done yet: "), step.doneWhen ?? "save what this page asks for."];
   const skip = () => { if (step.state === "todo" && change(ctx, (q) => markLater(q, j.id, step.key, today))) pending = `Skipped for now: ${lowerFirst(step.short)}. It stays on your list under All steps.`; else touch(); };
   const main = [];
@@ -181,6 +183,6 @@ export function frame(ctx, page) {
     slot(),
     ui.h("p", { class: "gn-state" }, stateLine),
     main.length ? ui.h("div", { class: "gn-main" }, main) : null,
-    ui.h("div", { class: "gn-links" }, nav(bar.guideHref, [allLabel, ui.h("span", { class: "vh" }, ` of ${j.title}`)], null, tickLooked), help));
+    ui.h("div", { class: "gn-links" }, main.some((el) => el.getAttribute?.("href") === bar.guideHref) ? ui.h("span", {}) : nav(bar.guideHref, [allLabel, ui.h("span", { class: "vh" }, ` of ${j.title}`)], null, tickLooked), help));
   return { before, after };
 }

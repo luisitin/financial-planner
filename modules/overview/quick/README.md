@@ -24,7 +24,8 @@ Rows open `#/<key>?from=quick`, so the page shows a "‹ Quick answers" bar on t
   up" into set-up, so Capital gains, Crypto, Trips, Vehicles, Rental, Federal estimate and similar stay in their guides'
   "More on this" folds and in the menu. Goals itself is left out for the same reason: its answer appears only after
   Add, which saves a goal.
-- The bar on a page opened from here repeats the question ("How much home can I afford? Type your own numbers below."). The pages that open with example figures already say so in their own words, so the bar does not repeat it.
+- The bar on a page opened from here repeats the question ("How much home can I afford? Type your own numbers below.";
+  a question's `hint` replaces the second sentence where there is nothing to type, as on Market risk). The pages that open with example figures already say so in their own words, so the bar does not repeat it.
 - Three questions need the plan's own numbers (will the money last, when am I debt-free, this year's tax). They are
   listed honestly under "Questions that need your numbers first" and open the matching step-by-step guide.
 

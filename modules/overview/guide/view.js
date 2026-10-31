@@ -111,7 +111,7 @@ function renderOne(wrap, ctx, id) {
     return ui.h("li", { class: cls },
       ui.h("a", { href: st.href, class: "step-link", "aria-current": isNext ? "step" : null, onClick: () => follow() },
         ui.h("span", { class: "num", "aria-hidden": "true" }, num),
-        ui.h("span", { class: "lbl" }, st.title, ui.h("span", { class: "vh" }, ` ${isNext ? "Next step." : STATE_WORDS[st.state]}`), hint ? ui.h("span", { class: "hint" }, hint) : null),
+        ui.h("span", { class: "lbl" }, st.title, ui.h("span", { class: "vh" }, ` ${isNext ? "Next step." : status ? "" : STATE_WORDS[st.state]}`), hint ? ui.h("span", { class: "hint" }, hint) : null),
         status ? ui.h("span", { class: "st" }, status) : null,
         ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
   };

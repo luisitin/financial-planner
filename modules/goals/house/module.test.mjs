@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, monthlyCost, priceFor, solveMonths, DEFAULTS, FRONT, BACK } from "./compute.js";
+import { compute, monthlyCost, priceFor, solveMonths, DEFAULTS, FRONT, BACK, isHouseGoal } from "./compute.js";
 import { pmt, pmtToReach } from "../../../core/math/finance.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -31,6 +31,12 @@ test("the family: the lenders' limits on their income and other debts, the cash 
   assert.equal(d.monthsToGo, null);
 });
 
+test("the house goal is a down payment or a home, never work on a home you have (Make it a goal must not overwrite it)", () => {
+  for (const n of ["House down payment", "New home fund", "Saving for a house", "Home", "Down payment"]) assert.equal(isHouseGoal({ name: n }), true, n);
+  for (const n of ["Home repairs", "Home office", "Homeschool", "Home insurance", "House renovation", "Car", ""]) assert.equal(isHouseGoal({ name: n }), false, n);
+  const d = compute(withHouse({ price: 400000 }, [{ id: "r", name: "Home repairs", target: 5000, targetDate: "2027-01-01", saved: 1000, monthly: 100, priority: 2, fundedBy: [] }]), { today: TODAY });
+  assert.equal(d.goal, null, "a repairs goal is not offered for update");
+});
 test("a house goal on Goals supplies what is set aside and saved; entered figures win; warnings", () => {
   const goals = [{ id: "g", name: "New home fund", target: 100000, targetDate: "2030-01-01", saved: 20000, monthly: 2000, priority: 2, fundedBy: [] }];
   const d = compute(withHouse({ price: 400000 }, goals), { today: TODAY });

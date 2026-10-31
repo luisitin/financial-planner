@@ -4,6 +4,7 @@
 //   icon     one emoji for the row (the pages' own icons repeat: three goals pages share 🎯)
 //   title    the question, in the reader's words, ending in "?"
 //   line     one sentence: what the answer holds
+//   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
 export const MOST_ASKED = [
@@ -13,12 +14,12 @@ export const MOST_ASKED = [
   { key: "property/purchase", icon: "🛋️", title: "Save up or pay over time?", line: "A sofa, a laptop, a ring: what saving, a payment plan or paying now each costs." },
   { key: "insurance/health", icon: "🩺", title: "Which health plan costs least?", line: "Premiums plus your share of the bills, in a quiet, a usual and a bad year." },
   { key: "goals/charitable", icon: "🎁", title: "What does my giving save in tax?", line: "What a gift really costs, and how to give the same for less." },
-  { key: "investments/backtest", icon: "📈", title: "How has a mix of stocks and bonds done?", line: "Any mix run through the years since 1871: growth, worst years, deepest fall." },
+  { key: "investments/backtest", icon: "📈", title: "How has a mix of stocks and bonds done?", line: "Any mix run through the years since 1871: growth, worst years, deepest fall.", hint: "Pick two mixes below." },
   { key: "property/renovation", icon: "🔨", title: "Is this home project worth it?", line: "What it adds to the home's value and the cheapest way to pay for it." },
 ];
 export const MORE = [
   { key: "career/offer-compare", icon: "💼", title: "Which job offer pays more?", line: "Pay, bonus, stock, benefits and the commute side by side, after tax." },
-  { key: "investments/risk", icon: "🎢", title: "How much could my savings drop in a bad year?", line: "The worst year and the deepest fall that history has dealt the mix of stocks and bonds you pick." },
+  { key: "investments/risk", icon: "🎢", title: "How much could my savings drop in a bad year?", line: "The worst year and the deepest fall since 1871 for your target mix of stocks and bonds, and for the usual mixes.", hint: "The answer is below; nothing to type." },
   { key: "insurance/term-vs-permanent", icon: "🛡️", title: "Whole life or term life insurance?", line: "Whole life against cheaper term insurance plus investing the difference, using the prices you were quoted." },
 ];
 /** Questions whose answer needs your own numbers first: they open the step-by-step guide that gathers them. */

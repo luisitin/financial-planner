@@ -88,7 +88,8 @@ test("done checks: a 0% loan counts as detailed; Home repairs is not a down paym
   assert.equal(houseGoal(g("Home repairs", "🏠")), false);
   assert.equal(houseGoal(g("Homeschool", "🏠")), false);
   assert.equal(houseGoal(g("Our new home", "🏠")), true);
-  assert.equal(houseGoal(g("Home", "🎯")), false);
+  assert.equal(houseGoal(g("Home", "🎯")), true, "by name, as Home affordability finds it");
+  assert.equal(houseGoal(g("Home office", "🏠")), false);
   assert.equal(emergencyGoal(g("Rainy day", "🎯")), true);
   assert.equal(emergencyGoal(g("Anything", "🛟")), true);
   assert.equal(emergencyGoal(g("Car", "🚗")), false);
@@ -192,9 +193,25 @@ test("neighbours: no previous on step 1; next jumps done steps; wraps to an earl
 test("neighbours: Skip goes to a step that can be done now; one that needs the skipped step only when nothing else is left", () => {
   const home = journeyStatus(J("home"), empty());
   assert.equal(st(home, "lenders").blockedBy.key, "pay");
-  assert.equal(neighbours(home, st(home, "pay")).next.key, "rent-buy", "not lenders, which needs pay");
+  assert.equal(neighbours(home, st(home, "afford")).next.key, "rent-buy", "not lenders (needs pay) or the goal (needs afford)");
   const debt = journeyStatus(J("debt"), empty());
   assert.equal(neighbours(debt, st(debt, "add")).next.key, "rates", "every later step needs add: the next in order");
+});
+test("Do step N never points at a step waiting on a skipped one while another can be done; Skip prefers a free step before it to a blocked one after", () => {
+  const p = empty();
+  markLater(p, "debt", "add", "2026-10-31");
+  assert.equal(journeyStatus(J("debt"), p).next.key, "add", "every other step needs add: back to the skipped one");
+  const r = family(); delete r.expenses; r.expenses = []; r.retirement = { ...(r.retirement ?? {}), spendingMonthly: null };
+  markLater(r, "retire", "spend", "2026-10-31");
+  let s = journeyStatus(J("retire"), r);
+  assert.equal(st(s, "chance").blockedBy.key, "spend");
+  assert.equal(s.next.key, "pension", "a free step before the skipped one");
+  const nb = neighbours(s, st(s, "pension"));
+  assert.deepEqual([nb.next.key, nb.wrapped], ["spend", true], "not chance, which needs spend: back to step 3");
+  assert.equal(st(s, "estimate"), undefined);
+  const t = journeyStatus(J("taxes"), empty());
+  assert.equal(st(t, "estimate").hasCheck, true, "a look-only step that can also be saved says so");
+  assert.equal(st(t, "room").hasCheck, false);
 });
 test("the retirement and protect guides do not finish before their pages can answer", () => {
   const p = empty();
@@ -211,7 +228,7 @@ test("the retirement and protect guides do not finish before their pages can ans
   assert.equal(st(pr, "people").state, "todo", "an adult needs a birth date");
   assert.deepEqual(st(pr, "life").blockedBy.key, "people");
 });
-test("isDirty: a control on the page whose value changed since it was focused; gone, unchanged, search and marked controls do not count", () => {
+test("isDirty: a typed box on the page whose value changed since it was focused; gone, unchanged, choice lists, tick boxes, search and marked controls do not count", () => {
   const c = (o) => ({ type: "text", value: "", isConnected: true, ...o });
   const a = c({}), b = c({ type: "checkbox", checked: false }), gone = c({ isConnected: false }), find = c({ type: "search" }), filt = c({ dataset: { nodirty: "" } });
   const starts = new Map([[a, ""], [b, false], [gone, ""], [find, ""], [filt, "x"]]);
@@ -219,9 +236,13 @@ test("isDirty: a control on the page whose value changed since it was focused; g
   gone.value = "typed"; find.value = "typed"; filt.value = "y";
   assert.equal(isDirty([a, b, gone, find, filt], starts), false);
   b.checked = true;
+  assert.equal(isDirty([a, b], starts), false, "a tick box is not typing");
+  const sel = c({ type: "select-one", value: "x" }); starts.set(sel, "x"); sel.value = "y";
+  assert.equal(isDirty([sel], starts), false, "a choice list (a filter, an account picker) is not typing");
+  a.value = "250";
   assert.equal(isDirty([a, b], starts), true);
-  b.checked = false; a.value = "250";
-  assert.equal(isDirty([a, b], starts), true);
+  const t = c({ type: "textarea", value: "" }); starts.set(t, ""); t.value = "notes";
+  assert.equal(isDirty([t], starts), true);
   assert.equal(isDirty([c({ value: "250" })], starts), false, "never focused: not typed here");
 });
 test("barFor: nothing without a followed guide; guide mode only for the followed guide; compact elsewhere; quick", () => {
@@ -235,7 +256,7 @@ test("barFor: nothing without a followed guide; guide mode only for the followed
   const b = barFor(p, { page: "balance/liabilities", query: q });
   assert.equal(b.mode, "guide"); assert.equal(b.step.key, "rates"); assert.equal(b.index, 2); assert.equal(b.total, 3); assert.equal(b.state, "done");
   assert.equal(b.next.key, "order");
-  assert.equal(JSON.stringify(b).includes("function"), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(b)), b, "plain data only");
   assert.equal(barFor(p, { page: "balance/liabilities", query: { guide: "budget", step: "rates" } }), null, "a guide that is not followed is ignored, and a done step reached another way shows nothing");
   const c = barFor(p, { page: "debt/payoff" });
   assert.equal(c.mode, "compact"); assert.equal(c.step.key, "order");

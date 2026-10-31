@@ -11,7 +11,16 @@ import { monthsBetween } from "../../../core/math/dates.js";
 export const DEFAULTS = { price: 400000, downShare: 0.2, closingShare: 0.03, rate: 0.065, termYears: 30, taxRate: 0.011, insuranceRate: 0.0035, hoaMonthly: 0, reserveMonths: 2, saved: null, monthly: null, targetDate: "" };
 /** The lenders' ratios: housing up to 28% of gross monthly income (front end), all debt payments up to 36% (back end). */
 export const FRONT = 0.28, BACK = 0.36;
-const HOUSE = /house|home|down ?payment/i;
+/**
+ * The house goal on Goals: a down payment, or a goal named for a house or home, but never one for work on a home you
+ * already have ("Home repairs", "Home office", "Home insurance"), which "Make it a goal" must not overwrite. The
+ * step-by-step guide's "Set down payment goal" step uses the same test, so the page and the step always agree.
+ */
+export const isHouseGoal = (g) => {
+  const n = g?.name ?? "";
+  if (/down ?payment/i.test(n)) return true;
+  return /\b(house|home)\b/i.test(n) && !/\b(house|home) ?(repairs?|office|improvements?|renovations?|insurance|warranty|maintenance|upkeep|school(ing)?)\b/i.test(n);
+};
 
 /** The monthly cost of a home at a price: principal and interest, property tax, insurance, HOA. */
 export function monthlyCost(price, x) {
@@ -52,7 +61,7 @@ export function compute(plan, params = {}) {
   cash.total = cash.down + cash.closing + cash.reserves;
   // what is set aside: the figure entered, else the house goal on Goals
   const g = computeGoals(plan, { today });
-  const goal = g.goals.find((y) => HOUSE.test(y.name ?? "")) ?? null;
+  const goal = g.goals.find(isHouseGoal) ?? null;
   const saved = x.saved !== null ? x.saved : goal ? goal.funded : 0;
   const monthlySaving = x.monthly !== null ? x.monthly : goal ? Number(goal.monthly) || 0 : 0;
   const rate = Number(plan.assumptions?.returnCash ?? 0.02) / 12;

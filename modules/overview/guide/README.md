@@ -29,11 +29,12 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
 - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
   question>" (session storage, wrapped in try/catch).
 - Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,
-  Compare...) first, or tap again to leave without it"); a second tap goes. A control counts when it is still on the
-  page and its value differs from the one it had when first focused (`act.js` `isDirty`), inside a `<form>` or not
-  (Payoff, Social Security and Beneficiaries build theirs without one). A control that saves on change makes the
-  shell redraw the page, which replaces it, so filters never count; nor do a cancelled form, search boxes, file
-  pickers or anything marked `data-nodirty`.
+  Compare...) first, or tap again to leave without it"); a second tap goes. A box counts when it is typed into, still on
+  the page, and its value differs from the one it had when first focused (`act.js` `isDirty`), inside a `<form>` or
+  not (Payoff, Social Security and Beneficiaries build theirs without one). A box that saves on change makes the shell
+  redraw the page, which replaces it; a cancelled form is gone too. Choice lists and tick boxes never count (pages use
+  them as filters, like Import's account picker, and one changed by mistake costs nothing to redo), nor do search
+  boxes, file pickers or anything marked `data-nodirty`. The compact line's link is guarded the same way.
 - When a step page's own link or button moves on to a page that is not a step (Import goes to Categorize after a bank
   file), that next page shows "‹ Back to the guide: <name>" for one page, back to the step, which then says it is done.
 
@@ -59,8 +60,10 @@ plan to the PC and leaves a backup copy there.
   and the guide then stays "Done" if new data reopens a step.
 - **Started:** the person started it or marked a step; data alone never makes a guide "in progress". A guide not
   started says "About N minutes. 2 of 5 steps are already in your plan." instead.
-- **Next:** the first numbered step still to do, else the first skipped one. On a step page, Next goes to the first
-  open step after this one (numbered, then extras), else wraps to an earlier one ("Back to step 2: ...").
+- **Next:** the first numbered step still to do that can be done now, else the first skipped one that can, else
+  the first to do or skipped at all ("Do step N" never points at a step waiting on a skipped one while another is
+  free). On a step page, Next goes to the first open step that can be done now, after this one, else before it ("Back
+  to step 3: ..."); a step that needs an earlier one only when nothing else is left.
 - **Which step a page is:** the step named in the address; else the first open step on that page; else one reached by
   its alternative page; else the first step on that page (Buy a home uses Home affordability twice: "See what you
   can afford", then "Set down payment goal").
@@ -83,7 +86,7 @@ Done checks in words (`journeys.js`):
 | Build my whole plan | accounts, people, income, expenses, goals, assumptions | the dashboard's own six checks (`dashboard/compute.js`), so the count is always the dashboard's |
 | Pay off what I owe | add, rates, order, [cards, student, one-loan] | a liability account; every loan and card with a balance has its details saved, a 0% one too (Liabilities' own `detail`); a payoff order saved; [looked / saved] |
 | Spend less and save more | income, accounts, spending, budget, cushion, [sort] | an income; a checking, savings, cash or card account; an expense or a bank row; an envelope or a 50/30/20 split; a goal named emergency / rainy day / cushion or with the 🛟 icon (Emergency fund's own test); [90% of bank rows sorted, or looked] |
-| Buy a home | afford, pay, lenders, goal, [rent-buy, fit] | Home affordability's inputs saved; an income; looked; a goal named "down payment" (what its "Make it a goal" saves) or a 🏠 goal named for the home, never "Home repairs"; [saved or looked; looked] |
+| Buy a home | pay, afford, lenders, goal, [rent-buy, fit] | an income (first, so Home affordability can show a price range at once); its inputs saved; looked; the house goal by Home affordability's own test (`goals/house` `isHouseGoal`: a down payment or a home, never "Home repairs"); [saved or looked; looked] |
 | Plan my retirement | people, savings, spend, ss, saving, pension, chance | every adult has a birth date; a savings or retirement account (not a loan); retirement spending saved, or bills on Expenses (its other page); a Social Security amount or record, or "won't get it"; a contribution, or "not saving now"; a pension, or "don't have one"; looked, once people, savings and spending are in (the chance page cannot answer before) |
 | Sort out my taxes | people, income, estimate, paychecks, state, [room] | a person; an income or typed wages; tax withheld typed, or looked; one paycheck's tax, or "none taken"; a state; [looked] |
 | Protect my family | people, policies, savings, spend, life, papers, contacts, [who-gets] | an adult with a birth date; a policy, or "none"; an account; an expense (Life insurance needs works from the retirement projection's inputs: accounts, spending, adults' birth dates, so the guide gathers them); looked, once those are in; any paper noted (even "not made yet"), or "none of these yet"; a contact; [a beneficiary saved] |
@@ -96,7 +99,13 @@ finding: 24 of 39 findings held and are fixed. Among them: a guide could never c
 pages without a `<form>` was not protected; the retirement and protect guides could "finish" with their answer pages
 still saying they needed more; Skip could land on a step needing the skipped one; a blocked look-only step could be
 ticked; a finished step's bar kept its instruction; plus wording (each "does not apply" says what was said; Quick
-answers' rows; "a baby or a move" first in More guides).
+answers' rows; "a baby or a move" first in More guides). A second round (regressions, flows, copy; then
+skeptics) confirmed 16 more, all fixed: "Do step N" could point at a step waiting on a skipped one; Skip could prefer
+a blocked step after to a free one before; the compact link was not guarded; Import's account picker set off the
+typing warning; the finished guide repeated its link four times; five asks named buttons that were folded away or did
+not exist (Federal estimate, Consolidation, Student loans, State, People's filing choice that saves at once); Buy a
+home asked for the price before the pay; the house page could overwrite a "Home repairs" goal (fixed there, shared
+test).
 
 ## Choices made (no owner input; noted per the builder instructions)
 The spec (2026-10-31) was checked by three critics before building (an engineer against the code, a first-time user of

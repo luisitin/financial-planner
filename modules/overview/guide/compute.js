@@ -16,7 +16,7 @@ export const guideHref = (id) => `#/overview/guide/${id}`;
 /** href for a step: "#/<page>?guide=<id>&step=<key>" (ids and keys are kebab-case: nothing to escape). */
 export const stepHref = (journeyId, step, viaAlt = false) => `#/${viaAlt && step.alt ? step.alt.page : step.page}?guide=${journeyId}&step=${step.key}`;
 const progressOf = (plan, id) => plan?.guide?.journeys?.[id] ?? {};
-const plain = (step) => { if (!step) return null; const { check, show, ...rest } = step; return rest; };
+const plain = (step) => { if (!step) return null; const { check, show, ...rest } = step; return { ...rest, hasCheck: !!check }; };
 const safe = (fn, plan) => { try { return !!fn(plan); } catch { return false; } };
 
 /** Steps that count for this plan: an extra step whose show() is false is hidden, and so is an extra whose page is off on this device. Numbered (required) steps always count. */
@@ -50,7 +50,9 @@ export function journeyStatus(journey, plan, { off = [] } = {}) {
   const doneCount = req.filter((s) => finishedState(s.state)).length;
   const complete = doneCount === req.length;
   const marks = ["done", "none", "later"].some((k) => Object.keys(prog[k] ?? {}).length > 0);
-  const next = req.find((s) => s.state === "todo") ?? req.find((s) => s.state === "later") ?? null;
+  // the next step to do: one that can be done now first (never one waiting on a skipped step while another is free)
+  const free = (s) => !s.blockedBy;
+  const next = req.find((s) => s.state === "todo" && free(s)) ?? req.find((s) => s.state === "later" && free(s)) ?? req.find((s) => s.state === "todo") ?? req.find((s) => s.state === "later") ?? null;
   return {
     id: journey.id, title: journey.title, icon: journey.icon, line: journey.line, minutes: journey.minutes, haveReady: journey.haveReady ?? null,
     steps, doneCount, total: req.length, complete, finished: complete || !!prog.finishedAt,
@@ -77,15 +79,14 @@ export function stepForPage(status, pageKey, stepKey) {
   return pick ? { step: pick, viaAlt: !on(pick) } : null;
 }
 
-/** prev: the step before in order (numbered, then extras). next: the first step after this one still to do or skipped (one that needs an earlier step only when no other is left), else the first such before it (wrapped), else null. */
+/** prev: the step before in order (numbered, then extras). next: the first open step (to do or skipped) that can be done now, after this one, else before it (wrapped); one that needs an earlier step only when no other is left; else null. */
 export function neighbours(status, step) {
   const i = status.steps.findIndex((s) => s.key === step.key);
   const open = (s) => s.state === "todo" || s.state === "later";
   const ready = (s) => open(s) && !s.blockedBy;   // a step that needs an earlier one only when nothing else is left
-  const pick = (list) => list.find(ready) ?? list.find(open);
-  const after = pick(status.steps.slice(i + 1)), before = pick(status.steps.slice(0, Math.max(0, i)));
-  const next = after ?? before ?? null;
-  return { prev: i > 0 ? status.steps[i - 1] : null, next, wrapped: !after && !!before };
+  const after = status.steps.slice(i + 1), before = status.steps.slice(0, Math.max(0, i));
+  const next = after.find(ready) ?? before.find(ready) ?? after.find(open) ?? before.find(open) ?? null;
+  return { prev: i > 0 ? status.steps[i - 1] : null, next, wrapped: !!next && before.includes(next) };
 }
 
 const daysBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
