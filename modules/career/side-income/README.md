@@ -42,9 +42,10 @@
   side income alone.
 - **Forms** (`data/rules.js`, 2026): clients send a 1099-NEC from $2,000 a year (IRC 6041 as amended by P.L. 119-21
   §70433; $600 before 2026; indexed from 2027); payment apps and marketplaces send a 1099-K over $20,000 and more than
-  200 payments (IRC 6050W(e) as restored by §70432, third-party settlement organizations only); card processors report
-  card sales of any amount. Income tax applies to all of the profit; self-employment tax starts once 92.35% of the
-  year's profit reaches $400 (IRC 1402(b), 6017), about $433 of profit. A year past the table shows the latest rules,
+  200 payments (IRC 6050W(e) as restored by §70432, third-party settlement organizations only; IRS FS-2025-08 with
+  IR-2025-107); card processors report card sales of any amount. Income tax applies to all of the profit;
+  self-employment tax starts once 92.35% of the year's profit (IRC 1402(a)(12); Schedule SE line 4a) reaches $400
+  (IRC 1402(b), 6017), about $433 of profit. A year past the table shows the latest rules,
   labelled as such.
 - **Mileage**: 72.5 cents a business mile from 1 January 2026 (IRS Notice 2026-10), 76 cents from 1 July 2026
   (Announcement 2026-11); 70 cents in 2025 (Notice 2025-5).

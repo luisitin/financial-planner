@@ -18,8 +18,9 @@ export const MAX_OFFERS = 3;
 export const PAYROLL = { ss: 0.062, medicare: 0.0145, extraMedicare: 0.009 };
 /**
  * Starting values a blank field falls back to (offers take the job now's). Days off: the private-industry average after a
- * year of service, 11 paid vacation days (BLS National Compensation Survey, March 2026) and 8 paid holidays (2025);
- * hours and office days are plain examples, said so on the form.
+ * year of service for workers who get paid time off, 11 paid vacation days (BLS National Compensation Survey, Employee
+ * Benefits in the United States, March 2026) and 8 paid holidays (2025; BLS The Economics Daily, 10 Feb 2026); hours
+ * and office days are plain examples, said so on the form.
  */
 export const DEFAULTS = { years: 4, hoursWeek: 40, ptoDays: 19, officeDays: 5 };
 

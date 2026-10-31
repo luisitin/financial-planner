@@ -66,17 +66,22 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   year until the tax-filing deadline; the owner's own part in its first year by the April deadline (IRC 401(b)(2),
   SECURE 2.0 section 317). SIMPLE IRA: pay = 92.35% of profit before any
   contribution (Schedule SE line 4); deferral = min(pay, the limit + the catch-up, the 402(g) room left + the
-  catch-up), with the higher limits of a business with 25 or fewer employees (2026: $18,100 and $3,850 from 50; 2025:
-  $17,600 and $3,850; $5,250 from 60 to 63; IRC 408(p)(2)(E)(i)(I), Notice 2025-67); the match = the deferral, at most
-  3% of pay; the higher limits need no 401(k) or other qualified plan for the same people in the three years before
+  catch-up), with the higher limits of a business with no more than 25 employees paid $5,000 or more the year before
+  (2026: $18,100 and $3,850 from 50; 2025: $17,600 and $3,850; $5,250 from 60 to 63; IRC 408(p)(2)(E)(i)(I), Notice
+  2025-67). The catch-up there is 110% of 2024's $3,500 (IRC 414(v)(2)(B)(iii)), the indexed $2,500 otherwise
+  ((B)(ii)); from 60 to 63 the greater of $5,000 or 150% of 2025's ((E)(ii)). The match = the deferral, at most 3% of
+  pay (IRC 408(p)(2)(A)(iii), (C)(ii)(I)); an employer may choose as little as 1% in at most 2 years out of 5
+  ((C)(ii)(II)), which the page does not model. The higher limits need no 401(k) or other qualified plan for the same people in the three years before
   the SIMPLE IRA's first year (408(p)(2)(E)(iv)) and a plan document that allows them, and the 60-to-63 catch-up
   replaces the higher-tier one, never both (Treas. Reg. 1.414(v)-1, TD 10033). Catch-ups go by the age reached by
-  December 31. A new SIMPLE IRA must be set up by October 1 for the year:
-  after that the row says it is for next year and counts no saving. The tax each saves = the sole proprietor's taxes
+  December 31. A new SIMPLE IRA must be set up by October 1 for the year, for a business that never had one (one
+  that had one before can start a new one only on January 1, and a business that begins after October 1 sets one up
+  as soon as it can; IRS, "SIMPLE IRA plan", reviewed 2 Apr 2026, read 2026-10-31): after October 1 the row says it is
+  for next year and counts no saving. The tax each saves = the sole proprietor's taxes
   again with the contribution off income, off the health-insurance limit and off the 20% deduction's base, less with.
   "Most room" is named only when one plan has strictly more than the others.
 - **The 20% deduction's line**: above $403,500 joint / $201,750 others / $201,775 separate of taxable income before it
-  (2026, Rev. Proc. 2025-32 section 4.26; 2025: $394,600 joint / $197,300 others, Rev. Proc. 2024-40) its wage and
+  (2026, Rev. Proc. 2025-32 section 4.26; 2025: $394,600 joint / $197,300 others, Rev. Proc. 2024-40 section 2.27) its wage and
   property limits can apply: a note.
 
 ## Edge cases

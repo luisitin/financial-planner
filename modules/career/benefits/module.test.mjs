@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, matchAt, fullMatchAt, matchDollars, limit401k, groupLifeImputed, taxSaved, PAYROLL, DEFAULT_TIERS } from "./compute.js";
-import { BENEFITS, GROUP_LIFE, ESPP } from "./data/benefits.js";
+import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM } from "./data/benefits.js";
 import { LIMITS } from "../../retirement/contributions/data/limits.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
@@ -66,7 +66,7 @@ test("the tax a pre-tax deduction saves: federal income tax by the engine (no 0.
 test("in October the page chooses next year's benefits with the latest limits, and says so", () => {
   const d = compute(familyPlan(TODAY), { today: TODAY });
   assert.equal(d.planYear, 2027); assert.equal(d.limitsYear, 2026); assert.equal(d.person.age, 37, "the age Ana reaches in 2027");
-  assert.ok(d.notes.some((n) => /2027 limits are not in the app yet/.test(n)));
+  assert.ok(d.notes.some((n) => /2027 limits for the 401\(k\).* are not in the app yet/.test(n) && /health savings account's 2027 limits are in/.test(n)));
   const spring = compute(familyPlan(SPRING), { today: SPRING });
   assert.equal(spring.planYear, 2026); assert.ok(!spring.notes.some((n) => /limits are not in the app/.test(n)));
   const turning50 = familyPlan(TODAY); turning50.household.people.find((x) => x.id === "p-ana").birthDate = "1977-03-01";
@@ -119,6 +119,17 @@ test("the Roth catch-up: over $150,000 the catch-up part is after tax, so it sav
   near(max.saved, fedOnly(federalTax({ ...t.inputs, wages: w0 }, t.params)) - fedOnly(federalTax({ ...t.inputs, wages: w0 - 24500 }, t.params)));
 });
 
+test("no Roth catch-up rule before 2026 (Notice 2023-62's transition)", () => {
+  const q = familyPlan(TODAY);
+  q.household.people.find((x) => x.id === "p-ana").birthDate = "1970-01-01";
+  q.income.find((x) => x.id === "i-ana").amount = 6500;   // 169,000 a year
+  q.whatIfs = { ...(q.whatIfs ?? {}), benefits: { "p-ana": { planYear: 2025 } } };
+  const k = compute(q, { today: "2025-11-01" }).k401;
+  assert.ok(k.catchUp > 0, "50 or older"); assert.ok(169000 > BENEFITS[2025].rothCatchUpWages);
+  assert.equal(k.rothCatchUp, false); assert.equal(k.options.find((o) => o.key === "max").roth, 0, "all of it pre-tax in 2025");
+  assert.equal(ROTH_CATCHUP_FROM, 2026);
+});
+
 test("a state that taxes 401(k) money (Pennsylvania) saves no state tax on it, but does on the HSA", () => {
   const p = withBenefits({ hsaEligible: true, hsaElect: 1000 }, {}, (q) => { q.household.state = "PA"; q.taxes.state = { rate: 0.0307 }; });
   const d = compute(p, { today: TODAY });
@@ -130,18 +141,21 @@ test("a state that taxes 401(k) money (Pennsylvania) saves no state tax on it, b
 });
 
 test("the HSA: the family limit less the employer's money, the election capped at the room, the tax it saves, the catch-up from 55", () => {
-  const d = compute(withBenefits({ hsaEligible: true, hsaCoverage: "family", hsaEmployer: 1000, hsaElect: 9000 }), { today: TODAY });
+  const d = compute(withBenefits({ hsaEligible: true, hsaCoverage: "family", hsaEmployer: 1000, hsaElect: 9500 }), { today: TODAY });
   const h = d.hsa;
-  assert.equal(h.limit, 8750); assert.equal(h.room, 7750); assert.equal(h.elect, 7750); assert.equal(h.typed, 9000);
+  // 2027, the plan year in October: Rev. Proc. 2026-24's $9,000 family limit, before the rest of 2027's limits are out
+  assert.equal(h.limit, 9000); assert.equal(h.room, 8000); assert.equal(h.elect, 8000); assert.equal(h.typed, 9500);
   const t = ti();
-  near(h.saved, fedOnly(federalTax(t.inputs, t.params)) - fedOnly(federalTax({ ...t.inputs, wages: t.inputs.wages - 7750 }, t.params)) + 7750 * 0.0765);
+  near(h.saved, fedOnly(federalTax(t.inputs, t.params)) - fedOnly(federalTax({ ...t.inputs, wages: t.inputs.wages - 8000 }, t.params)) + 8000 * 0.0765);
   near(h.maxSaved, h.saved, 1e-9);
   assert.equal(h.stateTaxed, false);
   const older = compute(withBenefits({ hsaEligible: true, hsaCoverage: "self" }, {}, (q) => { q.household.people.find((x) => x.id === "p-ana").birthDate = "1972-01-01"; }), { today: TODAY }).hsa;
-  assert.equal(older.limit, 4400 + 1000, "55 in the plan year");
+  assert.equal(older.limit, 4500 + 1000, "55 in the plan year");
+  const spring = compute(withBenefits({ hsaEligible: true, hsaCoverage: "family" }), { today: SPRING }).hsa;
+  assert.equal(spring.limit, 8750, "2026 chosen in the spring: Rev. Proc. 2025-19");
   const ca = withBenefits({ hsaEligible: true, hsaCoverage: "self", hsaElect: 1000 }, {}, (q) => { q.household.state = "CA"; q.taxes.state = { rate: 0.06 }; });
   const c = compute(ca, { today: TODAY }).hsa;
-  assert.equal(c.limit, 4400); assert.equal(c.stateTaxed, true);
+  assert.equal(c.limit, 4500); assert.equal(c.stateTaxed, true);
   const tc = taxInputs(ca, { today: TODAY });
   near(c.saved, taxSaved(1000, { inputs: tc.inputs, params: tc.params, personPay: 101400, wageBase: 184500, stateRate: 0.06, state: false }).total, 1e-6);
   assert.equal(compute(familyPlan(TODAY), { today: TODAY }).hsa, null, "no HSA on file: not shown");

@@ -123,7 +123,7 @@ export function render(page, ctx) {
       { key: "hsaEmployer", label: "Employer's health account money a year", type: "money", min: 0 },
       { key: "premium", label: "Health insurance you pay a year", type: "money", min: 0, help: "your share; in 2026 workers paid $1,672 a year on average for cover alone, $7,471 for a family (KFF)" },
       { key: "otherYearly", label: "Other benefits worth a year", type: "money", min: 0, help: "a pension, tuition help, meals, a phone: the ones you would use" },
-      { key: "ptoDays", label: "Paid days off a year, holidays too", type: "number", min: 0, max: 100, step: "1", help: same(now?.ptoDays, `empty: ${DEFAULTS.ptoDays}, the average after a year at a job: 11 vacation days and 8 holidays (BLS)`) },
+      { key: "ptoDays", label: "Paid days off a year, holidays too", type: "number", min: 0, max: 100, step: "1", help: same(now?.ptoDays, `empty: ${DEFAULTS.ptoDays}, the average after a year at a job for workers who get paid time off: 11 vacation days and 8 holidays (BLS)`) },
       { key: "hoursWeek", label: "Hours worked a week", type: "number", min: 0, max: 100, step: "1", help: same(now?.hoursWeek, `empty: ${DEFAULTS.hoursWeek}`) },
       { key: "officeDays", label: "Days a week at the workplace", type: "number", min: 0, max: 7, step: "1", help: `empty: ${DEFAULTS.officeDays}; 0 if fully remote` },
       { key: "commuteMinutes", label: "Commute each way, minutes", type: "number", min: 0, max: 300, step: "1", help: "the US average is 27 minutes (Census, 2025)" },

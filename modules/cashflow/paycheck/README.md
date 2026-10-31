@@ -35,7 +35,7 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
   elections), each a year ÷ paychecks.
 - **Taxable pay**: for income tax = pay − everything before tax; for Social Security and Medicare = pay − everything
   except the 401(k) (a 401(k) deferral is still wages for them, IRC 3121(v)(1)(A); cafeteria-plan items, IRC 125 and
-  3121(a)(5)(G), and commuting, IRC 132(f), are not); for the state = income-tax pay, + the 401(k) in Pennsylvania, + the
+  3121(a)(5)(G), and commuting, IRC 132(f) and 3121(a)(20), are not); for the state = income-tax pay, + the 401(k) in Pennsylvania, + the
   HSA in California and New Jersey (`career/benefits` `K401_TAXED_STATES`, `HSA_TAXED_STATES`).
 - **Federal income tax**: the pay stub's figure typed here; else, when no W-4 choice is typed here, the Withholding
   check page's figure if it is for the same number of paychecks; else the IRS
@@ -53,7 +53,8 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
   (a year landing exactly on it at its last paycheck gives that paycheck; the page mentions it only when it comes before
   the last); with several, each job's share of the pay counted
   separately (the excess over one base comes back on the tax return). **Medicare** = 1.45%, + 0.9% on pay over
-  $200,000 from one employer in the year (IRC 3101, 3102(f); IRS Publication 15 (2026)): from paycheck
+  $200,000 from one employer in the year, whatever the filing status (IRC 3101, 3102(f); IRS Publication 15 (2026);
+  IRS Topic no. 751, https://www.irs.gov/taxtopics/tc751, reviewed 24 Sep 2026, checked 2026-10-31): from paycheck
   ⌊200,000 ÷ pay⌋ + 1, per job (exactly $200,000 is not above it).
 - **State**: typed, else the State page's tax ÷ its income (the household's average after its allowances and
   deductions, not the top rate) × the state's taxable pay; "none in your state" for a state without income tax. Local income taxes are not counted (a note in states
@@ -72,7 +73,8 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
 - Two earners both "married filing jointly" on the W-4 without Step 2: a note that this usually withholds too little
   (worded as an assumption until the W-4s are typed). A yearly or quarterly salary: 26 paychecks assumed, in a note and
   on the card. Pay linked to no adult (household pay, a removed person, a child): the empty state says to set Whose.
-- Bonuses: a note (22% flat, 37% above $1 million); they are not in the regular paycheck.
+- Bonuses: a note (22% flat, 37% on the part above $1 million in a year; IRS Publication 15 (2026) §7, Supplemental
+  Wages, checked 2026-10-31); they are not in the regular paycheck.
 - Choices made: the tables are 2026's (the federal tax year's, falling back to the nearest); a W-4 from 2019 or earlier
   (allowances) is not modelled: type the pay stub's figure. Several salaries for one person are taken as one paycheck.
 

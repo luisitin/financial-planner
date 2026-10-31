@@ -38,7 +38,8 @@ perHour, overYears: { gross, afterTax, commute, net }, stockYears, stockShare, i
     pay as the Income page has it, so everyone's pre-tax 401(k) saving stays as it is; it may be negative, the sum is
     floored at 0) + this job's, less the same without this job; the engine's own 0.9% extra Medicare figure is left out
     (it is counted with payroll, below). Each later year uses that year's tables (`paramsFor`, indexed with the plan's
-    inflation past the last published year) and that year's wage base (SSA: $184,500 in 2026, $192,300 in 2027).
+    inflation past the last published year) and that year's wage base (SSA: $184,500 in 2026, $192,300 in 2027;
+    https://www.ssa.gov/oact/cola/cbb.html, checked 2026-10-31).
   - Payroll = 6.2% Social Security up to the year's wage base ($184,500 in 2026, SSA) + 1.45% Medicare (IRC 3101) +
     0.9% on the household's Medicare wages (pay before 401(k) saving, IRC 3121(v)(1)(A)) above $250,000 joint /
     $200,000 single / $125,000 separate (IRC 3101(b)(2)), less what the rest of the household already pays of it.
@@ -59,10 +60,15 @@ perHour, overYears: { gross, afterTax, commute, net }, stockYears, stockShare, i
 - **Leaving gives up** = the value of every share still to vest at the employer now (RSUs at the price, options at the
   spread), shown as a note; the comparison already counts only what would vest within the years compared.
 - Blank days off, hours and raise on an offer are the job now's; for the job now (and office days anywhere) they are
-  19 days off (the private-industry average after a year: 11 paid vacation days, BLS National Compensation Survey,
-  March 2026, and 8 paid holidays, 2025), 40 hours and 5 days (examples, said so on each form). The form's help quotes
-  what workers paid for health cover in 2026 ($1,672 alone, $7,471 for a family; KFF Employer Health Benefits Survey
-  2026) and the average one-way commute (27.4 minutes; Census American Community Survey 2025), all checked 2026-10-30.
+  19 days off (the private-industry average after a year of service for workers who get paid time off: 11 paid
+  vacation days, BLS National Compensation Survey, Employee Benefits in the United States, March 2026,
+  https://www.bls.gov/ebs/publications/employee-benefits-in-the-united-states-march-2026.htm, and 8 paid holidays in
+  2025, BLS The Economics Daily, 10 Feb 2026,
+  https://www.bls.gov/opub/ted/2026/paid-sick-leave-was-available-to-80-percent-of-private-industry-workers-in-2025.htm),
+  40 hours and 5 days (examples, said so on each form). The form's help quotes what workers paid for health cover in
+  2026 ($1,672 alone, $7,471 for a family; KFF Employer Health Benefits Survey 2026) and the average one-way commute
+  (27.4 minutes, the mean travel time to work; Census American Community Survey 2025 1-year, Table S0801, released
+  29 Oct 2026), all checked 2026-10-30.
 
 ## Edge cases
 - No pay on Income and nothing typed for the job now, with an offer: the job now is "No job now": no pay, match,

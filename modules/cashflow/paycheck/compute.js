@@ -13,7 +13,7 @@ import { PCT_METHOD, forYear } from "./data/withholding.js";
 
 /** The employee's payroll taxes (IRC 3101): Social Security to the wage base, Medicare, and the 0.9% an employer withholds on pay over $200,000 in the year (IRC 3102(f)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145, extraMedicare: 0.009, extraOver: 200000 };
-export const W4_STATUSES = { single: "Single or married filing separately", married_joint: "Married filing jointly", head_of_household: "Head of household" };
+export const W4_STATUSES = { single: "Single or married filing separately", married_joint: "Married filing jointly or qualifying surviving spouse", head_of_household: "Head of household" };
 export const DEFAULT_PAYCHECKS = 26;
 /** The pay period named by a number of paychecks a year (what the Withholding check page stores). */
 export const PERIOD_OF = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
@@ -85,6 +85,7 @@ export function compute(plan, params = {}) {
   const notes = [];
   if (LOCAL_TAX.includes(code)) notes.push("Cities or counties in your state may take their own income tax from pay too; it is not counted here.");
   const bonus = inc.active.filter((x) => x.type === "bonus" && x.period !== "once" && x.yearly > 0);
+  // IRS Publication 15 (2026) section 7, Supplemental Wages: 22% flat, 37% on the part over $1 million in a calendar year
   if (bonus.length) notes.push("Bonuses are paid on their own: employers usually withhold a flat 22% of federal tax from them (37% above $1 million in a year), on top of Social Security and Medicare.");
   let benefitsLater = false;
 
@@ -129,7 +130,7 @@ export function compute(plan, params = {}) {
     ].filter((x) => x.amount > 0.005);
     const amt = (key) => pretax.find((x) => x.key === key)?.amount ?? 0;
     const pretaxTotal = pretax.reduce((t, x) => t + x.amount, 0);
-    // a 401(k) still pays Social Security and Medicare; cafeteria-plan items and commuting pay neither (IRC 125, 132(f), 3121(a)(5)(G), 3121(v)(1)(A))
+    // a 401(k) still pays Social Security and Medicare; cafeteria-plan items and commuting pay neither (IRC 125, 132(f), 3121(a)(5)(G), 3121(a)(20), 3121(v)(1)(A))
     const cafeteria = pretaxTotal - amt("k401");
     const wages = {
       federal: Math.max(0, gross - pretaxTotal),

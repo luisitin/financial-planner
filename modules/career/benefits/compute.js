@@ -8,7 +8,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { LIMITS } from "../../retirement/contributions/data/limits.js";
-import { BENEFITS, GROUP_LIFE, ESPP } from "./data/benefits.js";
+import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM, HSA_AHEAD } from "./data/benefits.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -121,7 +121,9 @@ export function compute(plan, params = {}) {
   const fromPeriod = PAYCHECKS[salaries[0].period];
   const paychecks = num(s.paychecks) ?? fromPeriod ?? DEFAULTS.paychecks;
   if (num(s.paychecks) === null && !fromPeriod) notes.push(`Your pay is entered as a ${salaries[0].period === "annual" ? "yearly" : "quarterly"} figure, so ${DEFAULTS.paychecks} paychecks a year are assumed: set yours under "Your employer's match".`);
-  if (limitsYear !== planYear) notes.push(`The ${planYear} limits are not in the app yet, so ${limitsYear}'s are shown; the IRS publishes the next year's in the autumn.`);
+  // the HSA limits come out in the spring, the others in October and November
+  const hsaAhead = limitsYear !== planYear ? HSA_AHEAD[planYear] ?? null : null;
+  if (limitsYear !== planYear) notes.push(`The ${planYear} limits${hsaAhead ? " for the 401(k), the flexible spending accounts and commuting" : ""} are not in the app yet, so ${limitsYear}'s are shown; the IRS publishes them in October and November.${hsaAhead ? ` The health savings account's ${planYear} limits are in.` : ""}`);
 
   const ti = taxInputs(plan, { today });
   const st = computeState(plan, { today });
@@ -148,7 +150,7 @@ export function compute(plan, params = {}) {
   const fullPct = pay > 0 ? fullYearly / pay : 0;
   const maxPct = pay > 0 ? Math.min(1, lim.limit / pay) : 0;
   const stateTaxed401k = K401_TAXED_STATES.includes(code);
-  const rothCatchUp = lim.catchUp > 0 && pay > B.rothCatchUpWages;
+  const rothCatchUp = planYear >= ROTH_CATCHUP_FROM && lim.catchUp > 0 && pay > B.rothCatchUpWages;
   // what a choice costs: the plan's wages already have today's 401(k) taken off; compare each choice with no 401(k)
   const base = { ...T, inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + nowYearly } };
   const option = (key, pct) => {
@@ -178,7 +180,8 @@ export function compute(plan, params = {}) {
   let hsa = null;
   if (eligible) {
     const coverage = (s.hsaCoverage ?? hs.coverage) === "family" ? "family" : "self";
-    const limit = (coverage === "family" ? L.hsa.family : L.hsa.limit) + (age !== null && age >= L.hsa.catchUpAge ? L.hsa.catchUp : 0);
+    const H = { ...L.hsa, ...hsaAhead };
+    const limit = (coverage === "family" ? H.family : H.limit) + (age !== null && age >= H.catchUpAge ? H.catchUp : 0);
     const employer = num(s.hsaEmployer) ?? pos(hs.employer);
     const room = Math.max(0, limit - employer);
     const typed = num(s.hsaElect) ?? pos(hs.contribution);

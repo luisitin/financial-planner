@@ -44,8 +44,10 @@
   worksheet's line 4, even the part the regular deduction covered), stacked on the regular ordinary taxable income
   (Part III, `taxOnQualified`), never more than the flat figure. AMT = tentative − the regular
   income tax before credits. 2026 (Rev. Proc. 2025-32 §4.10): exemption $90,100 single / $140,200 joint / $70,100 separate; phase-out from
-  $500,000 / $1,000,000 / $500,000 at 50 cents a dollar (P.L. 119-21 §70107); 28% above $244,500 ($122,250 separate).
-  2025 (Rev. Proc. 2024-40 §2.11): $88,100 / $137,000 / $68,500; from $626,350 / $1,252,700 at 25 cents; $239,100.
+  $500,000 / $1,000,000 / $500,000 at 50 cents a dollar (IRC 55(d)(4)(A)(ii)(I), (II) and (IV); P.L. 119-21 §70107
+  made the rule permanent, added the 50% and indexes the $1,000,000 from 2025 prices); 28% above $244,500 ($122,250 separate).
+  2025 (Rev. Proc. 2024-40 §2.11): $88,100 / $137,000 / $68,500; from $626,350 / $1,252,700 at 25 cents (IRC
+  55(d)(2)); $239,100.
   Not modelled: other AMT items (private-activity bond interest, depletion), the AMT foreign tax credit.
 - **AMT room** (`amtRoom`): the largest spread with AMT no more than today's + $0.50, by `largestAtOrUnder` on a
   doubling bracket, worked once for the year and shared across incentive grants from the oldest: each grant's

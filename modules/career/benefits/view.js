@@ -78,7 +78,8 @@ export function render(page, ctx) {
       ui.stat("You can put in", money(h.room), `a year: the ${h.coverage === "family" ? "family" : "self-only"} limit ${money(h.limit)} less ${money(h.employer)} from your employer`),
       h.elect > 0 ? ui.stat("Tax saved", money(h.saved), `on the ${money(h.elect)} you chose; ${money(h.maxSaved)} if you fill it`) : ui.stat("Tax saved if you fill it", money(h.maxSaved), "a year"),
     ), ui.h("p", { class: "muted small" }, `Through the paycheck it skips income tax and Social Security and Medicare${h.stateTaxed ? "; your state still taxes it" : ""}. Unused money stays yours and can be invested.`),
-    ui.row(ui.button("Use these on the HSA page", () => { pending = "Saved on the HSA and FSA page."; store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: h.coverage, contribution: h.elect, employer: h.employer, fsa: d.fsa.elect }; }); }))));
+    ui.row(ui.button("Use these on the HSA page", () => { pending = "Saved on the HSA and FSA page."; store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: h.coverage, contribution: h.elect, employer: h.employer, fsa: d.fsa.elect }; }); })),
+    d.planYear > d.year ? ui.h("p", { class: "muted small" }, `The HSA and FSA page shows ${d.year}, so until January it checks these against ${d.year}'s limits.`) : null));
   }
 
   // FSAs and commuting

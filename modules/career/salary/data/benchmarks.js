@@ -10,17 +10,17 @@ export const BENCHMARKS = {
   },
   budget: {
     value: 0.035, title: "The yearly raise", short: "about 3.5%",
-    text: "What employers plan to spend on raises in 2027: 3.4% to 3.5% across the big surveys (merit raises alone about 3.1% to 3.2%), the same as in 2026.",
-    source: "WTW (July 2026), Mercer (31 Aug 2026), Payscale (4 Aug 2026), The Conference Board (3 Sep 2026), WorldatWork (15 Jul 2026)",
+    text: "What employers plan to spend on raises in 2027, promotions included: 3.4% to 3.5% (the median) across the big surveys, about the same as in 2026. The yearly raise alone, without promotions, is about 3.1% to 3.2%: use that as your raise when you add promotions, so they are not counted twice.",
+    source: "WTW (July 2026), Mercer (31 Aug 2026), Payscale (4 Aug 2026), The Conference Board (3 Sep 2026), WorldatWork (15 Jul 2026, median)",
   },
   switchers: {
     switcher: 0.047, stayer: 0.034, month: "September 2026", title: "Changing jobs", short: "4.7% against 3.4%",
-    text: "Pay growth over a year for people who changed jobs, against people who stayed (the median, three-month average, September 2026).",
+    text: "Typical (median) pay growth over a year for people who changed jobs, against people who stayed in theirs (averaged over three months to September 2026).",
     source: "Federal Reserve Bank of Atlanta, Wage Growth Tracker (FRED, updated 9 Oct 2026)",
   },
   peak: {
     title: "When pay peaks", short: "35 to 54",
-    text: "Full-time pay is highest from 35 to 54 ($1,414 a week at 35 to 44, $1,407 at 45 to 54) and a little lower from 55 to 64 ($1,376).",
+    text: "Typical (median) full-time pay is highest from 35 to 54 ($1,414 a week at 35 to 44, $1,407 at 45 to 54) and a little lower from 55 to 64 ($1,376).",
     source: "Bureau of Labor Statistics, Usual Weekly Earnings, third quarter 2026 (21 Oct 2026)",
   },
   prices: {

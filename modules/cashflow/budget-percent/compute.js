@@ -3,7 +3,7 @@
 // what is left over), each against its target share, with the largest items in each and how far each is off.
 import { compute as computeIncome } from "../income/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
-import { compute as computePaycheck } from "../paycheck/compute.js";
+import { compute as computePaycheck, PAYROLL } from "../paycheck/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { seTax, SE, QBI } from "../../taxes/self-employment/compute.js";
@@ -15,10 +15,12 @@ import { federalTax } from "../../../core/math/tax.js";
 
 /** The rule's split of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All Your Worth", 2005): needs 50%, wants 30%, savings 20%. */
 export const RULE = { needs: 0.5, wants: 0.3, savings: 0.2 };
-/** Other splits people use when costs are high or saving matters more. */
+/** The app's own example splits for when costs are high or money is tight (not from the book). */
 export const PRESETS = { "50-30-20": RULE, "60-20-20": { needs: 0.6, wants: 0.2, savings: 0.2 }, "70-20-10": { needs: 0.7, wants: 0.2, savings: 0.1 } };
-/** An employee's Social Security and Medicare (IRC 3101). */
-export const FICA = { ss: 0.062, medicare: 0.0145 };
+/** An employee's Social Security and Medicare (IRC 3101), the Paycheck page's rates. */
+export const FICA = { ss: PAYROLL.ss, medicare: PAYROLL.medicare };
+/** Where the 0.9% extra Medicare tax starts, by filing status (IRC 3101(b)(2)): a fallback when the year's tax figures lack it. */
+const EXTRA_MEDICARE_LINE = { married_joint: 250000, married_separate: 125000, other: 200000 };
 /** Within this many points of the target counts as on target. */
 export const SLACK = 0.02;
 
@@ -82,7 +84,7 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
     profit += net; se += t.total; seHalf += t.half; seBase += t.base;
   }
   // the 0.9% on pay plus self-employment earnings above the filing status's line (Form 8959 Parts I and II)
-  const th = ti.params.additionalMedicareThreshold?.[status] ?? 200000;
+  const th = ti.params.additionalMedicareThreshold?.[status] ?? EXTRA_MEDICARE_LINE[status] ?? EXTRA_MEDICARE_LINE.other;
   const extraMedicare = SE.addlMedicare * Math.max(0, ficaWages + seBase - th);
 
   // federal income tax: the Federal estimate's household (filing status, people, deductions, contributions) with the

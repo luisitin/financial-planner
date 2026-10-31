@@ -52,8 +52,11 @@ each job: `{ incomeId, name, personId, personName, pay, ageNow, retireAge, retir
 - **What raises usually are** (`data/benchmarks.js`, a fold on the page; checked 2026-10-30): salary increase budgets
   for 2027 of 3.4% (WTW, July 2026) to 3.5% (Mercer 31 Aug 2026, Payscale 4 Aug 2026, The Conference Board 3 Sep 2026,
   WorldatWork 15 Jul 2026 median), merit alone 3.1% to 3.2%; pay growth of job switchers 4.7% against stayers 3.4%
-  (Atlanta Fed Wage Growth Tracker, September 2026); full-time weekly pay highest at 35 to 54 (BLS Usual Weekly
-  Earnings, third quarter 2026); prices up 3.7% in the year to September 2026 (BLS CPI).
+  (Atlanta Fed Wage Growth Tracker, median, three-month average, September 2026); full-time median weekly pay highest
+  at 35 to 54 (BLS Usual Weekly Earnings, third quarter 2026); prices up 3.7% in the year to September 2026 (BLS CPI).
+  A salary increase budget counts promotions and other increases as well as merit raises, so the fold says to use the
+  merit figure as the yearly raise when promotions are added (the page itself never uses the budget as a raise: the
+  raise is the one typed, the Income page's, or the Assumptions page's).
 
 ## Edge cases
 - No salary on Income: an empty state pointing there. Bonuses (`type: "bonus"`) are not part of the path (their

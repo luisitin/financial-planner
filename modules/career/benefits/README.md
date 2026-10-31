@@ -44,17 +44,27 @@
   Income Tax Guide, Compensation): no state saving there.
 - **Roth catch-up**: from 2026, someone 50 or older paid over $150,000 by the employer the year before (2026 line,
   Notice 2025-67; IRC 414(v)(7), SECURE 2.0 §603) makes catch-ups as Roth; the final regulations apply from 2027 and
-  plans follow the law in good faith in 2026 (IRS IR-2025-91). The page uses this year's pay as the guide, and the
-  catch-up part of a choice saves no tax now.
-- **Health savings account** (shown when the plan qualifies): limit = $4,400 self-only / $8,750 family, + $1,000 from
-  55 (Rev. Proc. 2025-19); room = limit − employer money; the election is capped at the room. From 2026 bronze and
+  plans follow the law in good faith in 2026 (IRS IR-2025-91). Not before 2026: Notice 2023-62 gave plans an
+  administrative transition through 2025 (`ROTH_CATCHUP_FROM`), so a 2025 plan year puts all of it in pre-tax. The page
+  uses this year's pay as the guide, and the catch-up part of a choice saves no tax now.
+- **Health savings account** (shown when the plan qualifies): limit = $4,400 self-only / $8,750 family in 2026 (Rev.
+  Proc. 2025-19), $4,500 / $9,000 in 2027 (Rev. Proc. 2026-24 §3.01(1), posted 2026-05-29, read 2026-10-31), + $1,000
+  from 55, which is in the law and not indexed (IRC 223(b)(3)); room = limit − employer money; the election is capped
+  at the room. The IRS puts out the HSA limits in the spring and the others in October and November, so in open
+  enrollment the next year's HSA limit can be known before the 401(k)'s: `HSA_AHEAD` in `data/benefits.js` holds it
+  until `retirement/contributions/data/limits.js` (not this page's file) has the year, and the page's note says which
+  limits are the next year's. "Use these on the HSA page" saves next year's choice on a page that shows this year, so
+  the page says that page checks it against this year's limits until January. From 2026 bronze and
   catastrophic marketplace plans qualify (P.L. 119-21; IRS Notice 2026-5). Tax saved through payroll = federal (the
   household's tax with the HSA page's figure taken back out, then the election off wages) + 7.65% payroll tax (6.2% only
   under the wage base) + the state's rate, except California and New Jersey, which tax HSA money (`HSA_TAXED_STATES`).
 - **Health FSA**: up to $3,400 in 2026, $680 may carry over (Rev. Proc. 2025-32). **Child care FSA**: up to $7,500 a
   household from 2026 ($3,750 married filing separately; was $5,000), IRC 129 as amended by P.L. 119-21 §70404; shown
-  with children under 13; the other adults' elections come off the household's limit. **Commuting**: transit and work
-  parking, each up to $340 a month in 2026 (Rev. Proc. 2025-32). Each saves federal + payroll + state tax
+  with children under 13 (IRC 21(b)(1)(A)); the other adults' elections come off the household's limit. The account
+  also pays care for a spouse or another dependent who cannot care for themselves (IRC 21(b)(1)(B) and (C)); the page
+  does not know who that is, so it is shown with a child under 13 or once an amount is typed. **Commuting**: transit
+  and work parking, each up to $340 a month in 2026 (Rev. Proc. 2025-32 §4) and $325 in 2025 (Rev. Proc. 2024-40
+  §2.17). Each saves federal + payroll + state tax
   (`taxSaved`). A typed amount over its limit is capped, and the page says so.
 - **Stock purchase plan** (IRC 423): put in = min(share × pay, $25,000 × (1 − discount)), the most that buys $25,000
   of stock a year at the offering price with prices flat (the limit is on the stock's value at the offering's start);

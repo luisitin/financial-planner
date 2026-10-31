@@ -27,8 +27,10 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
 ## Formulas
 - **The rule**: needs 50%, wants 30%, savings 20% of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All
   Your Worth: The Ultimate Lifetime Money Plan", Free Press, 2005: the "balanced money formula"; a fact, no text taken).
-  Presets 60/20/20 and 70/20/10 for high costs or getting by; own shares, once all three are typed, are scaled to add up
-  to 100%.
+  One departure from the book: it counts paying down debt beyond the minimum as saving; this page counts minimum loan
+  payments as needs and leaves extra payments out of savings (see Choices made). The presets 60/20/20 and 70/20/10
+  are the app's own example splits for high costs or getting by, not the book's; own shares, once all three are
+  typed, are scaled to add up to 100%.
 - **Income** = the Income page's items a year − the business expenses typed on the Self-employment page.
 - **Social Security and Medicare** = for each earner, 6.2% of their pay (salary and bonus, less the pre-tax benefits the
   Paycheck page takes out before these taxes: HSA, health, FSA, commuter; IRC 3121(a)(5)(G), 125) up to the wage base
@@ -41,7 +43,9 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
 - **Federal income tax** (`core/math/tax.js` `federalTax`) on the Income page's income only: pay less pre-tax 401(k)
   contributions, rent, pensions, dividends and interest (as ordinary), other income and the profit; Social Security
   benefits; half the self-employment tax off income (IRC 164(f)); the 20% business deduction = 20% × (profit − half the
-  tax), at least $400 from 2026 when that is $1,000 or more (IRC 199A(a), (i)), at most 20% of taxable income; after
+  tax), at least $400 from 2026 when that is $1,000 or more (IRC 199A(a), (i)); the minimum is for a business you
+  materially participate in (an "active" one, IRC 199A(i) and 469(h)), which the page assumes for a side business you
+  run yourself; at most 20% of taxable income; after
   credits, so the refundable child tax credit can make it negative (a credit). Sales of investments and amounts typed on
   the Federal tax page are left out with a note: that money is not part of the month. The 0.9% is counted above.
 - **The state** = the State page's tax ÷ its income × this income's AGI (as the Paycheck page does); 0 where the state
