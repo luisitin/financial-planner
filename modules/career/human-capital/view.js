@@ -50,9 +50,10 @@ export function render(page, ctx) {
 
   const steady = d.people.every((p) => p.risk !== "volatile");
   root.append(ui.card("What it means", ui.h("ul", {},
-    ui.h("li", {}, ui.h("b", {}, "Protect it. "), "Insurance on your life and your ability to work is how this value reaches your family if you cannot earn it. ", ui.h("a", { href: "#/insurance/life-needs" }, "Life cover"), " · ", ui.h("a", { href: "#/insurance/disability" }, "disability")),
+    ui.h("li", {}, ui.h("b", {}, "Protect it. "), "Insurance on your life and your ability to work is how this value reaches your family if you cannot earn it: see Life cover and Disability cover below."),
     ui.h("li", {}, ui.h("b", {}, "Invest around it. "), steady ? "Steady pay behaves like a bond: it lets your savings take more stock risk while you work." : "Volatile pay behaves like a stock: keep more of your savings steady, and avoid piling into your own employer's shares."),
-    ui.h("li", {}, ui.h("b", {}, "Grow it. "), `Raises one point bigger every year would add about ${money(d.raiseGain)} of pay over your careers, in today's money: skills and job moves are often your best investment.`))));
+    ui.h("li", {}, ui.h("b", {}, "Grow it. "), `Raises one point bigger every year would add about ${money(d.raiseGain)} of pay over your careers, in today's money: skills and job moves are often your best investment.`)),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life cover"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability cover"))));
 
   const s = plan.whatIfs?.humanCapital ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How steady is each job?"), ui.h("span", { class: "fold-status" }, d.people.map((p) => p.risk).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
