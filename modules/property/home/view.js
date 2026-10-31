@@ -27,6 +27,7 @@ export function render(page, ctx) {
   page.append(root);
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const dayDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your home"),
@@ -48,6 +49,19 @@ export function render(page, ctx) {
     ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} of the mortgage that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${pct(d.details.maintenance ?? DEFAULTS.maintenance, 1)} of the value a year; older homes often need more.`)));
 
   const s = d.sale;
+  const niitLine = { married_joint: 250000, married_separate: 125000 }[s.filingStatus] ?? 200000;
+  const owned = (m) => [Math.floor(m / 12) ? `${Math.floor(m / 12)} year${Math.floor(m / 12) === 1 ? "" : "s"}` : null, m % 12 ? `${m % 12} month${m % 12 === 1 ? "" : "s"}` : null].filter(Boolean).join(" and ") || "less than a month";
+  function saleText() {
+    if (s.gain === null) return `Up to ${money(s.cap)} of gain on your main home is tax-free once you have owned it and lived in it two of the last five years. Add what you paid, below, to check yours.`;
+    if (s.gain <= 0) return `After selling costs that would be a loss of ${money(-s.gain)}. A loss on your own home does not lower your tax.`;
+    const taxPart = s.taxable <= 0.5 ? "" : s.term === "short"
+      ? ` Owned a year or less, it is taxed like your pay: about ${money(s.tax)}.${s.longOn ? ` From ${dayDate(s.longOn)} it would get the lower rate for things owned over a year.` : ""}`
+      : ` About ${money(s.tax)} of federal tax: gains are taxed at 0%, 15% or 20% depending on your income that year${s.niit > 0.5 ? `, and ${money(s.niit)} of that is the 3.8% extra tax on investment income, charged only on the part of your income over ${money(niitLine)}` : ""}.`;
+    if (s.test && !s.test.meets && s.reduced === null) return `You have owned it ${owned(s.test.months)}. The ${money(s.cap)} of gain that is tax-free on a main home needs two of the last five years owned and lived in (you reach that on ${dayDate(s.test.from)}), so the whole ${money(s.gain)} gain is taxed.${s.taxable > 0.5 && s.tax <= 0.5 ? " At your income it is taxed at 0%." : taxPart}`;
+    if (s.reduced !== null) return `Selling early for a new job, your health or an event you could not foresee: ${money(s.exclusion)} of gain can be tax-free (${money(s.cap)} times the ${pct(s.reduced, 0)} of two years you have owned it).${s.taxable > 0.5 ? ` The other ${money(s.taxable)} is taxed.${taxPart}` : ` That covers the whole ${money(s.gain)} gain.`}`;
+    if (s.taxable > 0.5) return `The gain (${money(s.gain)}) is ${money(s.taxable)} above the ${money(s.exclusion)} that is tax-free on a main home.${s.tax <= 0.5 ? " At your income it is taxed at 0%." : taxPart}`;
+    return `The gain after costs (${money(s.gain)}) is under the ${money(s.exclusion)} that is tax-free on a main home you have owned and lived in two of the last five years.`;
+  }
   root.append(ui.card("If you sold today", ui.h("ul", { class: "hm-lines" }, [
     ui.h("li", {}, ui.h("span", {}, "Sale price"), ui.h("span", {}, money(d.value))),
     ui.h("li", {}, ui.h("span", {}, `Selling costs (about ${pct(d.details.sellCosts ?? DEFAULTS.sellCosts)})`), ui.h("span", {}, `−${money(s.costs)}`)),
@@ -55,7 +69,10 @@ export function render(page, ctx) {
     s.tax > 0.5 ? ui.h("li", {}, ui.h("span", {}, "Tax on the gain"), ui.h("span", {}, `−${money(s.tax)}`)) : null,
     ui.h("li", { class: "hm-tot" }, ui.h("span", {}, "You would keep"), ui.h("span", {}, money(s.net))),
   ].filter(Boolean)),
-    ui.h("p", { class: "hm-d" }, s.gain === null ? `Up to ${money(s.exclusion)} of gain on your main home is tax-free once you have lived in it two of the last five years; add what you paid to check yours.` : s.taxable > 0 ? `The gain (${money(s.gain)}) is ${money(s.taxable)} above the ${money(s.exclusion)} that is tax-free on a main home, taxed at about ${pct(s.rate, 1)}.` : `The gain after costs (${money(Math.max(0, s.gain))}) is under the ${money(s.exclusion)} that is tax-free on a main home lived in two of the last five years.`)));
+    ui.h("p", {}, saleText()),
+    s.test && !s.test.meets && s.reduced === null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "Selling because of a new job, your health or an event you could not foresee? Then part of the gain can still be tax-free: tick that in the home's details below.") : null,
+    s.otherYear ? ui.h("p", { class: "hm-d" }, `A sale today falls in ${s.year}, so this is ${s.year}'s tax (the Federal estimate is set to ${s.otherYear}).`) : null,
+    s.gain !== null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "This assumes the home has been your main home since you bought it; time it was rented out or empty can change the tax-free part.") : null));
 
   root.append(ui.card("Ahead", ui.h("ul", { class: "records" }, d.ahead.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `In ${a.years} years (${a.year})`), ui.h("span", { class: "rec-value" }, money(a.equity))), ui.h("div", { class: "rec-sub" }, `worth about ${money(a.value)}${a.owed > 0.5 ? `, ${money(a.owed)} still owed` : ", the mortgage paid off"}`)))),
     ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), the mortgage paid as now. Not in today's money.`)));
@@ -88,7 +105,8 @@ export function render(page, ctx) {
       { key: "maintenance", label: "Upkeep a year, as a share of the value", type: "percent", min: 0, max: 10 },
       { key: "appreciation", label: "Value grows each year", type: "percent", min: -10, max: 15 },
       { key: "sellCosts", label: "Selling costs, as a share of the price", type: "percent", min: 0, max: 15 },
-    ], { maintenance: DEFAULTS.maintenance, appreciation: DEFAULTS.appreciation, sellCosts: DEFAULTS.sellCosts, ...e, propertyTax: e.propertyTax ?? (plan.taxes?.itemized?.propertyTax || "") }, (v) => {
+      s.test && !s.test.meets ? { key: "reducedReason", label: "Selling before two years because of a new job, my health or an event I could not foresee", type: "checkbox", help: "then part of the gain can still be tax-free" } : null,
+    ].filter(Boolean), { maintenance: DEFAULTS.maintenance, appreciation: DEFAULTS.appreciation, sellCosts: DEFAULTS.sellCosts, ...e, propertyTax: e.propertyTax ?? (plan.taxes?.itemized?.propertyTax || "") }, (v) => {
       pending = "Saved.";
       store.update((p) => {
         p.property = p.property ?? [];

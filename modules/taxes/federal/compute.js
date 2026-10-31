@@ -52,6 +52,17 @@ export function netGains(gains, filingStatus) {
 }
 
 /**
+ * A sale today falls in today's tax year. When the Federal estimate is set to another year (say last year's return), work
+ * today's year instead, without that year's sales typed on Capital gains (they belong to the set year). Used by Tax lots, Crypto, Home and Rental analysis. The typed figures
+ * (pay, dividends) stay as the best guess at today's year. -> { plan, year, other (the set year, when it differs) }
+ */
+export function todaysReturn(plan, today) {
+  const year = today ? Number(String(today).slice(0, 4)) : null, set = Number(plan.taxes?.year) || null;
+  if (!year || !set || set === year) return { plan, year: set ?? year, other: null };
+  return { plan: { ...plan, taxes: { ...(plan.taxes ?? {}), year: null, gains: [] } }, year, other: set };
+}
+
+/**
  * The capital loss carried to next year (IRC 1212(b)), by the Capital Loss Carryover Worksheet (Pub. 550 Worksheet 4-1):
  * taxable income (negative when it would be), the loss allowed this year (at most 3,000, 1,500 filing separately), the
  * year's net short-term and long-term results (Schedule D lines 7 and 15). Line 3 = taxable income + the allowed loss (the

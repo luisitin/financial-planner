@@ -1,17 +1,47 @@
 // modules/property/home/compute.js -- PURE. Your home: what it is worth and what you own of it, how it has grown
 // since you bought it, what it costs a year to keep (tax, insurance, dues, upkeep, the mortgage's interest), what
-// you would walk away with if you sold today (selling costs, and tax only on a gain above the $250,000 or
-// $500,000 that is tax-free), and the value and equity in 5, 10 and 20 years as it grows and the mortgage shrinks.
+// you would walk away with if you sold today (selling costs, and the federal tax on the gain: the $250,000 or $500,000
+// that is tax-free once you have owned and lived in it two of the last five years, a short-term gain taxed like pay,
+// the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
+// years as it grows and the mortgage shrinks.
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
-import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { taxInputs, todaysReturn } from "../../taxes/federal/compute.js";
+import { longOn } from "../../investments/tax-lots/compute.js";
+import { federalTax } from "../../../core/math/tax.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";
-import { monthsBetween } from "../../../core/math/dates.js";
+import { monthsBetween, daysBetween, isoOf } from "../../../core/math/dates.js";
 
 /** Upkeep is often put at 1% of the value a year (more for older homes); selling costs about 6% (agent and closing); values about 3.5% a year over the long run. */
 export const DEFAULTS = { maintenance: 0.01, sellCosts: 0.06, appreciation: 0.035 };
-/** Gain on a main home that is tax-free when sold (IRC §121): owned and lived in two of the last five years. */
+/** Gain on a main home that is tax-free when sold (IRC 121(b)(1)-(2)): $250,000, $500,000 on a joint return. */
 export const EXCLUSION = { single: 250000, married_joint: 500000 };
+/** Owned and lived in for 730 days or 24 full months of the five years before the sale (121(a); 26 CFR 1.121-1(c)(1): "24 full months or for 730 days (365 x 2)"). */
+export const USE = { days: 730, months: 24 };
+
+const lastDay = (y, m) => Number(isoOf(y, m + 1, 0).slice(8, 10));
+/** The date k calendar months after `iso`: a purchase on a month's last day gives the target month's last day, and a day the target month lacks falls back to its last day. */
+export function addMonthsEnd(iso, k) {
+  const y = Number(iso.slice(0, 4)), m = Number(iso.slice(5, 7)), d = Number(iso.slice(8, 10));
+  const n = y * 12 + (m - 1) + k, ty = Math.floor(n / 12), tm = (n % 12) + 1, last = lastDay(ty, tm);
+  return isoOf(ty, tm, d === lastDay(y, m) ? last : Math.min(d, last));
+}
+/** Full calendar months from `from` to `to` (1.121-1(c)(1)): the largest k with addMonthsEnd(from, k) on or before `to`. */
+export function fullMonths(from, to) {
+  let k = (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + (Number(to.slice(5, 7)) - Number(from.slice(5, 7))) + 1;
+  while (k > 0 && addMonthsEnd(from, k) > to) k--;
+  return Math.max(0, k);
+}
+/**
+ * The two-year test of 121(a) on a purchase date, sold today (owned and lived in since the purchase): days counted from the
+ * day after the purchase, the sale day included (Pub. 550, Holding Period; 1.121-1(c)(4) Example 3), so the plain difference;
+ * met at 730 days or 24 full months, whichever comes first. -> { days, months, meets, from (the first day it is met) }
+ */
+export function twoYearTest(date, today) {
+  const days = daysBetween(date, today), months = fullMonths(date, today);
+  const byDays = isoOf(Number(date.slice(0, 4)), Number(date.slice(5, 7)), Number(date.slice(8, 10)) + USE.days), byMonths = addMonthsEnd(date, USE.months);
+  return { days, months, meets: days >= USE.days || months >= USE.months, from: byDays < byMonths ? byDays : byMonths };
+}
 
 /** Yearly growth between two values over `months`. */
 export function growthRate(from, to, months) {
@@ -22,7 +52,8 @@ export function growthRate(from, to, months) {
 /**
  * compute(plan, { today }) -> {
  *   ready, name, value, owed, equity, equityShare, ltv, details, bought: { price, date, years, growth } | null,
- *   history: [{ date, value }], costs: { lines, total, monthly }, sale: { costs, gain, exclusion, taxable, tax, net },
+ *   history: [{ date, value }], costs: { lines, total, monthly }, sale: { costs, basis, gain, cap, exclusion (the most that can be tax-free), excluded (the part of the gain that is), taxable, term, longOn,
+ *   test: { days, months, meets, from } | null, reduced, rate (tax / taxable), tax, niit, incomeTax, year, otherYear, filingStatus, net },
  *   ahead: [{ years, year, value, owed, equity }], appreciation
  * }
  */
@@ -59,17 +90,31 @@ export function compute(plan, params = {}) {
   ].filter((l) => l.amount > 0.5);
   const total = lines.reduce((s, l) => s + l.amount, 0);
 
-  // selling today
-  const fed = computeFederal(plan, { today });
-  const status = fed.filingStatus;
-  const exclusion = status === "married_joint" ? EXCLUSION.married_joint : EXCLUSION.single;
+  // selling today: the federal tax on the gain, worked through the federal estimate in today's tax year
+  const yr = todaysReturn(plan, today);
+  const ti = taxInputs(yr.plan, { today });
+  const status = ti.filingStatus;
+  const cap = status === "married_joint" ? EXCLUSION.married_joint : EXCLUSION.single;
   const sellCosts = value * n(e.sellCosts, DEFAULTS.sellCosts);
   const basis = price !== null ? price + n(e.improvements, 0) : null;
   const gain = basis !== null ? value - sellCosts - basis : null;
+  // the two-year test (121(a)); without a purchase date it is taken as met. Not met: no exclusion, unless the sale is for a
+  // new job, health or an event you could not foresee (121(c)): then the cap times the share of the two years, by days or by
+  // full months, whichever is larger (26 CFR 1.121-3(g)(1): "expressed in days or months")
+  const test = date && today ? twoYearTest(date, today) : null;
+  const reduced = test && !test.meets && e.reducedReason === true ? Math.min(1, Math.max(test.days / USE.days, test.months / USE.months)) : null;
+  const exclusion = !test || test.meets ? cap : reduced !== null ? cap * reduced : 0;
   const taxable = gain !== null ? Math.max(0, gain - exclusion) : 0;
-  // the gains rate on the next dollars of long-term gain: 15% for most, 20% at the top; 3.8% more above $200,000 / $250,000 of income
-  const gainsRate = taxable > 0 ? (fed.result.taxableIncome + taxable > (status === "married_joint" ? 600050 : 533400) ? 0.20 : 0.15) + (fed.result.agi + taxable > (status === "married_joint" ? 250000 : 200000) ? 0.038 : 0) : 0;
-  const sale = { costs: sellCosts, basis, gain, exclusion, taxable, rate: gainsRate, tax: taxable * gainsRate, net: value - sellCosts - owed - taxable * gainsRate };
+  // held more than a year (from the day after the purchase) is long-term (IRC 1222(3); Tax lots' longOn); a year or less is
+  // short-term and taxed like pay. The gain is investment income for the 3.8% tax (1411(c)(1)(A)(iii)); the excluded part is not
+  // (1.1411-4(d)(3)(ii) Example 3). The engine stacks a long-term gain through the year's 0/15/20% bands and charges the 3.8% on
+  // the lesser of the investment income and the income over the line (1(h), 1411(a)(1))
+  const longFrom = date ? longOn(date) : null;
+  const term = longFrom && today && today < longFrom ? "short" : "long";
+  const r0 = federalTax(ti.inputs, ti.params);
+  const r1 = taxable > 0 ? federalTax({ ...ti.inputs, ...(term === "short" ? { otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + taxable } : { qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + taxable }), investmentIncome: (Number(ti.inputs.investmentIncome) || 0) + taxable }, ti.params) : r0;
+  const tax = Math.max(0, r1.totalTax - r0.totalTax), niit = Math.max(0, (r1.niit || 0) - (r0.niit || 0));
+  const sale = { costs: sellCosts, basis, gain, cap, exclusion, excluded: gain !== null ? Math.min(exclusion, Math.max(0, gain)) : 0, taxable, term, longOn: longFrom, test, reduced, rate: taxable > 0 ? tax / taxable : 0, tax, niit, incomeTax: tax - niit, year: yr.year, otherYear: yr.other, filingStatus: status, net: value - sellCosts - owed - tax };
 
   // ahead: the value growing, the mortgage on its schedule
   const appreciation = n(e.appreciation, DEFAULTS.appreciation);

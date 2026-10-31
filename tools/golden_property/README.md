@@ -80,7 +80,10 @@ That is how the table under "Deliberate mistakes" was made.
 in the law columns, all "app wrong" when checked against the sources: on the Rental page `rentlaw-separate-together` (23
 rows), `-no-netting` (385), `-in-order` (86), `-one-rate` (973) and `-no-niit` (713); on the Home page
 `homelaw-two-year-test` (276), `-short-term` (113), `-flat-rate` (609) and `-niit-whole-gain` (448). A row can be under more
-than one cause. The test's `WHY` gives each cause's reason and source.
+than one cause. All nine were fixed on the pages the same day (the Rental page nets the rentals, spreads the allowance pro
+rata, gives none to a couple filing separately who lived together, and works the tax and the 3.8% through the federal
+estimate; the Home page applies the 2-of-5-year test, taxes a short-term gain like pay and works the tax through the federal
+estimate), so `todo.json` is `{}` again and every row of every part agrees. The test's header keeps each cause's summary.
 
 ## Sources
 

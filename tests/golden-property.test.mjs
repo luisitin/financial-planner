@@ -25,59 +25,61 @@
 //                           interest, principal, cash_flow, cash_on_cash, dscr, break_even, one_percent, equity, growth,
 //                           total_return, return_on_equity (a blank key value is the page's null); the number of rentals;
 //                           totals.cashFlow against cash_flow_total
-//                rentaltax  the page's tax, per rental: basis, depreciation, taxable, loss_usable, loss_carried, tax_line,
-//                           after_tax; the rate it applies (federal marginal + state) against marginal_rate, lossRoom against
-//                           page_loss_room, the sums of the usable and carried losses and of the tax lines, totals.afterTax
-//                           against page_after_tax_total
+//                rentaltax  the page's taxable result, per rental: basis, depreciation, taxable; the federal marginal rate
+//                           (+ the state share, 0 here) against marginal_rate
 //                rentlaw    what the page says will happen this year, against the law (within $1): each rental's loss that
-//                           "lowers your other tax this year" (lossUsable) against the law's allowed_loss and the part that
-//                           "waits" (lossCarried) against suspended_loss (Form 8582); the sum of the tax lines against
-//                           law_tax_change (federal tax with the allowed net result less without, the 3.8% included) and
-//                           totals.afterTax against law_after_tax_total
+//                           counts this year (lossUsable) against the law's allowed_loss and the part that "waits"
+//                           (lossCarried) against suspended_loss (Form 8582); lossRoom against law_allowance (line 8); the
+//                           netting (passive: profits less losses, netLoss, againstOther, allowed, suspended, net) against
+//                           law_net_passive ... law_allowed_net; tax.niit against law_niit_change; the sum of the tax lines
+//                           against law_tax_change (federal tax with the allowed net result less without, the 3.8% included)
+//                           and totals.afterTax against law_after_tax_total
 //   homes.csv    home       equity, ltv (none at value 0), the whole months owned (bought.years x 12) against months_owned
 //                           (M1), bought.growth against growth_since_bought (none under 12 months)
 //                upkeep     the year's cost lines (property tax, insurance, dues, upkeep, mortgage interest; a line the page
 //                           leaves out is 0) and costs.total against costs_year
-//                sale       sale.costs, basis, gain, exclusion, taxable, rate (only where something is taxed: the page shows
-//                           no rate otherwise), tax and net against sell_costs ... page_keep
+//                sale       sale.costs, basis and gain against sell_costs, basis, gain
 //                ahead      the values in 5, 10 and 20 years against value_5y, value_10y, value_20y
-//                homelaw    what the page says selling today leaves, against the law (within $1): sale.taxable against
-//                           law_taxable_gain, sale.tax against law_tax, sale.net against law_keep
+//                homelaw    what the page says selling today leaves, against the law: the days owned, full months, the
+//                           2-of-5-year test, the first long-term day and the term exactly; within $1 the exclusion (the cap
+//                           against law_exclusion_max, the part of the gain excluded against law_exclusion), sale.taxable
+//                           against law_taxable_gain, its income tax and 3.8% parts against law_income_tax and law_niit,
+//                           sale.tax against law_tax, sale.net against law_keep
 // Reported only (no pass or fail; the page has no such figure, follows another lawful method, or does not show the figure as
 // what will happen), as counts: of rows where the page's figure differs from the law's by more than $1, or where the app
 // equals one of the key's convention columns:
 //   - depreciation.csv and rentals.csv: P946 Table A-6 (depreciation_law_table_a6, depreciation_table_a6) against the page's
 //     formula (both are lawful: P946 allows figuring it without the table);
-//   - rentals.csv: law_allowance against lossRoom, law_loss_allowed_total and law_suspended_total against the page's sums,
-//     law_niit_change (the page has no 3.8%);
-//   - homes.csv: the key's other readings of "whole months" (M2, M3) against the app; the law's full months, the 2-of-5-year
-//     test, the term, its income tax and 3.8% parts against the page's flat rate; the page's taxable income (convention H6)
-//     against the federal estimate; page_rate where nothing is taxed; 121(c)'s reduced exclusion (a contrast).
+//   - rentals.csv: the brief's old page method (rental_results loss_usable, loss_carried, tax_line, after_tax; page_loss_room
+//     and the page totals), which no longer describes the page, against the page: how far the 2026-10-31 fixes moved it;
+//   - homes.csv: the key's other readings of "whole months" (M2, M3) against the app; the old page method's exclusion,
+//     taxable gain, tax and keep against the page; the page's taxable income (convention H6) against the federal estimate;
+//     page_rate where nothing is taxed; 121(c)'s reduced exclusion (a contrast: the page applies it only when the sale's
+//     reason is ticked, which the key's households never do).
 // Not compared (the page has no such figure): depreciation.csv recovery_year, year_is, months_counted, note; rentals.csv
 // rental_law allowed_result (the page's taxable and lossUsable give it), rental_depreciation recovery_year and
 // placed_this_year, rental_loan, law_net_passive, law_passive_activity_loss, law_allowed_against_wages, law_allowed_net,
 // law_tax_without, law_tax_with, law_minus_page, ratio_law_to_page, note; homes.csv loan_payments_made, page_taxable_income
-// (reported), days_owned, full_months_owned, meets_2_of_5, law_exclusion_max, law_exclusion, first_long_day, term,
-// law_tax_without, law_income_tax, law_niit, law_minus_page_tax and the reduced_* columns (reported), note.
+// (reported), law_tax_without, law_minus_page_tax and the reduced_* columns (reported), note.
 //
 // On 2026-10-31 the first run found every page-convention figure in agreement (depreciation, rental, rentaltax, home,
 // upkeep, sale, ahead: every row), so the brief's open conventions hold on the pages (whole months M1, the page's taxable
 // income H6, return on equity blank at equity 0 or less E1, a blank cost 0, a blank share the default). The law parts
-// differ by nine causes: five on the Rental page (1,433 of 2,000 rows), four on the Home page (881 of 1,500).
+// differed by nine causes, each checked against the sources and proved with a copy of the page's code with one switch per
+// cause: on the Rental page (1,433 of 2,000 rows) no passive netting across rentals (469(d)(1)), the allowance used in the
+// order typed instead of pro rata (469(j)(4)), the allowance for a couple filing separately who lived together (none:
+// 469(i)(5)(B)), the tax at one marginal rate instead of the federal estimate's tax with the rentals less without, and no
+// 3.8% on net rent (1411); on the Home page (881 of 1,500 rows) no 2-of-5-year test (121(a), 1.121-1(c)(1)), a short-term
+// gain at 15% or 20% instead of like pay (1222), one flat 15% or 20% with 2025's single and joint lines instead of the year's
+// own 0/15/20% bands for the status (1(h)), and the 3.8% on the whole gain instead of on the lesser of the gain and the income
+// over the line (1411(a)(1); 125,000 filing separately). All nine were fixed the same day; every row of every part agrees.
+// The comparisons with the brief's page columns that the fixes moved off (rentaltax's losses, tax lines and totals; sale's
+// exclusion, taxable gain, rate, tax and keep) are now counts in the reported tests, and the law parts compare the pages'
+// in-between figures too (the netting, the allowance, the 3.8%; the days, months, test, term and exclusion).
 //
-// Where the page and the key part ways, the case ids are listed by cause in golden/property/todo.json and run as { todo }
-// tests; a cause's part is the first word of its name, and a row can have more than one cause. Each reason starts with the
-// verdict of a check against the sources: "app wrong" (the law says otherwise, or the screen tells a layperson something
-// about this year's tax or the sale that the law contradicts), "simplification" (a modelling choice the page's README
-// states and the screen marks as approximate) or "convention" (no source decides). Each cause was checked with a copy of
-// the page's code that has one switch per cause: with every switch on, every row of the law parts agrees; with all but one
-// on, exactly the rows listed under that one differ (no two causes explain a row only together); and for every set of
-// causes fixed, each row that still differs is listed under a cause not yet fixed. One listed row passes today only because
-// two causes cancel (rent-2025-mfs-0978, see separate-together). When a cause is fixed, delete its lists and those rows
-// must then pass. The page-convention parts compare the same figures with the brief's page columns (rentaltax loss_usable,
-// loss_carried, tax_line, after_tax and the totals; sale page_exclusion, page_taxable_gain, page_rate, page_tax,
-// page_keep): a fix that follows the law moves those figures off the page columns, so those comparisons then become counts
-// in the reported tests, as the key's page columns no longer describe the page.
+// Should the page and the key part ways again, list the case ids by cause in golden/property/todo.json ("<part>-<why>") with
+// a reason in WHY that starts with the verdict ("app wrong", "simplification" or "convention"); they then run as { todo }
+// tests. Delete a cause's list when it is fixed.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -110,19 +112,7 @@ const idOf = (f, row) => row.case_id;
 
 // Where the page and the key part ways (tests/golden/property/RULES.md sections 5, 7 and 8, tools/golden_property/README.md
 // open points). A cause is "<part>-<why>"; the reason is the why's.
-const WHY = {
-  // rentals.csv: what the page says this year's loss and tax will be (469, Form 8582, 1411)
-  "separate-together": "app wrong: on a separate return whose spouses lived together at any time in the year the page still gives the $12,500 allowance (less half the wages over $50,000); 469(i)(5)(B), Form 8582 Part V and P925 give none, so the loss the page says lowers this year's tax is suspended by law (the README's 'half that on a separate return' is the lived-apart rule only). In 27 more such rows the page's allowance happens to equal what the rentals with income absorb by law: they are listed under no-netting, which keeps them to-do if this cause is fixed first",
-  "no-netting": "app wrong: the page sets each loss against the $25,000 allowance alone and carries the rest, but rentals with income absorb the other rentals' losses first (469(d)(1): the passive activity loss is the losses less the passive income; Form 8582 lines 1-4, P925's $70,000 example), so the law allows more of the loss this year and suspends less",
-  "in-order": "app wrong: the page lets the losing rentals use the allowance in the order they were typed (its README: 'shared by all rentals in order'); 469(j)(4) and 1.469-1T(f)(2) spread the allowed and the suspended loss over them pro rata (Form 8582 Parts VI-VIII, P925's Terry). The household's totals agree; each rental's 'lowers your other tax this year' and 'waits' figures do not, and a rental's own suspended loss is what its sale later frees (469(g))",
-  "one-rate": "app wrong: the page's tax line is the taxable result times one rate, the federal marginal rate on $1,000 more on the wages (its README states the shortcut, 'tax = taxable x (federal top rate + state share)', and the screen says 'about'), but what the rentals add to this year's tax is the federal tax with their allowed net result less the tax without (26 U.S.C. 1(j) and 63; the brackets and standard deductions of Rev. Procs. 2024-40 and 2025-32), which crosses brackets and the standard deduction. In every row listed the page shows less tax, or more saved, than the law: by a median of $2,520, more than $5,000 in 365 rows, and in 92 rows its rate is 0 (wages under the standard deduction), so a rental profit shows no tax at all (rent-2025-hoh-0082: $0 on $81,506 against $10,121.68). The fix: the federal estimate's tax with the rentals' allowed net result added less without, as the tax-lots and crypto pages do",
-  "no-niit": "app wrong: the page leaves out the 3.8% net investment income tax on net rental income (1411(c)(1)(A)(i): rents are net investment income; Form 8960 line 4a), owed once the modified AGI with the rentals passes 200,000 (250,000 joint, 125,000 separate)",
-  // homes.csv: what the page says selling today leaves (121, 1222, 1(h), 1411)
-  "two-year-test": "app wrong: the page applies the $250,000 / $500,000 exclusion to every sale, but 121(a) and 1.121-1(c)(1) allow it only after owning and living in the home 730 days or 24 full months of the 5 years before the sale, which the purchase date shows is not met here (121(c)'s reduced exclusion needs a reason for the sale the page does not ask for)",
-  "short-term": "app wrong: a home held one year or less is a short-term gain (1222(1); P550: counted from the day after the purchase), taxed as ordinary income through the brackets, not at 15% or 20%; every such row also fails the two-year test, so its tax shows only once that is fixed",
-  "flat-rate": "app wrong: the page taxes the whole taxable gain at 15%, or at 20% once taxable income plus the gain passes 533,400 (600,050 joint), 2025's single and joint lines, in every year and for every status (its README states those two 2025 lines only, not the head of household or separate ones nor 2026's, and its code comment calls it the rate 'on the next dollars' while it puts the last dollar's rate on all of them); the law stacks the gain on top of the other income through that year's own 0%, 15% and 20% bands for the status (26 U.S.C. 1(h) and 1(j)(5); Form 1040 Qualified Dividends and Capital Gain Tax Worksheet; Rev. Proc. 2024-40 s.2.03, Rev. Proc. 2025-32 s.4.03), so part or all of it can be at 0% or 15%. The page's 15/20% part alone misses the law's income tax on the gain by a median of $17,373 in these rows (more than $5,000 in 507, up to $51,551): too much in 591, including 27 where the law's is $0, and too little in 18 separate returns, whose 15% band ends at 300,000 (2025) or 306,850 (2026), not 533,400. The fix: the federal estimate's tax with the gain added to the qualified income less without",
-  "niit-whole-gain": "app wrong: the page adds 3.8% on the whole taxable gain once wages plus the gain pass 200,000 (250,000 joint) for every status; 1411(a)(1) taxes only the lesser of the gain and the modified AGI over the line, and the line is 125,000 on a separate return (1411(b)(2))",
-};
+const WHY = {};   // every cause found on 2026-10-31 is fixed (see the header)
 const reasonOf = (cause) => WHY[cause.slice(cause.indexOf("-") + 1)];
 const todoLists = JSON.parse(read("todo.json"));
 const TODO = {};   // "<id> <part>" -> reason
@@ -237,17 +227,8 @@ function rentalMismatches(row, part) {
       near(out, `${L} basis`, r.basis, w.basis);
       near(out, `${L} depreciation`, r.depreciation, w.depreciation);
       near(out, `${L} taxable`, r.taxable, w.taxable);
-      near(out, `${L} loss_usable`, r.lossUsable, w.loss_usable);
-      near(out, `${L} loss_carried`, r.lossCarried, w.loss_carried);
-      near(out, `${L} tax_line`, r.tax, w.tax_line);
-      near(out, `${L} after_tax`, r.afterTax, w.after_tax);
     });
     near(out, "marginal_rate (federal marginal + state share)", d.rates ? d.rates.marginal + d.rates.state : null, row.marginal_rate, RATE);
-    near(out, "page_loss_room", d.lossRoom, row.page_loss_room);
-    near(out, "page_loss_usable_total", sum(app, (r) => r.lossUsable), row.page_loss_usable_total);
-    near(out, "page_loss_carried_total", sum(app, (r) => r.lossCarried), row.page_loss_carried_total);
-    near(out, "page_tax_line_total", sum(app, (r) => r.tax), row.page_tax_line_total);
-    near(out, "page_after_tax_total", d.totals?.afterTax, row.page_after_tax_total);
   }
   if (part === "rentlaw") {
     lawOf(row).forEach((w, i) => {
@@ -256,6 +237,15 @@ function rentalMismatches(row, part) {
       near(out, `${L} loss lowering other tax this year (lossUsable) against allowed_loss`, r.lossUsable, w.allowed_loss, LAW);
       near(out, `${L} loss waiting (lossCarried) against suspended_loss`, r.lossCarried, w.suspended_loss, LAW);
     });
+    near(out, "loss room (the allowance) against law_allowance", d.lossRoom, row.law_allowance, LAW);
+    const P = d.passive ?? {};
+    near(out, "passive.profits - passive.losses against law_net_passive", (P.profits ?? 0) - (P.losses ?? 0), row.law_net_passive, LAW);
+    near(out, "passive.netLoss against law_passive_activity_loss", P.netLoss, row.law_passive_activity_loss, LAW);
+    near(out, "passive.againstOther against law_allowed_against_wages", P.againstOther, row.law_allowed_against_wages, LAW);
+    near(out, "passive.allowed against law_loss_allowed_total", P.allowed, row.law_loss_allowed_total, LAW);
+    near(out, "passive.suspended against law_suspended_total", P.suspended, row.law_suspended_total, LAW);
+    near(out, "passive.net against law_allowed_net", P.net, row.law_allowed_net, LAW);
+    near(out, "tax.niit against law_niit_change", d.tax?.niit, row.law_niit_change, LAW);
     near(out, "tax lines against law_tax_change", sum(app, (r) => r.tax), row.law_tax_change, LAW);
     near(out, "after tax against law_after_tax_total", d.totals?.afterTax, row.law_after_tax_total, LAW);
   }
@@ -302,17 +292,22 @@ function homeMismatches(row, part) {
     near(out, "sell_costs", s.costs, row.sell_costs);
     near(out, "basis", s.basis, row.basis);
     near(out, "gain", s.gain, row.gain);
-    near(out, "page_exclusion", s.exclusion, row.page_exclusion);
-    near(out, "page_taxable_gain", s.taxable, row.page_taxable_gain);
-    if (num(row.page_taxable_gain) > 0) near(out, "page_rate", s.rate, row.page_rate, RATE);
-    near(out, "page_tax", s.tax, row.page_tax);
-    near(out, "page_keep", s.net, row.page_keep);
   }
   if (part === "ahead") {
     for (const [i, col] of [[0, "value_5y"], [1, "value_10y"], [2, "value_20y"]]) near(out, col, d.ahead[i]?.value, row[col]);
   }
   if (part === "homelaw") {
+    const t = d.sale.test;
+    same(out, "days owned against days_owned", t?.days ?? null, num(row.days_owned));
+    same(out, "full months against full_months_owned", t?.months ?? null, num(row.full_months_owned));
+    same(out, "two-year test against meets_2_of_5", t?.meets ?? null, yes(row.meets_2_of_5));
+    same(out, "first long-term day against first_long_day", d.sale.longOn, row.first_long_day);
+    same(out, "term against term", d.sale.term, row.term);
+    near(out, "exclusion (the most tax-free) against law_exclusion_max", d.sale.exclusion, row.law_exclusion_max, LAW);
+    near(out, "excluded (the part of the gain tax-free) against law_exclusion", d.sale.excluded, row.law_exclusion, LAW);
     near(out, "taxable gain against law_taxable_gain", d.sale.taxable, row.law_taxable_gain, LAW);
+    near(out, "income tax on the gain against law_income_tax", d.sale.incomeTax, row.law_income_tax, LAW);
+    near(out, "3.8% on the gain against law_niit", d.sale.niit, row.law_niit, LAW);
     near(out, "tax on the gain against law_tax", d.sale.tax, row.law_tax, LAW);
     near(out, "you would keep against law_keep", d.sale.net, row.law_keep, LAW);
   }
@@ -380,23 +375,21 @@ test("reported: P946 Table A-6 against the page's formula (both lawful), as coun
   t.diagnostic(`depreciation.csv: the table's year differs from the page's by more than $1 on ${differ} of ${rows} rows with depreciation (largest $${largest.toFixed(2)}); the running totals on ${runDiffer} (largest $${runLargest.toFixed(2)})`);
   t.diagnostic(`rentals.csv: the table's year differs from the page's by more than $1 on ${rentalsDiffer} of ${rentals} rentals`);
 });
-test("reported: the law's passive-loss figures the Rental page does not show as what will happen, as counts", (t) => {
+test("reported: the brief's old page method against the Rental page now (how far the 2026-10-31 fixes moved it), as counts", (t) => {
   const R = ROWS["rentals.csv"];
-  let room = 0, allowed = 0, suspended = 0, niit = 0, niitRows = 0;
+  let rentals = 0, usable = 0, carried = 0, line = 0, room = 0, total = 0;
   for (const row of R) {
-    const d = rentalOf(row), app = d.rentals ?? [];
-    if (over(d.lossRoom ?? 0, num(row.law_allowance))) room++;
-    if (over(sum(app, (r) => r.lossUsable), num(row.law_loss_allowed_total))) allowed++;
-    if (over(sum(app, (r) => r.lossCarried), num(row.law_suspended_total))) suspended++;
-    if (num(row.law_niit_change) > 0) niitRows++;
-    if (num(row.law_niit_change) > LAW + EPS) niit++;
+    const d = rentalOf(row), app = d.rentals ?? [], want = resultsOf(row);
+    want.forEach((w, i) => { const r = app[i]; if (!r) return; rentals++; if (over(r.lossUsable, num(w.loss_usable))) usable++; if (over(r.lossCarried, num(w.loss_carried))) carried++; if (over(r.tax, num(w.tax_line))) line++; });
+    if (over(d.lossRoom ?? 0, num(row.page_loss_room))) room++;
+    if (over(d.totals?.afterTax ?? 0, num(row.page_after_tax_total))) total++;
   }
-  t.diagnostic(`of ${R.length} rows: the law's allowance (line 8) differs from the page's loss room on ${room}; all losses allowed (line 11) from the page's usable total on ${allowed}; the suspended total from the page's carried total on ${suspended}`);
-  t.diagnostic(`the 3.8% tax on net rental income (the page has none): above 0 on ${niitRows} rows, above $1 on ${niit}`);
+  t.diagnostic(`of ${rentals} rentals the old method's usable loss differs from the page's by more than $1 on ${usable}, its carried loss on ${carried}, its tax line on ${line}`);
+  t.diagnostic(`of ${R.length} rows its loss room differs on ${room} (the couples filing separately who lived together), its after-tax total on ${total}`);
 });
 test("reported: the Home page against the key's other month counts, the law's dates and rates, H6 and the reduced exclusion, as counts", (t) => {
   const H = ROWS["homes.csv"];
-  let m1 = 0, m2 = 0, m3 = 0, g2 = 0, g3 = 0, fullMonths = 0, fails = 0, short = 0, incomeTax = 0, niit = 0, h6 = 0, rateShown = 0, noTax = 0, reduced = 0, failsReduced = 0;
+  let m1 = 0, m2 = 0, m3 = 0, g2 = 0, g3 = 0, fullMonths = 0, fails = 0, short = 0, oldExclusion = 0, oldTax = 0, oldKeep = 0, h6 = 0, rateShown = 0, noTax = 0, reduced = 0, failsReduced = 0;
   for (const row of H) {
     const d = homeOf(row), months = monthsOf(d);
     if (months === num(row.months_owned)) m1++;
@@ -408,18 +401,18 @@ test("reported: the Home page against the key's other month counts, the law's da
     if (months !== num(row.full_months_owned)) fullMonths++;
     if (!yes(row.meets_2_of_5)) fails++;
     if (row.term === "short") short++;
-    // the page's rate is 15% or 20%, plus 3.8% (18.8%, 23.8%) once over its line
-    const s = d.sale, pageNiit = [0.188, 0.238].some((r) => Math.abs(s.rate - r) < EPS) ? s.taxable * 0.038 : 0;
-    if (over(s.tax - pageNiit, num(row.law_income_tax))) incomeTax++;
-    if (over(pageNiit, num(row.law_niit))) niit++;
+    const s = d.sale;
+    if (over(s.exclusion, num(row.page_exclusion))) oldExclusion++;
+    if (over(s.tax, num(row.page_tax))) oldTax++;
+    if (over(s.net, num(row.page_keep))) oldKeep++;
     const fed = federalPage(homePlan(row), { today: row.today });
     if (Math.abs(fed.result.taxableIncome - num(row.page_taxable_income)) <= CENT + EPS) h6++;
-    if (!(num(row.page_taxable_gain) > 0)) { noTax++; if (Math.abs(s.rate - num(row.page_rate)) <= RATE + EPS) rateShown++; }
+    if (!(s.taxable > 0)) { noTax++; if (Math.abs(s.rate - num(row.page_rate)) <= RATE + EPS) rateShown++; }
     if (!yes(row.meets_2_of_5)) { failsReduced++; if (over(s.tax, num(row.reduced_tax))) reduced++; }
   }
   t.diagnostic(`whole months: the app equals M1 (months_owned) on ${m1} of ${H.length} rows, M2 on ${m2}, M3 on ${m3}; its growth equals growth_m2 on ${g2}, growth_m3 on ${g3}`);
-  t.diagnostic(`the law's full months (L1) differ from the page's whole months on ${fullMonths} rows; the 2-of-5-year test fails on ${fails} (the page applies the exclusion anyway); the term is short on ${short} (the page uses 15% or 20%)`);
-  t.diagnostic(`the page's 15/20% part differs from the law's income tax on the sale by more than $1 on ${incomeTax} rows, its 3.8% part from the law's on ${niit}`);
+  t.diagnostic(`the law's full months (L1) differ from the page's whole months on ${fullMonths} rows; the 2-of-5-year test fails on ${fails}; the term is short on ${short}`);
+  t.diagnostic(`the brief's old page method against the page now: its exclusion differs by more than $1 on ${oldExclusion} rows, its tax on ${oldTax}, what you keep on ${oldKeep}`);
   t.diagnostic(`H6: the federal estimate's taxable income equals page_taxable_income (wages less the standard deduction) on ${h6} of ${H.length} rows`);
   t.diagnostic(`where nothing is taxed (${noTax} rows) the page keeps a rate of 0 and shows none; the key's page_rate (15% or more, "shown even when nothing is taxed") equals it on ${rateShown}`);
   t.diagnostic(`121(c) contrast: of the ${failsReduced} rows that fail the 2-of-5-year test, the reduced exclusion (by days) would give another tax than the page's by more than $1 on ${reduced}`);

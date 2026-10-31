@@ -4,7 +4,7 @@
 // carries to next year, what a recent purchase cancels), and the order to sell in when you need
 // cash (the smallest gain per share first).
 import { compute as computeHoldings } from "../holdings/compute.js";
-import { taxInputs, lossCarryover } from "../../taxes/federal/compute.js";
+import { taxInputs, lossCarryover, todaysReturn } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween, isoOf } from "../../../core/math/dates.js";
 
@@ -20,16 +20,8 @@ export function longOn(date) {
   return isoOf(y + 1, mo, d);   // a year on (February 29 in a year without one rolls to March 1)
 }
 
-/**
- * A sale today falls in today's tax year. When the Federal estimate is set to another year (say last year's return), work
- * today's year instead, without that year's sales typed on Capital gains (they belong to the set year). The typed figures
- * (pay, dividends) stay as the best guess at today's year. -> { plan, year, other (the set year, when it differs) }
- */
-export function todaysReturn(plan, today) {
-  const year = today ? Number(String(today).slice(0, 4)) : null, set = Number(plan.taxes?.year) || null;
-  if (!year || !set || set === year) return { plan, year: set ?? year, other: null };
-  return { plan: { ...plan, taxes: { ...(plan.taxes ?? {}), year: null, gains: [] } }, year, other: set };
-}
+/** A sale today is worked in today's tax year (`todaysReturn` lives with the Federal estimate; re-exported for Crypto). */
+export { todaysReturn };
 
 /** The carryover worksheet (Pub. 550 Worksheet 4-1) lives with the Federal estimate; re-exported here for this page's tests. */
 export { carryoverWorksheet as carryover } from "../../taxes/federal/compute.js";

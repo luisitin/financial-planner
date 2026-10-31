@@ -36,11 +36,14 @@ export function render(page, ctx) {
     return;
   }
 
-  if (d.rentals.length > 1) root.append(ui.card(null, ui.row(
+  const P = d.passive, many = d.rentals.length > 1;
+  const niitLine = { married_joint: 250000, married_separate: 125000 }[plan.household?.filingStatus] ?? 200000;
+  const niitText = d.tax.niit > 0.5 ? ` That includes ${money(d.tax.niit)} of the 3.8% extra tax on investment income: rent counts once your income passes ${money(niitLine)}.` : "";
+  if (many) root.append(ui.card(null, ui.row(
     ui.stat("Rent a year", money(d.totals.rent), `${d.rentals.length} properties`),
     ui.stat("Cash flow a year", signed(d.totals.cashFlow), `${signed(d.totals.afterTax)} after tax`),
     ui.stat("Equity", money(d.totals.equity), `in ${money(d.totals.value)} of property`),
-  )));
+  ), ui.h("p", {}, `${Math.abs(d.tax.total) < 0.5 ? `Together your rentals do not change this year's tax${P.losses > 0.5 && P.profits > 0.5 ? ": the losses cancel the profits" : ""}` : `Together your rentals ${d.tax.total > 0 ? "add" : "take"} about ${money(Math.abs(d.tax.total))} ${d.tax.total > 0 ? "to" : "off"} this year's tax${P.losses > 0.5 && P.profits > 0.5 ? `, after the profitable ones absorb the others' losses` : ""}`}${P.suspended > 0.5 ? `; ${money(P.suspended)} of loss waits for a later year` : ""}.${niitText}`)));
 
   for (const r of d.rentals) {
     const src = (plan.property ?? []).find((x) => x.id === r.id) ?? {};
@@ -55,7 +58,7 @@ export function render(page, ctx) {
       ["Income after running costs", r.noi, false, true],
       r.debtService ? ["Loan payments", -r.debtService, true] : null,
       ["Cash flow", r.cashFlow, false, true],
-      [r.tax >= 0 ? "Tax on it" : "Tax it saves", -r.tax, true],
+      [r.tax >= -0.5 ? "Tax on it" : "Tax it saves", Math.abs(r.tax) < 0.5 ? 0 : -r.tax, true],
       ["After tax", r.afterTax, false, true],
     ].filter(Boolean);
     root.append(ui.card(`The year, line by line`, ui.h("ul", { class: "rn-lines" }, lines.map(([label, amount, sub, tot]) => ui.h("li", { class: tot ? "rn-tot" : sub ? "rn-sub" : null }, ui.h("span", {}, label), ui.h("span", {}, signed(amount)))))));
@@ -66,10 +69,17 @@ export function render(page, ctx) {
     if (r.onePercent !== null) checks.push(ui.h("li", {}, `Monthly rent is ${pct(r.onePercent, 2)} of the price paid. `, ui.h("span", { class: "rn-d" }, "Investors' quick screen asks for about 1%; few homes in costly areas reach it.")));
     root.append(ui.card("The checks a lender makes", ui.h("ul", {}, checks)));
 
+    const lossText = () => {
+      const intro = `A tax loss of ${money(-r.taxable)} after costs, interest (${money(r.interest)}) and depreciation.`;
+      const saving = -r.tax > 0.5 ? `, saving about ${money(-r.tax)}` : P.profits > 0.5 ? ", against your other rentals' profit" : "";
+      if (r.lossUsable > 0.5 && r.lossCarried <= 0.5) return `${intro} All of it counts this year${P.profits > 0.5 && P.againstOther > 0.5 ? `: your other rentals' profit absorbs part of it and the rest lowers your other income` : P.profits > 0.5 ? `: your other rentals' profit absorbs it` : ": it lowers your other income"}${-r.tax > 0.5 ? `, saving about ${money(-r.tax)}` : ""}.`;
+      if (r.lossUsable > 0.5) return `${intro} ${money(r.lossUsable)} of it counts this year${saving}${many ? ": its share of what your rentals' profits and the allowance can take, split by the size of each rental's loss" : ""}. ${money(r.lossCarried)} waits for a year with rental profit, or the sale. ${d.lossRoom > 0.5 ? `At your income up to ${money(d.lossRoom)} of rental losses can come off other income this year (the allowance shrinks by 50 cents for each dollar over $100,000 and ends at $150,000).` : d.separateTogether ? "Filing separately while living with your spouse, none of it can come off other income this year (if you lived apart all year, tick that on the Federal estimate)." : "At your income the allowance that lets rental losses come off other income is gone (it ends at $150,000)."}`;
+      if (d.separateTogether) return `${intro} You file separately and lived with your spouse during the year, so a rental loss cannot lower your other income this year${P.profits > 0.5 ? ` (only your rentals' profit can absorb it)` : ""}: ${money(r.lossCarried)} waits for a year with rental profit, or the sale. If you lived apart all year, tick that on the Federal estimate.`;
+      return `${intro} At your income (${money(d.rates.magi)}) the allowance that lets rental losses come off other income is gone: it shrinks by 50 cents for each dollar over $100,000 and ends at $150,000. ${money(r.lossCarried)} waits for a year with rental profit, or the sale.`;
+    };
     root.append(ui.card("Tax", ui.h("p", {}, `Depreciation: the building (${money(r.basis)}, the price less the land) is written off over ${RECOVERY_YEARS} years: ${money(r.depreciation)} this year. It lowers the tax without costing cash.`),
-      ui.h("p", {}, r.taxable >= 0 ? `Taxable rent after costs, interest (${money(r.interest)}) and depreciation: ${money(r.taxable)}, about ${money(r.tax)} of tax at ${pct(d.rates.marginal + d.rates.state, 0)}.`
-        : `A tax loss of ${money(-r.taxable)} after costs, interest (${money(r.interest)}) and depreciation. ${r.lossUsable > 0 ? `${money(r.lossUsable)} of it lowers your other tax this year (about ${money(-r.tax)} saved)` : "None of it lowers your other tax this year: the allowance is gone at your income"}${r.lossCarried > 0 ? `; ${money(r.lossCarried)} waits for a year with rental profit, or the sale` : ""}.`),
-      ui.h("p", { class: "rn-d" }, "When you sell, the depreciation taken is taxed back at up to 25%. If Income also lists this rent, the federal estimate already counts it once.")));
+      ui.h("p", {}, r.taxable >= 0 ? `Taxable rent after costs, interest (${money(r.interest)}) and depreciation: ${money(r.taxable)}. ${many ? (Math.abs(r.tax) < 0.5 && P.losses > 0.5 ? "Your other rentals' losses cancel it, so it adds no tax this year." : `Its share of what your rentals add to this year's tax: about ${money(r.tax)}.`) : `Added to your other income it raises this year's tax by about ${money(r.tax)}.${niitText}`}` : lossText()),
+      ui.h("p", { class: "rn-d" }, "When you sell, the depreciation taken is taxed back at up to 25%, and any loss still waiting can then be used. If Income also lists this rent, the federal estimate already counts it once.")));
 
     root.append(ui.card("What it adds to your wealth", ui.h("p", {}, `${signed(r.cashFlow)} of cash, ${money(r.principal)} of loan paid down and about ${money(r.growth)} of growth in value (${pct(src.appreciation ?? DEFAULTS.appreciation)} a year): ${money(r.totalReturn)}${r.returnOnEquity !== null ? `, ${pct(r.returnOnEquity)} on your ${money(r.equity)} of equity` : ""}.`)));
     root.append(editor(src, false));

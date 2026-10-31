@@ -2,9 +2,11 @@
 // rent less a vacancy allowance, less the running costs, is the net operating income; against the value that
 // is the cap rate; less the loan payments it is the cash flow, and against the cash put in the cash-on-cash
 // return; the debt-service coverage a lender wants; the occupancy that breaks even. Then tax: depreciation over
-// 27.5 years, the year's taxable result, and whether a loss can be used now (the $25,000 allowance) or waits.
+// 27.5 years, the year's taxable result, the losses netted across rentals and the $25,000 allowance (what is used this
+// year and what waits), and what the rentals add to this year's federal tax, worked through the federal estimate.
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { federalTax } from "../../../core/math/tax.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";
@@ -13,7 +15,7 @@ import { yearOfPayments } from "../../cashflow/statement/compute.js";
 export const DEFAULTS = { vacancy: 0.05, maintenance: 0.01, management: 0, landShare: 0.2, appreciation: 0.035 };
 /** Residential rental buildings are depreciated straight-line over 27.5 years, mid-month in the first year (IRS Publication 527). */
 export const RECOVERY_YEARS = 27.5;
-/** The special allowance for rental losses with active participation: $25,000, less half of modified AGI above $100,000, gone at $150,000 (IRC §469(i)); $12,500 and $50,000 married filing separately (living apart). */
+/** The special allowance for rental losses with active participation: $25,000, less half of modified AGI above $100,000, gone at $150,000 (IRC 469(i)(2), (3)(A)); $12,500 and $50,000 married filing separately and living apart all year, none filing separately otherwise (469(i)(5)). */
 export const ALLOWANCE = { max: 25000, from: 100000, to: 150000 };
 /** Lenders' usual minimum debt-service coverage for a rental loan. */
 export const DSCR_MIN = 1.25;
@@ -61,9 +63,10 @@ export function analyse(r, loan, rates) {
   const basis = price * (1 - n(r.landShare, DEFAULTS.landShare)) + n(r.improvements);
   const dep = depreciation(basis, r.purchaseDate, rates.year);
   const taxable = income - opex - pay.interest - dep;
-  // a loss: usable now up to the allowance (active participation), the rest carried forward
+  // on its own (compute() replaces these with the household's netting, pro-rata shares and the federal engine's tax):
+  // a loss usable up to the allowance, the rest waits; the tax at one rate
   const usable = taxable < 0 ? Math.min(-taxable, Math.max(0, rates.allowance ?? 0)) : 0;
-  const rate = rates.marginal + rates.state;
+  const rate = (rates.marginal ?? 0) + (rates.state ?? 0);
   const tax = taxable >= 0 ? taxable * rate : -usable * rate;
   const equity = value - (loan?.balance ?? 0);
   const growth = value * n(r.appreciation, DEFAULTS.appreciation);
@@ -80,7 +83,25 @@ export function analyse(r, loan, rates) {
 }
 
 /**
- * compute(plan, { today }) -> { ready, year, rentals: [analyse(...)], totals: { rent, noi, cashFlow, afterTax, equity, value }, rates, lossRoom }
+ * The passive-loss rules for one year's rentals (IRC 469; Form 8582), each rental its own activity with active participation
+ * and nothing carried in. `taxables`: each rental's taxable result; `allowance`: the special allowance at the income.
+ * Rentals with a profit absorb the others' losses first (469(d)(1): the passive activity loss is the losses less the
+ * passive income); the allowance takes at most the net loss off other income (469(i)(1)); what is allowed and what waits
+ * are spread over the losing rentals by the size of each loss (469(j)(4); 1.469-1T(f)(2); Form 8582 Parts VI-VII).
+ * -> { profits, losses, netLoss, againstOther, allowed, suspended, net (the allowed net result), shares: [{ allowed, suspended }] }
+ */
+export function passiveLosses(taxables, allowance) {
+  const profits = taxables.reduce((s, t) => s + Math.max(0, t), 0), losses = taxables.reduce((s, t) => s + Math.max(0, -t), 0);
+  const netLoss = Math.max(0, losses - profits);
+  const againstOther = Math.min(netLoss, Math.max(0, allowance));
+  const allowed = losses - (netLoss - againstOther), suspended = losses - allowed;
+  const shares = taxables.map((t) => t < 0 && losses > 0 ? { allowed: allowed * -t / losses, suspended: suspended * -t / losses } : { allowed: 0, suspended: 0 });
+  return { profits, losses, netLoss, againstOther, allowed, suspended, net: profits - allowed, shares };
+}
+
+/**
+ * compute(plan, { today }) -> { ready, year, rentals: [analyse(...)], totals: { rent, noi, cashFlow, afterTax, equity, value }, rates, lossRoom,
+ *   passive (passiveLosses), separateTogether, tax: { federal, niit, state, total } (what the rentals add to this year's tax) }
  * A rental's loan: the mortgage account it names (`loanAccountId`, with its rate and payment from Debts), else the typed
  * `loanBalance`, `loanRate`, `loanPayment`. Its value: the property account it names (`accountId`), else `value`.
  */
@@ -90,20 +111,40 @@ export function compute(plan, params = {}) {
   if (!list.length) return { ready: false, rentals: [] };
   const fed = computeFederal(plan, { today });
   const st = computeState(plan, { today });
-  const rates = { marginal: fed.marginal ?? 0.22, state: st.effective ?? 0, magi: Math.max(0, fed.result.agi), separate: fed.filingStatus === "married_separate", year: fed.year };
+  // modified AGI for the allowance: AGI without the taxable Social Security and the IRA deduction (469(i)(3)(E): "without
+  // regard to (i) any amount includible in gross income under section 86, ... (iii) the amounts allowable as a deduction
+  // under sections 219, 221, and 250, and (iv) any passive activity loss"), never below 0 (Form 8582 line 6)
+  const magi = Math.max(0, fed.result.agi - (fed.result.income?.taxableSocialSecurity || 0) + (fed.ira?.deductible || 0));
+  const separate = fed.filingStatus === "married_separate", separateTogether = separate && fed.livedApart !== true;
+  const rates = { marginal: fed.marginal ?? 0.22, state: st.effective ?? 0, magi, separate, year: fed.year };
   const li = computeLiabilities(plan, { today });
   const accounts = plan.accounts ?? [];
-  let room = lossAllowance(rates.magi, { separate: rates.separate });
+  // filing separately while living together at any time in the year: no allowance at all (469(i)(5)(B))
+  const room = separateTogether ? 0 : lossAllowance(magi, { separate });
   const rentals = list.map((r) => {
     const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
     const row = r.loanAccountId ? li.rows.find((x) => x.id === r.loanAccountId) : null;
     const loan = row ? { name: row.name, balance: row.owed, rate: row.rate ?? 0, payment: row.payment || 0 }
       : Number(r.loanBalance) > 0 ? { name: "Loan", balance: Number(r.loanBalance), rate: Number(r.loanRate) || 0, payment: Number(r.loanPayment) || 0 } : null;
-    // the allowance is shared by every rental: each uses what the ones before it left
-    const a = analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { ...rates, allowance: room });
-    room -= a.lossUsable;
-    return a;
+    return analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { ...rates, allowance: room });
+  });
+  // the losses netted across the rentals, then the allowance, spread pro rata
+  const passive = passiveLosses(rentals.map((x) => x.taxable), room);
+  // what the rentals add to this year's federal tax: the estimate with their allowed net result added (a profit as
+  // ordinary income and as investment income for the 3.8% tax, IRC 1411(c)(1)(A)(i); a loss off income) less without,
+  // so it crosses brackets and the standard deduction; the state's share at its effective rate on top
+  const base = fed.result.totalTax, inp = fed.inputs;
+  const withNet = passive.net >= 0
+    ? federalTax({ ...inp, otherOrdinary: (Number(inp.otherOrdinary) || 0) + passive.net, investmentIncome: (Number(inp.investmentIncome) || 0) + passive.net }, fed.params)
+    : federalTax({ ...inp, adjustments: (Number(inp.adjustments) || 0) - passive.net }, fed.params);
+  const federal = withNet.totalTax - base, niit = (withNet.niit || 0) - (fed.result.niit || 0), state = passive.net * rates.state;
+  // each rental's line: its part of the allowed net result (a profit, or its allowed loss) times the household's change
+  rentals.forEach((a, i) => {
+    const part = a.taxable >= 0 ? a.taxable : -passive.shares[i].allowed;
+    a.lossUsable = passive.shares[i].allowed; a.lossCarried = passive.shares[i].suspended;
+    a.tax = Math.abs(passive.net) > 0.005 ? (federal + state) * part / passive.net : 0;
+    a.afterTax = a.cashFlow - a.tax;
   });
   const sum = (k) => rentals.reduce((s, x) => s + (x[k] ?? 0), 0);
-  return { ready: true, year: rates.year, rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, lossRoom: lossAllowance(rates.magi, { separate: rates.separate }) };
+  return { ready: true, year: rates.year, rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, lossRoom: room, passive, separateTogether, tax: { federal, niit, state, total: federal + state } };
 }
