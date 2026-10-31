@@ -44,6 +44,17 @@
 `module.test.mjs`: values new and used, a year by hand (and an electric car), not ready, keep/buy/lease by hand for the
 family's sedan, a short period with a loan still owed, a car without an account.
 
+## Answer key
+`tools/golden_property_goals` works 1,500 invented households with one or two cars (petrol and electric, with and without a
+loan, blank what-if boxes at the page's defaults) from the brief and its sources, never from this code, by two exact
+derivations that agree on every value; `tests/golden-property-goals.test.mjs` compares (rules: `tests/golden/property-goals/
+RULES.md`). It found two errors here, both fixed on 2026-10-31: keeping the car left out what its loan still owes at the end
+(buy and lease pay it off at the start), and the lease dropped a positive trade-in's equity (dearer by the car's whole
+equity); a trade-in worth more than the new car's price now comes back as cash. Doubts left for the owner, not failed: keep's
+upkeep rises while the new car's costs stay flat (it leans toward buying or leasing), the full new price is taxed (many
+states tax the price less the trade-in), and an electric first car's new car is charged by the car's kWh whatever the new mpg
+box says.
+
 ## Ideas / not yet
 - Replace-when: the year upkeep plus lost value beats a newer car's cost.
 - Gas against electric, with the federal and state credits.

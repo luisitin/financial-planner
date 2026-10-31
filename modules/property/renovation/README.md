@@ -56,5 +56,16 @@
 `module.test.mjs`: the schedule and its present value, a level loan, value added (average and own), the family's four ways
 and the ranking, the refinance by hand, cash with no home.
 
+## Answer key
+`tools/golden_property_goals` works 1,500 invented home projects (with and without a mortgage, itemizing or not, home debt
+over the $750,000 limit, blank rates at the page's defaults) from 26 U.S.C. 163, IRS Publication 936 (2025), the CFPB
+home-equity booklet and HUD Mortgagee Letter 2019-11, never from this code, by two exact derivations that agree on every
+value; `tests/golden-property-goals.test.mjs` compares (rules: `tests/golden/property-goals/RULES.md`). It found four errors
+here, all fixed on 2026-10-31: a cash-out refinance fitted by the line's 85% limit without its closing costs (now 80% of the
+value, closing costs in); its tax effect was floored at 0 (a refinance that cuts the interest gives up some deduction); the
+deductible interest had no $750,000 limit and counted closing costs rolled in; and a line that takes the home debt past the
+limit did not cut the mortgage's own deduction while it runs (Pub. 936 Table 1). Left for the owner: a home owned outright
+gets no refinance, and points, mortgage insurance premiums and the average-balance method are not modelled.
+
 ## Ideas / not yet
 - Energy projects: tax credits (the residential clean energy credit) and the bills they save.

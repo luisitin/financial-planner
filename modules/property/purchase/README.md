@@ -34,6 +34,14 @@
 `module.test.mjs`: the example, saving up by hand, three kinds of financing, a purchase that fits, giving way in order
 (paused, delayed, uncovered), a boat that squeezes the goals.
 
+## Answer key
+`tools/golden_property_goals` works 1,500 invented big purchases with 0 to 4 goals (save up, finance level, all at 0% or 0%
+for the promo months, pay cash; done goals and a spare below 0) from the brief and its sources, never from this code, by two
+exact derivations that agree on every value; `tests/golden-property-goals.test.mjs` compares (rules: `tests/golden/
+property-goals/RULES.md`). It found one error here, fixed on 2026-10-31: paying cash took the whole total from usable cash,
+not the total less what is already set aside, as this README and the screen say. Left for the owner, not failed: the promo
+is a true 0% period, while a store's "no interest if paid in full" offer charges the interest back when it is not.
+
 ## Ideas / not yet
 - Buy-now-pay-later plans (four payments) and their late fees.
 - Waiting for a sale: the price drop needed to beat financing now.
