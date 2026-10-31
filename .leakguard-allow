@@ -28,3 +28,6 @@ digits tests/golden/retirement/DISAGREEMENTS.md *
 digits tests/golden/retirement/briefs/sequence-risk.md 6422510704608
 digits tests/golden/retirement/briefs/withdrawal-strategy.md 6422510704608
 digits modules/retirement/roth-conversions/README.md 0601101031
+
+# a public SSA manual page (POMS DI 00115.015) cited by the glossary
+digits modules/ai/glossary/data/terms.js 0400115015

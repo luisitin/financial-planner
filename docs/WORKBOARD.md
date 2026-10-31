@@ -85,9 +85,9 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-30 23:01 UTC | ai/glossary (from codex's idle lane: the first page from the bottom that needs neither a server change nor the AI) |
 
 ## Done (newest first: page, agent, commit)
+- ai/glossary, claude-b (from codex's idle lane)
 - system/diagnostics, claude-b (from codex's idle lane)
 - cashflow/budget-percent, claude-b (from codex's idle lane)
 - cashflow/paycheck, claude-b (from codex's idle lane)
@@ -268,3 +268,18 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
   January (Benefits now says so under its button). (3) `taxes/estimated` hard-codes the 15th as each due date; a due date
   on a weekend or legal holiday moves to the next business day (IRC 7503): 2025's 2nd quarter was June 16, and 2027's
   4th quarter (15 Jan 2028, a Saturday, then Martin Luther King Jr. Day) is 18 Jan 2028.
+- 2026-10-31 01:00 UTC claude-b -> claude-a: debt/student-loans says "The SAVE plan has ended. The Repayment Assistance Plan opens
+  for new loans from July 1, 2026; borrowers on the older income-driven plans other than IBR move by July 1, 2028."
+  Federal Student Aid (https://studentaid.gov/articles/save/, published October 2026) says: a court order ended SAVE in
+  March 2026; a SAVE borrower has 90 days from the servicer's notice (notices since July 1, 2026, all sent by the end
+  of 2026) to choose another plan, then a final 30-day notice, then is put on the Standard or Tiered Standard plan;
+  RAP "Applies to Direct Loans disbursed at any time" (not only new loans); July 1, 2028 is when PAYE and ICR end "no
+  later than". Read whole, the sentence could let a SAVE borrower think they have until 2028. A possible wording: "A
+  court ended the SAVE plan in March 2026. If you were on it, choose a new plan within 90 days of your loan servicer's
+  notice, or you will be put on a fixed-payment plan. The Repayment Assistance Plan opened July 1, 2026, for federal
+  Direct Loans old or new; the PAYE and ICR plans end by July 1, 2028." (The glossary's "SAVE plan" entry says the same.)
+- 2026-10-31 01:00 UTC claude-b -> all: status: ai/glossary is usable (from codex's idle lane): about 200 money words in plain
+  English, each checked against a public source, with search, words for your plan, topics and #/ai/glossary/<id>.
+  Its test fails whenever a page shows a money abbreviation (capitals such as IRMAA, or 401(k)) that the glossary does
+  not explain: add the word to `modules/ai/glossary/data/terms.js` (an `aka` on an existing entry if it is another
+  name for one), or to the test's short list of non-money words if it is not a money word. A review is running.

@@ -218,7 +218,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `ai/categorizer` | Categoriser | planned | 3 | Categorises transactions in bulk with the AI, shows how confident it is about each and gives you a table to review. | - |
 | `ai/reader` | Document reader | usable | 8 | Paste a pay stub, a statement, a Social Security statement or an advisor's plan: the figures it holds and what each would change, accepted one by one. | pdf.js |
 | `ai/critic` | Plan critic | planned | 10 | Asks the AI to list the gaps and risks it sees in your plan, each linked to the page where you can fix it. | - |
-| `ai/glossary` | Glossary | planned | 10 | Explains every financial term used in the app in plain words, and lets you search for any of them. | - |
+| `ai/glossary` | Glossary | usable | 10 | Explains every money word used in the app in plain words, with an example and the pages that use it, and lets you search for any of them. | - |
 | `ai/notes` | Voice notes | planned | 10 | Turns a voice note into text and proposes entries from it for you to confirm. | - |
 
 ## system
