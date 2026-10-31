@@ -145,3 +145,17 @@ test("the return without the HSA money: own money from pay set to 0, the employe
   assert.equal(p.taxes.hsa.contribution, 4400); assert.equal(p.retirement.contributions.find((c) => c.accountId === "hsa-kai").amount, 4400);
   assert.equal(q.retirement.contributions.find((c) => c.accountId === "k401-kai").amount, 24500);
 });
+
+test("typed wages are W-2 box 1, which already leaves the HSA money out: not deducted again, and added back for the return without it", async () => {
+  const { compute: federal } = await import("../federal/compute.js");
+  const auto = kai(150000), typed = kai(150000);
+  const fa = federal(auto, { today: "2026-10-30" });
+  typed.taxes.thisYear.wages = fa.inputs.wages - 4400;   // box 1: pay less the 401(k) and the HSA money from pay
+  const ft = federal(typed, { today: "2026-10-30" });
+  near(ft.inputs.adjustments, 0); near(ft.result.agi, fa.result.agi); near(ft.result.totalTax, fa.result.totalTax);
+  // the HSA page's tax saved is the same whichever way the wages come in
+  const a = compute(auto, { today: "2026-10-30" }), t = compute(typed, { today: "2026-10-30" });
+  assert.ok(a.hsa.taxSaved > 0); near(t.hsa.taxSaved, a.hsa.taxSaved);
+  assert.equal(withoutHsaPayroll(typed, { wagesAddBack: 4400 }).taxes.thisYear.wages, typed.taxes.thisYear.wages + 4400);
+  assert.equal(withoutHsaPayroll(auto, { wagesAddBack: 4400 }).taxes.thisYear.wages ?? null, auto.taxes.thisYear.wages ?? null);   // nothing typed: untouched
+});

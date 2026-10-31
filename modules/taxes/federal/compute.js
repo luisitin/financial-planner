@@ -122,12 +122,14 @@ export function taxInputs(plan, params = {}) {
   // 223(b); none without a high-deductible plan); the excess is pay, the employer's part of it included (Pub. 969)
   const hsa = hsaPicture(plan, year);
   const hsaPayroll = hsa.household.payroll, hsaExcess = hsa.household.excess;
-  const hsaContrib = Math.max(0, hsaPayroll - hsaExcess), hsaEmployerTaxed = Math.max(0, hsaExcess - hsaPayroll);
   const wagesTyped = typed("wages");
+  // typed wages are W-2 box 1, which already leaves out the HSA money from pay within the limit (and has any excess in it):
+  // nothing more comes off for the HSA then (Pub. 969: "excluded from your income"; box 12 code W)
+  const hsaContrib = wagesTyped ? 0 : Math.max(0, hsaPayroll - hsaExcess), hsaEmployerTaxed = Math.max(0, hsaExcess - hsaPayroll);
   const wagesAuto = Math.max(0, payTotal - pretax401k - fsaExcluded) + hsaEmployerTaxed;
   const wages = wagesTyped ? Number(ty.wages) : wagesAuto;
   const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null, hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
-  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? "as typed" : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
+  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA and FSA money from pay are already left out)` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
   if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
   if (!wagesTyped && fsaElection > fsaExcluded) notes.push(`The health FSA election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(fsaExcluded)} comes off your pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
@@ -203,7 +205,7 @@ export function taxInputs(plan, params = {}) {
         otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort),
         qualifiedIncome: Math.max(0, qualifiedTyped / 2 + halfGains.netLong), capitalLoss: halfGains.lossAllowed,
         socialSecurity: typed("socialSecurity") ? socialSecurity / 2 : sumFor(p, ["social"]), taxExemptInterest: taxExemptInterest / 2,
-        adjustments: adjustmentsTyped / 2 + ira.deductible + hsaDeducted,
+        adjustments: adjustmentsTyped / 2 + ira.deductible + (wagesTyped ? 0 : hsaDeducted),
         ages65plus: ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65 ? 1 : 0, blind: p === me ? Math.min(1, blindAll) : Math.max(0, blindAll - 1),
         dependentsUnder17: p === carrier ? dependentsUnder17 : 0, otherDependents: p === carrier ? otherDependents : 0,
         withheld: base.withheld / 2, paid: paid / 2, selfEmployment: ownBusiness,

@@ -27,14 +27,17 @@ export function payrollTaxSaved(without, withIt, wageBase = Infinity) {
 }
 
 /**
- * withoutHsaPayroll(plan) -> a copy of the plan with none of the household's own HSA money taken from pay: the HSA rows'
- * amounts on the Contributions page and the HSA page's contribution set to 0, the employer's money kept. The plan itself
- * is not changed.
+ * withoutHsaPayroll(plan, { wagesAddBack }) -> a copy of the plan with none of the household's own HSA money taken from pay:
+ * the HSA rows' amounts on the Contributions page and the HSA page's contribution set to 0, the employer's money kept, and
+ * typed wages raised by `wagesAddBack` (they are box 1, which left the money out). The plan itself is not changed.
  */
-export function withoutHsaPayroll(plan) {
+export function withoutHsaPayroll(plan, { wagesAddBack = 0 } = {}) {
   const hsaAccounts = new Set((plan.accounts ?? []).filter((a) => a.type === "hsa").map((a) => a.id));
   const contributions = (plan.retirement?.contributions ?? []).map((c) => (hsaAccounts.has(c.accountId) ? { ...c, amount: 0 } : c));
-  return { ...plan, retirement: { ...(plan.retirement ?? {}), contributions }, taxes: { ...(plan.taxes ?? {}), hsa: { ...(plan.taxes?.hsa ?? {}), contribution: 0 } } };
+  const taxes = { ...(plan.taxes ?? {}), hsa: { ...(plan.taxes?.hsa ?? {}), contribution: 0 } };
+  // typed wages are W-2 box 1, from which the HSA money was left out: without it they are that much higher
+  if (wagesAddBack && taxes.thisYear && taxes.thisYear.wages !== null && taxes.thisYear.wages !== undefined && taxes.thisYear.wages !== "") taxes.thisYear = { ...taxes.thisYear, wages: Number(taxes.thisYear.wages) + wagesAddBack };
+  return { ...plan, retirement: { ...(plan.retirement ?? {}), contributions }, taxes };
 }
 
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
@@ -68,7 +71,10 @@ export function compute(plan, params = {}) {
   // the tax saved: the federal return without the household's own HSA money against the plan's own. Without it the money is
   // back in pay, in income and in Medicare wages (so the 0.9% additional Medicare tax is in the saving), and the cover's
   // excess is worked again on the employer's money alone; only money within the limit was kept out of income (106(d)(1))
-  const b0 = taxInputs(withoutHsaPayroll(plan), params);
+  // typed wages (W-2 box 1) already leave the money out: without it box 1 is higher by the own money kept out (payroll less
+  // the excess) plus any employer excess that the own money's absence changes
+  let b0 = taxInputs(withoutHsaPayroll(plan), params);
+  if (b.wagesTyped) b0 = taxInputs(withoutHsaPayroll(plan, { wagesAddBack: Math.max(0, hh.payroll - hh.excess) + b0.hsa.picture.household.excess }), params);
   const withIt = federalTax(b.inputs, b.params).totalTax;
   const without = federalTax(b0.inputs, b0.params).totalTax;
   const taxSaved = Math.max(0, without - withIt);
