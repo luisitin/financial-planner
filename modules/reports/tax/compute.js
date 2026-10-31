@@ -15,7 +15,7 @@ import { compute as computeTaxProjection } from "../../taxes/projection/compute.
  *   ready, missing, today, year, filing, isIndexed,
  *   thisYear: { steps: [{ label, amount, sub }], totalTax, agi, taxableIncome, effectiveRate, marginal, bracketRate, roomInBracket, nextRate },
  *   ladder: [{ rate, from, to, filled, tax, current }],
- *   paying: { verdict, balance, withheld, estimatesPaid, needsEstimates, nextDue, penaltyRisk } ,
+ *   paying: { verdict, balance, withheld, estimatesPaid, needsEstimates, nextDue (the next quarter not yet past), overdue (past quarters not paid), penaltyRisk } ,
  *   gains: { hasSales, taxOnGains, zeroRoom, netLoss, carryForward } , hsa: { taxSaved, room, limit } | null,
  *   retirement: { ready, years, total, average, peak, byBracket, firstZero, flatTaxes, bracketsOn } 
  * }
@@ -36,7 +36,7 @@ export function compute(plan, params = {}) {
     ready: true, missing: [], today, year: fed.year, filing: fed.filingStatus, isIndexed: fed.isIndexed,
     thisYear: { steps: fed.steps, totalTax: r.totalTax, agi: r.agi, taxableIncome: r.taxableIncome, effectiveRate: r.effectiveRate, marginal: fed.marginal, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate },
     ladder: br.ladder.map((l) => ({ rate: l.rate, from: l.from, to: l.to, filled: l.filled, tax: l.tax, current: l.current })),
-    paying: { verdict: wh.verdict, balance: wh.balance, withheld: wh.withholding?.projected ?? 0, estimatesPaid: wh.estimatedPaid ?? 0, needsEstimates: es.needsEstimates, nextDue: es.nextDue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk },
+    paying: { verdict: wh.verdict, balance: wh.balance, withheld: wh.withholding?.projected ?? 0, estimatesPaid: wh.estimatedPaid ?? 0, needsEstimates: es.needsEstimates, nextDue: es.nextDue, overdue: es.overdue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk },
     gains: { hasSales: cg.hasSales, taxOnGains: cg.taxOnGains, zeroRoom: cg.zeroRoom, netLoss: cg.gains?.netLoss ?? 0, carryForward: cg.gains?.carryForward ?? 0 },
     hsa: hs.hasHsa ? { taxSaved: hs.hsa.savedTotal, room: hs.hsa.room, limit: hs.hsa.limit } : null,
     retirement: tp.ready ? { ready: true, years: tp.rows.length, total: tp.totals.taxes, average: tp.average, peak: tp.peak, byBracket: tp.byBracket, firstZero: tp.firstZero, flatTaxes: tp.flatTaxes, bracketsOn: tp.bracketsOn } : { ready: false },

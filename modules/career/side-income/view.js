@@ -57,8 +57,8 @@ export function render(page, ctx) {
     root.append(ui.card("Tax to set aside", ui.row(
       ui.stat("Of every payment", pct(s.rate), `what comes in, before expenses: self-employment and federal income tax${s.state ? ", and state tax" : ""}`),
       ui.stat("This income adds", money(s.yearly), `of tax a year, ${money(s.quarter)} a quarter`),
-    ), ui.h("p", {}, !e.needed || !e.nextDue ? "Your whole return does not need quarterly payments now: what is already withheld covers enough (the Quarterly payments page checks)."
-      : e.nextDue.due < today ? `Your whole return needs quarterly payments, and ${money(e.nextDue.amount)} that was due on ${longDate(e.nextDue.due)} is not marked as paid: see the Quarterly payments page.`
+    ), ui.h("p", {}, !e.needed || (!e.nextDue && !e.overdue) ? "Your whole return does not need quarterly payments now: what is already withheld covers enough (the Quarterly payments page checks)."
+      : e.overdue ? `Your whole return needs quarterly payments, and ${money(e.overdue.amount)} that was due from ${longDate(e.overdue.due)} on is not marked as paid: see the Quarterly payments page.${e.nextDue ? ` Then ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.` : ""}`
         : `Your whole return needs quarterly payments: the next is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)} (the Quarterly payments page).`),
     ui.h("p", { class: "muted small" }, [
       "Nobody holds back tax from side income, so it is paid during the year, or covered by more withholding at a job.",

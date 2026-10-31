@@ -49,7 +49,7 @@ export function monthStats(values, labels = []) {
  * compute(plan, { today }) -> {
  *   ready, year, months (labels), items: [{ id, name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, gap, below }],
  *   setAside: { rate (of each payment received), yearly (the tax this income adds), quarter, state, stateKnown, stateAverage, onAverage } | null,
- *   estimates: { needed, nextDue: { due, label, amount } | null } (the whole return, from the Estimated payments page),
+ *   estimates: { needed, nextDue: { due, label, amount } | null (the next quarter not yet past), overdue: { due, label, amount } | null (past quarters not paid) } (the whole return, from the Estimated payments page),
  *   rules: { year (of the table used), stale, form1099NEC, form1099K: { apps: { amount, payments }, cards }, mileage, mileageSteps }, notes
  * }
  */
@@ -95,6 +95,6 @@ export function compute(plan, params = {}) {
   }
   // whether the whole return needs quarterly payments, and the next one (the Estimated payments page)
   const est = computeEstimated(taxPlan, { today });
-  const estimates = { needed: !!est.needsEstimates, nextDue: est.nextDue ?? null };
+  const estimates = { needed: !!est.needsEstimates, nextDue: est.nextDue ?? null, overdue: est.overdue ?? null };
   return { ready: true, year, months, items, setAside, estimates, rules, notes };
 }

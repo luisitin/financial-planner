@@ -101,9 +101,13 @@ test("estimated payments: the safe harbour, no instalments when withholding cove
   assert.equal(d.needsEstimates, false); near(d.harbour.required, 0.9 * 9730); assert.equal(d.nextDue, null); assert.equal(d.paid, 300);
   const p = taxPlan(); p.taxes.thisYear.withheld = 0; p.taxes.withholding = {};
   const e = estimated(p, { today: TODAY });
-  assert.equal(e.needsEstimates, true); near(e.toPayByEstimates, 8757); near(e.perQuarter, 8757 / 4);
-  assert.deepEqual(e.quarters.map((q) => q.status), ["short", "short", "short", "upcoming"]);   // 300 paid against 2,189 a quarter, mid-September
-  assert.equal(e.nextDue.label, "1st quarter"); near(e.nextDue.amount, 8757 / 4 - 300); near(e.remaining, 8757 - 300);
+  // nothing typed for withholding: the Paycheck page's estimate of what the pay withholds counts instead of nothing
+  assert.equal(e.withholdingFrom, "paycheck"); const w = e.withholding; assert.ok(w > 0 && w < 8757);
+  assert.equal(e.needsEstimates, true); near(e.toPayByEstimates, 8757 - w); near(e.perQuarter, (8757 - w) / 4);
+  assert.deepEqual(e.quarters.map((q) => q.status), ["short", "short", "short", "upcoming"]);   // 300 paid against more a quarter, mid-September
+  // three quarters are past: what they required less the 300 paid is behind; the 4th quarter's share is the next payment
+  near(e.behind, 3 * e.perQuarter - 300); assert.equal(e.overdue.label, "1st quarter");
+  assert.equal(e.nextDue.label, "4th quarter"); near(e.nextDue.amount, e.perQuarter); near(e.remaining, 8757 - w - 300);
   assert.equal(e.penaltyRisk, true);
   assert.equal(e.quarters[3].due, "2027-01-15");
 });

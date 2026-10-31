@@ -35,6 +35,7 @@ export function render(page, ctx) {
     else if (pay.verdict === "refund") payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: a refund of about ${money(-pay.balance)} next spring.`);
     else if (pay.verdict === "owe") payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: about ${money(pay.balance)} left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
     else payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
+    if (pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} due from ${longDate(pay.overdue.due)} on is not marked as paid.`);
     if (pay.verdict !== "unknown" && pay.needsEstimates && pay.nextDue) payLines.push(`Estimated payments: the ${pay.nextDue.label} payment of ${money(pay.nextDue.amount)} is due ${longDate(pay.nextDue.due)}.`);
     sheet.append(section(ui, "Paying it", list(ui, payLines)));
     const more = [];
