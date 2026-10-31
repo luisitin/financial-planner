@@ -63,7 +63,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `transactions/rules` | Rules | usable | 3 | The rules that file transactions for you: when the description contains this, give it that category. | Actual rules |
 | `transactions/categorize` | Categorise | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
 | `transactions/statements` | Statement reader | usable | 3 | No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check. | pdf.js |
-| `transactions/reconcile` | Reconcile | planned | 3 | Compares a statement's ending balance with your ledger and helps you find what explains any gap. | - |
+| `transactions/reconcile` | Reconcile | usable | 3 | Compares a statement's ending balance with your ledger and helps you find what explains any gap. | - |
 | `transactions/transfers` | Transfers | usable | 3 | Link money moved between your own accounts so it is not counted as spending or income. | Actual |
 | `transactions/categories` | Categories | usable | 3 | The categories transactions are filed under: rename, hide, or add your own. | - |
 | `transactions/duplicates` | Duplicates | usable | 3 | Find lines that were imported twice and remove the copy. | - |

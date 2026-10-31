@@ -18,6 +18,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 | `categories` | the owner's changes to the built-in list: `[{ id, label?, icon?, kind: expense\|income\|transfer, essential?, hidden? }]`; built-ins come from Expenses/Income | transactions/categories |
 | `rules` | `[{ id, contains, accountId?, direction: any\|in\|out, category, payee?, hits, createdAt }]` | transactions/rules |
 | `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad }]` one per bank file; undo removes by `importId` | transactions/import |
+| `reconciliations` | `[{ id, accountId, from (the statement's first day), to (its last day), startBalance, endBalance (as printed; a card's is what you owe), lines (transactions it covered), at (the day it was checked) }]` -- statements checked against the ledger; optional | transactions/reconcile |
 | `importProfiles` | `{ [header fingerprint]: { accountId, mapping, flipSign } }` so the same bank's next file maps itself | transactions/import |
 | `income` | `[{ id, name, type (INCOME_TYPES: salary, bonus, business, rental, pension, social, investment, support, other), personId ("" = household), amount, period (core/math/periods.js: weekly, biweekly, semimonthly, monthly, quarterly, annual, once), growth (fraction), startDate, endDate, taxable }]` | cashflow/income |
 | `expenses` | `[{ id, name, category (CATEGORIES in the module), amount, period, inflates: bool, essential: bool, startDate?, endDate? }]` | cashflow/expenses |
