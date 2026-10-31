@@ -131,13 +131,13 @@ test("journeyStatus on an empty plan: nothing done, step 1 next, not started; ne
     assert.equal(s.doneCount, 0); assert.equal(s.finished, false); assert.equal(s.started, false);
     assert.equal(s.next.index, 1);
   }
-  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [6, 3, 5, 4, 7, 5, 7]);
+  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [6, 3, 5, 3, 7, 5, 7]);
   const r = journeyStatus(J("retire"), empty());
   assert.deepEqual(st(r, "spend").blockedBy, { key: "people", index: 1, short: "Add birth dates", href: "#/household/people?guide=retire&step=people" });
   assert.equal(st(r, "pension").blockedBy, null);
 });
 test("journeyStatus on the family plan (worked by hand from qa/fixtures): counts and which steps", () => {
-  const want = { "whole-plan": [5, 6, ["accounts", "people", "income", "expenses", "goals"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 4, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
+  const want = { "whole-plan": [5, 6, ["accounts", "people", "income", "expenses", "goals"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 3, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
   const p = family();
   for (const j of JOURNEYS) {
     const s = journeyStatus(j, p);
@@ -148,18 +148,20 @@ test("journeyStatus on the family plan (worked by hand from qa/fixtures): counts
 });
 test("journeyStatus: does-not-apply counts; finished once every numbered step is done even with extras left; next prefers to-do over skipped", () => {
   const p = family();
+  markLater(p, "home", "afford", "2026-10-31");
+  assert.equal(journeyStatus(J("home"), p).next.key, "afford", "the goal needs afford: back to the skipped one");
   markNone(p, "home", "afford", "2026-10-31");
-  markLater(p, "home", "lenders", "2026-10-31");
   let s = journeyStatus(J("home"), p);
   assert.equal(s.doneCount, 2); assert.equal(s.started, true);
   assert.equal(s.next.key, "goal");
+  markLater(p, "home", "goal", "2026-10-31");
+  s = journeyStatus(J("home"), p);
+  assert.equal(s.next.key, "goal", "only the skipped step is left");
   p.goals.push({ id: "h", name: "House down payment", icon: "🏠" });
   s = journeyStatus(J("home"), p);
-  assert.equal(s.next.key, "lenders", "only the skipped step is left");
-  markLooked(p, "home", "lenders", "2026-10-31");
-  s = journeyStatus(J("home"), p);
   assert.equal(s.complete, true); assert.equal(s.finished, true); assert.equal(s.next, null);
-  assert.equal(s.extrasLeft, 2); assert.equal(s.nextExtra.key, "rent-buy");
+  assert.deepEqual(s.steps.filter((x) => x.optional).map((x) => x.key), ["lenders", "rent-buy", "fit"], "lenders only with loans or cards");
+  assert.equal(s.extrasLeft, 3); assert.equal(s.nextExtra.key, "lenders");
 });
 test("finishedAt keeps a guide Done when new data reopens a step", () => {
   const p = family();
@@ -195,8 +197,12 @@ test("neighbours: no previous on step 1; next jumps done steps; wraps to an earl
 });
 test("neighbours: Skip goes to a step that can be done now; one that needs the skipped step only when nothing else is left", () => {
   const home = journeyStatus(J("home"), empty());
-  assert.equal(st(home, "lenders").blockedBy.key, "pay");
-  assert.equal(neighbours(home, st(home, "afford")).next.key, "rent-buy", "not lenders (needs pay) or the goal (needs afford)");
+  assert.equal(st(home, "lenders"), undefined, "no loans or cards: no lenders step");
+  assert.equal(neighbours(home, st(home, "afford")).next.key, "rent-buy", "not the goal (needs afford)");
+  const owes = empty(); owes.accounts = [{ id: "c", type: "credit", balance: -900 }];
+  const h2 = journeyStatus(J("home"), owes);
+  assert.equal(st(h2, "lenders").blockedBy.key, "pay");
+  assert.equal(h2.nextExtra.key, "rent-buy", "the first extra that can be done now");
   const debt = journeyStatus(J("debt"), empty());
   assert.equal(neighbours(debt, st(debt, "add")).next.key, "rates", "every later step needs add: the next in order");
 });
@@ -325,4 +331,31 @@ test("the manifest exports the shell's frame hook, and frame.js never imports th
   assert.equal(typeof manifest.frame, "function");
   const f = fs.readFileSync(fileURLToPath(new URL("./frame.js", import.meta.url)), "utf8");
   assert.ok(!/core\/app\.js/.test(f));
+});
+test("every fold and '+ Add another' button an ask names is really on that page (a guide-page sweep found asks naming folded or missing controls)", () => {
+  const view = (page) => fs.readFileSync(`${MODS}${page}/view.js`, "utf8");
+  let folds = 0, adds = 0;
+  for (const j of JOURNEYS) for (const s of j.steps) {
+    for (const [page, ask, opens] of [[s.page, s.ask, s.opens], s.alt ? [s.alt.page, s.alt.ask, s.alt.opens] : null].filter(Boolean)) {
+      const v = view(page);
+      if (opens) { folds++; assert.ok(v.includes(`"${opens}"`), `${j.id}/${s.key}: ${page} has a fold "${opens}"`); assert.ok(ask.includes(opens), `${j.id}/${s.key}: the ask names the fold it opens`); }
+      for (const m of ask.match(/\+ Add another \w+/g) ?? []) { adds++; assert.ok(v.includes(m), `${j.id}/${s.key}: ${page} has "${m}"`); }
+    }
+  }
+  assert.ok(folds >= 3 && adds >= 8, `${folds} folds, ${adds} add-another buttons checked`);
+});
+test("the paycheck step counts either earner; the card and one-loan steps wait for rates; one loan only when Consolidation has something to compare", () => {
+  const p = family(); p.taxes = { ...(p.taxes ?? {}), withholding: { partner: { perPaycheck: 210, period: "biweekly" } } };
+  assert.equal(st(journeyStatus(J("taxes"), p), "paychecks").state, "done", "only the partner has tax taken out");
+  const owes = (...debts) => { const q = empty(); q.accounts = debts.map(([type, balance], i) => ({ id: `d${i}`, name: `Debt ${i}`, type, balance })); return q; };
+  const d = journeyStatus(J("debt"), owes(["credit", -3000], ["loan", -5000]));
+  assert.equal(st(d, "cards").blockedBy.key, "rates");
+  assert.equal(st(d, "one-loan").blockedBy.key, "rates", "no rate yet: consolidation would assume 20%");
+  const withRates = (q, rates) => { q.debts = q.accounts.map((a, i) => ({ id: `x${i}`, accountId: a.id, rate: rates[i], minPayment: 100 })); return q; };
+  const low = withRates(owes(["credit", -3000], ["loan", -5000]), [0.06, 0.05]);
+  assert.equal(st(journeyStatus(J("debt"), low), "one-loan"), undefined, "nothing at 10% or more: nothing to roll together");
+  const mixed = withRates(owes(["credit", -3000], ["student_loan", -20000]), [0.22, 0.05]);
+  assert.equal(st(journeyStatus(J("debt"), mixed), "one-loan"), undefined, "a student loan is left out of Consolidation");
+  const high = withRates(owes(["credit", -3000], ["loan", -5000]), [0.22, 0.08]);
+  assert.ok(st(journeyStatus(J("debt"), high), "one-loan"), "two it can roll together, one at 22%");
 });

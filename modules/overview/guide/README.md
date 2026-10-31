@@ -35,6 +35,11 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
   redraw the page, which replaces it; a cancelled form is gone too. Choice lists and tick boxes never count (pages use
   them as filters, like Import's account picker, and one changed by mistake costs nothing to redo), nor do search
   boxes, file pickers or anything marked `data-nodirty`. The compact line's link is guarded the same way.
+- **A fold the ask names:** a step (or its other page) may give `opens`, the title of a fold on that page ("What a
+  paycheck withholds", "Figures the plan cannot see", "The split to aim for"). While the step is to do or skipped, the
+  frame opens that fold each time the page draws it (`openFold`, a MutationObserver on the page's own div, so pages
+  that redraw themselves are covered); one the person shuts stays shut until the next draw. Pages fold these once data
+  exists, so an ask naming a field inside could not be followed (the guide sweep below).
 - When a step page's own link or button moves on to a page that is not a step (Import goes to Categorize after a bank
   file), that next page shows "‹ Back to the guide: <name>" for one page, back to the step, which then says it is done.
 
@@ -84,11 +89,11 @@ Done checks in words (`journeys.js`):
 | Guide | Steps (extras in brackets) | Done when |
 |---|---|---|
 | Build my whole plan | accounts, people, income, expenses, goals, assumptions | the dashboard's own six checks (`dashboard/compute.js`), so the count is always the dashboard's |
-| Pay off what I owe | add, rates, order, [cards, student, one-loan] | a liability account; every loan and card with a balance has its details saved, a 0% one too (Liabilities' own `detail`); a payoff order saved; [looked / saved] |
+| Pay off what I owe | add, rates, order, [cards, student, one-loan] | a liability account; every loan and card with a balance has its details saved, a 0% one too (Liabilities' own `detail`); a payoff order saved; [looked, once rates are in; saved or looked; saved or looked, once rates are in, and shown only when Consolidation has two cards or loans it can roll together (not a mortgage or student loan) with one at 10% or more: its own pick] |
 | Spend less and save more | income, accounts, spending, budget, cushion, [sort] | an income; a checking, savings, cash or card account; an expense or a bank row; an envelope or a 50/30/20 split; a goal named emergency / rainy day / cushion or with the 🛟 icon (Emergency fund's own test); [90% of bank rows sorted, or looked] |
-| Buy a home | pay, afford, lenders, goal, [rent-buy, fit] | an income (first, so Home affordability can show a price range at once); its inputs saved; looked; the house goal by Home affordability's own test (`goals/house` `isHouseGoal`: a down payment, the 🏠 icon or a home to buy, never repairs, paying it off or a trip home); [saved or looked; looked] |
+| Buy a home | pay, afford, goal, [lenders, rent-buy, fit] | an income (first, so Home affordability can show a price range at once); its inputs saved; the house goal by Home affordability's own test (`goals/house` `isHouseGoal`: a down payment, the 🏠 icon or a home to buy, never repairs, paying it off or a trip home); [looked, shown only with loans or cards (Debt ratios works from today's debts, not the home just priced); saved or looked; looked] |
 | Plan my retirement | people, savings, spend, ss, saving, pension, chance | every adult has a birth date; a savings or retirement account (not a loan); retirement spending saved, or bills on Expenses (its other page); a Social Security amount or record, or "won't get it"; a contribution, or "not saving now"; a pension, or "don't have one"; looked, once people, savings and spending are in (the chance page cannot answer before) |
-| Sort out my taxes | people, income, estimate, paychecks, state, [room] | a person; an income or typed wages; tax withheld typed, or looked; one paycheck's tax, or "none taken"; a state; [looked] |
+| Sort out my taxes | people, income, estimate, paychecks, state, [room] | a person; an income or typed wages; tax withheld typed, or looked; one paycheck's tax for either earner, or "none taken"; a state; [looked] |
 | Protect my family | people, policies, savings, spend, life, papers, contacts, [who-gets] | an adult with a birth date; a policy, or "none"; an account; an expense (Life insurance needs works from the retirement projection's inputs: accounts, spending, adults' birth dates, so the guide gathers them); looked, once those are in; any paper noted (even "not made yet"), or "none of these yet"; a contact; [a beneficiary saved] |
 
 The minutes are rough judgements of the time to fill each guide's pages, not measured.
@@ -107,6 +112,19 @@ not exist (Federal estimate, Consolidation, Student loans, State, People's filin
 home asked for the price before the pay; the house page could overwrite a "Home repairs" goal (fixed there, shared
 test).
 
+A third, narrow round on that commit (two lenses, two skeptics each) confirmed four: the house-goal test lost
+"Townhouse fund" and still took "Pay off the house" (now ranked, in `goals/house`); the taxes paycheck ask named a
+folded form; Withholding said "Nothing is withheld from a paycheck" when only the figure was missing. Then a **sweep of
+every step** (45 steps, each on an empty plan, the family plan and right after the step before, on a phone; a skeptic
+per finding) confirmed 20, none refuted, all fixed here: asks now name "+ Add another ..." where a list folds its form,
+the fold to open (or the frame opens it, above), the Status and row to tap on Papers and Beneficiaries, the state
+choice inside Your figures, the untick on Expenses' "I must pay this" (it starts ticked, which made the emergency fund
+too big), that Rent vs buy starts from its own example and Debt ratios leaves out the home just priced; look-only
+steps say "the button below" (it is not always labelled Next); the paycheck step counts either earner; Check your cards
+and See if one loan helps wait for rates; one loan shows only when Consolidation has something to compare; the next
+extra step prefers one that can be done now. A test now checks every fold and "+ Add another" an ask names against that
+page's code.
+
 ## Choices made (no owner input; noted per the builder instructions)
 The spec (2026-10-31) was checked by three critics before building (an engineer against the code, a first-time user of
 60 on a phone, a UX reviewer). Their fixes are in; the main ones:
@@ -119,6 +137,12 @@ The spec (2026-10-31) was checked by three critics before building (an engineer 
 - Budget's emergency-fund step opens Goals (Emergency fund cannot create a goal), with Emergency fund as "See how big
   it should be"; Protect's papers step counts any paper noted, since someone with no will notes "none".
 - Help: "Ask the app a question" only while the AI answers; otherwise "Questions? See the help".
+- Buy a home has three numbered steps (pay, price range, down payment goal); "See what lenders see" became an extra
+  shown with loans or cards, because Home affordability already shows the lenders' 28% / 36% limits with the other
+  debts counted, and Debt ratios, built for today's debts, rated housing "comfortable" right after the price page said
+  the home was over the limit (sweep, 2026-10-31).
+- The guide opens a fold the ask names instead of editing other people's pages to open it; the pages' owners were told
+  on the WORKBOARD.
 
 ## Sources
 GOV.UK Design System: "Complete multiple tasks" (task list: statuses in words, not colour) and "Question pages" (one
@@ -129,8 +153,8 @@ research notes are in the build session, not the repo.
 
 ## Tests
 `module.test.mjs`: definitions (7 guides, 3 to 7 numbered steps, every door a usable page, shorts of 21 characters
-starting with a verb, one-sentence asks, the button an ask names exists on that page); the whole plan equals the
-dashboard; done checks (a 0% loan, "Home repairs", the emergency fund); visible steps; step states; statuses on an
+starting with a verb, one-sentence asks, the button an ask names exists on that page, every fold and "+ Add another" an ask names is in that page's code); the whole plan equals the
+dashboard; done checks (a 0% loan, "Home repairs", "Pay off the house", the emergency fund, either earner's paycheck, one loan only with something to compare, steps that wait for rates); visible steps; step states; statuses on an
 empty plan and on the family fixture (worked by hand); finishing; which step a page is; neighbours; the bar's modes,
 the 30-day quiet, after leaving; the summary and step addresses; every change reports whether it changed anything and
 touches only `plan.guide`; compute returns plain data; the manifest's frame hook.

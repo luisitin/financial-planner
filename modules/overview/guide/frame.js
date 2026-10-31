@@ -47,6 +47,23 @@ const readTrail = (name) => { try { return JSON.parse(sessionStorage.getItem(nam
 const writeTrail = (name, t) => { try { if (t) sessionStorage.setItem(name, JSON.stringify(t)); else sessionStorage.removeItem(name); } catch { } };
 const writeGuideTrail = (t) => writeTrail(GTRAIL, t);
 
+/**
+ * Open the page's fold titled `title` (a <details> whose summary says it), the one the step's ask names, every time the
+ * page draws it anew (pages that redraw themselves make a new one). One the person shuts stays shut until the next draw.
+ */
+function openFold(page, title) {
+  const seen = new WeakSet();
+  const run = () => {
+    for (const d of page.querySelectorAll("details")) {
+      if (seen.has(d)) continue;
+      seen.add(d);
+      const s = d.querySelector(":scope > summary");
+      if (!d.open && s && s.textContent.includes(title)) d.open = true;
+    }
+  };
+  try { new MutationObserver(run).observe(page, { childList: true, subtree: true }); } catch { }
+}
+
 function checkAi(ctx) {
   if (Date.now() - ai.at < 60000) return;
   ai.at = Date.now();
@@ -132,6 +149,9 @@ export function frame(ctx, page) {
   const finishedState = step.state === "done" || step.state === "none";
   const noneSaid = step.noneSaid ?? "You said this does not apply.";
   const ask = bar.viaAlt && step.alt?.ask ? step.alt.ask : step.ask;
+  // the fold the ask names ("Lower down, under ..."), opened while the step is still to do
+  const opens = bar.viaAlt ? step.alt?.opens : step.opens;
+  if (opens && !blocked && (step.state === "todo" || step.state === "later")) openFold(page, opens);
   const needLine = blocked ? `This step needs ${bar.blockedBy.index ? `step ${bar.blockedBy.index}` : "an earlier step"} first.` : null;
 
   // the bar

@@ -59,7 +59,7 @@ export function journeyStatus(journey, plan, { off = [] } = {}) {
     extrasLeft: extras.filter((s) => !finishedState(s.state)).length, extrasTotal: extras.length,
     started: !!prog.startedAt || marks, startedAt: prog.startedAt ?? null, finishedAt: prog.finishedAt ?? null,
     next: next ? { key: next.key, index: next.index, short: next.short, title: next.title, href: next.href } : null,
-    nextExtra: (() => { const x = extras.find((s) => s.state === "todo"); return x ? { key: x.key, short: x.short, title: x.title, href: x.href } : null; })(),
+    nextExtra: (() => { const x = extras.find((s) => s.state === "todo" && free(s)) ?? extras.find((s) => s.state === "todo"); return x ? { key: x.key, short: x.short, title: x.title, href: x.href } : null; })(),
     more: (journey.more ?? []).filter((m) => !off.includes(m.page)), moreTitle: journey.moreTitle ?? "More on this",
     finish: journey.finish, guideHref: guideHref(journey.id),
   };

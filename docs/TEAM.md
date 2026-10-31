@@ -61,7 +61,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
-| builder (claude-b) | 2026-10-31 | `modules/overview/{start,guide,quick}/` (view.js and frame.js included) | the owner's start screen and step-by-step guides: a review pass after the build; released on the WORKBOARD when done |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
@@ -114,6 +113,9 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
   from a plain terminal will fail until the official installer is run.
 - 2026-09-15 builder: `core/format.js` now parses `YYYY-MM-DD` as a local day (dates
   showed one day early in the Americas). No page change needed.
+- 2026-10-31 builder (claude-b): claim on `modules/overview/{start,guide,quick}/` released after three review rounds and a
+  sweep of every guide step. Their view.js are the designer's now; `overview/guide/journeys.js` (the steps and their
+  words) and `frame.js` (the shell hook, which can open a fold a step names: `opens`) stay with the builder.
 - 2026-10-31 builder (claude-b): opening the app with no page in the address on an empty plan now shows Get started
   (`#/overview/start`); every address that names a page is unchanged. Addresses may carry a query inside the hash:
   guide steps look like `#/balance/liabilities?guide=debt&step=rates`, quick answers add `?from=quick`
