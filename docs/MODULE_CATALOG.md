@@ -227,7 +227,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `system/settings` | Settings | usable | 0 | Manages your connections, AI settings, which pages are switched on, data import and export, and the basics of your plan. | - |
 | `system/docs` | Docs | usable | 0 | Lets you read every project document (plan, catalog, agent notes, vendor map and more) inside the app on your phone. | - |
 | `system/assumptions` | Assumptions | usable | 2 | The ten numbers behind every projection: inflation, growth, retirement age, how long the money must last. | Damodaran, Shiller |
-| `system/backups` | Backups | usable | 10 | Lists the backups on your server, shows what changed between them and lets you restore any of them. | - |
+| `system/backups` | Backups | usable | 10 | Earlier copies your PC keeps of your plan: see what changed since one and put it back if something went wrong. | - |
 | `system/audit` | Change log | usable | 10 | Shows what changed in your plan at each save, and when, from the copies your PC keeps (which device made a change: once the plan records it). | - |
 | `system/devices` | Devices | planned | 1 | Manages the devices allowed into the app: name each one, revoke access or limit a device to read-only viewing. | - |
 | `system/diagnostics` | Diagnostics | usable | 10 | Checks on one page that your plan holds together (links to people, accounts and goals that are gone, dates that are not dates, rates typed as whole numbers), with a fix where one is safe; that every page can work out its numbers; and whether the PC and the AI helper answer. | - |

@@ -101,7 +101,9 @@ function publicConfig() {
 function readPlan() { try { return JSON.parse(fs.readFileSync(PLAN_FILE, "utf8")); } catch { return null; } }
 function writePlan(plan) {
   if (fs.existsSync(PLAN_FILE)) {
-    fs.copyFileSync(PLAN_FILE, path.join(DATA, "backups", `plan-${stamp()}.json`));
+    // copies are named to the second: a second save in the same second keeps the first copy (the plan before both),
+    // so a copy never changes once made (system/backups and system/audit rely on that)
+    try { fs.copyFileSync(PLAN_FILE, path.join(DATA, "backups", `plan-${stamp()}.json`), fs.constants.COPYFILE_EXCL); } catch (e) { if (e.code !== "EEXIST") throw e; }
     const keep = Number(P("data.backups")) || 50;
     const old = fs.readdirSync(path.join(DATA, "backups")).filter((f) => f.startsWith("plan-")).sort();
     for (const f of old.slice(0, Math.max(0, old.length - keep))) fs.unlinkSync(path.join(DATA, "backups", f));

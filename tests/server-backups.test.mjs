@@ -38,6 +38,16 @@ test("backups: the list, one backup by name, and nothing outside the folder", as
     assert.equal((await get("/plan/backups/..%2Fsecret.json")).status, 404, "a path is never followed");
     assert.equal((await get("/plan/backups/%2E%2E%2Fsecret.json")).status, 404);
     assert.equal((await get("/plan/backups/%E0%A4%A")).status, 404, "a malformed name");
+    // saves: each keeps a copy of the plan before it; two saves in the same second keep the first copy, never the second
+    const put = (body) => fetch(`${base}/plan`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal((await put({ schemaVersion: 1, notes: "A" })).status, 200);
+    const before = new Set((await get("/plan/backups")).body.backups);
+    await put({ schemaVersion: 1, notes: "B" });
+    await put({ schemaVersion: 1, notes: "C" });
+    const made = (await get("/plan/backups")).body.backups.filter((n) => !before.has(n)).sort();
+    const held = await Promise.all(made.map(async (n) => (await get(`/plan/backups/${n}`)).body.notes));
+    assert.ok(made.length === 1 || made.length === 2, `copies made: ${made}`);
+    assert.deepEqual(held, made.length === 1 ? ["A"] : ["A", "B"], "the plan before the first save of a second is kept");
   } finally {
     child.kill();
     fs.rmSync(root, { recursive: true, force: true });

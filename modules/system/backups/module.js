@@ -15,7 +15,8 @@ export default {
   needs: ["*"],
   writes: ["*"],
   heavy: false,
-  purpose: "Lists the backups on your server, shows what changed between them and lets you restore any of them.",
+  purpose: "Earlier copies your PC keeps of your plan: see what changed since one and put it back if something went wrong.",
+  aliases: ["undo", "earlier copies", "restore", "go back"],
   compute,
   render,
 };
