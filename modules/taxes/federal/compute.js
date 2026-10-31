@@ -52,6 +52,32 @@ export function netGains(gains, filingStatus) {
 }
 
 /**
+ * The capital loss carried to next year (IRC 1212(b)), by the Capital Loss Carryover Worksheet (Pub. 550 Worksheet 4-1):
+ * taxable income (negative when it would be), the loss allowed this year (at most 3,000, 1,500 filing separately), the
+ * year's net short-term and long-term results (Schedule D lines 7 and 15). Line 3 = taxable income + the allowed loss (the
+ * "adjusted taxable income" of 1212(b)(2)(B), floor 0); line 4 = the smaller of that and the allowed loss; the short-term
+ * loss not used by line 4 and the long-term gain carries as short-term; the long-term loss not used by the short-term gain
+ * and what line 4 has left carries as long-term. So with taxable income below zero more than the loss over 3,000 carries.
+ */
+export function carryoverWorksheet({ taxableIncome, allowed, shortNet, longNet }) {
+  const l2 = Math.max(0, Number(allowed) || 0);
+  const l4 = Math.min(l2, Math.max(0, (Number(taxableIncome) || 0) + l2));
+  const stLoss = Math.max(0, -shortNet), ltGain = Math.max(0, longNet), ltLoss = Math.max(0, -longNet), stGain = Math.max(0, shortNet);
+  const short = Math.max(0, stLoss - (l4 + ltGain));
+  const long = Math.max(0, ltLoss - (stGain + Math.max(0, l4 - stLoss)));
+  return { short, long, total: short + long };
+}
+
+/** The carryover of a return worked by federalTax (`b` from taxInputs, `r` its result): each spouse's return on its own when filing separately (each holds half the sales), added. */
+export function lossCarryover(b, r) {
+  const parts = r.separate ? r.separate.map((x) => ({ x, share: 1 / r.separate.length })) : [{ x: r, share: 1 }];
+  return parts.reduce((acc, { x, share }) => {
+    const c = carryoverWorksheet({ taxableIncome: x.agi - x.deduction.amount - (x.deduction.qbi || 0), allowed: -x.income.capitalLoss, shortNet: b.gains.shortTotal * share, longNet: b.gains.longTotal * share });
+    return { short: acc.short + c.short, long: acc.long + c.long, total: acc.total + c.total };
+  }, { short: 0, long: 0, total: 0 });
+}
+
+/**
  * taxInputs(plan, { today }) -> { year, params, filingStatus, inputs (for federalTax), sources: [{ key, label, amount, from: "plan" | "typed", detail }],
  *   notes: [text], itemized: { total, lines, saltCap }, people: { ages65plus, dependentsUnder17, otherDependents, adults }, pretax401k, standard, gains }
  * `inputs.itemized` is the total after caps, worked out against the AGI the plan implies.
@@ -242,6 +268,12 @@ export function taxInputs(plan, params = {}) {
 export function compute(plan, params = {}) {
   const b = taxInputs(plan, params);
   const result = federalTax(b.inputs, b.params);
+  // the loss carried to next year by the worksheet (more than the loss over 3,000 when taxable income is below zero)
+  if (b.gains.netLoss < 0) {
+    const carry = lossCarryover(b, result);
+    b.gains = { ...b.gains, carryForward: -carry.total, carryover: carry };
+    b.sources = b.sources.map((x) => x.key === "loss" ? { ...x, detail: carry.total > 0.5 ? `${fmtInt(-b.gains.netLoss)} lost in all; ${fmtInt(carry.total)} carries forward` : "Capital gains page" } : x);
+  }
   const marginal = marginalRate(b.inputs, b.params);
   const r = result;
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];

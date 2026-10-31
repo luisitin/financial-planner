@@ -4,7 +4,7 @@
 // carries to next year, what a recent purchase cancels), and the order to sell in when you need
 // cash (the smallest gain per share first).
 import { compute as computeHoldings } from "../holdings/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, lossCarryover } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween, isoOf } from "../../../core/math/dates.js";
 
@@ -20,31 +20,8 @@ export function longOn(date) {
   return isoOf(y + 1, mo, d);   // a year on (February 29 in a year without one rolls to March 1)
 }
 
-/**
- * The capital loss carried to next year (IRC 1212(b)), by the Capital Loss Carryover Worksheet (Pub. 550 Worksheet 4-1):
- * taxable income (negative when it would be), the loss allowed this year (at most 3,000, 1,500 filing separately), the
- * year's net short-term and long-term results (Schedule D lines 7 and 15). Line 3 = taxable income + the allowed loss (the
- * "adjusted taxable income" of 1212(b)(2)(B), floor 0); line 4 = the smaller of that and the allowed loss; the short-term
- * loss not used by line 4 and the long-term gain carries as short-term; the long-term loss not used by the short-term gain
- * and what line 4 has left carries as long-term. So with taxable income below zero more than the loss over 3,000 carries.
- */
-export function carryover({ taxableIncome, allowed, shortNet, longNet }) {
-  const l2 = Math.max(0, Number(allowed) || 0);
-  const l4 = Math.min(l2, Math.max(0, (Number(taxableIncome) || 0) + l2));
-  const stLoss = Math.max(0, -shortNet), ltGain = Math.max(0, longNet), ltLoss = Math.max(0, -longNet), stGain = Math.max(0, shortNet);
-  const short = Math.max(0, stLoss - (l4 + ltGain));
-  const long = Math.max(0, ltLoss - (stGain + Math.max(0, l4 - stLoss)));
-  return { short, long, total: short + long };
-}
-
-/** The carryover of a plan's year as the Federal estimate works it (each spouse's return on its own when filing separately). */
-function carryOf(ti, r) {
-  const parts = r.separate ? r.separate.map((x) => ({ x, share: 1 / r.separate.length })) : [{ x: r, share: 1 }];
-  return parts.reduce((acc, { x, share }) => {
-    const c = carryover({ taxableIncome: x.agi - x.deduction.amount - (x.deduction.qbi || 0), allowed: -x.income.capitalLoss, shortNet: ti.gains.shortTotal * share, longNet: ti.gains.longTotal * share });
-    return { short: acc.short + c.short, long: acc.long + c.long, total: acc.total + c.total };
-  }, { short: 0, long: 0, total: 0 });
-}
+/** The carryover worksheet (Pub. 550 Worksheet 4-1) lives with the Federal estimate; re-exported here for this page's tests. */
+export { carryoverWorksheet as carryover } from "../../taxes/federal/compute.js";
 
 /**
  * Wash sales (IRC 1091(a)): a loss is not allowed on the shares matched by the same security bought in the 30 days before
@@ -134,7 +111,7 @@ export function compute(plan, params = {}) {
   // loss added to the year's sales, short or long by its term. The engine nets it against the year's gains (short against
   // short, long against long, then across) and lets a net loss take at most 3,000 (1,500 filing separately) off other income
   // (IRC 1211(b), 1222; Schedule D); the rest carries to next year (1212(b)) and saves nothing this year.
-  const baseCarry = carryOf(ti, federalTax(ti.inputs, ti.params));
+  const baseCarry = lossCarryover(ti, federalTax(ti.inputs, ti.params));
   let taxSavedTotal = 0, carry = baseCarry;
   const allowedOf = (held) => harvest.filter((x) => x.lot.term === held).reduce((s, x) => s + x.allowed, 0);
   if (harvest.length) {
@@ -142,7 +119,7 @@ export function compute(plan, params = {}) {
     p2.taxes = { ...(p2.taxes ?? {}), gains: [...(p2.taxes?.gains ?? []), { id: "harvest-short", proceeds: 0, basis: allowedOf("short"), held: "short" }, { id: "harvest-long", proceeds: 0, basis: allowedOf("long"), held: "long" }] };
     const t2 = taxInputs(p2, params), r2 = federalTax(t2.inputs, t2.params);
     taxSavedTotal = Math.max(0, base - r2.totalTax);
-    carry = carryOf(t2, r2);
+    carry = lossCarryover(t2, r2);
   }
   const disallowedTotal = harvest.reduce((s, x) => s + x.disallowed, 0);
   const sellFirst = [];

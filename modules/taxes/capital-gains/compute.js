@@ -2,7 +2,7 @@
 // loss allowance and carry-forward, the tax the gains add on top of the rest of your return
 // (0/15/20% for long-term, ordinary rates for short-term, the 3.8% surtax), how much long-term
 // gain still fits in the 0% band, and what one more sale would cost.
-import { taxInputs, netGains } from "../federal/compute.js";
+import { taxInputs, netGains, lossCarryover } from "../federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 
 /**
@@ -18,7 +18,8 @@ export function compute(plan, params = {}) {
   const withGains = federalTax(b.inputs, b.params);
   const bare = taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), gains: [] } }, params);
   const without = federalTax(bare.inputs, bare.params);
-  const g = b.gains;
+  // the loss carried to next year by the Capital Loss Carryover Worksheet (Pub. 550), not just the loss over 3,000
+  const g = b.gains.netLoss < 0 ? (() => { const c = lossCarryover(b, withGains); return { ...b.gains, carryForward: -c.total, carryover: c }; })() : b.gains;
   const st = b.params.status[b.filingStatus] ?? b.params.status.single;
   const thresholds = { zero: st.ltcgBrackets?.[0] ?? 0, fifteen: st.ltcgBrackets?.[1] ?? 0 };
   // room in the 0% band: more long-term gain until taxable income reaches the first threshold (benefits taxation can move it, so iterate)
