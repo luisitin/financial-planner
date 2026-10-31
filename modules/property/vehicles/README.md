@@ -15,13 +15,18 @@
 - A year: value lost = value × loss (default 12%); fuel = miles ÷ mpg × price (electric: miles × kWh a mile × price);
   insurance, upkeep, registration as typed; loan interest over the next twelve payments (`yearOfPayments`). Per mile = total ÷ miles.
 - Values: a used car × (1 − loss)^years; a new one × (1 − 20%) after year one, then × (1 − 15%) a year (rough averages).
-- Keep: the old loan's payments for the period (stopping when paid) + fuel, insurance, registration and upkeep rising
-  10% a year; back = its value at the end.
+- Keep: the old loan's payments for the period (stopping when paid) + fuel, insurance and registration at today's
+  prices + upkeep rising 10% a year as the car ages (only upkeep rises); back = its value at the end less what the old
+  loan still owes then, so it compares like for like with buy and lease, which pay that loan off at the start (until
+  2026-10-31 the debt left at the end was ignored).
 - Buy: trade-in = value − old loan; a negative trade-in is paid in cash; financed = price × (1 + sales tax) − positive
   trade-in − cash down, at `newRate` over `newTermMonths`; payments for the period; running costs with the new mpg,
-  insurance × 1.25, upkeep `newMaintenanceYear`; back = the new car's value at the end − what is still owed.
-- Lease: due at signing for each lease started in the period + payments every month + miles over the allowance × the
-  charge + running costs (upkeep halved: under warranty); back = 0.
+  insurance × 1.25, upkeep `newMaintenanceYear`, all at today's prices every year (a new car's upkeep is counted flat);
+  back = the new car's value at the end − what is still owed.
+- Lease: the old car goes when the lease starts, so a positive trade-in comes back as cash (`leaseCredit`, taken off what
+  is paid; a negative one is paid off, as for buy) + due at signing for each lease started in the period + payments every
+  month + miles over the allowance × the charge + running costs at today's prices (upkeep halved: under warranty); back = 0.
+  Until 2026-10-31 a positive trade-in was not credited, which made leasing look dearer by the car's whole equity.
 - Cost = paid − back; monthly = cost ÷ months. The cheapest is marked. No discounting: the periods are the same length.
 
 ## Edge cases

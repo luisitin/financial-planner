@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, schedule, loanCost, PROJECTS, DEFAULTS } from "./compute.js";
+import { compute, schedule, loanCost, deductibleShare, PROJECTS, DEFAULTS, ACQ_LIMIT } from "./compute.js";
 import { pmt } from "../../../core/math/finance.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -66,4 +66,43 @@ test("with the cash and no home: cash is the way, and no home loans are offered"
   assert.deepEqual(d.ways.map((w) => w.id), ["cash", "loan"]);
   assert.equal(d.best, "cash"); assert.equal(d.home, null);
   near(d.cushion.after, 60000);
+});
+
+test("a cash-out refinance fits only up to 80% of the home's value, closing costs included (HUD Mortgagee Letter 2019-11)", () => {
+  // the family's 380,000 home and 265,000 mortgage: 30,000 more is 303,850 with 3% costs, 79.96%; 35,000 more is 309,000, 81.3%
+  const p = familyPlan(TODAY);
+  const r = compute(p, { today: TODAY }).ways.find((w) => w.id === "refi");
+  near(r.ltv, 303850 / 380000, 1e-6); assert.equal(r.fits, true);
+  p.whatIfs = { renovation: { cost: 35000 } };
+  const d = compute(p, { today: TODAY }), r2 = d.ways.find((w) => w.id === "refi");
+  near(r2.ltv, 309000 / 380000, 1e-6); assert.equal(r2.fits, false);
+  assert.equal(d.ways.find((w) => w.id === "heloc").fits, true, "the line still fits: 85% of 380,000 less 265,000 is 58,000");
+});
+
+test("deductible interest by the law: the first $750,000 of home debt, never the closing costs rolled in (IRC 163(h)(3); Pub. 936)", () => {
+  assert.equal(deductibleShare(700000, ACQ_LIMIT.other), 1);
+  near(deductibleShare(800000, ACQ_LIMIT.other), 15 / 16, 1e-12);
+  near(deductibleShare(500000, ACQ_LIMIT.separate), 0.75, 1e-12);
+  // the family itemizing: the line's interest is all deductible (295,000 of home debt); the refinance's new loan only on the
+  // old balance and the cost, 295,000 of its 303,850, less the old mortgage's interest it replaces; today's money after the tax
+  const p = familyPlan(TODAY); p.taxes.itemized = { ...p.taxes.itemized, other: 60000 };
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.itemizes, true);
+  const h = d.ways.find((w) => w.id === "heloc"), r = d.ways.find((w) => w.id === "refi");
+  const lc = loanCost(30000, DEFAULTS.helocRate, DEFAULTS.helocYears, d.discount);
+  near(h.deductibleShare, 1); near(h.taxSaved, lc.interest * d.marginal); near(h.today, lc.pv - 30000 - lc.pvInterest * d.marginal);
+  const nl = loanCost(303850, DEFAULTS.refiRate, DEFAULTS.refiYears, d.discount), old = schedule(265000, 0.0625, 1980, d.discount), share = 295000 / 303850;
+  near(r.deductibleShare, share, 1e-12);
+  near(r.taxSaved, (nl.interest * share - old.interest) * d.marginal);
+  near(r.today, nl.pv - old.pv - 30000 - (nl.pvInterest * share - old.pvInterest) * d.marginal);
+  // a cheaper refinance gives up deduction: the tax saved goes negative instead of stopping at 0
+  p.whatIfs = { renovation: { refiRate: 0.04, refiYears: 15 } };
+  const cheap = compute(p, { today: TODAY }).ways.find((w) => w.id === "refi");
+  assert.ok(cheap.interest < 0 && cheap.taxSaved < 0, `${cheap.interest} ${cheap.taxSaved}`);
+  // a 740,000 mortgage: the line's 30,000 takes the home debt past 750,000, so 750/770 of its interest counts
+  const big = familyPlan(TODAY); big.taxes.itemized = { ...big.taxes.itemized, other: 60000 };
+  big.accounts.find((a) => a.id === "a-mort").balance = 740000; big.accounts.find((a) => a.id === "a-home").balance = 1200000;
+  big.debts.find((x) => x.id === "d-mort").minPayment = 5000;
+  const bh = compute(big, { today: TODAY }).ways.find((w) => w.id === "heloc");
+  near(bh.deductibleShare, 750000 / 770000, 1e-12); near(bh.taxSaved, bh.interest * 750000 / 770000 * compute(big, { today: TODAY }).marginal);
 });

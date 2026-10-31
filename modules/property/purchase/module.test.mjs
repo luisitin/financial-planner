@@ -4,6 +4,7 @@ import { compute, giveWay, DEFAULTS } from "./compute.js";
 import { pmt, pmtToReach } from "../../../core/math/finance.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
+import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 
 const TODAY = "2026-10-30";
 const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -59,4 +60,13 @@ test("a boat: saving up by June squeezes the goals; the cash is not there", () =
   assert.ok(d.effect.save.list.length > 0 && d.effect.save.uncovered > 0);
   near(d.effect.save.list.reduce((t, g) => t + g.from, 0) + d.effect.save.uncovered, d.save.monthly - d.spare);
   assert.equal(d.cash.fits, false);
+});
+
+test("pay cash: only what is not already set aside comes out of usable cash (README: usable cash − (total − set aside))", () => {
+  const p = withPurchase({ name: "Sofa", price: 3000, saved: 1000 });
+  const d = compute(p, { today: TODAY }), now = computeLiquidity(p, { today: TODAY }).now;
+  near(d.cash.amount, 2000); near(d.cash.after, now - 2000); assert.equal(d.cash.fits, now >= 2000);
+  // set aside more than it costs: nothing more to pay
+  const all = compute(withPurchase({ name: "Sofa", price: 3000, saved: 5000 }), { today: TODAY });
+  near(all.cash.amount, 0); near(all.cash.after, now);
 });

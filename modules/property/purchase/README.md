@@ -13,12 +13,14 @@
 `{ ready, inputs, total, saved, months, spare, save: { monthly, months, earned } | null, finance: { principal, payment, months, interest, promo }, cash: { fits, after, target }, effect: { save, finance } }`.
 
 ## Formulas
-- Total = price × (1 + sales tax). Months to the date = whole months from today (at least 1).
+- Total = price × (1 + sales tax). Months to the date = whole months from today, the day of the month reached
+  (`monthsBetween`: Oct 31 to Jun 30 is 7), at least 1.
 - Save up: monthly = `pmtToReach(cash return / 12, months, total, already set aside)`; earned = total − set aside − monthly × months.
 - Finance now, on total − set aside: a level payment `pmt(apr / 12, term, amount)`; all 0%: amount ÷ term; 0% for the first
   months then the rate: the level payment that clears it by the end (found by bisection: balance after the term = 0).
   Interest = payment × term − amount. (Deferred-interest store cards charge the whole interest if anything is left: named, not modelled.)
-- Pay cash: usable cash − (total − set aside), against the emergency target.
+- Pay cash: usable cash − (total − set aside), against the emergency target (`cash.amount` = total − set aside; until
+  2026-10-31 the whole total was taken from usable cash, though the screen showed the smaller amount).
 - Goals give way (`giveWay`) when the monthly amount is more than the money left: least important first (priority 3,
   then 2, then 1), within a priority the latest due first; each gives up to its whole monthly saving; its new arrival =
   `solveMonths(rate / 12, set aside, new monthly, target)` (`goals/house`) against the old; a goal left at 0 is paused.

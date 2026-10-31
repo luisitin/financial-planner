@@ -40,7 +40,7 @@ export function yearCost(car, loan) {
   return { lines, total, monthly: total / 12, perMile: miles > 0 ? total / miles : null };
 }
 
-/** Keep, buy new or lease over `years` (whole years): { years, tradeIn, loanLeft, newPayment, financed, options: [{ id, label, out (money paid), back (what you own at the end, less any loan), cost (out − back), monthly, endValue, owedAtEnd, terms }] }. */
+/** Keep, buy new or lease over `years` (whole years): { years, tradeIn, loanLeft, oldOwedAtEnd, newPayment, financed, leaseCredit, options: [{ id, label, out (money paid), back (what you own at the end, less any loan), cost (out − back), monthly, endValue, owedAtEnd, terms }] }. */
 export function compare(car, loan, x) {
   const c = { ...DEFAULTS.car, ...Object.fromEntries(Object.entries(car).filter(([, v]) => v !== null && v !== undefined && v !== "")) };
   const years = Math.max(1, Math.round(num(x.years, 5))), months = years * 12;
@@ -48,9 +48,10 @@ export function compare(car, loan, x) {
   const value = num(c.value, 0), ins = num(c.insuranceYear, 0), reg = num(c.registrationYear, 0), upkeep = num(c.maintenanceYear, 0);
   // the old loan: kept, its payments run on; replaced, it is paid off from the trade-in
   const loanLeft = loan?.balance ?? 0;
-  let loanPaid = 0;
-  if (loan) { let b = loan.balance; for (let m = 0; m < months && b > 0.005; m++) { const i = b * loan.rate / 12, p = Math.min(loan.payment, b + i); loanPaid += p; b = b + i - p; } }
-  // keep: running costs with upkeep rising, the loan's payments; the car is still yours at the end
+  let loanPaid = 0, oldOwedAtEnd = 0;
+  if (loan) { let b = loan.balance; for (let m = 0; m < months && b > 0.005; m++) { const i = b * loan.rate / 12, p = Math.min(loan.payment, b + i); loanPaid += p; b = b + i - p; } oldOwedAtEnd = b > 0.005 ? b : 0; }
+  // keep: fuel, insurance and registration at today's prices, upkeep rising as the car ages, the loan's payments; the car is
+  // still yours at the end, less what its loan still owes then (buy and lease pay that loan off at the start, so like for like)
   let keepOut = loanPaid;
   for (let t = 0; t < years; t++) keepOut += fuel(num(c.mpg, 0)) + ins + reg + upkeep * Math.pow(1 + x.upkeepRise, t);
   const keepEnd = valueAfter(value, years, { loss: num(c.loss, DEFAULTS.car.loss) });
@@ -64,15 +65,16 @@ export function compare(car, loan, x) {
   const buyEnd = valueAfter(x.newPrice, years, { first: DEFAULTS.newLoss[0], after: DEFAULTS.newLoss[1] });
   let owedAtEnd = 0;
   if (financed > 0 && months < x.newTermMonths) { let b = financed; for (let m = 0; m < months; m++) b = b * (1 + x.newRate / 12) - payment; owedAtEnd = Math.max(0, b); }
-  // lease: due at signing each term, the payments, miles over the allowance; nothing owned at the end
-  const terms = Math.ceil(months / x.leaseMonths);
-  let leaseOut = Math.max(0, -tradeIn) + x.leaseDue * terms + x.leaseMonthly * months + Math.max(0, miles - x.leaseMiles) * years * x.leaseExcess;
+  // lease: the old car goes at the start, so its equity comes back as cash (a negative trade-in is paid off); due at signing
+  // each term, the payments, miles over the allowance; nothing owned at the end. A new car's running costs are at today's prices.
+  const terms = Math.ceil(months / x.leaseMonths), leaseCredit = Math.max(0, tradeIn);
+  let leaseOut = Math.max(0, -tradeIn) - leaseCredit + x.leaseDue * terms + x.leaseMonthly * months + Math.max(0, miles - x.leaseMiles) * years * x.leaseExcess;
   for (let t = 0; t < years; t++) leaseOut += fuel(x.newMpg) + ins * x.newInsuranceShare + reg + x.newMaintenanceYear * 0.5;
   const row = (id, label, out, back, extra) => ({ id, label, out, back, cost: out - back, monthly: (out - back) / months, ...extra });
   return {
-    years, tradeIn, loanLeft, newPayment: payment, financed,
+    years, tradeIn, loanLeft, oldOwedAtEnd, newPayment: payment, financed, leaseCredit,
     options: [
-      row("keep", "Keep it", keepOut, keepEnd, { endValue: keepEnd, owedAtEnd: 0 }),
+      row("keep", "Keep it", keepOut, keepEnd - oldOwedAtEnd, { endValue: keepEnd, owedAtEnd: oldOwedAtEnd }),
       row("buy", "Buy a new one", buyOut, buyEnd - owedAtEnd, { endValue: buyEnd, owedAtEnd }),
       row("lease", "Lease a new one", leaseOut, 0, { endValue: 0, owedAtEnd: 0, terms }),
     ],

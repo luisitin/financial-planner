@@ -66,3 +66,29 @@ test("a car with no account, typed on its own", () => {
   const d = compute(p, { today: TODAY });
   assert.equal(d.cars[0].name, "Old truck"); assert.equal(d.cars[0].value, 6000); assert.equal(d.cars[0].loan, null);
 });
+
+test("keep: what the old loan still owes at the end comes off the car's value; the lease credits the car's equity", () => {
+  // the sedan, worth 9,000, with a 0% loan of 6,000 at 250 a month, over 1 year: 3,000 paid, 3,000 still owed at the end
+  const x = { ...DEFAULTS.compare, years: 1 };
+  const c = compare({ ...SEDAN, value: 9000 }, { balance: 6000, rate: 0, payment: 250 }, x);
+  const keep = c.options[0];
+  near(c.oldOwedAtEnd, 3000); near(keep.owedAtEnd, 3000); near(keep.back, 9000 * 0.88 - 3000); near(keep.cost, keep.out - keep.back);
+  // buy and lease pay that loan off from the trade-in at the start: 9,000 - 6,000 = 3,000 of equity, credited on the lease
+  near(c.tradeIn, 3000); near(c.leaseCredit, 3000);
+  const lease = c.options[2];
+  // one 36-month lease started, 12 payments, 11,000 miles inside the 12,000 allowed; a new car's running costs at today's prices
+  const run = 11000 / x.newMpg * 3.4 + 1300 * x.newInsuranceShare + 180 + x.newMaintenanceYear * 0.5;
+  near(lease.out, x.leaseDue + x.leaseMonthly * 12 + run - 3000);
+  // worth less than its loan: nothing to credit, the shortfall is paid at the start instead
+  const under = compare({ ...SEDAN, value: 5000 }, { balance: 6000, rate: 0, payment: 250 }, x);
+  near(under.leaseCredit, 0); near(under.options[2].out, 1000 + x.leaseDue + x.leaseMonthly * 12 + run);
+});
+
+test("buy and lease: a new car's running costs are flat over the years; only the kept car's upkeep rises", () => {
+  const x = { ...DEFAULTS.compare, years: 3, newPrice: 30000, newSalesTax: 0, newDown: 30000 };
+  const c = compare({ ...SEDAN, value: 0 }, null, x);
+  const buy = c.options[1], run = 11000 / x.newMpg * 3.4 + 1300 * x.newInsuranceShare + 180 + x.newMaintenanceYear;
+  near(c.financed, 0); near(buy.out, 30000 + 3 * run);
+  let keepRun = 0; for (let t = 0; t < 3; t++) keepRun += 11000 / 27 * 3.4 + 1300 + 180 + 1400 * Math.pow(1.1, t);
+  near(c.options[0].out, keepRun);
+});

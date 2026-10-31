@@ -27,7 +27,11 @@ export const PROJECTS = {
   "addition": { label: "An addition (a new room or suite)", recoup: 0.25 },
   "other": { label: "Something else", recoup: 0.5 },
 };
-export const DEFAULTS = { project: "minor-kitchen", cost: 30000, recoup: null, helocRate: 0.08, helocYears: 10, refiRate: 0.065, refiYears: 30, refiCosts: 0.03, loanRate: 0.12, loanYears: 5, cltv: 0.85 };
+export const DEFAULTS = { project: "minor-kitchen", cost: 30000, recoup: null, helocRate: 0.08, helocYears: 10, refiRate: 0.065, refiYears: 30, refiCosts: 0.03, loanRate: 0.12, loanYears: 5, cltv: 0.85, refiLtv: 0.80 };
+/** Home debt whose interest can be deducted (acquisition debt taken out after December 15, 2017): IRC 163(h)(3)(F)(i)(II), IRS Pub. 936 (2025). */
+export const ACQ_LIMIT = { other: 750000, separate: 375000 };
+/** The share of a home loan's interest that is deductible when the home debt is `debt`: all of it up to the limit, else limit ÷ debt (by the balances at the start; Pub. 936's worksheet uses each year's average balances). */
+export const deductibleShare = (debt, limit) => (debt <= limit ? 1 : limit / debt);
 
 /** A loan paid off at `payment` a month: its total interest, and its payments and interest in today's money at `discount` a year. */
 export function schedule(principal, rate, payment, discount = 0, maxMonths = 600) {
@@ -47,7 +51,8 @@ export function loanCost(principal, rate, years, discount = 0) {
 /**
  * compute(plan, { today }) -> {
  *   inputs, project: { id, label }, cost, recoup, valueAdded, equityChange, home: { value, mortgage, equity, borrowable } | null,
- *   ways: [{ id, label, monthly, interest (whole term), deductible, taxSaved, cost (interest + fees - tax saved), today (the extra cost in today's money at the plan's return), note, risk, fits }], discount,
+ *   ways: [{ id, label, monthly, interest (whole term; the refinance's is the change), deductible, deductibleShare, ltv (refinance), taxSaved (negative: a lost
+ *   deduction), cost (interest + fees - tax saved), today (the extra cost in today's money at the plan's return, after the tax saved), note, risk, fits }], discount,
  *   cushion: { now, after, months, monthsAfter, target } , best
  * }
  */
@@ -72,6 +77,9 @@ export function compute(plan, params = {}) {
   const itemizes = fed.result.deduction?.used === "itemized";
   const marginal = fed.marginal ?? 0.22;
   const ded = (interest) => (itemizes ? interest * marginal : 0);
+  // only the interest on home debt up to $750,000 ($375,000 filing separately) is deductible, and only on money used to buy,
+  // build or improve the home (IRC 163(h)(3)(B), (F); Pub. 936): so not on closing costs rolled into a refinance
+  const limit = fed.filingStatus === "married_separate" ? ACQ_LIMIT.separate : ACQ_LIMIT.other;
   const discount = planReturn(plan);
 
   const ways = [];
@@ -80,15 +88,19 @@ export function compute(plan, params = {}) {
   const cushion = { now: liq.now ?? 0, after: (liq.now ?? 0) - cost, months: liq.runwayMonths ?? null, monthsAfter: monthlyNeed > 0 ? ((liq.now ?? 0) - cost) / monthlyNeed : null, target: liq.target ?? null };
   ways.push({ id: "cash", label: "Pay cash from savings", monthly: 0, interest: 0, fees: 0, deductible: false, taxSaved: 0, today: 0, note: "no interest and nothing owed", risk: cushion.after < 0 ? "There is not this much cash." : cushion.target && cushion.after < cushion.target ? "It leaves less usable cash than your emergency target." : null, fits: cushion.after >= 0 });
   if (home) {
-    const h = loanCost(cost, x.helocRate, x.helocYears, discount);
-    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, taxSaved: ded(h.interest), today: h.pv - cost - ded(h.pvInterest), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually floats`, risk: "The home secures it.", fits: home.borrowable >= cost });
+    const h = loanCost(cost, x.helocRate, x.helocYears, discount), lineShare = deductibleShare((mortgage?.owed ?? 0) + cost, limit);
+    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, deductibleShare: lineShare, taxSaved: ded(h.interest * lineShare), today: h.pv - cost - ded(h.pvInterest * lineShare), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually floats`, risk: "The home secures it.", fits: home.borrowable >= cost });
     if (mortgage && mortgage.payment > 0) {
       // a cash-out refinance: the old mortgage and the project in one new loan; compare against keeping the old mortgage and paying cash
-      const fees = (mortgage.owed + cost) * x.refiCosts;
-      const newLoan = loanCost(mortgage.owed + cost + fees, x.refiRate, x.refiYears, discount);
+      const fees = (mortgage.owed + cost) * x.refiCosts, principal = mortgage.owed + cost + fees;
+      const newLoan = loanCost(principal, x.refiRate, x.refiYears, discount);
       const old = schedule(mortgage.owed, mortgage.rate ?? 0, mortgage.payment, discount);
       const extraInterest = newLoan.interest - old.interest;
-      ways.push({ id: "refi", label: "Cash-out refinance", monthly: newLoan.payment - mortgage.payment, interest: extraInterest, fees, deductible: true, taxSaved: ded(Math.max(0, extraInterest)), today: newLoan.pv - old.pv - cost - ded(Math.max(0, newLoan.pvInterest - old.pvInterest)), note: `the whole mortgage at ${(x.refiRate * 100).toFixed(2).replace(/\.?0+$/, "")}% for ${x.refiYears} years, with ${Math.round(x.refiCosts * 100)}% closing costs; the payment shown is the change`, risk: (mortgage.rate ?? 0) < x.refiRate ? `It gives up your ${((mortgage.rate ?? 0) * 100).toFixed(2).replace(/\.?0+$/, "")}% rate on the whole mortgage.` : null, fits: home.borrowable >= cost });
+      // deductible: the new loan's interest on the old balance and the cost (not the closing costs), within the limit, less
+      // the old mortgage's that it replaces; negative when the new loan has less deductible interest (a lost deduction)
+      const newShare = Math.min(mortgage.owed + cost, limit) / principal, oldShare = deductibleShare(mortgage.owed, limit);
+      const ltv = home.value > 0 ? principal / home.value : Infinity;
+      ways.push({ id: "refi", label: "Cash-out refinance", monthly: newLoan.payment - mortgage.payment, interest: extraInterest, fees, deductible: true, deductibleShare: newShare, ltv, taxSaved: ded(newLoan.interest * newShare - old.interest * oldShare), today: newLoan.pv - old.pv - cost - ded(newLoan.pvInterest * newShare - old.pvInterest * oldShare), note: `the whole mortgage at ${(x.refiRate * 100).toFixed(2).replace(/\.?0+$/, "")}% for ${x.refiYears} years, with ${Math.round(x.refiCosts * 100)}% closing costs; the payment shown is the change`, risk: (mortgage.rate ?? 0) < x.refiRate ? `It gives up your ${((mortgage.rate ?? 0) * 100).toFixed(2).replace(/\.?0+$/, "")}% rate on the whole mortgage.` : null, fits: ltv <= x.refiLtv + 1e-9 });
     }
   }
   const pl = loanCost(cost, x.loanRate, x.loanYears, discount);
@@ -99,6 +111,6 @@ export function compute(plan, params = {}) {
   return {
     inputs: x, project: { id: project, label: PROJECTS[project].label }, cost, recoup, valueAdded, equityChange: valueAdded - cost,
     home, mortgage: mortgage ? { name: mortgage.name, owed: mortgage.owed, rate: mortgage.rate, payment: mortgage.payment } : null,
-    itemizes, marginal, discount, ways, cushion, best: best?.id ?? null,
+    itemizes, marginal, limit, discount, ways, cushion, best: best?.id ?? null,
   };
 }

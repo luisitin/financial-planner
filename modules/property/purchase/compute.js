@@ -31,7 +31,7 @@ export function giveWay(goals, need) {
 /**
  * compute(plan, { today }) -> {
  *   inputs, total (price with sales tax), months (to the date wanted; null without one), spare (a month, after saving and goals),
- *   save: { monthly, months, earned } | null, finance: { principal, payment, months, interest, promo } , cash: { fits, after, target },
+ *   save: { monthly, months, earned } | null, finance: { principal, payment, months, interest, promo } , cash: { amount (total less set aside), fits, after, target },
  *   effect: { save: giveWay | null, finance: giveWay }
  * }
  */
@@ -64,7 +64,8 @@ export function compute(plan, params = {}) {
   } else { payment = x.apr > 0 ? pmt(x.apr / 12, n, principal) : principal / n; interest = payment * n - principal; }
   const finance = { principal, payment, months: n, interest, promo };
   const liq = computeLiquidity(plan, { today });
-  const cash = { fits: (liq.now ?? 0) >= total, after: (liq.now ?? 0) - total, target: liq.target ?? null };
+  // pay now from cash: what is not already set aside comes out of usable cash (the README's rule and what the screen shows)
+  const cash = { amount: total - saved, fits: (liq.now ?? 0) >= total - saved, after: (liq.now ?? 0) - (total - saved), target: liq.target ?? null };
   const effect = {
     save: save ? giveWay(gl.goals, Math.max(0, save.monthly - Math.max(0, spare))) : null,
     finance: giveWay(gl.goals, Math.max(0, payment - Math.max(0, spare))),
