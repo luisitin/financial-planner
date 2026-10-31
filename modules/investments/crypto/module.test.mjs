@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, cryptoKind, STRESS_DROP, SHARE } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
+import { emptyPlan } from "../../../core/schema/migrate.js";
 
 const TODAY = "2026-10-30";
 const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -101,4 +102,90 @@ test("a crypto account with more than its coins shows the rest; one with none sh
   const rest = d.items.filter((i) => i.kind === "account");
   assert.deepEqual(rest.map((i) => Math.round(i.value)).sort(), [1000, 2500]);
   assert.ok(rest.every((i) => i.cost === null));
+});
+
+// one adult filing single, paid `pay` a year, with coins in a crypto wallet: [symbol, price, shares, cost, date]
+function single(pay, coins, more = {}) {
+  const p = emptyPlan();
+  p.household.people = [{ id: "a1", name: "Adult 1", role: "self", birthDate: "1980-01-01" }];
+  p.household.filingStatus = "single";
+  p.income = [{ id: "pay", name: "Pay", type: "salary", personId: "a1", amount: pay, period: "annual", taxable: true }];
+  p.accounts = [{ id: "w", name: "Wallet", type: "crypto", balance: 0, history: [] }, { id: "brk", name: "Brokerage", type: "brokerage", balance: 0, history: [] }, { id: "ira", name: "IRA", type: "ira", balance: 0, history: [] }];
+  p.holdings = coins.map(([symbol, price, shares, cost, date, accountId = "w"], i) => ({ id: `c${i}`, accountId, symbol, shares, price, priceAsOf: TODAY, costBasis: cost, lots: [{ id: `l${i}`, date, shares, cost }] }));
+  Object.assign(p.taxes, more);
+  return p;
+}
+
+test("the carryover the sale adds compares the whole carryover: a gain that uses up some of it counts (IRC 1212(b); Pub. 550 Worksheet 4-1)", () => {
+  // single, pay 120,000; this year's other sales: a 10,000 short-term loss (3,000 off pay, 7,000 short-term carries)
+  // coins: BTC short +5,000, ETH long -6,000 -> short -5,000, long -6,000: still 3,000 off pay; the worksheet carries 2,000
+  // short and 6,000 long, 8,000 in all: 1,000 more than without (not the 6,000 rise in the long-term part alone)
+  const p = single(120000, [["BTC", 10000, 1, 5000, ago(100)], ["ETH", 1000, 4, 10000, ago(800)]], { gains: [{ id: "g1", name: "Stock", proceeds: 0, basis: 10000, held: "short" }] });
+  const d = compute(p, { today: TODAY });
+  near(d.tax.total, 0); near(d.tax.carry, 1000); near(d.tax.net, -1000);
+  assert.equal(d.tax.why, "limit", "the other sales already take the whole 3,000");
+  assert.equal(d.tax.lossLimit, 3000);
+});
+
+test("selling everything: a fund bought in an IRA within 30 days cancels that part of the fund's loss (IRC 1091(a); Rev. Rul. 2008-5)", () => {
+  // single, pay 230,000; IBIT 100 shares at a 2,000 long-term loss, 30 bought in the IRA 5 days ago: 600 disallowed, 1,400
+  // allowed; BTC long +10,000, ETH short -1,000 -> net long 10,000 - 1,400 - 1,000 = 7,600 at 15% + 3.8% = 1,428.80
+  const p = single(230000, [["IBIT", 50, 100, 7000, ago(600), "brk"], ["IBIT", 50, 30, 1500, ago(5), "ira"], ["BTC", 20000, 1, 10000, ago(700)], ["ETH", 1000, 1, 2000, ago(60)]]);
+  const d = compute(p, { today: TODAY });
+  near(d.tax.disallowed, 600); near(d.tax.net, 7600);
+  near(d.tax.total, 1428.80); near(d.tax.addLong, 7600); near(d.tax.addShort, 0);
+});
+
+test("a bitcoin fund in a crypto account is a fund (the wash-sale rule reaches it)", () => {
+  assert.equal(cryptoKind({ symbol: "IBIT", accountType: "crypto" }), "fund");
+});
+
+test("a gain taxed at 0% shows why the tax does not change; nothing gained says so", () => {
+  // single, pay 30,000 in 2026: taxable income 13,900 + a 2,000 long-term gain stays under the 0% band's 49,450 top
+  const d = compute(single(30000, [["BTC", 12000, 1, 10000, ago(700)]]), { today: TODAY });
+  near(d.tax.total, 0); assert.equal(d.tax.why, "zero"); near(d.tax.net, 2000);
+  const flat = compute(single(30000, [["BTC", 10000, 1, 10000, ago(700)]]), { today: TODAY });
+  assert.equal(flat.tax.why, "none");
+});
+
+test("a sale today is in today's tax year: the Federal estimate set to last year works this year, without last year's sales", () => {
+  const sale = [["BTC", 10000, 1, 5000, ago(100)], ["ETH", 1000, 4, 10000, ago(800)]];
+  const last = compute(single(120000, sale, { year: 2025, gains: [{ id: "g1", name: "Stock", proceeds: 0, basis: 10000, held: "short" }] }), { today: TODAY });
+  const now = compute(single(120000, sale), { today: TODAY });
+  assert.equal(last.tax.year, 2026); assert.equal(last.tax.otherYear, 2025);
+  near(last.tax.total, now.tax.total); near(last.tax.carry, now.tax.carry);
+  assert.equal(now.tax.otherYear, null);
+});
+
+test("a lot sold on its own takes its own wash-sale match (not the one it gets when every lot is sold)", () => {
+  // two IBIT lots, 20 shares each at a 500 long-term loss, and 10 bought in an IRA 10 days ago. Sold together the older lot
+  // takes the 10 (26 CFR 1.1091-1(b)); sold alone either lot does: 250 of its 500 counts, and with no other sales this year
+  // it comes off pay at 22% = 55
+  const p = familyPlan(TODAY);
+  p.accounts.push({ id: "a-ira2", name: "IRA", type: "ira", balance: 550, history: [] });
+  p.holdings = [
+    { id: "f1", accountId: "a-brk", symbol: "IBIT", shares: 40, price: 55, priceAsOf: ago(1), costBasis: 3200, lots: [{ id: "la", date: ago(500), shares: 20, cost: 1600 }, { id: "lb", date: ago(400), shares: 20, cost: 1600 }] },
+    { id: "f2", accountId: "a-ira2", symbol: "IBIT", shares: 10, price: 55, priceAsOf: ago(1), costBasis: 560, lots: [{ id: "lc", date: ago(10), shares: 10, cost: 560 }] },
+  ];
+  const d = compute(p, { today: TODAY });
+  const [a, b] = ["la", "lb"].map((id) => d.harvest.find((h) => h.lot.id === id));
+  near(a.disallowed, 250); near(b.disallowed, 0);   // together: the older lot is washed
+  near(a.saved, 250 * 0.22); near(b.saved, 250 * 0.22);   // alone: each is
+  near(d.harvestSaved, 750 * 0.22);
+});
+
+test("filing separately: a coin in one spouse's account is on that spouse's return, with its own $1,500 limit (Pub. 501; IRC 1211(b))", () => {
+  const p = familyPlan(TODAY);
+  p.household.filingStatus = "married_separate";
+  p.accounts.push({ id: "a-bow", name: "Bo's wallet", type: "crypto", balance: 5000, ownerId: "p-bo", history: [] }, { id: "a-jw", name: "Our wallet", type: "crypto", balance: 5000, ownerId: "", history: [] });
+  const eth = (accountId) => [{ id: "e1", accountId, symbol: "ETH", shares: 2, price: 2500, priceAsOf: ago(1), costBasis: 10000, lots: [{ id: "le", date: ago(100), shares: 2, cost: 10000 }] }];
+  p.holdings = eth("a-bow");
+  const own = compute(p, { today: TODAY });
+  assert.equal(own.tax.lossLimit, 1500);
+  // Bo's 5,000 short-term loss: 1,500 off Bo's pay, 3,500 carries
+  near(own.tax.carry, 3500);
+  p.holdings = eth("a-jw");
+  const joint = compute(p, { today: TODAY });
+  // a joint wallet: 2,500 on each return, 1,500 off each, 1,000 carries on each
+  near(joint.tax.carry, 2000);
 });

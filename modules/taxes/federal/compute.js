@@ -68,11 +68,13 @@ export function carryoverWorksheet({ taxableIncome, allowed, shortNet, longNet }
   return { short, long, total: short + long };
 }
 
-/** The carryover of a return worked by federalTax (`b` from taxInputs, `r` its result): each spouse's return on its own when filing separately (each holds half the sales), added. */
+/** The carryover of a return worked by federalTax (`b` from taxInputs, `r` its result): each spouse's return on its own when filing separately (each with its own sales: the ones in their name and half the rest), added. */
 export function lossCarryover(b, r) {
-  const parts = r.separate ? r.separate.map((x) => ({ x, share: 1 / r.separate.length })) : [{ x: r, share: 1 }];
-  return parts.reduce((acc, { x, share }) => {
-    const c = carryoverWorksheet({ taxableIncome: x.agi - x.deduction.amount - (x.deduction.qbi || 0), allowed: -x.income.capitalLoss, shortNet: b.gains.shortTotal * share, longNet: b.gains.longTotal * share });
+  const parts = r.separate
+    ? r.separate.map((x, i) => ({ x, totals: b.separate?.[i]?.gainTotals ?? { short: b.gains.shortTotal / r.separate.length, long: b.gains.longTotal / r.separate.length } }))
+    : [{ x: r, totals: { short: b.gains.shortTotal, long: b.gains.longTotal } }];
+  return parts.reduce((acc, { x, totals }) => {
+    const c = carryoverWorksheet({ taxableIncome: x.agi - x.deduction.amount - (x.deduction.qbi || 0), allowed: -x.income.capitalLoss, shortNet: totals.short, longNet: totals.long });
     return { short: acc.short + c.short, long: acc.long + c.long, total: acc.total + c.total };
   }, { short: 0, long: 0, total: 0 });
 }
@@ -212,8 +214,9 @@ export function taxInputs(plan, params = {}) {
   let inputs = { ...base, itemized: itemized.total };
   // married filing separately is two returns, one per spouse (IRS Pub. 501: each reports their own income, credits and
   // deductions): each spouse's own pay, 401(k), IRA and HSA money and the income in their name; the household's income
-  // with no one named, the typed figures, the gains and the itemized amounts split in half (a sale's half on each return,
-  // so each has its own $1,500 loss limit, IRC 1211(b)); pay with no one named and the health FSA on the adult marked
+  // with no one named, the typed figures, the sales in neither name and the itemized amounts split in half (a sale's half on
+  // each return, so each has its own $1,500 loss limit, IRC 1211(b); a sale with a personId is all on that spouse's return:
+  // its owner's own income, Pub. 501); pay with no one named and the health FSA on the adult marked
   // "Me"; the children on the higher earner's return (the Which way to file page's convention). The engine adds the two
   // returns up (core/math/tax.js separateTax); `separate` holds each spouse's inputs.
   let separate = null;
@@ -221,7 +224,7 @@ export function taxInputs(plan, params = {}) {
     const two = adults.slice(0, 2);
     const shareOf = (x, p, payLike) => { const o = adultOf(x.personId); return o ? (o === p ? 1 : 0) : payLike ? (p === me ? 1 : 0) : 0.5; };
     const sumFor = (p, types, payLike = false) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly * shareOf(x, p, payLike), 0);
-    const halfGains = netGains((t.gains ?? []).map((g) => ({ ...g, proceeds: (Number(g.proceeds) || 0) / 2, basis: (Number(g.basis) || 0) / 2 })), filingStatus);
+    const gainsOf = (p) => netGains((t.gains ?? []).map((g) => { const s = shareOf(g, p, false); return { ...g, proceeds: (Number(g.proceeds) || 0) * s, basis: (Number(g.basis) || 0) * s }; }), filingStatus);
     const halfItemized = Object.fromEntries(Object.entries(t.itemized ?? {}).map(([k, v]) => [k, typeof v === "number" ? v / 2 : v]));
     const payOf = (p) => sumFor(p, ["salary", "bonus"], true);
     const carrier = [...two].sort((a, b) => payOf(b) - payOf(a))[0];
@@ -232,6 +235,7 @@ export function taxInputs(plan, params = {}) {
       const hsaDeducted = Math.max(0, h.payroll - h.excess), hsaTaxed = Math.max(0, h.excess - h.payroll);
       const ownWages = wagesTyped ? wages * (payTotal > 0 ? k.pay / payTotal : 1 / two.length) : Math.max(0, k.pay - k.excluded - fsaOwn) + hsaTaxed;
       const ownBusiness = sumFor(p, ["business"]);
+      const halfGains = gainsOf(p);
       const part = {
         filingStatus, wages: ownWages, medicareWages: wagesTyped ? ownWages : Math.max(0, k.pay - fsaOwn - h.payroll + h.excess),
         otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort),
@@ -245,7 +249,7 @@ export function taxInputs(plan, params = {}) {
         charitableCash: base.charitableCash / 2,
       };
       const partAgi = federalTax({ ...part, itemized: 0 }, P).agi;
-      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total };
+      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal } };
     });
     const sums = Object.fromEntries(SEPARATE_FIELDS.map((f) => [f, separate.reduce((s, x) => s + (Number(x[f]) || 0), 0)]));
     inputs = { ...inputs, ...sums, separate, separateTo: me ? me.id : separate[0].personId };   // an amount another page adds lands on Me's return

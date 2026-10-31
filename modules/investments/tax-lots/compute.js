@@ -20,6 +20,17 @@ export function longOn(date) {
   return isoOf(y + 1, mo, d);   // a year on (February 29 in a year without one rolls to March 1)
 }
 
+/**
+ * A sale today falls in today's tax year. When the Federal estimate is set to another year (say last year's return), work
+ * today's year instead, without that year's sales typed on Capital gains (they belong to the set year). The typed figures
+ * (pay, dividends) stay as the best guess at today's year. -> { plan, year, other (the set year, when it differs) }
+ */
+export function todaysReturn(plan, today) {
+  const year = today ? Number(String(today).slice(0, 4)) : null, set = Number(plan.taxes?.year) || null;
+  if (!year || !set || set === year) return { plan, year: set ?? year, other: null };
+  return { plan: { ...plan, taxes: { ...(plan.taxes ?? {}), year: null, gains: [] } }, year, other: set };
+}
+
 /** The carryover worksheet (Pub. 550 Worksheet 4-1) lives with the Federal estimate; re-exported here for this page's tests. */
 export { carryoverWorksheet as carryover } from "../../taxes/federal/compute.js";
 
@@ -92,19 +103,21 @@ export function lotsOf(h, today) {
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const h = computeHoldings(plan, params);
-  const ti = taxInputs(plan, params);
+  const yr = todaysReturn(plan, today);
+  const ti = taxInputs(yr.plan, params);
   // the tax on $1,000 more of short- or long-term gain, the 3.8% on investment income included (a true 0% stays 0%)
   const base = federalTax(ti.inputs, ti.params).totalTax;
   const invested = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
   const rateOn = (more) => Math.max(0, (federalTax({ ...ti.inputs, ...more, investmentIncome: invested }, ti.params).totalTax - base) / 1000);
   const marginal = rateOn({ otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000 });
   const gainsRate = rateOn({ qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + 1000 });
+  const ownerOf = new Map((plan.accounts ?? []).map((a) => [a.id, a.ownerId || null]));   // filing separately, a sale is on its owner's return
   const holdings = h.items.map((x) => {
     const lots = lotsOf(x, today);
-    return { id: x.id, symbol: x.symbol, name: x.name, account: x.accountName, bucket: x.bucket, priced: x.priced, price: x.price, shares: x.shares, lots, gain: lots.reduce((s, l) => s + l.gain, 0), unassignedShares: lots.find((l) => !l.assigned)?.shares ?? 0, cls: x.cls };
+    return { id: x.id, symbol: x.symbol, name: x.name, account: x.accountName, accountId: x.accountId, personId: ownerOf.get(x.accountId) ?? null, bucket: x.bucket, priced: x.priced, price: x.price, shares: x.shares, lots, gain: lots.reduce((s, l) => s + l.gain, 0), unassignedShares: lots.find((l) => !l.assigned)?.shares ?? 0, cls: x.cls };
   });
   const harvest = [];
-  for (const x of holdings.filter((y) => y.bucket === "taxable" && y.priced)) for (const l of x.lots) if (l.gain < -1) harvest.push({ symbol: x.symbol, account: x.account, lot: l, loss: -l.gain, taxSaved: -l.gain * (l.term === "short" ? marginal : gainsRate) });
+  for (const x of holdings.filter((y) => y.bucket === "taxable" && y.priced)) for (const l of x.lots) if (l.gain < -1) harvest.push({ symbol: x.symbol, account: x.account, personId: x.personId, lot: l, loss: -l.gain, taxSaved: -l.gain * (l.term === "short" ? marginal : gainsRate) });
   harvest.sort((a, b) => b.taxSaved - a.taxSaved);   // the loss at its rate orders the list (not shown: what a sale saves this year is the total below)
   washSales(harvest, holdings, today);
   // what the harvest saves this year: the federal total now less the total with every candidate sold today, its allowed
@@ -113,10 +126,15 @@ export function compute(plan, params = {}) {
   // (IRC 1211(b), 1222; Schedule D); the rest carries to next year (1212(b)) and saves nothing this year.
   const baseCarry = lossCarryover(ti, federalTax(ti.inputs, ti.params));
   let taxSavedTotal = 0, carry = baseCarry;
-  const allowedOf = (held) => harvest.filter((x) => x.lot.term === held).reduce((s, x) => s + x.allowed, 0);
+  // one sale row per term and owner (filing separately, each spouse's own losses are on their own return)
+  const rows = [];
+  for (const held of ["short", "long"]) for (const pid of new Set(harvest.map((x) => x.personId))) {
+    const basis = harvest.filter((x) => x.lot.term === held && x.personId === pid).reduce((s, x) => s + x.allowed, 0);
+    if (basis > 0) rows.push({ id: `harvest-${held}-${pid ?? "joint"}`, proceeds: 0, basis, held, ...(pid ? { personId: pid } : {}) });
+  }
   if (harvest.length) {
-    const p2 = structuredClone(plan);
-    p2.taxes = { ...(p2.taxes ?? {}), gains: [...(p2.taxes?.gains ?? []), { id: "harvest-short", proceeds: 0, basis: allowedOf("short"), held: "short" }, { id: "harvest-long", proceeds: 0, basis: allowedOf("long"), held: "long" }] };
+    const p2 = structuredClone(yr.plan);
+    p2.taxes = { ...(p2.taxes ?? {}), gains: [...(p2.taxes?.gains ?? []), ...rows] };
     const t2 = taxInputs(p2, params), r2 = federalTax(t2.inputs, t2.params);
     taxSavedTotal = Math.max(0, base - r2.totalTax);
     carry = lossCarryover(t2, r2);
@@ -128,8 +146,9 @@ export function compute(plan, params = {}) {
   const shortLosses = harvest.filter((x) => x.lot.term === "short").reduce((s, x) => s + x.loss, 0), longLosses = harvest.filter((x) => x.lot.term === "long").reduce((s, x) => s + x.loss, 0);
   const notes = [];
   const unassigned = holdings.filter((x) => x.unassignedShares > 1e-6 && x.bucket === "taxable").length;
+  if (yr.other && harvest.length) notes.push(`The Federal estimate is set to ${yr.other}, but a sale today falls in ${yr.year}: the tax saved below is ${yr.year}'s, without the ${yr.other} sales typed on Capital gains.`);
   if (h.hasData && unassigned) notes.push(`${unassigned} taxable holding${unassigned === 1 ? " has" : "s have"} shares not split into lots: they are treated as one long-term lot holding whatever cost your typed lots leave over. Type the lots (date, shares, cost) from the brokerage's cost-basis page for the real picture.`);
   if (harvest.length) notes.push("Buying the same fund within 30 days before or after you sell it at a loss, in any of your accounts (an IRA too) or your spouse's, cancels the loss on that many shares (the wash-sale rule). Buy something similar but not the same, such as another company's total-market fund, or wait 31 days.");
   const capLimit = ti.filingStatus === "married_separate" ? 1500 : 3000;
-  return { ready: h.hasData, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
+  return { ready: h.hasData, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
 }

@@ -107,3 +107,24 @@ test("tax-lots: wash sales: the same fund bought in the 30 days before today can
   washSales(two, hs, "2026-11-20");
   assert.equal(two[1].disallowed, 40); assert.equal(two[0].disallowed, 0);   // the undated lot counts as sold first and takes the 4 shares
 });
+
+test("tax-lots: a sale today is in today's tax year, and filing separately a loss is on its owner's return", async () => {
+  // set to 2025 while today is in 2026: the harvest works 2026's tax, without 2025's sales
+  const h = { symbol: "ZZTOT", price: 60, lots: [{ date: "2022-03-14", shares: 100, cost: 10000 }] };   // a 4,000 long-term loss
+  const p = household({ status: "single", today: "2026-11-16", interest: 90000, longRealized: 20000, holdings: [h] });
+  const now = compute({ ...p, taxes: { ...p.taxes, gains: [] } }, { today: "2026-11-16" });
+  p.taxes.year = 2025;
+  const last = compute(p, { today: "2026-11-16" });
+  assert.equal(last.year, 2026); assert.equal(last.otherYear, 2025);
+  assert.equal(last.taxSavedTotal, now.taxSavedTotal); assert.deepEqual(last.carryAdded, now.carryAdded);
+  assert.ok(last.notes.some((n) => /set to 2025, but a sale today falls in 2026/.test(n)));
+  // filing separately: the loss in Bo's brokerage is all on Bo's return (1,500 off, 2,500 carries); a joint account splits it (each 2,000: 1,500 off, 500 carries)
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const f = familyPlan("2026-10-30");
+  f.household.filingStatus = "married_separate";
+  f.accounts.push({ id: "a-bob", name: "Bo's brokerage", type: "brokerage", balance: 6000, ownerId: "p-bo", history: [] });
+  f.holdings = [{ id: "x1", accountId: "a-bob", symbol: "ZZTOT", shares: 100, price: 60, priceAsOf: "2026-10-30", costBasis: 10000, lots: [{ id: "x1l", date: "2022-03-14", shares: 100, cost: 10000 }] }];
+  assert.equal(compute(f, { today: "2026-10-30" }).carryAdded.total, 2500);
+  f.holdings[0].accountId = "a-brk";
+  assert.equal(compute(f, { today: "2026-10-30" }).carryAdded.total, 1000);
+});

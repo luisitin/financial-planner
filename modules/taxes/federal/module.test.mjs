@@ -168,3 +168,22 @@ test("federal: filing separately, each spouse's return holds their own pay and b
   p.household.filingStatus = "married_joint";
   assert.equal(compute(p, { today: "2026-10-30" }).separate, null);
 });
+
+test("federal: filing separately, a sale in one spouse's name is all on that spouse's return; one in neither name is split (Pub. 501; IRC 1211(b))", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { lossCarryover } = await import("./compute.js");
+  const { federalTax } = await import("../../../core/math/tax.js");
+  const p = familyPlan("2026-10-30");
+  p.household.filingStatus = "married_separate";
+  p.taxes.gains = [{ id: "g1", name: "Bo's shares", proceeds: 0, basis: 5000, held: "short", personId: "p-bo" }];
+  let d = compute(p, { today: "2026-10-30" });
+  const [ana, bo] = d.separate;
+  assert.equal(ana.capitalLoss, 0); assert.equal(bo.capitalLoss, -1500);   // Bo's 5,000 loss: 1,500 off Bo's income
+  assert.deepEqual(bo.gainTotals, { short: -5000, long: 0 });
+  assert.equal(lossCarryover(d, federalTax(d.inputs, d.params)).total, 3500);
+  delete p.taxes.gains[0].personId;
+  d = compute(p, { today: "2026-10-30" });
+  assert.deepEqual(d.separate.map((x) => x.capitalLoss), [-1500, -1500]);   // 2,500 on each return, 1,500 off each
+  assert.equal(lossCarryover(d, federalTax(d.inputs, d.params)).total, 2000);
+  assert.equal(d.gains.carryover.total, 2000);
+});

@@ -55,7 +55,7 @@ export function render(page, ctx) {
     const li = ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${i.symbol ? `${i.symbol} · ` : ""}${i.name}`), ui.h("span", { class: "rec-value" }, money(i.value))),
       ui.h("div", { class: "rec-sub" }, [`${kindLabel} in ${i.account}`, i.shares !== null && i.kind !== "account" ? `${+i.shares.toFixed(8)} at ${exact(i.price)}` : null, i.gain !== null && Math.abs(i.gain) >= 1 ? ui.h("span", { class: i.gain >= 0 ? "cr-up" : "cr-down" }, `${i.gain >= 0 ? "+" : "−"}${money(Math.abs(i.gain))}${i.gainPct !== null ? ` (${i.gain >= 0 ? "+" : "−"}${pct(Math.abs(i.gainPct))})` : ""}`) : null].filter(Boolean).flatMap((x, k) => (k ? [" · ", x] : [x]))),
-      lots.length ? ui.h("div", { class: "rec-sub" }, lots.map((l) => `${l.date ? shortDate(l.date) : "no date"}: ${money(l.cost)} paid, ${l.gain >= 0 ? "+" : "−"}${money(Math.abs(l.gain))}${l.term === "short" ? ` (held under a year; long-term in ${l.daysToLong} days)` : ""}`).join(" · ")) : null,
+      lots.length ? ui.h("div", { class: "rec-sub" }, lots.map((l) => `${l.date ? shortDate(l.date) : "no date"}: ${money(l.cost)} paid, ${l.gain >= 0 ? "+" : "−"}${money(Math.abs(l.gain))}${l.term === "short" ? ` (held a year or less${l.longOn ? `; long-term from ${shortDate(l.longOn)}` : ""})` : ""}`).join(" · ")) : null,
       i.stale ? ui.h("div", { class: "rec-sub cr-flag" }, i.priceAsOf ? `Price from ${shortDate(i.priceAsOf)}: crypto moves daily, update it.` : "No price date: update it.") : null);
     if (i.kind === "coin" || i.kind === "fund") {
       const box = ui.h("input", { type: "number", min: "0", step: "any", inputmode: "decimal", value: i.price ?? "", "aria-label": `Price of ${i.symbol}` });
@@ -74,13 +74,34 @@ export function render(page, ctx) {
 
   // tax
   const t = d.tax;
-  const taxCard = ui.card("If you sold everything today", ui.h("p", {}, t.total > 0.5
-    ? `About ${money(t.total)} more federal tax this year: ${money(Math.max(0, t.longGain))} of gains held over a year and ${money(Math.max(0, t.shortGain))} held a year or less, after any losses on the other lots and this year's other sales.`
-    : t.total < -0.5 ? `It would lower this year's federal tax by about ${money(-t.total)}: a net loss cancels this year's other gains, then takes up to $3,000 off other income.${t.carry > 0.5 ? ` The other ${money(t.carry)} carries to next year.` : ""}`
-    : t.shortGain + t.longGain < 0 ? `No change this year: a net loss of ${money(-(t.shortGain + t.longGain))}, and your other income is already under your deductions.${t.carry > 0.5 ? ` ${money(t.carry)} carries to next year.` : ""}` : "No tax: nothing has gained."),
-    ui.h("p", { class: "muted small" }, `Gains held over a year are taxed at ${pct(t.gainsRate)} on your next dollar, those held a year or less at ${pct(t.marginal)}, like pay. Funds in a 401(k) or IRA are left out: selling inside them is not taxed.`));
+  const limitText = `up to ${money(t.lossLimit)} off other income${t.lossLimit === 1500 ? " (filing separately)" : ""}`;
+  const carryText = (lead) => t.carry > 0.5 ? ` ${lead}${money(t.carry)} carries to next year, where it can cancel future gains.` : "";
+  const added = [t.addLong > 0.5 ? `${money(t.addLong)} of gains held over a year` : null, t.addShort > 0.5 ? `${money(t.addShort)} held a year or less, taxed like pay` : null].filter(Boolean);
+  const cancelled = [t.addLong < -0.5 ? `${money(-t.addLong)} of this year's other gains held over a year` : null, t.addShort < -0.5 ? `${money(-t.addShort)} of those held a year or less` : null].filter(Boolean);
+  const NO_CHANGE = {
+    none: "No tax: nothing has gained or lost.",
+    even: "No change this year: the gains and losses cancel out.",
+    zero: t.net > 0 ? "No tax this year: with your other income, these gains are taxed at 0% (they stay under your deductions or in the 0% band for gains held over a year)." : `No change this year: the net loss of ${money(-t.net)} only cancels this year's other gains that are taxed at 0%.${carryText("")}`,
+    carry: "No change this year: the gains use up part of a loss from this year's other sales that would otherwise carry to next year.",
+    limit: `No change this year: this year's other sales already take the whole ${money(t.lossLimit)} a net loss can take off other income${t.lossLimit === 1500 ? " (filing separately)" : ""}.${carryText("So all ")}`,
+    under: `No change this year: a net loss of ${money(-t.net)}, and your other income is already under your deductions.${carryText("")}`,
+  };
+  const taxText = t.total > 0.5
+    ? `About ${money(t.total)} more federal tax this year.${added.length ? ` After losses cancel gains, this year's other sales included, it adds ${added.join(" and ")}${cancelled.length ? `, and cancels ${cancelled.join(" and ")}` : ""}.` : ""}`
+    : t.total < -0.5 ? (t.net < -0.5
+      ? `It would lower this year's federal tax by about ${money(-t.total)}: a net loss of ${money(-t.net)} cancels this year's other gains first, then takes ${limitText}.${carryText("The other ")}`
+      : `It would lower this year's federal tax by about ${money(-t.total)}, though the lots gain overall: their losses cancel gains taxed at a higher rate than their own gains.`)
+    : NO_CHANGE[t.why] ?? "No change this year.";
+  const taxCard = ui.card("If you sold everything today", ui.h("p", {}, taxText),
+    t.disallowed > 0.5 ? ui.h("p", { class: "small" }, `${money(t.disallowed)} of the fund losses would not count: the same fund was bought within the last 30 days in a retirement account (the wash-sale rule), and that part is lost for good.`) : null,
+    t.otherYear ? ui.h("p", { class: "muted small" }, `A sale today falls in ${t.year}, so this is ${t.year}'s tax, without the ${t.otherYear} sales on Capital gains (the Federal estimate is set to ${t.otherYear}).`) : null,
+    ui.h("p", { class: "muted small" }, [t.total > 0.5 || d.waitLong.length ? `Gains held over a year are taxed at ${pct(t.gainsRate)} on your next dollar, those held a year or less at ${pct(t.marginal)}, like pay.` : null, "Funds in a 401(k) or IRA are left out: selling inside them is not taxed."].filter(Boolean).join(" ")));
   if (d.harvest.length) {
-    taxCard.append(ui.h("p", {}, `Banking the loss on ${d.harvest.map((h) => `${h.symbol} (${money(h.loss)})`).join(", ")} would lower this year's federal tax by about ${money(d.harvestSaved)}${d.harvestCarry > 0.5 ? `; the other ${money(d.harvestCarry)} of loss carries to next year, where it can cancel future gains` : ""}. ${d.harvest.some((h) => h.kind === "coin") ? "Coins held directly are property, not securities, so as of 2026 the wash-sale rule does not stop you buying the same coin back at once; for a fund it does (wait 31 days)." : "For a fund, the wash-sale rule means waiting 31 days before buying it back."}`));
+    const direct = d.harvest.some((h) => h.kind !== "fund"), fund = d.harvest.some((h) => h.kind === "fund");
+    const rule = direct && fund ? "Coins held directly are property, not securities, so as of 2026 the wash-sale rule does not stop you buying the same coin back at once; for a fund it does (wait 31 days)."
+      : direct ? "Coins held directly are property, not securities, so as of 2026 the wash-sale rule does not stop you buying the same coin back at once."
+      : "For a fund, the wash-sale rule means waiting 31 days before buying it back.";
+    taxCard.append(ui.h("p", {}, `Banking the loss on ${d.harvest.map((h) => `${h.symbol} (${money(h.loss)})`).join(", ")} would lower this year's federal tax by about ${money(d.harvestSaved)}${d.harvestCarry > 0.5 ? `; the other ${money(d.harvestCarry)} of loss carries to next year, where it can cancel future gains` : ""}. ${rule}`));
     for (const h of d.harvest) for (const m of h.washedBy ?? []) taxCard.append(ui.h("p", { class: "small" }, m.bucket === "taxable"
       ? `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} does not count now; it is added to that purchase's cost.`
       : `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} is lost for good.`));

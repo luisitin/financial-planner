@@ -4,7 +4,7 @@
 // take, the tax if you sold today (short- or long-term, lot by lot), losses that could be banked, gains that turn
 // long-term soon, and prices that are out of date.
 import { compute as computeHoldings } from "../holdings/compute.js";
-import { lotsOf, washSales } from "../tax-lots/compute.js";
+import { lotsOf, washSales, todaysReturn } from "../tax-lots/compute.js";
 import { compute as computeNetWorth, countedBalance } from "../../balance/net-worth/compute.js";
 import { taxInputs, lossCarryover } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
@@ -27,8 +27,8 @@ export const STALE_DAYS = 7;
 /** Is this enriched holding crypto, and of which kind: "coin" (held directly), "stable", "fund" (an exchange-traded fund), or null. */
 export function cryptoKind(h) {
   const sym = String(h.symbol ?? "").toUpperCase();
+  if (FUNDS[sym]) return "fund";   // a bitcoin fund is a fund wherever it is held
   if (h.accountType === "crypto") return STABLE.includes(sym) ? "stable" : "coin";
-  if (FUNDS[sym]) return "fund";
   return null;
 }
 
@@ -36,9 +36,12 @@ export function cryptoKind(h) {
  * compute(plan, { today }) -> {
  *   ready, items: [{ id, symbol, name, kind, account, bucket, value, cost, gain, gainPct, price, priceAsOf, stale, lots }],
  *   total, cost, gain, volatile (all but stablecoins), share (of net worth), level: "small" | "medium" | "large", netWorth,
- *   stress: { drop, loss, share }, tax: { shortGain, longGain, total (the change in this year's federal tax if every taxable lot
- *   were sold today; below 0 a saving), carry (loss that would carry to next year), marginal, gainsRate },
- *   harvest: [{ symbol, kind, account, date, lot, loss, allowed, disallowed, washedBy, saved (that lot alone) }], harvestSaved (all of them
+ *   stress: { drop, loss, share }, tax: { shortGain, longGain (the lots' own sums), net (after wash sales), addShort, addLong (what
+ *   the sale adds to this year's net short and long gains, after netting), total (the change in this year's federal tax if every
+ *   taxable lot were sold today; below 0 a saving), carry (loss the sale adds to next year's carryover), disallowed (wash sales),
+ *   lossLimit (3,000; 1,500 filing separately), why (when total is 0: "none" | "even" | "zero" | "carry" | "limit" | "under"),
+ *   year (the tax year worked), otherYear (the Federal estimate's year when it is not today's), marginal, gainsRate },
+ *   harvest: [{ symbol, kind, account, personId, date, lot, loss, allowed, disallowed, washedBy, saved (that lot sold on its own) }], harvestSaved (all of them
  *   together), harvestCarry, harvestDisallowed, waitLong: [{ symbol, date, longOn, gain, saved }], staleCount
  * }
  */
@@ -72,45 +75,75 @@ export function compute(plan, params = {}) {
   // tax if sold today, taxable accounts only: the federal total with the lots sold (each lot's gain or loss added to the
   // year's sales, short or long by its term) less the total without. The engine nets them with the year's other sales
   // (short against short, long against long, then across), stacks long-term gains at 0/15/20%, adds the 3.8% on investment
-  // income and lets a net loss take at most 3,000 (1,500 filing separately) off other income (IRC 1(h), 1211(b), 1222, 1411)
-  const ti = taxInputs(plan, { today });
-  const base = federalTax(ti.inputs, ti.params).totalTax;
+  // income and lets a net loss take at most 3,000 (1,500 filing separately) off other income (IRC 1(h), 1211(b), 1222, 1411).
+  // A sale today is in today's tax year (todaysReturn); filing separately, a lot is on the return of its account's owner.
+  const yr = todaysReturn(plan, today);
+  const P0 = yr.plan;
+  const ownerOf = new Map((plan.accounts ?? []).map((a) => [a.id, a.ownerId || null]));
+  const ti = taxInputs(P0, { today });
+  const r0 = federalTax(ti.inputs, ti.params);
+  const base = r0.totalTax;
   const withSales = (sales) => {
-    const extra = sales.filter((x) => Math.abs(x.gain) > 0.005).map((x, n) => ({ id: `crypto-${n}`, name: "crypto", proceeds: Math.max(0, x.gain), basis: Math.max(0, -x.gain), held: x.held }));
-    const t2 = taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), gains: [...(plan.taxes?.gains ?? []), ...extra] } }, { today });
+    const extra = sales.filter((x) => Math.abs(x.gain) > 0.005).map((x, n) => ({ id: `crypto-${n}`, name: "crypto", proceeds: Math.max(0, x.gain), basis: Math.max(0, -x.gain), held: x.held, ...(x.personId ? { personId: x.personId } : {}) }));
+    const t2 = taxInputs({ ...P0, taxes: { ...(P0.taxes ?? {}), gains: [...(P0.taxes?.gains ?? []), ...extra] } }, { today });
     const r2 = federalTax(t2.inputs, t2.params);
-    return { change: r2.totalTax - base, carry: lossCarryover(t2, r2) };
+    return { change: r2.totalTax - base, carry: lossCarryover(t2, r2), short: t2.gains.netShort - ti.gains.netShort, long: t2.gains.netLong - ti.gains.netLong };
   };
   // the rates shown: the tax on $1,000 more pay-like income or long-term gain, the 3.8% included (as Tax lots)
   const invested = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
   const rateOn = (more) => Math.max(0, (federalTax({ ...ti.inputs, ...more, investmentIncome: invested }, ti.params).totalTax - base) / 1000);
   const marginal = rateOn({ otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000 });
   const gainsRate = rateOn({ qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + 1000 });
-  const baseCarry = lossCarryover(ti, federalTax(ti.inputs, ti.params));
+  const baseCarry = lossCarryover(ti, r0);
+  const lossLimit = ti.filingStatus === "married_separate" ? 1500 : 3000;
   const taxable = items.filter((x) => x.bucket === "taxable" && x.kind !== "account");
   let shortGain = 0, longGain = 0;
   const all = [], harvest = [], waitLong = [];
   for (const i of taxable) {
+    const personId = ownerOf.get(i.accountId) ?? null;
     for (const l of i.lots) {
       if (l.term === "short") shortGain += l.gain; else longGain += l.gain;
-      all.push({ gain: l.gain, held: l.term });
-      if (l.gain < -1) harvest.push({ symbol: i.symbol, kind: i.kind, account: i.account, date: l.date, lot: l, loss: -l.gain });
-      if (l.term === "short" && l.gain > 1 && l.daysToLong > 0 && l.daysToLong <= 90 && today) waitLong.push({ symbol: i.symbol, date: l.date, longOn: addDays(today, l.daysToLong), gain: l.gain, saved: Math.max(0, withSales([{ gain: l.gain, held: "short" }]).change - withSales([{ gain: l.gain, held: "long" }]).change) });
+      all.push({ gain: l.gain, held: l.term, personId, lot: l });
+      if (l.gain < -1) harvest.push({ symbol: i.symbol, kind: i.kind, account: i.account, personId, date: l.date, lot: l, loss: -l.gain });
+      if (l.term === "short" && l.gain > 1 && l.daysToLong > 0 && l.daysToLong <= 90 && today) waitLong.push({ symbol: i.symbol, date: l.date, longOn: addDays(today, l.daysToLong), gain: l.gain, saved: Math.max(0, withSales([{ gain: l.gain, held: "short", personId }]).change - withSales([{ gain: l.gain, held: "long", personId }]).change) });
     }
   }
-  const sold = all.length ? withSales(all) : { change: 0, carry: baseCarry };
-  // losses to bank: a fund is a security, so the same fund bought in the 30 days before today, in any account, cancels the
-  // loss on that many shares (IRC 1091; Tax lots' washSales); coins are property, not securities, so the rule does not
-  // reach them as of 2026
+  // a fund is a security, so the same fund bought in the 30 days before today, in any account, cancels the loss on that
+  // many shares (IRC 1091; Tax lots' washSales); coins are property, not securities, so the rule does not reach them as of 2026
   const funds = items.filter((x) => x.kind === "fund").map((x) => ({ symbol: x.symbol, account: x.account, bucket: x.bucket, lots: x.lots }));
-  washSales(harvest.filter((h) => h.kind === "fund"), funds, today);
-  for (const h of harvest) { if (h.allowed === undefined) { h.allowed = h.loss; h.disallowed = 0; h.washedBy = []; } h.saved = Math.max(0, -withSales([{ gain: -h.allowed, held: h.lot.term }]).change); }
-  const banked = harvest.length ? withSales(harvest.map((h) => ({ gain: -h.allowed, held: h.lot.term }))) : { change: 0, carry: baseCarry };
-  const carryOf = (c) => Math.max(0, c.short - baseCarry.short) + Math.max(0, c.long - baseCarry.long);
+  const fundLoss = (h) => h.kind === "fund";
+  // selling everything: every taxable lot is sold, so only a fund's lots outside taxable accounts (an IRA's) can replace a loss
+  const lossLots = new Set(harvest.map((h) => h.lot));
+  const soldFunds = harvest.filter(fundLoss).map((h) => ({ lot: h.lot, loss: h.loss }));
+  washSales(soldFunds, funds.map((x) => ({ ...x, lots: x.lots.filter((l) => x.bucket !== "taxable" || lossLots.has(l)) })), today);
+  const allowedIn = new Map(soldFunds.map((c) => [c.lot, c.allowed]));
+  const allSales = all.map((x) => allowedIn.has(x.lot) ? { ...x, gain: -allowedIn.get(x.lot) } : x);
+  const sold = allSales.length ? withSales(allSales) : { change: 0, carry: baseCarry, short: 0, long: 0 };
+  // losses to bank: only the losing lots are sold, so a fund's other lots anywhere can replace them
+  washSales(harvest.filter(fundLoss), funds, today);
+  for (const h of harvest) {
+    if (h.allowed === undefined) { h.allowed = h.loss; h.disallowed = 0; h.washedBy = []; }
+    // that lot sold on its own: its own wash match (it may take purchases another lot takes when all are sold)
+    const solo = fundLoss(h) ? washSales([{ lot: h.lot, loss: h.loss }], funds, today)[0].allowed : h.loss;
+    h.saved = Math.max(0, -withSales([{ gain: -solo, held: h.lot.term, personId: h.personId }]).change);
+  }
+  const banked = harvest.length ? withSales(harvest.map((h) => ({ gain: -h.allowed, held: h.lot.term, personId: h.personId }))) : { change: 0, carry: baseCarry };
+  // the loss the sale adds to next year's carryover (the whole carryover against the one without: a gain can use up some of it)
+  const carryOf = (c) => Math.max(0, c.total - baseCarry.total);
+  // why selling everything would not change this year's tax
+  const net = allSales.reduce((s, x) => s + x.gain, 0);
+  const limitUsed = -(Number(r0.income?.capitalLoss) || 0) >= lossLimit * (r0.separate?.length || 1) - 0.005;
+  let why = null;
+  if (Math.abs(sold.change) <= 0.5) {
+    if (!allSales.some((x) => Math.abs(x.gain) > 0.5)) why = "none";
+    else if (Math.abs(net) <= 0.5) why = "even";
+    else if (net > 0) why = sold.carry.total < baseCarry.total - 0.5 ? "carry" : "zero";
+    else why = limitUsed ? "limit" : r0.taxableIncome <= 0 ? "under" : "zero";
+  }
   return {
     ready: true, items, total, cost, gain, volatile: vol, share, level, netWorth: nw.netWorth,
     stress: { drop: STRESS_DROP, loss, share: nw.netWorth > 0 ? loss / nw.netWorth : null },
-    tax: { shortGain, longGain, total: sold.change, carry: carryOf(sold.carry), marginal, gainsRate },
+    tax: { shortGain, longGain, net, addShort: sold.short, addLong: sold.long, total: sold.change, carry: carryOf(sold.carry), disallowed: soldFunds.reduce((s, c) => s + c.disallowed, 0), lossLimit, why, year: yr.year, otherYear: yr.other, marginal, gainsRate },
     harvest: harvest.sort((a, b) => b.saved - a.saved), harvestSaved: Math.max(0, -banked.change), harvestCarry: carryOf(banked.carry), harvestDisallowed: harvest.reduce((s, x) => s + x.disallowed, 0),
     waitLong: waitLong.sort((a, b) => a.longOn.localeCompare(b.longOn)), staleCount: items.filter((i) => i.stale).length,
   };
