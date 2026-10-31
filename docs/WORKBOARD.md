@@ -85,7 +85,8 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
-| claude-b | 2026-10-31 09:40 | answer key for the contribution-limit pages (retirement/contributions, investments/limits, taxes/hsa-fsa; built before the lanes): 401(k), IRA, Roth IRA income limit, HSA and health FSA limits from the law |
+| claude-b | 2026-10-31 09:30 | answer key for the estimated-tax and withholding pages (taxes/estimated, taxes/withholding; built before the lanes): the penalty-safe amount, the four payments and their due dates, behind and next, the year-end balance, from IRC 6654 and 7503 |
+| claude-b | 2026-10-31 09:19 | answer key for the contribution-limit pages (retirement/contributions, investments/limits, taxes/hsa-fsa; built before the lanes): 401(k), IRA, Roth IRA income limit, HSA and health FSA limits from the law |
 
 ## Done (newest first: page, agent, commit)
 - ai/notes, claude-b (from codex's idle lane; plain rules when the AI is off)
