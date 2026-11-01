@@ -112,7 +112,7 @@ export function compute(plan, params = {}) {
     if (dates.length) { if (item.fromDebts) plannedFromDebts++; else plannedN++; }
     // a salary that lands as typed (no take-home share: tied to nobody and no earner to borrow a share from) is marked, so the page can say so
     const asTyped = isPay && item.beforeTax === undefined && th.ratio[item.id] === undefined;
-    const unlinked = asTyped && !(plan.household?.people ?? []).some((q) => q.id === item.personId && q.role !== "child");
+    const unlinked = asTyped && !(plan.household?.people ?? []).some((q) => q.id === item.personId && q.role !== "dependent");
     for (const d of dates) events.push({ date: d, name: item.name, amount: item.signed, source: "planned", ...(item.beforeTax !== undefined ? { beforeTax: item.beforeTax } : {}), ...(item.fromDebts ? { fromDebts: true } : {}), ...(asTyped ? { payBeforeTax: true } : {}), ...(unlinked ? { payUnlinked: true } : {}) });
   }
   // 3. one-time items with a date inside the horizon

@@ -105,3 +105,33 @@ export function compute(plan, params = {}) {
     warnings, overspend,
   };
 }
+
+/**
+ * closeGap(items, gap, { goalSaving }) -> { gap, picks: [{ id, name, monthly, period, amount, trimBy | null, trimTo | null }], covered, enough, niceTotal,
+ *   bigMustPays: [{ id, name, monthly }] (when the nice-to-haves cannot close it), goalSaving }
+ * The fewest nice-to-have expenses that close a monthly gap: the largest ones until one of the rest covers what is left,
+ * then the smallest of those, so a big cut is never picked when a small one does it. The last pick says how much a
+ * trim would be enough (trimBy, a month) when that is less than the whole amount, and the amount each time that leaves
+ * (trimTo, in the expense's own period, rounded down to $5 so it closes the gap).
+ */
+export function closeGap(items, gap, opts = {}) {
+  const pool = (items ?? []).filter((x) => x.active && !x.essential && x.period !== "once" && x.monthly > 0.5).sort((a, b) => b.monthly - a.monthly);
+  const niceTotal = pool.reduce((t, x) => t + x.monthly, 0);
+  const picks = [];
+  let left = Math.max(0, Number(gap) || 0);
+  const rest = [...pool];
+  while (left > 0.5 && rest.length) {
+    const fits = rest.filter((x) => x.monthly >= left);
+    const x = fits.length ? fits[fits.length - 1] : rest[0];
+    rest.splice(rest.indexOf(x), 1);
+    const trimBy = x.monthly > left + 0.5 ? left : null;
+    // the trim in the expense's own terms (its form asks for the amount each time): a yearly $3,000 trimmed by $220 a month is $360 a year
+    const times = perYear(1, x.period) || 12;
+    picks.push({ id: x.id, name: x.name, monthly: x.monthly, period: x.period, amount: Number(x.amount) || 0, trimBy, trimTo: trimBy === null ? null : Math.max(0, Math.floor(((Number(x.amount) || 0) - (trimBy * 12) / times) / 5) * 5) });
+    left -= x.monthly;
+  }
+  const covered = picks.reduce((t, x) => t + x.monthly, 0);
+  const enough = gap > 0 && covered >= gap - 0.5;
+  const bigMustPays = enough ? [] : (items ?? []).filter((x) => x.active && x.essential && x.period !== "once" && x.monthly > 0.5 && !String(x.id ?? "").startsWith("debt")).sort((a, b) => b.monthly - a.monthly).slice(0, 3).map((x) => ({ id: x.id, name: x.name, monthly: x.monthly }));
+  return { gap: Math.max(0, Number(gap) || 0), picks, covered, enough, niceTotal, bigMustPays, goalSaving: Math.max(0, Number(opts.goalSaving) || 0) };
+}

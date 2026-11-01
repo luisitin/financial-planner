@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, CATEGORIES } from "./compute.js";
+import { compute, CATEGORIES, closeGap } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
 const TODAY = "2026-09-15";
@@ -95,4 +95,42 @@ test("the before-tax overspend sentence is also returned on its own, so a page t
   assert.ok(d.warnings.includes(d.overspend));
   p.income[0].amount = 2000;
   assert.equal(compute(p, { today: "2026-09-15" }).overspend, null);
+});
+
+test("closeGap: the fewest nice-to-haves that close the gap, a trim on the last, must-pays only when that is not enough", () => {
+  const items = [
+    { id: "a", name: "Eating out", amount: 400, monthly: 400, active: true, essential: false, period: "monthly" },
+    { id: "b", name: "Streaming", amount: 45, monthly: 45, active: true, essential: false, period: "monthly" },
+    { id: "c", name: "Gym", amount: 120, monthly: 120, active: true, essential: false, period: "monthly" },
+    { id: "d", name: "Trip", monthly: 900, active: false, essential: false, period: "monthly" },   // ended: not offered
+    { id: "e", name: "Rent", monthly: 2400, active: true, essential: true, period: "monthly" },
+    { id: "f", name: "Groceries", monthly: 700, active: true, essential: true, period: "monthly" },
+  ];
+  // one item covers 100: the smallest that does (Gym 120), with a trim of 100 enough
+  let r = closeGap(items, 100);
+  assert.deepEqual(r.picks.map((x) => x.id), ["c"]);
+  assert.equal(r.picks[0].trimBy, 100);
+  assert.equal(r.picks[0].trimTo, 20, "a $120 monthly gym trimmed by $100 a month: $20 a month");
+  // a yearly trip: the trim is said in its own terms, the amount its form asks for
+  const trip = [{ id: "t", name: "Summer trip", amount: 3000, period: "annual", monthly: 250, active: true, essential: false }];
+  const y = closeGap(trip, 220).picks[0];
+  assert.equal(y.trimBy, 220); assert.equal(y.trimTo, 360, "$3,000 a year less $2,640 = $360 a year"); assert.equal(y.period, "annual");
+  assert.equal(r.enough, true);
+  assert.deepEqual(r.bigMustPays, []);
+  // 450: Eating out alone is 400; then Streaming (45) does not cover the 50 left, Gym (120) does -> trim it by 50
+  r = closeGap(items, 450);
+  assert.deepEqual(r.picks.map((x) => x.id), ["a", "c"]);
+  assert.equal(r.picks[1].trimBy, 50);
+  assert.equal(r.covered, 520);
+  // exactly the whole of one: no trim
+  assert.equal(closeGap(items, 400).picks[0].trimBy, null);
+  // more than every nice-to-have (565): all three, not enough, the biggest must-pays named
+  r = closeGap(items, 1000, { goalSaving: 950 });
+  assert.deepEqual(r.picks.map((x) => x.id), ["a", "c", "b"]);
+  assert.equal(r.enough, false);
+  assert.equal(r.niceTotal, 565);
+  assert.deepEqual(r.bigMustPays.map((x) => x.id), ["e", "f"]);
+  assert.equal(r.goalSaving, 950);
+  // no gap: nothing picked
+  assert.deepEqual(closeGap(items, 0).picks, []);
 });

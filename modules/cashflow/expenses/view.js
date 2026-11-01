@@ -1,7 +1,7 @@
 // modules/cashflow/expenses/view.js -- DOM only. Totals, a breakdown by category with bars,
 // a tappable list of expenses, one form to add or edit.
-import { compute, CATEGORIES } from "./compute.js";
-import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
+import { compute, CATEGORIES, closeGap } from "./compute.js";
+import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
 
 const FIELDS = [
   { key: "name", label: "What is it", type: "text", required: true, placeholder: "e.g. Rent" },
@@ -14,6 +14,7 @@ const FIELDS = [
   { key: "endDate", label: "Ends", type: "date", help: "blank if it does not end" },
 ];
 
+const periodWords = (p) => periodLabel(p).toLowerCase();
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
 
@@ -31,6 +32,34 @@ export function render(root, ctx) {
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;
+  // short each month: say by how much, then the fewest nice-to-haves that close it (tap one to change it), the biggest
+  // must-pays when that is not enough, and the goal saving that could pause; Next best action's first step lands here
+  const gapCard = () => {
+    if (!(nba?.ready && nba.spare.monthly < 0)) return null;
+    const g = closeGap(d.items, -nba.spare.monthly, { goalSaving: nba.spare.goalSaving });
+    const m = (v) => fmt.money(v, cur);
+    const open = (id) => { const x = plan.expenses.find((y) => y.id === id); if (!x) return; editing = x; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    const row = (x, detail) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => open(x.id),
+      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name), ui.h("div", { class: "d" }, detail)),
+      ui.h("span", { class: "st amount" }, ui.h("div", {}, m(x.monthly)), ui.h("div", { class: "muted small" }, "a month"), ui.h("div", { class: "muted small" }, "Change \u203a")));
+    // a trim in the expense's own terms, the amount its form asks for: "$360 once a year instead of $3,000"
+    const trimText = (x) => x.period === "monthly" ? `trimming it by ${m(x.trimBy)} a month is enough` : `${m(x.trimTo)} ${periodWords(x.period)} instead of ${m(x.amount)} is enough`;
+    const lead = !g.picks.length ? "There are no nice-to-have expenses to cut, so the gap has to come from the must-pays below or from what goes to saving."
+      : g.enough ? (g.picks.length === 1 ? (g.picks[0].trimBy ? `${g.picks[0].name}: ${trimText(g.picks[0])}.` : `Cutting ${g.picks[0].name} closes it.`) : `Cutting ${g.picks.length === 2 ? "these two" : `these ${g.picks.length}`} nice-to-haves closes it:`)
+      : `Cutting every nice-to-have (${m(g.niceTotal)} a month) still leaves ${m(g.gap - g.covered)} short.`;
+    return ui.h("section", { class: "card gap-card" },
+      ui.h("h2", {}, "Close the gap"),
+      ui.notice("warn", `About ${m(g.gap)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix.`),
+      ui.h("p", {}, lead),
+      g.picks.length ? ui.h("ul", { class: "page-list" }, g.picks.map((x) => row(x, x.trimBy ? `nice to have \u00b7 ${trimText(x)}` : "nice to have"))) : null,
+      g.bigMustPays.length ? ui.h("p", { class: "small", style: { margin: "12px 0 0" } }, g.picks.length ? "The rest has to come from a must-pay. The biggest:" : "The biggest must-pays:") : null,
+      g.bigMustPays.length ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "must pay \u00b7 a cheaper version closes part of it"))) : null,
+      g.goalSaving > 0 ? ui.h("p", { class: "muted small" }, `Or for now: ${m(g.goalSaving)} a month goes to your goals, and pausing some of it closes ${g.goalSaving >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/goals/goals" }, "Goals \u203a")) : null,
+      ui.h("p", { class: "muted small" }, "Tap one to change its amount or give it an end date. The left-over figure updates as soon as you save."),
+    );
+  };
+
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
@@ -52,6 +81,8 @@ export function render(root, ctx) {
       `Next year about ${fmt.money(d.nextYear, cur)} after inflation.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
+    const gc = gapCard();
+    if (gc) root.append(gc);
     if (d.byCategory.length) root.append(ui.card("Where it goes",
       ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", {},
         ui.h("span", { class: "ic" }, c.icon),
@@ -62,7 +93,6 @@ export function render(root, ctx) {
   }
   // the before-tax "you spend more than comes in" gives way to the after-tax figure the tile shows, whichever way it falls
   for (const w of d.warnings) if (!(nba?.ready && w === d.overspend)) root.append(ui.notice("warn", w));
-  if (nba?.ready && nba.spare.monthly < 0) root.append(ui.notice("warn", `About ${fmt.money(-nba.spare.monthly, cur)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix: trim what you can below, or pause a goal.`));
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   let showForm = d.count === 0;
