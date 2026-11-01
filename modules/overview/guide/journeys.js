@@ -20,6 +20,7 @@
 //   opens      the title of a fold (<details>) on the page that the ask names; the guide opens it while the step is to do
 //   needs      keys of earlier steps this page needs first (it shows "This step needs step 1 first")
 import { compute as setupSteps } from "../dashboard/compute.js";
+import { rateIsGuess } from "../setup/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
@@ -31,8 +32,8 @@ const RETIRE = ["401k", "ira", "roth", "hsa"];
 const SAVINGS = ["checking", "savings", "cash", "credit"];
 export const debtAccounts = (p) => L(p, "accounts").filter((a) => isLiability(a.type));
 export const hasType = (p, ...types) => L(p, "accounts").some((a) => types.includes(a.type));
-/** Every loan and card with a balance has its rate and payment saved (a 0% loan counts): Liabilities' own test. */
-export const detailed = (p) => { const owed = liabilities(p).rows.filter((r) => r.owed > 0); return owed.length > 0 && owed.every((r) => !!r.detail); };
+/** Every loan and card with a balance has its rate and payment saved (a 0% loan counts): Liabilities' own test. A typical rate the setup put in (`rateGuessed`) is not a saved rate yet. */
+export const detailed = (p) => { const owed = liabilities(p).rows.filter((r) => r.owed > 0); return owed.length > 0 && owed.every((r) => !!r.detail && !rateIsGuess(r.detail)); };
 export const adults = (p) => (p?.household?.people ?? []).filter((x) => x.role !== "dependent");
 const setup = (key) => (p) => setupSteps(p).steps.find((s) => s.key === key)?.done === true;
 /** The same test as goals/emergency-fund (its EMERGENCY pattern and the 🛟 icon), plus the flag a goal may carry. */

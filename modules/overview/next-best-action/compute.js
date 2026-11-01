@@ -114,7 +114,7 @@ export function compute(plan, params = {}) {
   const earners = adults.filter((p) => inc.active.some((x) => x.personId === p.id && ["salary", "bonus", "business"].includes(x.type)));
   const iraRoom = earners.map((p) => { const used = (con.byPerson.find((q) => q.personId === p.id)?.limits ?? []).filter((l) => l.kind === "ira").reduce((s, l) => s + l.used, 0); const age = con.byPerson.find((q) => q.personId === p.id)?.age; const limit = L.ira.limit + (age !== null && age !== undefined && age >= L.ira.catchUpAge ? L.ira.catchUp : 0); return { p, room: Math.max(0, limit - used), limit }; });
   const iraTotal = iraRoom.reduce((s, x) => s + x.room, 0);
-  if (earners.length) add({ id: "ira", title: "An IRA for each of you", why: "Roth money grows tax-free for good; for most people early in a career it is the best next account.", status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal,
+  if (earners.length) add({ id: "ira", title: "An IRA for each of you", why: "Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.", status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal,
     detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)} each). Above the income limit a Roth needs the backdoor route.` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
 
   // 7. moderate debt (not the mortgage)

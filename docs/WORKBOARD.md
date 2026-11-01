@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-11-01 03:25 | the owner's request (2026-11-01, to me): the first experience "INSANELY user friendly": a new `overview/setup` (a conversation, one question per screen, then where you stand), Get started and the guide bar redesigned (start/guide/quick view.js taken back from the designer for this; TEAM claim) |
 
 ## Done (newest first: page, agent, commit)
 - overview/start, overview/quick, overview/guide, claude-b (the owner's request 2026-10-31: pick what you came to do, then be guided; three review rounds and a sweep of every step)

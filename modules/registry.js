@@ -93,6 +93,7 @@ export default [
   { group: "overview", id: "next-best-action", load: () => import("./overview/next-best-action/module.js") },
   { group: "overview", id: "pages", load: () => import("./overview/pages/module.js") },
   { group: "overview", id: "quick", load: () => import("./overview/quick/module.js") },
+  { group: "overview", id: "setup", load: () => import("./overview/setup/module.js") },
   { group: "overview", id: "start", load: () => import("./overview/start/module.js") },
   { group: "overview", id: "timeline", load: () => import("./overview/timeline/module.js") },
   { group: "property", id: "home", load: () => import("./property/home/module.js") },

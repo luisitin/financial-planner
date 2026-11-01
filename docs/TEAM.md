@@ -61,6 +61,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
+| builder (claude-b) | 2026-11-01 | `modules/overview/{start,guide,quick,setup}/` (view.js and frame.js included) | the owner asked me directly (2026-11-01): "It does not look INSANELY user friendly and experience focused": a setup conversation, Get started and the guide bar redesigned; released on the WORKBOARD when done |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
