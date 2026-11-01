@@ -1,6 +1,7 @@
-// modules/overview/dashboard/compute.js -- PURE. Setup steps and whether the plan has
-// enough in it to show money instead of a welcome. Readiness of pages (how many are
-// built) is display logic done in view.js from ctx.modules.
+// modules/overview/dashboard/compute.js -- PURE. Setup steps, whether "Set up my plan" is finished, and whether the
+// plan has enough in it to show money instead of a welcome. Where you stand and the next move come from
+// overview/setup's standing() (view.js asks for it through ctx.computeOf). Readiness of pages (how many are built)
+// is display logic done in view.js from ctx.modules.
 export function compute(plan) {
   const steps = [
     { key: "accounts", label: "Add your accounts and balances", done: (plan.accounts ?? []).length > 0, go: ["balance", "net-worth"] },
@@ -12,5 +13,8 @@ export function compute(plan) {
   ];
   const doneCount = steps.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done) ?? null;
-  return { steps, doneCount, total: steps.length, next, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length };
+  // "Set up my plan" finished: the checklist folds to one line even while a step (the assumptions) is open; that
+  // step stays a to-do on Needs attention, and the page's one filled button becomes your next move
+  const setupFinished = !!plan.guide?.setup?.finishedAt;
+  return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length };
 }

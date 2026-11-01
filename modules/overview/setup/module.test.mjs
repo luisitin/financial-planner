@@ -505,7 +505,9 @@ test("the headline never contradicts the cards under it", () => {
   // a thin cushion with a good month
   const w = empty(); S.applyYou(w, { who: "me" }); S.applyMoney(w, { people: { "setup-self": { status: "work", amount: 90000 } } });
   S.applyHavePicks(w, ["checking"]); S.applyHaveAmounts(w, { checking: 6000 }, T); S.applySpend(w, { mode: "total", total: 3000 });
-  assert.match(head(w), /Building your cushion/);
+  assert.match(head(w), /Building your cushion|then a bigger cushion/);
+  const firstId = S.standing(w, { today: T }).moves[0]?.id;
+  if (firstId && firstId !== "starter" && firstId !== "full-fund") assert.match(head(w), /The move below comes first/, "the sentence never names a different first step than the button");
   S.applyHaveAmounts(w, { checking: 30000 }, T);
   assert.match(head(w), /good shape|Retirement/);
   // nothing at all: no figure, no echo of the title

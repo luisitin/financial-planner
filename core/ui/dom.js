@@ -23,10 +23,11 @@ export const muted = (text) => h("p", { class: "muted" }, text);
 export const notice = (kind, text) => h("div", { class: `notice ${kind}` }, text);
 export const button = (label, onClick, attrs = {}) => h("button", { type: "button", onClick, ...attrs }, label);
 // Long figures step down a size and may wrap only after a comma, never inside a digit group
-// (design log 2026-09-15, tester F-004).
-export const stat = (label, value, sub) => {
+// (design log 2026-09-15, tester F-004). { link: true }: a tile in a two-across row with a chevron (the Dashboard's),
+// which has less room, so a figure steps down from 8 characters ("$572,700"), one size earlier.
+export const stat = (label, value, sub, { link = false } = {}) => {
   const text = typeof value === "string" ? value : String(value ?? "");
-  const size = text.length > 13 ? " xlong" : text.length > 9 ? " long" : "";
+  const size = text.length > (link ? 12 : 13) ? " xlong" : text.length > (link ? 7 : 9) ? " long" : "";
   const shown = typeof value === "string" ? value.replace(/,/g, ",\u200b") : value;
   return h("div", { class: "stat" }, h("div", { class: `stat-value${size}` }, shown), h("div", { class: "stat-label" }, label), sub ? h("div", { class: "stat-sub" }, sub) : null);
 };

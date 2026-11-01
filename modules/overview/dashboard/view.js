@@ -1,12 +1,38 @@
 // modules/overview/dashboard/view.js -- DOM only. Welcome, start-here actions, setup
-// steps, and what is coming. Money numbers appear once there is money in the plan.
+// steps, and what is coming. Money numbers appear once there is money in the plan: first where you stand (one plain
+// sentence, three status lines and your next move, from overview/setup's standing()), then the owner's four tiles.
 import { PHASES } from "../../../core/phases.js";
+import { usable } from "../guide/act.js";
+
+// scoped to the where-you-stand card (no new global CSS)
+const STYLE = `
+.db-now h1 { font-size: var(--fs-xl); margin: 0 0 6px; }
+.db-now .db-head { color: var(--text); font-size: var(--fs-md); line-height: 1.45; margin: 0 0 14px; text-wrap: pretty; }
+.db-now .db-rows { list-style: none; margin: 0 0 16px; padding: 0; }
+.db-now .db-rows li + li a { border-top: 1px solid var(--line); }
+.db-now .db-rows a { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 2px; color: var(--text); text-decoration: none; }
+.db-now .db-rows a:hover .db-k { color: var(--accent-ink); }
+.db-now .db-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--text-2); }
+.db-now .db-dot.ok { background: var(--ok); } .db-now .db-dot.warn { background: var(--warn); } .db-now .db-dot.bad { background: var(--bad); }
+.db-now .db-k { flex: 1; min-width: 0; font-weight: 600; line-height: 1.3; }
+.db-now .db-s { display: block; font-weight: 400; font-size: var(--fs-sm); color: var(--text-2); margin-top: 2px; }
+.db-now .db-v { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.db-now .db-v.open { font-weight: 600; color: var(--accent-ink); }
+.db-now .db-chev { flex: none; color: var(--text-2); font-size: 20px; line-height: 1; }
+.db-now .db-go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; text-align: center; font-size: var(--fs-md); }
+.db-now .db-all { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; font-weight: 600; }
+@media (min-width: 720px) { .db-now .db-go { width: auto; display: inline-flex; padding: 0 22px; } .db-now .db-all { display: inline-flex; margin: 0 0 0 16px; } }
+`;
 
 export function render(root, ctx) {
   const { ui, fmt, plan, derived: d, computeOf, modules, isReady, store, go } = ctx;
   const cur = plan.meta.currency;
   const all = [...modules.values()];
   const readyN = all.filter(isReady).length;
+  const today = fmt.today();
+  const setupOn = usable(ctx, "overview/setup");
+  let moveShown = false;   // the where-you-stand card holds the page's one filled button
+  root.append(ui.h("style", {}, STYLE));
 
   // ---- welcome / money
   if (!d.hasMoney) {
@@ -15,15 +41,44 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Your financial plan"),
       ui.h("p", { class: "lede" }, "Everything about your money in one place, on your own computer. Nothing here goes to the cloud."),
-      ui.h("p", { class: "lede", style: { marginTop: "10px", fontWeight: "600" } }, "Start by adding your accounts. It takes about five minutes."),
+      ui.h("p", { class: "lede", style: { marginTop: "10px", fontWeight: "600" } }, setupOn ? "Start with a few easy questions. It takes about five minutes." : "Start by adding your accounts. It takes about five minutes."),
     ));
   } else {
+    // ---- where you stand: the setup's end screen, kept up to date, so every return starts with it
+    const st = setupOn ? computeOf("overview/setup", { today, screen: "done" })?.standing ?? null : null;
+    if (st && !st.error) {
+      const self = (plan.household?.people ?? []).find((p) => p.role === "self");
+      const name = self?.name && self.name !== "Me" ? self.name : null;
+      const money = (n) => fmt.money(Math.round(Number(n) || 0), cur);
+      const back = (id) => `#/overview/setup/${id}?back=done`;
+      const rows = [];
+      if (st.spare === null) rows.push({ dot: "", k: "Left over each month", s: "Needs your pay and spending", v: "Add ›", open: true, href: back((plan.income ?? []).length ? "spend" : "money") });
+      else if (st.drawing) rows.push({ dot: "", k: "Drawn from savings each month", s: "What a pension and Social Security don't cover", v: money(-st.spare), href: "#/retirement/projection" });
+      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? "After tax, bills and saving" : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
+      if (st.runway === null) rows.push({ dot: "", k: "Safety cushion", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
+      else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : `Aim for ${st.runwayTarget ?? 6} months`, v: `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
+      if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });
+      else rows.push({ dot: st.retire.verdict === "on track" ? "ok" : "warn", k: "Retirement", s: st.retire.verdict === "on track" ? "The money lasts" : "Small changes help", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: "#/retirement/projection" });
+      const move = st.moves[0] ?? null;
+      moveShown = !!move;
+      root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
+        ui.h("h1", { id: "db-now-h" }, name ? `Hi ${name}.` : "Where you stand"),
+        ui.h("p", { class: "db-head" }, st.headline),
+        ui.h("ul", { class: "db-rows" }, rows.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.` },
+          ui.h("span", { class: `db-dot ${r.dot}`, "aria-hidden": "true" }),
+          ui.h("span", { class: "db-k", "aria-hidden": "true" }, r.k, ui.h("span", { class: "db-s" }, r.s)),
+          ui.h("span", { class: `db-v${r.open ? " open" : ""}`, "aria-hidden": "true" }, r.v),
+          r.open ? null : ui.h("span", { class: "db-chev", "aria-hidden": "true" }, "›"))))),
+        move ? ui.h("a", { class: "btn db-go", href: move.href }, `Your next move: ${move.title} ›`) : null,
+        ui.h("a", { class: "db-all", href: "#/overview/setup/done" }, move ? "See all your moves ›" : "See where you stand ›")));
+    }
+
     const nw = computeOf("balance/net-worth");
     const gl = computeOf("goals/goals", { today: fmt.today() }) ?? {};
     const behind = (gl.goals ?? []).filter((g) => g.status === "behind" || g.status === "past due").length;
     const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind` : null].filter(Boolean).join(", ") || "all on track";
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
-    const tile = (href, ...args) => { const t = ui.stat(...args); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
+    const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
       tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.change ? (nw.change.since === fmt.today() ? "saved today" : `${fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}`) : "what you own minus what you owe"),
       tile("#/balance/net-worth", "You own", fmt.money(nw.assets, cur), `${fmt.money(nw.liquid, cur)} of it is cash or easy to sell`),
@@ -37,7 +92,8 @@ export function render(root, ctx) {
   const al = d.hasMoney ? computeOf("overview/alerts", { today: fmt.today() }) : null;
   const alN = al?.total ?? 0;
   const actions = !d.hasMoney ? [
-    { icon: "💰", t: "Add your accounts", d: "Checking, savings, retirement, loans. This is where the numbers start.", go: ["balance", "net-worth"] },
+    setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }
+      : { icon: "💰", t: "Add your accounts", d: "Checking, savings, retirement, loans. This is where the numbers start.", go: ["balance", "net-worth"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
     { icon: "📱", t: "Set up your phone", d: "Connect this device to the PC and add the app to your home screen.", go: ["system", "settings"] },
   ] : [
@@ -63,14 +119,19 @@ export function render(root, ctx) {
           ui.h("span", { class: "lbl" }, s.label, soon ? ui.h("span", { class: "pill warn" }, "coming soon") : null),
           ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
     }));
-  if (!next) {
-    // All done: one folded line (design log 2026-09-15, pass 2).
+  if (!next || d.setupFinished) {
+    // All done, or "Set up my plan" finished: one folded line (design log 2026-09-15, pass 2). A step still open (the
+    // assumptions) stays inside and on Needs attention; the page's filled button is then your next move.
     root.append(ui.h("details", { class: "card fold fold-card" },
-      ui.h("summary", {}, ui.h("h2", {}, `Set up your plan: all ${d.total} steps done \u2713`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-      ui.h("div", { class: "fold-body" }, stepsList())));
+      ui.h("summary", {}, ui.h("h2", {}, next ? "Set up your plan: done \u2713" : `Set up your plan: all ${d.total} steps done \u2713`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("div", { class: "fold-body" }, stepsList(), d.setupFinished && setupOn ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: "#/overview/setup", class: "btn secondary" }, "Change an answer")) : null)));
+  } else if (setupOn && d.doneCount === 0) {
+    // nothing in the plan yet: the first five steps in one go, as easy questions
+    root.append(ui.card(`Set up your plan: ${d.doneCount} of ${d.total} done`, stepsList(),
+      ui.h("div", { class: "steps-cta" }, ui.h("a", { href: "#/overview/setup", class: "btn" }, "Do steps 1 to 5 in one go: Set up my plan"))));
   } else {
     root.append(ui.card(`Set up your plan: ${d.doneCount} of ${d.total} done`, stepsList(),
-      ui.h("div", { class: "steps-cta" }, ui.h("a", { href: `#/${next.go.join("/")}`, class: "btn" }, `Do step ${nextIdx + 1}: ${shortLabel[next.key] ?? next.label}`))));
+      ui.h("div", { class: "steps-cta" }, ui.h("a", { href: `#/${next.go.join("/")}`, class: moveShown ? "btn secondary" : "btn" }, `Do step ${nextIdx + 1}: ${shortLabel[next.key] ?? next.label}`))));
   }
 
   // ---- what is coming

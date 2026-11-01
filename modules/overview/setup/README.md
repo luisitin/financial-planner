@@ -177,7 +177,8 @@ homeMissing }`.
   amber ("Grows as the loans shrink"); with a mortgage and no home it says the home's value is not in yet.
 - **The sentence at the top** never contradicts the figures under it, checked in this order: someone retired drawing
   on savings ("You draw about $1,200 a month from savings ($414,000 saved)"); more out than in; costly debt as the
-  first move; a cushion under the aim (never "your month works" without a left-over figure); retirement not on
+  first move; a cushion under the aim (never "your month works" without a left-over figure; when the first move is
+  something else, "The move below comes first, then a bigger cushion", so the sentence and the button agree); retirement not on
   track; "You're in good shape" only when the month, the cushion and retirement are all fine; else "A few more answers
   will fill this in."
 - **Your first three moves**: Next best action's first step not done (its own order, never re-ranked; "Then: your

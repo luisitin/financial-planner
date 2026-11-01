@@ -906,7 +906,9 @@ export function standing(plan, { today }) {
   const headline = drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
       : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
-        : runwayStatus === "warn" || runwayStatus === "bad" ? (spare !== null ? "Your month works. Building your cushion for surprises is next." : "A cushion for surprises is the thing to build first.")
+        : runwayStatus === "warn" || runwayStatus === "bad" ? (first && first !== "starter" && first !== "full-fund"
+          ? (spare !== null ? "Your month works. The move below comes first, then a bigger cushion for surprises." : "The move below comes first, then a cushion for surprises.")
+          : spare !== null ? "Your month works. Building your cushion for surprises is next." : "A cushion for surprises is the thing to build first.")
           : retire && retire.verdict !== "on track" ? "Your month and your cushion look good. Retirement could use a closer look."
             : spare !== null && spare >= 0 && runwayStatus === "ok" && (!retire || retire.verdict === "on track") ? "You're in good shape. Here's how to make it even better."
               : "A few more answers will fill this in.";
