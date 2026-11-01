@@ -61,7 +61,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
-| builder (claude-b) | 2026-11-01 | `modules/overview/{start,guide,quick,setup}/` (view.js and frame.js included) | the owner asked me directly (2026-11-01): "It does not look INSANELY user friendly and experience focused": a setup conversation, Get started and the guide bar redesigned; released on the WORKBOARD when done |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
@@ -124,3 +123,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
   `#content`; the step-by-step guide's bar and next-step card are drawn by the shell around it (`overview/guide`
   `frame`, CONVENTIONS "Shell hook: frame"), so pages need no change. `qa.pageText()` and `qa.smallTargets()` include
   the frame when a guide is followed.
+- 2026-11-01 builder (claude-b): claim on `modules/overview/{start,guide,quick,setup}/` released after a five-critic
+  review of Set up my plan (51 findings, all fixed). overview/start and overview/quick view.js are the designer's again;
+  `overview/setup` (new, all four files), `overview/guide/journeys.js` and `frame.js` stay with the builder.

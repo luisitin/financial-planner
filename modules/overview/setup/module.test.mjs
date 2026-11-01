@@ -262,7 +262,7 @@ test("the safety cushion: months x must-pay bills, no date, drawn from savings, 
   const g = p.goals.find((x) => x.id === "setup-goal-cushion");
   const essential = expenses(p, {}).essentialMonthly;
   assert.equal(g.target, Math.round((4 * essential) / 100) * 100);
-  assert.deepEqual([g.targetDate, g.isEmergencyFund, g.fundedBy, p.assumptions.emergencyMonths], ["", true, ["setup-have-savings"], 4]);
+  assert.deepEqual([g.targetDate, g.isEmergencyFund, g.fundedBy, p.assumptions.emergencyMonths], ["", true, ["setup-have-checking", "setup-have-savings"], 4], "the money Emergency fund counts as usable today");
   assert.equal("saved" in g && g.saved, 0);
   const st = goals(p, { today: T }).goals.find((x) => x.id === "setup-goal-cushion").status;
   assert.notEqual(st, "behind", "no date: it never asks for money a month");
@@ -343,7 +343,7 @@ test("where you stand: read from the pages' own computes; the first move is Next
   assert.ok(st.moves.length === 3 && st.moves.every((m) => m.id !== "rest"));
   assert.ok(st.moves.some((m) => m.id === "guide-home"), "the home goal brings its guide");
   assert.deepEqual(st.guessed.map((g) => g.name), ["Credit cards", "Car loan"]);
-  assert.ok(st.later.some((l) => /state income tax/.test(l.label)), "Ohio taxes wages");
+  assert.ok(st.later.some((l) => l.key === "state" && /state.s income tax/.test(l.label)), "Ohio taxes wages");
   assert.equal(dashboard(p).doneCount, dashboard(p).total, "the dashboard's setup steps are all done");
 });
 
@@ -368,4 +368,226 @@ test("the debt guide's rates step stays open while a rate is the setup's guess",
   assert.equal(detailed(p), false, "the card and car loan rates are guesses");
   for (const d of p.debts) if (S.rateIsGuess(d)) d.rate = d.rate + 0.01;   // typed on What you owe
   assert.equal(detailed(p), true);
+  const q = empty(); S.applyOwePicks(q, ["mortgage"]); S.applyOweAmounts(q, { mortgage: { owed: 200000, rate: 6.5 } }, T);
+  assert.equal(detailed(q), false, "a guessed payment keeps it open too");
+  q.debts[0].minPayment = 1400;
+  assert.equal(detailed(q), true);
+});
+
+/** Every screen's Continue with nothing touched, as the view does it (values read back, then written). */
+function noOpPass(p) {
+  S.applyYou(p, S.valuesFor(p, "you"));
+  S.applyMoney(p, S.valuesFor(p, "money"));
+  S.applyAges(p, S.valuesFor(p, "ages", { today: T }), T);
+  S.applyHavePicks(p, S.valuesFor(p, "have"));
+  S.applyHaveAmounts(p, S.valuesFor(p, "have-amounts"), T);
+  S.applyOwePicks(p, S.valuesFor(p, "owe"));
+  S.applyOweAmounts(p, S.valuesFor(p, "owe-amounts"), T);
+  S.applySpend(p, S.valuesFor(p, "spend"));
+  S.applyGoalPicks(p, S.valuesFor(p, "goals"));
+  S.applyGoalDetails(p, S.valuesFor(p, "goal-details", { today: T }), T);
+}
+
+test("a record of the same kind added later on its own page never removes the setup's own", () => {
+  const p = family();
+  p.accounts.push({ id: "a-joint", name: "Joint checking", type: "checking", balance: 900 }, { id: "a-store", name: "Store card", type: "credit", balance: 300 }, { id: "a-roth", name: "Ana's Roth", type: "roth", balance: 5000, ownerId: "setup-self" });
+  p.income.push({ id: "i-2", name: "Ana's second job", type: "salary", personId: "setup-self", amount: 800, period: "monthly" });
+  p.goals.push({ id: "g-trip", name: "Trip to Lisbon", target: 3000 });
+  const ids = (q) => ["accounts", "debts", "income", "expenses", "goals"].map((k) => q[k].map((x) => x.id).join()).join("|") + q.retirement.contributions.map((c) => c.id).join();
+  const before = ids(p);
+  noOpPass(p);
+  for (const id of ["setup-have-checking", "setup-owe-credit", "setup-have-retire-setup-self"]) assert.ok(acct(p, id), id);
+  assert.ok(p.debts.find((d) => d.id === "setup-debt-credit"));
+  assert.ok(p.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self"), "the 401(k) saving stays");
+  assert.ok(inc(p, "setup-pay-setup-self"), "the setup's pay stays beside the second job");
+  assert.ok(p.goals.find((g) => g.id === "setup-goal-trip"));
+  assert.equal(ids(p), before, "nothing added or removed (the estimate follows the second job's pay; the cushion counts the new checking)");
+});
+
+test("fields set on the real pages survive a Continue: a Roth, a yearly match, an Income type, a rate to the thousandth", () => {
+  const p = family();
+  acct(p, "setup-have-retire-setup-partner").type = "roth";                       // changed on Net worth
+  p.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").employerMatch = 1000;   // typed yearly on Contributions
+  Object.assign(inc(p, "setup-other"), { type: "investment", taxable: false });     // changed on Income
+  p.debts.find((d) => d.id === "setup-debt-mortgage").rate = 0.06875;               // typed on Liabilities
+  noOpPass(p);
+  assert.equal(acct(p, "setup-have-retire-setup-partner").type, "roth");
+  assert.equal(p.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").employerMatch, 1000);
+  assert.deepEqual([inc(p, "setup-other").type, inc(p, "setup-other").taxable], ["investment", false]);
+  assert.equal(p.debts.find((d) => d.id === "setup-debt-mortgage").rate, 0.06875);
+  assert.equal(S.valuesFor(p, "owe-amounts").mortgage.rate, 6.875, "shown as typed");
+  // the setup itself takes 6.125%, and a kind changed on the screen still changes the type
+  S.applyOweAmounts(p, { ...S.valuesFor(p, "owe-amounts"), mortgage: { ...S.valuesFor(p, "owe-amounts").mortgage, rate: "6.125" } }, T);
+  assert.equal(p.debts.find((d) => d.id === "setup-debt-mortgage").rate, 0.06125);
+  S.applyHaveAmounts(p, { ...S.valuesFor(p, "have-amounts"), "kind-setup-self": "own" }, T);
+  assert.equal(acct(p, "setup-have-retire-setup-self").type, "ira", "401(k) to on my own: an IRA");
+});
+
+test("a blank payment gets a typical one, so the debt's cost is counted; a real one typed later wins", () => {
+  const p = empty(); S.applyYou(p, { who: "me" });
+  S.applyOwePicks(p, ["mortgage", "credit"]);
+  S.applyOweAmounts(p, { mortgage: { owed: 300000 }, credit: { owed: 4200 } }, T);
+  const m = p.debts.find((d) => d.id === "setup-debt-mortgage"), c = p.debts.find((d) => d.id === "setup-debt-credit");
+  // by hand: 300,000 at 7.24% over 360 months = 300000 x r / (1 - (1 + r)^-360), r = 0.0724 / 12
+  const r = 0.0724 / 12, byHand = Math.round(300000 * r / (1 - (1 + r) ** -360));
+  assert.deepEqual([m.minPayment, m.paymentGuessed, byHand], [2044, 2044, 2044]);
+  assert.equal(c.minPayment, Math.round(4200 * 0.2236 / 12 + 42), "a month's interest plus 1% of the balance");
+  assert.equal(expenses(p, {}).debtFromDebts, m.minPayment + c.minPayment, "counted in spending");
+  assert.equal(S.valuesFor(p, "owe-amounts").mortgage.payment, "", "a guess is not shown as typed");
+  assert.deepEqual(S.standing(p, { today: T }).guessed.map((g) => [g.name, g.payment]), [["Credit cards", c.minPayment], ["Mortgage", 2044]]);
+  // the owed amount changes: the guess follows; a payment typed on Liabilities then stays
+  S.applyOweAmounts(p, { ...S.valuesFor(p, "owe-amounts"), mortgage: { owed: 200000 } }, T);
+  assert.equal(m.minPayment, S.typicalPayment("mortgage", 200000, 0.0724));
+  m.minPayment = 1500;
+  S.applyOweAmounts(p, S.valuesFor(p, "owe-amounts"), T);
+  assert.deepEqual([m.minPayment, "paymentGuessed" in m], [1500, false]);
+});
+
+test("a mortgage with no home asks the home's value, and net worth then has both sides", () => {
+  const p = empty(); S.applyYou(p, { who: "me" });
+  S.applyHavePicks(p, ["checking"]); S.applyHaveAmounts(p, { checking: 2000 }, T);
+  S.applyOwePicks(p, ["mortgage"]);
+  assert.equal(S.askHomeWithMortgage(p), true);
+  assert.equal(S.standing(p, { today: T }).homeMissing, false, "no mortgage yet");
+  S.applyOweAmounts(p, { mortgage: { owed: 210000, payment: 1650, rate: 6.25 } }, T);
+  assert.equal(S.standing(p, { today: T }).homeMissing, true, "the done screen says the home is not in");
+  S.applyOweAmounts(p, { mortgage: { owed: 210000, payment: 1650, rate: 6.25, home: "300k" } }, T);
+  assert.deepEqual([acct(p, "setup-have-home").type, acct(p, "setup-have-home").balance], ["property", 300000]);
+  assert.ok(S.picks(p, "have").includes("home"), "the have screens show it too");
+  assert.equal(S.standing(p, { today: T }).netWorth, 2000 + 300000 - 210000);
+  assert.equal(S.askHomeWithMortgage(p), true, "still asked there, where it was typed");
+  const q = family(); q.accounts.push({ id: "h", name: "House", type: "property", balance: 350000 });
+  assert.equal(S.askHomeWithMortgage(q), false, "a home on Net worth: not asked");
+});
+
+test("spending once work stops follows the bills until typed, and counts a loan still paid after work stops", () => {
+  const p = family();
+  S.applySpend(p, { ...S.valuesFor(p, "spend"), retireMonthly: S.retireDefault(p, T), retireAuto: true });
+  assert.equal(S.valuesFor(p, "spend").retireTyped, false, "the screen's own figure: it follows the rows");
+  S.applySpend(p, { ...S.valuesFor(p, "spend"), retireMonthly: 2500, retireAuto: false });
+  assert.equal(S.valuesFor(p, "spend").retireTyped, true, "typed: it stays");
+  // a 30-year mortgage at 52: still paid at 65
+  const q = empty(); S.applyYou(q, { who: "me" });
+  S.applyMoney(q, { people: { "setup-self": { status: "work", amount: 80000 } } });
+  S.applyAges(q, { people: { "setup-self": { month: 1, year: 1974, stopAge: 65, ss: { mode: "unsure" } } } }, T);
+  S.applyOwePicks(q, ["mortgage", "car-loan"]);
+  S.applyOweAmounts(q, { mortgage: { owed: 280000, payment: 1900, rate: 6.5 }, "car-loan": { owed: 9000, payment: 320, rate: 7 } }, T);
+  S.applySpend(q, { mode: "rows", rows: { groceries: 600 } });
+  assert.equal(S.retireDefault(q, T), 600 + 1900, "the mortgage runs past 65, the car loan does not");
+  assert.equal(S.retireDefault(q), 600, "no date: no loan added");
+});
+
+test("the cushion's money follows the accounts while it is the setup's choice; no bills, no amount", () => {
+  const p = family();
+  S.applyHavePicks(p, [...S.picks(p, "have"), "savings"]);
+  p.accounts.push({ id: "a-cash", name: "Cash at home", type: "cash", balance: 300 });
+  S.applyGoalDetails(p, S.valuesFor(p, "goal-details", { today: T }), T);
+  const g = p.goals.find((x) => x.id === "setup-goal-cushion");
+  assert.ok(g.fundedBy.includes("a-cash"), "a new cash account counts");
+  g.fundedBy = ["setup-have-savings"];   // chosen on Goals
+  S.applyGoalDetails(p, S.valuesFor(p, "goal-details", { today: T }), T);
+  assert.deepEqual(g.fundedBy, ["setup-have-savings"]);
+  // loans but no bills: no cushion amount made of loan payments alone
+  const q = empty(); S.applyYou(q, { who: "me" });
+  S.applyOwePicks(q, ["car-loan"]); S.applyOweAmounts(q, { "car-loan": { owed: 9000, payment: 400 } }, T);
+  assert.equal(S.cushion(q).essential, 0);
+  S.applyGoalPicks(q, ["cushion"]); S.applyGoalDetails(q, { cushion: { months: 6 } }, T);
+  assert.equal(q.goals.find((x) => x.id === "setup-goal-cushion").target, 0);
+});
+
+test("the headline never contradicts the cards under it", () => {
+  const head = (p) => S.standing(p, { today: T }).headline;
+  assert.match(head(family()), /costly debt comes first/, "the 22% card is move 1");
+  // no pay at all: never "your month works"
+  const n = empty(); S.applyYou(n, { who: "me" }); S.applyMoney(n, { people: { "setup-self": { status: "none" } } });
+  S.applyHavePicks(n, ["checking"]); S.applyHaveAmounts(n, { checking: 500 }, T); S.applySpend(n, { mode: "total", total: 3000 });
+  assert.doesNotMatch(head(n), /month works/);
+  // a thin cushion with a good month
+  const w = empty(); S.applyYou(w, { who: "me" }); S.applyMoney(w, { people: { "setup-self": { status: "work", amount: 90000 } } });
+  S.applyHavePicks(w, ["checking"]); S.applyHaveAmounts(w, { checking: 6000 }, T); S.applySpend(w, { mode: "total", total: 3000 });
+  assert.match(head(w), /Building your cushion/);
+  S.applyHaveAmounts(w, { checking: 30000 }, T);
+  assert.match(head(w), /good shape|Retirement/);
+  // nothing at all: no figure, no echo of the title
+  const z = empty(); S.markAt(z, "done", T);
+  assert.deepEqual([S.standing(z, { today: T }).netWorth, head(z)], [null, "A few more answers will fill this in."]);
+});
+
+test("someone retired living on savings is told calmly, with the retirement check first", () => {
+  const p = empty(); S.applyYou(p, { name: "Rosa", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired", pension: 1800 } } });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1956, retired: true, ss: { mode: "getting", amount: 1400, started: 66 } } } }, T);
+  S.applyHavePicks(p, ["savings", "retire"]); S.applyHaveAmounts(p, { savings: 34000, "retire-setup-self": 380000, "kind-setup-self": "own" }, T);
+  S.applySpend(p, { mode: "total", total: 4800 });
+  const st = S.standing(p, { today: T });
+  assert.equal(st.drawing, true);
+  assert.match(st.headline, /^You draw about \$[\d,]+ a month from savings \(\$414,000 saved\)/);
+  assert.equal(st.moves[0].id, "guide-retire");
+  assert.ok(!st.moves.some((m) => m.title === "Spend less than comes in"));
+});
+
+test("the first moves are in plain words: no 'each of you' for one adult, no 'backdoor', a guessed rate says so", () => {
+  const p = empty(); S.applyYou(p, { name: "Rosa", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", amount: 60000 } } });
+  S.applyHavePicks(p, ["checking"]); S.applyHaveAmounts(p, { checking: 20000 }, T);
+  S.applyOwePicks(p, ["credit"]); S.applyOweAmounts(p, { credit: { owed: 4200, payment: 150 } }, T);
+  S.applySpend(p, { mode: "total", total: 2500 });
+  const moves = S.standing(p, { today: T }).moves;
+  const text = moves.map((m) => `${m.title} ${m.detail ?? ""}`).join(" | ");
+  assert.equal(moves[0].title, "Pay down the cards first");
+  assert.match(moves[0].detail, /22\.4% a year \(a typical rate: type yours on What you owe\)/);
+  assert.doesNotMatch(text, /each of you|backdoor|for sure/);
+  assert.ok(moves.some((m) => m.id === "ira" && m.title === "A retirement account of your own (an IRA)"));
+  assert.equal(S.revealWords({ id: "full-fund", title: "A full emergency fund (4 months)", detail: "x" }, p).title, "Build your cushion to 4 months");
+  const f = S.standing(family(), { today: T }).moves.find((m) => m.id === "ira");
+  if (f) assert.match(f.title, /each of you/);
+});
+
+test("what is not counted yet names only what is missing, an unmarried couple's tax and an estimated Social Security", () => {
+  const p = empty(); S.applyYou(p, { who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", amount: 60000 } } });
+  S.applyAges(p, { people: { "setup-self": { month: 1, year: 1980, stopAge: 65, ss: { mode: "unsure" } } } }, T);
+  assert.equal(S.retirementMissing(p), "Social Security", "the birth date was typed");
+  const q = empty(); S.applyYou(q, { who: "me" }); S.applyAges(q, { people: { "setup-self": { ss: { mode: "none" } } } }, T);
+  assert.equal(S.retirementMissing(q), "your birth date");
+  const c = empty(); S.applyYou(c, { who: "partner", partnerName: "Sam" });
+  S.applyMoney(c, { people: { "setup-self": { status: "work", amount: 65000 }, "setup-partner": { status: "work", amount: 65000 } } });
+  assert.ok(S.standing(c, { today: T }).later.some((l) => l.key === "couple"));
+  assert.ok(!S.standing(family(), { today: T }).later.some((l) => l.key === "couple"), "spouses file together");
+  const f = family();
+  assert.ok(S.standing(f, { today: T }).later.some((l) => l.key === "ss-estimate" && /Ana's pay/.test(l.label)));
+  f.retirement.socialSecurity["setup-self"].monthlyAtFRA = 2500;   // typed from the statement
+  assert.ok(!S.standing(f, { today: T }).later.some((l) => l.key === "ss-estimate"));
+});
+
+test("Social Security set on its own page stays: a typed figure, a claim age; an estimate refreshes only its own figure", () => {
+  const p = family();
+  const ss = p.retirement.socialSecurity;
+  ss["setup-partner"].claimAge = 68;            // chosen on Social Security
+  S.applyAges(p, S.valuesFor(p, "ages", { today: T }), T);
+  assert.equal(ss["setup-partner"].claimAge, 68);
+  inc(p, "setup-pay-setup-self").amount = 120000;   // a raise on Income
+  const was = ss["setup-self"].monthlyAtFRA;
+  S.applyAges(p, S.valuesFor(p, "ages", { today: T }), T);
+  assert.ok(ss["setup-self"].monthlyAtFRA > was, "the setup's estimate follows the pay");
+  ss["setup-self"].monthlyAtFRA = 2222;             // typed from the statement on Social Security
+  S.applyAges(p, S.valuesFor(p, "ages", { today: T }), T);
+  assert.equal(ss["setup-self"].monthlyAtFRA, 2222);
+});
+
+test("a retired person under 62 who gets Social Security gets it unreduced (disability), at full retirement age", () => {
+  const p = empty(); S.applyYou(p, { who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired" } } });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1966, retired: true, ss: { mode: "getting", amount: 1500 } } } }, T);
+  const r = p.retirement.socialSecurity["setup-self"];
+  assert.deepEqual([r.monthlyAtFRA, r.claimAge], [1500, 67]);
+});
+
+test("a partner named on another page's records is kept", () => {
+  const p = family();
+  p.estate = { beneficiaries: [{ accountId: "a1", primary: [{ personId: "setup-partner", share: 100 }] }] };
+  assert.match(S.personReferenced(p, "setup-partner"), /beneficiary/);
+  const kept = S.applyYou(p, { ...S.valuesFor(p, "you"), who: "me" });
+  assert.ok(kept.some((k) => k.name === "Bo"));
+  assert.ok(p.household.people.some((x) => x.id === "setup-partner"));
 });

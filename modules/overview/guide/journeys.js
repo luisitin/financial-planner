@@ -20,7 +20,7 @@
 //   opens      the title of a fold (<details>) on the page that the ask names; the guide opens it while the step is to do
 //   needs      keys of earlier steps this page needs first (it shows "This step needs step 1 first")
 import { compute as setupSteps } from "../dashboard/compute.js";
-import { rateIsGuess } from "../setup/compute.js";
+import { rateIsGuess, paymentIsGuess } from "../setup/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
@@ -33,7 +33,7 @@ const SAVINGS = ["checking", "savings", "cash", "credit"];
 export const debtAccounts = (p) => L(p, "accounts").filter((a) => isLiability(a.type));
 export const hasType = (p, ...types) => L(p, "accounts").some((a) => types.includes(a.type));
 /** Every loan and card with a balance has its rate and payment saved (a 0% loan counts): Liabilities' own test. A typical rate the setup put in (`rateGuessed`) is not a saved rate yet. */
-export const detailed = (p) => { const owed = liabilities(p).rows.filter((r) => r.owed > 0); return owed.length > 0 && owed.every((r) => !!r.detail && !rateIsGuess(r.detail)); };
+export const detailed = (p) => { const owed = liabilities(p).rows.filter((r) => r.owed > 0); return owed.length > 0 && owed.every((r) => !!r.detail && !rateIsGuess(r.detail) && !paymentIsGuess(r.detail)); };
 export const adults = (p) => (p?.household?.people ?? []).filter((x) => x.role !== "dependent");
 const setup = (key) => (p) => setupSteps(p).steps.find((s) => s.key === key)?.done === true;
 /** The same test as goals/emergency-fund (its EMERGENCY pattern and the 🛟 icon), plus the flag a goal may carry. */
@@ -78,7 +78,7 @@ export const JOURNEYS = [
     line: "Every loan and card, the order to pay them in, and the month the last one is paid off.",
     haveReady: "Your latest card and loan statements.",
     steps: [
-      { key: "add", page: "balance/net-worth", title: "Add each loan and card", short: "Add loans and cards", ask: "Add every card, loan and mortgage with what you owe today (if accounts are listed already, tap + Add another account first), choose its kind under Type, like Credit card or Mortgage, then tap Add account.", doneWhen: "it is done once one card, loan or mortgage is saved as an account.", check: (p) => debtAccounts(p).length > 0 },
+      { key: "add", page: "balance/net-worth", title: "Add each loan and card", short: "Add loans and cards", target: "Type", ask: "Add every card, loan and mortgage with what you owe today (if accounts are listed already, tap + Add another account first), choose its kind under Type, like Credit card or Mortgage, then tap Add account.", doneWhen: "it is done once one card, loan or mortgage is saved as an account.", check: (p) => debtAccounts(p).length > 0 },
       { key: "rates", page: "balance/liabilities", title: "Give each its rate and payment", short: "Add rates, payments", ask: "Open each loan and card, type its yearly interest rate and the payment you must make each month, then tap Save.", doneWhen: "it is done once each loan and card you owe on has a rate and a payment saved.", check: (p) => detailed(p), needs: ["add"] },
       { key: "order", page: "debt/payoff", title: "Pick your payoff order", short: "Pick payoff order", ask: "Choose any extra you can pay each month and which debt goes first, then tap Save plan.", doneWhen: "it is done once you tap Save plan.", check: (p) => !!p?.debtPlan?.order, needs: ["rates"] },
       { key: "cards", page: "debt/credit-cards", title: "Check your credit cards", short: "Check your cards", ask: "See what paying only the minimum costs, and whether moving the balance to a card that charges no interest for a while would help.", doneWhen: "it is done once you tap the button below after looking.", looked: true, optional: true, show: (p) => hasType(p, "credit"), why: "Because you have a credit card.", needs: ["rates"] },

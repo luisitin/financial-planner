@@ -30,6 +30,9 @@ const STYLE = `
 .gb-ring { outline: 3px solid var(--accent) !important; outline-offset: 4px; border-radius: var(--radius-sm); animation: gb-ring 2s ease-out forwards; }
 @keyframes gb-ring { 0%, 75% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .gb-ring { animation: none; } }
+.gb-toast { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 40; max-width: 560px; margin: 0 auto; display: flex; gap: 12px; align-items: center; padding: 10px 12px 10px 16px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--accent); box-shadow: var(--shadow); }
+.gb-toast p { flex: 1; margin: 0; color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
+.gb-toast button { flex: none; min-height: 44px; min-width: 56px; }
 .gb-root .gb-first { margin-top: 2px; }
 .gb-root .gb-state { margin: 12px 0 8px; color: var(--text); }
 .gb-root .gb-next { display: flex; justify-content: flex-end; margin-top: 4px; }
@@ -71,22 +74,32 @@ function openFold(page, title) {
   try { new MutationObserver(run).observe(page, { childList: true, subtree: true }); } catch { }
 }
 
-/** The first element on the page a step's labels name (a button, link or fold), drawn or inside a closed fold. */
+/**
+ * The first element on the page a step's labels name, drawn or inside a closed fold: a button, link or fold whose text
+ * starts with the label, or a form box whose label is exactly it ("Type": the box itself, so the ring is on it).
+ */
 function findTarget(page, labels) {
   const norm = (x) => String(x ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const shown = (e) => e.getClientRects().length > 0 || e.closest("details:not([open])");
   const els = [...page.querySelectorAll("button, a, summary, [role=button], input[type=submit]")];
+  const boxes = [...page.querySelectorAll("label")].map((l) => ({ name: norm(l.querySelector(".field-label")?.textContent ?? l.textContent), box: l.control ?? l.querySelector("input, select, textarea") })).filter((x) => x.box);
   for (const l of labels) {
     const want = norm(l);
-    const hit = els.find((e) => norm(e.textContent || e.value).startsWith(want) && (e.getClientRects().length > 0 || e.closest("details:not([open])")));
+    const hit = els.find((e) => norm(e.textContent || e.value).startsWith(want) && shown(e)) ?? boxes.find((x) => x.name === want && shown(x.box))?.box;
     if (hit) return hit;
   }
   return null;
 }
-/** Scroll to it (opening any fold around it), focus it (a form's Add button: the form's first box), ring it for two seconds. */
-function showTarget(el) {
+/**
+ * Scroll to it (opening any fold around it), focus it (a form's Add button: the form's first box), ring it for two
+ * seconds; then the step's instruction stays in a strip at the bottom of the screen for a while (`ask`), since the
+ * scroll moved the bar off screen.
+ */
+function showTarget(el, ask = null, ui = null) {
   for (let d = el.closest("details:not([open])"); d; d = d.parentElement?.closest("details:not([open])")) d.open = true;
   const submit = el.form && (el.type === "submit");
-  const ring = submit ? el.form.closest(".card") ?? el.form : el.tagName === "SUMMARY" ? el.parentElement : el;
+  const box = el.matches("input, select, textarea");
+  const ring = submit ? el.form.closest(".card") ?? el.form : el.tagName === "SUMMARY" ? el.parentElement : box ? el.closest("label") ?? el : el;
   const focusEl = submit ? el.form.querySelector("input:not([type=hidden]):not([type=checkbox]), select, textarea") ?? el : el;
   let still = false;
   try { still = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { }
@@ -95,6 +108,14 @@ function showTarget(el) {
   try { focusEl.focus({ preventScroll: true }); } catch { }
   ring.classList.remove("gb-ring"); void ring.offsetWidth; ring.classList.add("gb-ring");
   setTimeout(() => ring.classList.remove("gb-ring"), 2200);
+  if (ask && ui) {
+    document.querySelector(".gb-toast")?.remove();
+    const close = () => toast.remove();
+    const toast = ui.h("div", { class: "gb-toast", role: "status" }, ui.h("p", {}, ask), ui.h("button", { type: "button", class: "secondary small", onClick: close }, "OK"));
+    document.body.append(toast);
+    setTimeout(() => { if (toast.isConnected) close(); }, 9000);
+    window.addEventListener("hashchange", close, { once: true });
+  }
 }
 
 function checkAi(ctx) {
@@ -193,7 +214,7 @@ export function frame(ctx, page) {
   const labels = targetsOf(ask, { target: bar.viaAlt ? step.alt?.target : step.target, opens });
   let showBtn = null;
   if (labels.length && !blocked && step.state !== "none") {
-    showBtn = ui.h("button", { type: "button", class: "secondary small gb-show", hidden: true, onClick: () => { const t = findTarget(page, labels); if (t) showTarget(t); } }, "Show me where");
+    showBtn = ui.h("button", { type: "button", class: "secondary small gb-show", hidden: true, onClick: () => { const t = findTarget(page, labels); if (t) showTarget(t, ask, ui); } }, "Show me where");
     let queued = false;
     const check = () => { queued = false; showBtn.hidden = !findTarget(page, labels); };
     const later = () => { if (!queued) { queued = true; requestAnimationFrame(check); } };

@@ -1,23 +1,32 @@
 // modules/overview/setup/view.js -- DOM only. "Set up my plan": one question per screen at #/overview/setup/<screen>
-// (the phone's Back button goes to the previous question). Answers live in the screen until Continue (or Enter, or
-// Finish later), which saves them in one store.update -- compute.js turns them into the pages' own records -- and
-// moves on. A Continue that changes nothing saves nothing (compute's wouldChange).
+// (the phone's Back button goes to the previous question). Answers live in the screen until Continue (or Finish
+// later), which saves them in one store.update -- compute.js turns them into the pages' own records -- and moves on.
+// A Continue that changes nothing saves nothing (compute's wouldChange). Enter in a box moves to the next box; only
+// the Continue button moves on. What was typed and not saved is kept while you go Back and forth (drafts).
+// "?back=done" (from Change an answer): saving returns to where you stand.
 import {
   SCREENS, QUESTIONS, HAVE, OWE, GOALS, PAY_PERIODS, OTHER_KINDS, RETIRE_KINDS, DATE_CHIPS, STATES, TYPICAL_RATES,
   adults, dependents, picks, nextScreen, prevScreen, resolveScreen, barShare, valuesFor, reflect, hasMortgage,
-  existingHave, existingOwe, existingPay, existingGoal, askOwners, spendRows, spendBase, allRetired, cushion,
-  estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange, markAt, applyYou, applyMoney, applyAges,
-  applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend, applyGoalPicks, applyGoalDetails, applyGuesses,
-  progress, standing,
+  existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
+  spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
+  markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
+  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing,
 } from "./compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
+import { perYear } from "../../../core/math/periods.js";
+import { ageOn } from "../../../core/math/dates.js";
 
 let pending = [];        // [{ kind, text }] for the top of the next screen (the shell redraws after every save)
 let lastShare = 0;       // the bar starts where the last screen left it, then fills to this one
 let reveal = false;      // the last Continue was just tapped: show "Putting your plan together" once
+let drafts = {};         // { [screen]: { v, at } }: typed, not saved yet, kept for Back and forth while the plan is unchanged
+let cameFrom = null;     // the screen a Continue just left: stamped on the next screen's history entry, so Back can go back
+let warnedPay = null;    // the low-pay question already asked once for these figures
+let warnedKept = null;   // the "Kept X" warnings Finish later already stopped for once
 
 const STYLE = `
 .su-root { max-width: 580px; margin: 0 auto; }
+.su-root .su-vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .su-top { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: -6px 0 2px; }
 .su-root .su-icon { flex: none; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 0; background: none; color: var(--accent-ink); font-size: 28px; line-height: 1; }
 .su-root .su-icon:hover { background: var(--panel-2); filter: none; }
@@ -43,17 +52,20 @@ const STYLE = `
 .su-root .su-tile:active { transform: scale(.98); }
 .su-root .su-tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .su-tile .su-ti { font-size: 28px; line-height: 1.1; }
-.su-tile .su-tl { font-weight: 650; font-size: var(--fs); line-height: 1.25; padding-right: 22px; }
+.su-tile .su-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.su-tile .su-tl { font-weight: 650; font-size: var(--fs); line-height: 1.25; }
 .su-tile .su-ts { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.3; }
 .su-root .su-tile.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.su-tile.on::after { content: "✓"; position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
-.su-root .su-tile.have { cursor: default; opacity: .8; }
+.su-tile.on::after { content: "✓"; content: "✓" / ""; position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.su-root .su-tile.have { cursor: default; }
+.su-root .su-tile.have .su-ti { opacity: .6; }
 .su-root .su-tile.have:hover { border-color: var(--accent); }
 .su-root .su-tile.wide { grid-column: 1 / -1; min-height: 60px; flex-direction: row; align-items: center; gap: 12px; }
 .su-root .su-tiles.three .su-tile { min-height: 60px; flex-direction: row; align-items: center; gap: 12px; padding: 10px 14px; }
-.su-tiles.three .su-tile .su-ts { margin-left: auto; padding-right: 26px; }
-.su-tiles.three .su-tile.on::after { top: 50%; transform: translateY(-50%); }
+.su-tiles.three .su-tile .su-tx, .su-tile.wide .su-tx { flex: 1; gap: 2px; padding-right: 26px; }
+.su-tiles.three .su-tile.on::after, .su-tile.wide.on::after { top: 50%; transform: translateY(-50%); }
 .su-field { display: block; margin: 0 0 16px; }
+.su-field > label { display: block; }
 .su-label { display: block; font-weight: 600; margin: 0 0 6px; }
 .su-sub { display: block; color: var(--text-2); font-size: var(--fs); line-height: 1.45; margin: 6px 0 0; }
 .su-in { width: 100%; min-height: 52px; font: inherit; font-size: var(--fs-lg); padding: 10px 14px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); }
@@ -69,7 +81,8 @@ select.su-in { font-size: var(--fs-md); }
 .su-root .su-seg button { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line-2); background: var(--panel); color: var(--text); font-weight: 600; }
 .su-root .su-seg button:hover { filter: none; border-color: var(--accent); }
 .su-root .su-seg button[aria-checked="true"], .su-root .su-seg button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
-.su-group { border-top: 1px solid var(--line); padding: 18px 0 2px; }
+.su-group { border-top: 1px solid var(--line); padding: 18px 0 16px; }
+.su-group > :last-child, .su-group > :last-child > :last-child { margin-bottom: 0; }
 .su-group.first { border-top: 0; padding-top: 0; }
 .su-gh { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: var(--fs-md); margin: 0 0 12px; }
 .su-gh .sum { margin-left: auto; color: var(--text-2); font-weight: 600; font-size: var(--fs); font-variant-numeric: tabular-nums; }
@@ -89,8 +102,11 @@ select.su-in { font-size: var(--fs-md); }
 .su-row .su-in { min-height: 48px; font-size: var(--fs-md); }
 .su-row .su-money > span { font-size: var(--fs-md); left: 12px; }
 .su-row .su-money > input { padding-left: 26px; }
-.su-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; margin: 8px 0 20px; border-radius: var(--radius-sm); background: var(--panel-2); font-weight: 650; }
+.su-row .su-fixed { text-align: right; font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; padding-right: 14px; }
+.su-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; margin: 8px 0 0; border-radius: var(--radius-sm); background: var(--panel-2); font-weight: 650; }
 .su-total b { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.su-parts { color: var(--text-2); font-size: var(--fs-sm); text-align: right; margin: 6px 4px 20px; font-variant-numeric: tabular-nums; }
+.su-parts:empty { margin-bottom: 20px; }
 .su-have { background: var(--panel-2); border-radius: var(--radius-sm); padding: 12px 14px; margin: 0 0 16px; color: var(--text-2); line-height: 1.45; }
 .su-have b { color: var(--text); font-weight: 600; }
 .su-actions { display: flex; gap: 10px; margin: 22px 0 0; }
@@ -105,7 +121,9 @@ select.su-in { font-size: var(--fs-md); }
 .su-list .su-li { flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--accent-soft); display: grid; place-items: center; font-size: 22px; }
 .su-list b { display: block; font-weight: 650; }
 .su-list .m { display: block; color: var(--text-2); }
-.su-meta { margin: 0 0 18px; color: var(--text-2); font-weight: 600; text-align: center; }
+.su-ticks { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 8px; }
+.su-ticks li { display: flex; gap: 10px; align-items: center; color: var(--text); }
+.su-ticks li::before { content: "✓"; content: "✓" / ""; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
 .su-meter { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 8px 0 0; }
 .su-meter > span { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
 .su-wait { text-align: center; padding: 56px 12px; }
@@ -125,9 +143,8 @@ select.su-in { font-size: var(--fs-md); }
 .su-stand .su-fig .stat-value { font-variant-numeric: tabular-nums; }
 .su-stand .su-fig .stat-label { font-size: var(--fs-sm); line-height: 1.3; margin-top: 2px; color: var(--text); font-weight: 600; }
 .su-stand .su-fig .stat-sub { font-size: var(--fs-sm); color: var(--text-2); margin-top: 6px; line-height: 1.35; }
-.su-stand .su-fig .st { margin-top: auto; padding-top: 8px; font-size: var(--fs-sm); font-weight: 650; }
+.su-stand .su-fig .st { margin-top: auto; padding-top: 8px; font-size: var(--fs-sm); font-weight: 650; color: var(--text-2); }
 .su-stand .su-fig.ok .st { color: var(--ok); }
-.su-stand .su-fig.warn { border-color: var(--warn); background: var(--warn-soft); }
 .su-stand .su-fig.warn .st { color: var(--warn); }
 .su-stand .su-fig.open .stat-value { color: var(--text-2); font-size: var(--fs-lg); }
 .su-stand a.su-fig .st { color: var(--accent-ink); }
@@ -140,19 +157,23 @@ select.su-in { font-size: var(--fs-md); }
 .su-moves b { display: block; font-weight: 650; }
 .su-moves .d { display: block; color: var(--text-2); font-size: var(--fs-sm); margin-top: 2px; line-height: 1.4; }
 .su-moves .c { margin-left: auto; color: var(--text-2); font-size: 22px; }
-.su-later-list { margin: 0 0 22px; padding: 0 0 0 20px; color: var(--text-2); line-height: 1.5; }
-.su-later-list li { margin: 6px 0; }
-.su-later-list a { display: inline-flex; min-height: 32px; align-items: center; }
+.su-root .page-list { margin: 0 0 22px; }
+.su-root .page-list .row-link { align-items: center; min-height: 52px; padding: 8px 4px; }
+.su-root .page-list .row-link .t { color: var(--text); font-weight: 600; }
+.su-root .page-list .row-link .chev { flex: none; margin-left: auto; color: var(--text-2); font-size: 22px; line-height: 1; padding-left: 8px; }
+.su-root .page-list .d { display: block; color: var(--text-2); }
 .su-guess { margin: 0 0 24px; }
 .su-guess .su-list { margin-top: 12px; }
 .su-guess .su-gbtns { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .su-end { display: grid; gap: 10px; }
 .su-root .su-end .btn, .su-root .su-end button { display: flex; align-items: center; justify-content: center; min-height: 52px; font-size: var(--fs-md); }
+@media (max-width: 719px) { .su-stand .su-fig:last-child:nth-child(even) { grid-column: 1 / -1; } }
 @media (min-width: 720px) {
   .su-card { padding: 30px 32px 22px; }
   .su-tiles, .su-tiles.three { grid-template-columns: 1fr 1fr 1fr; }
   .su-root .su-tiles.three .su-tile { min-height: 84px; flex-direction: column; align-items: flex-start; gap: 4px; }
-  .su-tiles.three .su-tile .su-ts { margin-left: 0; }
+  .su-tiles.three .su-tile .su-tx { padding-right: 0; }
+  .su-tiles.three .su-tile .su-tl { padding-right: 22px; }
   .su-tiles.three .su-tile.on::after { top: 9px; transform: none; }
   .su-stand .su-fig:first-child { grid-column: auto; }
   .su-stand .su-fig:nth-child(n) .stat-value, .su-stand .su-fig:nth-child(n) .stat-value.long { font-size: var(--fs-xl); }
@@ -162,12 +183,14 @@ select.su-in { font-size: var(--fs-md); }
 `;
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const FOOT = "🔒 Everything stays on your own computer and phone. No bank logins or account numbers, ever.";
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 /** append / replace children, skipping null, false and "" (the DOM would print "null"). */
 const keep = (kids) => kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false && k !== "");
 const add = (el, ...kids) => el.append(...keep(kids));
 const swap = (el, ...kids) => el.replaceChildren(...keep(kids));
 const and = (list) => (list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
+let uid = 0;
 /** "1234567.5" -> "1,234,567.5" as you type (k and m kept at the end). */
 function groupDigits(raw) {
   let s = String(raw ?? "").replace(/[^0-9.kKmM]/g, "");
@@ -176,6 +199,22 @@ function groupDigits(raw) {
   const [i, ...rest] = s.split(".");
   const int = i.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return int + (rest.length ? `.${rest.join("").slice(0, 2)}` : "") + suf;
+}
+/** One choice of a radio group: tabindex 0 on the checked option (else the first), -1 on the rest; arrow keys move. */
+function roving(btns) {
+  const at = Math.max(0, btns.findIndex((b) => b.getAttribute("aria-checked") === "true"));
+  btns.forEach((b, i) => { b.tabIndex = i === at ? 0 : -1; });
+}
+function arrows(box, btns) {
+  box.addEventListener("keydown", (e) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    const i = btns.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const n = btns[(i + step + btns.length) % btns.length];
+    n.focus(); n.click();
+  });
 }
 
 export function render(page, ctx) {
@@ -188,81 +227,171 @@ export function render(page, ctx) {
   const symbol = (() => { try { return new Intl.NumberFormat(plan.meta?.locale || "en-US", { style: "currency", currency: cur }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } })();
   const prog = progress(plan);
   const asked = ctx.route.rest?.[0] ?? "welcome";
+  const backDone = ctx.route.query?.back === "done";
   const screenId = resolveScreen(plan, SCREENS.some((s) => s.id === asked) ? asked : "welcome");
-  if (screenId !== asked && asked !== "welcome") { try { history.replaceState(null, "", `#/overview/setup/${screenId}`); } catch { /* the address stays; the screen is right */ } }
+  if (screenId !== asked && asked !== "welcome") { try { history.replaceState(history.state, "", `#/overview/setup/${screenId}${backDone ? "?back=done" : ""}`); } catch { /* the address stays; the screen is right */ } }
+  if (cameFrom) { try { history.replaceState({ ...(history.state ?? {}), suFrom: cameFrom }, ""); } catch { /* Back then replaces instead */ } cameFrom = null; }
   const screen = SCREENS.find((s) => s.id === screenId);
   const root = ui.h("div", { class: "su-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   try { window.scrollTo(0, 0); } catch { /* no window in tests */ }
 
-  const go = (id) => ctx.go("overview", "setup", id === "welcome" ? [] : [id]);
+  const go = (id, query = {}) => ctx.go("overview", "setup", id === "welcome" ? [] : [id], query);
   const ad = adults(plan);
   const self = ad.find((p) => p.role === "self") ?? ad[0];
   const firstName = self && self.name && self.name !== "Me" ? self.name : null;
+  const named = (p, text) => (ad.length > 1 && p ? `${p.name}: ${text}` : null);
+  const setupHref = (id) => `#/overview/setup/${id}?back=done`;
+  // a draft lives while the plan is the one it was typed against
+  const stamp = plan.meta?.updatedAt ?? "";
+  const draft = (make) => { const d = drafts[screenId]; if (d && d.at === stamp) return d.v; const v = make(); drafts[screenId] = { v, at: stamp }; return v; };
 
-  /** The answers on screen as a writer; Continue, Enter and Finish later all save through it. */
+  /** The answers on screen as a writer; Continue and Finish later save through it. */
   let current = null;
-  const toStart = () => { ctx.go("overview", "start"); };
+  const toStart = () => { drafts = {}; ctx.go("overview", "start"); };
   const save = (then) => {
     if (!current) { then(nextScreen(plan, screenId)); return; }
     let kept = [];
     const fn = (d) => { kept = current.apply(d) || []; markAt(d, then === toStart ? screenId : nextScreen(d, screenId), today); };
-    if (wouldChange(plan, fn)) store.update(fn);
+    const changed = wouldChange(plan, fn);
+    if (changed) store.update(fn);
+    delete drafts[screenId];
+    warnedPay = null;
     const after = store.get();
     pending = [];
     const said = current.words?.(after);
     if (said) pending.push({ kind: "ok", text: said });
     for (const k of kept) pending.push({ kind: "warn", text: `Kept ${k.name}: ${k.reason}. ${k.page === "#/household/people" ? "Remove them on People" : "Remove it on Net worth"} if you mean to.` });
+    if (then === toStart) {
+      const warns = pending.filter((n) => n.kind === "warn"), key = JSON.stringify(warns);
+      if (warns.length && warnedKept !== key) {
+        // stay, so the reason an account stayed is seen; the shell redraws this screen after the save
+        warnedKept = key;
+        pending = warns;
+        if (!changed) { for (const n of pending) { const el = ui.notice(n.kind, n.text); el.setAttribute("role", "alert"); card.prepend(el); } pending = []; }
+        return;
+      }
+      warnedKept = null;
+      pending = [];
+    }
     then(nextScreen(after, screenId));
   };
-  const forward = () => save((next) => { if (next === "done") reveal = true; go(next); });
+  const forward = () => {
+    const ask = current?.check?.();
+    if (ask && warnedPay !== ask) {
+      warnedPay = ask;
+      card.querySelector(".su-ask")?.remove();
+      const el = ui.notice("warn", ask); el.classList.add("su-ask"); el.setAttribute("role", "alert");
+      card.prepend(el);
+      try { el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
+      return;
+    }
+    save((next) => {
+      cameFrom = screenId;
+      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, { back: "done" }); else go("done"); return; }
+      if (next === "done") reveal = true;
+      go(next);
+    });
+  };
   const skip = () => {
     const fn = (d) => { if (screenId === "you" && !(d.household?.people ?? []).length) applyYou(d, { who: "me" }); markAt(d, nextScreen(d, screenId), today); };
     if (wouldChange(plan, fn)) store.update(fn);
+    delete drafts[screenId];
     const next = nextScreen(store.get(), screenId);
     if (next === "done") reveal = true;
+    cameFrom = screenId;
     go(next);
   };
-  const back = () => { const prev = prevScreen(plan, screenId); if (!prev || prev === "welcome") toStart(); else go(prev); };
+  // Back goes back in history when this screen was reached by Continue from the one before; else it replaces the
+  // address, so the phone's Back never walks forward through the questions
+  const back = () => {
+    if (backDone) { history.back(); return; }
+    const prev = prevScreen(plan, screenId);
+    if (!prev || prev === "welcome") { toStart(); return; }
+    let from = null;
+    try { from = history.state?.suFrom ?? null; } catch { from = null; }
+    if (from === prev) { history.back(); return; }
+    try { location.replace(`#/overview/setup/${prev}`); } catch { go(prev); }
+  };
 
-  // the top: back, the bar, finish later; then "Question 3 of 7"
+  // the top: back, the bar, finish later; then "Question 3 of 7" (the heading says it to screen readers)
   if (screen.q) {
     const share = barShare(screenId);
     const fill = ui.h("span", { style: { width: `${Math.max(3, Math.round(lastShare * 100))}%` } });
     add(root,
       ui.h("div", { class: "su-top" },
         ui.h("button", { type: "button", class: "su-icon", "aria-label": "Back", onClick: back }, "‹"),
-        ui.h("div", { class: "su-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(share * 100)), "aria-label": `Question ${screen.q} of ${QUESTIONS}` }, fill),
-        ui.h("button", { type: "button", class: "su-later", onClick: () => save(toStart) }, "Finish later")),
-      ui.h("p", { class: "su-count" }, `Question ${screen.q} of ${QUESTIONS}`));
+        ui.h("div", { class: "su-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(share * 100)), "aria-valuetext": `Question ${screen.q} of ${QUESTIONS}`, "aria-label": "How far along" }, fill),
+        backDone ? null : ui.h("button", { type: "button", class: "su-later", onClick: () => save(toStart) }, "Finish later")),
+      ui.h("p", { class: "su-count", "aria-hidden": "true" }, `Question ${screen.q} of ${QUESTIONS}`));
     requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = `${Math.max(3, Math.round(share * 100))}%`; }));
     lastShare = share;
   }
   const card = ui.h("form", { class: "su-card", "aria-labelledby": "su-q", novalidate: true, onSubmit: (e) => { e.preventDefault(); forward(); } });
   add(root, card);
+  // Enter (the phone keyboard's Next) moves to the next box, never on to the next question; the last box says Done
+  const boxes = () => [...card.querySelectorAll("input.su-in, select.su-in")].filter((el) => el.offsetParent !== null && !el.disabled);
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement) || !t.classList.contains("su-in")) return;
+    e.preventDefault();
+    const all = boxes(), nxt = all[all.indexOf(t) + 1];
+    if (nxt) nxt.focus(); else t.blur();
+  });
+  card.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.classList.contains("su-in")) { const all = boxes(); t.setAttribute("enterkeyhint", all[all.length - 1] === t ? "done" : "next"); } });
   for (const n of pending) { const el = ui.notice(n.kind, n.text); el.setAttribute("role", "status"); add(card, el); ctx.announce?.(n.text); }
   pending = [];
 
   // ---- small parts
   const head = (emoji, q, help) => add(card,
     emoji ? ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, emoji) : null,
-    ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, q),
+    ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, screen.q ? ui.h("span", { class: "su-vh" }, `Question ${screen.q} of ${QUESTIONS}: `) : null, q),
     help ? ui.h("p", { class: "su-help" }, help) : null);
   const actions = (label = "Continue", { noSkip = false } = {}) => {
     add(card, ui.h("div", { class: "su-actions" },
       ui.h("button", { type: "button", class: "secondary su-backbtn", onClick: back }, "‹ Back"),
-      ui.h("button", { type: "submit", class: "su-go" }, label)));
-    if (!noSkip) add(card, ui.h("button", { type: "button", class: "su-skip", onClick: skip }, "Skip this question"));
+      ui.h("button", { type: "submit", class: "su-go" }, backDone ? "Save" : label)));
+    if (!noSkip && !backDone) add(card, ui.h("button", { type: "button", class: "su-skip", onClick: skip }, "Skip this question"));
   };
-  /** A choice tile: multi (aria-pressed) or one-of (role radio). `have`: already in the plan, shown ticked, not a choice. */
-  const tile = (o, on, onPick, { radio = false, wide = false, have = false } = {}) => ui.h("button", {
-    type: "button", class: `su-tile${on || have ? " on" : ""}${wide ? " wide" : ""}${have ? " have" : ""}`,
-    role: radio ? "radio" : null, "aria-checked": radio ? String(!!on) : null, "aria-pressed": radio || have ? null : String(!!on), "aria-disabled": have ? "true" : null,
-    onClick: have ? null : onPick,
-  }, ui.h("span", { class: "su-ti", "aria-hidden": "true" }, o.icon), ui.h("span", { class: "su-tl" }, o.label), have ? ui.h("span", { class: "su-ts" }, "Already in your plan") : o.line ? ui.h("span", { class: "su-ts" }, o.line) : null);
-  const tilesBox = (label, cls = "", radio = false) => ui.h("div", { class: `su-tiles${cls}`, role: radio ? "radiogroup" : "group", "aria-label": label });
-  const moneyIn = (value, onValue, { label, placeholder = "0", hint = "next" } = {}) => {
-    const input = ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: hint, autocomplete: "off", value: groupDigits(value === null || value === undefined ? "" : String(value)), placeholder, "aria-label": label ?? null });
+  /**
+   * Choice tiles, built once and updated in place (so focus and the screen reader stay on the tile tapped). Multi:
+   * aria-pressed; one-of (radio): role radio, one Tab stop, arrow keys. `isHave`: already in the plan, shown ticked.
+   */
+  const tileGroup = (label, opts, { cls = "", radio = false, isOn, onPick, isHave = () => false }) => {
+    const box = ui.h("div", { class: `su-tiles${cls}`, role: radio ? "radiogroup" : "group", "aria-label": label });
+    let btns = [];
+    const refresh = () => {
+      btns.forEach((b, i) => {
+        const o = opts[i], have = isHave(o), on = have || !!isOn(o);
+        b.classList.toggle("on", on);
+        if (radio) b.setAttribute("aria-checked", String(on));
+        else if (!have) b.setAttribute("aria-pressed", String(on));
+      });
+      if (radio) roving(btns);
+    };
+    btns = opts.map((o) => {
+      const have = isHave(o);
+      return ui.h("button", {
+        type: "button", class: `su-tile${o.wide ? " wide" : ""}${have ? " have" : ""}`, "data-key": o.key, role: radio ? "radio" : null, "aria-disabled": have ? "true" : null,
+        onClick: have ? null : () => { onPick(o); refresh(); },
+      }, ui.h("span", { class: "su-ti", "aria-hidden": "true" }, o.icon), ui.h("span", { class: "su-tx" }, ui.h("span", { class: "su-tl" }, o.label), have ? ui.h("span", { class: "su-ts" }, "Already in your plan") : o.line ? ui.h("span", { class: "su-ts" }, o.line) : null));
+    });
+    add(box, btns);
+    refresh();
+    if (radio) arrows(box, btns);
+    return box;
+  };
+  /** Help under a box, read out with it (aria-describedby) and kept out of its name. */
+  const describe = (control, sub) => {
+    if (!sub) return null;
+    const id = `su-h-${++uid}`;
+    const el = control.matches?.("input, select") ? control : control.querySelector?.("input, select") ?? control;
+    el.setAttribute("aria-describedby", id);
+    return ui.h("span", { class: "su-sub", id }, sub);
+  };
+  const moneyIn = (value, onValue, { label = null, placeholder = "0" } = {}) => {
+    const input = ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: "next", autocomplete: "off", value: groupDigits(value === null || value === undefined ? "" : String(value)), placeholder, "aria-label": label });
     input.addEventListener("input", () => {
       const at = input.selectionStart ?? input.value.length;
       const before = input.value.slice(0, at).replace(/[^0-9.kKmM]/g, "").length;
@@ -275,21 +404,25 @@ export function render(page, ctx) {
     return ui.h("div", { class: "su-money" }, ui.h("span", { "aria-hidden": "true" }, symbol), input);
   };
   const pctIn = (value, onValue, label, placeholder) => ui.h("div", { class: "su-pct" }, ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: "next", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder, "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9.]/g, ""); onValue(e.target.value); } }), ui.h("span", { "aria-hidden": "true" }, "%"));
-  const field = (label, control, sub) => ui.h("label", { class: "su-field" }, ui.h("span", { class: "su-label" }, label), control, sub ? ui.h("span", { class: "su-sub" }, sub) : null);
-  const fieldset = (label, control, sub) => ui.h("div", { class: "su-field" }, label ? ui.h("span", { class: "su-label" }, label) : null, control, sub ? ui.h("span", { class: "su-sub" }, sub) : null);
-  /** One of a few, as pills (role radio). */
+  const field = (label, control, sub) => ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), describe(control, sub));
+  const fieldset = (label, control, sub) => ui.h("div", { class: "su-field" }, label ? ui.h("span", { class: "su-label" }, label) : null, control, describe(control, sub));
+  /** One of a few, as pills (role radio), updated in place; one Tab stop, arrow keys. */
   const seg = (options, value, onPick, label) => {
     const wrap = ui.h("div", { class: "su-seg", role: "radiogroup", "aria-label": label });
-    const draw = (v) => swap(wrap, ...options.map((o) => ui.h("button", { type: "button", role: "radio", "aria-checked": String(o.value === v), onClick: () => { onPick(o.value); draw(o.value); } }, o.label)));
-    draw(value);
+    let v = value;
+    const btns = options.map((o) => ui.h("button", { type: "button", role: "radio", onClick: () => { v = o.value; mark(); onPick(o.value); } }, o.label));
+    const mark = () => { btns.forEach((b, i) => b.setAttribute("aria-checked", String(options[i].value === v))); roving(btns); };
+    add(wrap, btns); mark(); arrows(wrap, btns);
     return wrap;
   };
   const toggle = (label, on, onFlip) => {
-    const b = ui.h("button", { type: "button", "aria-pressed": String(!!on), onClick: () => { on = !on; onFlip(on); } }, on ? `✓ ${label}` : label);
+    const b = ui.h("button", { type: "button", "aria-pressed": String(!!on), onClick: () => { on = !on; b.setAttribute("aria-pressed", String(on)); b.textContent = on ? `✓ ${label}` : label; onFlip(on); } }, on ? `✓ ${label}` : label);
     return ui.h("div", { class: "su-seg" }, b);
   };
+  /** A number with − and +; a starting value outside the range is reported back at once, so what shows is what saves. */
   const stepper = (value, min, max, onValue, label, live) => {
     let v = Math.max(min, Math.min(max, Number(value) || min));
+    if (v !== Number(value)) onValue(v);
     const out = ui.h("output", { "aria-live": "polite" }, String(v));
     const note = live ? ui.h("span", { class: "su-live" }, live(v)) : null;
     const set = (n) => { v = Math.max(min, Math.min(max, n)); out.textContent = String(v); if (note) note.textContent = live(v); onValue(v); };
@@ -303,18 +436,37 @@ export function render(page, ctx) {
   const firstGroup = () => { const g = card.querySelector(".su-group"); if (g) g.classList.add("first"); };
   const who = (p) => (ad.length > 1 ? p.name : null);
   const needYou = (emoji, q) => { head(emoji, q, "First, who the plan is for."); add(card, ui.h("div", { class: "su-end" }, ui.h("button", { type: "button", onClick: () => go("you") }, "Go to question 1"))); };
+  const rowLink = (href, icon, title, sub) => ui.h("li", {}, ui.h("a", { class: "row-link", href },
+    icon ? ui.h("span", { class: "ic", "aria-hidden": "true" }, icon) : null,
+    ui.h("span", { class: "body" }, ui.h("span", { class: "t" }, title), sub ? ui.h("span", { class: "d" }, sub) : null),
+    ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
+
+  /** One line per question for "Change an answer": what the plan holds now. */
+  const answerOf = (id) => {
+    const none = "Not answered yet";
+    if (id === "you") { const kids = dependents(plan).length, st = STATES.find((s) => s.value === plan.household?.state)?.label; const names = ad.map((p) => (p.name === "Me" ? "You" : p.name)); return [names.length ? and(names) : null, kids ? `${kids} ${kids === 1 ? "child" : "children"}` : null, st].filter(Boolean).join(", ") || none; }
+    if (id === "money") { const r = reflect(plan, "money"); return r ? `About ${money(r.monthly)} a month before tax` : none; }
+    if (id === "ages") { const a = ad.filter((p) => p.birthDate).map((p) => `${ad.length > 1 ? `${p.name} ` : ""}${ageOn(p.birthDate, today)}`); return a.length ? `${and(a)}${ad.length > 1 ? "" : " years old"}` : none; }
+    if (id === "have") { const r = reflect(plan, "have-amounts"); const ks = picks(plan, "have"); return r ? `${money(r.total)} saved and invested` : ks.length ? and(ks.map((k) => HAVE.find((h) => h.key === k)?.label ?? k)) : none; }
+    if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
+    if (id === "spend") { const r = reflect(plan, "spend"); return r ? `About ${money(r.monthly)} a month` : none; }
+    if (id === "goals") { const ks = picks(plan, "goals"); return ks.length ? and(ks.map((k) => GOALS.find((g) => g.key === k)?.label ?? k)) : none; }
+    return none;
+  };
 
   const UI = {
     welcome() {
       if (prog.finished) {
-        head("🌱", "Your plan is set up", "Go through the questions again to change an answer, or see where you stand.");
-        add(card, ui.h("div", { class: "su-end" }, ui.h("button", { type: "button", onClick: () => go("done") }, "See where I stand"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("you") }, "Go through the questions again")));
+        head("🌱", "Your plan is set up", "Tap a question to change its answer. You come straight back to where you stand.");
+        const Q = [["you", "👋", "Who the plan is for"], ["money", "💵", "What comes in"], ["ages", "🎂", "Ages and Social Security"], ["have", "🏦", "What you have"], ["owe", "🧾", "What you owe"], ["spend", "🛒", "What you spend"], ["goals", "🎯", "What you're working toward"]];
+        add(card, ui.h("ul", { class: "page-list", "aria-label": "Your answers" }, Q.map(([id, icon, title]) => rowLink(setupHref(id), icon, title, answerOf(id)))));
+        add(card, ui.h("div", { class: "su-end" }, ui.h("button", { type: "button", onClick: () => go("done") }, "See where I stand"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("you") }, "Go through every question again")));
         return;
       }
       head("🌱", firstName ? `Let's build your plan, ${firstName}` : "Let's build your plan", "A few easy questions, one at a time. At the end you'll see your money on one page.");
-      add(card, ui.h("ul", { class: "su-list" }, [["🧭", "See what you own and owe", "Every account and debt in one place"], ["📅", "Know what's left each month", "After tax, bills and saving"], ["✅", "Get your first three moves", "In the order that helps most"]]
+      add(card, ui.h("ul", { class: "su-list" }, [["🗂️", "See what you own and owe", "Every account and debt in one place"], ["📅", "Know what's left each month", "After tax, bills and saving"], ["✅", "Get your first three moves", "In the order that helps most"]]
         .map(([i, b, m]) => ui.h("li", {}, ui.h("span", { class: "su-li", "aria-hidden": "true" }, i), ui.h("div", {}, ui.h("b", {}, b), ui.h("span", { class: "m" }, m))))));
-      add(card, ui.h("p", { class: "su-meta" }, "About 5 minutes · Rough numbers are fine · Stop any time"));
+      add(card, ui.h("ul", { class: "su-ticks" }, ui.h("li", {}, "About 5 minutes"), ui.h("li", {}, "Rough numbers are fine"), ui.h("li", {}, "Stop any time, pick up later")));
       if (store.backend() !== "server" && !store.sandbox()) add(card, ui.h("div", { class: "notice info" }, "This device is not connected to your PC, so what you save stays on this device only. To keep one plan on your phone and your PC, ", ui.h("a", { href: "#/system/settings" }, "connect them in Settings"), "."));
       const resume = prog.started && prog.at && prog.at !== "welcome" && prog.at !== "done";
       const btns = ui.h("div", { class: "su-end" });
@@ -324,107 +476,139 @@ export function render(page, ctx) {
     },
 
     you() {
-      const v = valuesFor(plan, "you");
-      const stateSel = ui.h("select", { class: "su-in", "aria-label": "Your state", onChange: (e) => { v.state = e.target.value; } }, ui.h("option", { value: "" }, "Choose…"), STATES.map((s) => ui.h("option", { value: s.value, selected: s.value === v.state }, s.label)));
+      const v = draft(() => valuesFor(plan, "you"));
+      const stateSel = ui.h("select", { class: "su-in", onChange: (e) => { v.state = e.target.value; } }, ui.h("option", { value: "" }, "Choose…"), STATES.map((s) => ui.h("option", { value: s.value, selected: s.value === v.state }, s.label)));
       if (v.own.length) {
         head("👋", "Who is this plan for?", null);
-        add(card, haveNote(v.own), fieldset("Which state do you live in?", stateSel, "For state income tax."), ui.h("a", { class: "su-skip", href: "#/household/people" }, "Change the people on People"));
+        add(card, haveNote(v.own), field("Which state do you live in?", stateSel, "For state income tax."), ui.h("a", { class: "su-skip", href: "#/household/people" }, "Change the people on People"));
         current = { apply: (d) => applyYou(d, v) };
         actions("Continue", { noSkip: true });
         return;
       }
-      head("👋", "Who is this plan for?", "First names only. Nothing else about you is asked.");
+      head("👋", "Who is this plan for?", "First names only. No surnames, bank logins or account numbers.");
       const nameIn = ui.h("input", { class: "su-in", autocomplete: "given-name", enterkeyhint: "next", value: v.name, placeholder: "Your first name", onInput: (e) => { v.name = e.target.value; } });
       add(card, field("Your first name", nameIn, "So the plan can talk to you. You can leave it blank."));
-      const tilesEl = tilesBox("Who is this plan for?", " three", true);
       const partnerWrap = ui.h("div", {});
-      const opts = [{ key: "me", icon: "🙋", label: "Just me" }, { key: "spouse", icon: "💍", label: "Me and my spouse", line: "Married" }, { key: "partner", icon: "🤝", label: "Me and my partner", line: "Not married" }];
-      const draw = () => {
-        swap(tilesEl, ...opts.map((o) => tile(o, v.who === o.key, () => { v.who = o.key; draw(); }, { radio: true })));
-        swap(partnerWrap, v.who === "me" ? "" : field(v.who === "spouse" ? "Your spouse's first name" : "Your partner's first name", ui.h("input", { class: "su-in", enterkeyhint: "next", value: v.partnerName, placeholder: "First name", onInput: (e) => { v.partnerName = e.target.value; } })));
-      };
-      draw();
+      const drawPartner = () => swap(partnerWrap, v.who === "me" ? "" : field(v.who === "spouse" ? "Your spouse's first name" : "Your partner's first name", ui.h("input", { class: "su-in", enterkeyhint: "next", value: v.partnerName, placeholder: "First name", onInput: (e) => { v.partnerName = e.target.value; } })));
+      const opts = [{ key: "me", icon: "🙋", label: "Just me", line: "Not married" }, { key: "spouse", icon: "💍", label: "Me and my spouse", line: "Married" }, { key: "partner", icon: "🤝", label: "Me and my partner", line: "Not married" }];
+      const tilesEl = tileGroup("Who is this plan for?", opts, { cls: " three", radio: true, isOn: (o) => v.who === o.key, onPick: (o) => { v.who = o.key; drawPartner(); } });
+      drawPartner();
       add(card, fieldset(null, tilesEl), partnerWrap,
-        fieldset("Children who live with you", stepper(v.kids, 0, 9, (n) => { v.kids = n; }, "children who live with you", (n) => (n === 0 ? "None" : n === 1 ? "One child" : `${n} children`)), "Children you support. Their ages come later."),
-        fieldset("Which state do you live in?", stateSel, "For state income tax."));
+        fieldset("Children who live with you", stepper(v.kids, 0, 9, (n) => { v.kids = n; }, "Children who live with you", (n) => (n === 0 ? "None" : "")), "Children who live with you more than half the year. Their ages come later."),
+        field("Which state do you live in?", stateSel, "For state income tax."));
       current = { apply: (d) => applyYou(d, v) };
       actions();
     },
 
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
-      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax, as on a pay stub or offer letter. A yearly figure is fine.");
-      const v = valuesFor(plan, "money");
+      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax, as on a pay stub or offer letter. Pick how often it comes.");
+      const v = draft(() => valuesFor(plan, "money"));
       for (const p of ad) {
         const x = v.people[p.id];
         const own = existingPay(plan, p.id);
         const mine = p === self || ad.length === 1;
         const STATUS = [{ key: "work", icon: "💼", label: mine ? "I work" : "Works" }, { key: "retired", icon: "🌴", label: mine ? "I'm retired" : "Retired" }, { key: "none", icon: "⏸️", label: "Not working now" }];
-        const tilesEl = tilesBox(`${p.name}: work`, " three", true);
         const body = ui.h("div", {});
-        const draw = () => {
-          swap(tilesEl, ...STATUS.map((o) => tile(o, x.status === o.key, () => { x.status = o.key; draw(); }, { radio: true })));
-          swap(body, ...(x.status === "work" ? (own.length ? [haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim()))] : [
-            field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; }, { label: `${p.name}: pay before tax`, placeholder: "65,000" })),
-            fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; }, `${p.name}: how often`)),
-          ]) : x.status === "retired" ? [field("A pension a month, if any", moneyIn(x.pension, (val) => { x.pension = val; }, { label: `${p.name}: pension a month` }), "Social Security comes on the next question. Leave this blank if there is no pension.")]
-            : x.status === "none" ? [ui.h("p", { class: "su-sub" }, "Nothing counted for now. You can add pay any time on Income.")] : []));
+        const drawBody = () => {
+          if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim()))); return; }
+          if (x.status === "work") {
+            const live = ui.h("p", { class: "su-live", "aria-live": "polite" });
+            const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
+            swap(body, field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax"), placeholder: "65,000" })),
+              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live);
+            showMo();
+            return;
+          }
+          swap(body, x.status === "retired" ? field("A pension a month, if any", moneyIn(x.pension, (val) => { x.pension = val; }, { label: named(p, "pension a month") }), "Social Security comes on the next question. Leave this blank if there is no pension.")
+            : x.status === "none" ? ui.h("p", { class: "su-sub" }, "Nothing counted for now. You can add pay any time on Income.") : "");
         };
-        draw();
+        const tilesEl = tileGroup(named(p, "work") ?? "Work", STATUS, { cls: " three", radio: true, isOn: (o) => x.status === o.key, onPick: (o) => { x.status = o.key; drawBody(); } });
+        drawBody();
         add(card, group(who(p), tilesEl, body));
       }
       const o = v.other;
       add(card, group("Any other money coming in each month?",
-        field("A month", moneyIn(o.amount, (val) => { o.amount = val; }, { label: "Other money a month", hint: "done" }), "Leave it blank if there is none."),
+        field("A month", moneyIn(o.amount, (val) => { o.amount = val; }, { label: "Other money a month" }), "Leave it blank if there is none."),
         fieldset("What kind", seg(OTHER_KINDS, o.kind, (val) => { o.kind = val; }, "Other money: what kind"))));
       firstGroup();
-      current = { apply: (d) => applyMoney(d, v), words: (p2) => { const r = reflect(p2, "money"); return r ? `Got it: about ${money(r.monthly)} a month before tax.` : null; } };
+      // a yearly figure under $15,000 for a job is most often a month's pay with "A year" left on: ask once
+      const check = () => {
+        for (const p of ad) {
+          const x = v.people[p.id];
+          if (x.status !== "work" || existingPay(plan, p.id).length) continue;
+          const n = parseMoney(x.amount);
+          if (n > 0 && perYear(n, x.period) < 15000) return `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`;
+        }
+        return null;
+      };
+      current = { apply: (d) => applyMoney(d, v), check, words: (p2) => { const r = reflect(p2, "money"); return r ? `Got it: about ${money(r.monthly)} a month before tax.` : null; } };
       actions();
     },
 
     ages() {
       if (!ad.length) return needYou("🎂", "Your ages");
-      head("🎂", ad.length > 1 ? "Your ages, and when you'd like to stop working" : "Your age, and when you'd like to stop working", "This decides when retirement money and Social Security start.");
-      const v = valuesFor(plan, "ages", { today });
+      if (allRetired(plan)) head("🎂", ad.length > 1 ? "Your ages, and Social Security" : "Your age, and Social Security", "This decides how long the money has to last and what Social Security adds.");
+      else head("🎂", ad.length > 1 ? "Your ages, and when you'd like to stop working" : "Your age, and when you'd like to stop working", "This decides when retirement money and Social Security start.");
+      const v = draft(() => valuesFor(plan, "ages", { today }));
       const year = Number(today.slice(0, 4)), month = Number(today.slice(5, 7));
       const ageOf = (x) => { const y = Number(x.year); if (!(y >= 1900 && y <= year)) return null; const m = Number(x.month) || 7; return year - y - (month < m ? 1 : 0); };
-      const SS = [{ value: "estimate", label: "Estimate it for me" }, { value: "statement", label: "I have my statement figure" }, { value: "getting", label: "I already get it" }, { value: "none", label: "I won't get any" }];
+      const SS = { estimate: "Estimate it for me", statement: "I have my statement figure", getting: "I already get it", none: "I won't get any" };
       for (const p of ad) {
         const x = v.people[p.id];
         const retiredNow = plan.guide?.setup?.status?.[p.id] === "retired";
+        const modeSaved = !!plan.guide?.setup?.ss?.[p.id];
         if (retiredNow) x.retired = true;
         if (retiredNow && x.ss.mode === "estimate") x.ss.mode = "getting";
         const liveAge = ui.h("p", { class: "su-live", "aria-live": "polite" });
-        const stopBox = ui.h("div", {});
-        const ssBody = ui.h("div", {});
+        const stopBox = ui.h("div", {}), ssPick = ui.h("div", {}), ssBody = ui.h("div", {});
+        let pickKey = null;
         const showAge = () => { const a = ageOf(x); liveAge.textContent = a === null ? "" : `${a} years old`; };
-        const monthSel = ui.h("select", { class: "su-in", "aria-label": `${p.name}: birth month`, onChange: (e) => { x.month = e.target.value; showAge(); drawStop(); drawSS(); } }, ui.h("option", { value: "" }, "Month"), MONTHS.map((m, i) => ui.h("option", { value: String(i + 1), selected: Number(x.month) === i + 1 }, m)));
-        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": `${p.name}: birth year`, onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } } });
+        const monthSel = ui.h("select", { class: "su-in", "aria-label": named(p, "birth month") ?? "Birth month", onChange: (e) => { x.month = e.target.value; showAge(); drawStop(); drawSS(); } }, ui.h("option", { value: "" }, "Month"), MONTHS.map((m, i) => ui.h("option", { value: String(i + 1), selected: Number(x.month) === i + 1 }, m)));
+        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } } });
+        const tog = retiredNow ? null : toggle("Already retired", x.retired, (on) => { x.retired = on; drawStop(); drawSS(); });
         function drawStop() {
           const a = ageOf(x);
-          swap(stopBox,
-            x.retired ? ui.h("p", { class: "su-sub" }, "Already retired.") : stepper(x.stopAge, Math.max(40, (a ?? 39) + 1), 85, (n) => { x.stopAge = n; drawSS(); }, `${p.name}: age to stop working`, (n) => (a === null ? `at ${n}` : `in ${n - a} year${n - a === 1 ? "" : "s"} (${year + n - a})`)),
-            retiredNow ? null : toggle("Already retired", x.retired, (on) => { x.retired = on; drawStop(); drawSS(); }));
+          if (x.retired) { swap(stopBox, ui.h("p", { class: "su-sub" }, "Already retired.")); return; }
+          swap(stopBox, stepper(x.stopAge, Math.max(40, (a ?? 39) + 1), 85, (n) => { x.stopAge = n; drawSS(); }, named(p, "age to stop working") ?? "Age to stop working", (n) => (a === null ? `at ${n}` : `in ${n - a} year${n - a === 1 ? "" : "s"} (${year + n - a})`)));
         }
         function drawSS() {
           const s = x.ss;
-          if (s.record) { swap(ssBody, ui.h("p", { class: "su-sub" }, "Your ssa.gov record is in the plan: the Social Security page works from it.")); return; }
+          if (s.record) { swap(ssPick); swap(ssBody, ui.h("p", { class: "su-sub" }, "Your ssa.gov record is in the plan: the Social Security page works from it.")); return; }
+          const a = ageOf(x), by = Number(x.year);
+          const young = x.retired && a !== null && a < 62;
+          // before 62 nobody gets retirement benefits yet: the statement figure first; "getting it" is disability or survivor pay
+          if (young && !modeSaved && !s.touched && s.mode === "getting") s.mode = "statement";
+          const opts = x.retired
+            ? (young ? [{ value: "statement", label: "Not yet: I have my statement figure" }, { value: "getting", label: "I get it now" }, { value: "none", label: SS.none }] : ["getting", "statement", "none"].map((k) => ({ value: k, label: SS[k] })))
+            : ["estimate", "statement", "getting", "none"].map((k) => ({ value: k, label: SS[k] }));
+          const key = opts.map((o) => o.label).join("|");
+          if (key !== pickKey) { pickKey = key; swap(ssPick, seg(opts, s.mode, (m) => { s.mode = m; s.touched = true; drawSS(); }, named(p, "Social Security") ?? "Social Security")); }
           let detail = null;
           if (s.mode === "estimate") {
-            const by = Number(x.year), pay = yearlyPay(plan, p.id);
-            const est = by >= 1900 ? estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? ageOf(x) ?? 65 : x.stopAge, today }) : null;
+            const pay = yearlyPay(plan, p.id);
+            const est = by >= 1900 ? estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? a ?? 65 : x.stopAge, today }) : null;
             const fra = by >= 1900 ? fullRetirementAge(by) : null;
             detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's money. A rough guide; your statement at ssa.gov is exact.`]);
-          } else if (s.mode === "statement") detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: `${p.name}: Social Security at full retirement age` }), "On your statement at ssa.gov/myaccount.");
-          else if (s.mode === "getting") detail = ui.h("div", {}, field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: `${p.name}: Social Security a month` })), fieldset("It started at age", stepper(s.started, 62, 70, (n) => { s.started = n; }, `${p.name}: age Social Security started`)));
-          else if (s.mode === "none") detail = ui.h("p", { class: "su-sub" }, "No Social Security counted. Some public jobs pay into a pension instead.");
+          } else if (s.mode === "statement") detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security at full retirement age") }), "On your statement at ssa.gov/myaccount.");
+          else if (s.mode === "getting") {
+            const amount = field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security a month") }), young ? "Before 62 that's disability or survivor benefits. They're paid in full, so it counts as it is." : null);
+            if (young) detail = amount;
+            else {
+              const fra = by >= 1900 ? fullRetirementAge(by).asYears : 67;
+              const top = a === null ? 70 : Math.max(62, Math.min(70, a));
+              if (!s.startedKnown && !s.startedTouched) s.started = a === null ? Math.round(fra) : a >= fra ? Math.round(fra) : top;
+              detail = ui.h("div", {}, amount, fieldset("It started at age", stepper(s.started, 62, top, (n) => { s.started = n; }, named(p, "age Social Security started") ?? "Age Social Security started"), "The age of your first payment."));
+              detail.querySelectorAll(".su-step button").forEach((b) => b.addEventListener("click", () => { s.startedTouched = true; }));
+            }
+          } else if (s.mode === "none") detail = ui.h("p", { class: "su-sub" }, "No Social Security counted. Some public jobs pay into a pension instead.");
           swap(ssBody, detail ?? "");
         }
         showAge(); drawStop(); drawSS();
         add(card, group(who(p) ?? "You",
           ui.h("div", { class: "su-field" }, ui.h("span", { class: "su-label" }, "Born"), ui.h("div", { class: "su-born" }, monthSel, yearIn), liveAge),
-          fieldset(retiredNow ? "Work" : "Stop working at", stopBox),
-          fieldset("Social Security", x.ss.record ? null : seg(retiredNow ? [SS[2], SS[1], SS[3]] : SS, x.ss.mode, (m) => { x.ss.mode = m; drawSS(); }, `${p.name}: Social Security`)), ssBody));
+          fieldset(retiredNow ? "Work" : "Stop working at", ui.h("div", {}, stopBox, tog)),
+          fieldset("Social Security", ssPick), ssBody));
       }
       const kids = dependents(plan);
       if (kids.length) add(card, group("Children's birth years", ui.h("div", { class: "su-born" }, ...kids.map((k) => field(k.name, ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; } }))))));
@@ -435,18 +619,16 @@ export function render(page, ctx) {
 
     have() {
       head("🏦", "What do you have?", "Tap all that apply. Amounts come next.");
-      const v = new Set(valuesFor(plan, "have"));
-      const tilesEl = tilesBox("What do you have?");
-      const draw = () => swap(tilesEl, ...HAVE.map((o) => tile(o, v.has(o.key), () => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); draw(); }, { have: askOwners(plan, o.key).length === 0 })));
-      draw();
-      add(card, tilesEl, haveNote(HAVE.flatMap((h) => existingHave(plan, h.key)).map(accLine)));
+      const v = draft(() => new Set(valuesFor(plan, "have")));
+      add(card, tileGroup("What do you have?", HAVE, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => askOwners(plan, o.key).length === 0 }),
+        haveNote(HAVE.flatMap((h) => existingHave(plan, h.key)).map(accLine)));
       current = { apply: (d) => applyHavePicks(d, [...v]) };
       actions();
     },
 
     "have-amounts"() {
       head("🧮", "About how much is in each?", "Today's balance or value. Round numbers are fine; you can make them exact later.");
-      const v = valuesFor(plan, "have-amounts");
+      const v = draft(() => valuesFor(plan, "have-amounts"));
       for (const h of HAVE.filter((x) => picks(plan, "have").includes(x.key))) {
         for (const pid of askOwners(plan, h.key)) {
           if (!h.perAdult) {
@@ -457,12 +639,12 @@ export function render(page, ctx) {
           const p = ad.find((x) => x.id === pid);
           const extra = ui.h("div", {});
           const drawExtra = () => swap(extra,
-            field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: `${p?.name}: put in a month` }), "From pay, if you save. Leave it blank if not."),
-            v[`kind-${pid}`] === "work" ? field("Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: `${p?.name}: employer adds a month` }), "The match, if there is one. It's on your pay stub.") : null);
+            field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: named(p, "put in a month") }), "From pay, if you save. Leave it blank if not."),
+            v[`kind-${pid}`] === "work" ? field("Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, "employer adds a month") }), "The match, if there is one. It's on your pay stub.") : null);
           drawExtra();
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
-            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, `${p?.name}: retirement through work or on your own`), "Through work: a 401(k) or 403(b). On your own: an IRA."),
-            field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: `${p?.name}: retirement saved so far` }), "Add up every account of that kind."),
+            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), "Through work: a 401(k) or 403(b). On your own: an IRA."),
+            field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far") }), "Add up every account of that kind."),
             extra));
         }
       }
@@ -473,26 +655,33 @@ export function render(page, ctx) {
 
     owe() {
       head("🧾", "Do you owe money on anything?", "Tap all that apply. Most people do; it helps the plan put things in the right order.");
-      const v = new Set(valuesFor(plan, "owe"));
-      const tilesEl = tilesBox("Do you owe money on anything?");
-      const draw = () => swap(tilesEl,
-        ...OWE.map((o) => tile(o, v.has(o.key), () => { v.delete("none"); if (v.has(o.key)) v.delete(o.key); else v.add(o.key); draw(); }, { have: existingOwe(plan, o.key).length > 0 })),
-        tile({ icon: "🎉", label: "No, I'm debt free" }, v.has("none"), () => { const on = !v.has("none"); v.clear(); if (on) v.add("none"); draw(); }, { wide: true }));
-      draw();
-      add(card, tilesEl, haveNote(OWE.flatMap((o) => existingOwe(plan, o.key)).filter((a, i, all) => all.indexOf(a) === i).map(accLine)));
+      const v = draft(() => new Set(valuesFor(plan, "owe")));
+      const opts = [...OWE, { key: "none", icon: "🎉", label: "No, I'm debt free", wide: true }];
+      add(card, tileGroup("Do you owe money on anything?", opts, {
+        isOn: (o) => v.has(o.key),
+        isHave: (o) => o.key !== "none" && oweTaken(plan, o.key),
+        onPick: (o) => {
+          if (o.key === "none") { const on = !v.has("none"), had = v.size > 0 && !v.has("none"); v.clear(); if (on) v.add("none"); if (on && had) ctx.announce?.("Other picks cleared"); return; }
+          v.delete("none"); if (v.has(o.key)) v.delete(o.key); else v.add(o.key);
+        },
+      }), haveNote(OWE.flatMap((o) => existingOwe(plan, o.key)).filter((a, i, all) => all.indexOf(a) === i).map(accLine)));
       current = { apply: (d) => applyOwePicks(d, [...v]), words: (p2) => (reflect(p2, "owe")?.kind === "debt-free" ? "Debt free: that makes everything easier." : null) };
       actions();
     },
 
     "owe-amounts"() {
-      head("✍️", "Tell us about each one", "What you owe today and what you pay a month. The rate is on the statement; leave it blank if you don't know it.");
-      const v = valuesFor(plan, "owe-amounts");
-      for (const o of OWE.filter((x) => picks(plan, "owe").includes(x.key) && !existingOwe(plan, x.key).length)) {
+      head("✍️", "Tell us about each one", "What you owe today and what you pay a month. The rate is on the statement; leave a box blank if you don't know it.");
+      const v = draft(() => valuesFor(plan, "owe-amounts"));
+      const askHome = askHomeWithMortgage(plan);
+      for (const o of OWE.filter((x) => picks(plan, "owe").includes(x.key) && !oweTaken(plan, x.key))) {
         const x = v[o.key];
         const body = ui.h("div", {});
+        const payHelp = o.key === "mortgage" ? "The whole payment on your statement, including property tax and insurance if they're in it. Blank: a typical payment for now."
+          : o.key === "credit" ? "The minimum, or what you usually pay. Blank: a typical minimum for now." : "Blank: a typical payment for now.";
         const draw = () => swap(body, ...(o.key === "credit" && x.paidInFull ? [ui.h("p", { class: "su-sub" }, "Then your cards cost you nothing in interest. Nothing to add.")] : [
+          o.key === "mortgage" && askHome ? field("🏡 What would your home sell for today?", moneyIn(x.home, (val) => { x.home = val; }, { placeholder: "300,000" }), "So what you own counts beside what you owe. A rough figure is fine.") : null,
           field("Still owed", moneyIn(x.owed, (val) => { x.owed = val; }, { label: `${o.label}: still owed` }), o.key === "credit" ? "All your cards together" : null),
-          field("Paid a month", moneyIn(x.payment, (val) => { x.payment = val; }, { label: `${o.label}: paid a month` }), o.key === "credit" ? "The minimum, or what you usually pay" : null),
+          field("Paid a month", moneyIn(x.payment, (val) => { x.payment = val; }, { label: `${o.label}: paid a month` }), payHelp),
           field("Interest rate a year", pctIn(x.rate, (val) => { x.rate = val; }, `${o.label}: interest rate a year`, o.key === "credit" ? "e.g. 24.9" : "e.g. 6.5"), `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`),
         ]));
         draw();
@@ -506,15 +695,14 @@ export function render(page, ctx) {
     },
 
     spend() {
-      const v = valuesFor(plan, "spend");
-      const base = spendBase(plan), rows = spendRows(plan), mortgage = hasMortgage(plan);
+      const v = draft(() => valuesFor(plan, "spend"));
+      const base = spendBase(plan), rows = spendRows(plan), mortgage = hasMortgage(plan), loansLater = loansAfterWork(plan, today);
       head("🛒", "What do you spend in a typical month?", "Guesses are fine. Leave out what you save.");
       if (base.existingCount) add(card, ui.h("p", { class: "su-have" }, "Already in your plan: ", ui.h("b", {}, `${money(base.existing)} a month`), ` in ${base.existingCount} bill${base.existingCount === 1 ? "" : "s"}. Add only what's missing.`));
-      if (base.loanPayments > 0) add(card, ui.h("p", { class: "su-have" }, "Not counting the ", ui.h("b", {}, `${money(base.loanPayments)} a month`), " of loan and card payments you told us: they're already in."));
-      const modeEl = tilesBox("How to answer", "", true);
+      if (base.loanPayments > 0) add(card, ui.h("p", { class: "su-have" }, "Leave out loan and card payments: we already have them (", ui.h("b", {}, `${money(base.loanPayments)} a month`), ") and add them to the total below."));
       const body = ui.h("div", {});
-      const totalEl = ui.h("b", {});
-      const later = { typed: v.retireTyped, value: v.retireMonthly };
+      const totalEl = ui.h("b", {}), partsEl = ui.h("p", { class: "su-parts" });
+      const later = v.later ?? (v.later = { typed: v.retireTyped, value: v.retireMonthly });
       let laterInput = null;
       const num = (s) => parseMoney(s) ?? 0;
       const rowsSum = (g) => rows.filter((s) => !g || s.group === g).reduce((t, s) => t + num(v.rows[s.key]), 0);
@@ -522,55 +710,64 @@ export function render(page, ctx) {
       const upd = () => {
         const own = v.mode === "total" ? num(v.total) : rowsSum();
         totalEl.textContent = money(own + base.existing + base.loanPayments);
-        for (const g of ["must", "else"]) if (sums[g]) sums[g].textContent = money(rowsSum(g));
+        partsEl.textContent = base.loanPayments > 0 || base.existing > 0 ? [`${money(own)} here`, base.existing > 0 ? `${money(base.existing)} already in your plan` : null, base.loanPayments > 0 ? `${money(base.loanPayments)} loan payments` : null].filter(Boolean).join(" + ") : "";
+        if (sums.must) sums.must.textContent = money(rowsSum("must") + base.loanPayments);
+        if (sums.else) sums.else.textContent = money(rowsSum("else"));
         if (laterInput && !later.typed) {
-          const core = base.existingCore + (v.mode === "total" ? num(v.total) : rows.filter((s) => s.key !== "childcare").reduce((t, s) => t + num(v.rows[s.key]), 0));
+          const core = base.existingCore + (v.mode === "total" ? num(v.total) : rows.filter((s) => s.key !== "childcare").reduce((t, s) => t + num(v.rows[s.key]), 0)) + loansLater;
           laterInput.value = core > 0 ? groupDigits(String(Math.round(core / 10) * 10)) : "";
           later.value = laterInput.value;
         }
       };
-      const row = (s) => ui.h("label", { class: "su-row" },
-        ui.h("span", {}, ui.h("span", { class: "su-label" }, s.key === "housing" && mortgage ? s.labelMortgage : s.label), ui.h("span", { class: "su-sub" }, s.key === "housing" && mortgage ? s.helpMortgage : s.help)),
-        moneyIn(v.rows[s.key], (val) => { v.rows[s.key] = val; upd(); }, { label: s.label }));
-      const draw = () => {
-        swap(modeEl, tile({ icon: "📋", label: "A few groups", line: "Rent, food, car..." }, v.mode !== "total", () => { v.mode = "rows"; draw(); }, { radio: true }), tile({ icon: "🎯", label: "One rough total", line: "If you're not sure" }, v.mode === "total", () => { v.mode = "total"; draw(); }, { radio: true }));
-        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }, { label: "All your spending in a month", placeholder: "3,500" }), "Home, food, car, fun: everything. It counts as must-pay, to be safe."));
+      const row = (s) => {
+        const name = s.key === "housing" && mortgage ? s.labelMortgage : s.label, help = s.key === "housing" && mortgage ? s.helpMortgage : s.help;
+        const box = moneyIn(v.rows[s.key], (val) => { v.rows[s.key] = val; upd(); });
+        const input = box.querySelector("input"), id = `su-i-${++uid}`;
+        input.id = id;
+        return ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("label", { class: "su-label", for: id }, name), describe(input, help)), box);
+      };
+      const mode = tileGroup("How to answer", [{ key: "rows", icon: "📋", label: "A few groups", line: "Rent, food, car..." }, { key: "total", icon: "✏️", label: "One rough total", line: "If you're not sure" }],
+        { radio: true, isOn: (o) => (o.key === "total") === (v.mode === "total"), onPick: (o) => { v.mode = o.key; drawBody(); } });
+      const drawBody = () => {
+        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }, { placeholder: "3,500" }), "Home, food, car, fun: everything. It counts as must-pay, to be safe."));
         else {
           sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
           const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
+          const loanRow = base.loanPayments > 0 ? ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("span", { class: "su-label" }, "Loan and card payments"), ui.h("span", { class: "su-sub" }, "From question 5, already counted")), ui.h("span", { class: "su-fixed" }, money(base.loanPayments))) : null;
           swap(body,
-            must.length ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Must-pay bills", sums.must), ...must.map(row)) : null,
+            must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Must-pay bills", sums.must), ...must.map(row), loanRow) : null,
             other.length ? ui.h("div", { class: "su-group" }, ui.h("div", { class: "su-gh" }, "Everything else", sums.else), ...other.map(row)) : null,
             rows.length ? null : ui.h("p", { class: "su-sub" }, "Every kind of bill is already in your plan."));
         }
         upd();
       };
-      add(card, modeEl, body, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl));
+      add(card, mode, body, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl);
       if (!allRetired(plan)) {
-        const box = moneyIn(later.value, (val) => { later.value = val; later.typed = true; }, { label: "Spending a month once you stop working", hint: "done" });
+        const box = moneyIn(later.value, (val) => { later.value = val; later.typed = true; });
         laterInput = box.querySelector("input");
-        add(card, group("Once you stop working, about how much a month?", box, ui.h("span", { class: "su-sub" }, "We start from today's spending without loan payments and childcare. Change it if you expect to spend more or less.")));
+        add(card, group(null, field("Once you stop working, about how much a month?", box, loansLater > 0
+          ? `We start from today's spending without childcare, and keep the ${money(loansLater)} of loan payments still running then. Change it if you expect to spend more or less.`
+          : "We start from today's spending without loan payments and childcare. Change it if you expect to spend more or less.")));
       }
-      draw();
-      current = { apply: (d) => applySpend(d, { ...v, retireMonthly: later.value }), words: (p2) => { const r = reflect(p2, "spend"); return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; } };
+      drawBody();
+      current = { apply: (d) => applySpend(d, { ...v, retireMonthly: later.value, retireAuto: !later.typed }), words: (p2) => { const r = reflect(p2, "spend"); return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; } };
       actions();
     },
 
     goals() {
       head("🎯", "What are you working toward?", "Pick any. You can add more later.");
-      const v = new Set(valuesFor(plan, "goals"));
-      const tilesEl = tilesBox("What are you working toward?");
-      const draw = () => swap(tilesEl, ...GOALS.map((o) => tile(o, v.has(o.key), () => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); draw(); }, { have: !o.focus && existingGoal(plan, o.key).length > 0 })));
-      draw();
-      add(card, tilesEl, haveNote((plan.goals ?? []).filter((g) => !String(g.id).startsWith("setup-")).map((g) => g.name)));
+      const v = draft(() => new Set(valuesFor(plan, "goals")));
+      add(card, tileGroup("What are you working toward?", GOALS, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }),
+        haveNote((plan.goals ?? []).filter((g) => !String(g.id).startsWith("setup-")).map((g) => g.name)));
       current = { apply: (d) => applyGoalPicks(d, [...v]) };
       actions();
     },
 
     "goal-details"() {
       head("🗓️", "How much, and by when?", "A rough target is enough to see what it takes each month.");
-      const v = valuesFor(plan, "goal-details", { today });
-      for (const g of GOALS.filter((x) => !x.focus && picks(plan, "goals").includes(x.key) && !existingGoal(plan, x.key).length)) {
+      const v = draft(() => valuesFor(plan, "goal-details", { today }));
+      const loans = spendBase(plan).loanPayments > 0;
+      for (const g of GOALS.filter((x) => !x.focus && picks(plan, "goals").includes(x.key) && !goalTaken(plan, x.key))) {
         const x = v[g.key];
         if (g.key === "cushion") {
           const live = ui.h("div", { "aria-live": "polite" });
@@ -578,13 +775,13 @@ export function render(page, ctx) {
             const c = cushion(plan, x.months, today);
             const share = c.target > 0 ? Math.min(1, c.now / c.target) : 0;
             swap(live, c.essential > 0
-              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.target)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in must-pay bills.`)
+              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.target)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in must-pay bills${loans ? " and loan payments" : ""}.`)
               : ui.h("p", { class: "su-live" }, "Your must-pay bills (question 6) set the amount."),
-              c.essential > 0 ? ui.h("p", { class: "su-live" }, `You already have ${money(c.now)} in checking and savings: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} of ${x.months} months.`) : null,
+              c.essential > 0 ? ui.h("p", { class: "su-live" }, `You already have ${money(c.now)} in checking, savings and cash: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} of ${x.months} months.`) : null,
               c.essential > 0 ? ui.h("div", { class: "su-meter", role: "img", "aria-label": `${Math.round(share * 100)}% of the cushion` }, ui.h("span", { style: { width: `${Math.round(share * 100)}%` } })) : null);
           };
           drawC();
-          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of must-pay bills?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "months of must-pay bills")), live, ui.h("span", { class: "su-sub" }, "Three to six months is the usual advice; more if your pay goes up and down.")));
+          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of must-pay bills?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of must-pay bills"), "Three to six months is the usual advice; more if your pay goes up and down."), live));
           continue;
         }
         const dateBox = ui.h("div", {});
@@ -616,9 +813,11 @@ export function render(page, ctx) {
   };
 
   function drawDone() {
+    drafts = {};
     const st = standing(plan, { today });
-    add(card, ui.h("div", { class: "su-done-head" }, ui.h("div", { class: "su-check", "aria-hidden": "true" }, "✓"),
-      ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, firstName ? `You did it, ${firstName}. Here is your money on one page.` : "You did it. Here is your money on one page."),
+    const any = st.netWorth !== null || st.spare !== null || st.runway !== null || !!st.retire;
+    add(card, ui.h("div", { class: "su-done-head" }, any ? ui.h("div", { class: "su-check", "aria-hidden": "true" }, "✓") : ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, "🌱"),
+      ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money on one page.` : "You did it. Here is your money on one page.") : "Your plan is ready for numbers"),
       ui.h("p", {}, st.headline)));
     const counters = [];
     const fig = (cls, label, value, sub, status, href) => {
@@ -626,14 +825,19 @@ export function render(page, ctx) {
       if (typeof value === "number") counters.push({ el: s.querySelector(".stat-value"), to: value });
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
     };
-    add(card, ui.h("div", { class: "su-stand" },
-      fig(st.netWorth >= 0 ? "ok" : "warn", "What you own, minus what you owe", st.netWorth, st.netWorth >= 0 ? `You own ${money(st.assets)} and owe ${money(st.liabilities)}.` : "Common with a mortgage or student loans. It grows as you pay them down.", st.netWorth >= 0 ? "● A solid base" : "● Grows as the loans shrink"),
-      st.spare === null ? fig("open", "Left over each month", "Not yet", "Needs your pay and spending.", "Add them ›", "#/cashflow/income")
-        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, "After federal tax, bills and saving. State tax is not counted yet.", st.spare >= 0 ? "● Money to put to work" : "● More goes out than comes in"),
-      st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", "#/cashflow/expenses")
-        : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up"),
-      !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs Social Security and birth dates.", "Add them ›", "#/retirement/social-security")
-        : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection")));
+    const couple = st.later.some((l) => l.key === "couple");
+    const nwFig = st.netWorth === null ? fig("open", "What you own, minus what you owe", "Not yet", "Needs what you have and what you owe.", "Add them ›", setupHref("have"))
+      : st.netWorth >= 0 ? fig("ok", "What you own, minus what you owe", st.netWorth, `You own ${money(st.assets)} and owe ${money(st.liabilities)}.`, "● A solid base")
+        : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
+          : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
+    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", "Needs your pay and spending.", "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
+      : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
+        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, couple ? "After federal tax (worked out as one return for now), bills and saving." : "After federal tax, bills and saving.", st.spare >= 0 ? "● Money to put to work" : "● More goes out than comes in");
+    const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
+      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up");
+    const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
+      : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection");
+    add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
     if (!reduced() && counters.length) {
       const t0 = performance.now(), dur = 800;
       for (const c of counters) c.el.textContent = money(0);
@@ -644,9 +848,13 @@ export function render(page, ctx) {
       add(card, ui.h("h2", { class: "su-h2" }, st.moves.length === 1 ? "Your first move" : `Your first ${st.moves.length === 2 ? "two" : "three"} moves`),
         ui.h("ol", { class: "su-moves" }, st.moves.map((m, i) => ui.h("li", {}, ui.h("a", { href: m.href }, ui.h("span", { class: "n", "aria-hidden": "true" }, String(i + 1)), ui.h("span", {}, ui.h("b", {}, m.title), m.detail ? ui.h("span", { class: "d" }, m.detail) : null), ui.h("span", { class: "c", "aria-hidden": "true" }, "›"))))));
     }
-    const notes = st.later.map((l) => ui.h("li", {}, ui.h("a", { href: l.href }, l.label)));
-    if (st.guessed.length) notes.push(ui.h("li", {}, `The interest rate on ${and(st.guessed.map((g) => `${g.name.toLowerCase()} (a typical ${pctOf(g.rate)})`))}: `, ui.h("a", { href: "#/balance/liabilities" }, "type the real one on What you owe")));
-    if (notes.length) add(card, ui.h("h2", { class: "su-h2" }, "Not counted yet"), ui.h("ul", { class: "su-later-list" }, notes));
+    // what is not counted yet: what no tile above already asks for (their "Add them" links cover the rest)
+    const notes = st.later.filter((l) => !["income", "spend", "accounts", "retire"].includes(l.key)).map((l) => rowLink(l.href, null, l.label));
+    for (const g of st.guessed) {
+      const parts = [g.rate !== null ? `rate (a typical ${pctOf(g.rate)} for now)` : null, g.payment !== null ? `payment (about ${money(g.payment)} a month for now)` : null].filter(Boolean);
+      notes.push(rowLink("#/balance/liabilities", null, `${g.name}: the real ${and(parts)}`));
+    }
+    if (notes.length) add(card, ui.h("h2", { class: "su-h2" }, "Not counted yet"), ui.h("ul", { class: "page-list" }, notes));
     const a = plan.assumptions ?? {};
     const pc = (x) => `${Math.round(Number(x) * 1000) / 10}%`;
     const looked = !!a.reviewedAt;
@@ -658,12 +866,12 @@ export function render(page, ctx) {
           ["🎂", `The plan runs to age ${a.planEndAge ?? 95}`, "So the money is planned to last"],
           ["🛟", `A cushion of ${a.emergencyMonths ?? 6} months of must-pay bills`, "For a lost job or a big repair"]]
           .map(([i, b, m]) => ui.h("li", {}, ui.h("span", { class: "su-li", "aria-hidden": "true" }, i), ui.h("div", {}, ui.h("b", {}, b), ui.h("span", { class: "m" }, m))))),
-      ui.h("div", { class: "su-gbtns" }, looked ? null : ui.h("button", { type: "button", onClick: () => { pending = [{ kind: "ok", text: "Saved: the plan's guesses are looked over." }]; store.update((d) => applyGuesses(d, today)); } }, "These sound fine"), ui.h("a", { href: "#/system/assumptions", class: "btn secondary" }, "Change them ›"))));
-    add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: "#/overview/dashboard" }, "Go to my dashboard"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("you") }, "Change an answer")));
+      ui.h("div", { class: "su-gbtns" }, looked ? null : ui.h("button", { type: "button", class: "secondary", onClick: () => { pending = [{ kind: "ok", text: "Saved: the plan's guesses are looked over." }]; store.update((d) => applyGuesses(d, today)); } }, "These sound fine"), ui.h("a", { href: "#/system/assumptions", class: "btn secondary" }, "Change them ›"))));
+    add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: "#/overview/dashboard" }, "Go to my dashboard"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer")));
     try { card.querySelector("#su-q")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
   }
 
   (UI[screenId] ?? UI.welcome)();
-  add(root, ui.h("p", { class: "su-foot" }, "🔒 Everything stays on your own computer and phone. No bank logins or account numbers, ever."));
+  add(root, ui.h("p", { class: "su-foot" }, FOOT));
   if (screen.q) { try { card.querySelector("#su-q")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ } }
 }

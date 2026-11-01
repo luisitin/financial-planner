@@ -7,7 +7,7 @@ export default {
   id: "start",
   group: "overview",
   title: "Get started",
-  icon: "🧭",
+  icon: "👋",
   order: 3,
   version: 1,
   status: "usable",

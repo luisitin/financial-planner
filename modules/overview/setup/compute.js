@@ -8,15 +8,18 @@
 // ever removed; a blank box saves nothing.
 import { CATEGORIES, compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
-import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
-import { compute as computeNext } from "../next-best-action/compute.js";
+import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
+import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
+import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computeNext, HIGH_RATE, MODERATE_RATE } from "../next-best-action/compute.js";
 import { compute as computeProjection } from "../../retirement/projection/compute.js";
 import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { pmt, nper } from "../../../core/math/finance.js";
+import { money as fmtMoney } from "../../../core/format.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -48,10 +51,10 @@ export const SCREENS = [
   { id: "have", q: 4 },
   { id: "have-amounts", q: 4, follow: true, show: (p) => picks(p, "have").some((k) => askOwners(p, k).length > 0) },
   { id: "owe", q: 5 },
-  { id: "owe-amounts", q: 5, follow: true, show: (p) => picks(p, "owe").some((k) => k !== "none" && !existingOwe(p, k).length) },
+  { id: "owe-amounts", q: 5, follow: true, show: (p) => picks(p, "owe").some((k) => k !== "none" && !oweTaken(p, k)) },
   { id: "spend", q: 6 },
   { id: "goals", q: 7 },
-  { id: "goal-details", q: 7, follow: true, show: (p) => picks(p, "goals").some((k) => GOALS.find((g) => g.key === k && !g.focus) && !existingGoal(p, k).length) },
+  { id: "goal-details", q: 7, follow: true, show: (p) => picks(p, "goals").some((k) => GOALS.find((g) => g.key === k && !g.focus) && !goalTaken(p, k)) },
   { id: "done" },
 ];
 export const QUESTIONS = 7;
@@ -66,7 +69,7 @@ export const HAVE = [
   { key: "car", icon: "🚗", label: "A car", line: "Or another vehicle", type: "vehicle", types: ["vehicle"], name: "Car", ask: "What it is worth today" },
 ];
 /** The retirement box's two kinds: through work (a 401(k) or 403(b), with an employer match) or on your own (an IRA). */
-export const RETIRE_KINDS = [{ value: "work", label: "Through work", type: "401k" }, { value: "own", label: "On my own", type: "ira" }];
+export const RETIRE_KINDS = [{ value: "work", label: "Through work", type: "401k", group: ["401k", "roth"] }, { value: "own", label: "On my own", type: "ira", group: ["ira", "roth"] }];
 /** What you owe. */
 export const OWE = [
   { key: "credit", icon: "💳", label: "Credit cards", type: "credit", name: "Credit cards" },
@@ -93,11 +96,25 @@ export const TYPICAL_CARD_RATE = TYPICAL_RATES.credit;
 /** A Liabilities row's rate is still the setup's guess (nobody has typed a real one since). */
 export const rateIsGuess = (d) => typeof d?.rateGuessed === "number" && Math.abs(Number(d.rate) - d.rateGuessed) < 1e-9;
 /**
+ * A payment a month for a debt whose payment box is left blank, so its cost is counted (a $0 payment would drop out of
+ * spending and the cushion): a loan, the level payment that pays it off over a usual term (mortgage 30 years, car loan
+ * 5, student loans 10 (the Standard plan for loans made before July 1, 2026; README), another loan 3; pmt in
+ * core/math/finance.js); cards, a common minimum (the month's interest plus 1% of the balance). Kept on the row in `paymentGuessed`, a guess while the payment still equals it.
+ */
+export const TYPICAL_TERMS = { mortgage: 360, "car-loan": 60, student: 120, loan: 36 };
+export function typicalPayment(key, owed, rate) {
+  if (!(owed > 0)) return 0;
+  const r = Math.max(0, Number(rate) || 0) / 12;
+  const p = key === "credit" ? owed * r + owed * 0.01 : pmt(r, TYPICAL_TERMS[key] ?? 60, owed);
+  return Math.round(p);
+}
+export const paymentIsGuess = (d) => typeof d?.paymentGuessed === "number" && Math.abs(Number(d.minPayment) - d.paymentGuessed) < 0.005;
+/**
  * A month's spending in two groups; must-pay comes from the group (and matches the categories' own `essential`).
  * `covers`: the Expenses categories a row stands for, so a row is not asked when the plan already has one of them.
  */
 export const SPEND = [
-  { key: "housing", group: "must", label: "Rent", labelMortgage: "Home costs besides the mortgage", help: "Rent, or property tax, insurance and fees if you own", helpMortgage: "Property tax, home insurance, fees", covers: ["housing"] },
+  { key: "housing", group: "must", label: "Rent", labelMortgage: "Home costs besides the mortgage", help: "Rent, or property tax, insurance and fees if you own", helpMortgage: "Only what the mortgage payment doesn't cover: HOA fees, and tax or insurance you pay yourself", covers: ["housing"] },
   { key: "utilities", group: "must", label: "Utilities and phone", help: "Power, water, gas, internet, phones", covers: ["utilities", "phone"] },
   { key: "groceries", group: "must", label: "Groceries", help: "Food and household things", covers: ["groceries"] },
   { key: "transport", group: "must", label: "Car, gas and transit", help: "Gas, repairs, car insurance, fares. Not the loan payment", covers: ["transport"] },
@@ -168,21 +185,25 @@ export const existingHave = (p, key) => { const h = HAVE.find((x) => x.key === k
 export function askOwners(p, key) {
   const h = HAVE.find((x) => x.key === key);
   if (!h) return [];
-  const have = existingHave(p, key);
-  if (!h.perAdult) return have.length ? [] : [""];
-  return adults(p).filter((a) => !have.some((x) => x.ownerId === a.id || !x.ownerId)).map((a) => a.id);
+  const have = existingHave(p, key), mine = (pid) => !!byId(L(p, "accounts"), haveId(key, pid));
+  if (!h.perAdult) return have.length && !mine("") ? [] : [""];
+  return adults(p).filter((a) => mine(a.id) || !have.some((x) => x.ownerId === a.id || !x.ownerId)).map((a) => a.id);
 }
 const carName = (a) => /car|auto|vehicle|truck/i.test(a.name ?? "");
 export const existingOwe = (p, key) => { const o = OWE.find((x) => x.key === key); return o ? L(p, "accounts").filter((a) => !isSetupId(a.id) && a.type === o.type && (key !== "car-loan" || carName(a)) && (key !== "loan" || !carName(a))) : []; };
+/** A debt kind is not asked when the plan already has one made elsewhere, unless the setup made its own first (it stays the setup's). */
+export const oweTaken = (p, key) => existingOwe(p, key).length > 0 && !byId(L(p, "accounts"), oweId(key));
 /** A pay already on Income for this person (not made here): the money question shows it instead of asking again. */
 export const existingPay = (p, pid) => L(p, "income").filter((x) => !isSetupId(x.id) && x.personId === pid && (x.type === "salary" || x.type === "business"));
 export const existingSpend = (p) => L(p, "expenses").filter((x) => !isSetupId(x.id));
 /** The spending rows to ask: childcare only with children; a row whose categories the plan already has is not asked. */
-export const spendRows = (p) => { const have = new Set(existingSpend(p).map((x) => x.category)); return SPEND.filter((s) => (!s.kids || dependents(p).length > 0) && !s.covers.some((c) => have.has(c))); };
+export const spendRows = (p) => { const have = new Set(existingSpend(p).map((x) => x.category)); return SPEND.filter((s) => (!s.kids || dependents(p).length > 0) && (byId(L(p, "expenses"), `setup-x-${s.key}`) || !s.covers.some((c) => have.has(c)))); };
 const emergencyLike = (g) => g.isEmergencyFund || g.icon === "🛟" || /emergency|rainy ?day|cushion/i.test(g.name ?? "");
 const houseLike = (g) => /down ?payment|\b(house|home)\b/i.test(g.name ?? "") && !/repair|remodel|office|pay ?off|mortgage/i.test(g.name ?? "");
 /** A goal of this kind the plan already has (made on Goals): it shows ticked and nothing is added. */
 export const existingGoal = (p, key) => { const def = GOALS.find((g) => g.key === key); return L(p, "goals").filter((g) => !isSetupId(g.id) && (key === "cushion" ? emergencyLike(g) : key === "home" ? houseLike(g) : def?.match ? def.match.test(g.name ?? "") : false)); };
+/** A goal kind is not added when Goals already has one like it, unless the setup made its own first. */
+export const goalTaken = (p, key) => existingGoal(p, key).length > 0 && !byId(L(p, "goals"), `setup-goal-${key}`);
 
 /**
  * Why an account must stay: something else in the plan points at it (README lists where an account id can appear). The
@@ -213,6 +234,13 @@ export function personReferenced(plan, pid) {
   if ((plan?.retirement?.pensions ?? []).some((x) => x.personId === pid)) return "a pension is in their name";
   if ((plan?.insurance?.policies ?? []).some((x) => x.personId === pid)) return "an insurance policy covers them";
   if ((plan?.estate?.documents ?? []).some((x) => x.personId === pid)) return "their papers are listed";
+  if ((plan?.retirement?.socialSecurity?.[pid]?.record ?? []).length > 0) return "their Social Security record is in the plan";
+  if ((plan?.retirement?.annuities ?? []).some((x) => x.personId === pid)) return "an annuity is in their name";
+  if (plan?.equity?.personId === pid) return "work stock is in their name";
+  if ((plan?.taxes?.gains ?? []).some((x) => x.personId === pid)) return "investment sales are in their name";
+  if ((plan?.estate?.gifts ?? []).some((x) => x.from === pid)) return "gifts are in their name";
+  if ((plan?.estate?.beneficiaries ?? []).some((b) => [...(b.primary ?? []), ...(b.contingent ?? [])].some((x) => x.personId === pid))) return "they are named as a beneficiary";
+  if (plan?.whatIfs?.college?.[pid]) return "a college plan is saved for them";
   return null;
 }
 
@@ -287,8 +315,8 @@ function dropPersonRecords(draft, pid) {
   draft.income = draft.income.filter((x) => ![`setup-pay-${pid}`, `setup-pension-${pid}`, `setup-ss-${pid}`].includes(x.id));
   for (const x of draft.income) if (x.id === "setup-other" && x.personId === pid) x.personId = "";
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => c.id !== `setup-contrib-${pid}`);
-  delete draft.retirement.socialSecurity[pid];
-  for (const k of ["status", "ss"]) if (draft.guide.setup[k]) delete draft.guide.setup[k][pid];
+  if (!(draft.retirement.socialSecurity[pid]?.record ?? []).length) delete draft.retirement.socialSecurity[pid];
+  for (const k of ["status", "ss", "ssWrote"]) if (draft.guide.setup[k]) delete draft.guide.setup[k][pid];
   return kept;
 }
 const blankPerson = { birthDate: "", retirementAge: null, lifeExpectancy: null };
@@ -345,7 +373,7 @@ export function applyMoney(draft, v) {
     const status = ["work", "retired", "none"].includes(x.status) ? x.status : draft.guide.setup.status[p.id] ?? null;
     if (status) draft.guide.setup.status[p.id] = status;
     const base = { personId: p.id, growth: 0, startDate: "", endDate: "", taxable: true };
-    if (status === "work" && !existingPay(draft, p.id).length) {
+    if (status === "work" && (byId(draft.income, `setup-pay-${p.id}`) || !existingPay(draft, p.id).length)) {
       const amount = pos(x.amount);
       const period = PAY_PERIODS.some((o) => o.value === x.period) ? x.period : "annual";
       if (amount) { const id = `setup-pay-${p.id}`; keep.add(id); put(draft.income, id, { amount, period }, { name: `${possessive(p)} pay`, type: "salary", ...base }); }
@@ -355,13 +383,16 @@ export function applyMoney(draft, v) {
       if (pension) { const id = `setup-pension-${p.id}`; keep.add(id); put(draft.income, id, { amount: pension }, { name: `${possessive(p)} pension`, type: "pension", period: "monthly", ...base }); }
     }
   }
-  const other = pos(v.other?.amount), kind = OTHER_KINDS.find((k) => k.value === v.other?.kind) ?? OTHER_KINDS[3];
+  // other money: the kind is written only when one is picked and it differs (a type set on Income, like investment, stays)
+  const other = pos(v.other?.amount), picked = OTHER_KINDS.find((k) => k.value === v.other?.kind) ?? null;
   if (other) {
     keep.add("setup-other");
-    const self = adults(draft)[0];
-    put(draft.income, "setup-other", { amount: other, type: kind.value, taxable: kind.taxable !== false, personId: kind.value === "business" ? self?.id ?? "" : "" }, { name: kind.name, period: "monthly", growth: 0, startDate: "", endDate: "" });
+    const self = adults(draft)[0], old = byId(draft.income, "setup-other");
+    const kind = picked ?? (old ? null : OTHER_KINDS[3]);
+    const kindFields = kind && (!old || old.type !== kind.value) ? { type: kind.value, taxable: kind.taxable !== false, personId: kind.value === "business" ? self?.id ?? "" : "" } : {};
+    put(draft.income, "setup-other", { amount: other, ...kindFields }, { name: (kind ?? OTHER_KINDS[3]).name, period: "monthly", growth: 0, startDate: "", endDate: "" });
     const r = byId(draft.income, "setup-other");
-    if (OTHER_KINDS.some((k) => k.name === r.name)) r.name = kind.name;   // follow the kind unless renamed on Income
+    if (kind && OTHER_KINDS.some((k) => k.name === r.name) && r.name !== kind.name) r.name = kind.name;   // follow the kind unless renamed on Income
   }
   draft.income = draft.income.filter((x) => !isSetupId(x.id) || x.id.startsWith("setup-ss-") || keep.has(x.id));
 }
@@ -413,7 +444,9 @@ export function applyAges(draft, v, today) {
     if (stop !== null && stop >= 18 && stop <= 100) { const want = stop === planAge ? null : stop; if ((p.retirementAge ?? null) !== want) p.retirementAge = want; }
     const ss = x.ss ?? {};
     const mode = ["estimate", "statement", "getting", "none", "unsure"].includes(ss.mode) ? ss.mode : null;
-    if (mode) draft.guide.setup.ss[p.id] = mode;
+    const prev = draft.guide.setup.ss[p.id] ?? null;
+    if (mode && prev !== mode) draft.guide.setup.ss[p.id] = mode;
+    const wrote = draft.guide.setup.ssWrote ?? {};
     const rec = draft.retirement.socialSecurity[p.id] ?? {};
     const hasRecord = Array.isArray(rec.record) && rec.record.length > 0;
     const birthYear = p.birthDate ? Number(p.birthDate.slice(0, 4)) : null;
@@ -422,22 +455,36 @@ export function applyAges(draft, v, today) {
     if (hasRecord || !mode) continue;
     const without = (o, ...ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
     const set = (next) => { if (JSON.stringify(next) !== JSON.stringify(rec)) draft.retirement.socialSecurity[p.id] = next; };
+    // the claim age is the Social Security page's; only an age this setup wrote ("I already get it") is taken back
+    const base = prev === "getting" && mode !== "getting" ? without(rec, "claimAge") : rec;
+    const noteWrote = (n) => { if (n === null) { if (wrote[p.id] !== undefined) { delete wrote[p.id]; draft.guide.setup.ssWrote = wrote; } } else if (wrote[p.id] !== n) { draft.guide.setup.ssWrote = { ...wrote, [p.id]: n }; } };
     if (mode === "estimate") {
+      // a figure typed on the Social Security page since the last estimate is kept
+      const ours = prev !== "estimate" || !(Number(rec.monthlyAtFRA) > 0) || Number(rec.monthlyAtFRA) === wrote[p.id];
       const est = estimateSocialSecurity({ birthYear, yearlyPay: yearlyPay(draft, p.id), stopAge: p.retirementAge ?? planAge, today });
-      if (est !== null) set({ ...without(rec, "claimAge"), monthlyAtFRA: est });
+      if (ours && est !== null) { set({ ...base, monthlyAtFRA: est }); noteWrote(est); }
     } else if (mode === "statement") {
       const amount = pos(ss.amount);
-      if (amount) set({ ...without(rec, "claimAge"), monthlyAtFRA: amount });
+      if (amount) { set({ ...base, monthlyAtFRA: amount }); noteWrote(null); }
     } else if (mode === "getting" && birthYear) {
       const amount = pos(ss.amount);
-      const started = Math.min(70, Math.max(62, Math.round(Number(ss.started) || 0) || Math.min(70, now ?? 67)));
+      const fra = fullRetirementAge(birthYear).asYears;
       if (amount) {
-        set({ ...rec, claimAge: started, monthlyAtFRA: Math.round((amount / claimFactor(birthYear, started)) * 10) / 10 });
+        if (now !== null && now < 62) {
+          // disability or survivor benefits before 62: paid unreduced, so the amount is the full-retirement amount
+          set({ ...rec, claimAge: Number(rec.claimAge) >= 62 ? rec.claimAge : Math.round(fra * 12) / 12, monthlyAtFRA: amount });
+        } else {
+          const top = Math.min(70, Math.max(62, now ?? 70));
+          const started = Math.min(top, Math.max(62, Math.round(Number(ss.started) || 0) || (now !== null && now >= fra ? Math.round(fra) : top)));
+          set({ ...rec, claimAge: started, monthlyAtFRA: Math.round((amount / claimFactor(birthYear, started)) * 10) / 10 });
+        }
+        noteWrote(null);
         keepIncome.add(sid);
         put(draft.income, sid, { amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
       }
     } else if (mode === "none") {
       set(without(rec, "monthlyAtFRA", "claimAge"));
+      noteWrote(null);
     }
   }
   draft.income = draft.income.filter((x) => !x.id?.startsWith?.("setup-ss-") || keepIncome.has(x.id));
@@ -447,6 +494,7 @@ export function applyHavePicks(draft, keys) {
   ensure(draft);
   const ks = keys.filter((k) => HAVE.some((h) => h.key === k) && askOwners(draft, k).length > 0);
   if (JSON.stringify(picks(draft, "have")) !== JSON.stringify(ks)) draft.guide.setup.picks.have = ks;
+  if (!ks.includes("home") && draft.guide.setup.homeFromOwe) delete draft.guide.setup.homeFromOwe;
   return dropAccounts(draft, draft.accounts.filter((a) => isHave(a.id) && !ks.includes(haveKeyOf(a.id))).map((a) => a.id));
 }
 /**
@@ -467,13 +515,18 @@ export function applyHaveAmounts(draft, v, today) {
       const mine = h.perAdult ? pos(v[`contrib-${pid}`]) : null, match = h.perAdult && kind.value === "work" ? pos(v[`match-${pid}`]) : null;
       if (amount === null && !mine && !match) { gone.push(id); continue; }
       const person = pid ? byId(adults(draft), pid) : null;
-      const asked = { balance: amount ?? byId(draft.accounts, id)?.balance ?? 0, asOf: today, ...(h.perAdult ? { type: kind.type } : {}) };
       const old = byId(draft.accounts, id);
+      const type = h.perAdult ? (old && kind.group.includes(old.type) ? old.type : kind.type) : undefined;   // a Roth set on Net worth stays a Roth
+      const asked = { balance: amount ?? old?.balance ?? 0, asOf: today, ...(type ? { type } : {}) };
       if (old && old.balance === asked.balance && (asked.type === undefined || old.type === asked.type)) delete asked.asOf;   // unchanged: keep its date
       put(draft.accounts, id, asked, { name: h.perAdult ? (several || person?.name !== "Me" ? `${possessive(person)} retirement` : "My retirement") : h.name, type: h.type, institution: "", asOf: today, ownerId: pid || "", history: [], notes: "" });
       if (mine || match) {
         const cid = `setup-contrib-${pid}`; keepC.add(cid);
-        put(draft.retirement.contributions, cid, { amount: mine ?? 0, employerMatch: Math.round((match ?? 0) * 12) }, { accountId: id, personId: pid, period: "monthly" });
+        const oc = byId(draft.retirement.contributions, cid);
+        // the screen shows the match a month, rounded; a yearly figure typed on Contributions that reads back the same stays
+        const yearly = oc && Math.round(Number(oc.employerMatch) / 12) === Math.round(match ?? 0) ? oc.employerMatch : Math.round((match ?? 0) * 12);
+        const monthly = oc && Math.round(Number(oc.amount) || 0) === Math.round(mine ?? 0) ? oc.amount : mine ?? 0;
+        put(draft.retirement.contributions, cid, { amount: monthly, employerMatch: yearly }, { accountId: id, personId: pid, period: "monthly" });
       }
     }
   }
@@ -484,23 +537,26 @@ export function applyHaveAmounts(draft, v, today) {
 /** Q5. Which debts to add (keys of OWE, or ["none"]; a kind the plan already has is not asked). Returns what had to be kept. */
 export function applyOwePicks(draft, keys) {
   ensure(draft);
-  const ks = keys.includes("none") ? ["none"] : keys.filter((k) => OWE.some((o) => o.key === k) && !existingOwe(draft, k).length);
+  const ks = keys.includes("none") ? ["none"] : keys.filter((k) => OWE.some((o) => o.key === k) && !oweTaken(draft, k));
   if (JSON.stringify(picks(draft, "owe")) !== JSON.stringify(ks)) draft.guide.setup.picks.owe = ks;
   draft.expenses = draft.expenses.filter((x) => x.id !== "setup-x-debt");
   return dropAccounts(draft, OWE.filter((o) => !ks.includes(o.key)).map((o) => oweId(o.key)));
 }
 /**
- * Q5b. Each debt: { [key]: { owed, payment, rate (percent, as typed), paidInFull (cards) } }. A card paid in full every
- * month is not a debt: nothing is saved. Otherwise a liability account with what is owed and a Liabilities row with
- * the rate and the monthly payment; a blank rate gets the typical one (TYPICAL_RATES), kept in `rateGuessed`. The
- * payment is not written as an expense: Expenses counts the Liabilities rows' payments itself (its F-019 rule).
+ * Q5b. Each debt: { [key]: { owed, payment, rate (percent, as typed), paidInFull (cards), home (mortgage: what the home
+ * would sell for, asked when the plan has no home) } }. A card paid in full every month is not a debt: nothing is saved.
+ * Otherwise a liability account with what is owed and a Liabilities row with the rate and the monthly payment. A blank
+ * rate gets the typical one (TYPICAL_RATES, kept in `rateGuessed`); a blank payment gets a typical one (typicalPayment,
+ * kept in `paymentGuessed`), so the debt's cost is counted. The rate is saved to a thousandth of a percent (6.875%),
+ * and a rate or payment set on Liabilities that reads back the same stays as it is. The payment is not written as an
+ * expense: Expenses counts the Liabilities rows' payments itself (its F-019 rule).
  */
 export function applyOweAmounts(draft, v, today) {
   ensure(draft);
   const gone = [];
   let paidInFull = false;
   for (const o of OWE) {
-    if (!picks(draft, "owe").includes(o.key) || existingOwe(draft, o.key).length) continue;
+    if (!picks(draft, "owe").includes(o.key) || oweTaken(draft, o.key)) continue;
     const x = v[o.key] ?? {};
     const id = oweId(o.key), did = `setup-debt-${o.key}`;
     if (o.key === "credit" && x.paidInFull) paidInFull = true;
@@ -508,18 +564,34 @@ export function applyOweAmounts(draft, v, today) {
     if (!owed) { gone.push(id); continue; }
     const old = byId(draft.accounts, id);
     put(draft.accounts, id, old && old.balance === owed ? {} : { balance: owed, asOf: today }, { name: o.name, type: o.type, institution: "", asOf: today, ownerId: "", history: [], notes: "" });
+    const row = byId(draft.debts, did);
+    // the rate: as typed (percent, 3 decimals), unless it is what the screen showed for the row's own rate
     const typed = parseMoney(x.rate);
     const known = typed !== null && typed >= 0 && typed <= 100;
-    const row = byId(draft.debts, did);
-    const rate = known ? Math.round(typed * 100) / 10000 : row && !rateIsGuess(row) ? row.rate : TYPICAL_RATES[o.key];
-    const asked = { rate, minPayment: pos(x.payment) ?? 0 };
-    const r = put(draft.debts, did, asked, { accountId: id, extra: 0, termMonths: null, startDate: "", securedBy: "", creditLimit: null });
-    if (known || (row && !rateIsGuess(row))) { if ("rateGuessed" in r) delete r.rateGuessed; }
-    else if (r.rateGuessed !== rate) r.rateGuessed = rate;
+    const shown = row && !rateIsGuess(row) ? Math.round(Number(row.rate) * 100000) / 1000 : null;
+    const rate = known ? (shown !== null && shown === Math.round(typed * 1000) / 1000 ? row.rate : Math.round(typed * 1000) / 100000) : row && !rateIsGuess(row) ? row.rate : TYPICAL_RATES[o.key];
+    const rateGuess = !known && !(row && !rateIsGuess(row));
+    // the payment: as typed (whole dollars shown), else a typical one while no real one is known
+    const paid = pos(x.payment);
+    const ownPay = row && !paymentIsGuess(row) && Number(row.minPayment) > 0 ? row.minPayment : null;
+    const payment = paid ? (ownPay !== null && Math.round(ownPay) === Math.round(paid) ? ownPay : paid) : ownPay ?? typicalPayment(o.key, owed, rate);
+    const payGuess = !paid && ownPay === null;
+    const r = put(draft.debts, did, { rate, minPayment: payment }, { accountId: id, extra: 0, termMonths: null, startDate: "", securedBy: "", creditLimit: null });
+    if (!rateGuess) { if ("rateGuessed" in r) delete r.rateGuessed; } else if (r.rateGuessed !== rate) r.rateGuessed = rate;
+    if (!payGuess) { if ("paymentGuessed" in r) delete r.paymentGuessed; } else if (r.paymentGuessed !== payment) r.paymentGuessed = payment;
+    // a mortgage with no home in the plan: what the home would sell for, so net worth has both sides
+    const home = o.key === "mortgage" ? pos(x.home) : null;
+    if (home && !existingHave(draft, "home").length) {
+      const hid = haveId("home"), h = HAVE.find((k) => k.key === "home"), was = byId(draft.accounts, hid);
+      put(draft.accounts, hid, was && was.balance === home ? {} : { balance: home, asOf: today }, { name: h.name, type: h.type, institution: "", asOf: today, ownerId: "", history: [], notes: "" });
+      if (!picks(draft, "have").includes("home")) { draft.guide.setup.picks.have = [...picks(draft, "have"), "home"]; draft.guide.setup.homeFromOwe = true; }
+    }
   }
   if ((draft.guide.setup.paidInFull ?? false) !== paidInFull) draft.guide.setup.paidInFull = paidInFull;
   return dropAccounts(draft, gone);
 }
+/** Ask the home's value with the mortgage: the plan has no home, or only the one this box made. */
+export const askHomeWithMortgage = (p) => !existingHave(p, "home").length && (!byId(L(p, "accounts"), haveId("home")) || !!setupOf(p).homeFromOwe);
 /** Has a mortgage: the housing question then asks for costs besides its payment. */
 export const hasMortgage = (p) => L(p, "accounts").some((a) => a.type === "mortgage" && Number(a.balance));
 /**
@@ -534,11 +606,32 @@ export function spendBase(plan) {
   const all = L(plan, "debts").length ? computeExpenses({ ...plan, expenses: own }, {}) : null;
   return { existing: ex?.monthly ?? 0, existingCount: own.length, existingCore: (ex?.monthly ?? 0) - cat("debt") - cat("childcare"), loanPayments: all?.debtFromDebts ?? 0 };
 }
-/** Spending once work stops, to start the question with: today's bills without loan payments and childcare, to $10. */
-export function retireDefault(plan) {
+/**
+ * Spending once work stops, to start the question with, to $10: today's bills without childcare and loan payments,
+ * plus the payment of each loan still being paid when the first adult stops work (months to payoff at its payment,
+ * nper in core/math/finance.js, past the months until then; a loan that never pays off at its payment counts too).
+ * Without birth dates nobody knows when work stops, so no loan is added.
+ */
+export function retireDefault(plan, today = null) {
   const base = spendBase(plan);
   const rows = L(plan, "expenses").filter((x) => isSetupId(x.id) && x.category !== "childcare").reduce((s, x) => s + perYear(x.amount, x.period) / 12, 0);
-  return Math.round((base.existingCore + rows) / 10) * 10;
+  return Math.round((base.existingCore + rows + loansAfterWork(plan, today)) / 10) * 10;
+}
+/** The loan payments a month still running when the first adult stops work (retireDefault's loan part). */
+export function loansAfterWork(plan, today = null) {
+  const planAge = Number(plan?.assumptions?.retirementAge ?? 65);
+  const left = today ? adults(plan).filter((p) => p.birthDate && setupOf(plan).status?.[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
+  const until = left.length ? Math.min(...left) : null;
+  let loans = 0;
+  if (until !== null && !L(plan, "expenses").some((x) => x.category === "debt")) {
+    for (const d of L(plan, "debts")) {
+      const owed = Math.abs(Number(byId(L(plan, "accounts"), d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
+      if (!(owed > 0) || !(pay > 0)) continue;
+      const months = nper((Number(d.rate) || 0) / 12, pay, owed);
+      if (!Number.isFinite(months) || months > until) loans += pay;
+    }
+  }
+  return loans;
 }
 /** Everyone is already retired: the retirement spending question is not asked (today's bills are retirement's). */
 export const allRetired = (p) => adults(p).length > 0 && adults(p).every((a) => setupOf(p).status?.[a.id] === "retired");
@@ -567,24 +660,32 @@ export function applySpend(draft, v) {
     }
   }
   draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
+  // the figure follows the bills while it is the screen's own starting figure (retireAuto), and stays once typed
   const later = pos(v.retireMonthly);
-  if (later && !allRetired(draft) && Number(draft.retirement.spendingMonthly) !== later) draft.retirement.spendingMonthly = later;
+  if (later && !allRetired(draft)) {
+    if (Number(draft.retirement.spendingMonthly) !== later) draft.retirement.spendingMonthly = later;
+    const auto = v.retireAuto === true;
+    if ((draft.guide.setup.retireAuto ?? null) !== auto) draft.guide.setup.retireAuto = auto;
+  }
 }
 /** Q7. What you are working toward (keys of GOALS; a kind the plan already has is not added). Goals linked from elsewhere stay. */
 export function applyGoalPicks(draft, keys) {
   ensure(draft);
   const valid = keys.filter((k) => GOALS.some((g) => g.key === k));
-  const ks = valid.filter((k) => GOALS.find((g) => g.key === k).focus || !existingGoal(draft, k).length);
+  const ks = valid.filter((k) => GOALS.find((g) => g.key === k).focus || !goalTaken(draft, k));
   if (JSON.stringify(picks(draft, "goals")) !== JSON.stringify(ks)) draft.guide.setup.picks.goals = ks;
   const focus = ks.filter((k) => GOALS.find((g) => g.key === k)?.focus);
   if (JSON.stringify(draft.guide.setup.focus ?? []) !== JSON.stringify(focus)) draft.guide.setup.focus = focus;
   const linked = new Set(L(draft, "events").map((e) => e.goalId).filter(Boolean));
   draft.goals = draft.goals.filter((g) => !isSetupId(g.id) || ks.includes(g.id.replace(/^setup-goal-/, "")) || linked.has(g.id));
 }
-/** The cushion: months x must-pay bills a month (Expenses, loan payments included), to $100; what cash covers it now. */
+/**
+ * The cushion: months x must-pay bills a month (Expenses, loan payments included), to $100; what cash covers it now.
+ * No bills yet: no amount (loan payments alone are not the bills; Emergency fund waits for expenses the same way).
+ */
 export function cushion(plan, months = null, today = null) {
   const m = Math.round(Number(months ?? plan?.assumptions?.emergencyMonths ?? 6)) || 6;
-  const essential = computeExpenses(plan, {}).essentialMonthly ?? 0;
+  const essential = L(plan, "expenses").length ? computeExpenses(plan, {}).essentialMonthly ?? 0 : 0;
   let now = 0;
   try { now = computeLiquidity(plan, { today }).now ?? 0; } catch { now = 0; }
   return { months: m, essential, target: Math.round((m * essential) / 100) * 100, now, covered: essential > 0 ? now / essential : null };
@@ -599,15 +700,23 @@ const addYears = (iso, years) => { const [y, m, d] = iso.split("-").map(Number);
 export function applyGoalDetails(draft, v, today) {
   ensure(draft);
   for (const g of GOALS) {
-    if (g.focus || !picks(draft, "goals").includes(g.key) || existingGoal(draft, g.key).length) continue;
+    if (g.focus || !picks(draft, "goals").includes(g.key) || goalTaken(draft, g.key)) continue;
     const id = `setup-goal-${g.key}`;
     const x = v[g.key] ?? {};
     if (g.key === "cushion") {
       const months = Math.min(12, Math.max(1, Math.round(Number(x.months) || Number(draft.assumptions?.emergencyMonths ?? 6))));
       if (Number(draft.assumptions?.emergencyMonths ?? 6) !== months || draft.assumptions?.emergencyMonths === undefined) draft.assumptions = { ...(draft.assumptions ?? {}), emergencyMonths: months };
       const c = cushion(draft, months, today);
-      const fundedBy = draft.accounts.filter((a) => a.type === "savings" || a.type === "cash").map((a) => a.id);
-      put(draft.goals, id, { target: c.target }, { name: g.name, icon: g.icon, targetDate: "", priority: 1, saved: 0, fundedBy, monthly: 0, rate: null, inflates: false, isEmergencyFund: true });
+      // its money: what Emergency fund counts as usable today (cash, checking, savings). The list follows the accounts
+      // while it is the one this setup wrote (cushionFunds); a choice made on Goals stays. The amount the same way.
+      const funds = draft.accounts.filter((a) => TIERS.now.types.includes(a.type)).map((a) => a.id);
+      const old = byId(draft.goals, id), s = draft.guide.setup;
+      const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+      const asked = {};
+      if (!old || same(old.fundedBy, s.cushionFunds)) { asked.fundedBy = funds; if (!same(s.cushionFunds, funds)) s.cushionFunds = funds; }
+      if (c.essential > 0 && (!old || Number(old.target) === Number(s.cushionTarget ?? old.target))) { asked.target = c.target; if (s.cushionTarget !== c.target) s.cushionTarget = c.target; }
+      if (old) for (const k of Object.keys(asked)) if (same(old[k], asked[k])) delete asked[k];
+      put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: "", priority: 1, saved: 0, fundedBy: funds, monthly: 0, rate: null, inflates: false, isEmergencyFund: true });
       continue;
     }
     const years = DATE_CHIPS.includes(Number(x.years)) ? Number(x.years) : null;
@@ -652,7 +761,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
         const mode = s.ss?.[p.id] ?? (typed ? "statement" : s.status?.[p.id] === "retired" ? "getting" : working ? "estimate" : "unsure");
         const getting = inc(`setup-ss-${p.id}`);
         const now = p.birthDate && today ? ageOn(p.birthDate, today) : null;
-        return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: getting?.amount ?? (mode === "statement" ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), record: (ss[p.id]?.record ?? []).length > 0 } }];
+        return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: getting?.amount ?? (mode === "statement" ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), startedKnown: Number(ss[p.id]?.claimAge) > 0, record: (ss[p.id]?.record ?? []).length > 0 } }];
       })),
       kids: Object.fromEntries(dependents(plan).map((k) => [k.id, k.birthDate ? Number(k.birthDate.slice(0, 4)) : ""])),
     };
@@ -663,20 +772,21 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)); o[h.perAdult ? `${h.key}-${pid}` : h.key] = a ? a.balance : ""; }
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
-      o[`kind-${p.id}`] = a && (a.type === "ira" || a.type === "roth") ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
-      o[`contrib-${p.id}`] = c?.amount || ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
+      o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a ? "work" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
+      o[`contrib-${p.id}`] = c?.amount ? Math.round(c.amount) : ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
     }
     return o;
   }
   if (screen === "owe") return picks(plan, "owe");
   if (screen === "owe-amounts") {
     const o = {};
-    for (const d of OWE) { const a = acct(oweId(d.key)); const r = byId(L(plan, "debts"), `setup-debt-${d.key}`); o[d.key] = { owed: a?.balance ?? "", payment: r?.minPayment || "", rate: r && !rateIsGuess(r) ? Math.round(r.rate * 10000) / 100 : "", paidInFull: d.key === "credit" ? !!s.paidInFull : false }; }
+    for (const d of OWE) { const a = acct(oweId(d.key)); const r = byId(L(plan, "debts"), `setup-debt-${d.key}`); o[d.key] = { owed: a?.balance ?? "", payment: r && !paymentIsGuess(r) && Number(r.minPayment) > 0 ? Math.round(r.minPayment) : "", rate: r && !rateIsGuess(r) ? Math.round(r.rate * 100000) / 1000 : "", paidInFull: d.key === "credit" ? !!s.paidInFull : false }; }
+    o.mortgage.home = acct(haveId("home"))?.balance ?? "";
     return o;
   }
   if (screen === "spend") {
     const rt = Number(plan?.retirement?.spendingMonthly);
-    return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, byId(L(plan, "expenses"), `setup-x-${x.key}`)?.amount ?? ""])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 ? rt : "", retireTyped: rt > 0 };
+    return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, byId(L(plan, "expenses"), `setup-x-${x.key}`)?.amount ?? ""])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 ? rt : "", retireTyped: rt > 0 && !s.retireAuto };
   }
   if (screen === "goals") return picks(plan, "goals");
   if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => { const x = byId(L(plan, "goals"), `setup-goal-${g.key}`); return [g.key, { target: x?.target || "", date: x?.targetDate ?? "", years: x ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: Number(plan?.assumptions?.emergencyMonths ?? 6) }]; }));
@@ -698,14 +808,62 @@ export const FOCUS_GUIDE = { debt: { title: "Make a plan to pay off what you owe
 export function retirementKnown(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   const ad = adults(plan);
-  return ad.length > 0 && ad.every((p) => p.birthDate && (Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0 || said[p.id] === "none"));
+  return ad.length > 0 && ad.every((p) => p.birthDate && ssKnown(ss, said, p.id));
+}
+const ssKnown = (ss, said, pid) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none";
+/** What the retirement check still needs, in plain words: only what is missing (README "Where you stand"). */
+export function retirementMissing(plan) {
+  const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
+  const ad = adults(plan);
+  const dates = ad.some((p) => !p.birthDate), soc = ad.some((p) => !ssKnown(ss, said, p.id));
+  return dates && soc ? "Social Security and birth dates" : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? "Social Security" : null;
+}
+/** Money saved: what is in accounts that are not a home, a car or a debt (for the retiree's "drawn from savings" line). */
+const savedTotal = (plan) => L(plan, "accounts").filter((a) => { const t = ACCOUNT_TYPES[a.type]; return t && t.side === "asset" && (t.liquid || t.invested); }).reduce((s, a) => s + Math.max(0, Number(a.balance) || 0), 0);
+/**
+ * The first moves in plain words (README "The first three moves"): Next best action's steps say "IRA", "backdoor",
+ * "earns the rate for sure", fine on that page, too much as someone's first advice. A typical rate the setup guessed
+ * is said to be one.
+ */
+export function revealWords(step, plan, { today = null, retired = false } = {}) {
+  const cur = plan?.meta?.currency ?? "USD";
+  const money = (n) => fmtMoney(Math.round((Number(n) || 0) / 10) * 10, cur);
+  const pct = (r) => `${Math.round(r * 1000) / 10}%`;
+  const several = adults(plan).length > 1;
+  const costly = (lo, hi) => {
+    let rows = [];
+    try { rows = computeLiabilities(plan, { today }).rows; } catch { rows = []; }
+    return rows.filter((r) => r.owed > 0 && r.rate !== null && r.rate >= lo && r.rate < hi && r.type !== "mortgage").sort((a, b) => b.rate - a.rate)
+      .map((r) => ({ name: r.name, rate: r.rate, guess: rateIsGuess(r.detail), card: r.type === "credit" }));
+  };
+  const said = (list) => {
+    const words = list.map((d) => `${d.name} about ${pct(d.rate)} a year`).join(", ");
+    return `${words}${list.some((d) => d.guess) ? " (a typical rate: type yours on What you owe)" : ""}`;
+  };
+  switch (step.id) {
+    case "bills": return retired
+      ? { title: "See how long your savings last", detail: `About ${money(-(step.spare ?? 0))} a month comes from savings. The retirement check shows how many years that covers.` }
+      : { title: "Spend less than comes in", detail: step.detail };
+    case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
+    case "match": return { title: "Get all of your employer's match", detail: "Money your employer adds when you save for retirement. Put in at least enough to get every dollar of it." };
+    case "high-debt": { const list = costly(HIGH_RATE, Infinity); return { title: list.length && list.every((d) => d.card) ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail }; }
+    case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
+    case "hsa": return { title: "Fill your health savings account", detail: step.detail };
+    case "ira": return { title: several ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${several ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail };
+    case "mid-debt": { const list = costly(MODERATE_RATE, HIGH_RATE); return { title: "Pay down the loans that cost the most", detail: list.length ? `${said(list)}. Paying them early saves that interest.` : step.detail }; }
+    case "max-401k": return { title: "Put more into your 401(k)", detail: step.roomYearly > 0 ? `${money(step.roomYearly)} more is allowed this year, and it grows sheltered from tax.` : step.detail };
+    case "goals": return { title: "Catch up on your goals", detail: step.detail };
+    default: return { title: step.title, detail: step.detail ?? step.why ?? null };
+  }
 }
 /**
- * Where you stand, from the pages' own computes: what you own minus what you owe (Net worth), what is left each month
- * after federal tax, spending and saving (Next best action's `spare`), how many months of must-pay bills the cash
- * covers (Emergency fund's `runwayMonths`), and whether retirement is on track (Will the money last?, only once Social
- * Security is known, so a missing figure never reads as "short"). Then the first three moves: Next best action's most
- * urgent step, a guide for what you said matters most, then its next steps, in its own order ("your choice" left out).
+ * Where you stand, from the pages' own computes: what you own minus what you owe (Net worth; null while the plan has
+ * neither), what is left each month after federal tax, spending and saving (Next best action's `spare`), how many
+ * months of must-pay bills the cash covers (Emergency fund's `runwayMonths`), and whether retirement is on track (Will
+ * the money last?, only once Social Security is known, so a missing figure never reads as "short"). Then the first
+ * three moves: Next best action's most urgent step, a guide for what you said matters most, then its next steps, in
+ * its own order ("your choice" left out). Someone retired who spends more than comes in is living on savings, as
+ * planned: that is said calmly, with the retirement check first.
  */
 export function standing(plan, { today }) {
   const nw = computeNetWorth(plan, { today });
@@ -716,30 +874,48 @@ export function standing(plan, { today }) {
   if (known) { try { proj = computeProjection(plan, { today }); } catch { proj = null; } }
   const spare = nba?.ready ? nba.spare.monthly : null;
   const runway = liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;
+  const runwayStatus = runway !== null ? liq?.status ?? "unknown" : "unknown";
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
-  const open = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.id !== "rest").map((s) => ({ id: s.id, title: s.title, detail: s.detail ?? s.why ?? null, href: `#/${s.go.join("/")}` }));
-  const focus = [...(setupOf(plan).focus ?? []), ...(picks(plan, "goals").includes("home") ? ["home"] : [])];
+  const retired = allRetired(plan);
+  const drawing = retired && spare !== null && spare < 0;
+  const steps = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.id !== "rest");
+  const open = steps.map((s) => ({ id: s.id, ...revealWords({ ...s, spare }, plan, { today, retired: drawing }), href: `#/${s.go.join("/")}` }));
+  const focus = [...(drawing ? ["retire"] : []), ...(setupOf(plan).focus ?? []), ...(picks(plan, "goals").includes("home") ? ["home"] : [])];
   const debtStep = open.slice(0, 1).some((m) => m.id === "high-debt" || m.id === "mid-debt");   // the debt guide would repeat it
   const guides = focus.filter((f, i) => FOCUS_GUIDE[f] && focus.indexOf(f) === i && !(f === "debt" && debtStep)).map((f) => ({ id: `guide-${f}`, title: FOCUS_GUIDE[f].title, detail: null, href: FOCUS_GUIDE[f].href }));
-  const moves = [...open.slice(0, 1), ...guides, ...open.slice(1)].slice(0, 3);
+  const moves = (drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)]).slice(0, 3);
   // what was left out, so the person knows what a figure is missing
   const later = [];
-  if (!L(plan, "income").length) later.push({ label: "what comes in", href: "#/cashflow/income" });
-  if (!L(plan, "expenses").length && !L(plan, "transactions").length) later.push({ label: "what you spend", href: "#/cashflow/expenses" });
-  if (!L(plan, "accounts").length) later.push({ label: "your accounts", href: "#/balance/net-worth" });
-  if (!known && adults(plan).length) later.push({ label: "Social Security and birth dates, for the retirement check", href: "#/retirement/social-security" });
-  if (L(plan, "income").length && !NO_WAGE_TAX[plan?.household?.state]) later.push({ label: "state income tax (the left-over figure counts federal tax only)", href: "#/taxes/state" });
-  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d)).map((d) => ({ name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: d.rate }));
-  // one sentence that says what matters most
-  const headline = spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
-    : runway !== null && runway < 1 ? "Your month works. A cushion for surprises is the thing to build next."
-      : retire && retire.verdict !== "on track" ? "Your month and your cushion look good. Retirement could use a closer look."
-        : spare !== null && runway !== null ? "You're in good shape. Here's how to make it even better."
-          : "Here is your money on one page. A few more answers will sharpen it.";
+  const missing = retirementMissing(plan);
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  if (!L(plan, "income").length) later.push({ label: "What comes in", href: "#/cashflow/income", key: "income" });
+  if (!L(plan, "expenses").length && !L(plan, "transactions").length) later.push({ label: "What you spend", href: "#/cashflow/expenses", key: "spend" });
+  if (!L(plan, "accounts").length) later.push({ label: "Your accounts", href: "#/balance/net-worth", key: "accounts" });
+  if (missing && adults(plan).length) later.push({ label: `${cap(missing)}, for the retirement check`, href: missing === "Social Security" ? "#/retirement/social-security" : "#/household/people", key: "retire" });
+  if (L(plan, "income").length && !NO_WAGE_TAX[plan?.household?.state]) later.push({ label: "Your state's income tax: the left-over figure counts federal tax only", href: "#/taxes/state", key: "state" });
+  const couple = adults(plan).length >= 2 && (plan?.household?.filingStatus ?? "single") === "single" && adults(plan).some((p) => p.relation === "partner");
+  if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the left-over figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
+  const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
+  const estimated = adults(plan).filter((p) => wrote[p.id] !== undefined && Number(ssAll[p.id]?.monthlyAtFRA) === wrote[p.id] && !(ssAll[p.id]?.record ?? []).length);
+  if (estimated.length) later.push({ label: `Social Security is estimated from ${estimated.length > 1 ? "your pay" : `${estimated[0].name === "Me" ? "your" : `${estimated[0].name}'s`} pay`}: the statement at ssa.gov/myaccount is exact`, href: "#/retirement/social-security", key: "ss-estimate" });
+  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d)).map((d) => ({ name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null }));
+  // one sentence that says what matters most, never at odds with the cards under it
+  const first = open[0]?.id ?? null;
+  const saved = savedTotal(plan);
+  const cur = plan?.meta?.currency ?? "USD";
+  const headline = drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
+    : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
+      : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
+        : runwayStatus === "warn" || runwayStatus === "bad" ? (spare !== null ? "Your month works. Building your cushion for surprises is next." : "A cushion for surprises is the thing to build first.")
+          : retire && retire.verdict !== "on track" ? "Your month and your cushion look good. Retirement could use a closer look."
+            : spare !== null && spare >= 0 && runwayStatus === "ok" && (!retire || retire.verdict === "on track") ? "You're in good shape. Here's how to make it even better."
+              : "A few more answers will fill this in.";
+  const empty = !L(plan, "accounts").length || (nw.assets === 0 && nw.liabilities === 0);
   return {
-    netWorth: nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
-    spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus: liq?.status ?? "unknown",
-    retire, retirementKnown: known, moves, later, headline, guessed,
+    netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
+    spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
+    retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
+    homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
   };
 }
 
