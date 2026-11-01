@@ -67,3 +67,29 @@ test("minimum-only: 2% of the month's opening balance (Regulation Z appendix M2)
   const slow = minimumOnly(1260, 0.2399, 0, pct);
   assert.deepEqual([slow.months, slow.interest], [1350, 32570.08]);   // cc-edge-009
 });
+
+test("an aimed extra goes to its own debts only and stops when they are paid off; freed payments still roll on", () => {
+  const debts = [
+    { id: "card", name: "Card", balance: 3000, rate: 0.24, minPayment: 100, takesExtra: true },
+    { id: "car", name: "Car", balance: 9000, rate: 0.07, minPayment: 300 },
+    { id: "home", name: "Home", balance: 200000, rate: 0.065, minPayment: 1400 },
+  ];
+  const aimed = payoffPlan(debts, { extra: 1000 });
+  const plain = payoffPlan(debts.map(({ takesExtra, ...d }) => d), { extra: 1000 });
+  const none = payoffPlan(debts.map(({ takesExtra, ...d }) => d), { extra: 0 });
+  const end = (r, id) => r.debts.find((d) => d.id === id).months;
+  assert.equal(end(aimed, "card"), end(plain, "card"), "the card gets the extra the same way");
+  assert.ok(end(aimed, "card") < end(none, "card"));
+  // after the card: only its $100 moves on to the car (highest rate next), not the $1,000
+  const cardDone = end(aimed, "card");
+  const after = aimed.timeline[cardDone + 1];
+  assert.equal(after.paid, 100 + 300 + 1400, "the month after: the required payments, the card's $100 rolled on, no extra");
+  assert.ok(end(aimed, "home") > end(plain, "home"), "the mortgage is not paid early by the aimed extra");
+  assert.ok(end(aimed, "car") < end(none, "car"), "but the car gets the card's freed $100");
+  // a middling debt aimed at while a higher-rate mortgage is in the plan: the extra still goes to the aimed debt
+  const mid = [{ id: "car", name: "Car", balance: 9000, rate: 0.059, minPayment: 300, takesExtra: true }, { id: "home", name: "Home", balance: 200000, rate: 0.065, minPayment: 1400 }];
+  const m = payoffPlan(mid, { extra: 1000 }), m0 = payoffPlan(mid.map(({ takesExtra, ...d }) => d), { extra: 1000 });
+  assert.ok(end(m, "car") < end(m0, "car"), "avalanche alone would send the extra to the 6.5% mortgage");
+  // nothing marked: the same result as before
+  assert.deepEqual(payoffPlan(debts.map((d) => ({ ...d, takesExtra: false })), { extra: 1000 }).debts, plain.debts);
+});

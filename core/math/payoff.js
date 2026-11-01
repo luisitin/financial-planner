@@ -14,10 +14,17 @@ export const ORDERS = { avalanche: "Highest interest rate first", snowball: "Sma
  *   timeline: [{ month, balances: { [id]: balance }, paid, interest, total }]  (one row per month),
  *   neverPaysOff: [ids whose payment does not cover their interest even with the extra]
  * }
- * debts: [{ id, name, balance, rate (yearly fraction), minPayment }]. Debts with balance 0 are skipped.
+ * debts: [{ id, name, balance, rate (yearly fraction), minPayment, takesExtra? }]. Debts with balance 0 are skipped.
+ * takesExtra (2026-11-01): when any debt has it, the extra goes only to those debts, in the order, and stops once they are all
+ * paid off (an extra aimed at the costly debts, as Next best action counts it); freed payments still roll on to the next debt.
+ * With no debt marked, nothing changes.
  */
 export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder = [], maxMonths = 600 } = {}) {
-  const list = (debts ?? []).filter((d) => Number(d.balance) > 0).map((d) => ({ id: d.id, name: d.name ?? d.id, balance: Number(d.balance), rate: Number(d.rate) || 0, minPayment: Math.max(0, Number(d.minPayment) || 0) }));
+  const list = (debts ?? []).filter((d) => Number(d.balance) > 0).map((d) => ({ id: d.id, name: d.name ?? d.id, balance: Number(d.balance), rate: Number(d.rate) || 0, minPayment: Math.max(0, Number(d.minPayment) || 0), takesExtra: d.takesExtra === true }));
+  // aimed extra: when some debts are marked takesExtra, the extra goes to them only (in the order) and stops once they are paid off;
+  // the payments of finished debts still roll on to the next debt in the order, as always
+  const aimed = list.some((d) => d.takesExtra);
+  const extraAmount = Math.max(0, Number(extra) || 0), minimums = list.reduce((s, d) => s + d.minPayment, 0);
   const rank = (d) => order === "snowball" ? d.balance : order === "custom" ? (customOrder.indexOf(d.id) >= 0 ? customOrder.indexOf(d.id) : 1e9) : -d.rate;
   const targetOrder = [...list].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map((d) => d.id);
   const bal = Object.fromEntries(list.map((d) => [d.id, d.balance]));
@@ -29,7 +36,8 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
   const neverPaysOff = list.filter((d) => d.minPayment <= d.balance * d.rate / 12 && budget <= list.reduce((s, x) => s + x.balance * x.rate / 12, 0)).map((d) => d.id);
   while (month < maxMonths && Object.values(bal).some((b) => b > 0.005)) {
     month++;
-    let free = budget, interestThisMonth = 0, paidThisMonth = 0;
+    const aimedLeft = aimed && list.some((d) => d.takesExtra && bal[d.id] > 0.005);
+    let free = aimed ? minimums + (aimedLeft ? extraAmount : 0) : budget, interestThisMonth = 0, paidThisMonth = 0;
     // interest first, then required payments
     for (const d of list) {
       if (bal[d.id] <= 0.005) continue;
@@ -37,6 +45,16 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
       bal[d.id] += i; interestThisMonth += i; result[d.id].interest += i;
       const pay = Math.min(d.minPayment, bal[d.id]);
       bal[d.id] -= pay; free -= pay; paidThisMonth += pay;
+    }
+    // an aimed extra goes to its own debts first
+    if (aimedLeft) {
+      let ex = Math.min(extraAmount, free);
+      for (const d of targetOrder.map((id) => list.find((x) => x.id === id))) {
+        if (ex <= 0.005) break;
+        if (!d.takesExtra || bal[d.id] <= 0.005) continue;
+        const pay = Math.min(ex, bal[d.id]);
+        bal[d.id] -= pay; ex -= pay; free -= pay; paidThisMonth += pay;
+      }
     }
     // everything left goes to the target debts in order
     for (const id of targetOrder) {
