@@ -9,7 +9,7 @@ let text = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = ""
 const accepted = new Set();
 
 const STYLE = `
-.rd-root textarea { width: 100%; min-height: 160px; font: inherit; font-size: var(--fs-sm); }
+.rd-root textarea { width: 100%; min-height: 160px; font: inherit; font-size: max(16px, var(--fs)); }   /* 16 px or more: an iPhone zooms the page on a smaller box */
 .rd-root .rd-found { list-style: none; margin: 0; padding: 0; }
 .rd-root .rd-found li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
 .rd-root .rd-found li:last-child { border-bottom: 0; }
