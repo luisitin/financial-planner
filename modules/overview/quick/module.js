@@ -12,7 +12,7 @@ export default {
   status: "usable",
   phase: 10,
   enabledByDefault: true,
-  needs: [],
+  needs: ["household", "accounts", "income", "expenses", "debts", "assumptions", "taxes"],
   writes: [],
   heavy: false,
   purpose: "Questions you can answer in a minute with your own numbers, with nothing to set up first.",

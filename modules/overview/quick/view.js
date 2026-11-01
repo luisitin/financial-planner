@@ -14,6 +14,8 @@ const STYLE = `
 .qk-root .page-list .ic { width: 40px; height: 40px; font-size: 20px; border: 1px solid var(--line); }
 .qk-root .qk-chev { flex: none; color: var(--muted); font-size: 22px; line-height: 1; padding-left: 4px; }
 .qk-root .qk-search { width: 100%; margin-top: 12px; }
+.qk-root .qk-answers .row-link .t { font-weight: 700; font-size: var(--fs-md); }
+.qk-root .qk-answers .qk-q { display: block; color: var(--text); font-weight: 600; margin-bottom: 2px; }
 @media (min-width: 720px) {
   .qk-root .qk-two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
   .qk-root .qk-two li:nth-last-child(2) { border-bottom: 0; }   /* the last row of each column */
@@ -25,7 +27,7 @@ export function render(root, ctx) {
   const { ui, modules, features, isReady } = ctx;
   const usable = (key) => { const m = modules.get(key); return !!m && isReady(m) && features.enabled(m); };
   const off = [...modules.keys()].filter((k) => !usable(k));
-  const d = compute(ctx.plan, { off });
+  const d = compute(ctx.plan, { off, today: ctx.fmt.today() });
   const wrap = ui.h("div", { class: "qk-root" }, ui.h("style", {}, STYLE));
   root.append(wrap);
 
@@ -36,9 +38,17 @@ export function render(root, ctx) {
 
   wrap.append(ui.h("section", { class: "card" },
     ui.h("h1", {}, "Get a quick answer"),
-    ui.h("p", { class: "qk-lede" }, "Pick a question and type your own numbers. Each one answers on its own page, with nothing to set up first."),
+    ui.h("p", { class: "qk-lede" }, d.answers.length ? "Your plan already answers the first questions below. For the others, pick one and type your own numbers: nothing to set up first." : "Pick a question and type your own numbers. Each one answers on its own page, with nothing to set up first."),
     ui.h("p", { class: "qk-foot" }, "Everything stays on your own computer and phone. Nothing goes to the cloud."),
-    ui.h("h2", {}, "Start with these"),
+    // the questions the plan already answers: the answer itself, in the answer page's words, first
+    d.answers.length ? [
+      ui.h("h2", {}, "Your plan already answers"),
+      ui.h("ul", { class: "page-list qk-answers" }, d.answers.map((a) => ui.h("li", {}, ui.h("a", { href: a.href, class: "row-link" },
+        ui.h("span", { class: "ic", "aria-hidden": "true" }, a.icon),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, a.headline), ui.h("div", { class: "d" }, ui.h("span", { class: "qk-q" }, a.title), a.line)),
+        ui.h("span", { class: "qk-chev", "aria-hidden": "true" }, "›"))))),
+    ] : null,
+    ui.h("h2", {}, d.answers.length ? "Or type your own numbers" : "Start with these"),
     ui.h("ul", { class: "page-list qk-two" }, d.mostAsked.map((q) => row(q)))));
 
   if (d.more.length) wrap.append(ui.h("section", { class: "card" }, ui.h("h2", { class: "qk-first" }, "More questions"), ui.h("ul", { class: "page-list qk-two" }, d.more.map((q) => row(q)))));

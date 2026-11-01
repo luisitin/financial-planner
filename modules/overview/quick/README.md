@@ -8,10 +8,14 @@ etc...) then guide". This page is the "calculator" door: a list of questions, ea
 Get started (`overview/start`) links here; so does search ("calculator", "quick answer").
 
 ## Inputs
-None from the plan (`needs: []`). The view passes `off`: the pages switched off or not ready on this device.
+The view passes `off` (the pages switched off or not ready on this device) and `today`. For the three questions that
+need the plan's numbers, the plan itself is read through the answer pages' own computes (`retirement/projection`,
+`debt/payoff`, `taxes/federal`), so the manifest's `needs` lists their sections.
 
 ## Outputs
-`compute(plan, { off })` -> `{ mostAsked: [{ key, icon, title, line, href }], more: [...], needsFirst: [{ guide, icon, title, line, href }] }`.
+`compute(plan, { off, today })` -> `{ mostAsked: [{ key, icon, title, line, href }], more: [...], answers: [{ guide, icon,
+title, key, headline, line, status, href }], needsFirst: [{ guide, icon, title, line, href }] }`. `answerFor(guide, plan,
+params)` -> `{ headline, line, status }` or null.
 Rows open `#/<key>?from=quick`, so the page shows a "‹ Quick answers" bar on top and "Another question?" at the bottom
 (drawn by the step-by-step guides' frame, `overview/guide` `frame.js`).
 
@@ -26,8 +30,12 @@ Rows open `#/<key>?from=quick`, so the page shows a "‹ Quick answers" bar on t
   Add, which saves a goal.
 - The bar on a page opened from here repeats the question ("How much home can I afford? Type your own numbers below.";
   a question's `hint` replaces the second sentence where there is nothing to type, as on Market risk). The pages that open with example figures already say so in their own words, so the bar does not repeat it.
-- Three questions need the plan's own numbers (will the money last, when am I debt-free, this year's tax). They are
-  listed honestly under "Questions that need your numbers first" and open the matching step-by-step guide.
+- Three questions need the plan's own numbers (will the money last, when am I debt-free, this year's tax). When the
+  plan already answers one (2026-11-01, the owner's experience list: "the app already has the answers ... but sends
+  people to setup steps"), it is shown at the top under "Your plan already answers" with the answer itself, in the
+  answer page's own heading and first line ("The money lasts", "Debt-free by March 2039", "About $15,072 of federal
+  tax for 2026"), and opens that page; the page's bar says the answer comes from the plan. The questions it cannot
+  answer yet stay under "Questions that need your numbers first" and open the matching step-by-step guide.
 
 ## Choices made (no owner input; noted per the builder instructions)
 - "Start with these" instead of "Most asked" (asked by whom?), and one flat "More questions" card instead of topic

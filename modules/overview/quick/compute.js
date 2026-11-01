@@ -6,6 +6,11 @@
 //   line     one sentence: what the answer holds
 //   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
+import { compute as projection } from "../../retirement/projection/compute.js";
+import { compute as payoff } from "../../debt/payoff/compute.js";
+import { compute as federal } from "../../taxes/federal/compute.js";
+import { money as fmtMoney } from "../../../core/format.js";
+
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
 export const MOST_ASKED = [
   { key: "goals/house", icon: "🏠", title: "How much home can I afford?", line: "The monthly cost, the cash you need on the day, and when you will have it." },
@@ -28,18 +33,73 @@ export const NEEDS_FIRST = [
   { guide: "debt", icon: "💳", title: "When will I be debt-free?", line: "Your loans and cards first, about 10 minutes; then the order and the month each is paid off." },
   { guide: "taxes", icon: "🧮", title: "What will I owe in tax this year?", line: "Your household and pay first, about 15 minutes; then the bill or refund." },
 ];
+/** The page that answers each of those questions once the plan has the numbers. */
+export const ANSWER_PAGES = { retire: "retirement/projection", debt: "debt/payoff", taxes: "taxes/federal" };
+
+const monthsText = (m) => m < 12 ? `${m} month${m === 1 ? "" : "s"}` : `${Math.floor(m / 12)} year${Math.floor(m / 12) === 1 ? "" : "s"}${m % 12 ? ` ${m % 12} month${m % 12 === 1 ? "" : "s"}` : ""}`;
+const monthYear = (iso) => { const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? "")); return m ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m[2]) - 1]} ${m[1]}` : null; };
+
+/**
+ * The answer the plan already gives, in the answer page's own words (its heading and first line), or null when the
+ * page cannot answer yet. Each is the same compute the page runs, so the two never disagree.
+ */
+export function answerFor(guide, plan, params = {}) {
+  const cur = plan.meta?.currency ?? "USD";
+  const m = (n) => fmtMoney(n, cur);
+  if (guide === "retire") {
+    const d = projection(plan, params);
+    if (!d.ready || !d.verdict) return null;
+    return {
+      headline: d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`,
+      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year the money runs out at age ${d.shortAge}; the plan carries about ${m(d.affordable)} a year.` : `The plan carries ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year of spending in today's dollars; you plan on ${m(d.spendingYearly)}.`,
+      status: d.verdict === "on track" ? "ok" : "warn",
+    };
+  }
+  if (guide === "debt") {
+    const d = payoff(plan, params);
+    const c = d.chosen;
+    if (!d.hasData || !c) return null;
+    if (!Number.isFinite(c.months)) return { headline: "This plan never ends", line: "The payments do not cover the interest on every debt. The page shows what to add.", status: "warn" };
+    return { headline: `Debt-free ${monthYear(c.endDate) ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}`, line: `${monthsText(c.months)} at ${m(d.budget)} a month, ${m(c.totalInterest)} of interest.`, status: "ok" };
+  }
+  if (guide === "taxes") {
+    const d = federal(plan, params);
+    if (!d.hasIncome) return null;
+    const r = d.result;
+    const paid = (r.withheld ?? 0) + (r.paid ?? 0);
+    const owes = paid > 0 ? r.balance : null;
+    return {
+      headline: `About ${m(r.totalTax)} of federal tax for ${d.year}`,
+      line: owes === null ? `${(Math.round(r.effectiveRate * 1000) / 10).toFixed(1)}% of your income overall.` : owes > 0 ? `With ${m(paid)} already paid, about ${m(owes)} still to pay at filing time.` : `With ${m(paid)} already paid, about ${m(-owes)} back.`,
+      status: owes !== null && owes > 0 ? "warn" : "ok",
+    };
+  }
+  return null;
+}
+
 /** What a listed page may save: calculator inputs and quotes, or a goal through its own "Make it a goal" button. */
 export const ALLOWED_WRITES = ["whatIfs", "goals", "insurance"];
 
 export const quickHref = (key) => `#/${key}?from=quick`;
-export const questionFor = (key) => [...MOST_ASKED, ...MORE].find((q) => q.key === key) ?? null;
+export const questionFor = (key) => [...MOST_ASKED, ...MORE].find((q) => q.key === key)
+  ?? (() => { const n = NEEDS_FIRST.find((x) => ANSWER_PAGES[x.guide] === key); return n ? { key, icon: n.icon, title: n.title, hint: "The answer below comes from your plan." } : null; })();
 
-/** compute(plan, { off? }) -> { mostAsked, more, needsFirst }: rows with their href; pages in `off` (switched off or not ready on this device) left out. */
+/**
+ * compute(plan, { off?, today? }) -> { mostAsked, more, answers, needsFirst }: rows with their href; pages in `off`
+ * (switched off or not ready on this device) left out. `answers`: the questions of NEEDS_FIRST the plan already
+ * answers ({ ...question, key, headline, line, status, href to the answer page }); `needsFirst`: the rest, each opening
+ * its guide.
+ */
 export function compute(plan, params = {}) {
   const off = params.off ?? [];
   const rows = (list) => list.filter((q) => !off.includes(q.key)).map((q) => ({ ...q, href: quickHref(q.key) }));
-  return {
-    mostAsked: rows(MOST_ASKED), more: rows(MORE),
-    needsFirst: NEEDS_FIRST.filter((n) => !off.includes("overview/guide")).map((n) => ({ ...n, href: `#/overview/guide/${n.guide}` })),
-  };
+  const answers = [], needsFirst = [];
+  for (const n of NEEDS_FIRST) {
+    const key = ANSWER_PAGES[n.guide];
+    let a = null;
+    if (!off.includes(key)) { try { a = answerFor(n.guide, plan, { today: params.today ?? null }); } catch { a = null; } }
+    if (a) answers.push({ ...n, ...a, key, href: quickHref(key) });
+    else if (!off.includes("overview/guide")) needsFirst.push({ ...n, href: `#/overview/guide/${n.guide}` });
+  }
+  return { mostAsked: rows(MOST_ASKED), more: rows(MORE), answers, needsFirst };
 }

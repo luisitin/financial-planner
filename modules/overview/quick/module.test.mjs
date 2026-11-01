@@ -45,3 +45,28 @@ test("rows open their page with ?from=quick; pages off on this device are left o
   assert.equal(questionFor("goals/house").title, "How much home can I afford?");
   assert.equal(questionFor("nope/nope"), null);
 });
+
+test("the plan's own answers: the sample family's three questions answer at once, an empty plan keeps the guides", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const { compute, questionFor } = await import("./compute.js");
+  const { compute: projection } = await import("../../retirement/projection/compute.js");
+  const T = "2026-11-01";
+  const p = familyPlan(T);
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.answers.map((a) => a.guide), ["retire", "debt", "taxes"]);
+  assert.deepEqual(d.needsFirst, []);
+  const by = Object.fromEntries(d.answers.map((a) => [a.guide, a]));
+  assert.equal(by.retire.headline, projection(p, { today: T }).verdict === "on track" ? "The money lasts" : by.retire.headline, "the answer page's own heading");
+  assert.match(by.debt.headline, /^Debt-free by [A-Z][a-z]+ \d{4}$/);
+  assert.match(by.taxes.headline, /^About \$[\d,]+ of federal tax for 2026$/);
+  assert.equal(by.retire.href, "#/retirement/projection?from=quick");
+  assert.equal(questionFor("debt/payoff").title, "When will I be debt-free?", "the answer page shows the question on top");
+  // a page switched off on this device: its question goes back to the guide
+  const off = compute(p, { today: T, off: ["debt/payoff"] });
+  assert.deepEqual(off.answers.map((a) => a.guide), ["retire", "taxes"]);
+  assert.deepEqual(off.needsFirst.map((n) => n.guide), ["debt"]);
+  const e = compute(emptyPlan(), { today: T });
+  assert.deepEqual(e.answers, []);
+  assert.deepEqual(e.needsFirst.map((n) => n.guide), ["retire", "debt", "taxes"]);
+});
