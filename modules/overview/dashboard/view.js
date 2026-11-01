@@ -46,6 +46,8 @@ export function render(root, ctx) {
   } else {
     // ---- where you stand: the setup's end screen, kept up to date, so every return starts with it
     const st = setupOn ? computeOf("overview/setup", { today, screen: "done" })?.standing ?? null : null;
+    // balances more than a month old: one line here (not another card under What to do now, the owner's three)
+    const bu = usable(ctx, "balance/update") ? computeOf("balance/update", { today }) : null;
     if (st && !st.error) {
       const self = (plan.household?.people ?? []).find((p) => p.role === "self");
       const name = self?.name && self.name !== "Me" ? self.name : null;
@@ -59,6 +61,9 @@ export function render(root, ctx) {
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : `Aim for ${st.runwayTarget ?? 6} months`, v: `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
       if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });
       else rows.push({ dot: st.retire.verdict === "on track" ? "ok" : "warn", k: "Retirement", s: st.retire.verdict === "on track" ? "The money lasts" : "Small changes help", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: "#/retirement/projection" });
+      // time for the monthly update: the oldest balance is 25 days old or more (or one has no date)
+      const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;
+      if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
       const move = st.moves[0] ?? null;
       moveShown = !!move;
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
@@ -73,14 +78,15 @@ export function render(root, ctx) {
         ui.h("a", { class: "db-all", href: "#/overview/setup/done" }, move ? "See all your moves ›" : "See where you stand ›")));
     }
 
-    const nw = computeOf("balance/net-worth");
+    const nw = computeOf("balance/net-worth", { today });   // change since the last point before today
+    const savedToday = (nw.history ?? []).some((h) => h.date === today);
     const gl = computeOf("goals/goals", { today: fmt.today() }) ?? {};
     const behind = (gl.goals ?? []).filter((g) => g.status === "behind" || g.status === "past due").length;
     const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind` : null].filter(Boolean).join(", ") || "all on track";
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
-      tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.change ? (nw.change.since === fmt.today() ? "saved today" : `${fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}`) : "what you own minus what you owe"),
+      tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.change ? `${fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       tile("#/balance/net-worth", "You own", fmt.money(nw.assets, cur), `${fmt.money(nw.liquid, cur)} of it is cash or easy to sell`),
       tile("#/balance/liabilities", "You owe", fmt.money(nw.liabilities, cur), nw.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       tile("#/goals/goals", "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),
@@ -101,9 +107,6 @@ export function render(root, ctx) {
     { icon: "📥", t: "Import a bank file", d: "Three months of transactions keeps the numbers real.", go: ["transactions", "import"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
   ];
-  // balances more than a month old: one screen brings them all up to date
-  const bu = d.hasMoney && usable(ctx, "balance/update") ? computeOf("balance/update", { today: fmt.today() }) : null;
-  if (bu?.stale) actions.splice(1, 0, { icon: "🔄", t: "Update my balances", d: `${bu.stale} of your ${bu.count} balances ${bu.stale === 1 ? "is" : "are"} more than a month old. One screen, save once.`, go: ["balance", "update"] });
   root.append(ui.card(d.hasMoney ? "What to do now" : "Start here", ui.h("div", { class: "grid" }, actions.map((a) => ui.h("a", { href: `#/${a.go.join("/")}`, class: "action" },
     ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d)))))));
 

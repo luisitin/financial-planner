@@ -10,7 +10,7 @@
 `{ ready, missing, month, label, choices, steps[], done, todo, reviewed, history, streak }`; each step `{ id, title, status: done|todo|info|skip, detail, go }`. `markReviewed(draft, month, today, note)` adds or replaces the month's entry (one per month, kept in month order).
 
 ## The steps
-1. Update the balances: done when every account's balance is dated in the month or later (or within 20 days of today).
+1. Update the balances: done when every account's balance was typed in the last `FRESH_DAYS` (20) days. (Until 2026-11-01 a balance dated anywhere in the reviewed month counted, so the October review on Nov 1 ticked balances from Oct 1 as done.) Opens Update my balances while any is older. The saved net-worth point's date is shown in words.
 2. Save the month's net worth: done when `netWorthHistory` has a point in the month; says the change since the last earlier point.
 3. Bring in the bank files: done when transactions are dated in the month; "optional" (skip) when the plan keeps no transactions.
 4. File what came in: the month's transactions with no category and no transfer link.

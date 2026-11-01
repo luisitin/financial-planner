@@ -47,3 +47,16 @@ test("marking reviewed: one entry a month, replaced not doubled, and the streak 
   p.reviews = p.reviews.filter((r) => r.month !== "2026-09");
   assert.equal(compute(p, { today: "2026-10-31" }).streak, 1, "a gap breaks the streak");
 });
+
+test("balances from the 1st are not fresh on the 1st of the next month; the saved point's date is in words", () => {
+  const p = familyPlan("2026-10-01");
+  p.netWorthHistory = [{ date: "2026-10-01", netWorth: 287100 }];
+  const d = compute(p, { today: "2026-11-01", month: "2026-10" });
+  const b = step(d, "balances");
+  assert.equal(b.status, "todo", "a month-old balance is not this month's");
+  assert.ok(b.detail.includes("more than three weeks old"), b.detail);
+  assert.deepEqual(b.go, ["balance", "update"]);
+  assert.ok(step(d, "net-worth").detail.includes("saved on 10/1/2026"), step(d, "net-worth").detail);
+  const fresh = compute(familyPlan("2026-10-25"), { today: "2026-11-01", month: "2026-10" });
+  assert.equal(step(fresh, "balances").status, "done", "typed a week ago: fresh");
+});

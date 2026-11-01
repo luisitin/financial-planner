@@ -23,7 +23,10 @@ const ownerField = (plan, current) => {
 };
 
 export function render(root, ctx) {
-  const { ui, fmt, store, derived: d, plan } = ctx;
+  const { ui, fmt, store, derived, plan } = ctx;
+  // worked out with today's date: "since" is the last point before today, and a point saved today says so as well
+  const d = ctx.computeOf?.("balance/net-worth", { today: fmt.today() }) ?? derived;
+  const savedToday = (d.history ?? []).some((h) => h.date === fmt.today());
   const cur = plan.meta.currency;
   let editing = null;
 
@@ -36,7 +39,7 @@ export function render(root, ctx) {
     ));
   } else {
     root.append(ui.card(null, ui.row(
-      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.change ? (d.change.since === fmt.today() ? "saved today" : `${fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}`) : "what you own minus what you owe"),
+      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.change ? `${fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       ui.stat("You own", fmt.money(d.assets, cur), `${fmt.money(d.liquid, cur)} is cash or easy to sell`),
       ui.stat("You owe", fmt.money(d.liabilities, cur), d.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       ui.stat("Invested for later", fmt.money(d.investable, cur), investedLine(d, fmt, cur)),

@@ -10,6 +10,10 @@ import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeAlerts } from "../alerts/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { date as fmtDate } from "../../../core/format.js";
+
+/** A balance typed within this many days counts as fresh for the month's review. */
+export const FRESH_DAYS = 20;
 import { money as fmtMoney } from "../../../core/format.js";
 
 /** A review in the first days of a month is about the month just ended. */
@@ -40,16 +44,17 @@ export function compute(plan, params = {}) {
 
   // 1. balances
   const accounts = plan.accounts ?? [];
-  const stale = accounts.filter((a) => !a.asOf || (a.asOf.slice(0, 7) < month && daysBetween(a.asOf, today) > 20));
+  // fresh = typed in the last three weeks: a balance from the 1st no longer counts as this month's by the 30th
+  const stale = accounts.filter((a) => !a.asOf || daysBetween(a.asOf, today) > FRESH_DAYS);
   add({ id: "balances", title: "Update the balances", status: !accounts.length ? "todo" : stale.length ? "todo" : "done",
-    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are older than ${label}: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? "..." : ""}.` : `All ${accounts.length} balances are from ${label} or later.`, go: ["balance", stale.length ? "update" : "net-worth"] });
+    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are more than three weeks old: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? ` and ${stale.length - 4} more` : ""}.` : `All ${accounts.length} balances are from the last three weeks.`, go: ["balance", stale.length ? "update" : "net-worth"] });
 
   // 2. this month's net worth point
   const nw = computeNetWorth(plan, { today });
   const point = (plan.netWorthHistory ?? []).filter((h) => inMonth(h.date)).pop();
   const before = (plan.netWorthHistory ?? []).filter((h) => h.date.slice(0, 7) < month).pop();
   add({ id: "net-worth", title: "Save the month's net worth", status: point ? "done" : accounts.length ? "todo" : "skip",
-    detail: point ? `${money(point.netWorth)} saved on ${point.date}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${monthLabel(before.date.slice(0, 7))}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them on Net worth to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
+    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${monthLabel(before.date.slice(0, 7))}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them on Net worth to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
 
   // 3. the bank files, 4. filing them
   const txMonth = (plan.transactions ?? []).filter((t) => inMonth(t.date));

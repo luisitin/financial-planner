@@ -15,7 +15,7 @@ coming.
 2. The owner's four tiles (Net worth, You own, You owe, Goals; design log 2026-09-15 pass 2), unchanged except that
    their figures step down a size from 8 characters (`ui.stat(..., { link: true })`), so "$572,700" no longer splits
    into "$572," and "700" in a two-across tile.
-3. "What to do now" (Needs attention, Import a bank file, Ask a question), unchanged.
+3. "What to do now" (Needs attention, Import a bank file, Ask a question), unchanged (the owner's three; when the oldest balance is 25 or more days old a fourth line in "where you stand" says so, "Your balances: the oldest is from 10/1/2026, 31 days ago · Update ›", opening Update my balances, not as a card here).
 4. The setup checklist: folded to one line once every step is done, or once "Set up my plan" is finished ("Set up your
    plan: done ✓", with "Change an answer" inside); the assumptions step then stays a to-do on Needs attention. While
    the where-you-stand card shows a move, the checklist's "Do step N" is outlined, so the page keeps one filled button.
