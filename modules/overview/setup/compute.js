@@ -758,7 +758,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
         const [y, m] = (p.birthDate || "").split("-");
         const working = s.status?.[p.id] === "work" || existingPay(plan, p.id).length > 0 || !!inc(`setup-pay-${p.id}`);
         const typed = Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0;
-        const mode = s.ss?.[p.id] ?? (typed ? "statement" : s.status?.[p.id] === "retired" ? "getting" : working ? "estimate" : "unsure");
+        // a figure typed later wins over an earlier "none" (the retirement pages' notice can set it), so going through this screen never erases it
+        const mode = typed && s.ss?.[p.id] === "none" ? "statement" : s.ss?.[p.id] ?? (typed ? "statement" : s.status?.[p.id] === "retired" ? "getting" : working ? "estimate" : "unsure");
         const getting = inc(`setup-ss-${p.id}`);
         const now = p.birthDate && today ? ageOn(p.birthDate, today) : null;
         return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: getting?.amount ?? (mode === "statement" ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), startedKnown: Number(ss[p.id]?.claimAge) > 0, record: (ss[p.id]?.record ?? []).length > 0 } }];
@@ -811,6 +812,11 @@ export function retirementKnown(plan) {
   return ad.length > 0 && ad.every((p) => p.birthDate && ssKnown(ss, said, p.id));
 }
 const ssKnown = (ss, said, pid) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none";
+/** The adults with no Social Security figure in the plan who have not said they get none (the retirement pages' notice). */
+export function ssMissingFor(plan) {
+  const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
+  return adults(plan).filter((p) => !ssKnown(ss, said, p.id));
+}
 /** What the retirement check still needs, in plain words: only what is missing (README "Where you stand"). */
 export function retirementMissing(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};

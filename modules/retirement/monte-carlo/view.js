@@ -2,11 +2,13 @@
 // the PC (or here if the PC is not connected), then shows the chance the money lasts, the range
 // of outcomes as a band, and the age it ran out in the paths that failed.
 import { bandChart } from "../charts.js";
+import { ssNotice } from "../ss-notice.js";
 
 const state = { paths: 2000, seed: 1 };
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
+  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
   const cur = plan.meta.currency;
   const host = ui.h("div");
   root.append(ui.h("section", { class: "card accent hero" },

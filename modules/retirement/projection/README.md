@@ -23,6 +23,21 @@ Modelled on the Bogleheads Retiree Portfolio Model and cFIREsim's spending modul
 ## Pensions from the Income page
 `incomePensions()` turns every Income item of type "pension" into a retirement income, so a pension typed where the app first asks for it counts here (F-028). One already being paid (no start date, or a past one) counts from now, the way the Income page counts it; a future one from the age its owner reaches in the start-date year; an end date stops it after that year. A rise typed on the item (growth above 0) means it keeps up with inflation; none means a fixed amount. Left out: one-off payments (a lump sum is not an income), ended items, and items that repeat a `retirement.pensions` entry for the same person with the same name or the same monthly amount within a dollar.
 
+## Getting to what you can change (2026-11-01)
+"(Contributions page)", "(Social Security page)", "(Assumptions page)" and "(Taxes pages)" are links to those pages, and the
+hero has an outlined "What would change it ›" to Goal seek, which works out the most you could spend, the earliest age to
+stop and what more to save. Before, the page gave a verdict with nothing to tap but a settings fold at the bottom.
+
+## No Social Security in the plan (2026-11-01)
+When an adult has no Social Security figure and has not said they get none (`overview/setup` `ssMissingFor`, the same check as the
+Dashboard's "Retirement: Needs Social Security"), the page opens with a notice from `modules/retirement/ss-notice.js`: "Social
+Security is not counted yet, so this page looks worse than it is", a filled "Add Social Security" and an outlined "We won't get
+Social Security", which saves the setup's own `guide.setup.ss[personId] = "none"` so it is never asked again, and confirms in
+green on the next render ("Saved: no Social Security for Sam and Lee. Change it on the Social Security page."). When one figure
+of two adults is missing, the notice and button name that person ("Bo won't get Social Security"), so "I won't" never marks the
+other. A figure typed later wins over the "none" (Set up my plan's ages screen shows and keeps it). Before, only a grey sentence
+at the end of a paragraph said why the plan looked short.
+
 ## Edge cases
 No adult with a birth date, no accounts, or no spending figure: the page lists what is missing and still shows the settings. Already retired: retirement year = this year. A partner retiring after the primary: their pay counts as income until then.
 

@@ -2,9 +2,11 @@
 // history: how many stretches it survived, which would have sunk it, and the spending that
 // survived them all.
 import { lineChart } from "../charts.js";
+import { ssNotice } from "../ss-notice.js";
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
+  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
   const cur = plan.meta.currency;
   const host = ui.h("div");
   root.append(ui.h("section", { class: "card accent hero" },

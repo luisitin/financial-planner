@@ -2,11 +2,13 @@
 // each with what it means, and how each does on your numbers: expected returns and the worst
 // stretch of history. Pick one; the Projection page uses it.
 import { compute } from "./compute.js";
+import { ssNotice } from "../ss-notice.js";
 
 let pending = null;
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
+  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);

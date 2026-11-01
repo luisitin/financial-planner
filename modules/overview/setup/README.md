@@ -92,6 +92,10 @@ bar. An address whose screen no longer applies (5b after "debt free") moves on t
 runwayTarget, runwayStatus, drawing, saved, retire: { verdict, shortAge } | null, retirementKnown, retirementMissing,
 moves: [{ id, title, detail, href }], later: [{ label, href, key }], headline, guessed: [{ name, rate, payment }],
 homeMissing }`.
+`ssMissingFor(plan)` (2026-11-01): the adults with no Social Security figure who have not said they get none; the retirement
+pages' notice (`modules/retirement/ss-notice.js`) reads it and its "won't get Social Security" button saves the same
+`guide.setup.ss[personId] = "none"` as the ages screen. A figure typed later wins over that "none": `valuesFor("ages")` shows it
+as "statement", so going through the ages screen again keeps it.
 
 ## Formulas and sources
 - **Pay a year** = amount x periods a year (`core/math/periods.js`: 52, 26, 24, 12, 1). The live line under the box:

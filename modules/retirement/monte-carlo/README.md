@@ -16,6 +16,13 @@ The 99.9% checks in `tests/montecarlo-stats.test.mjs` use the two-sided normal q
 
 The share of successful runs is a sample proportion `p`; its standard error is `sqrt(p(1-p)/n)` (NIST/SEMATECH e-Handbook, Binomial Distribution). `binomialStandardError(p, n)` in `core/math/montecarlo.js` returns this value. The convergence test compares independent fixed-seed estimates and uses the square root of the sum of their two variance estimates. In the worked statistical tests, all return assumptions and seeds are invented examples; 20,000 draws are used for the distribution checks as requested, and the success-rate comparison uses 5,000 and 20,000 paths.
 
+## No Social Security in the plan (2026-11-01)
+When an adult has no Social Security figure and has not said they get none (`overview/setup` `ssMissingFor`, the same check as the
+Dashboard's "Retirement: Needs Social Security"), the page opens with a notice from `modules/retirement/ss-notice.js`: "Social
+Security is not counted yet, so this page looks worse than it is", a filled "Add Social Security" and an outlined "We won't get
+Social Security", which saves the setup's own `guide.setup.ss[personId] = "none"` so it is never asked again. Before, only a
+grey sentence at the end of a paragraph said why the plan looked short.
+
 ## Tests
 `tests/montecarlo-stats.test.mjs`: reproducible seeds, exact zero-volatility compounding, 99.9% mean and standard-deviation intervals, lognormal skew and kurtosis, joint return correlation, success-rate convergence, and the binomial standard-error helper. `tests/retirement-pages.test.mjs`: ordered bands and the server cap.
 

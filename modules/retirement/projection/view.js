@@ -3,11 +3,13 @@
 import { compute } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
+import { ssNotice } from "../ss-notice.js";
 
 let pending = null;
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
+  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const rt = plan.retirement ?? {};
@@ -23,11 +25,16 @@ export function render(root, ctx) {
     root.append(settingsCard(ctx, d));
     return;
   }
+  // "(Contributions page)" and the like are links to that page, not plain text to go and find
+  const PAGES = { Contributions: "#/retirement/contributions", "Social Security": "#/retirement/social-security", Assumptions: "#/system/assumptions", Taxes: "#/taxes/federal" };
+  const linked = (text) => String(text).split(/\((Contributions|Social Security|Assumptions|Taxes) pages?\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part] }, `${part} page`), ")"] : part);
   const verdictText = { "on track": `On track. The plan carries ${money(d.affordable)} a year of spending in today's dollars; you plan on ${money(d.spendingYearly)}.`, tight: `Tight. The plan carries about ${money(d.affordable)} a year; you plan on ${money(d.spendingYearly)}. Small changes matter here.`, short: `Short. At ${money(d.spendingYearly)} a year the money runs out in ${d.shortYear} (age ${d.shortAge}). The plan carries about ${money(d.affordable)} a year.` }[d.verdict];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`),
     ui.h("p", { class: "lede" }, verdictText),
-    ui.h("p", { class: "muted small" }, `Retirement starts in ${d.atRetirement.year} (${d.people[0].name} at ${d.atRetirement.age}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`),
+    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${d.people[0].name} at ${d.atRetirement.age}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`)),
+    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›")),
   ));
   root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
@@ -49,7 +56,7 @@ export function render(root, ctx) {
       ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" ? " (today's expenses)" : ""}`],
       ["Growth and inflation", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, ${fmt.pct(d.inputs.rates.inflation, 1)} inflation (Assumptions page); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${d.orderLabel.toLowerCase()}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals from ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from pre-tax accounts; withdrawals ${d.orderLabel.toLowerCase()}; required withdrawals from ${d.inputs.rmd.startAge}`],
-    ].map(([k, v]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, v)))),
+    ].map(([k, v]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, linked(v))))),
   ));
   root.append(settingsCard(ctx, d));
 }

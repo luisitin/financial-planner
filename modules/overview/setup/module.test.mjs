@@ -593,3 +593,28 @@ test("a partner named on another page's records is kept", () => {
   assert.ok(kept.some((k) => k.name === "Bo"));
   assert.ok(p.household.people.some((x) => x.id === "setup-partner"));
 });
+
+test("ssMissingFor: adults with no Social Security figure who have not said they get none (the retirement pages' notice)", async () => {
+  const { ssMissingFor } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1980-01-01" }, { id: "b", name: "Bo", role: "partner", birthDate: "1979-01-01" }, { id: "c", name: "Cy", role: "dependent", birthDate: "2015-01-01" });
+  assert.deepEqual(ssMissingFor(p).map((x) => x.id), ["a", "b"], "children are never asked");
+  p.retirement.socialSecurity = { a: { monthlyAtFRA: 2400 } };
+  assert.deepEqual(ssMissingFor(p).map((x) => x.id), ["b"]);
+  p.guide = { setup: { ss: { b: "none" } } };
+  assert.deepEqual(ssMissingFor(p), [], "saying none counts as known");
+});
+test("a Social Security figure typed after saying none wins: going through the ages screen keeps it", async () => {
+  const S2 = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const T2 = "2026-11-01";
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1980-01-01" }, { id: "b", name: "Bo", role: "partner", birthDate: "1979-01-01" });
+  p.guide = { setup: { ss: { b: "none" } } };
+  p.retirement.socialSecurity = { a: { monthlyAtFRA: 2400, claimAge: 67 }, b: { monthlyAtFRA: 2900, claimAge: 67 } };
+  const v = S2.valuesFor(p, "ages", { today: T2 });
+  assert.equal(v.people.b.ss.mode, "statement", "the typed $2,900 is shown, not the earlier none");
+  S2.applyAges(p, v, T2);
+  assert.equal(p.retirement.socialSecurity.b.monthlyAtFRA, 2900, "and is not erased");
+});

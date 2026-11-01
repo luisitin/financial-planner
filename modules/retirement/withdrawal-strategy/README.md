@@ -12,6 +12,13 @@ The projection inputs; `retirement.strategy` and `retirement.withdrawalRate`. Wr
 ## Formulas
 The engine's four strategies (see the Projection README). `worstWindow`: every start year in the Damodaran data run with fixed-real spending; the one that fails earliest, else ends lowest. Sources: Bengen (1994) and the Trinity study for the 4% rule; Guyton and Klinger (2006) for guardrails; the Bogleheads VPW; the FI Calc guide's definitions (vendored).
 
+## No Social Security in the plan (2026-11-01)
+When an adult has no Social Security figure and has not said they get none (`overview/setup` `ssMissingFor`, the same check as the
+Dashboard's "Retirement: Needs Social Security"), the page opens with a notice from `modules/retirement/ss-notice.js`: "Social
+Security is not counted yet, so this page looks worse than it is", a filled "Add Social Security" and an outlined "We won't get
+Social Security", which saves the setup's own `guide.setup.ss[personId] = "none"` so it is never asked again. Before, only a
+grey sentence at the end of a paragraph said why the plan looked short.
+
 ## Tests
 `tests/retirement-pages.test.mjs`: four rows, percent never fails, fixed-real first year equals the planned spending.
 
