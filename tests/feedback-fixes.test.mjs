@@ -78,7 +78,7 @@ test("F-018 and F-019: next year's spending, and debt payments from the Debts pa
   p.expenses.push({ id: "card", name: "Visa payment", category: "debt", amount: 200, period: "monthly" });
   d = expenses(p, { today: TODAY });
   assert.equal(d.debtFromDebts, 0, "a filed debt expense wins");
-  assert.ok(d.warnings.some((w) => w.includes("differ from the Debts page")));
+  assert.ok(d.warnings.some((w) => /add up to \$200 a month; the Debts page has \$75\. One may be out of date/.test(w)), d.warnings.join(" "));
 });
 test("F-021: the change since last time compares with the last point before today", () => {
   const p = emptyPlan();

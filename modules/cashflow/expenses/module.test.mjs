@@ -51,3 +51,38 @@ test("dates: upcoming and ended expenses are listed but not counted; one-offs ar
   assert.equal(d.monthly, 100); assert.equal(d.count, 4); assert.equal(d.active.length, 2); assert.equal(d.oneTime, 3000);
   assert.equal(d.items[1].upcoming, true); assert.equal(d.items[2].ended, true);
 });
+
+test("a mortgage filed under housing is not counted twice, and does not set off the loan-payments check", () => {
+  const base = () => {
+    const p = emptyPlan();
+    p.accounts.push({ id: "m", name: "Mortgage", type: "mortgage", balance: 250000 }, { id: "c", name: "Car loan", type: "loan", balance: 9000 });
+    p.debts.push({ id: "dm", accountId: "m", rate: 0.065, minPayment: 1650 }, { id: "dc", accountId: "c", rate: 0.07, minPayment: 320 });
+    return p;
+  };
+  // 1. "Mortgage payment" under housing, the car loan under loan payments: nothing to check, nothing added
+  const a = base();
+  a.expenses.push({ id: "e1", name: "Mortgage payment", category: "housing", amount: 1650, period: "monthly" }, { id: "e2", name: "Car loan", category: "debt", amount: 320, period: "monthly" });
+  const da = compute(a, {});
+  assert.equal(da.warnings.length, 0, da.warnings.join(" "));
+  assert.equal(da.monthly, 1970);
+  // 2. the mortgage under housing (by amount), no loan payments filed: only the car loan comes from Debts
+  const b = base();
+  b.expenses.push({ id: "e1", name: "House", category: "housing", amount: 1600, period: "monthly" });
+  assert.equal(compute(b, {}).monthly, 1600 + 320, "the mortgage is not added a second time");
+  // 3. Set up my plan's "Home costs" besides the mortgage: the mortgage still comes from Debts
+  const c = base();
+  c.expenses.push({ id: "e1", name: "Home costs", category: "housing", amount: 450, period: "monthly" });
+  assert.equal(compute(c, {}).monthly, 450 + 1650 + 320);
+  // 4. everything filed under loan payments, mortgage included: also fine
+  const d = base();
+  d.expenses.push({ id: "e1", name: "Home costs", category: "housing", amount: 450, period: "monthly" }, { id: "e2", name: "Mortgage and car", category: "debt", amount: 1970, period: "monthly" });
+  assert.equal(compute(d, {}).warnings.length, 0);
+  // 5. a card payment missing from the list: the check says so, in plain words
+  const e = base();
+  e.accounts.push({ id: "v", name: "Visa", type: "credit", balance: 4000 });
+  e.debts.push({ id: "dv", accountId: "v", rate: 0.24, minPayment: 400 });
+  e.expenses.push({ id: "e1", name: "Mortgage payment", category: "housing", amount: 1650, period: "monthly" }, { id: "e2", name: "Car loan", category: "debt", amount: 320, period: "monthly" });
+  const w = compute(e, {}).warnings;
+  assert.equal(w.length, 1);
+  assert.match(w[0], /add up to \$320 a month; the Debts page has \$720 \(not counting the mortgage, which is under housing\)\. A payment may be missing here/);
+});

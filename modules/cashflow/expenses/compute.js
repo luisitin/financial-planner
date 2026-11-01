@@ -59,7 +59,14 @@ export function compute(plan, params = {}) {
   // F-019: required debt payments live on the Debts page. When no expense is filed under "Loan and card
   // payments", they are counted here as a must-pay line so the totals and the emergency-fund target are right.
   const debts = (plan.debts ?? []).length ? computeDebts(plan, params) : null;
-  const debtPayments = debts ? debts.payments : 0;
+  // A mortgage's payment is often filed here under housing ("Mortgage payment"), not under loan payments. When a
+  // housing expense is that payment (its name says mortgage, or it is within 10% of the mortgage's payment), the
+  // mortgage is not added again from Debts. Set up my plan files "Home costs" besides the mortgage under housing, so
+  // there the mortgage still comes from Debts. The check below accepts either way of filing it.
+  const mortgagePay = debts ? (debts.rows ?? []).filter((r) => r.type === "mortgage").reduce((s, r) => s + (Number(r.payment) || 0), 0) : 0;
+  const mortgageFiled = mortgagePay > 0 && active.some((x) => x.category === "housing" && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1));
+  const allDebtPayments = debts ? debts.payments : 0;
+  const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);
   const filedDebt = sum(active.filter((x) => x.category === "debt"), "monthly");
   const debtFromDebts = debtPayments > 0 && filedDebt === 0 ? debtPayments : 0;
   const monthly = sum(active, "monthly") + debtFromDebts;
@@ -78,7 +85,8 @@ export function compute(plan, params = {}) {
   const nextYear = inflatingMonthly * 12 * (1 + inflation) + (yearly - inflatingMonthly * 12);   // F-018: next year's spending after inflation
   const leftOverNextYear = income ? income.nextYear - nextYear : null;
   const warnings = [];
-  if (debtPayments > 0 && filedDebt > 0 && Math.abs(filedDebt - debtPayments) / debtPayments > 0.1) warnings.push(`Loan and card payments here (${money(filedDebt, plan.meta?.currency ?? "USD")} a month) differ from the Debts page (${money(debtPayments, plan.meta?.currency ?? "USD")}). One of them is out of date.`);
+  const off = (want) => want <= 0 || Math.abs(filedDebt - want) / want > 0.1;
+  if (debtPayments > 0 && filedDebt > 0 && off(debtPayments) && off(allDebtPayments)) warnings.push(`Loan and card payments here add up to ${money(filedDebt, plan.meta?.currency ?? "USD")} a month; the Debts page has ${money(debtPayments, plan.meta?.currency ?? "USD")}${mortgageFiled ? " (not counting the mortgage, which is under housing)" : ""}. ${filedDebt < debtPayments ? "A payment may be missing here" : "One may be out of date"}: check both.`);
   for (const x of items) {
     if (!(Number(x.amount) > 0)) warnings.push(`${x.name || "An expense"} has no amount.`);
     if (x.startDate && x.endDate && String(x.endDate) < String(x.startDate)) warnings.push(`${x.name || "An expense"} ends before it starts.`);
