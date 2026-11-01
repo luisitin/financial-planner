@@ -10,7 +10,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 | section | shape | owner |
 |---|---|---|
 | `schemaVersion` | integer, see migrate.js | core |
-| `meta` | `{ name, currency, locale, createdAt, updatedAt }` | system/settings |
+| `meta` | `{ name, currency, locale, createdAt, updatedAt, rev? }` -- `rev` names the version (new on every change, set by core/store.js; the PC refuses a save built on another version); optional, older plans are named by `updatedAt` | system/settings |
 | `household` | `{ people: [{ id, name, birthDate, role: "self"\|"partner"\|"dependent", retirementAge?, lifeExpectancy?, relation?: "spouse"\|"partner" (on the partner: married or not; optional, added 2026-11-01 by overview/setup) }], filingStatus: single\|married_joint\|married_separate\|head_of_household\|qualifying_surviving, state: two letters or "" }`; ages are computed, never stored | household/people |
 | `accounts` | `[{ id, name, type, institution, balance, asOf, ownerId, history: [{ date, balance }], notes }]`; `type` from `ACCOUNT_TYPES`; `ownerId` is a person's id from `household.people` ("" = joint or shared): Net worth offers the people to choose from, and since 2026-10-31 `migrate` turns a typed name that matches exactly one person's name into their id (`ownersToIds`, no version bump) | balance/net-worth |
 | `netWorthHistory` | `[{ date, assets, liabilities, netWorth }]` one per day | balance/net-worth |

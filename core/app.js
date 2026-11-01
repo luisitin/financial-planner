@@ -140,7 +140,8 @@ function makeCtx(route) {
     computeOf: (key, params) => { const m = modules.get(key); return m ? safeCompute(m, store.get(), params) : null; },
     computeRemote: async (key, params) => {
       const m = modules.get(key); if (!m) return null;
-      if (m.heavy && store.backend() === "server") { try { return await api.compute(key, params); } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
+      // the PC works on this device's plan, sent along: its own copy may not have the latest change yet
+      if (m.heavy && store.backend() === "server") { try { return await api.compute(key, params, store.get()); } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
       return safeCompute(m, store.get(), params);
     },
     go: (group, id, rest, query) => router.go(group, id, rest, query),
@@ -211,23 +212,34 @@ async function show(route, { keepScroll = false } = {}) {
     const fresh = now.filter((n) => !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
     lastFresh = new Set(fresh.map((n) => n.textContent));
     const inView = (n) => { const r = n.getBoundingClientRect(); return r.bottom > topbarH() && r.top < window.innerHeight; };
-    if (!pageScrolled && fresh.length && !fresh.some(inView)) echo(fresh[0]);
+    if (!pageScrolled && fresh.length && !fresh.some(inView)) {
+      const words = fresh[0].cloneNode(true); words.querySelectorAll("a, button").forEach((x) => x.remove());
+      echo(words.textContent.trim(), fresh[0].classList.contains("error"));
+    }
   } else lastFresh = new Set();
 }
 const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
 let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
 const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect().bottom ?? 0;
-/** A copy of an off-screen confirmation at the bottom of the screen; it never takes a tap and leaves by itself. */
-function echo(n) {
+/** A short note at the bottom of the screen (a save's off-screen confirmation); it never takes a tap and leaves by itself. */
+function echo(text, bad = false) {
   document.querySelector(".save-echo")?.remove();
-  const bad = n.classList.contains("error");
-  const el = ui.h("div", { class: `save-echo ${bad ? "bad" : "ok"}`, role: "status" }, ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, bad ? "!" : "✓"), ui.h("span", {}, n.textContent));
+  const el = ui.h("div", { class: `save-echo ${bad ? "bad" : "ok"}`, role: "status" }, ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, bad ? "!" : "✓"), ui.h("span", {}, text));
   document.body.append(el);
   setTimeout(() => el.classList.add("leaving"), bad ? 6000 : 3200);
   setTimeout(() => el.remove(), bad ? 6400 : 3600);
 }
 
+let aiState = "off";
 async function refreshStatus() {
+  try { aiState = await ai.status(); } catch { aiState = "off"; }
+  showPill();
+}
+/**
+ * The pill says where the latest change really is (design log 2026-09-15 words): "Saved on PC" only when the PC has it.
+ * A change that could not reach the PC yet, or two versions waiting for a choice, read "Phone only" (amber).
+ */
+function showPill() {
   const el = document.getElementById("status");
   if (store.sandbox()) {
     el.textContent = "Sandbox";
@@ -236,12 +248,45 @@ async function refreshStatus() {
     return;
   }
   const server = store.backend() === "server";
-  let aiState = "off";
-  try { aiState = await ai.status(); } catch { aiState = "off"; }
-  // Plain words (design log 2026-09-15): where the plan is saved right now.
-  el.textContent = server ? "Saved on PC" : "Phone only";
-  el.className = server ? "ok" : "warn";
-  el.title = (server ? `Your plan is saved on the PC (${api.base()})` : "The PC cannot be reached: your plan is saved in this browser only") + `. AI: ${aiState}. Tap for settings.`;
+  const { late, conflict } = store.syncState();   // a save on its way for a moment still reads Saved on PC (no flicker)
+  const onPc = server && !late && !conflict;
+  el.textContent = onPc ? "Saved on PC" : "Phone only";
+  el.className = onPc ? "ok" : "warn";
+  el.title = (conflict ? "Your plan was changed in two places: choose which version to keep, at the top of the page"
+    : late ? "Your latest changes are saved on this device only. They go to the PC by themselves as soon as it can be reached"
+    : server ? `Your plan is saved on the PC (${api.base()})` : "The PC cannot be reached: your plan is saved in this browser only") + `. AI: ${aiState}. Tap for settings.`;
+}
+/** Two versions (this device's changes and another device's): a bar above every page asks which one to keep. */
+function showConflict() {
+  let bar = document.getElementById("sync-bar");
+  const { conflict } = store.syncState();
+  if (!conflict) { bar?.remove(); return; }
+  const fresh = !bar;
+  if (!bar) { bar = ui.h("div", { id: "sync-bar", role: "alert" }); document.getElementById("content").before(bar); }
+  const when = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "earlier" : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
+  bar.replaceChildren(ui.h("section", { class: "card notice warn sync-card" },
+    ui.h("h2", {}, "Your plan was changed in two places"),
+    conflict.from === "tab"
+      ? ui.h("p", {}, `This window has changes (last at ${when(conflict.mineAt)}), and the plan was also changed in another window or tab on this device (${when(conflict.theirsAt)}). Nothing has been overwritten. Which version do you want to keep?`)
+      : ui.h("p", {}, `This device has changes (last at ${when(conflict.mineAt)}) that the PC does not have, and the PC's copy was changed on another device (${when(conflict.theirsAt)}). Nothing has been overwritten. Which version do you want to keep?`),
+    ui.h("div", { class: "row" },
+      ui.button(conflict.from === "tab" ? "Keep this window's version" : "Keep this device's version", () => { const tab = store.syncState().conflict?.from === "tab"; store.resolve("mine"); echo(tab ? "Kept this window's version." : "Kept this device's version. The PC's earlier copy is in its backups."); }),
+      ui.button(conflict.from === "tab" ? "Use the other window's version" : "Use the PC's version", () => { const tab = store.syncState().conflict?.from === "tab"; if (ui.confirm(tab ? "Use the other window's version? The changes made in this window will be dropped." : "Use the PC's version? The changes made on this device will be dropped.")) { store.resolve("theirs"); echo(tab ? "Now showing the other window's version." : "Now showing the PC's version."); } }, { class: "secondary" })),
+    ui.h("p", { class: "muted small" }, `This screen shows this ${conflict.from === "tab" ? "window" : "device"}'s version until you choose.`)));
+  // a choice that matters: bring it into view once, unless someone is typing (it waits at the top for them)
+  const typingNow = (() => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); })();
+  if (fresh && !typingNow) { document.querySelector(".save-echo")?.remove(); window.scrollTo(0, 0); }
+}
+let toldFull = false;
+function onSync() {
+  const { conflict, localFull, late } = store.syncState();
+  if (store.takeSent() && !conflict) echo("Your changes are now saved on the PC.");
+  // the browser's storage is full and the PC cannot take the change either: say so once, in plain words
+  if (localFull && late && !toldFull) { toldFull = true; echo("This device is out of space for your plan, so the latest change is only on screen. Connect to your PC before closing the app.", true); }
+  if (!localFull) toldFull = false;
+  // a change marked as waiting was not on this device at open (it did not fit, or this device's copy was erased)
+  if (store.takeLost()) echo("Your last change on this device could not be found when the app opened, so it did not reach the PC. Please check it and enter it again if it is missing.", true);
+  showPill(); showConflict();
 }
 
 async function boot() {
@@ -257,16 +302,19 @@ async function boot() {
   document.getElementById("scrim").addEventListener("click", closeDrawer);
   document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
   store.subscribe(() => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50); });
-  // a tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap
-  // here never saves an old copy over today's changes
-  document.addEventListener("visibilitychange", async () => {
-    if (document.visibilityState !== "visible" || store.backend() !== "server") return;
-    const typing = () => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
-    if (typing()) return;   // never redraw over what someone is typing; the next return to the tab checks again
-    try { const p = await api.getPlan(); if ((p?.meta?.updatedAt ?? "") > (store.get()?.meta?.updatedAt ?? "") && !typing()) store.adopt(p); } catch { }
-  });
+  // A tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap here
+  // never saves an old copy over today's changes; changes made here while the PC was out of reach go to it now (and
+  // are retried every 30 seconds and when the network returns). Never redraw over what someone is typing.
+  const typing = () => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); };
+  addEventListener("planner:sync", onSync);
+  // leaving the app (switching apps, locking the phone, closing the tab): the change is already on this device; send it now
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") store.resync({ takeNewer: !typing() }); else store.flush(); });
+  addEventListener("pagehide", () => store.flush());
+  addEventListener("online", () => store.resync({ takeNewer: !typing() }));
+  setInterval(() => { if (store.syncState().pending || store.backend() !== "server") store.resync({ takeNewer: !typing() }); }, 30000);
+  onSync();
   addEventListener("planner:features", () => buildNav());
-  addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); if (current) show(current, { keepScroll: true }); }); });
+  addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); onSync(); if (current) show(current, { keepScroll: true }); }); });
   // First visit (an empty plan, "look around" never chosen) or a guide still followed before any account: an address
   // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
   const sm = modules.get("overview/start");

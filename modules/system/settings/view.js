@@ -69,7 +69,8 @@ export function render(root, ctx) {
     ui.row(
       ui.button("Download a copy", () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" })); a.download = `plan-${fmt.today()}.json`; a.click(); dataOut.say("ok", "A copy of your plan is downloading."); }, { class: "secondary" }),
       ui.button("Restore from a copy", () => fileIn.click(), { class: "secondary" }),
-      ui.button("Erase the copy on this device", () => { if (ui.confirm("Erase the plan stored in this browser? The copy on the PC is untouched.")) { localStorage.removeItem("planner.plan"); location.reload(); } }, { class: "danger" }),
+      // through the store: in the sandbox only the pretend plan goes, and the waiting mark goes with the copy it names
+      ui.button("Erase the copy on this device", () => { const waiting = store.syncState().pending; if (ui.confirm(waiting ? "Erase the plan stored in this browser? Your latest changes have not reached the PC yet, so they would be lost. The copy on the PC is untouched." : "Erase the plan stored in this browser? The copy on the PC is untouched.")) { store.eraseDevice(); location.reload(); } }, { class: "danger" }),
     ),
     fileIn, dataOut,
     ui.h("p", { class: "small muted", style: { marginTop: "10px" } }, "A copy is a plain file you can keep anywhere. Restoring replaces what is here with the file."),

@@ -130,6 +130,14 @@ async function aiModels() {
   }
   return [];
 }
+let aiSeen = { ok: null, at: 0, check: null };
+function aiReachable() {
+  if (P("ai.provider") === "none") return Promise.resolve(false);
+  if (Date.now() - aiSeen.at < 30000) return Promise.resolve(aiSeen.ok);
+  aiSeen.check = aiSeen.check ?? aiModels().then((m) => m.length > 0, () => false)
+    .then((ok) => { aiSeen = { ok, at: Date.now(), check: null }; return ok; });
+  return Promise.race([aiSeen.check, new Promise((r) => setTimeout(() => r(aiSeen.ok), 1500))]);
+}
 async function aiChat({ messages, model, options }) {
   const provider = P("ai.provider");
   if (provider === "none") throw new Error("AI disabled in planner.properties (ai.provider=none)");
@@ -153,7 +161,9 @@ async function handleApi(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);   // ["api", ...]
   const route = parts.slice(1).join("/");
   if (req.method === "GET" && route === "health") {
-    let aiOk = null; try { aiOk = (await aiModels()).length > 0; } catch { aiOk = false; }
+    // the app asks this before it loads or saves the plan, so it never waits long for the AI: a slow or switched-off AI
+    // host must not make a reachable PC look out of reach. The last answer is reused for 30 s; a new check gets 1.5 s.
+    const aiOk = await aiReachable();
     return json(res, 200, { ok: true, version: VERSION, plan: fs.existsSync(PLAN_FILE), ai: { provider: P("ai.provider"), reachable: aiOk }, authRequired: !!P("auth.token") });
   }
   if (req.method === "GET" && route === "config") { ({ props, source } = loadProperties()); return json(res, 200, publicConfig()); }
@@ -167,6 +177,19 @@ async function handleApi(req, res, url) {
   if (route === "plan" && req.method === "PUT") {
     let plan; try { plan = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "invalid JSON" }); }
     if (!plan || typeof plan !== "object" || !("schemaVersion" in plan)) return json(res, 400, { error: "not a plan (schemaVersion missing)" });
+    // X-Planner-Base names the copy the device built this plan on. When another device saved since,
+    // refuse with the current copy instead of overwriting it; the device asks which version to keep (core/store.js).
+    // No header: a page from before this check (a tab left open since the update). Its save is taken only while the
+    // PC's copy also predates the check (no meta.rev); over a copy a current page wrote, it is refused the same way.
+    const base = req.headers["x-planner-base"];
+    const cur = readPlan();
+    // a version is named by meta.rev (new on every change), or meta.updatedAt for plans saved before rev existed;
+    // "none" means the device knows of no plan here
+    const curAt = cur?.meta?.rev || cur?.meta?.updatedAt || "";
+    const sameAt = curAt === (plan.meta?.rev || plan.meta?.updatedAt);
+    if (typeof base === "string" && base) {
+      if (cur && curAt && curAt !== base && !sameAt) return json(res, 409, { error: "the plan on the PC changed since this device last saw it", plan: cur });
+    } else if (cur?.meta?.rev && !sameAt) return json(res, 409, { error: "this page is out of date: reload it, then save again", plan: cur });
     writePlan(plan); return json(res, 200, { ok: true, savedAt: new Date().toISOString() });
   }
   if (route === "plan/backups" && req.method === "GET") return json(res, 200, { backups: fs.readdirSync(path.join(DATA, "backups")).sort().reverse() });
@@ -249,7 +272,7 @@ function serveStatic(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   res.setHeader("Access-Control-Allow-Origin", "*");     // a copy of the HTML opened elsewhere may call this server
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Planner-Token, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Planner-Token, X-Planner-Base, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   try {
