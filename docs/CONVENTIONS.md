@@ -84,6 +84,14 @@ type: "text" | "number" | "money" | "percent" | "date" | "select" | "checkbox" |
 `percent` fields are typed as 7 and stored as 0.07. `money` and `number` return numbers or
 `null` when blank. `select` options are strings or `{ value, label }`.
 
+A `money` field is a text box with the plan's currency sign in front and the phone's number pad: "4,500",
+"$4,500", "4500.50" and "72k" all save as numbers (rounded to cents), commas come back when you leave the box, and
+anything else (or outside `min`/`max`) holds the form with a plain message. `step` does not apply to it. A money box
+built by hand outside `ui.form` should use `ui.moneyBox({ name, value, min, max })` (put `.box` on the page, read
+`ui.moneyValue(.input)`) rather than `type: "number"`, which refuses a comma and on an iPhone silently saves nothing.
+Every box is at least 16px: an iPhone zooms the whole page into a box with smaller text, so never set a box's
+font-size below 16px in a module style.
+
 ## Ids and dates
 Every list item in the plan has `id` from `ui.uid()`. Dates are ISO `YYYY-MM-DD` strings.
 Money is a plain number in the plan's currency (`plan.meta.currency`); rates are fractions.

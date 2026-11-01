@@ -155,8 +155,12 @@ p:last-child { margin-bottom: 0; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); }
 .field-label { color: var(--text-2); font-weight: 500; }
 .help { color: var(--muted); }
-input, select, textarea { font: inherit; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); width: 100%; }
+input, select, textarea { font: inherit; font-size: max(16px, var(--fs)); min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); width: 100%; }
 input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; }
+/* money boxes: the currency sign inside the box (core/ui/dom.js moneyBox). Boxes are 16px because an iPhone zooms
+   the whole page into a box with smaller text and does not zoom back out. */
+.money-in { position: relative; display: block; }
+.money-in .money-sign { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-2); pointer-events: none; font-size: max(16px, var(--fs)); }
 textarea { min-height: 88px; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 button, .btn { font: inherit; font-weight: 600; min-height: 44px; padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }

@@ -23,3 +23,36 @@ test("money, pct, num, signed", () => {
   assert.equal(fmt.signed(-5), "-$5");
   assert.equal(fmt.signed(5), "+$5");
 });
+
+test("a money box reads what people type: commas, a dollar sign, k and m, spaces; nonsense and blank are null", () => {
+  assert.equal(fmt.readAmount("$4,500"), 4500);
+  assert.equal(fmt.readAmount("4500.50"), 4500.5);
+  assert.equal(fmt.readAmount("72k"), 72000);
+  assert.equal(fmt.readAmount("1.2M"), 1200000);
+  assert.equal(fmt.readAmount("-500"), -500);
+  assert.equal(fmt.readAmount("-$500"), -500);
+  assert.equal(fmt.readAmount(" 950 "), 950);
+  assert.equal(fmt.readAmount("4 500"), 4500);
+  assert.equal(fmt.readAmount("5."), 5);
+  assert.equal(fmt.readAmount(".5"), 0.5);
+  assert.equal(fmt.readAmount("US$12"), 12);
+  assert.equal(fmt.readAmount(1250), 1250);
+  assert.equal(fmt.readAmount(""), null);
+  assert.equal(fmt.readAmount("   "), null);
+  assert.equal(fmt.readAmount("abc"), null);
+  assert.equal(fmt.readAmount("4,500 a month"), null);
+  assert.equal(fmt.readAmount("1.2.3"), null);
+  assert.equal(fmt.readAmount(null), null);
+  assert.equal(fmt.readAmount(NaN), null);
+});
+
+test("a money box shows commas and up to two decimals, and nothing for blank", () => {
+  assert.equal(fmt.amountText(380000), "380,000");
+  assert.equal(fmt.amountText(1234.5), "1,234.5");
+  assert.equal(fmt.amountText(1234.567), "1,234.57");
+  assert.equal(fmt.amountText(0), "0");
+  assert.equal(fmt.amountText(-500), "-500");
+  assert.equal(fmt.amountText(null), "");
+  assert.equal(fmt.amountText(""), "");
+  assert.equal(fmt.amountText(undefined), "");
+});

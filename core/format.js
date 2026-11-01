@@ -11,3 +11,16 @@ export const date = (iso, locale = "en-US") => { if (!iso) return "-"; const d =
 export const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 export const today = () => isoDate(new Date());   // the local calendar day, not the UTC one
 export const signed = (n, currency) => (Number(n) < 0 ? "-" : "+") + money(Math.abs(Number(n)), currency);
+// Reading what someone typed into a money box (the inverse of money(), not math): "$4,500", "4500.50", "72k", "1.2m",
+// "-500" and " 950 " all read as numbers; blank or nonsense is null, so a blank box saves nothing and never becomes 0.
+export const readAmount = (text) => {
+  if (text === null || text === undefined) return null;
+  if (typeof text === "number") return Number.isFinite(text) ? text : null;
+  const s = String(text).trim().toLowerCase().replace(/[$€£¥,\s]|us\$|ca\$|a\$/g, "");
+  const m = /^([-+]?)(\d+\.?\d*|\.\d+)([km])?$/.exec(s);
+  if (!m) return null;
+  const n = Number(m[2]) * (m[3] === "k" ? 1e3 : m[3] === "m" ? 1e6 : 1) * (m[1] === "-" ? -1 : 1);
+  return Number.isFinite(n) ? n : null;
+};
+// An amount for a money box: commas, up to two decimals, no sign ("380,000", "1,234.5").
+export const amountText = (n) => Number.isFinite(Number(n)) && n !== "" && n !== null ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(n)) : "";

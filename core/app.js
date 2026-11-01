@@ -162,6 +162,7 @@ async function show(route, { keepScroll = false } = {}) {
   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
   if (cleanup) { try { cleanup(); } catch (e) { console.warn(e); } cleanup = null; }
   const root = document.getElementById("content");
+  ui.setMoneySign(currencySign(store.get()?.meta?.currency));
   const keepY = keepScroll ? window.scrollY : 0;
   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
   if (keepScroll) root.style.minHeight = `${root.offsetHeight}px`;
@@ -213,6 +214,7 @@ async function show(route, { keepScroll = false } = {}) {
     if (!pageScrolled && fresh.length && !fresh.some(inView)) echo(fresh[0]);
   } else lastFresh = new Set();
 }
+const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
 let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
 const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect().bottom ?? 0;
 /** A copy of an off-screen confirmation at the bottom of the screen; it never takes a tap and leaves by itself. */

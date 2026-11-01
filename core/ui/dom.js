@@ -1,5 +1,6 @@
 // core/ui/dom.js -- the tiny UI kit every module uses. No framework, no build step.
 // Keep it small; a module that needs something fancier adds it to its own view.js.
+import { readAmount, amountText } from "../format.js";
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -36,6 +37,36 @@ export function field(label, control, help) {
   return h("label", { class: "field" }, h("span", { class: "field-label" }, label), control, help ? h("small", { class: "help" }, help) : null);
 }
 export function input(attrs = {}) { return h("input", { type: "text", ...attrs }); }
+
+// The plan's currency sign in front of every money box; the shell sets it from plan.meta.currency.
+let moneySign = "$";
+export const setMoneySign = (sign) => { moneySign = sign || "$"; };
+/**
+ * A money box: the sign sits in front, the phone shows its number pad, and "4,500", "$4,500", "4500.50" and "72k" are
+ * all understood (a number box refuses a comma or a pasted "$", and on an iPhone silently saves nothing). Leaving the
+ * box puts the commas back ("380,000"), so an extra zero shows. Something that is not an amount, or is outside
+ * min/max, holds the form with a plain message. Returns { box, input }: put `box` on the page, read `input`.
+ */
+export function moneyBox({ name, value, required, min, max, placeholder, label } = {}) {
+  const c = h("input", { type: "text", name, value: typeof value === "number" || (value !== "" && value !== null && value !== undefined && readAmount(value) !== null) ? amountText(readAmount(value)) : (value ?? ""), inputmode: "decimal", autocomplete: "off", required: required ? true : null, placeholder, "aria-label": label });
+  const check = () => {
+    const n = readAmount(c.value);
+    let why = "";
+    if (c.value.trim() && n === null) why = "Type an amount in numbers, like 4,500.";
+    else if (n !== null && min !== undefined && min !== null && min !== "" && n < Number(min)) why = `Use ${amountText(Number(min))} or more.`;
+    else if (n !== null && max !== undefined && max !== null && max !== "" && n > Number(max)) why = `Use ${amountText(Number(max))} or less.`;
+    c.setCustomValidity(why);
+    return why ? null : n;
+  };
+  c.addEventListener("input", check);
+  c.addEventListener("blur", () => { const n = check(); if (n !== null) c.value = amountText(n); });
+  check();
+  const box = h("span", { class: "money-in" }, h("span", { class: "money-sign", "aria-hidden": "true" }, moneySign), c);
+  c.style.paddingLeft = `${16 + moneySign.length * 9}px`;
+  return { box, input: c };
+}
+/** The number in a money box, rounded to cents; blank or not an amount is null. */
+export const moneyValue = (el) => { const n = readAmount(el?.value); return n === null ? null : Math.round(n * 100) / 100; };
 export function select(options, value, attrs = {}) {
   return h("select", attrs, options.map((o) => {
     const opt = typeof o === "string" ? { value: o, label: o } : o;
@@ -68,7 +99,8 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
       case "checkbox": c = h("input", { type: "checkbox", name: fd.key, checked: v ? true : null }); break;
       case "textarea": c = h("textarea", { name: fd.key, rows: fd.rows ?? 3 }, v ?? ""); break;
       case "date": c = input({ type: "date", name: fd.key, value: v ?? "", required: fd.required ? true : null }); break;
-      case "number": case "money": case "percent":
+      case "money": { const m = moneyBox({ name: fd.key, value: v, required: fd.required, min: fd.min, max: fd.max, placeholder: fd.placeholder }); c = m.input; controls[fd.key] = c; f.append(field(fd.label, m.box, fd.help)); continue; }
+      case "number": case "percent":
         // percent fields store a fraction (0.219) and show a percentage (21.9), both ways
         c = input({ type: "number", name: fd.key, value: fd.type === "percent" && v !== null && v !== undefined && v !== "" ? Number((Number(v) * 100).toPrecision(10)) : (v ?? ""), step: fd.step ?? (fd.type === "percent" ? "0.01" : fd.type === "money" ? "0.01" : "any"), min: fd.min, max: fd.max, inputmode: "decimal", required: fd.required ? true : null, placeholder: fd.type === "percent" ? "e.g. 7 for 7%" : null }); break;
       default: c = input({ type: "text", name: fd.key, value: v ?? "", required: fd.required ? true : null, placeholder: fd.placeholder });
@@ -84,7 +116,8 @@ function readForm(fields, controls) {
   for (const fd of fields) {
     const c = controls[fd.key];
     if (fd.type === "checkbox") out[fd.key] = !!c.checked;
-    else if (fd.type === "number" || fd.type === "money") out[fd.key] = c.value === "" ? null : Number(c.value);
+    else if (fd.type === "money") out[fd.key] = moneyValue(c);
+    else if (fd.type === "number") out[fd.key] = c.value === "" ? null : Number(c.value);
     else if (fd.type === "percent") out[fd.key] = c.value === "" ? null : Number(c.value) / 100;   // typed 7 -> stored 0.07
     else out[fd.key] = c.value;
   }
