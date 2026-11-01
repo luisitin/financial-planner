@@ -1,7 +1,7 @@
 // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 // the text), check the columns and the preview, import. Past imports can be undone.
 import { compute, prepareImport } from "./compute.js";
-import { txKey } from "../ledger/compute.js";
+import { txKey, monthLabel } from "../ledger/compute.js";
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -79,6 +79,9 @@ export function render(root, ctx) {
       ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
       bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
     ));
+    // where the file starts and stops: a month it cuts is only partly in your spending and budget pages
+    const cut = [prep.fileFrom && prep.fileFrom.slice(8, 10) > "04" ? monthLabel(prep.fileFrom) : null, prep.fileTo && prep.fileTo.slice(8, 10) < "28" ? monthLabel(prep.fileTo) : null].filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
+    if (prep.fileFrom) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`));
     if (ok) previewHost.append(
       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
@@ -92,7 +95,7 @@ export function render(root, ctx) {
           const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId });
           for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
           p.imports = p.imports ?? [];
-          p.imports.push({ id: importId, at: when, accountId: acct, fileName: name, rows: fresh.parsed.rows.length, added: fresh.add.length, skipped: fresh.skip.length, bad: fresh.bad.length });
+          p.imports.push({ id: importId, at: when, accountId: acct, fileName: name, rows: fresh.parsed.rows.length, added: fresh.add.length, skipped: fresh.skip.length, bad: fresh.bad.length, from: fresh.fileFrom, to: fresh.fileTo });
           p.importProfiles = p.importProfiles ?? {};
           p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
           for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);

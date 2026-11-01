@@ -22,7 +22,10 @@ test("no month: nothing; a month with envelopes: spent, left, pace, rollover", (
   assert.equal(n.spent, 60); assert.equal(n.carried, 0, "no rollover"); assert.equal(n.pace, "ahead", "60 of 100 by mid-month is faster than half");
   assert.equal(d.totals.spent, 275); assert.equal(d.totals.available, 620); assert.equal(d.totals.left, 345);
   assert.deepEqual(d.unbudgeted.map((u) => u.category), ["housing"]);
-  assert.equal(d.suggestions.find((s) => s.category === "housing").average, 500, "1500 once over the three months that have data");
+  // the lines start on Jun 10, so June is not a whole month: July and August are averaged, and "2 months" is what it was divided by
+  assert.deepEqual(d.suggestFrom, ["2026-08", "2026-07"]);
+  assert.equal(d.suggestions.find((s) => s.category === "housing").average, 750, "1500 once over the two whole months");
+  assert.equal(d.suggestions.find((s) => s.category === "housing").months, 2);
   assert.equal(d.suggestions.find((s) => s.category === "groceries"), undefined, "already budgeted");
 });
 test("over budget and a past month", () => {
@@ -33,4 +36,17 @@ test("over budget and a past month", () => {
   d = compute(p, { today: "2026-09-15", month: "2026-08" });
   assert.equal(d.dayOfMonth, 31); assert.equal(d.daysLeft, 0);
   assert.equal(d.envelopes.find((e) => e.category === "groceries").carried, 30, "July: 450 - 420");
+});
+test("a file with no whole month suggests nothing; a file that stops days before today is stale", () => {
+  const p = emptyPlan();
+  // a file downloaded on Sep 2 covering Aug 12 to Sep 2: no whole month, so no averages of a part of a month
+  p.transactions.push(tx("a", "2026-08-12", -70, "groceries"), tx("b", "2026-08-20", -640, "debt"), tx("c", "2026-09-02", -40, "groceries"));
+  let d = compute(p, { today: "2026-09-02" });
+  assert.deepEqual(d.suggestFrom, []); assert.deepEqual(d.suggestions, []);
+  assert.equal(d.stale, false, "the file reaches today");
+  d = compute(p, { today: "2026-09-20" });
+  assert.equal(d.stale, true, "18 days of September are not in the file yet");
+  assert.equal(compute(p, { today: "2026-09-04" }).stale, false, "two days behind is normal (the bank posts late)");
+  assert.equal(compute(p, { today: "2026-10-03" }).stale, true, "a new month the files do not reach yet");
+  assert.equal(compute(p, { today: "2026-10-03", month: "2026-09" }).stale, false, "only this month's spent-so-far is affected");
 });

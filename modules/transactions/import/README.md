@@ -18,6 +18,8 @@ Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfil
 4. Rules run (`applyRules`), then `dedupe` against `plan.transactions` by `txKey` and within the file.
 5. On confirm the view appends `add` with fresh ids, records an `imports` entry (undo removes by `importId`) and saves the mapping under the header fingerprint.
 
+- The preview says what the file covers (2026-11-01): "This file covers 8/12/2026 to 9/2/2026. Aug 2026 and Sep 2026 are only partly in it; the spending and budget pages say so." (`fileFrom`/`fileTo`: the first and last day of every row, duplicates included; a month counts as cut when the file starts after the 4th or ends before the 28th). Each import record keeps `from` and `to`.
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 

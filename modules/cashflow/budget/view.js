@@ -26,7 +26,11 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, d.hasBudget
       ? (d.totals.left >= 0 ? `${fmt.money(d.totals.left, cur)} left in your envelopes with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.` : `Your envelopes are ${fmt.money(-d.totals.left, cur)} over with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.`)
       : "Give each kind of spending an envelope: an amount for the month. The page shows what is spent so far from your transactions, what is left, and whether the pace is right."),
-    d.hasBudget ? null : ui.h("p", { class: "muted small" }, d.hasData ? "Suggestions below come from your last months of real spending." : "Import a bank file first and the page will suggest amounts from what you actually spend."),
+    d.hasBudget ? null : ui.h("p", { class: "muted small" }, !d.hasData ? "Import a bank file first and the page will suggest amounts from what you actually spend."
+      : d.suggestFrom.length ? `Suggestions below are the average of your last ${d.suggestFrom.length === 1 ? "whole month" : `${d.suggestFrom.length} whole months`} of real spending.`
+      : `Suggestions need at least one whole month in your bank files; yours cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}. Most banks let you download 90 days: import that and they appear.`),
+    // a file that stops days ago leaves "spent so far" short: say where it stops
+    d.stale ? ui.h("p", { class: "muted small" }, `Spent so far comes from your bank files, which stop on ${fmt.date(d.cover.to)}. Import a newer file to count the rest of the month.`) : null,
   ));
   const months = []; for (let k = 0; k < 6; k++) { const dt = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - k, 1); months.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`); }
   root.append(ui.card(null, ui.h("div", { class: "form" }, ui.field("Month", ui.select(months.map((m) => ({ value: m, label: compute(plan, { today, month: m }).label })), d.month, { onChange: (e) => { state.month = e.target.value; redraw(); } })))));
@@ -77,7 +81,7 @@ export function render(root, ctx) {
   const useIt = (sg) => { pending = `Envelope added for ${sg.label}.`; store.update((p) => { p.budgets = p.budgets ?? []; if (!p.budgets.some((b) => b.category === sg.category)) p.budgets.push({ id: ui.uid(), category: sg.category, amount: sg.average, period: "monthly", rollover: false }); }); };
   const suggestionRow = (sg) => ui.h("li", {},
     ui.h("span", { class: "ic" }, sg.icon),
-    ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, sg.label), ui.h("div", { class: "d" }, `average of ${sg.months} month${sg.months === 1 ? "" : "s"}`)),
+    ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, sg.label), ui.h("div", { class: "d" }, `average of ${sg.months} whole month${sg.months === 1 ? "" : "s"}`)),
     ui.h("span", { class: "st" }, fmt.money(sg.average, cur), " ", ui.button("Use it", () => useIt(sg), { class: "secondary small" })));
   if (d.suggestions.length) root.append(ui.card("Suggested from your last months", ui.h("ul", { class: "page-list" }, d.suggestions.slice(0, 12).map(suggestionRow))));
   if (!d.envelopes.length) { formCard.append(out, formHost); root.append(formCard); }

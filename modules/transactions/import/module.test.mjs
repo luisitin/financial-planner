@@ -90,6 +90,7 @@ test("prepareImport: rules applied, saved profile reused, duplicates against the
   const kroger = r.add.find((t) => t.rawPayee.startsWith("KROGER"));
   assert.equal(kroger.category, "groceries"); assert.equal(kroger.payee, "Kroger");
   assert.equal(r.dateFrom, "2026-08-12"); assert.equal(r.dateTo, "2026-09-02");
+  assert.equal(r.fileFrom, "2026-08-12"); assert.equal(r.fileTo, "2026-09-02", "the file's own days, duplicates included");
   assert.ok(Math.abs(r.inTotal - 3900) < 1e-9); assert.ok(Math.abs(r.outTotal - 1506.4) < 1e-9);
   p.transactions.push(...r.add);
   const saved = { ...r.mapping };

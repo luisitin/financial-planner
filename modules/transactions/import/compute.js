@@ -137,7 +137,8 @@ export const headerKey = (headers) => headers.map(H).join("|");
 
 /**
  * prepareImport(plan, text, { accountId, mapping?, flipSign?, importId }) -> {
- *   parsed, mapping, headerKey, txs (after rules), add, skip, bad, dateFrom, dateTo, inTotal, outTotal, ruled
+ *   parsed, mapping, headerKey, txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
+ *   own first and last day), inTotal, outTotal, ruled
  * }
  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
  */
@@ -159,9 +160,10 @@ function finish(plan, rawTxs) {
   const ruled = applyRules(plan.rules ?? [], rawTxs);
   const { add, skip } = dedupe(plan.transactions ?? [], ruled.txs);
   const dates = add.map((t) => t.date).sort();
+  const all = ruled.txs.map((t) => t.date).filter(Boolean).sort();   // the file's own first and last day, duplicates included
   let inTotal = 0, outTotal = 0;
   for (const t of add) { if (t.amount >= 0) inTotal += t.amount; else outTotal += -t.amount; }
-  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits };
+  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom: all[0] ?? null, fileTo: all[all.length - 1] ?? null, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits };
 }
 /**
  * prepareRows(plan, rows, { accountId, importId, flipSign }) -> same shape as prepareImport (minus parsed/mapping).

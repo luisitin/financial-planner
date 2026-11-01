@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, txKey, monthOf, monthLabel, isTransfer } from "./compute.js";
+import { compute, txKey, monthOf, monthLabel, isTransfer, coverage, monthCover, COVER_SLACK } from "./compute.js";
 import { samplePlan } from "../../../qa/fixtures/sample-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -47,4 +47,23 @@ test("filters: month, account, uncategorised, search; paging", () => {
   assert.equal(d.shown, 5); assert.equal(d.hasMore, true);
   d = compute(p, { limit: 5, offset: 15 });
   assert.equal(d.shown, 1); assert.equal(d.hasMore, false);
+});
+test("coverage: the days the bank files cover; a month is whole when it misses at most 3 days at either end and is over", () => {
+  assert.equal(coverage(emptyPlan()), null);
+  const p = emptyPlan();
+  p.transactions.push({ id: "a", date: "2026-08-12", amount: -1 }, { id: "b", date: "2026-10-29", amount: -1 }, { id: "c", date: "bad", amount: -1 });
+  const cov = coverage(p);
+  assert.deepEqual(cov, { from: "2026-08-12", to: "2026-10-29" });
+  assert.equal(COVER_SLACK, 3);
+  const aug = monthCover(cov, "2026-08", "2026-11-01");
+  assert.deepEqual([aug.firstDay, aug.lastDay, aug.days, aug.full], [12, 31, 20, false], "starts on the 12th");
+  assert.equal(monthCover(cov, "2026-09", "2026-11-01").full, true);
+  const oct = monthCover(cov, "2026-10", "2026-11-01");
+  assert.deepEqual([oct.lastDay, oct.full], [29, true], "a file cut on the 29th of 31 still counts as the whole month");
+  assert.equal(monthCover(cov, "2026-10", "2026-10-30").full, false, "not over yet");
+  assert.equal(monthCover({ from: "2026-08-04", to: "2026-10-29" }, "2026-08", null).full, true, "the 4th is within 3 days of the 1st");
+  assert.equal(monthCover({ from: "2026-08-05", to: "2026-10-29" }, "2026-08", null).full, false);
+  const jul = monthCover(cov, "2026-07", "2026-11-01");
+  assert.deepEqual([jul.days, jul.full, jul.from], [0, false, null], "the files do not reach July");
+  assert.equal(monthCover(cov, "2026-10", "2026-10-20").lastDay, 20, "never past today");
 });

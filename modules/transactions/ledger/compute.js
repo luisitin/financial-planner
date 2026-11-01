@@ -11,6 +11,32 @@ export const txKey = (t) => `${t.accountId ?? ""}|${t.date ?? ""}|${(Math.round(
 export const monthOf = (date) => String(date ?? "").slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const monthLabel = (ym) => { const m = /^(\d{4})-(\d{2})/.exec(String(ym ?? "")); return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : String(ym ?? ""); };
+/** coverage(plan) -> { from, to } | null: the first and last transaction dates, the days the imported bank files cover. */
+export function coverage(plan) {
+  let from = null, to = null;
+  for (const t of plan.transactions ?? []) { const d = String(t.date ?? ""); if (!/^\d{4}-\d{2}-\d{2}/.test(d)) continue; if (!from || d < from) from = d.slice(0, 10); if (!to || d > to) to = d.slice(0, 10); }
+  return from ? { from, to } : null;
+}
+/** Days either end of a month the files may miss and still count as covering it: a file cut on the 29th, or a quiet 1st. */
+export const COVER_SLACK = 3;
+/**
+ * monthCover(cov, ym, today) -> { ym, from, to, firstDay, lastDay, days, daysInMonth, full }
+ * The part of a month the bank files cover: from the later of the 1st and the first transaction to the earlier of the month's
+ * last day, the last transaction and today. `full` when it misses at most COVER_SLACK days at either end and the month is over.
+ * Days are day-of-month numbers; days = 0 when the files do not reach the month.
+ */
+export function monthCover(cov, ym, today = null) {
+  const y = Number(String(ym).slice(0, 4)), m = Number(String(ym).slice(5, 7));
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const start = `${ym}-01`, end = `${ym}-${String(daysInMonth).padStart(2, "0")}`;
+  let from = cov?.from && cov.from > start ? cov.from : start;
+  let to = cov?.to && cov.to < end ? cov.to : end;
+  if (today && today < to) to = today;
+  if (!cov || from > to || cov.to < start || cov.from > end) return { ym, from: null, to: null, firstDay: 0, lastDay: 0, days: 0, daysInMonth, full: false };
+  const firstDay = Number(from.slice(8, 10)), lastDay = Number(to.slice(8, 10));
+  const over = !today || today > end;
+  return { ym, from, to, firstDay, lastDay, days: lastDay - firstDay + 1, daysInMonth, full: over && firstDay <= 1 + COVER_SLACK && lastDay >= daysInMonth - COVER_SLACK };
+}
 /** Transfers between the owner's own accounts are neither income nor spending. */
 export const isTransfer = (t, plan) => !!t.transferId || t.category === "transfer" || categoryById(plan, t.category)?.kind === "transfer";
 

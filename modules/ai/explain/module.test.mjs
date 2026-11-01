@@ -412,7 +412,9 @@ test("every page offered, on a plan holding every name and note there is: none o
   const s = spending(copy, { today: TODAY }), real = spending(p, { today: TODAY });
   assert.deepEqual(s.topPayees.map((x) => [x.total, x.count]), real.topPayees.map((x) => [x.total, x.count]));
   assert.deepEqual(recurring(copy, { today: TODAY }).detected.map((r) => [r.count, r.amount]), recurring(p, { today: TODAY }).detected.map((r) => [r.count, r.amount]));
-  const top = page(p, "cashflow/spending").lines.filter((l) => /^ {2}\d+\. payee /.test(l)).map((l) => l.split(";")[0].replace(/^ {2}\d+\. payee /, ""));
+  // October, the month with the most payees (the page opens on the latest month the file covers to the end: September)
+  const october = sheetFor(p, (c) => MODS.get("cashflow/spending").compute(c, { today: TODAY, month: "2026-10" }), { today: TODAY });
+  const top = october.lines.filter((l) => /^ {2}\d+\. payee /.test(l)).map((l) => l.split(";")[0].replace(/^ {2}\d+\. payee /, ""));
   assert.ok(top.length >= 5 && top.every((x) => /^Payee \d+$/.test(x)) && new Set(top).size === top.length, `each payee its own stand-in: ${top}`);
   assert.ok(payeeAliases(p).some((x) => x.name === "Netflix") && payeeAliases(p).some((x) => x.name === "NETFLIX"), "Netflix and NETFLIX stay two payees, as on the page");
   // and the names come back on screen
