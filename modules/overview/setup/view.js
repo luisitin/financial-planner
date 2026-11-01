@@ -154,8 +154,8 @@ select.su-in { font-size: var(--fs-md); }
   .su-root .su-tiles.three .su-tile { min-height: 84px; flex-direction: column; align-items: flex-start; gap: 4px; }
   .su-tiles.three .su-tile .su-ts { margin-left: 0; }
   .su-tiles.three .su-tile.on::after { top: 9px; transform: none; }
-  .su-stand { grid-template-columns: 1fr 1fr 1fr 1fr; }
   .su-stand .su-fig:first-child { grid-column: auto; }
+  .su-stand .su-fig:nth-child(n) .stat-value, .su-stand .su-fig:nth-child(n) .stat-value.long { font-size: var(--fs-xl); }
 }
 @media (max-width: 380px) { .su-row { grid-template-columns: 1fr 8rem; } }
 @media (prefers-reduced-motion: reduce) { .su-card, .su-check, .su-dots i { animation: none; } .su-bar > span, .su-tile { transition: none; } }
