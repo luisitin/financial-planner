@@ -1,7 +1,7 @@
 // tests/search.test.mjs -- core/search.js: finding pages in the owner's own words (FEEDBACK F-007).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalize, words, matchRank, matches } from "../core/search.js";
+import { normalize, words, matchRank, matches, stem } from "../core/search.js";
 
 const netWorth = { title: "Net worth", purpose: "Every account and balance in one list: what you own, what you owe, and the difference over time.", aliases: ["what I owe", "what I own", "how much am I worth", "assets and debts"] };
 const debts = { title: "Debts", purpose: "Every loan and card with its rate and payment: what interest costs you and when each one is gone." };
@@ -34,4 +34,29 @@ test("a page without aliases or purpose still works", () => {
   assert.equal(matchRank({ title: "Docs" }, "System", "docs"), 0);
   assert.equal(matchRank({ title: "Docs" }, "System", "system"), 1);
   assert.equal(matchRank({ title: "Docs" }, "System", "nothing"), -1);
+});
+
+// the real pages: everyday questions from a phone walk-through (2026-11-01) that used to find nothing, or the wrong page first
+test("plain questions find the page that answers them, first", async () => {
+  const { default: registry } = await import("../modules/registry.js");
+  const { GROUPS } = await import("../core/groups.js");
+  const pages = [];
+  for (const e of registry) { const m = (await e.load()).default; if (!m.placeholder) pages.push(m); }
+  const title = (g) => GROUPS.find((x) => x.id === g)?.title ?? g;
+  const top = (q) => pages.map((m) => ({ k: `${m.group}/${m.id}`, r: matchRank(m, title(m.group), q) })).filter((x) => x.r >= 0).sort((a, b) => a.r - b.r);
+  const firstRank = (q) => top(q)[0]?.r;
+  const among = (q, key) => top(q).filter((x) => x.r === firstRank(q)).map((x) => x.k).includes(key);
+  for (const [q, key] of [
+    ["safety cushion", "goals/emergency-fund"], ["next move", "overview/next-best-action"], ["can we afford a house", "goals/house"],
+    ["are we saving enough", "retirement/projection"], ["lose my job", "balance/liquidity"], ["will our money last", "retirement/projection"],
+    ["stock from work", "career/equity"], ["left over", "cashflow/expenses"], ["update balances", "balance/update"],
+    ["how much tax", "taxes/federal"], ["debt free", "debt/payoff"], ["monthly check-in", "overview/monthly-review"],
+    ["buy a home", "goals/house"], ["what I owe", "balance/net-worth"],
+  ]) assert.ok(among(q, key), `"${q}" finds ${key} first (got ${top(q).slice(0, 3).map((x) => `${x.k}:${x.r}`).join(", ") || "nothing"})`);
+  assert.notEqual(top("buy a home")[0].k, "overview/dashboard", "a one-word alias (home) does not match inside a longer question");
+});
+test("stems and synonyms: saving, savings and save are one word; house finds home", () => {
+  assert.equal(stem("savings"), stem("save")); assert.equal(stem("saving"), stem("save"));
+  assert.equal(stem("house"), stem("home")); assert.equal(stem("kids"), stem("child"));
+  assert.equal(matchRank({ title: "Home", purpose: "what it is worth" }, "Property", "my house worth"), 3);
 });
