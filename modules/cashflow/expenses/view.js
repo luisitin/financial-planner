@@ -60,8 +60,9 @@ export function render(root, ctx) {
       ))),
     ));
   }
-  for (const w of d.warnings) root.append(ui.notice("warn", w));
-
+  // the before-tax "you spend more than comes in" gives way to the after-tax figure the tile shows, whichever way it falls
+  for (const w of d.warnings) if (!(nba?.ready && w === d.overspend)) root.append(ui.notice("warn", w));
+  if (nba?.ready && nba.spare.monthly < 0) root.append(ui.notice("warn", `About ${fmt.money(-nba.spare.monthly, cur)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix: trim what you can below, or pause a goal.`));
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   let showForm = d.count === 0;

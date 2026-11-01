@@ -209,6 +209,51 @@ export function compute(plan, params = {}) {
   return { ready: true, year, people: out, notes, stateMethod: st.method ?? null, w4Default };
 }
 
+/** IRS Publication 15 (2026), section 7, Supplemental Wages: the flat federal rate an employer may withhold from a bonus paid on its own. */
+export const SUPPLEMENTAL = 0.22;
+
+/**
+ * takeHome(plan, { today }) -> { ready, monthly, grossMonthly, salaryGrossMonthly, salaryNetMonthly, ratio: { [incomeId]: share }, people: [{ id, name, ratio }], household }
+ * What the Income page's money is once it reaches the bank. Each salary of an earner here is scaled by that earner's take-home
+ * share (this page's take-home over the year divided by the pay over the year: taxes withheld, Social Security and Medicare, the
+ * 401(k), health cover and the other deductions taken out), including a salary that starts later (a new job; an adult with no
+ * pay today gets their own share as worked out on the day that pay starts); a salary tied to
+ * nobody by the household's share (all earners' take-home over their pay); a bonus by 1 - 22% federal (supplemental wages) -
+ * Social Security and Medicare - the earner's state share. Every other kind of income stays as typed. `ratio` gives each item's
+ * share so the Forecast and the Income statement scale a typed amount the same way; `monthly` counts the items active today.
+ * `ready` is false when no salary belongs to an adult (then nothing is scaled and `monthly` equals `grossMonthly`).
+ */
+export function takeHome(plan, params = {}) {
+  const today = params.today ?? `${new Date().getFullYear()}-01-01`;
+  const inc = computeIncome(plan, { today });
+  const pc = compute(plan, { today });
+  const ratio = {}, people = [];
+  const clamp = (r) => Math.max(0, Math.min(1, r));
+  for (const p of pc.ready ? pc.people : []) {
+    people.push({ id: p.id, name: p.name, ratio: p.yearly.gross > 0 ? clamp(p.yearly.net / p.yearly.gross) : 1, stateShare: p.gross > 0 ? p.state.amount / p.gross : 0 });
+  }
+  const gross = pc.ready ? pc.people.reduce((t, p) => t + p.yearly.gross, 0) : 0;
+  const household = gross > 0 ? clamp(pc.people.reduce((t, p) => t + p.yearly.net, 0) / gross) : null;
+  const seen = new Map();
+  const laterShare = (x) => {
+    const at = String(x.startDate);
+    if (!seen.has(at)) seen.set(at, compute(plan, { today: at }));
+    const pcl = seen.get(at), q = pcl.ready ? pcl.people.find((y) => y.id === x.personId) : null;
+    return q && q.yearly.gross > 0 ? clamp(q.yearly.net / q.yearly.gross) : null;
+  };
+  for (const x of inc.items) {
+    if (x.period === "once" || !(Number(x.amount) > 0)) continue;
+    const pp = people.find((q) => q.id === x.personId);
+    // an adult whose pay starts later (a new job, nothing now): that person's share once the pay has started
+    const later = !pp && x.type === "salary" && x.personId && x.startDate && String(x.startDate) > today ? laterShare(x) : null;
+    if (x.type === "salary") { const r = pp ? pp.ratio : later ?? household; if (r !== null) ratio[x.id] = r; }
+    else if (x.type === "bonus" && (pp || household !== null)) ratio[x.id] = clamp(1 - SUPPLEMENTAL - PAYROLL.ss - PAYROLL.medicare - (pp?.stateShare ?? 0));
+  }
+  let salaryGross = 0, salaryNet = 0;
+  for (const x of inc.active) if (ratio[x.id] !== undefined && x.period !== "once") { salaryGross += x.monthly; salaryNet += x.monthly * ratio[x.id]; }
+  return { ready: people.length > 0, monthly: inc.monthly - salaryGross + salaryNet, grossMonthly: inc.monthly, salaryGrossMonthly: salaryGross, salaryNetMonthly: salaryNet, ratio, people: people.map(({ id, name, ratio: r }) => ({ id, name, ratio: r })), household };
+}
+
 /** Whole-dollar shares of $100 that add up to 100: each part's floor, then the largest remainders take the dollars left. */
 export function hundred(parts, total) {
   const keys = Object.keys(parts);

@@ -86,3 +86,13 @@ test("a mortgage filed under housing is not counted twice, and does not set off 
   assert.equal(w.length, 1);
   assert.match(w[0], /add up to \$320 a month; the Debts page has \$720 \(not counting the mortgage, which is under housing\)\. A payment may be missing here/);
 });
+test("the before-tax overspend sentence is also returned on its own, so a page that knows the after-tax figure can show that instead", () => {
+  const p = emptyPlan();
+  p.income.push({ id: "i", name: "Pay", type: "salary", amount: 1000, period: "monthly" });
+  p.expenses.push({ id: "r", name: "Rent", category: "housing", amount: 1500, period: "monthly" });
+  const d = compute(p, { today: "2026-09-15" });
+  assert.ok(d.overspend.includes("$500 more each month"));
+  assert.ok(d.warnings.includes(d.overspend));
+  p.income[0].amount = 2000;
+  assert.equal(compute(p, { today: "2026-09-15" }).overspend, null);
+});

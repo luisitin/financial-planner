@@ -91,7 +91,9 @@ export function compute(plan, params = {}) {
     if (!(Number(x.amount) > 0)) warnings.push(`${x.name || "An expense"} has no amount.`);
     if (x.startDate && x.endDate && String(x.endDate) < String(x.startDate)) warnings.push(`${x.name || "An expense"} ends before it starts.`);
   }
-  if (leftOver !== null && leftOver < 0) warnings.push(`You spend ${money(-leftOver, plan.meta?.currency ?? "USD")} more each month than comes in. Check the amounts, or this is the first thing the plan should fix.`);
+  // pay before tax minus spending: a view that can work out the after-tax figure (Next best action) shows that instead
+  const overspend = leftOver !== null && leftOver < 0 ? `You spend ${money(-leftOver, plan.meta?.currency ?? "USD")} more each month than comes in. Check the amounts, or this is the first thing the plan should fix.` : null;
+  if (overspend) warnings.push(overspend);
   return {
     items, active, count: items.length, monthly, yearly,
     essentialMonthly: sum(active.filter((x) => x.essential), "monthly") + debtFromDebts,
@@ -100,6 +102,6 @@ export function compute(plan, params = {}) {
     debtPayments, debtFromDebts,
     oneTime: sum(active, "oneTime"),
     byCategory, income, leftOver, savingsRate: income && income.monthly > 0 ? leftOver / income.monthly : null,
-    warnings,
+    warnings, overspend,
   };
 }

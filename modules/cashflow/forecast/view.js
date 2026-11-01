@@ -18,9 +18,13 @@ export function render(root, ctx) {
     return;
   }
   const money = (n, typed = false) => (n < 0 ? "-" : "+") + fmt.money(Math.abs(n), cur, undefined, typed ? 0 : 2);
+  // "ends lower than today" only when it holds over 90 days too: a short window can end just after the bills on the 1st and
+  // before the next pay, which says nothing about the trend (a household with $4,170 left over a month read "$1,809 lower")
+  const long = state.days >= 90 ? d : compute(plan, { today: fmt.today(), days: 90, accountId: state.accountId });
+  const drifts = d.end < d.start - 0.5 && long.end < long.start - 0.5;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.shortfallDate ? `Short on ${fmt.date(d.shortfallDate)}` : "Cash-flow forecast"),
-    ui.h("p", { class: "lede" }, d.shortfallDate ? `At this pace the everyday accounts go below zero on ${fmt.date(d.shortfallDate)}. Move money in before then, or push a bill.` : `The lowest point in the next ${state.days} days is ${fmt.money(d.lowest.balance, cur)} on ${fmt.date(d.lowest.date)}. No shortfall expected.`),
+    ui.h("p", { class: "lede" }, d.shortfallDate ? `At this pace the everyday accounts go below zero on ${fmt.date(d.shortfallDate)}. Move money in before then, or push a bill.` : `The lowest point in the next ${state.days} days is ${fmt.money(d.lowest.balance, cur)} on ${fmt.date(d.lowest.date)}. No shortfall expected${drifts ? `, but the everyday accounts end ${fmt.money(d.start - d.end, cur)} lower than today` : ""}.`),
   ));
   const acctSel = ui.select([{ value: "", label: "All everyday accounts" }, ...d.accounts.map((a) => ({ value: a.id, label: a.name }))], state.accountId, { "aria-label": "Account", onChange: (e) => { state.accountId = e.target.value; redraw(); } });
   const daysSel = ui.select([{ value: "30", label: "30 days" }, { value: "60", label: "60 days" }, { value: "90", label: "90 days" }], String(state.days), { "aria-label": "How far ahead", onChange: (e) => { state.days = Number(e.target.value); redraw(); } });
@@ -33,7 +37,8 @@ export function render(root, ctx) {
   // Day by day: one balance line with the lowest day marked and month labels; a red band
   // only where the line dips below zero (design log 2026-09-16, pass 2).
   root.append(ui.card("Day by day", balanceChart([{ date: d.days[0]?.date ?? fmt.today(), balance: d.start, events: [], start: true }, ...d.days], d.lowest, fmt, cur),
-    ui.h("p", { class: "muted small" }, `${d.sources.found} regular payment${d.sources.found === 1 ? "" : "s"} found in the transactions, ${d.sources.planned} from the Expenses and Income pages. Touch the line for a day's balance.`)));
+    ui.h("p", { class: "muted small" }, `${d.sources.found} regular payment${d.sources.found === 1 ? "" : "s"} found in the transactions, ${d.sources.planned} from the Expenses and Income pages${d.sources.fromDebts ? `, ${d.sources.fromDebts} from the Debts page` : ""}.${d.takeHome ? " Pay counts as take-home: what reaches the bank after tax and what the paycheck takes out (from the Paycheck page)." : ""} Touch the line for a day's balance.`),
+    d.payBeforeTax ? ui.h("p", { class: "muted small" }, d.payUnlinked ? "Some pay counts before tax here, so the line is too high: say whose pay it is on the Income page (and add the people on Household > People) so tax comes out." : "Some pay counts before tax here, so the line is too high: the Paycheck page cannot work out its take-home yet.") : null));
   // What is expected: grouped by month, the first month open, the rest folded.
   const withEvents = d.days.filter((x) => x.events.length);
   const months = [];
@@ -44,7 +49,7 @@ export function render(root, ctx) {
     m.days.push(x);
   }
   const dayRows = (days) => ui.h("ul", { class: "page-list" }, days.map((x) => ui.h("li", { style: { alignItems: "flex-start" } },
-    ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, fmt.date(x.date)), ...x.events.map((e) => ui.h("div", { class: "d" }, `${money(e.amount, e.source === "planned")} ${e.name}${e.source === "planned" ? "" : " \u00b7 from your bank"}`))),
+    ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, fmt.date(x.date)), ...x.events.map((e) => ui.h("div", { class: "d" }, `${money(e.amount, e.source === "planned")} ${e.name}${e.beforeTax !== undefined ? `, take-home (${fmt.money(e.beforeTax, cur)}\u00a0before\u00a0tax)` : e.payBeforeTax ? ", before tax" : e.fromDebts ? " \u00b7 from Debts" : e.source === "planned" ? "" : " \u00b7 from your bank"}`))),
     ui.h("span", { class: "st", style: { fontWeight: "600", color: x.balance < 0 ? "var(--bad)" : "inherit" } }, fmt.money(x.balance, cur)))));
   root.append(ui.card("What is expected",
     months.map((m, k) => ui.h("details", { class: "fold", open: k === 0 ? true : null },

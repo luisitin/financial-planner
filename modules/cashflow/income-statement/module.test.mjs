@@ -30,3 +30,25 @@ test("months from transactions: transfers out, income by category kind, uncatego
   assert.equal(d.byCategory.in[0].category, "income-salary"); near(d.byCategory.in[0].total, 5850);
   assert.equal(compute(p, { months: 1 }).rows.length, 1);
 });
+test("plan versus real compares the bank's money in with take-home pay, and calls it short only beyond 10%", async () => {
+  const { takeHome } = await import("../paycheck/compute.js");
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1988-05-01" });
+  p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 5000 });
+  p.income.push({ id: "ia", name: "Ana's salary", type: "salary", personId: "a", amount: 6000, period: "monthly", taxable: true });
+  const net = takeHome(p, { today: "2026-11-01" }).monthly;
+  assert.ok(net < 6000 * 0.9, `take-home is well below pay before tax: ${net}`);
+  // the bank shows exactly the take-home in each of three full months: nothing is short
+  const months = ["2026-08", "2026-09", "2026-10"];
+  months.forEach((m, k) => p.transactions.push({ id: `t${k}`, date: `${m}-15`, amount: Math.round(net * 100) / 100, payee: "Acme payroll", accountId: "c", category: "income-salary" }));
+  let d = compute(p, { today: "2026-11-01" });
+  near(d.planned.in, 6000); near(d.planned.takeHomeIn, net); assert.equal(d.planned.takeHome, true);
+  assert.ok(Math.abs(d.inGap) < 0.01); assert.equal(d.inShort, false, "matching take-home is not a red gap");
+  // 8% below: two paychecks in a month of pay every two weeks, not a gap
+  p.transactions.forEach((t) => { t.amount = Math.round(net * 0.92 * 100) / 100; });
+  assert.equal(compute(p, { today: "2026-11-01" }).inShort, false);
+  // 20% below take-home: worth a look
+  p.transactions.forEach((t) => { t.amount = Math.round(net * 0.8 * 100) / 100; });
+  d = compute(p, { today: "2026-11-01" });
+  assert.equal(d.inShort, true); near(d.inGap, Math.round(net * 0.8 * 100) / 100 - net);
+});

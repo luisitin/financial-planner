@@ -6,13 +6,25 @@ export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { months: 12, today: fmt.today() });
+  // what the plan keeps each month is the figure the Dashboard shows (after tax, spending and saving), never pay before tax minus spending
+  const nba = d.planned ? ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) : null;
+  // one sentence that adds up: in - tax - spending - saving = left (all Next best action's own figures, the Dashboard's). It names
+  // the tax rather than an "after tax" amount, which would sit next to the Income page's take-home (that one also takes out the
+  // 401(k) and health cover) and read as a second figure for the same thing.
+  const plannedLine = () => {
+    if (!nba?.ready) return `From the Income and Expenses pages: ${fmt.money(d.planned.in, cur)} a month comes in before tax and ${fmt.money(d.planned.out, cur)} goes out.`;
+    const s = nba.spare, tax = s.federalTax + s.payrollTax, saving = s.retirementSaving + s.goalSaving;
+    const parts = [tax >= 1 ? [tax, "tax"] : null, [s.spending, "spending"], saving >= 1 ? [saving, "saving"] : null].filter(Boolean).map(([v, w], i) => `${fmt.money(v, cur)}${i ? "" : " goes"} to ${w}`);
+    const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+    return `From the Income and Expenses pages: ${fmt.money(s.gross, cur)} a month comes in before tax; about ${list}, so about ${fmt.money(Math.abs(s.monthly), cur)} a month is ${s.monthly >= 0 ? "left" : "short"}.`;
+  };
 
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Income statement"),
       ui.h("p", { class: "lede" }, "What came in, what went out and what you kept, month by month, from your real transactions. It fills in as soon as a bank file is imported."),
       ui.row(ui.h("a", { class: "btn", href: "#/transactions/import" }, "Import a bank file")),
-      d.planned ? ui.h("p", { class: "muted small" }, `From what you entered on the Income and Expenses pages: ${fmt.money(d.planned.in, cur)} in, ${fmt.money(d.planned.out, cur)} out, ${fmt.money(d.planned.net, cur)} kept each month.`) : null,
+      d.planned ? ui.h("p", { class: "muted small" }, plannedLine()) : null,
     ));
     return;
   }
@@ -24,13 +36,16 @@ export function render(root, ctx) {
     d.average ? ui.stat("A typical month", fmt.money(d.average.net, cur), `kept, from ${d.average.months} full month${d.average.months === 1 ? "" : "s"}: ${fmt.money(d.average.in, cur)} in, ${fmt.money(d.average.out, cur)} out`) : null,
   )));
   if (d.planned && d.average) {
-    const diffIn = d.average.in - d.planned.in, diffOut = d.average.out - d.planned.out;
+    const diffIn = d.inGap ?? (d.average.in - d.planned.takeHomeIn), diffOut = d.average.out - d.planned.out;
+    const inSays = d.planned.takeHome ? `Income page says ${fmt.money(d.planned.in, cur)} a month before tax, about ${fmt.money(d.planned.takeHomeIn, cur)} after tax; the bank shows ${fmt.money(d.average.in, cur)}` : `Income page says ${fmt.money(d.planned.in, cur)} a month; the bank shows ${fmt.money(d.average.in, cur)}`;
     root.append(ui.card("Plan versus real",
       ui.h("ul", { class: "page-list" },
-        ui.h("li", {}, ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, "Money in"), ui.h("div", { class: "d" }, `Income page says ${fmt.money(d.planned.in, cur)} a month; the bank shows ${fmt.money(d.average.in, cur)}`)), ui.h("span", { class: `st ${diffIn < -50 ? "bad" : ""}` }, `${diffIn >= 0 ? "+" : "-"}${fmt.money(Math.abs(diffIn), cur)}`)),
+        ui.h("li", {}, ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, "Money in"), ui.h("div", { class: "d" }, inSays)), ui.h("span", { class: `st ${d.inShort ? "bad" : ""}` }, `${diffIn >= 0 ? "+" : "-"}${fmt.money(Math.abs(diffIn), cur)}`)),
         ui.h("li", {}, ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, "Money out"), ui.h("div", { class: "d" }, `Expenses page says ${fmt.money(d.planned.out, cur)} a month; the bank shows ${fmt.money(d.average.out, cur)}`)), ui.h("span", { class: `st ${diffOut > 50 ? "bad" : ""}` }, `${diffOut >= 0 ? "+" : "-"}${fmt.money(Math.abs(diffOut), cur)}`)),
       ),
-      ui.h("p", { class: "muted small" }, "A big gap usually means an expense that was never listed, or income the pages do not know about. Fix whichever is wrong."),
+      ui.h("p", { class: "muted small" }, d.planned.takeHome
+        ? "Pay is typed before tax and the bank sees it after tax, so money in is compared after tax (from the Paycheck page). A month with a third paycheck shows more. A big gap in money out usually means an expense that was never listed."
+        : "A big gap usually means an expense that was never listed, or income the pages do not know about."),
     ));
   }
   const maxBar = Math.max(1, ...d.rows.map((r) => Math.max(r.in, r.out)));

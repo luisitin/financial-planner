@@ -16,6 +16,7 @@ Plan sections read (`needs`): `income`, `household` (names for `personId`).
 - Next year = sum over active items of yearly x (1 + growth). Growth is a fraction (0.03); the form's percent field converts.
 - One-time amounts (`period: "once"`) are summed into `oneTime` and never into monthly or yearly.
 - Taxable: `taxable !== false` counts as taxed (older items without the flag are taxed).
+- The page's first tile (2026-11-01) is labelled "A month, before tax" and, when an adult has a salary, says "About $X a month reaches the bank after tax" from `cashflow/paycheck` `takeHome().monthly`. Before, "$14,250 Per month" never said before tax, and the Income statement told people to "fix whichever is wrong" when the bank showed less, so some typed take-home pay over their salary.
 
 ## Edge cases
 No people: items are "Household". Unknown `type`: treated as other. Amount 0 or missing: warning. End before start: warning. Growth above 25%: warning (usually a unit mistake). Unknown period: treated as monthly.

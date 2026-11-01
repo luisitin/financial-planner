@@ -2,6 +2,7 @@
 // sources, one form to add or edit.
 import { compute, INCOME_TYPES } from "./compute.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
+import { takeHome } from "../paycheck/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -33,8 +34,11 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, people.length ? "Tip: use the amount on the pay stub before taxes; the tax pages will work out the rest." : "Tip: add the people first (Household > People) so each income can be tied to who earns it. It works without that too."),
     ));
   } else {
+    // typed pay is before tax; say so, and what reaches the bank (the Paycheck page's take-home), so nobody types take-home over it
+    const th = takeHome(plan, { today });
+    const net = th.ready && th.monthly < d.monthly - 0.5 ? th.monthly : null;
     root.append(ui.card(null, ui.row(
-      ui.stat("Per month", fmt.money(d.monthly, cur), `${fmt.money(d.yearly, cur)} a year`),
+      ui.stat("A month, before tax", fmt.money(d.monthly, cur), net !== null ? `${fmt.money(d.yearly, cur)} a year. About ${fmt.money(net, cur)} a month reaches the bank after tax` : `${fmt.money(d.yearly, cur)} a year`),
       ui.stat("Next year", fmt.money(d.nextYear, cur), d.nextYear > d.yearly ? "after the raises you entered" : "no raises entered"),
       d.untaxedYearly ? ui.stat("Not taxed", fmt.money(d.untaxedYearly, cur), "a year") : null,
       d.oneTime ? ui.stat("One-time amounts", fmt.money(d.oneTime, cur), "not in the monthly total") : null,

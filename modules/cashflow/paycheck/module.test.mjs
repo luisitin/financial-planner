@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, withholdFederal, w4StatusFor, hundred, PAYROLL } from "./compute.js";
+import { compute, withholdFederal, w4StatusFor, hundred, PAYROLL, takeHome, SUPPLEMENTAL } from "./compute.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { PCT_METHOD } from "./data/withholding.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -196,4 +196,32 @@ test("each adult's own health FSA from the HSA and FSA page comes off their own 
   const d = compute(p, { today: "2026-10-30" });
   const fsaOf = (name) => d.people.find((x) => x.name === name).pretax.find((y) => y.key === "fsa").amount;
   assert.equal(fsaOf("Ana"), 1300 / 26); assert.equal(fsaOf("Bo"), 2400 / 12);   // Ana is paid every two weeks, Bo monthly
+});
+
+test("takeHome: each salary at its earner's yearly take-home over pay; a bonus at the supplemental rate; pay tied to nobody at the household's share", () => {
+  const p = familyPlan(TODAY);
+  const pc = compute(p, { today: TODAY }), th = takeHome(p, { today: TODAY });
+  const a = ana(pc), b = bo(pc);
+  near(th.ratio["i-ana"], a.yearly.net / a.yearly.gross);
+  near(th.ratio["i-bo"], b.yearly.net / b.yearly.gross);
+  near(th.household, (a.yearly.net + b.yearly.net) / (a.yearly.gross + b.yearly.gross));
+  const sal = th.salaryGrossMonthly;
+  near(th.monthly, th.grossMonthly - sal + th.salaryNetMonthly);
+  assert.ok(th.monthly < th.grossMonthly && th.ready);
+  p.income.push({ id: "bon", name: "Bonus", type: "bonus", personId: "p-ana", amount: 10000, period: "annual", taxable: true },
+    { id: "hh", name: "Pay", type: "salary", personId: "", amount: 1000, period: "monthly", taxable: true });
+  const t2 = takeHome(p, { today: TODAY });
+  near(t2.ratio.bon, 1 - SUPPLEMENTAL - PAYROLL.ss - PAYROLL.medicare - (ana(compute(p, { today: TODAY })).state.amount / ana(compute(p, { today: TODAY })).gross), 1e-9);
+  assert.equal(t2.ratio.hh, t2.household);
+  const none = takeHome(emptyPlan(), { today: TODAY });
+  assert.equal(none.ready, false); assert.equal(none.monthly, 0);
+});
+test("takeHome: an adult with no pay today gets their own share from the day their new job starts", () => {
+  const p = familyPlan(TODAY);
+  const boPay = p.income.find((x) => x.id === "i-bo");
+  boPay.startDate = "2027-01-01";
+  const th = takeHome(p, { today: TODAY });
+  const later = bo(compute(p, { today: "2027-01-01" }));
+  near(th.ratio["i-bo"], later.yearly.net / later.yearly.gross);
+  assert.notEqual(th.ratio["i-bo"], th.household, "not the household's (Ana's) share");
 });

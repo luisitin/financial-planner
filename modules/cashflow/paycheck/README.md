@@ -27,6 +27,13 @@ gross, pretax, pretaxTotal, wages: { federal, fica, state }, federal: { amount, 
 medicare, state: { amount, from, rate }, aftertax, aftertaxTotal, taxesTotal, net, monthly, yearly, ssStopsAfter,
 extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, stateMethod }`.
 
+`takeHome(plan, { today })` -> `{ ready, monthly, grossMonthly, salaryGrossMonthly, salaryNetMonthly, ratio: { [incomeId]: share }, people: [{ id, name, ratio }] }`
+(2026-11-01): what the Income page's money is once it reaches the bank. Each salary of an earner here is scaled by that
+earner's `yearly.net / yearly.gross` (clamped to 0..1), including one that starts later; a salary tied to nobody by `household`,
+all earners' take-home over their pay; a bonus by 1 - `SUPPLEMENTAL` (22%, IRS Publication 15 (2026) section 7) - 6.2% - 1.45% -
+the earner's state share; other income stays as typed. `monthly` counts what is active today. The Forecast, the Income statement
+and the Income page's tile read it, so take-home pay is worked out in one place. A salary of an adult who has no pay today (a first or new job that starts later) takes that adult's own share as this page works it out on the day the pay starts, not the household's (2026-11-01).
+
 ## Formulas
 - **Pay a paycheck** = the person's salaries a year ÷ paychecks.
 - **Before tax**: the 401(k) (the plan's contributions ÷ paychecks); health, dental and vision cover (typed); the HSA
@@ -79,14 +86,15 @@ extraMedicareFrom, employer: { match, hsa, payroll }, shares, jobs }], notes, st
   (allowances) is not modelled: type the pay stub's figure. Several salaries for one person are taken as one paycheck.
 
 ## Tests
-`module.test.mjs` (16): the 2026 tables against their own arithmetic and the 2026 standard deductions; Worksheet 1A by
+`module.test.mjs` (19): the 2026 tables against their own arithmetic and the 2026 standard deductions; Worksheet 1A by
 hand (single), the Step 2 box, Steps 3, 4(a), 4(b), 4(c), married filing jointly, head of household, under the first
 row, a row's start reached exactly; the wage base reached at the last paycheck, $200,000 reached exactly; the W-4 status; the family's paychecks (the 401(k) before income tax only, the shares, the W-4 note assumed or
 typed); `hundred`; cafeteria-plan items, Benefits elections capped and only for this year; the HSA and FSA page's
 figures, an HSA as state pay in California; two jobs; the Withholding check page's figure only for the same paychecks
 and without a typed W-4; the state's share of income (Colorado), typed state figures; the pay stub's figure and
 Pennsylvania's 401(k); the employer's part; paychecks from the period, typed or assumed, a Roth 401(k); not ready,
-pay linked to a child.
+pay linked to a child; each adult's health FSA; `takeHome` (each earner's share, the household's share, a bonus at the
+supplemental rate, no earner) and a later first job at its earner's own share.
 
 ## Answer key
 `tests/golden-paycheck.test.mjs` checks `withholdFederal` against 3,000 rows of Publication 15-T (2026) Worksheet 1A

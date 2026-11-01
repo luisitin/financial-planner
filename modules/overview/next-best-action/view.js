@@ -55,10 +55,11 @@ export function render(page, ctx) {
   const parts = [["Federal income tax", s.federalTax, "var(--muted)"], ["Social Security and Medicare tax", s.payrollTax, "var(--line-2)"], ["Spending", s.spending, "var(--text-2)"], ["Retirement saving", s.retirementSaving, "var(--ok)"], ["Saving for goals", s.goalSaving, "var(--accent)"]];
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
-    ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(v / total) * 100}%`, background: c } }))),
+    ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
     ui.h("ul", { class: "nb-key" },
       ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, "Pay and other income, before tax"), ui.h("span", {}, money(s.gross))),
-      parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, t), ui.h("span", {}, `- ${money(v)}`))),
+      // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
+      parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`))),
       ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : "Short each month"), ui.h("span", { class: s.monthly < 0 ? "bad" : null }, money(s.monthly)))),
     ui.h("p", { class: "muted small" }, "State and local income tax is not counted yet. Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away.")));
 
