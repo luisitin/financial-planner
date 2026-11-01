@@ -21,6 +21,15 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
+  // One left-over figure across the app: what is left after tax, spending and saving, the same number the Dashboard
+  // and Next best action show. Pay before tax minus spending (this page's own leftOver) left tax out and read about
+  // twice as high; it shows only when the after-tax figure cannot be worked out yet, and says so.
+  const nba = d.income ? ctx.computeOf("overview/next-best-action", { today: fmt.today() }) : null;
+  const leftTile = () => {
+    if (!d.income) return null;
+    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? "each month, after tax, bills and saving" : "more goes out than comes in, after tax and saving"); }
+    return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
+  };
   let editing = null;
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -36,11 +45,11 @@ export function render(root, ctx) {
       ui.stat("Per month", fmt.money(d.monthly, cur), `${fmt.money(d.yearly, cur)} a year`),
       ui.stat("Must pay", fmt.money(d.essentialMonthly, cur), "per month, the bills that cannot wait"),
       ui.stat("Nice to have", fmt.money(d.optionalMonthly, cur), "per month, could be cut in a pinch"),
-      d.income ? ui.stat(d.leftOver >= 0 ? "Left over" : "Short", fmt.money(Math.abs(d.leftOver), cur), d.leftOver >= 0 ? `each month, ${fmt.pct(d.savingsRate, 0)} of income` : "each month; spending is above income") : null,
+      leftTile(),
     ),
     // Next year and one-time amounts as one sentence under the tiles (design log 2026-09-16, pass 3).
     ui.h("p", { class: "muted small", style: { marginTop: "10px" } },
-      `Next year about ${fmt.money(d.nextYear, cur)} after inflation${d.income ? ` (${d.leftOverNextYear >= 0 ? "leaving" : "short by"} ${fmt.money(Math.abs(d.leftOverNextYear), cur)} a year)` : ""}.` +
+      `Next year about ${fmt.money(d.nextYear, cur)} after inflation.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
     if (d.byCategory.length) root.append(ui.card("Where it goes",

@@ -64,3 +64,26 @@ test("without today, date checks are skipped", () => {
   const d = compute(p);
   assert.ok(!ids(d).includes("stale-balances") && !ids(d).includes("history"));
 });
+
+test("overspending is judged after tax and saving, like the Dashboard: pay above spending can still be short", () => {
+  const p = emptyPlan();
+  p.household.people.push({ id: "me", name: "Ana", birthDate: "1990-01-01", role: "self" });
+  p.household.filingStatus = "single";
+  p.income.push({ id: "i", name: "Pay", type: "salary", amount: 6000, period: "monthly", personId: "me" });
+  p.expenses.push({ id: "e", name: "Everything", category: "housing", amount: 5500, period: "monthly" });
+  const d = compute(p, { today: TODAY });
+  const o = d.alerts.find((a) => a.id === "overspend");
+  assert.ok(o, "$6,000 before tax, $5,500 spent: short once tax is taken out");
+  assert.match(o.detail, /after tax and saving/);
+  const q = emptyPlan();
+  q.household.people.push({ id: "me", name: "Ana", birthDate: "1990-01-01", role: "self" });
+  q.household.filingStatus = "single";
+  q.income.push({ id: "i", name: "Pay", type: "salary", amount: 6000, period: "monthly", personId: "me" });
+  q.expenses.push({ id: "e", name: "Rent", category: "housing", amount: 2000, period: "monthly" });
+  assert.ok(!compute(q, { today: TODAY }).alerts.some((a) => a.id === "overspend"), "room left after tax: no alert");
+});
+test("old balances open Update my balances", () => {
+  const p = emptyPlan();
+  p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 1000, asOf: "2026-01-01" });
+  assert.deepEqual(compute(p, { today: TODAY }).alerts.find((a) => a.id === "stale-balances").go, ["balance", "update"]);
+});

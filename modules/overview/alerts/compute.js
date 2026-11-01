@@ -10,6 +10,7 @@ import { compute as goals } from "../../goals/goals/compute.js";
 import { compute as liquidity } from "../../balance/liquidity/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
+import { compute as nextBest } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -42,13 +43,17 @@ export function compute(plan, params = {}) {
   // stale numbers
   if (today && nw.count) {
     const stale = (plan.accounts ?? []).filter((a) => !a.asOf || daysBetween(a.asOf, today) > STALE_BALANCE_DAYS);
-    if (stale.length) add("stale-balances", "warn", `${stale.length === 1 ? "One balance is" : `${stale.length} balances are`} more than ${STALE_BALANCE_DAYS} days old`, `${stale.slice(0, 3).map((a) => a.name).join(", ")}${stale.length > 3 ? "..." : ""}. Update them so the totals mean something.`, ["balance", "net-worth"]);
+    if (stale.length) add("stale-balances", "warn", `${stale.length === 1 ? "One balance is" : `${stale.length} balances are`} more than ${STALE_BALANCE_DAYS} days old`, `${stale.slice(0, 3).map((a) => a.name).join(", ")}${stale.length > 3 ? "..." : ""}. Update them so the totals mean something.`, ["balance", "update"]);
     const last = nw.history[nw.history.length - 1];
     if (!last || daysBetween(last.date, today) > STALE_HISTORY_DAYS) add("history", "info", "Save today's totals", last ? `The last saved point is from ${fmtDate(last.date)}. Saving once a month builds the net-worth history.` : "Saving once a month builds the net-worth history.", ["balance", "net-worth"]);
   }
 
   // money
-  if (exp.leftOver !== null && exp.leftOver < 0) add("overspend", "bad", "You spend more than comes in", `About ${money(-exp.leftOver)} more goes out each month than comes in. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
+  // what is left after tax, spending and saving (the Dashboard's figure); pay before tax minus spending only when the
+  // tax cannot be worked out yet
+  const nba = exp.leftOver !== null ? nextBest(plan, p) : null;
+  const short = nba?.ready ? -nba.spare.monthly : exp.leftOver !== null ? -exp.leftOver : 0;
+  if (short > 0) add("overspend", "bad", "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
   if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);
   for (const r of debt.rows) {
