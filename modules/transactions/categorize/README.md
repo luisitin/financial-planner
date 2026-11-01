@@ -17,6 +17,22 @@ Plan sections read (`needs`): `transactions`, `rules`, `categories`. Writes: `tr
 
 Picking a category on a row files every transaction of that payee, renames the payee to its pretty form, and saves a rule (`ruleFor`) so next month's import files itself.
 
+### Guesses from the line itself (2026-11-01, round 2 of the owner's experience list)
+A first bank file had nothing to go on: every payee showed "Pick a category...". When no rule and no earlier filing says,
+two guesses fill in, each marked `guess: true` and shown as "suggested" with its reason, confirmed with OK or the bulk button:
+- `transferGuess`: money out to your own savings ("transfer ... sav", "to sav" or "to savings" as a whole word, so "ZELLE TO
+  SAVANNAH" is not) when the plan has a savings account, or a card's payment ("crd" or "card" ... "autopay"/"pmt", "payment thank
+  you"; never a line that says loan, mortgage or credit union, which are loan payments and count as spending) when it has a credit card: "Transfer between my accounts", so it is not counted as
+  spending (the repo's sample file counted $500 moved to savings and a $640 card payment as August spending).
+- `shopGuess`: a short list of well-known shops and billers (`SHOPS`: grocers, fuel and rides, streaming, coffee and fast food,
+  phone and internet, power, insurers, pharmacies), matched on whole words of the normalised line ("shell" is not "Shelley"),
+  longest name first across the kinds ("uber eats" is eating out before "uber trip" is a ride), and only names that are one kind of
+  business ("frontier comm", not "frontier", an airline too; "spectrum internet", not "spectrum", a health system too).
+- Payees are grouped by `payeeWords`, so "PAYPAL *NETFLIX" and "PAYPAL *EBAY" are two rows and two rules. The "Filed N
+  transactions" confirmation shows on the next render whatever it is, "All filed" included, and only once.
+  Shops that sell everything (Target, Amazon, Walmart) are left out on purpose. The list is my own, from common US brands.
+The bulk "File all N suggested" confirms in green with the count. The AI button shows only while the AI helper answers.
+
 ## Edge cases
 No transactions: points to Import. Nothing uncategorised: "All filed". The AI turned off or unreachable: a plain notice, the page keeps working. Duplicate rule (same text, same category): hits are added instead of a second rule.
 

@@ -17,6 +17,9 @@ export function normalizePayee(s) {
     .replace(/[^a-z\s]/g, " ")
     .replace(/\s+/g, " ").trim();
 }
+/** normalizePayee keeping the shop after a payment service's star: "PAYPAL *NETFLIX" -> "paypal netflix" (normalizePayee gives
+ * "paypal", which put every PayPal shop in one rule); "AMAZON MKTPL*2K3" -> "amazon mktpl" as before (the code has digits). */
+export const payeeWords = (s) => normalizePayee(String(s ?? "").replace(/\*/g, " "));
 /** A short, capitalised payee name from a raw bank description ("AMAZON MKTPL*2K3 AMZN.COM/BILL WA" -> "Amazon Mktpl"). */
 export function prettyPayee(raw) {
   const n = normalizePayee(raw).split(" ").filter((w) => w.length > 2).slice(0, 3);   // drops "to", "wa", "ca"
@@ -28,7 +31,9 @@ export function matchRule(rule, tx) {
   const amt = Number(tx.amount) || 0;
   if (rule.direction === "in" && amt < 0) return false;
   if (rule.direction === "out" && amt > 0) return false;
-  const hay = normalizePayee(tx.rawPayee ?? tx.payee) + " " + normalizePayee(tx.payee);
+  const hay = normalizePayee(tx.rawPayee ?? tx.payee) + " " + normalizePayee(tx.payee) + " | " + payeeWords(tx.rawPayee ?? tx.payee);
+  // rules made from a bank line (Categorise) match whole words, so "shell" never files "ZELLE TO SHELLEY"; typed rules match any part
+  if (rule.wholeWords) { const w = payeeWords(rule.contains); return !!w && ` ${hay.replace(/ \| /g, "  ")} `.includes(` ${w} `); }
   return hay.includes(normalizePayee(rule.contains));
 }
 /**
@@ -51,7 +56,53 @@ export function applyRules(rules, txs, { force = false } = {}) {
   return { txs: out, changed, hits };
 }
 /** The rule the Categorise page creates when a payee is confirmed. */
-export const ruleFor = (rawPayee, category, extra = {}) => ({ contains: normalizePayee(rawPayee).split(" ").slice(0, 3).join(" "), category, payee: prettyPayee(rawPayee), direction: "any", hits: 0, ...extra });
+/** Two-letter US state and territory codes a bank adds after the city ("KROGER #0388 DAYTON OH"). */
+const STATE_CODES = new Set("al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy pr vi gu".split(" "));
+/** First words that say what kind of line it is, not who: a rule needs the words after them ("transfer to sav", "zelle to sam"). */
+const GENERIC_FIRST = new Set(["transfer", "xfer", "deposit", "check", "withdrawal", "atm", "zelle", "venmo", "paypal", "cash", "square", "sq", "tst", "sp", "the", "bill", "interest", "fee", "service", "mobile", "external", "wire", "payroll", "direct"]);
+/** Common first words shared by many unrelated names ("AMERICAN AIRLINES", "AMERICAN EXPRESS"): a rule keeps the second word too. */
+const COMMON_FIRST = new Set(["american", "united", "first", "great", "family", "national", "state", "city", "county", "home", "golden", "north", "south", "east", "west", "central", "pacific", "atlantic", "royal", "best", "general", "capital", "citizens", "public", "global", "southern", "northern", "western", "eastern", "metro", "regional", "community", "premier", "union", "express", "super", "super", "smart", "green", "blue", "little", "grand", "olive", "olde"]);
+/**
+ * The words a rule keeps from a bank line: the shop's own name, without the store number, city and state that change from
+ * one branch or card to the next. The line is cut at its first word with a digit or # (store numbers, codes; a star only
+ * separates a payment service from the shop); a trailing state code is dropped; a line cut at a code keeps the words before it,
+ * two at most; a line with a city and state but no code keeps a web address alone, or one long uncommon word, else two words;
+ * otherwise up to three words as before. "KROGER #0388 DAYTON OH" -> "kroger" (it was "kroger dayton oh", which missed
+ * "KROGER #0421" on the card's file); "SHELL OIL 57442" -> "shell oil"; "SOUTHWEST AIRLINES 52621" -> "southwest airlines"
+ * (never "southwest", which would file Southwest Gas); "NETFLIX.COM LOS GATOS CA" -> "netflix". A first word that only says what
+ * kind of line it is (transfer, zelle, payroll, paypal...) keeps the first three words of the line. Fewer than four letters left:
+ * the first three words of the whole line, as before.
+ */
+export function ruleText(rawPayee) {
+  const raw = String(rawPayee ?? "").replace(/\*/g, " ");   // a star separates a payment service from the shop ("PAYPAL *NETFLIX")
+  const whole = payeeWords(raw).split(" ").filter(Boolean);
+  const before = () => whole.slice(0, 3).join(" ");
+  const tokens = raw.trim().split(/\s+/);
+  const at = tokens.findIndex((t) => /[\d#]/.test(t));
+  let words = normalizePayee((at === -1 ? tokens : tokens.slice(0, at)).join(" ")).split(" ").filter(Boolean);
+  if (!words.length) return before();
+  const state = words.length > 1 && STATE_CODES.has(words[words.length - 1]);
+  if (state) words = words.slice(0, -1);
+  if (GENERIC_FIRST.has(words[0])) return before();
+  // cut at a store number or code: the words before it, two at most ("shell oil", "southwest airlines": one word would also file
+  // Southwest Gas). No code but a city and state after the name: the name alone when it is a web address ("NETFLIX.COM LOS GATOS
+  // CA" -> "netflix"), else two words. Otherwise up to three words, as before.
+  const web = /\.(com|net|org|co|io)\b/i.test(tokens[0] ?? "");
+  words = at !== -1 ? words.slice(0, 2) : state ? (web || (words[0].length >= 5 && !COMMON_FIRST.has(words[0]) && words.length === 1) ? words.slice(0, 1) : words.slice(0, 2)) : words.slice(0, 3);
+  const text = words.join(" ");
+  return text.replace(/\s/g, "").length >= 4 ? text : before();
+}
+/** The name a rule gives the payee: the words it matches on, capitalised ("Kroger", not "Kroger Dayton" for every branch), without a
+ * card processor's prefix ("SQ *BLUE BOTTLE" -> "Blue Bottle", "PAYPAL *NETFLIX" -> "Netflix"); the old three-word name when the
+ * line only says what kind of line it is ("ONLINE TRANSFER TO SAV" -> "Transfer Sav", as before). */
+const PROCESSORS = new Set(["sq", "tst", "sp", "square", "paypal"]);
+export function ruleName(rawPayee) {
+  const words = ruleText(rawPayee).split(" ").filter(Boolean);
+  if (PROCESSORS.has(words[0]) && words.length > 1) words.shift();
+  else if (!words.length || GENERIC_FIRST.has(words[0])) return prettyPayee(rawPayee);   // "transfer to sav": the old name
+  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+export const ruleFor = (rawPayee, category, extra = {}) => ({ contains: ruleText(rawPayee), wholeWords: true, category, payee: ruleName(rawPayee), direction: "any", hits: 0, ...extra });
 
 /** compute(plan) -> { rules: [{ ...rule, categoryLabel, matches (over current transactions) }], count, uncategorised, wouldFix } */
 export function compute(plan) {

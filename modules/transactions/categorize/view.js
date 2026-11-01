@@ -5,6 +5,7 @@
 import { compute, buildPrompt, parseSuggestions } from "./compute.js";
 import { categoriesOf, categoryLabel } from "../categories/compute.js";
 import { ruleFor, normalizePayee } from "../rules/compute.js";
+import { aiHealth } from "../../ai/health.js";
 
 let aiSuggestions = {};   // normalized payee -> { category, confidence }; kept across re-renders in this session
 
@@ -14,6 +15,10 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan, ai } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan);
+  // the confirmation shows on the next render whatever that render is ("All filed" included), and only once
+  const out = ui.h("div");
+  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
+  root.append(out);
 
   if (d.total === 0) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Categorise"), ui.h("p", { class: "lede" }, "Once transactions are on file, this page lists the ones with no category, grouped by payee, so you can file dozens in a few taps."),
@@ -26,9 +31,6 @@ export function render(root, ctx) {
     return;
   }
 
-  const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
-  root.append(out);
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `${d.uncategorised} to file`),
     ui.h("p", { class: "lede" }, `${d.groups.length} payee${d.groups.length === 1 ? "" : "s"}. Pick a category on a row and every transaction from that payee gets it, now and in future imports.`),
@@ -58,7 +60,9 @@ export function render(root, ctx) {
   const applyAll = () => {
     const ready = d.groups.filter((g) => g.suggestion || aiSuggestions[g.key]);
     if (!ready.length) return;
-    if (!ui.confirm(`File ${ready.reduce((s, g) => s + g.count, 0)} transactions from ${ready.length} payees with the suggested categories?`)) return;
+    const n = ready.reduce((s, g) => s + g.count, 0);
+    if (!ui.confirm(`File ${n} transactions from ${ready.length} payees with the suggested categories?`)) return;
+    pending = `Filed ${n} transaction${n === 1 ? "" : "s"} from ${ready.length} payee${ready.length === 1 ? "" : "s"}. Change any on the Transactions page.`;
     store.update((p) => {
       p.rules = p.rules ?? [];
       for (const g of ready) {
@@ -87,7 +91,9 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     suggested ? ui.button(`File all ${suggested} suggested`, applyAll) : null,
     aiBtn,
-  ), ui.h("p", { class: "muted small" }, "Suggestions come from your rules, from what the same payee got before, or from the AI on your PC (it only sees the payee names). Nothing is filed until you pick or confirm.")));
+  ), ui.h("p", { class: "muted small" }, "Suggestions come from your rules, from what the same payee got before, from what kind of shop it is, or from the AI on your PC (it only sees the payee names). Nothing is filed until you pick or confirm.")));
+  // the AI button only when the AI helper answers (it failed with a technical message when it did not)
+  aiHealth(ai).then((h) => { if (h.st !== "on") aiBtn.remove(); });
 
   const listHost = ui.h("div");
   const drawList = () => {

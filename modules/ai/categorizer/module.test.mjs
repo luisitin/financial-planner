@@ -202,7 +202,7 @@ test("which rows replace what is filed, and the name filing gives", () => {
   assert.equal(row("netflix").rename, null, "already its tidy name");
   const q = planWith(tx("a", "AMAZON MKTPL*2K3 AMZN.COM/BILL WA", -20), tx("b", "Corner shop", -5, "", { rawPayee: "SQ CORNER SHOP 0042" }));
   const rq = review(q, groupsFor(q, "open"), { "amazon mktpl amzn wa": { category: "shopping", confidence: 0.9 }, "sq corner shop": { category: "groceries", confidence: 0.9 } });
-  assert.equal(rq.rows.find((x) => x.key === "amazon mktpl amzn wa").rename, "Amazon Mktpl Amzn");
+  assert.equal(rq.rows.find((x) => x.key === "amazon mktpl amzn wa").rename, "Amazon Mktpl");
   assert.equal(rq.rows.find((x) => x.key === "sq corner shop").rename, null, "a name the person typed stays");
 });
 
@@ -215,7 +215,7 @@ test("filing: the category on every transaction of the payee, its clean name, an
   const t6 = p.transactions.find((t) => t.id === "t6");
   assert.equal(t6.category, "subscriptions"); assert.equal(t6.rawPayee, "NETFLIX"); assert.equal(t6.payee, "Netflix");
   assert.equal(p.transactions.find((t) => t.id === "t9").category, "", "untouched");
-  assert.deepEqual(p.rules, [{ id: "r1", contains: "netflix", category: "subscriptions", payee: "Netflix", direction: "any", hits: 1, createdAt: "2026-10-31" }]);
+  assert.deepEqual(p.rules, [{ id: "r1", contains: "netflix", wholeWords: true, category: "subscriptions", payee: "Netflix", direction: "any", hits: 1, createdAt: "2026-10-31" }]);
   assert.equal(nextImport(p, "NETFLIX.COM 10/05", -15.49), "subscriptions", "next month's import files itself");
   // the same payee filed again the same way: hits; another way: the rule follows the new choice, and says so
   const again = applyChoices(p, [{ key: "netflix", ids: ["t6"], rawPayee: "NETFLIX", category: "subscriptions" }], opts());
@@ -314,7 +314,7 @@ test("names: a name the person typed survives filing; the bank's own text is tid
   assert.equal(t6.payee, "My streaming"); assert.equal(t6.rawPayee, "NETFLIX"); assert.equal(t6.category, "subscriptions");
   const q = planWith(tx("a", "AMAZON MKTPL*2K3 AMZN.COM/BILL WA", -20), tx("b", "(no description)", -5, "", { rawPayee: "POS 0042 0917" }));
   applyChoices(q, [{ key: "k", ids: ["a"], rawPayee: "AMAZON MKTPL*2K3 AMZN.COM/BILL WA", category: "shopping" }, { key: "n", ids: ["b"], rawPayee: "POS 0042 0917", category: "other" }], opts());
-  assert.equal(q.transactions[0].payee, "Amazon Mktpl Amzn");
+  assert.equal(q.transactions[0].payee, "Amazon Mktpl");
   assert.equal(q.transactions[1].payee, "POS 0042 0917", "the importer's \"(no description)\" gives way to the bank's text");
 });
 

@@ -40,3 +40,36 @@ test("the AI prompt carries only payee names and category ids; answers are check
   assert.deepEqual(parseSuggestions(p, "no json here"), {});
   assert.deepEqual(parseSuggestions(p, "[not json"), {});
 });
+
+test("a first bank file: well-known shops and moves between your own accounts come with a guess, marked as one", async () => {
+  const { compute, shopGuess } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 1000 }, { id: "s", name: "Savings", type: "savings", balance: 500 }, { id: "v", name: "Visa", type: "credit", balance: -300 });
+  const tx = (id, rawPayee, amount) => ({ id, date: "2026-09-02", amount, payee: rawPayee, rawPayee, accountId: "c", category: "" });
+  p.transactions.push(tx("a", "KROGER #0388 DAYTON OH", -54.12), tx("b", "SHELL OIL 57442", -40), tx("c", "Online Transfer to SAV 1234", -500), tx("d", "CHASE CREDIT CRD AUTOPAY", -640.22), tx("e", "SHELLEY JONES", -20), tx("f", "ACME CORP PAYROLL", 2000));
+  const by = Object.fromEntries(compute(p).groups.map((g) => [g.rawPayee, g.suggestion]));
+  assert.equal(by["KROGER #0388 DAYTON OH"].category, "groceries"); assert.equal(by["KROGER #0388 DAYTON OH"].guess, true);
+  assert.equal(by["SHELL OIL 57442"].category, "transport");
+  assert.equal(by["Online Transfer to SAV 1234"].category, "transfer");
+  assert.equal(by["CHASE CREDIT CRD AUTOPAY"].category, "transfer");
+  assert.equal(by["SHELLEY JONES"], null, "whole words only");
+  assert.equal(by["ACME CORP PAYROLL"], null);
+  assert.equal(shopGuess("NETFLIX.COM"), "subscriptions");
+  p.accounts = p.accounts.filter((a) => a.type === "checking");
+  assert.equal(compute(p).groups.find((g) => g.rawPayee === "CHASE CREDIT CRD AUTOPAY").suggestion, null, "no card in the plan: not called a transfer");
+});
+test("review: guesses try the longest name first and leave unclear names alone; loans and people are not transfers; PayPal shops are separate payees", async () => {
+  const { shopGuess, transferGuess, compute: cat } = await import("./compute.js");
+  assert.equal(shopGuess("UBER EATS"), "dining"); assert.equal(shopGuess("UBER *EATS"), "dining"); assert.equal(shopGuess("UBER *TRIP"), "transport");
+  assert.equal(shopGuess("FRONTIER AIRLINES 4221234 DENVER CO"), null); assert.equal(shopGuess("SPECTRUM HEALTH 0042"), null); assert.equal(shopGuess("MARATHON PETRO 123"), null);
+  const plan = { accounts: [{ type: "savings" }, { type: "credit" }] };
+  assert.equal(transferGuess("NAVY FEDERAL CREDIT UNION LOAN PMT", plan, false), false, "a loan payment is spending");
+  assert.equal(transferGuess("ZELLE TO SAVANNAH M", plan, false), false, "a person called Savannah");
+  assert.equal(transferGuess("ONLINE TRANSFER TO SAV 1234", plan, false), true);
+  assert.equal(transferGuess("CHASE CREDIT CRD AUTOPAY", plan, false), true);
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  p.transactions.push({ id: "1", date: "2026-10-01", amount: -15.49, payee: "PAYPAL *NETFLIX", rawPayee: "PAYPAL *NETFLIX", accountId: "c", category: "" }, { id: "2", date: "2026-10-02", amount: -80, payee: "PAYPAL *EBAY", rawPayee: "PAYPAL *EBAY", accountId: "c", category: "" });
+  assert.equal(cat(p).groups.length, 2);
+});
