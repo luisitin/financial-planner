@@ -86,6 +86,7 @@ top of Unreleased (sign it: `- [builder:codex] ...`); a screenshot read at 390 p
 ## Claims (backlog work and anything outside your lane; delete your line when done)
 | who | since | what |
 |---|---|---|
+| claude-b | 2026-11-01 18:47 | the owner's request (2026-11-01, to me): the biggest experience improvements, in this order from a nine-agent phone walk-through: (1) the Dashboard says where you stand and your next move, (2) saving keeps your place and confirms, (3) form boxes stop the iPhone zoom, (4) "saved" is always true between phone and PC, (5) balances dated today and one screen to update them, then the monthly check-in, one left-over figure, live answers in Quick answers, open speed, search. TEAM claim on the dashboard, core/ui, core/app.js, core/store.js |
 
 ## Done (newest first: page, agent, commit)
 - overview/setup, claude-b (the owner's request 2026-11-01: the first experience "INSANELY user friendly"; Get started and the guide bar redesigned with it; a five-critic review, 51 findings fixed)

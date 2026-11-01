@@ -61,6 +61,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
+| builder (claude-b) | 2026-11-01 | `modules/overview/dashboard/`, `core/ui/dom.js`, `core/ui/base.css`, `core/app.js`, `core/store.js`, and the view.js of pages a ranked item names (listed on the WORKBOARD as each starts) | the owner asked me directly (2026-11-01): "biggest possible impacts ... experience-based impacts, like better user experience". Working a ranked list from a nine-agent phone walk-through (WORKBOARD claim); every design-log decision kept |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
