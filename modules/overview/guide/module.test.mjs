@@ -359,3 +359,19 @@ test("the paycheck step counts either earner; the card and one-loan steps wait f
   const high = withRates(owes(["credit", -3000], ["loan", -5000]), [0.22, 0.08]);
   assert.ok(st(journeyStatus(J("debt"), high), "one-loan"), "two it can roll together, one at 22%");
 });
+
+test("Show me where: each step that says 'tap ...' names a button its page really draws", async () => {
+  const { targetsOf } = await import("./compute.js");
+  const fsm = await import("node:fs");
+  assert.deepEqual(targetsOf("List each account, then tap Add account, and + Add another account for the next."), ["+ Add another account", "Add account"]);
+  assert.deepEqual(targetsOf("Give each adult a birth date, then tap Add person or Save changes."), ["Add person", "Save changes"]);
+  assert.deepEqual(targetsOf("Open Retirement settings near the bottom, type what you spend, then tap Save settings."), ["Save settings", "Retirement settings"]);
+  assert.deepEqual(targetsOf("Tap each paper, like a will, then tap Save."), ["Save"], "'each paper' names no button");
+  assert.deepEqual(targetsOf("See which goals arrive on time."), []);
+  for (const j of JOURNEYS) for (const s of j.steps) for (const [page, ask, opens, target] of [[s.page, s.ask, s.opens, s.target], ...(s.alt?.ask ? [[s.alt.page, s.alt.ask, s.alt.opens, s.alt.target]] : [])]) {
+    if (!/\btap\b/i.test(ask)) continue;
+    const labels = targetsOf(ask, { opens, target });
+    const src = fsm.readFileSync(new URL(`../../${page}/view.js`, import.meta.url), "utf8");
+    assert.ok(labels.some((l) => src.includes(l.replace(/^\+ /, ""))), `${j.id}/${s.key}: none of ${JSON.stringify(labels)} is in ${page}/view.js`);
+  }
+});

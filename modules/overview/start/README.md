@@ -3,6 +3,19 @@
 **Status:** usable
 **Purpose:** Pick what you came to do: a quick answer, one goal or the whole plan, then follow it step by step.
 
+**2026-11-01, redesigned.** The owner: "It does not look INSANELY user friendly and experience focused." The page is now
+one big card, **Set up my plan** (`overview/setup`: seven questions, one per screen, then your money on one page), and
+"Or jump straight to" as a grid of eight tiles. The card has three states (`setupCard`): new ("Let's go", three ticks:
+rough numbers are fine, stop any time, no bank logins); started ("Question 4 of 7", the bar, "Next: what you owe", "Pick
+up where you left off"); done (what you own minus what you owe, what's left each month, "Your next move: ..." from the
+setup's own where-you-stand, and "See everything on one page"). A plan built on its own pages first (the whole-plan
+guide's steps all done) counts as done. The heading greets the person by the name the plan has ("Hi Ana. What would you
+like to do?"; no "Hi there"). The tiles: Quick answer, Pay off debt, Spend less save more, Buy a home, Plan retirement,
+Sort out taxes, Protect my family, Big life change (Life events); a started guide's tile shows "2 of 3" and a finished
+one "✓ Done". Footer: "Just exploring? Go to the dashboard ›" and the privacy line. The whole-plan guide stays on Step
+by step and behind "I'd rather fill in the full pages myself" on the setup's welcome screen; the sections below keep
+the earlier rules that still hold.
+
 The owner asked (2026-10-31): "Focus on making it user friendly and easy to use. Maybe have a way to start picking an
 option of what you want to do (calculator / financial plan / etc...) then guide." This page is that start: "What would
 you like to do?", with the whole plan featured, a quick answer (`overview/quick`) and four goals as a quiet list, and a
@@ -11,7 +24,7 @@ link to the other guides (`overview/guide`).
 ## When it opens
 | Situation | What opens |
 |---|---|
-| The app is opened with no page in the address (`#`, `#/` or nothing), and either the plan is empty and "look around" was never chosen, or a guide is still being followed and no account exists yet (`opensHere`) | **Get started**: `core/app.js` swaps the address with `history.replaceState` before the router starts, so Back does not loop and `?sandbox=1` is kept |
+| The app is opened with no page in the address (`#`, `#/` or nothing), and either the plan is empty and "look around" was never chosen, or Set up my plan is started and not finished (and "look around" was not chosen), or a guide is still being followed and no account exists yet (`opensHere`) | **Get started**: `core/app.js` swaps the address with `history.replaceState` before the router starts, so Back does not loop and `?sandbox=1` is kept |
 | No page in the address, any other case | the Dashboard, as before |
 | Any address that names a page (deep links, `tools/drive.mjs`, `qa/smoke-all.mjs`, the menu) | that page, always |
 | Menu: Overview > Get started, or searching "get started", "where do I start", "what can I do" | Get started |
@@ -26,8 +39,10 @@ their choice. The page never hides topics and never stores a "type of person".
 guide. `compute(plan, { today, off })`.
 
 ## Outputs
-`{ empty, firstRun, opensHere, featured: { state: new|started|done, label, line, href, doneCount, total }, rows: [{ id,
-icon, title, line, href, status }], more: { label, href }, resume: activeSummary | null, hasAccounts }`.
+`{ empty, firstRun, opensHere, setup: { state: new|started|done, href, q?, total?, share?, next?, netWorth?, spare?, move? },
+tiles: [{ id, icon, title, line, href, page, status: null | "2 of 3" | "Done" }], featured: { state: new|started|done,
+label, line, href, doneCount, total } (the whole-plan guide, kept for Step by step), rows (the earlier list, kept for
+compatibility), more: { label, href }, resume: activeSummary | null, hasAccounts }`.
 
 ## Rules (tested)
 - **Featured panel** = the whole-plan guide, which is exactly the dashboard's six setup steps, so the count is the
@@ -67,7 +82,9 @@ guidance (a skipped onboarding is not shown again but stays easy to find). Resea
 ## Tests
 `module.test.mjs`: the empty-plan test; first visit and what stops it; opening while a guide is followed; `setChosen`
 writes only `guide.chosen` and not twice a day; the featured panel's three states against the dashboard's count; the
-rows and their targets; the resume card.
+rows and their targets; the resume card; the Set up my plan card's three states; opening while the setup is unfinished
+(not after "look around", not once finished); the eight tiles, each a real page, short enough for a phone tile, with a
+started guide's progress.
 
 ## Ideas / not yet
 - The dashboard's "Choose what to do first" tile on an empty plan, "Continue: <guide>" and "Start something new"

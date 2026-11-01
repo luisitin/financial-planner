@@ -131,6 +131,13 @@ The spec (2026-10-31) was checked by three critics before building (an engineer 
 - Only `plan.guide.active` turns a guide on (the address alone brought the bar back after leaving).
 - Numbered steps never hide; anything that can hide is an extra (step numbers no longer shift mid-guide).
 - "On this page:" plus the page's own button name, in 15 px body text, instead of the step title repeated in small grey.
+  **Changed 2026-11-01** (the owner: "not INSANELY user friendly"): the step title in bold, the instruction under it in
+  normal body text, and **Show me where** under that. `targetsOf(ask, { target, opens })` reads the labels the
+  instruction names ("+ Add another ...", the buttons after "tap", the folds after "open"/"under", the step's `opens`,
+  or a step's own `target`); the button is drawn only once the page shows one of them, and tapping it opens any fold
+  around it, scrolls to it (a form's Add button: the form's card, from its top), focuses it (the form's first box) and
+  rings it for two seconds (no animation with reduced motion). A test checks that every step that says "tap ..." names
+  a label its page's code really has.
 - One way forward in the card ("Skip to" / "Next"), no separate Back and Skip buttons; Undo for "does not apply".
 - "Stop following this guide" instead of "Leave the guide", which sounded like losing work. A finished guide offers
   "Show all the steps" (it opens the folded list), not a restart that would clear the person's "does not apply" answers.

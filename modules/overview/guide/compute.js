@@ -223,3 +223,25 @@ export function compute(plan, params = {}) {
   const j = params.id ? journeyById(params.id) : null;
   return { journeys, active: activeSummary(plan, { off, today }), detail: j ? journeys.find((s) => s.id === j.id) : null };
 }
+
+/**
+ * The on-screen labels a step's instruction points at, in the order "Show me where" looks for them: a step's own
+ * `target` (one label or several), "+ Add another ..." (shown once a list has rows, with the form folded behind it),
+ * the buttons named after "tap" ("tap Add account", "tap Add person or Save changes"), then the folds it names
+ * ("open Retirement settings", "under What a paycheck withholds", and the step's `opens`). Labels start with a capital
+ * letter or "+"; "tap each paper" names no button.
+ */
+export function targetsOf(ask, { target = null, opens = null } = {}) {
+  const out = [];
+  const push = (s) => { const t = String(s ?? "").trim().replace(/\s+/g, " "); if (t && /^[A-Z+]/.test(t) && !out.includes(t)) out.push(t); };
+  for (const t of [].concat(target ?? [])) push(t);
+  const text = String(ask ?? "");
+  for (const m of text.matchAll(/\+ Add another [a-z]+/g)) push(m[0]);
+  for (const m of text.matchAll(/\btap ([^,.;()]+)/gi)) {
+    const phrase = m[1].replace(/\s+(first|for the next|so|to|again)\b.*$/i, "").replace(/\s+and\s+\+.*$/, "");
+    for (const part of phrase.split(/\s+or\s+/)) push(part);
+  }
+  for (const m of text.matchAll(/\b(?:[Oo]pen|under) ([A-Z][^,.;()]*?)(?=,|\.|;|\(| near| lower| and | pick| type| tick|$)/g)) push(m[1]);
+  if (opens) push(opens);
+  return out;
+}

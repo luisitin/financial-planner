@@ -4,7 +4,7 @@
 //   guide    the bar (what to do here, and Next once the step is done) and the next-step card
 //   compact  one line on a step page reached another way (menu, a page's own link), while that step is still to do
 //   quick    "‹ Quick answers" and the question on top, "Another question?" below; one page later, "‹ Back to: <the question>"
-import { barFor, OWN_PAGES, markLooked, markNone, markLater, clearMark, touchGuide } from "./compute.js";
+import { barFor, OWN_PAGES, markLooked, markNone, markLater, clearMark, touchGuide, targetsOf } from "./compute.js";
 import { questionFor } from "../quick/compute.js";
 import { offKeys, usable, change, lowerFirst, isDirty, controlValue } from "./act.js";
 
@@ -23,6 +23,13 @@ const STYLE = `
 .gb-root .gb-track > span { display: block; height: 100%; background: var(--accent); }
 .gb-root .gb-task { margin: 12px 0 0; color: var(--text); }
 .gb-root .gb-task b { font-weight: 650; }
+.gb-root .gb-title { margin: 12px 0 0; font-weight: 650; color: var(--text); }
+.gb-root .gb-title + .gb-task { margin-top: 2px; color: var(--text-2); line-height: 1.45; }
+.gb-root .gb-show { margin-top: 10px; }
+.gb-root .gb-show[hidden] { display: none; }
+.gb-ring { outline: 3px solid var(--accent) !important; outline-offset: 4px; border-radius: var(--radius-sm); animation: gb-ring 2s ease-out forwards; }
+@keyframes gb-ring { 0%, 75% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .gb-ring { animation: none; } }
 .gb-root .gb-first { margin-top: 2px; }
 .gb-root .gb-state { margin: 12px 0 8px; color: var(--text); }
 .gb-root .gb-next { display: flex; justify-content: flex-end; margin-top: 4px; }
@@ -62,6 +69,32 @@ function openFold(page, title) {
     }
   };
   try { new MutationObserver(run).observe(page, { childList: true, subtree: true }); } catch { }
+}
+
+/** The first element on the page a step's labels name (a button, link or fold), drawn or inside a closed fold. */
+function findTarget(page, labels) {
+  const norm = (x) => String(x ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const els = [...page.querySelectorAll("button, a, summary, [role=button], input[type=submit]")];
+  for (const l of labels) {
+    const want = norm(l);
+    const hit = els.find((e) => norm(e.textContent || e.value).startsWith(want) && (e.getClientRects().length > 0 || e.closest("details:not([open])")));
+    if (hit) return hit;
+  }
+  return null;
+}
+/** Scroll to it (opening any fold around it), focus it (a form's Add button: the form's first box), ring it for two seconds. */
+function showTarget(el) {
+  for (let d = el.closest("details:not([open])"); d; d = d.parentElement?.closest("details:not([open])")) d.open = true;
+  const submit = el.form && (el.type === "submit");
+  const ring = submit ? el.form.closest(".card") ?? el.form : el.tagName === "SUMMARY" ? el.parentElement : el;
+  const focusEl = submit ? el.form.querySelector("input:not([type=hidden]):not([type=checkbox]), select, textarea") ?? el : el;
+  let still = false;
+  try { still = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { }
+  ring.style.scrollMarginTop = "88px";
+  ring.scrollIntoView({ block: submit ? "start" : "center", behavior: still ? "auto" : "smooth" });
+  try { focusEl.focus({ preventScroll: true }); } catch { }
+  ring.classList.remove("gb-ring"); void ring.offsetWidth; ring.classList.add("gb-ring");
+  setTimeout(() => ring.classList.remove("gb-ring"), 2200);
 }
 
 function checkAi(ctx) {
@@ -156,10 +189,21 @@ export function frame(ctx, page) {
 
   // the bar
   const pct = bar.total ? Math.round(100 * bar.doneCount / bar.total) : 0;
+  // "Show me where": drawn once the page shows a button, link or fold the instruction names
+  const labels = targetsOf(ask, { target: bar.viaAlt ? step.alt?.target : step.target, opens });
+  let showBtn = null;
+  if (labels.length && !blocked && step.state !== "none") {
+    showBtn = ui.h("button", { type: "button", class: "secondary small gb-show", hidden: true, onClick: () => { const t = findTarget(page, labels); if (t) showTarget(t); } }, "Show me where");
+    let queued = false;
+    const check = () => { queued = false; showBtn.hidden = !findTarget(page, labels); };
+    const later = () => { if (!queued) { queued = true; requestAnimationFrame(check); } };
+    later();
+    try { const mo = new MutationObserver(later); mo.observe(page, { childList: true, subtree: true }); } catch { }
+  }
   const task = blocked
     ? [ui.h("p", { class: "gb-task" }, needLine), ui.h("div", { class: "gb-first" }, nav(bar.blockedBy.href, `${bar.blockedBy.short} ›`, null))]
     : step.state === "none" ? null
-      : ui.h("p", { class: "gb-task" }, ui.h("b", {}, "On this page: "), lowerFirst(ask));
+      : [ui.h("p", { class: "gb-title" }, step.title), ui.h("p", { class: "gb-task" }, ask), showBtn];
   const barNext = finishedState
     ? ui.h("div", {},
       ui.h("p", { class: "gb-state" }, step.state === "done" ? [ui.h("span", { class: "gb-tick", "aria-hidden": "true" }, "✓ "), "This step is done."] : [noneSaid, " ", undo()]),

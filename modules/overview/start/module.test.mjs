@@ -90,3 +90,42 @@ test("the resume card: the followed guide unless it is the whole plan (the featu
   startGuide(q, "debt", "2026-10-31");
   assert.equal(compute(q).rows.find((r) => r.id === "debt").status, "In progress: 2 of 3 steps done");
 });
+
+test("Set up my plan card: new, then started (question and next), then done (figures and the next move)", async () => {
+  const S = await import("../setup/compute.js");
+  const p = empty();
+  assert.deepEqual(compute(p, { today: "2026-11-01" }).setup, { state: "new", href: "#/overview/setup/you", total: 7 });
+  S.applyYou(p, { name: "Ana", who: "me" }); S.markAt(p, "money", "2026-11-01");
+  const st = compute(p, { today: "2026-11-01" }).setup;
+  assert.deepEqual([st.state, st.q, st.href, st.next], ["started", 2, "#/overview/setup/money", "what comes in"]);
+  S.applyMoney(p, { people: { "setup-self": { status: "work", amount: 60000 } } });
+  S.applySpend(p, { mode: "rows", rows: { housing: 1400, groceries: 500 } }); S.markAt(p, "done", "2026-11-01");
+  const done = compute(p, { today: "2026-11-01" }).setup;
+  assert.equal(done.state, "done");
+  assert.equal(done.href, "#/overview/setup/done");
+  assert.ok(done.move && done.move.href.startsWith("#/"), "a next move with a link");
+});
+test("opens here while Set up my plan is started and not finished, unless 'look around' was chosen", async () => {
+  const S = await import("../setup/compute.js");
+  const p = empty();
+  S.applyYou(p, { name: "Ana", who: "me" }); S.markAt(p, "money", "2026-11-01");
+  assert.equal(firstRun(p), false, "the plan has a person now");
+  assert.equal(opensHere(p), true);
+  setChosen(p, "look", "2026-11-01");
+  assert.equal(opensHere(p), false);
+  const q = empty(); S.applyYou(q, { who: "me" }); S.markAt(q, "done", "2026-11-01");
+  assert.equal(opensHere(q), false, "finished");
+});
+test("tiles: a quick answer, six guides and a big life change, each a real page; a started guide shows how far", () => {
+  const d = compute(empty());
+  assert.deepEqual(d.tiles.map((t) => t.id), ["quick", "debt", "budget", "home", "retire", "taxes", "protect", "life"]);
+  for (const t of d.tiles) {
+    assert.ok(CHOICE_IDS.includes(t.id), t.id);
+    const { group, id, rest } = router.parse(t.href);
+    assert.ok(fs.existsSync(`${MODS}${group}/${id}/module.js`), t.href);
+    if (rest[0]) assert.ok(journeyById(rest[0]), t.href);
+    assert.ok(t.title.length <= 22 && t.line.length <= 34, `${t.title}: short enough for a phone tile`);
+  }
+  const p = migrate(familyPlan("2026-10-31")); startGuide(p, "taxes", "2026-10-31");
+  assert.match(compute(p).tiles.find((t) => t.id === "taxes").status, /^\d+ of \d+$/);
+});
