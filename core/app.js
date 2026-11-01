@@ -232,7 +232,8 @@ function echo(text, bad = false) {
 
 let aiState = "off";
 async function refreshStatus() {
-  try { aiState = await ai.status(); } catch { aiState = "off"; }
+  // the sandbox never reaches out: no AI check (the pill says Sandbox and does not name the AI)
+  if (!store.sandbox()) { try { aiState = await ai.status(); } catch { aiState = "off"; } }
   showPill();
 }
 /**

@@ -20,6 +20,8 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import zlib from "node:zlib";
+import crypto from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -250,6 +252,55 @@ async function handleApi(req, res, url) {
   return json(res, 404, { error: `no route ${req.method} ${url.pathname}` });
 }
 
+// ---------------------------------------------------------------- static files, quick to open
+// Every open of the app used to fetch all ~530 files again (Cache-Control: no-cache and nothing to check against):
+// 3.4 MB and about 4.4 s on a phone over home Wi-Fi, every time. Now text goes gzipped; every file carries an ETag
+// (304 when unchanged); and index.html carries an import map that gives each code file under core/ and modules/ an
+// address with its content hash (?v=<hash>), which the browser keeps (immutable): an open after the first fetches
+// only index.html. A changed file gets a new address, so an update shows on the next open, never a mix of old and new.
+const fileInfo = new Map();                 // absolute path -> { mtimeMs, size, hash, buf, gz }
+const BIG = 4e6;                            // larger files are streamed as they are (no gzip, no copy in memory)
+function infoOf(abs, st) {
+  const k = fileInfo.get(abs);
+  if (k && k.mtimeMs === st.mtimeMs && k.size === st.size) return k;
+  if (st.size > BIG) { const info = { mtimeMs: st.mtimeMs, size: st.size, hash: `${st.size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}`, buf: null, gz: null }; fileInfo.set(abs, info); return info; }
+  const buf = fs.readFileSync(abs);
+  const info = { mtimeMs: st.mtimeMs, size: st.size, hash: crypto.createHash("sha1").update(buf).digest("hex").slice(0, 12), buf, gz: null };
+  fileInfo.set(abs, info); return info;
+}
+const versioned = (rel) => { try { const abs = path.join(ROOT, rel); return `${rel}?v=${infoOf(abs, fs.statSync(abs)).hash}`; } catch { return rel; } };
+let mapCache = { at: 0, json: "" };
+function importMap() {
+  if (Date.now() - mapCache.at < 1000) return mapCache.json;
+  const imports = {};
+  const walk = (dir) => {
+    let entries = []; try { entries = fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const rel = `${dir}/${e.name}`;
+      if (denied(rel)) continue;
+      if (e.isDirectory()) walk(rel);
+      else if (e.isFile() && /\.m?js$/.test(e.name) && !/\.test\.mjs$/.test(e.name)) imports[`/${rel}`] = `/${versioned(rel)}`;
+    }
+  };
+  walk("core"); walk("modules");
+  mapCache = { at: Date.now(), json: JSON.stringify({ imports }).replace(/</g, "\\u003c") };
+  return mapCache.json;
+}
+const COMPRESS = /^(text\/|application\/(json|manifest\+json)|image\/svg)/;
+function sendBody(req, res, { body, type, tag, cache, info }) {
+  const headers = { "Content-Type": type, "Cache-Control": cache, ETag: tag, Vary: "Accept-Encoding" };
+  const seen = String(req.headers["if-none-match"] || "").split(",").map((x) => x.trim());
+  if (seen.includes(tag) || seen.includes("*")) { res.writeHead(304, headers); return res.end(); }
+  if (COMPRESS.test(type) && body.length > 1024 && /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""))) {
+    const gz = info?.gz ?? zlib.gzipSync(body, { level: 6 });
+    if (info) info.gz = gz;
+    headers["Content-Encoding"] = "gzip"; headers["Content-Length"] = gz.length;
+    res.writeHead(200, headers); return res.end(req.method === "HEAD" ? undefined : gz);
+  }
+  headers["Content-Length"] = body.length;
+  res.writeHead(200, headers); res.end(req.method === "HEAD" ? undefined : body);
+}
+
 function serveStatic(req, res, url) {
   let rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
   if (rel === "" || rel.endsWith("/")) rel += "index.html";
@@ -263,8 +314,25 @@ function serveStatic(req, res, url) {
     if (realRel.startsWith("../") || path.isAbsolute(realRel) || denied(realRel) || (real + path.sep).toLowerCase().startsWith(DATA_REAL.toLowerCase() + path.sep)) { res.writeHead(403); return res.end("forbidden"); }
     fs.stat(real, (err2, st) => {
       if (err2 || !st.isFile()) { res.writeHead(404); return res.end("not found"); }
-      res.writeHead(200, { "Content-Type": MIME[path.extname(real).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-cache" });
-      fs.createReadStream(real).pipe(res);
+      const type = MIME[path.extname(real).toLowerCase()] ?? "application/octet-stream";
+      let info; try { info = infoOf(real, st); } catch { res.writeHead(404); return res.end("not found"); }
+      if (realRel === "index.html") {
+        // the shell, always checked: it names every code file's current address (the import map comes before the first module)
+        const html = info.buf.toString("utf8")
+          .replace(/href="\.\/core\/ui\/base\.css"/, `href="./${versioned("core/ui/base.css")}"`)
+          .replace(/<script type="module" src="\.\/core\/app\.js"><\/script>/, () => `<script type="importmap">${importMap()}</script>\n<script type="module" src="./${versioned("core/app.js")}"></script>`);
+        const body = Buffer.from(html);
+        return sendBody(req, res, { body, type, tag: `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 16)}"`, cache: "no-cache" });
+      }
+      // an address with this file's current hash never changes: keep it; any other address is checked each time (ETag)
+      const cache = url.searchParams.get("v") === info.hash ? "public, max-age=31536000, immutable" : "no-cache";
+      const tag = `W/"${info.hash}"`;
+      if (!info.buf) {
+        if (String(req.headers["if-none-match"] || "").split(",").map((x) => x.trim()).includes(tag)) { res.writeHead(304, { ETag: tag, "Cache-Control": cache }); return res.end(); }
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": cache, ETag: tag, "Content-Length": st.size });
+        return req.method === "HEAD" ? res.end() : fs.createReadStream(real).pipe(res);
+      }
+      sendBody(req, res, { body: info.buf, type, tag, cache, info });
     });
   });
 }

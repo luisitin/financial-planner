@@ -147,6 +147,7 @@ trip, server-side net-worth compute, Ollama model list, static serving, and the 
 ## 11. Devices and networking
 
 * On the LAN, the phone opens `http://<PC IP>:8787/`. The server prints its URLs at startup.
+* **Quick to open (2026-11-01).** The app is ~530 plain ES-module files with no bundler, so the server does the caching work: when it serves `index.html` it adds an import map giving every code file under `core/` and `modules/` an address with its content hash (`?v=<hash>`), served with `Cache-Control: immutable`; every other address is `no-cache` with an ETag (304 when unchanged), and text is gzipped. An open after the first fetches only `index.html` (0.7 s instead of 4.4 s on a phone over home Wi-Fi at 40 ms a request; 1 KB instead of 3.4 MB); an edited file gets a new address on the next open, so a reload never mixes old and new code. A service worker would do more but needs HTTPS, which a LAN address does not have. `tests/server-static.test.mjs` holds the rules.
 * The app is a hash-routed single page, so a deep link like `#/retirement/monte-carlo` works and survives reloads.
 * **Planned:** PWA manifest + service worker so the phone installs it and works offline against its local copy; live sync between devices (a WebSocket) so an open page shows another device's change at once (today it is picked up when the tab comes back into view, and a save on stale data asks instead of overwriting).
 * Beyond the LAN: only through a tunnel (playit.gg, Tailscale) **and** `auth.token`. HTTPS is a Tailscale/tunnel concern, not the server's.
