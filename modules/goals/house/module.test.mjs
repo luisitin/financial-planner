@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, monthlyCost, priceFor, solveMonths, DEFAULTS, FRONT, BACK, isHouseGoal, houseGoalRank, findHouseGoal } from "./compute.js";
+import { compute, monthlyCost, priceFor, priceForCash, solveMonths, DEFAULTS, FRONT, BACK, isHouseGoal, houseGoalRank, findHouseGoal } from "./compute.js";
 import { pmt, pmtToReach } from "../../../core/math/finance.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -59,4 +59,33 @@ test("a house goal on Goals supplies what is set aside and saved; entered figure
   const w = compute(withHouse({ price: 2000000, downShare: 0.1 }), { today: TODAY });
   assert.equal(w.warnings.length, 2);
   assert.equal(compute(emptyPlan(), { today: TODAY }).maxPrice, null);
+});
+test("priceForCash: the price whose down payment, closing costs and reserves add up to the cash", () => {
+  const x = { ...DEFAULTS, hoaMonthly: 150 };
+  const price = priceForCash(60000, x);
+  const cash = price * x.downShare + price * x.closingShare + monthlyCost(price, x) * x.reserveMonths;
+  assert.ok(Math.abs(cash - 60000) < 0.01, `${cash}`);
+  assert.equal(priceForCash(0, { ...DEFAULTS }), 0);
+});
+test("never saved here, with a house goal: the page opens on the home the goal buys, and quotes the Goals page's monthly figure", async () => {
+  const { compute: goals } = await import("../goals/compute.js");
+  const p = familyPlan(TODAY);
+  p.goals.push({ id: "gh", name: "House down payment", icon: "🏠", target: 50000, targetDate: "2029-11-01", saved: 0, monthly: 0, fundedBy: [], priority: 2 });
+  delete p.whatIfs?.house;
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.fromGoal, true); assert.equal(d.goalTarget, 50000);
+  assert.equal(d.inputs.price, Math.round(priceForCash(50000, d.inputs) / 1000) * 1000);
+  assert.ok(Math.abs(d.cash.total - 50000) < 500, "about the goal's amount (the price is rounded to $1,000)");
+  assert.equal(d.neededMonthly, goals(p, { today: TODAY }).goals.find((g) => g.id === "gh").neededMonthly);
+  p.whatIfs = { ...(p.whatIfs ?? {}), house: { price: 300000 } };
+  const own = compute(p, { today: TODAY });
+  assert.equal(own.fromGoal, false); assert.equal(own.inputs.price, 300000, "the person's own figures win once saved");
+});
+test("a house goal with no date: no monthly figure (not $0 a month)", () => {
+  const p = familyPlan(TODAY);
+  p.goals.push({ id: "gh", name: "House down payment", icon: "🏠", target: 50000, targetDate: "", saved: 0, monthly: 0, fundedBy: [], priority: 2 });
+  delete p.whatIfs?.house;
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.fromGoal, true);
+  assert.equal(d.neededMonthly, null);
 });

@@ -17,6 +17,7 @@ export function render(page, ctx) {
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
   const pct = (x) => `${Math.round(x * 100)}%`;
+  const monthYear = (iso) => { const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? "")); return m ? new Date(Number(m[1]), Number(m[2]) - 1, 15).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : String(iso ?? ""); };
   const today = fmt.today();
   const d = compute(plan, { today });
   const x = d.inputs;
@@ -27,7 +28,9 @@ export function render(page, ctx) {
 
   if (!saved) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Saving for a home"),
-    ui.h("p", { class: "lede" }, "How much home your income supports, what a home would cost a month, the cash you need on the day, and when you will have it. The figures below are an example: put in the home you have in mind.")));
+    ui.h("p", { class: "lede" }, d.fromGoal
+      ? `Your "${d.goal.name}" goal of ${fmt.money(d.goalTarget, cur)} buys a home of about ${money(x.price)}: ${pct(x.downShare)} down, closing costs and ${x.reserveMonths} months of payments kept in reserve. Change the figures below to try another home.`
+      : "How much home your income supports, what a home would cost a month, the cash you need on the day, and when you will have it. The figures below are an example: put in the home you have in mind.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   if (d.maxPrice !== null) root.append(ui.card("What your income supports", ui.row(
@@ -52,10 +55,16 @@ export function render(page, ctx) {
   const when = ui.card("When you get there");
   const have = `${money(d.saved)} set aside${d.goal ? ` (the "${d.goal.name}" goal)` : ""}`;
   if (d.monthsToGo === 0) when.append(ui.h("p", {}, `You have it: ${have}.`));
-  else if (d.monthsToGo !== null) when.append(ui.h("p", {}, Number.isFinite(d.monthsToGo) ? `With ${have} and ${money(d.monthlySaving)} a month, you have it in about ${Math.ceil(d.monthsToGo / 12 * 10) / 10} years (${d.readyDate}).` : `At ${money(d.monthlySaving)} a month it is not reached in 100 years.`));
+  else if (d.monthsToGo !== null) when.append(ui.h("p", {}, Number.isFinite(d.monthsToGo) ? `With ${have} and ${money(d.monthlySaving)} a month, you have it in about ${Math.ceil(d.monthsToGo / 12 * 10) / 10} years (${monthYear(d.readyDate)}).` : `At ${money(d.monthlySaving)} a month it is not reached in 100 years.`));
   else when.append(ui.h("p", {}, `${have[0].toUpperCase()}${have.slice(1)}; enter what you save a month below to see when.`));
-  if (d.neededMonthly !== null) when.append(ui.h("p", {}, `To have it by ${d.target}: about ${money(d.neededMonthly)} a month.`));
-  when.append(ui.row(ui.button(d.goal ? `Update the "${d.goal.name}" goal` : "Make it a goal", () => {
+  if (d.neededMonthly !== null) when.append(ui.h("p", {}, `To have it by ${monthYear(d.target)}: about ${money(d.neededMonthly)} a month.`));
+  // The goal button only once the figures are the person's own: before, a filled "Update the goal" with the example's
+  // figures replaced a $50,000 goal with $97,000 in one tap. It names both amounts, and it is outlined (Save is the action).
+  const newTarget = Math.round(d.cash.total / 100) * 100;
+  const changes = d.goal && Math.abs((d.goal.target ?? 0) - newTarget) >= 100;
+  const goalButton = !saved ? null : d.goal ? (changes ? ui.button(`Change the goal from ${fmt.money(d.goal.target ?? 0, cur)} to ${fmt.money(newTarget, cur)}`, () => goalWrite(), { class: "secondary" }) : null) : ui.button(`Make it a goal (${fmt.money(newTarget, cur)})`, () => goalWrite());
+  if (!saved && !d.goal) when.append(ui.h("p", { class: "muted small" }, "Put the home you have in mind in the figures below and save; then it can become a goal."));
+  const goalWrite = () => {
     pending = d.goal ? "Goal updated." : "Goal added on the Goals page.";
     store.update((p) => {
       p.goals = p.goals ?? [];
@@ -64,7 +73,8 @@ export function render(page, ctx) {
       if (g) Object.assign(g, { target, targetDate: d.target || g.targetDate, monthly: x.monthly ?? g.monthly });
       else p.goals.push({ id: ui.uid(), name: "House down payment", icon: "🏠", target, targetDate: d.target || "", priority: 2, saved: x.saved ?? 0, fundedBy: [], monthly: x.monthly ?? 0, rate: null, inflates: true });
     });
-  }), ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));
+  };
+  when.append(ui.row(goalButton, ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));
   root.append(when);
 
   const s = plan.whatIfs?.house ?? {};
@@ -83,7 +93,9 @@ export function render(page, ctx) {
     { key: "monthly", label: "Saved toward it a month", type: "money", min: 0, help: "empty: the house goal's monthly amount" },
     { key: "targetDate", label: "Buy by", type: "date" },
   ];
-  const values = Object.fromEntries(fields.map((f) => [f.key, s[f.key] ?? (["saved", "monthly"].includes(f.key) ? null : DEFAULTS[f.key])]));
+  // the boxes show the figures the page works with: opened from the goal, the price its cash buys (not the example $400,000),
+  // so "Work it out" without a change saves what the page shows
+  const values = Object.fromEntries(fields.map((f) => [f.key, s[f.key] ?? (["saved", "monthly", "targetDate"].includes(f.key) ? (f.key === "targetDate" ? "" : null) : x[f.key] ?? DEFAULTS[f.key])]));
   root.append(ui.h("details", { class: "card fold fold-card", open: saved ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, money(x.price)), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form(fields, values, (v) => {
       pending = "Saved.";

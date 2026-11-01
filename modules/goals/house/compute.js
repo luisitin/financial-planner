@@ -53,11 +53,22 @@ export function priceFor(budget, x) {
 }
 
 /**
+ * The price whose cash on the day (down payment + closing costs + reserves of the monthly cost) is `cash`: the cash rises
+ * in a straight line with the price, cash(price) = price x (down + closing + reserve months x cost per dollar) + HOA x reserve months.
+ */
+export function priceForCash(cash, x) {
+  const perDollar = monthlyCost(1, { ...x, hoaMonthly: 0 });
+  const share = x.downShare + x.closingShare + x.reserveMonths * perDollar;
+  return share > 0 ? Math.max(0, (cash - x.hoaMonthly * x.reserveMonths) / share) : 0;
+}
+
+/**
  * compute(plan, { today }) -> {
  *   inputs, grossMonthly, otherDebtMonthly, maxFront, maxBack, maxPrice, rule ("front"|"back"),
  *   monthly (the chosen price), parts: { principalInterest, taxInsurance, hoa }, frontShare, backShare,
  *   cash: { down, closing, reserves, total }, saved, goal (the house goal on Goals, if any), monthlySaving,
- *   monthsToGo, readyDate, neededMonthly (to reach it by the target date), warnings
+ *   monthsToGo, readyDate, neededMonthly (to reach it by the target date), warnings,
+ *   fromGoal: true when the page has never been saved and opens on the price the house goal's target buys (goalTarget)
  * }
  */
 export function compute(plan, params = {}) {
@@ -65,6 +76,12 @@ export function compute(plan, params = {}) {
   const s = plan.whatIfs?.house ?? {};
   const x = {};
   for (const [k, v] of Object.entries(DEFAULTS)) { const y = s[k]; x[k] = typeof v === "string" ? (y ?? v) : y === null || y === undefined || y === "" || !Number.isFinite(Number(y)) ? v : Number(y); }
+  // never saved here, and a house goal with an amount: open on the home that amount buys, not on the $400,000 example
+  const g = computeGoals(plan, { today });
+  const goal = findHouseGoal(g.goals);
+  const goalTarget = goal && Number(goal.target) > 0 ? Number(goal.target) : null;
+  const fromGoal = !plan.whatIfs?.house && goalTarget !== null;
+  if (fromGoal) x.price = Math.round(priceForCash(goalTarget, x) / 1000) * 1000;
   const inc = computeIncome(plan, { today });
   const grossMonthly = inc.monthly ?? 0;
   const li = computeLiabilities(plan, { today });
@@ -79,8 +96,6 @@ export function compute(plan, params = {}) {
   const cash = { down: x.price * x.downShare, closing: x.price * x.closingShare, reserves: monthly * x.reserveMonths };
   cash.total = cash.down + cash.closing + cash.reserves;
   // what is set aside: the figure entered, else the house goal on Goals
-  const g = computeGoals(plan, { today });
-  const goal = findHouseGoal(g.goals);
   const saved = x.saved !== null ? x.saved : goal ? goal.funded : 0;
   const monthlySaving = x.monthly !== null ? x.monthly : goal ? Number(goal.monthly) || 0 : 0;
   const rate = Number(plan.assumptions?.returnCash ?? 0.02) / 12;
@@ -89,7 +104,10 @@ export function compute(plan, params = {}) {
   const readyDate = today && monthsToGo !== null && Number.isFinite(monthsToGo) ? addMonthsIso(today, monthsToGo) : null;
   const target = x.targetDate || goal?.targetDate || "";
   const monthsToTarget = today && target ? monthsBetween(today, target) : null;
-  const neededMonthly = monthsToTarget && monthsToTarget > 0 ? Math.max(0, pmtToReach(rate, monthsToTarget, cash.total, saved)) : null;
+  // opened from the goal: the Goals page's own monthly figure, so the two pages agree
+  const goalMonthly = goal?.neededMonthly === null || goal?.neededMonthly === undefined || goal?.neededMonthly === "" ? null : Number(goal.neededMonthly);
+  const neededMonthly = fromGoal && Number.isFinite(goalMonthly) && !x.targetDate ? goalMonthly
+    : monthsToTarget && monthsToTarget > 0 ? Math.max(0, pmtToReach(rate, monthsToTarget, cash.total, saved)) : null;
   const warnings = [];
   if (x.downShare < 0.2) warnings.push(`With under 20% down, most lenders add mortgage insurance (often 0.3% to 1.5% of the loan a year) until you reach 20%.`);
   if (maxPrice !== null && x.price > maxPrice) warnings.push(`At ${Math.round(monthly)} a month this home is over what the lenders' rules suggest for your income.`);
@@ -97,7 +115,8 @@ export function compute(plan, params = {}) {
     inputs: x, grossMonthly, otherDebtMonthly, maxFront, maxBack, maxPrice, rule: maxFront <= maxBack ? "front" : "back",
     monthly, parts: { principalInterest: pi, taxInsurance: x.price * (x.taxRate + x.insuranceRate) / 12, hoa: x.hoaMonthly },
     frontShare: grossMonthly > 0 ? monthly / grossMonthly : null, backShare: grossMonthly > 0 ? (monthly + otherDebtMonthly) / grossMonthly : null,
-    cash, saved, goal: goal ? { id: goal.id, name: goal.name } : null, monthlySaving, monthsToGo, readyDate, target, neededMonthly, warnings,
+    cash, saved, goal: goal ? { id: goal.id, name: goal.name, target: goalTarget } : null, monthlySaving, monthsToGo, readyDate, target, neededMonthly, warnings,
+    fromGoal, goalTarget,
   };
 }
 

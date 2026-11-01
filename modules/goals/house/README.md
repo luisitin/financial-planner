@@ -27,6 +27,20 @@
   home as a whole word, which lost "Townhouse fund" and "Homebuying fund" and still took "Pay off the house" (found by
   a third review the same day). The step-by-step guide's "Set down payment goal" step uses the same test.
 
+## Opening on your own goal (2026-11-01, round 2 of the owner's experience list)
+- Never saved here (`whatIfs.house` absent) and a house goal with an amount: the page opens on the price that amount buys,
+  `priceForCash(target)` = (target - HOA x reserve months) / (down share + closing share + reserve months x monthly cost per
+  dollar), rounded to $1,000 ("Your "House down payment" goal of $50,000 buys a home of about $206,000"), and "To have it
+  by" quotes the Goals page's own `neededMonthly`, so the two pages agree. Before, it opened on the $400,000 example
+  ($97,010 cash, "about $2,620 a month") while Goals said $1,431. The form's boxes show the same figures (the price the goal
+  buys, not the example), so "Work it out" without a change saves what the page shows. A goal with no date gives no monthly
+  figure (it read "To have it by : about $0 a month").
+- The goal button shows only once the figures are the person's own (saved): outlined, naming both amounts, "Change the goal
+  from $50,000 to $97,000", or "Make it a goal ($97,000)" when there is none. Before, a filled "Update the goal" applied the
+  example's figures in one tap and replaced the person's $50,000 with $105,995. Unsaved and with no goal, a line says to put in
+  the home first.
+- Dates read as month and year ("November 2029").
+
 ## Tests
 `module.test.mjs`: the monthly cost and its inverse, months to save, the family's limits, cash and monthly needed, the house goal test (a repairs, pay-off or trip goal is never offered; the clearest of several wins), a house goal supplying the figures, entered figures winning, the warnings, no income.
 
