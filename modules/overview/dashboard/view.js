@@ -101,6 +101,9 @@ export function render(root, ctx) {
     { icon: "📥", t: "Import a bank file", d: "Three months of transactions keeps the numbers real.", go: ["transactions", "import"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
   ];
+  // balances more than a month old: one screen brings them all up to date
+  const bu = d.hasMoney && usable(ctx, "balance/update") ? computeOf("balance/update", { today: fmt.today() }) : null;
+  if (bu?.stale) actions.splice(1, 0, { icon: "🔄", t: "Update my balances", d: `${bu.stale} of your ${bu.count} balances ${bu.stale === 1 ? "is" : "are"} more than a month old. One screen, save once.`, go: ["balance", "update"] });
   root.append(ui.card(d.hasMoney ? "What to do now" : "Start here", ui.h("div", { class: "grid" }, actions.map((a) => ui.h("a", { href: `#/${a.go.join("/")}`, class: "action" },
     ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d)))))));
 

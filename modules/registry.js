@@ -16,6 +16,7 @@ export default [
   { group: "balance", id: "net-worth", load: () => import("./balance/net-worth/module.js") },
   { group: "balance", id: "projection", load: () => import("./balance/projection/module.js") },
   { group: "balance", id: "statement", load: () => import("./balance/statement/module.js") },
+  { group: "balance", id: "update", load: () => import("./balance/update/module.js") },
   { group: "career", id: "benefits", load: () => import("./career/benefits/module.js") },
   { group: "career", id: "business", load: () => import("./career/business/module.js") },
   { group: "career", id: "equity", load: () => import("./career/equity/module.js") },

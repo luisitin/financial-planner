@@ -36,6 +36,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `balance/net-worth` | Net worth | usable | 0 | Shows your accounts and totals, how liquid they are, which tax bucket each sits in and your net worth history. | Maybe |
+| `balance/update` | Update my balances | usable | 10 | Every account on one screen: type today's balances, save once, and each is dated today with today's net worth saved. | Monarch, Empower manual accounts |
 | `balance/accounts` | Account detail | usable | 3 | Shows each account's balance history, what goes in and out of it, whether its last statement was checked, and your notes on it. | Actual |
 | `balance/liquidity` | Emergency fund | usable | 2 | How many months of bills your cash covers, and whether your emergency fund is big enough. | - |
 | `balance/assets` | Asset register | usable | 10 | Lists your home, cars and belongings with what you paid, what each is worth now and which policy covers it. | - |

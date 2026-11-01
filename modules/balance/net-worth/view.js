@@ -1,5 +1,6 @@
 // modules/balance/net-worth/view.js -- DOM only.
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
+import { keepOnFile } from "../update/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -57,7 +58,16 @@ export function render(root, ctx) {
     formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
       pending = { card: "accounts", text: editing ? `${v.name || editing.name} saved.` : `${v.name} added.` };
       store.update((p) => {
-        if (editing) { const i = p.accounts.findIndex((a) => a.id === editing.id); if (i >= 0) p.accounts[i] = { ...p.accounts[i], ...v }; }
+        if (editing) {
+          const i = p.accounts.findIndex((a) => a.id === editing.id);
+          if (i >= 0) {
+            const old = p.accounts[i];
+            const moved = Number(v.balance) !== Number(old.balance);
+            // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
+            if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
+            p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
+          }
+        }
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });
       });
       editing = null;
@@ -92,6 +102,7 @@ export function render(root, ctx) {
   const said = (card) => { if (pending?.card !== card) return null; const n = ui.notice("ok", pending.text); pending = null; return n; };
   root.append(ui.card(empty ? null : "Accounts",
     said("accounts"),
+    empty ? null : ui.h("p", {}, ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update all balances at once")),
     empty ? null : table, empty ? null : records,
     formHost,
   ));

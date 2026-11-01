@@ -42,7 +42,7 @@ export function compute(plan, params = {}) {
   const accounts = plan.accounts ?? [];
   const stale = accounts.filter((a) => !a.asOf || (a.asOf.slice(0, 7) < month && daysBetween(a.asOf, today) > 20));
   add({ id: "balances", title: "Update the balances", status: !accounts.length ? "todo" : stale.length ? "todo" : "done",
-    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are older than ${label}: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? "..." : ""}.` : `All ${accounts.length} balances are from ${label} or later.`, go: ["balance", "net-worth"] });
+    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are older than ${label}: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? "..." : ""}.` : `All ${accounts.length} balances are from ${label} or later.`, go: ["balance", stale.length ? "update" : "net-worth"] });
 
   // 2. this month's net worth point
   const nw = computeNetWorth(plan, { today });

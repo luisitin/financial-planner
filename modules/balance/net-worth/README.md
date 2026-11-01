@@ -28,6 +28,12 @@ form marked "typed before; choose a person".
 Unknown `type` is treated as `other_asset`. Non-numeric balances count as 0. One snapshot per
 calendar day (the later one wins).
 
+Editing an account's balance (2026-11-01): a new balance is dated today unless "Balance as of" was changed in the same
+edit, and the old balance stays a point in the account's history on its old date (`keepOnFile` in
+`balance/update/compute.js`), so Account detail's chart and the monthly review see the update. Adding, saving and
+removing an account each confirm at the top of the Accounts card. "Update all balances at once" opens
+`balance/update`, which dates every balance today in one save.
+
 ## Tests
 `module.test.mjs`: totals, liability handling, tax buckets, change vs last snapshot.
 
