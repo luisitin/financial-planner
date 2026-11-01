@@ -1,7 +1,8 @@
 // modules/balance/net-worth/view.js -- DOM only.
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
 
-// The shell re-renders after store.update, so a confirmation waits here for the next render.
+// The shell re-renders after store.update, so a confirmation waits here for the next render:
+// { card: "accounts" | "history", text }.
 let pending = null;
 
 const FIELDS = [
@@ -54,6 +55,7 @@ export function render(root, ctx) {
     const values = editing ? { ...editing } : { type: "checking", asOf: fmt.today() };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an account"));
     formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
+      pending = { card: "accounts", text: editing ? `${v.name || editing.name} saved.` : `${v.name} added.` };
       store.update((p) => {
         if (editing) { const i = p.accounts.findIndex((a) => a.id === editing.id); if (i >= 0) p.accounts[i] = { ...p.accounts[i], ...v }; }
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });
@@ -64,7 +66,7 @@ export function render(root, ctx) {
   drawForm();
 
   const edit = (a) => { editing = a; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth" }); };
-  const del = (a) => { if (ui.confirm(`Delete ${a.name}?`)) store.update((p) => { p.accounts = p.accounts.filter((x) => x.id !== a.id); }); };
+  const del = (a) => { if (ui.confirm(`Delete ${a.name}?`)) { pending = { card: "accounts", text: `${a.name} removed.` }; store.update((p) => { p.accounts = p.accounts.filter((x) => x.id !== a.id); }); } };
   const typeLabel = (a) => (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label;
   // Anything that counts against you (a loan, or an overdrawn asset) shows a minus in red (F-008).
   const balance = (a) => { const against = isLiability(a.type) || countedBalance(a) < 0; return ui.h("span", { class: against ? "bad" : "" }, (against ? "-" : "") + fmt.money(Math.abs(countedBalance(a)), cur)); };
@@ -87,16 +89,19 @@ export function render(root, ctx) {
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
     ui.h("div", { class: "rec-sub" }, a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
+  const said = (card) => { if (pending?.card !== card) return null; const n = ui.notice("ok", pending.text); pending = null; return n; };
   root.append(ui.card(empty ? null : "Accounts",
+    said("accounts"),
     empty ? null : table, empty ? null : records,
     formHost,
   ));
 
   const histOut = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); histOut.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const histSaid = said("history");
+  if (histSaid) { histOut.append(histSaid); setTimeout(() => histSaid.remove(), 4000); }
   if (!empty) root.append(ui.card("Over time",
     ui.h("p", { class: "muted small" }, "Save today's totals now and then (monthly is plenty). Each save becomes a point on your history; saving twice in one day just updates that day."),
-    ui.row(ui.button("Save today's totals", () => { pending = "Today's totals saved."; store.update((p) => {
+    ui.row(ui.button("Save today's totals", () => { pending = { card: "history", text: "Today's totals saved." }; store.update((p) => {
       p.netWorthHistory = (p.netWorthHistory ?? []).filter((h) => h.date !== fmt.today());
       p.netWorthHistory.push({ date: fmt.today(), assets: d.assets, liabilities: d.liabilities, netWorth: d.netWorth });
       for (const a of p.accounts ?? []) { a.history = (a.history ?? []).filter((h) => h.date !== fmt.today()); a.history.push({ date: fmt.today(), balance: Number(a.balance) || 0 }); }   // per-account points feed investments/performance

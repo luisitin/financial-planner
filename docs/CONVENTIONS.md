@@ -42,6 +42,11 @@ Change data with `ctx.store.update(draft => { ... })` -- the shell re-renders th
 each update, so commit on save/blur, not per keystroke. Return a cleanup function if you
 created timers, intervals or listeners outside `root`.
 
+That re-render keeps the screen where it was (it does not jump to the top), and a page that scrolls itself while
+drawing still wins. Put the save's green `ui.notice("ok", ...)` where it belongs (top of its card is fine): when it
+lands off screen, the shell shows a short copy of it at the bottom of the screen for three seconds. A page that
+shows no notice gets no copy, so every save, add and remove still needs its own notice.
+
 ## The ctx object
 | field | what |
 |---|---|

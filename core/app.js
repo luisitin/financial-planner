@@ -148,7 +148,13 @@ function makeCtx(route) {
     announce,
   };
 }
-async function show(route) {
+/**
+ * Draw a page. A new address starts at the top. The redraw after a save (store.update, an adopted plan) passes
+ * keepScroll: the screen stays where it was (the old height is held while the page redraws, so nothing collapses)
+ * and a page that scrolls itself while drawing still wins. When the green "Saved." (or red error) the save produced
+ * sits off screen, a short copy of it shows at the bottom for a few seconds, so you keep your place AND see it.
+ */
+async function show(route, { keepScroll = false } = {}) {
   clearTimeout(rerender);
   const seq = ++renderSeq;
   current = route;
@@ -156,6 +162,9 @@ async function show(route) {
   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
   if (cleanup) { try { cleanup(); } catch (e) { console.warn(e); } cleanup = null; }
   const root = document.getElementById("content");
+  const keepY = keepScroll ? window.scrollY : 0;
+  const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
+  if (keepScroll) root.style.minHeight = `${root.offsetHeight}px`;
   root.innerHTML = "";
   document.getElementById("page-title").textContent = m ? m.title : "Planner";
   document.title = `${m ? m.title : "Planner"} - Planner`;
@@ -165,8 +174,8 @@ async function show(route) {
     saveNav(); buildNav();
   }
   markActive();
-  closeDrawer();
-  window.scrollTo(0, 0);
+  if (!keepScroll) closeDrawer();
+  window.scrollTo(0, keepY);
   if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
   if (broken.length) {
     // Plain words first; the technical list sits behind a tap (design log 2026-09-15).
@@ -193,6 +202,27 @@ async function show(route) {
   if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
   cleanup = c;
   if (frame?.after) root.append(frame.after);
+  if (keepScroll) {
+    const pageScrolled = Math.abs(window.scrollY - keepY) > 2;
+    root.style.minHeight = "";
+    const now = [...root.querySelectorAll(".notice.ok, .notice.error")];
+    // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
+    const fresh = now.filter((n) => !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
+    lastFresh = new Set(fresh.map((n) => n.textContent));
+    const inView = (n) => { const r = n.getBoundingClientRect(); return r.bottom > topbarH() && r.top < window.innerHeight; };
+    if (!pageScrolled && fresh.length && !fresh.some(inView)) echo(fresh[0]);
+  } else lastFresh = new Set();
+}
+let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
+const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect().bottom ?? 0;
+/** A copy of an off-screen confirmation at the bottom of the screen; it never takes a tap and leaves by itself. */
+function echo(n) {
+  document.querySelector(".save-echo")?.remove();
+  const bad = n.classList.contains("error");
+  const el = ui.h("div", { class: `save-echo ${bad ? "bad" : "ok"}`, role: "status" }, ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, bad ? "!" : "✓"), ui.h("span", {}, n.textContent));
+  document.body.append(el);
+  setTimeout(() => el.classList.add("leaving"), bad ? 6000 : 3200);
+  setTimeout(() => el.remove(), bad ? 6400 : 3600);
 }
 
 async function refreshStatus() {
@@ -224,7 +254,7 @@ async function boot() {
   document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
   document.getElementById("scrim").addEventListener("click", closeDrawer);
   document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
-  store.subscribe(() => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current); }, 50); });
+  store.subscribe(() => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50); });
   // a tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap
   // here never saves an old copy over today's changes
   document.addEventListener("visibilitychange", async () => {
@@ -234,7 +264,7 @@ async function boot() {
     try { const p = await api.getPlan(); if ((p?.meta?.updatedAt ?? "") > (store.get()?.meta?.updatedAt ?? "") && !typing()) store.adopt(p); } catch { }
   });
   addEventListener("planner:features", () => buildNav());
-  addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); if (current) show(current); }); });
+  addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); if (current) show(current, { keepScroll: true }); }); });
   // First visit (an empty plan, "look around" never chosen) or a guide still followed before any account: an address
   // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
   const sm = modules.get("overview/start");
