@@ -6,10 +6,12 @@ import { emptyPlan } from "../../../core/schema/migrate.js";
 const TODAY = "2026-09-15";
 const ids = (d) => d.alerts.map((a) => a.id);
 
-test("empty plan: the five setup alerts, all informational, nothing to fix", () => {
+test("empty plan: the four setup alerts, all informational, then the assumptions as a chore; nothing to fix", () => {
   const d = compute(emptyPlan(), { today: TODAY });
   assert.deepEqual(ids(d), ["no-people", "no-accounts", "no-income", "no-expenses", "assumptions-unreviewed"]);
-  assert.deepEqual(d.counts, { bad: 0, warn: 0, info: 5 });
+  assert.deepEqual(d.counts, { bad: 0, warn: 0, info: 4 }, "a chore is not counted");
+  assert.equal(d.total, 4); assert.equal(d.chores, 1);
+  assert.equal(d.alerts.at(-1).chore, true);
   assert.equal(d.allClear, false);
 });
 test("a complete, healthy plan is all clear", () => {
@@ -86,4 +88,56 @@ test("old balances open Update my balances", () => {
   const p = emptyPlan();
   p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 1000, asOf: "2026-01-01" });
   assert.deepEqual(compute(p, { today: TODAY }).alerts.find((a) => a.id === "stale-balances").go, ["balance", "update"]);
+});
+
+test("chores (assumptions, today's totals) come last and leave the count and all-clear alone", () => {
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1990-01-01" });
+  p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 20000, asOf: "2026-09-01" });
+  p.income.push({ id: "i", name: "Pay", type: "salary", amount: 5000, period: "monthly" });
+  p.expenses.push({ id: "e", name: "Rent", category: "housing", amount: 2000, period: "monthly" });
+  const d = compute(p, { today: TODAY });
+  assert.deepEqual(ids(d), ["assumptions-unreviewed", "history"]);
+  assert.ok(d.alerts.every((a) => a.chore));
+  assert.equal(d.total, 0); assert.equal(d.chores, 2); assert.equal(d.allClear, true, "nothing needs a look; two chores wait");
+});
+test("two or more goals behind are one alert with the extra they need in all; a goal with nothing going in is named first (F-015)", () => {
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1990-01-01" });
+  p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 20000, asOf: "2026-09-01" });
+  p.income.push({ id: "i", name: "Pay", type: "salary", amount: 9000, period: "monthly" });
+  p.expenses.push({ id: "e", name: "Rent", category: "housing", amount: 2000, period: "monthly" });
+  p.goals.push({ id: "t", name: "Trip", target: 6000, targetDate: "2027-09-15", monthly: 100 }, { id: "c", name: "Car", target: 12000, targetDate: "2028-09-15" });
+  const d = compute(p, { today: TODAY });
+  const g = d.alerts.find((a) => a.id === "goals-behind");
+  assert.ok(g, "one goals alert");
+  assert.ok(!ids(d).some((x) => x.startsWith("goal-behind-")), "not one per goal");
+  assert.equal(g.title, "2 goals are behind");
+  assert.ok(g.detail.startsWith("Car and Trip need about"), g.detail);
+  assert.ok(g.detail.includes("nothing is going in to Car yet"));
+  assert.ok(/You have about \$[\d,]+ left over each month\./.test(g.detail), g.detail);
+  p.goals.pop();
+  assert.ok(ids(compute(p, { today: TODAY })).includes("goal-behind-t"), "a single goal keeps its own alert");
+});
+test("goalsBehind: the monthly need counts goals behind their pace, never a goal past its date; idle goals are named; no duplicate for a late goal", async () => {
+  const { goalsBehind } = await import("./compute.js");
+  const { compute: goals } = await import("../../goals/goals/compute.js");
+  const p = emptyPlan();
+  p.household.people.push({ id: "a", name: "Ana", role: "self", birthDate: "1990-01-01" });
+  p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 20000, asOf: "2026-09-01" });
+  p.income.push({ id: "i", name: "Pay", type: "salary", amount: 9000, period: "monthly" });
+  p.expenses.push({ id: "e", name: "Rent", category: "housing", amount: 2000, period: "monthly" });
+  p.goals.push({ id: "t", name: "Trip", target: 6000, targetDate: "2027-09-15" }, { id: "c", name: "Car", target: 12000, targetDate: "2028-09-15" },
+    { id: "s2", name: "Sofa", target: 3000, targetDate: "2026-09-01", saved: 500, monthly: 100 });
+  const gl = goals(p, { today: TODAY });
+  const gb = goalsBehind(gl);
+  assert.deepEqual(gb.behind.map((g) => g.id).sort(), ["c", "t"]);
+  assert.deepEqual(gb.pastDue.map((g) => g.id), ["s2"]);
+  const want = gl.goals.filter((g) => g.status === "behind").reduce((t, g) => t + g.neededMonthly - (g.monthly || 0), 0);
+  assert.ok(Math.abs(gb.need - want) < 0.01, "the Sofa's $2,500 to go is not added as a month");
+  const d = compute(p, { today: TODAY });
+  const g = d.alerts.find((a) => a.id === "goals-behind");
+  assert.ok(g.detail.includes("nothing is going in to either of them yet"), g.detail);
+  assert.ok(ids(d).includes("goal-late-s2"));
+  assert.ok(!d.alerts.some((a) => a.id.startsWith("goals-") && a.id !== "goals-behind" && /Sofa/.test(a.detail)), "the late goal is said once");
 });

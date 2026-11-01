@@ -14,7 +14,7 @@ Device settings from localStorage (`planner.connection`, `planner.features`) thr
 None.
 
 ## Edge cases
-The AI card fills in asynchronously (it asks the server for its config first). Import replaces the
+The AI card fills in asynchronously (it asks the server for its config first). Its one-line status (2026-11-01) comes from `aiHealth()` (`modules/ai/health.js`, shared with Ask the plan and the Dashboard): "Working", "Not answering", "No model yet", "Model missing" (the model it is set to use is not installed) or "Off" (it read "On, PC settings" while nothing answered); when it does not answer, a plain line says what to do, worded for Ollama or for another service, and an outlined "Try again" asks again. The fold, its place last and its fields are unchanged (design log, Settings round 6). Import replaces the
 whole plan after a confirm; the server keeps timestamped backups of every previous save.
 
 ## Tests

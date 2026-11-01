@@ -2,6 +2,7 @@
 // technical parts (PC connection, AI assistant) folded at the bottom. Order, folding and
 // wording per docs/DESIGN_LOG.md 2026-09-15 (Settings round 6).
 import { conn } from "../../../core/api.js";
+import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
 
 // Plain names for the plan's list sections, shown in "Your data".
 const SECTION_NAMES = {
@@ -119,8 +120,19 @@ export function render(root, ctx) {
   ai.settings().then((s) => {
     const source = s.source === "properties" ? "Right now the PC's own AI settings are in use; these apply when the PC has none."
       : s.source === "device" ? "Right now the settings below are in use." : "Right now the built-in defaults are in use.";
-    aiStatus.textContent = s.provider === "none" ? "Off" : `On${s.source === "properties" ? ", PC settings" : ""}`;
-    aiBody.append(
+    // the one-line status says whether it answers, not only whether it is switched on ("On" while nothing answered misled)
+    const healthHost = ui.h("div");
+    // the same check and words as Ask the plan (modules/ai/health.js): the model must be there, the advice fits the service
+    const showHealth = (h) => {
+      healthHost.innerHTML = "";
+      aiStatus.textContent = healthWord(h);
+      if (h.st === "on" || (h.st === "off" && h.source !== "properties")) return;
+      const w = healthWords(h);
+      healthHost.append(ui.notice("warn", `${w.why} ${w.todo} Everything else in the app works without it.`),
+        h.st === "off" ? null : ui.row(ui.button("Try again", () => { aiStatus.textContent = "..."; aiHealth(ai).then(showHealth); }, { class: "secondary" })));
+    };
+    aiHealth(ai).then(showHealth);
+    aiBody.append(healthHost,
       ui.muted(`The assistant answers questions in plain words and never does the math. ${source}`),
       ui.form([
         { key: "provider", label: "Assistant", type: "select", options: [{ value: "ollama", label: "Ollama on the PC" }, { value: "openai", label: "Another service (OpenAI-compatible)" }, { value: "none", label: "Off" }] },

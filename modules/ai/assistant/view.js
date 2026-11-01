@@ -1,6 +1,7 @@
 // modules/ai/assistant/view.js -- DOM only. A plain chat over a short summary of the plan.
 // The model never sees the raw numbers and is told not to do arithmetic (compute.js).
 import { SYSTEM_PROMPT, pagesContext } from "./compute.js";
+import { aiHealth, healthWords } from "../health.js";
 
 const EXAMPLES = ["What should I do first?", "Is my emergency fund big enough?", "Which page shows what I spend?", "How do I add my mortgage?"];
 
@@ -46,6 +47,25 @@ export function render(root, ctx) {
     chipsFold.replaceChildren(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Suggestions"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")), ui.h("div", { class: "fold-body" }, chips)));
   };
   const setStatus = (kind, text) => { statusHost.innerHTML = ""; if (text) statusHost.append(ui.notice(kind, text)); };
+  // When the AI helper is off or not answering, say so in plain words once, offer the plan's own answers, and keep the
+  // question buttons from failing one by one (they used to answer "did not answer: Failed to fetch").
+  let down = false;
+  // h: aiHealth's answer (modules/ai/health.js), or null when the helper answers
+  const setDown = (h, detail) => {
+    down = !!h;
+    sendBtn.disabled = down; box.disabled = down;
+    // nothing to tap that cannot work: the suggestions and the question box step aside while the helper is down
+    for (const el of [chipsFold, askForm, sendRow]) el.style.display = down ? "none" : "";   // .form and .row set their own display, so not [hidden]
+    if (!down) { setStatus(null, ""); return; }
+    const w = healthWords(h), why = detail ?? h.detail;
+    statusHost.innerHTML = "";
+    statusHost.append(ui.notice("warn", `${w.why} ${w.todo} Everything else in the app works without it, and your plan's own answers are one tap away.`),
+      ui.row(ui.h("a", { class: "btn", href: "#/overview/quick" }, "See your plan's own answers"),
+        h.st === "off" && w.settingsHelp ? ui.h("a", { class: "btn secondary", href: "#/system/settings" }, "AI settings") : h.st === "off" ? null : ui.button("Try again", () => check(), { class: "secondary" })),
+      ...(why ? [ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Show details"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")), ui.h("div", { class: "fold-body muted small" }, why))] : []));
+  };
+  let health = null;
+  const check = () => { setStatus("info", "Checking the AI helper..."); return aiHealth(ai).then((h) => { health = h; setDown(h.st === "on" ? null : h); }); };
 
   async function send(question) {
     const q = (question ?? box.value).trim();
@@ -59,14 +79,20 @@ export function render(root, ctx) {
       setStatus(null, "");
     } catch (e) {
       history.pop();
-      setStatus("error", `The assistant did not answer: ${e.message}. Check the AI section in Settings, then try again.`);
+      busy = false; sendBtn.textContent = "Send";
+      // look again: if the helper is down, say why; if it is up and only this answer failed, keep the box and the question
+      const h = await aiHealth(ai);
+      if (h.st !== "on") { setDown(h, e?.message); return; }
+      sendBtn.disabled = false; box.value = q;
+      log.lastElementChild?.classList.contains("user") && log.lastElementChild.remove();   // the question goes back to the box, not twice in the chat
+      setStatus("error", `The AI helper did not answer this one (${e?.message ?? "no reason given"}). Your question is back in the box: send it again, or try a shorter one.`);
+      return;
     }
     busy = false; sendBtn.disabled = false; sendBtn.textContent = "Send";
     box.focus();
   }
   box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 
-  ai.status().then((s) => { if (s === "off") setStatus("warn", "The AI is turned off. Turn it on in Settings (AI assistant) to ask questions."); else if (!String(s).startsWith("on")) setStatus("warn", `The AI is ${s}. Check the AI section in Settings.`); }).catch(() => { });
 
   const hero = ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Ask the plan"),
@@ -76,12 +102,15 @@ export function render(root, ctx) {
   root.append(hero);
   const chips = ui.h("div", { class: "chips" }, EXAMPLES.map((q) => ui.h("button", { type: "button", class: "chip", onClick: () => send(q) }, q)));
   const chipsFold = ui.h("div", {}, ui.h("p", { class: "muted small" }, "Try one of these, or type your own:"), chips);
+  const askForm = ui.h("div", { class: "form" }, ui.field("Your question", box, "Enter sends; Shift+Enter makes a new line"));
+  const sendRow = ui.row(sendBtn);
   root.append(ui.card(null,
     chipsFold,
     log,
     statusHost,
-    ui.h("div", { class: "form" }, ui.field("Your question", box, "Enter sends; Shift+Enter makes a new line")),
-    ui.row(sendBtn),
+    askForm,
+    sendRow,
   ));
   root.append(ui.h("style", {}, ".msg p { margin: 0 0 8px; } .msg p:last-child { margin: 0; } .msg ul { margin: 0 0 8px; padding-left: 18px; }"));
+  check().then(() => { if (!down) setStatus(null, ""); });
 }

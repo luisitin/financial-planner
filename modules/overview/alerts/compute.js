@@ -19,14 +19,30 @@ export const STALE_BALANCE_DAYS = 90;
 export const STALE_HISTORY_DAYS = 35;
 
 /**
- * compute(plan, { today }) -> { alerts: [{ id, level, title, detail, go: [group, id] }], counts: { bad, warn, info }, total, allClear }
+ * compute(plan, { today }) -> { alerts: [{ id, level, title, detail, go: [group, id], chore? }], counts: { bad, warn, info }, total, chores, allClear }
  * `detail` is a finished sentence (money and dates already formatted). Without `today` the date checks are skipped.
+ * Chores (look over the assumptions, save today's totals) are listed last with `chore: true` and left out of `counts`,
+ * `total` and `allClear`, so the count on the Dashboard is what needs a look, not housekeeping. Two or more goals that
+ * are behind are one alert ("3 goals are behind") with the extra they need in all.
  */
+/**
+ * goalsBehind(goalsResult) -> { behind: [goals behind, nothing-going-in first], need (a month, more than now, in all), idle: [...], pastDue: [...] }
+ * Only goals behind their pace count toward the monthly need; a goal past its date is counted apart (its whole remaining
+ * amount is not a monthly figure). Needs attention and the Dashboard's Goals tile both use it, so they say the same.
+ */
+export function goalsBehind(gl) {
+  const goals = gl?.goals ?? [];
+  const behind = goals.filter((g) => g.status === "behind").sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
+  const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
+  return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due") };
+}
+
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const p = { today };
   const alerts = [];
-  const add = (id, level, title, detail, go) => alerts.push({ id, level, title, detail, go });
+  const add = (id, level, title, detail, go, extra = {}) => alerts.push({ id, level, title, detail, go, ...extra });
+  const chore = { chore: true };
   const cur = plan.meta?.currency ?? "USD";
   const money = (n) => fmtMoney(n, cur);
 
@@ -37,7 +53,7 @@ export function compute(plan, params = {}) {
   if (nw.count === 0) add("no-accounts", "info", "Add your accounts", "Net worth, the emergency fund and every projection start from your balances.", ["balance", "net-worth"]);
   if (inc.count === 0) add("no-income", "info", "Enter what comes in", "Income is needed to check spending, debt load and savings rate.", ["cashflow", "income"]);
   if (exp.count === 0) add("no-expenses", "info", "Enter what goes out", "Expenses set the emergency-fund target and what retirement has to cover.", ["cashflow", "expenses"]);
-  if (!asm.reviewedAt) add("assumptions-unreviewed", "info", "Look over the assumptions", "Ten numbers drive every projection. Confirm them once.", ["system", "assumptions"]);
+  if (!asm.reviewedAt) add("assumptions-unreviewed", "info", "Look over the assumptions", "Ten numbers drive every projection. Confirm them once.", ["system", "assumptions"], chore);
   else if (asm.stale) add("assumptions-stale", "warn", "Assumptions were reviewed over a year ago", "Rates and inflation move. Look again and confirm.", ["system", "assumptions"]);
 
   // stale numbers
@@ -45,7 +61,7 @@ export function compute(plan, params = {}) {
     const stale = (plan.accounts ?? []).filter((a) => !a.asOf || daysBetween(a.asOf, today) > STALE_BALANCE_DAYS);
     if (stale.length) add("stale-balances", "warn", `${stale.length === 1 ? "One balance is" : `${stale.length} balances are`} more than ${STALE_BALANCE_DAYS} days old`, `${stale.slice(0, 3).map((a) => a.name).join(", ")}${stale.length > 3 ? "..." : ""}. Update them so the totals mean something.`, ["balance", "update"]);
     const last = nw.history[nw.history.length - 1];
-    if (!last || daysBetween(last.date, today) > STALE_HISTORY_DAYS) add("history", "info", "Save today's totals", last ? `The last saved point is from ${fmtDate(last.date)}. Saving once a month builds the net-worth history.` : "Saving once a month builds the net-worth history.", ["balance", "net-worth"]);
+    if (!last || daysBetween(last.date, today) > STALE_HISTORY_DAYS) add("history", "info", "Save today's totals", last ? `The last saved point is from ${fmtDate(last.date)}. Saving once a month builds the net-worth history.` : "Saving once a month builds the net-worth history.", ["balance", "net-worth"], chore);
   }
 
   // money
@@ -64,11 +80,23 @@ export function compute(plan, params = {}) {
   if (debt.dti !== null && debt.dti > 0.43) add("dti", "warn", "Debt payments take a big share of income", `${Math.round(debt.dti * 100)}% of monthly income goes to debt payments; lenders start worrying above 43%.`, ["balance", "liabilities"]);
 
   // goals
+  // goals that are behind: one alert when there are two or more (four "X is behind" rows read as four problems); those
+  // with nothing going in are named first (F-015: the most behind of all), and the left-over each month is beside the need
+  const { behind: behindGoals, need, idle } = goalsBehind(gl);
+  if (behindGoals.length > 1) {
+    const names = behindGoals.map((g) => g.name);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+    const idleNames = idle.map((g) => g.name);
+    const idleText = !idle.length ? "" : idle.length === behindGoals.length ? `; nothing is going in to ${idle.length === 2 ? "either" : "any"} of them yet` : `; nothing is going in to ${idleNames.length > 1 ? `${idleNames.slice(0, -1).join(", ")} or ${idleNames[idleNames.length - 1]}` : idleNames[0]} yet`;
+    add("goals-behind", "info", `${behindGoals.length} goals are behind`, `${list} need about ${money(need)} more a month in all${idleText}.${nba?.ready && nba.spare.monthly > 0 ? ` You have about ${money(nba.spare.monthly)} left over each month.` : ""}`, ["goals", "goals"]);
+  }
   for (const g of gl.goals) {
     if (g.status === "past due") add(`goal-late-${g.id}`, "warn", `${g.name}: the date has passed`, `${money(g.remaining)} still to go. Set a new date or adjust the amount.`, ["goals", "goals"]);
-    else if (g.status === "behind") add(`goal-behind-${g.id}`, "info", `${g.name} is behind`, g.monthly > 0 ? `Needs about ${money(g.neededMonthly)} a month; you put in ${money(g.monthly)}.` : `Needs about ${money(g.neededMonthly)} a month; nothing is going in yet.`, ["goals", "goals"]);
+    else if (g.status === "behind" && behindGoals.length === 1) add(`goal-behind-${g.id}`, "info", `${g.name} is behind`, g.monthly > 0 ? `Needs about ${money(g.neededMonthly)} a month; you put in ${money(g.monthly)}.` : `Needs about ${money(g.neededMonthly)} a month; nothing is going in yet.`, ["goals", "goals"]);
   }
-  for (const [i, w] of gl.warnings.entries()) add(`goals-${i}`, "warn", "Goals: something to check", w, ["goals", "goals"]);
+  // a goal past its date already has its own alert above: its warning from the Goals page would say the same thing again
+  const late = gl.goals.filter((g) => g.status === "past due").map((g) => g.name);
+  for (const [i, w] of gl.warnings.entries()) if (!late.some((n) => n && w.startsWith(n) && /date has passed/.test(w))) add(`goals-${i}`, "warn", "Goals: something to check", w, ["goals", "goals"]);
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
   for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${p.name} retires ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
 
@@ -78,8 +106,9 @@ export function compute(plan, params = {}) {
   for (const [i, w] of exp.warnings.filter((w) => !w.includes("more each month")).entries()) add(`expenses-${i}`, "warn", "Expenses: something to check", w, ["cashflow", "expenses"]);
   for (const [i, w] of asm.warnings.entries()) add(`assumptions-${i}`, "warn", "Assumptions: something to check", w, ["system", "assumptions"]);
 
-  alerts.sort((a, b) => LEVELS[a.level].order - LEVELS[b.level].order);
+  alerts.sort((a, b) => (!!a.chore - !!b.chore) || LEVELS[a.level].order - LEVELS[b.level].order);
   const counts = { bad: 0, warn: 0, info: 0 };
-  for (const a of alerts) counts[a.level]++;
-  return { alerts, counts, total: alerts.length, allClear: alerts.length === 0 };
+  for (const a of alerts) if (!a.chore) counts[a.level]++;
+  const total = counts.bad + counts.warn + counts.info;
+  return { alerts, counts, total, chores: alerts.length - total, allClear: total === 0 };
 }

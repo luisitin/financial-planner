@@ -3,6 +3,8 @@
 // sentence, three status lines and your next move, from overview/setup's standing()), then the owner's four tiles.
 import { PHASES } from "../../../core/phases.js";
 import { usable } from "../guide/act.js";
+import { goalsBehind } from "../alerts/compute.js";
+import { aiHealth } from "../../ai/health.js";
 
 // scoped to the where-you-stand card (no new global CSS)
 const STYLE = `
@@ -23,6 +25,17 @@ const STYLE = `
 .db-now .db-all { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; font-weight: 600; }
 @media (min-width: 720px) { .db-now .db-go { width: auto; display: inline-flex; padding: 0 22px; } .db-now .db-all { display: inline-flex; margin: 0 0 0 16px; } }
 `;
+
+// Whether the AI helper answers, asked at most once a minute (the Dashboard re-renders after every change) and never
+// waited for: the "Ask a question" tile is drawn at once and changes when the answer comes.
+let aiSeen = { st: null, at: 0, asking: null };
+const AI_RECHECK_MS = 60000;
+function aiAnswers(ai) {
+  if (aiSeen.st !== null && Date.now() - aiSeen.at < AI_RECHECK_MS) return Promise.resolve(aiSeen.st);
+  aiSeen.asking ??= Promise.resolve().then(() => aiHealth(ai)).then((h) => h.st).catch(() => "unreachable")
+    .then((st) => { aiSeen = { st, at: Date.now(), asking: null }; return st; });
+  return aiSeen.asking;
+}
 
 export function render(root, ctx) {
   const { ui, fmt, plan, derived: d, computeOf, modules, isReady, store, go } = ctx;
@@ -81,8 +94,9 @@ export function render(root, ctx) {
     const nw = computeOf("balance/net-worth", { today });   // change since the last point before today
     const savedToday = (nw.history ?? []).some((h) => h.date === today);
     const gl = computeOf("goals/goals", { today: fmt.today() }) ?? {};
-    const behind = (gl.goals ?? []).filter((g) => g.status === "behind" || g.status === "past due").length;
-    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind` : null].filter(Boolean).join(", ") || "all on track";
+    // how far behind, as money a month (Needs attention's own sum), not only how many; a goal past its date is said apart
+    const gb = goalsBehind(gl), behind = gb.behind.length, late = gb.pastDue.length;
+    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind${gb.need >= 1 ? `, about ${fmt.money(gb.need, cur)} more a month` : ""}` : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join(", ") || "all on track";
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
@@ -107,8 +121,14 @@ export function render(root, ctx) {
     { icon: "📥", t: "Import a bank file", d: "Three months of transactions keeps the numbers real.", go: ["transactions", "import"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
   ];
-  root.append(ui.card(d.hasMoney ? "What to do now" : "Start here", ui.h("div", { class: "grid" }, actions.map((a) => ui.h("a", { href: `#/${a.go.join("/")}`, class: "action" },
-    ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d)))))));
+  const askOff = (st) => st !== "on";
+  const tiles = actions.map((a) => ui.h("a", { href: `#/${a.go.join("/")}`, class: "action" },
+    ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d))));
+  root.append(ui.card(d.hasMoney ? "What to do now" : "Start here", ui.h("div", { class: "grid" }, tiles)));
+  // the AI helper off or not answering: the tile stays "Ask a question" (design log) and opens the plan's own answers
+  const askTile = tiles[actions.findIndex((a) => a.go[0] === "ai")];
+  const showAsk = (st) => { if (!askTile || !askOff(st)) return; askTile.setAttribute("href", "#/overview/quick"); askTile.querySelector(".d").textContent = st === "off" ? "The AI helper is turned off, so this opens your plan's own answers." : "The AI helper isn't answering right now, so this opens your plan's own answers."; };
+  if (askTile) { if (aiSeen.st !== null) showAsk(aiSeen.st); aiAnswers(ctx.ai).then(showAsk); }
 
   // ---- setup steps
   // Every step row is one tappable link with a chevron; the next step also gets the
@@ -129,7 +149,8 @@ export function render(root, ctx) {
     // All done, or "Set up my plan" finished: one folded line (design log 2026-09-15, pass 2). A step still open (the
     // assumptions) stays inside and on Needs attention; the page's filled button is then your next move.
     root.append(ui.h("details", { class: "card fold fold-card" },
-      ui.h("summary", {}, ui.h("h2", {}, next ? "Set up your plan: done \u2713" : `Set up your plan: all ${d.total} steps done \u2713`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      // "done ✓" only when every step is done; finished Set up my plan with a step still open says how many (it said done)
+      ui.h("summary", {}, ui.h("h2", {}, next ? `Set up your plan: ${d.doneCount} of ${d.total} done` : `Set up your plan: all ${d.total} steps done \u2713`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, stepsList(), d.setupFinished && setupOn ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: "#/overview/setup", class: "btn secondary" }, "Change an answer")) : null)));
   } else if (setupOn && d.doneCount === 0) {
     // nothing in the plan yet: the first five steps in one go, as easy questions
