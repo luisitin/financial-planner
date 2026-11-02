@@ -11,15 +11,19 @@
 
 ## The steps
 1. Update the balances: done when every account's balance was typed in the last `FRESH_DAYS` (20) days. (Until 2026-11-01 a balance dated anywhere in the reviewed month counted, so the October review on Nov 1 ticked balances from Oct 1 as done.) Opens Update my balances while any is older. The saved net-worth point's date is shown in words.
-2. Save the month's net worth: done when `netWorthHistory` has a point in the month; says the change since the last earlier point.
+2. Save the month's net worth: done when `netWorthHistory` has a point from the month's 1st through the `LOOK_BACK_DAYS`-th (10th) of the next month (`monthPoint`), the newest one; the change is against the newest point saved before it, no later than the 10th of the reviewed month. So October's review on Nov 2 counts a point saved that day ("$306,074 saved on 11/2/2026: up $10,965 since 10/2/2026"). (Until 2026-11-02 only a point dated inside the month counted, so a review in early November could never tick October, and the change was against the month's own start.)
 3. Bring in the bank files: done when transactions are dated in the month; "optional" (skip) when the plan keeps no transactions.
-4. File what came in: the month's transactions with no category and no transfer link.
-5. Spending against the budget: envelopes over their amount for the month (Budget), or a pointer to set envelopes up.
-6. Where the money went (information): the month's spending against the month before, the biggest category.
-7. Check the goals: behind or past due.
-8. Clear what needs attention: Needs attention's counts and the first item.
-9. Take the next step: Next best action's next step.
-`done` / `todo` count only the steps that can be done or to do (not information or optional ones).
+4. File what came in: the month's transactions with no category and no transfer link. While nothing is dated in the month it waits for the files (skip), never "done" (until 2026-11-02 an empty month read "every transaction is filed").
+5. Spending against the budget: envelopes over their amount for the month (Budget), or a pointer to set envelopes up; waits for the month's files while it has none (it read "$0 spent" and ticked).
+6. Where the money went (information): the month's spending against the month before in dollars and as a share ("up $60 (5%) on September 2026"; on the same days of it when the file covers part of a month), the biggest category. (It printed the share as dollars: "up $0".)
+7. Check the goals, 8. Look at what needs attention, 9. Take the next step: things to look at, shown with how they stand (a goal behind or an alert to fix gives the number an amber ring, `state: "todo"`), never counted: a goal can be behind for a year and the month is still reviewed. (Until 2026-11-02 they were counted, so no household with a goal behind could ever finish.)
+`done` / `todo` count only the chores (balances, net worth, bank files, filing, the budget).
+
+Each step opens its page with `?from=review&review=YYYY-MM`: the page shows "‹ Back to the October 2026 check-in" (overview/guide's frame, mode "review"), and Budget and Where the money went open on the month under review (`?month=`) until a month is picked there.
+
+Once the month is marked reviewed, the hero says "October 2026 is done ✓" with the month in a line (`summary`: net worth's change since the point before, spending and its change) and the next check-in ("early December, for November 2026", `nextCheck`); the steps fold behind "All steps". Nothing new is stored.
+
+From the 1st to the 10th, while the month just ended is not reviewed, the Dashboard's "where you stand" card has one row "Your October check-in · Start ›" (it takes the stale-balances row's place, since the review starts with the balances).
 
 ## Data
 New plan section `reviews: [{ month, at, note }]` (`core/schema/migrate.js`; `migrate()` adds it to older plans, no version bump; `docs/DATA_MODEL.md`).

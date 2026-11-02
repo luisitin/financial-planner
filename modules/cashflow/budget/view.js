@@ -3,7 +3,7 @@
 import { compute } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
 
-const state = { month: "" };
+const state = { month: "", query: null };   // query: the ?month= the page was last opened with (the Monthly review's link)
 
 let pending = null;   // confirmation kept across the shell re-render
 
@@ -11,6 +11,10 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const today = fmt.today();
+  // opened from the Monthly review with ?month=2026-10: that month, until a month is picked here
+  const qm = /^\d{4}-\d{2}$/.test(ctx.route?.query?.month ?? "") ? ctx.route.query.month : null;
+  if (qm && qm !== state.query) { state.month = qm; }
+  state.query = qm;
   const d = compute(plan, { today, month: state.month || undefined });
   let editing = null;
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
@@ -67,7 +71,7 @@ export function render(root, ctx) {
       onKeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, e.icon),
       ui.h("span", { class: "body" },
-        ui.h("div", { class: "t" }, e.label, " ", e.pace === "over" ? ui.h("span", { class: "pill warn" }, "over") : e.pace === "ahead" ? ui.h("span", { class: "pill warn" }, "spending fast") : ui.h("span", { class: "pill ok" }, "on track")),
+        ui.h("div", { class: "t" }, e.label, " ", e.pace === "over" ? ui.h("span", { class: "pill warn" }, "over") : e.pace === "ahead" ? ui.h("span", { class: "pill warn" }, "spending fast") : e.pace === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : ui.h("span", { class: "pill ok" }, "on track")),
         ui.h("div", { class: "progress", style: { margin: "6px 0 2px" } }, ui.h("span", { style: { width: `${Math.round(e.share * 100)}%`, background: e.pace === "over" ? "var(--bad)" : e.pace === "ahead" ? "var(--warn)" : "var(--ok)" } })),
         ui.h("div", { class: "d" }, `${fmt.money(e.spent, cur)} of ${fmt.money(e.available, cur)}${e.carried ? ` (${fmt.money(e.carried, cur)} rolled over)` : ""}${e.rollover ? " · rolls over" : ""}`)),
       ui.h("span", { class: "st", style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, `${e.left < 0 ? "-" : ""}${fmt.money(Math.abs(e.left), cur)} left`)))),

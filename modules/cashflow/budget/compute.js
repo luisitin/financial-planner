@@ -14,7 +14,7 @@ const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 
 /**
  * compute(plan, { today, month }) -> {
  *   month, label, dayOfMonth, daysInMonth, daysLeft,
- *   envelopes: [{ id, category, label, icon, amount, rollover, carried, available, spent, left, share, pace ("under"|"on"|"over"), expectedByNow }],
+ *   envelopes: [{ id, category, label, icon, amount, rollover, carried, available, spent, left, share, pace ("on"|"ahead"|"over"|"paid": one payment of 90% or more of the envelope, a monthly bill), expectedByNow }],
  *   totals: { amount, available, spent, left }, unbudgeted: [{ category, label, icon, spent }] (spending this month with no envelope),
  *   suggestions: [{ category, label, icon, average, months }] for categories without an envelope, hasBudget, hasData,
  *   suggestFrom: [ym] (the whole months the suggestions average over), cover: { from, to } | null (the days the bank files cover),
@@ -28,7 +28,9 @@ export function compute(plan, params = {}) {
   const daysInMonth = daysIn(month);
   const dayOfMonth = today && today.slice(0, 7) === month ? Number(today.slice(8, 10)) : (today && today.slice(0, 7) > month ? daysInMonth : 0);
   const daysLeft = daysInMonth - dayOfMonth;
-  const spent = byCat(spendingOf(plan, month));
+  const monthTx = spendingOf(plan, month);
+  const spent = byCat(monthTx);
+  const count = new Map(); for (const t of monthTx) count.set(t.category || "", (count.get(t.category || "") ?? 0) + 1);
   const prevYm = addMonths(`${month}-01`, -1).slice(0, 7);
   const prev = byCat(spendingOf(plan, prevYm));
   const budgets = (plan.budgets ?? []).filter((b) => b.category);
@@ -39,7 +41,9 @@ export function compute(plan, params = {}) {
     const sp = spent.get(b.category) ?? 0;
     const left = available - sp;
     const expectedByNow = available * (dayOfMonth / daysInMonth);
-    const pace = sp > available ? "over" : sp > expectedByNow * 1.1 + 1 ? "ahead" : "on";
+    // a bill paid once a month (the mortgage on the 1st) is not "spending fast": one payment of 90% or more of the envelope is "paid"
+    const paid = sp <= available && count.get(b.category) === 1 && sp >= 0.9 * available && available > 0;
+    const pace = sp > available ? "over" : paid ? "paid" : sp > expectedByNow * 1.1 + 1 ? "ahead" : "on";
     return { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount, rollover: !!b.rollover, carried, available, spent: sp, left, share: available ? Math.min(1, sp / available) : 0, pace, expectedByNow };
   }).sort((a, b) => b.available - a.available);
   const budgeted = new Set(budgets.map((b) => b.category));

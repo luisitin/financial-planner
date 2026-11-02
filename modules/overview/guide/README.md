@@ -14,6 +14,8 @@ page it sends you to, and someone who learnt a page in a guide finds the same pa
 - `#/overview/guide/<id>`: one guide: what you get, how long, what to have ready, the steps, "Do step N", and once every
   numbered step is done a finish card.
 - A step: `#/<page>?guide=<id>&step=<key>`, e.g. `#/balance/liabilities?guide=debt&step=rates`.
+- A step of the Monthly review: `#/<page>?from=review&review=YYYY-MM`: the frame draws one line, "‹ Back to the
+  October 2026 check-in" (mode "review", 2026-11-02), when no guide applies.
 
 ## The frame (shell hook)
 `frame.js` is drawn by the shell around any page (docs/CONVENTIONS.md "Shell hook: frame"); the page renders into its

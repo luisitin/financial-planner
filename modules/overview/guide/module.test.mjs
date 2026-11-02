@@ -261,6 +261,10 @@ test("barFor: nothing without a followed guide; guide mode only for the followed
   assert.equal(barFor(p, { page: "balance/liabilities", query: q }), null, "query.guide with no followed guide gives nothing");
   for (const own of OWN_PAGES) assert.equal(barFor(p, { page: own, query: { from: "quick" } }), null);
   assert.deepEqual(barFor(p, { page: "goals/house", query: { from: "quick" } }), { mode: "quick" });
+  // a step of the Monthly review: one line back to the check-in, never on the review itself
+  assert.deepEqual(barFor(p, { page: "cashflow/budget", query: { from: "review", review: "2026-10", month: "2026-10" } }), { mode: "review", month: "2026-10" });
+  assert.deepEqual(barFor(p, { page: "cashflow/budget", query: { from: "review", review: "junk" } }), { mode: "review", month: null });
+  assert.equal(barFor(p, { page: "overview/monthly-review", query: { from: "review" } }), null);
   startGuide(p, "debt", "2026-10-31");
   const b = barFor(p, { page: "balance/liabilities", query: q });
   assert.equal(b.mode, "guide"); assert.equal(b.step.key, "rates"); assert.equal(b.index, 2); assert.equal(b.total, 3); assert.equal(b.state, "done");

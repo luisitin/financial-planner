@@ -19,6 +19,9 @@ Plan sections read (`needs`): `transactions`, `categories`. Writes nothing. `com
   - A day on average = month total / days covered when partly covered ("over the 9 days in your bank file"), else / days in the month.
   - One line under the month says what the file covers and what it is compared with, or "So far this month" for the month in progress.
 
+## Opened from the Monthly review (2026-11-02)
+`?month=2026-10` opens that month (the review's), until a month is picked here.
+
 ## Edge cases
 No spending at all: empty state. A month asked for that has no spending falls back to the default (the latest whole month, else the latest). No whole month at all (a file shorter than a month): the latest month, said to be partial.
 

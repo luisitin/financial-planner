@@ -14,6 +14,7 @@ const STYLE = `
 .mr-root .done .mr-num { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .mr-root .todo .mr-num { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .mr-root .skip .mr-t, .mr-root .skip .mr-d { color: var(--muted); }
+.mr-root .look-todo .mr-num { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
 .mr-root .mr-body { flex: 1; min-width: 0; }
 .mr-root .mr-t { font-weight: 650; }
 .mr-root .mr-d { color: var(--text-2); font-size: var(--fs-sm); margin-top: 2px; }
@@ -28,17 +29,25 @@ export function render(page, ctx) {
   const root = ui.h("div", { class: "mr-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   const left = d.todo - d.done;
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  // reviewed: the month summed up in a line, and when the next check-in is; the steps fold away below
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, `${d.label} review`),
-    ui.h("p", { class: "lede" }, d.reviewed ? `Reviewed on ${long(d.reviewed.at)}.${d.streak > 1 ? ` ${d.streak} months in a row.` : ""}` : left > 0 ? `${d.done} of ${d.todo} steps done: ${left} to go. Ten minutes, once a month, keeps every page in the app true.` : "Every step is done. Mark the month reviewed below."),
-    d.todo ? ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.done / d.todo) * 100)}%` } })) : null,
+    ui.h("h1", {}, d.reviewed ? `${d.label} is done ✓` : `${d.label} review`),
+    d.reviewed ? ui.h("p", { class: "lede" }, d.summary.length ? `${cap(d.summary.join(" · "))}.` : `Reviewed on ${long(d.reviewed.at)}.`) : null,
+    ui.h("p", { class: d.reviewed ? "muted small" : "lede" }, d.reviewed ? `${d.summary.length ? `Reviewed on ${long(d.reviewed.at)}. ` : ""}${d.streak > 1 ? `${d.streak} months in a row. ` : ""}Next check-in: early ${d.nextCheck.when}, for ${monthLabel(d.nextCheck.month)}.` : left > 0 ? `${d.done} of ${d.todo} steps done: ${left} to go. Ten minutes, once a month, keeps every page in the app true.` : "Every step is done. Mark the month reviewed below."),
+    d.todo && !d.reviewed ? ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.done / d.todo) * 100)}%` } })) : null,
     ui.h("div", { class: "chips", role: "group", "aria-label": "Month", style: { marginTop: "10px", marginBottom: "0" } }, d.choices.map((ym) => ui.h("button", { type: "button", class: `chip${ym === d.month ? " on" : ""}`, "aria-pressed": ym === d.month ? "true" : "false", onClick: () => { month = ym; store.update(() => {}); } }, monthLabel(ym))))));
   if (pending) { root.append(ui.notice(...pending)); pending = null; }
-  root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The steps"),
-    ui.h("ol", { class: "mr-steps" }, d.steps.map((s, i) => ui.h("li", { class: `mr-step ${s.status}` }, ui.h("a", { href: `#/${s.go[0]}/${s.go[1]}` },
-      ui.h("span", { class: "mr-num", "aria-hidden": "true" }, s.status === "done" ? "✓" : String(i + 1)),
-      ui.h("span", { class: "mr-body" }, ui.h("div", { class: "mr-t" }, s.title, s.status === "skip" ? ui.h("span", { class: "pill" }, "optional") : null), ui.h("div", { class: "mr-d" }, s.detail)),
-      ui.h("span", { class: "mr-chev", "aria-hidden": "true" }, "›")))))));
+  // each step's page shows "‹ Back to the October check-in" (guide/frame.js, from=review), and Budget and Where the money
+  // went open on the month under review
+  const hrefOf = (s) => `#/${s.go[0]}/${s.go[1]}?${new URLSearchParams({ ...(s.query ?? {}), from: "review", review: d.month })}`;
+  const list = ui.h("ol", { class: "mr-steps" }, d.steps.map((s, i) => ui.h("li", { class: `mr-step ${s.status}${s.state === "todo" ? " look-todo" : ""}` }, ui.h("a", { href: hrefOf(s) },
+    ui.h("span", { class: "mr-num", "aria-hidden": "true" }, s.status === "done" ? "✓" : String(i + 1)),
+    ui.h("span", { class: "mr-body" }, ui.h("div", { class: "mr-t" }, s.title, s.status === "skip" && !/^Waits/.test(s.detail) ? ui.h("span", { class: "pill" }, "optional") : null), ui.h("div", { class: "mr-d" }, s.detail)),
+    ui.h("span", { class: "mr-chev", "aria-hidden": "true" }, "›")))));
+  root.append(d.reviewed
+    ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, `All steps (${d.done} of ${d.todo} done)`), list)
+    : ui.h("section", { class: "card" }, ui.h("h2", {}, "The steps"), list));
   const note = ui.h("textarea", { rows: 3, placeholder: "What happened this month, what to change next month (optional)", "aria-label": "Note" }, d.reviewed?.note ?? "");
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.reviewed ? `${d.label} is reviewed` : `Done with ${d.label}?`),
     ui.field("A note for the month", note),

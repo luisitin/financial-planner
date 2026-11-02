@@ -105,6 +105,7 @@ export function activeJourney(plan, today) {
  *  - "compact": the page is a step of the followed guide but was reached another way (the menu, a page's own link):
  *    one line, only while that step is still to do, and never once the guide is complete.
  *  - "quick": opened from Quick answers (?from=quick) and no guide applies.
+ *  - "review": opened from a step of the Monthly review (?from=review&review=YYYY-MM) and no guide applies.
  * Only plan.guide.active switches a guide on; query.step only picks which step (inside the followed guide).
  */
 export function barFor(plan, { page, query = {}, off = [], today = null } = {}) {
@@ -129,6 +130,8 @@ export function barFor(plan, { page, query = {}, off = [], today = null } = {}) 
     }
   }
   if (query.from === "quick") return { mode: "quick" };
+  // a step of the Monthly review (?from=review&review=2026-10): one line back to the check-in
+  if (query.from === "review" && page !== "overview/monthly-review") return { mode: "review", month: /^\d{4}-\d{2}$/.test(query.review ?? "") ? query.review : null };
   return null;
 }
 

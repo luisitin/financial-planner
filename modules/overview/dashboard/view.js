@@ -76,7 +76,14 @@ export function render(root, ctx) {
       else rows.push({ dot: st.retire.verdict === "on track" ? "ok" : "warn", k: "Retirement", s: st.retire.verdict === "on track" ? "The money lasts" : "Small changes help", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: "#/retirement/projection" });
       // time for the monthly update: the oldest balance is 25 days old or more (or one has no date)
       const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;
-      if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
+      // the first ten days of a month, while the month just ended is not reviewed: one row inviting the check-in (its first
+      // step is the balances, so it takes the balances row's place rather than adding a second one)
+      const day = Number(today.slice(8, 10));
+      const ended = (() => { const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7)); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; })();
+      const endedName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(ended.slice(5, 7)) - 1];
+      const checkIn = day <= 10 && (plan.accounts ?? []).length > 0 && usable(ctx, "overview/monthly-review") && !(plan.reviews ?? []).some((r) => r.month === ended);
+      if (checkIn) rows.push({ dot: oldDays >= 25 ? "warn" : "", k: `Your ${endedName} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "About ten minutes, once a month", v: "Start ›", open: true, href: "#/overview/monthly-review" });
+      else if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
       const move = st.moves[0] ?? null;
       moveShown = !!move;
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },

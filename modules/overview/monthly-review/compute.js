@@ -27,8 +27,10 @@ export const defaultMonth = (today) => (Number(today.slice(8, 10)) <= LOOK_BACK_
 /**
  * compute(plan, { today, month }) -> {
  *   ready, missing, month, label, choices: [ym, ym] (this month and last),
- *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", detail, go }], done, todo,
- *   reviewed: { month, at, note } | null, history: [reviews, newest first, up to 12], streak (months in a row reviewed up to this one)
+ *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", state ("done"|"todo"|null: how a look step stands), detail, go, query? }], done, todo
+ *   (done and todo count only the chores: balances, net worth, bank files, filing, the budget),
+ *   reviewed: { month, at, note } | null, history: [reviews, newest first, up to 12], streak (months in a row reviewed up to this one),
+ *   summary: [the month in words, once known: net worth's change, spending against the month before], nextCheck: { month (the next one to review), when (the month name it is done in) }
  * }
  */
 export function compute(plan, params = {}) {
@@ -49,12 +51,13 @@ export function compute(plan, params = {}) {
   add({ id: "balances", title: "Update the balances", status: !accounts.length ? "todo" : stale.length ? "todo" : "done",
     detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are more than three weeks old: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? ` and ${stale.length - 4} more` : ""}.` : `All ${accounts.length} balances are from the last three weeks.`, go: ["balance", stale.length ? "update" : "net-worth"] });
 
-  // 2. this month's net worth point
+  // 2. the month's net worth point: the newest saved from the month's 1st up to the LOOK_BACK_DAYS-th of the next month
+  // (a review in early November saves October's close in November), compared with the newest point saved before it up
+  // to the LOOK_BACK_DAYS-th of this month (the point the month before's review used)
   const nw = computeNetWorth(plan, { today });
-  const point = (plan.netWorthHistory ?? []).filter((h) => inMonth(h.date)).pop();
-  const before = (plan.netWorthHistory ?? []).filter((h) => h.date.slice(0, 7) < month).pop();
+  const { point, before } = monthPoint(plan.netWorthHistory, month);
   add({ id: "net-worth", title: "Save the month's net worth", status: point ? "done" : accounts.length ? "todo" : "skip",
-    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${monthLabel(before.date.slice(0, 7))}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them on Net worth to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
+    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them on Net worth to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
 
   // 3. the bank files, 4. filing them
   const txMonth = (plan.transactions ?? []).filter((t) => inMonth(t.date));
@@ -62,30 +65,38 @@ export function compute(plan, params = {}) {
   const unfiled = txMonth.filter((t) => !t.category && !t.transferId);
   add({ id: "import", title: "Bring in the bank files", status: !hasTx ? "skip" : txMonth.length ? "done" : "todo",
     detail: !hasTx ? "Optional: the app works without transactions; import a bank file to see real spending." : txMonth.length ? `${txMonth.length} transactions dated in ${label}.` : `Nothing dated in ${label} yet: download this month's file from each bank and import it.`, go: ["transactions", "import"] });
-  add({ id: "file", title: "File what came in", status: !hasTx ? "skip" : unfiled.length ? "todo" : "done",
-    detail: !hasTx ? "Comes after the bank files." : unfiled.length ? `${unfiled.length} of ${label}'s transactions have no category yet (${cat?.uncategorised ?? unfiled.length} in all).` : `Every transaction in ${label} is filed.`, go: ["transactions", "categorize"] });
+  // nothing dated in the month yet: filing and the budget wait for its files (never "done" for a month with no lines)
+  add({ id: "file", title: "File what came in", status: !hasTx || !txMonth.length ? "skip" : unfiled.length ? "todo" : "done",
+    detail: !hasTx ? "Comes after the bank files." : !txMonth.length ? `Waits for ${label}'s bank files.` : unfiled.length ? `${unfiled.length} of ${label}'s transactions ${unfiled.length === 1 ? "has" : "have"} no category yet (${cat?.uncategorised ?? unfiled.length} in all).` : `Every transaction in ${label} is filed.`, go: ["transactions", "categorize"] });
 
   // 5. spending against the budget, and against last month
   const bud = hasTx ? computeBudget(plan, { today, month }) : null;
-  const sp = hasTx ? computeSpending(plan, { today, month }) : null;
-  if (bud?.hasBudget) {
+  const sp = hasTx && txMonth.length ? computeSpending(plan, { today, month }) : null;
+  if (bud?.hasBudget && !txMonth.length) add({ id: "budget", title: "Spending against the budget", status: "skip", detail: `Waits for ${label}'s bank files.`, go: ["cashflow", "budget"], query: { month } });
+  else if (bud?.hasBudget) {
     const over = bud.envelopes.filter((e) => e.left < 0);
     add({ id: "budget", title: "Spending against the budget", status: over.length ? "todo" : "done",
-      detail: `${money(bud.totals.spent)} spent of ${money(bud.totals.available)}${over.length ? `; over in ${over.map((e) => `${e.label} (${money(-e.left)})`).join(", ")}` : "; every envelope within its amount"}.`, go: ["cashflow", "budget"] });
-  } else add({ id: "budget", title: "Spending against the budget", status: hasTx ? "info" : "skip", detail: hasTx ? "No envelopes yet: the Budget page suggests amounts from past months." : "Needs the bank files.", go: ["cashflow", "budget"] });
-  if (sp?.hasData && sp.month === month) add({ id: "spending", title: "Where the money went", status: "info",
-    detail: `${money(sp.total)} spent in ${label}${sp.previous ? `, ${sp.change >= 0 ? "up" : "down"} ${money(Math.abs(sp.change))} on ${monthLabel(sp.previous.ym)}` : ""}${sp.byCategory[0] ? `; most on ${sp.byCategory[0].label} (${money(sp.byCategory[0].total)})` : ""}.`, go: ["cashflow", "spending"] });
+      detail: `${money(bud.totals.spent)} spent of ${money(bud.totals.available)}${over.length ? `; over in ${over.map((e) => `${e.label} (${money(-e.left)})`).join(", ")}` : "; every envelope within its amount"}.`, go: ["cashflow", "budget"], query: { month } });
+  } else add({ id: "budget", title: "Spending against the budget", status: hasTx ? "info" : "skip", detail: hasTx ? "No envelopes yet: the Budget page suggests amounts from past months." : "Needs the bank files.", go: ["cashflow", "budget"], query: { month } });
+  // the change in dollars and as a share, on the same days of the month before when the file covers only part of one
+  if (sp?.hasData && sp.month === month) {
+    const diff = sp.previous && sp.change !== null ? (sp.previous.current ?? sp.total) - sp.previous.total : null;
+    add({ id: "spending", title: "Where the money went", status: "info",
+      detail: `${money(sp.total)} spent in ${label}${diff !== null ? `, ${diff >= 0 ? "up" : "down"} ${money(Math.abs(diff))} (${Math.round(Math.abs(sp.change) * 100)}%) on ${sp.sameDays ? `the same days of ${monthLabel(sp.previous.ym)}` : monthLabel(sp.previous.ym)}` : ""}${sp.byCategory[0] ? `; most on ${sp.byCategory[0].label} (${money(sp.byCategory[0].total)})` : ""}.`, go: ["cashflow", "spending"], query: { month } });
+  }
 
   // 6. goals, 7. what needs attention, 8. the next step
   const gl = computeGoals(plan, { today });
   const behind = gl.goals.filter((g) => g.status === "behind" || g.status === "past due");
-  add({ id: "goals", title: "Check the goals", status: !gl.goals.length ? "info" : behind.length ? "todo" : "done",
+  // goals, what needs attention and the next step are things to look at, not chores: a goal can be behind for a year and the
+  // month is still reviewed, so they never hold the count back ("info"); their words say how they stand
+  add({ id: "goals", title: "Check the goals", status: "info", state: !gl.goals.length ? null : behind.length ? "todo" : "done",
     detail: !gl.goals.length ? "No goals yet: what are you saving for?" : behind.length ? `${behind.length} of ${gl.goals.length} behind: ${behind.map((g) => g.name).join(", ")}.` : `All ${gl.goals.length} done or on track.`, go: ["goals", "goals"] });
   const al = computeAlerts(plan, { today });
-  add({ id: "attention", title: "Clear what needs attention", status: al.counts.bad + al.counts.warn ? "todo" : "done",
+  add({ id: "attention", title: "Look at what needs attention", status: "info", state: al.counts.bad + al.counts.warn ? "todo" : "done",
     detail: al.total ? `${al.counts.bad} to fix, ${al.counts.warn} to check, ${al.counts.info} to do${al.alerts[0] ? `; first: ${al.alerts[0].title}` : ""}.` : "Nothing needs attention.", go: ["overview", "alerts"] });
   const nb = computeNext(plan, { today });
-  add({ id: "next", title: "Take the next step", status: nb.ready && nb.next ? "info" : nb.ready ? "done" : "skip",
+  add({ id: "next", title: "Take the next step", status: nb.ready ? "info" : "skip", state: nb.ready && !nb.next ? "done" : null,
     detail: nb.ready ? (nb.next ? `${nb.next.title}: ${nb.next.detail}` : "Every step of the order is done.") : "Needs income and expenses.", go: ["overview", "next-best-action"] });
 
   const reviews = [...(plan.reviews ?? [])].sort((a, b) => b.month.localeCompare(a.month));
@@ -93,7 +104,30 @@ export function compute(plan, params = {}) {
   let streak = 0;
   for (let m = month; reviews.some((r) => r.month === m); m = prevMonth(m)) streak++;
   const counted = steps.filter((s) => s.status === "done" || s.status === "todo");
-  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, reviewed, history: reviews.slice(0, 12), streak };
+  // the month in one line once it is reviewed: net worth's change and spending against the month before
+  const summary = [
+    point && before ? `net worth ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : point ? `net worth ${money(point.netWorth)}` : null,
+    sp?.hasData && sp.month === month ? `${money(sp.total)} spent${sp.previous && sp.change !== null ? ` (${sp.change >= 0 ? "up" : "down"} ${Math.round(Math.abs(sp.change) * 100)}%)` : ""}` : null,
+  ].filter(Boolean);
+  // the next review is the next month's, early in the month after it (October's on Nov 2: November's in early December)
+  const nextCheck = { month: nextMonth(month), when: MONTHS[Number(nextMonth(nextMonth(month)).slice(5, 7)) - 1] };
+  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck };
+}
+
+export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };
+
+/**
+ * monthPoint(history, month) -> { point, before }: the month's net worth point is the newest one saved from the month's
+ * 1st through the LOOK_BACK_DAYS-th of the next month; `before` is the newest one saved before it, no later than the
+ * LOOK_BACK_DAYS-th of this month (so October's review on Nov 2 compares Nov 2 with Oct 2, not with Oct 2's own month).
+ */
+export function monthPoint(history, month) {
+  const pts = [...(history ?? [])].filter((h) => h && /^\d{4}-\d{2}-\d{2}/.test(String(h.date))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const dd = String(LOOK_BACK_DAYS).padStart(2, "0");
+  const from = `${month}-01`, to = `${nextMonth(month)}-${dd}`;
+  const point = pts.filter((h) => h.date >= from && h.date.slice(0, 10) <= to).pop() ?? null;
+  const before = point ? pts.filter((h) => h.date < point.date && h.date.slice(0, 10) <= `${month}-${dd}`).pop() ?? null : null;
+  return { point, before };
 }
 
 /** The plan change for "mark reviewed": the month's entry added or replaced. PURE (the view passes it to store.update). */

@@ -4,6 +4,7 @@
 //   guide    the bar (what to do here, and Next once the step is done) and the next-step card
 //   compact  one line on a step page reached another way (menu, a page's own link), while that step is still to do
 //   quick    "‹ Quick answers" and the question on top, "Another question?" below; one page later, "‹ Back to: <the question>"
+//   review   "‹ Back to the October 2026 check-in" on a page opened from a Monthly review step
 import { barFor, OWN_PAGES, markLooked, markNone, markLater, clearMark, touchGuide, targetsOf } from "./compute.js";
 import { questionFor } from "../quick/compute.js";
 import { offKeys, usable, change, lowerFirst, isDirty, controlValue } from "./act.js";
@@ -147,6 +148,12 @@ export function frame(ctx, page) {
     const back = gtrail ? ui.h("a", { href: gtrail.href }, `‹ Back to the guide: ${gtrail.title}`) : trail ? ui.h("a", { href: `#/${trail.page}?from=quick` }, `‹ Back to: ${trail.title}`) : null;
     if (back) return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? "Back to your guide" : "Back to your quick answer" }, back)), after: null };
     return noteEl ? { before: ui.h("div", {}, style, noteEl), after: null } : null;
+  }
+
+  if (bar.mode === "review") {
+    const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const name = bar.month ? `${M[Number(bar.month.slice(5, 7)) - 1]} ${bar.month.slice(0, 4)}` : "monthly";
+    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Back to your monthly check-in" }, ui.h("a", { href: "#/overview/monthly-review" }, `‹ Back to the ${name} check-in`))), after: null };
   }
 
   if (bar.mode === "quick") {

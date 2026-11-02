@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, markReviewed, defaultMonth, prevMonth, monthLabel } from "./compute.js";
+import { compute, markReviewed, defaultMonth, prevMonth, monthLabel, monthPoint, nextMonth } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { samplePlan } from "../../../qa/fixtures/sample-plan.mjs";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
@@ -23,7 +23,8 @@ test("the family in October: fresh balances, no net worth point this month, no b
   assert.equal(step(d, "balances").status, "done");
   assert.equal(step(d, "net-worth").status, "todo");
   assert.equal(step(d, "import").status, "skip"); assert.equal(step(d, "file").status, "skip");
-  assert.equal(step(d, "goals").status, "todo");
+  assert.equal(step(d, "goals").status, "info", "a look step: never holds the count back");
+  assert.equal(step(d, "goals").state, "todo", "but says the goals are behind");
   assert.equal(d.done + (d.todo - d.done), d.steps.filter((s) => s.status === "done" || s.status === "todo").length);
   assert.equal(d.reviewed, null); assert.equal(d.streak, 0);
 });
@@ -59,4 +60,44 @@ test("balances from the 1st are not fresh on the 1st of the next month; the save
   assert.ok(step(d, "net-worth").detail.includes("saved on 10/1/2026"), step(d, "net-worth").detail);
   const fresh = compute(familyPlan("2026-10-25"), { today: "2026-11-01", month: "2026-10" });
   assert.equal(step(fresh, "balances").status, "done", "typed a week ago: fresh");
+});
+
+test("a month with no lines yet: filing and the budget wait for its files, never ticked", () => {
+  const p = familyPlan("2026-11-02");
+  p.transactions = [{ id: "t1", date: "2026-09-12", amount: -40, payee: "Kroger", rawPayee: "KROGER", category: "groceries", accountId: "a-chk" }];
+  p.budgets = [{ id: "b1", category: "groceries", amount: 600, period: "monthly", rollover: false }];
+  const d = compute(p, { today: "2026-11-02" });
+  assert.equal(d.month, "2026-10");
+  assert.equal(step(d, "import").status, "todo");
+  assert.equal(step(d, "file").status, "skip"); assert.match(step(d, "file").detail, /Waits for October 2026's bank files/);
+  assert.equal(step(d, "budget").status, "skip"); assert.deepEqual(step(d, "budget").query, { month: "2026-10" });
+  assert.equal(step(d, "spending"), undefined, "no spending line for an empty month");
+  assert.ok(d.done < d.todo);
+});
+
+test("the month's net worth: the newest point up to the 10th of the next month, against the one before it (Nov 2 saves October)", () => {
+  const h = [{ date: "2026-01-01", netWorth: 257000 }, { date: "2026-10-02", netWorth: 295109 }, { date: "2026-11-02", netWorth: 306074 }];
+  const r = monthPoint(h, "2026-10");
+  assert.equal(r.point.date, "2026-11-02"); assert.equal(r.before.date, "2026-10-02");
+  const only = monthPoint(h.slice(0, 2), "2026-10");
+  assert.equal(only.point.date, "2026-10-02"); assert.equal(only.before.date, "2026-01-01");
+  assert.equal(monthPoint(h, "2026-09").point.date, "2026-10-02", "September's close, saved Oct 2");
+  assert.equal(monthPoint([{ date: "2026-11-12", netWorth: 1 }], "2026-10").point, null, "after the 10th it is November's");
+  assert.equal(nextMonth("2026-12"), "2027-01");
+  const p = familyPlan("2026-11-02"); p.netWorthHistory = h;
+  const s = step(compute(p, { today: "2026-11-02" }), "net-worth");
+  assert.equal(s.status, "done"); assert.match(s.detail, /\$306,074 saved on 11\/2\/2026: up \$10,965 since 10\/2\/2026/);
+});
+
+test("where the money went says the change in dollars and as a share; once reviewed the month is summed up", () => {
+  const p = familyPlan("2026-11-02");
+  const tx = (id, date, amount, category) => ({ id, date, amount, payee: id, rawPayee: id, category, accountId: "a-chk" });
+  p.transactions = [tx("a", "2026-09-01", -1000, "groceries"), tx("b", "2026-09-30", -100, "dining"), tx("c", "2026-10-01", -1060, "groceries"), tx("d", "2026-10-31", -100, "dining")];
+  p.netWorthHistory = [{ date: "2026-10-02", netWorth: 100000 }, { date: "2026-11-02", netWorth: 104000 }];
+  const d = compute(p, { today: "2026-11-02" });
+  const sp = step(d, "spending");
+  assert.match(sp.detail, /\$1,160 spent in October 2026, up \$60 \(5%\) on September 2026/);
+  assert.deepEqual(sp.query, { month: "2026-10" });
+  assert.deepEqual(d.summary, ["net worth up $4,000 since 10/2/2026", "$1,160 spent (up 5%)"]);
+  assert.deepEqual(d.nextCheck, { month: "2026-11", when: "December" });
 });

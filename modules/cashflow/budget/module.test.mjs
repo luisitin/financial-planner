@@ -50,3 +50,17 @@ test("a file with no whole month suggests nothing; a file that stops days before
   assert.equal(compute(p, { today: "2026-10-03" }).stale, true, "a new month the files do not reach yet");
   assert.equal(compute(p, { today: "2026-10-03", month: "2026-09" }).stale, false, "only this month's spent-so-far is affected");
 });
+
+test("a bill paid once a month reads paid, not spending fast; two payments or less than 90% still pace as before", () => {
+  const p = plan();
+  p.budgets.push({ id: "b3", category: "housing", amount: 1500, period: "monthly", rollover: false });
+  let d = compute(p, { today: "2026-09-02" });
+  assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "paid", "the mortgage on the 1st");
+  p.budgets.find((b) => b.id === "b3").amount = 2000;   // 1,500 of 2,000 is 75%: still fast on the 2nd
+  d = compute(p, { today: "2026-09-02" });
+  assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "ahead");
+  p.budgets.find((b) => b.id === "b3").amount = 1500;
+  p.transactions.push(tx("12", "2026-09-02", -100, "housing"));   // two payments, 1,600 of 1,500: over
+  d = compute(p, { today: "2026-09-02" });
+  assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "over");
+});

@@ -32,6 +32,11 @@ people, income, spending and goals those steps ask for). Without the setup page 
 - "Needs attention: N things" counts what needs a look; housekeeping chores are left out (overview/alerts `total`).
 - Once Set up my plan is finished, the folded steps line reads "Set up your plan: 5 of 6 done" while a step is open; "all 6 steps done ✓" only when every step is. It read "done ✓" with a step still open.
 
+## The month's check-in (2026-11-02, round 3 of the owner's experience list)
+From the 1st to the 10th of a month, while the month just ended has no entry in `plan.reviews`, the "where you stand"
+card has one row "Your October check-in · Start ›" opening the Monthly review. Its first step is the balances, so the
+row takes the stale-balances row's place instead of adding a second one; the owner's three What-to-do-now cards stay.
+
 ## Inputs
 Reads the plan sections listed in `needs` only to decide which setup steps are done. Money
 numbers come from other modules through `ctx.computeOf("balance/net-worth")` etc.; where you stand from
