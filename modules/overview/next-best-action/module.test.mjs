@@ -315,3 +315,19 @@ test("a freelancer: this year's tax is kept apart before the cushion, and a past
   // the family (paychecks withhold most of it) gets no tax step
   assert.equal(compute(familyPlan(today), { today }).steps.some((s) => s.id === "tax"), false);
 });
+
+test("a freelancer: a retirement plan through the business (Small business's best), after the IRA; none once a 401(k) gets money", async () => {
+  const { compute: business } = await import("../../career/business/compute.js");
+  const today = "2026-11-02";
+  const plan = freelancer([2800, 2800, 2800, 0]);
+  const d = compute(plan, { today });
+  const b = business(plan, { today });
+  const best = b.plans.find((x) => x.key === b.best);
+  const st = d.steps.find((s) => s.id === "business-plan");
+  assert.ok(st, "the step is there");
+  assert.equal(st.roomYearly, best.room);
+assert.ok(st.detail.startsWith(`${best.label}: up to $`), st.detail);
+  assert.ok(d.steps.findIndex((s) => s.id === "business-plan") > d.steps.findIndex((s) => s.id === "ira"));
+  // the family's weekend photography allows less than an IRA ($6,690 against $7,500): no such step, the IRA step is the answer
+  assert.equal(compute(familyPlan(today), { today }).steps.some((s) => s.id === "business-plan"), false);
+});

@@ -132,5 +132,8 @@ After the bills, a step `tax` when Liquidity keeps tax out of the cushion (`liq.
 - Otherwise: "This year's tax, kept apart", done, saying how much of the cash is tax, what to put aside a month ((the year's tax - withholding) / 12) and the next payment.
 The cushion steps then use the cash less the tax. Before, the Dashboard said "Pay down the cards first" to a freelancer with $8,400 of estimated tax past due, and the full cushion looked $6,480 closer than it was. `dayWords("2027-01-15")` = "January 15, 2027".
 
+## A retirement plan through the business (round 4, 2026-11-02)
+After the 401(k) step, `business-plan`: Small business's best plan (career/business `plans` / `best`: a solo 401(k), a SEP-IRA or a SIMPLE IRA) with its room for the year and the tax it saves at the limit, and when a new one can still be set up (solo 401(k): until the April filing deadline, SECURE 2.0 section 317; SEP-IRA: until the filing deadline with extensions; a SIMPLE IRA too late for the year is not offered). Only while nothing goes into a 401(k) for the owner (then the 401(k) step covers it) and only when the plan allows more than an IRA does (the family's weekend photography allows $6,690 against $7,500: the IRA step is the answer there). Its room takes the spare money after the IRA. Before, a freelancer with a $37,900 solo 401(k) on the Small business page was offered only an IRA.
+
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).

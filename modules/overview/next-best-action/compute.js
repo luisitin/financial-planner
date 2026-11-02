@@ -16,6 +16,7 @@ import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/com
 import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { yearTaxes } from "../../cashflow/budget-percent/compute.js";
+import { compute as computeBusiness } from "../../career/business/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -274,6 +275,19 @@ export function compute(plan, params = {}) {
     if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: `${optional}Tax-sheltered growth on every dollar the law allows.`, optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
       detail: room > 0 ? `${k.filter((x) => x.room > 0).map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
   }
+
+  // 8b. a one-person business: its own retirement plan (Small business's best: a solo 401(k), a SEP-IRA or a SIMPLE IRA), far
+  // more room than an IRA, every dollar off this year's tax; while nothing goes into a 401(k) for its owner (then the step
+  // above is the place). Round 4, 2026-11-02: a freelancer was offered only an IRA
+  let bz = null;
+  try { bz = (plan.income ?? []).some((x) => x.type === "business") ? computeBusiness(plan, { today }) : null; } catch { bz = null; }
+  const bizPlan = bz?.ready && bz.best ? (bz.plans ?? []).find((x) => x.key === bz.best) ?? null : null;
+  const owner = bz?.person?.id ?? null;
+  const into401k = (con.byPerson ?? []).some((p) => (!owner || p.personId === owner) && (p.limits.find((l) => l.kind === "401k")?.used ?? 0) > 0);
+  // only when it allows more than an IRA does (a little weekend work's plan can allow less: then the IRA step is the answer)
+  if (bizPlan && bizPlan.room > (L.ira?.limit ?? 0) && !bizPlan.late && !into401k && earners.length) add({ id: "business-plan", title: "A retirement plan through your business",
+    why: `${optional}A business can put far more aside than an IRA allows, and every dollar comes off this year's tax.`, optional: !!optional, status: "now", roomYearly: bizPlan.room,
+    detail: `${bizPlan.label}: up to ${money(bizPlan.room)} for ${bz.year}; filling it would cut that year's tax by about ${money(bizPlan.saved)}.${bizPlan.key === "solo" ? " A new one can still be set up for this year until the April tax-filing deadline." : bizPlan.key === "sep" ? " It can be opened and filled up to the tax-filing deadline." : ""}`, go: ["career", "business"] });
 
   // 9. goals that are behind: the extra a month they need
   const behind = gl.goals.filter((g) => g.status === "behind" || g.status === "past due");
