@@ -43,7 +43,7 @@ export function compute(plan, params = {}) {
   let taxableSells = 0, gainRealised = 0;
   // a balanced or target-date fund is never sold as one class: it holds several and keeps its own mix
   const holdings = a.holdings.items.filter((h) => h.cls !== "unknown" && h.cls !== "balanced");
-  const blended = a.holdings.items.filter((h) => h.cls === "balanced" && h.value > 0).map((h) => ({ symbol: h.symbol, name: h.name, account: h.accountName, value: h.value, targetYear: h.targetYear ?? null }));
+  const blended = a.holdings.items.filter((h) => h.cls === "balanced" && h.value > 0).map((h) => ({ symbol: h.symbol, name: h.name, account: h.accountName, bucket: h.bucket, value: h.value, targetYear: h.targetYear ?? null }));
   const overOnlyBlended = [];
   for (const r of a.rows.filter((x) => x.move < -1)) {
     let toSell = -r.move;
@@ -59,7 +59,7 @@ export function compute(plan, params = {}) {
       cashByAccount.set(h.accountId, (cashByAccount.get(h.accountId) ?? 0) + amount);
       toSell -= amount;
     }
-    if (toSell >= 1 && blended.length) overOnlyBlended.push({ cls: r.cls, label: r.label, amount: toSell });
+    if (toSell >= 1 && blended.length && a.flaggedCount > 0) overOnlyBlended.push({ cls: r.cls, label: r.label, amount: toSell });
   }
   // buys: the underweight classes, from the cash freed in each account (the account with the most cash first)
   const buysNeeded = a.rows.filter((x) => x.move > 1).map((x) => ({ cls: x.cls, label: x.label, amount: x.move }));
@@ -78,8 +78,13 @@ export function compute(plan, params = {}) {
     if (need >= 1) leftover.push({ cls: b.cls, label: b.label, amount: need });
   }
   const notes = [...a.notes];
-  if (overOnlyBlended.length) notes.push(`${overOnlyBlended.map((o) => o.label).join(" and ")} ${overOnlyBlended.length > 1 ? "are" : "is"} over mostly inside ${blended.length > 1 ? "your balanced or target-date funds" : `${blended[0].symbol || blended[0].name || "your target-date fund"}`}, which ${blended.length > 1 ? "keep" : "keeps"} ${blended.length > 1 ? "their" : "its"} own mix and ${blended.length > 1 ? "are" : "is"} not sold here. To shift the mix, send new money to the other funds, or pick a target that matches the fund.`);
-  if (leftover.length) notes.push("Part of the buying could not be placed inside an account where something was sold; use new money for it, or sell in another account.");
+  const sells = trades.filter((t) => t.kind === "sell");
+  // a rebalance is due but every class that is over sits inside a balanced or target-date fund: nothing here can be sold
+  const onlyInFund = a.flaggedCount > 0 && !sells.length && overOnlyBlended.length > 0
+    ? { funds: blended, short: buysNeeded.map((b) => ({ label: b.label, amount: b.amount })), taxFree: blended.every((b) => b.bucket !== "taxable") }
+    : null;
+  if (overOnlyBlended.length && !onlyInFund) notes.push(`${overOnlyBlended.map((o) => o.label).join(" and ")} ${overOnlyBlended.length > 1 ? "are" : "is"} over mostly inside ${blended.length > 1 ? "your balanced or target-date funds" : `${blended[0].symbol || blended[0].name || "your target-date fund"}`}, which ${blended.length > 1 ? "keep" : "keeps"} ${blended.length > 1 ? "their" : "its"} own mix and ${blended.length > 1 ? "are" : "is"} not sold here. To shift the mix, send new money to the other funds, or pick a target that matches the fund.`);
+  if (leftover.length && a.flaggedCount > 0 && !onlyInFund) notes.push("Part of the buying could not be placed inside an account where something was sold; use new money for it, or sell in another account.");
   if (gainRealised > 0) notes.push(`The full rebalance sells ${round(taxableSells).toLocaleString("en-US")} in taxable accounts and realises about ${round(gainRealised).toLocaleString("en-US")} of gain; the Capital gains page shows what that costs this year.`);
-  return { ready: true, waiting: null, blended, overOnlyBlended, needed: a.flaggedCount > 0, rows: a.rows, band: a.band, total: a.total, newMoney, newMoneyBuys, afterNewMoney, newMoneyEnough: newMoney > 0 && stillOff.length === 0, trades, sells: trades.filter((t) => t.kind === "sell"), buys: trades.filter((t) => t.kind === "buy"), taxableSells, gainRealised, leftover, notes, flaggedCount: a.flaggedCount, worst: a.worst };
+  return { ready: true, waiting: null, blended, overOnlyBlended, onlyInFund, needed: a.flaggedCount > 0, rows: a.rows, band: a.band, total: a.total, newMoney, newMoneyBuys, afterNewMoney, newMoneyEnough: newMoney > 0 && stillOff.length === 0, trades, sells, buys: trades.filter((t) => t.kind === "buy"), taxableSells, gainRealised, leftover, notes, flaggedCount: a.flaggedCount, worst: a.worst };
 }

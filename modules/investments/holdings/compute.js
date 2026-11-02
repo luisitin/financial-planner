@@ -30,7 +30,8 @@ export function targetDateMix(targetYear, thisYear) {
   if (t >= 25) stocks = 0.9;
   else if (t >= 0) stocks = 0.5 + 0.4 * (t / 25);
   else stocks = Math.max(0.3, 0.5 + (t / 7) * 0.2);
-  return { us_stocks: Math.round(stocks * 0.6 * 100) / 100, intl_stocks: Math.round(stocks * 0.4 * 100) / 100, bonds: Math.round((1 - stocks) * 100) / 100 };
+  const us = Math.round(stocks * 0.6 * 100) / 100, intl = Math.round(stocks * 0.4 * 100) / 100;
+  return { us_stocks: us, intl_stocks: intl, bonds: Math.round((1 - us - intl) * 100) / 100 };   // the parts add to 1 after rounding
 }
 
 /** What a symbol (or a fund name) is: { cls, mix, er, yield, name, known, targetYear }. The owner's own class wins when set. */

@@ -4,7 +4,7 @@
 import { compute } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 
-const state = { mixA: "own", mixB: "60-40", from: 1928, real: false };
+const state = { mixA: null, mixB: "60-40", from: 1928, real: false };   // mixA null: compute's default (your target, else what you hold)
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -22,8 +22,8 @@ export function render(root, ctx) {
   for (const n of d.notes) root.append(ui.notice("info", n));
   const chip = (label, on, fn) => ui.h("button", { type: "button", class: `chip${on ? " on" : ""}`, onClick: fn }, label);
   const mixChips = (which) => ui.h("div", { class: "chips" }, [
-    chip(`Your target`, state[which] === "own", () => { state[which] = "own"; redraw(); }),
-    d.held ? chip("What you hold", state[which] === "held", () => { state[which] = "held"; redraw(); }) : null,
+    chip(d.ownSource === "own" ? "Your target" : "The Projection's mix", (state[which] ?? d.defaultA) === "own", () => { state[which] = "own"; redraw(); }),
+    d.held ? chip("What you hold", (state[which] ?? d.defaultA) === "held", () => { state[which] = "held"; redraw(); }) : null,
     ...d.presets.map((p) => chip(p.label, state[which] === p.key, () => { state[which] = p.key; redraw(); })),
   ]);
   root.append(ui.card("Which mixes",

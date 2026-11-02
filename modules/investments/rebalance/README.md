@@ -20,6 +20,12 @@ old rule (any holding more than half in a class) sold a whole 2055 fund as "US s
 of such funds, `overOnlyBlended` lists it and a note says the fund keeps its own mix (send new money elsewhere, or pick a
 target that matches the fund). `blended` lists those funds. The full list of trades shows only when a rebalance is due.
 
+Review fixes (2026-11-02): `overOnlyBlended` and the "could not be placed" note only when a rebalance is due (picking the
+fund's own mix used to say "No rebalance needed" next to "pick a target that matches the fund"). When a rebalance is due but
+everything over sits inside balanced or target-date funds, so nothing can be sold, `onlyInFund` (`{ funds, short, taxFree }`)
+replaces the empty trade list with "The fund sets this mix" and the three ways to move it: exchange part of the fund inside
+the account (no tax in a 401(k), IRA or Roth), send new money to a fund of the short class, or keep the fund's mix.
+
 ## Edge cases
 When no class is flagged the page still shows where new money should go. Nothing is ever traded automatically; the plan is not changed by this page except for the new-money amount.
 

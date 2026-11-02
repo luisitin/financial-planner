@@ -13,6 +13,8 @@
 Yearly rebalancing: the mix's return each year is the weighted sum of the classes' returns. Real returns divide by (1 + inflation). Ten-year stretches are compound rates over every ten consecutive years.
 
 ## Edge cases
+The first mix is your target when you chose one on Allocation, else what you hold (`defaultA`); with no target the chip
+reads "The Projection's mix", not "Your target" (2026-11-02).
 Before 1928 the cash figure is approximate (a note). No fees, no taxes, one rebalance a year. The chart is log-scaled (a `log` option added to `modules/retirement/charts.js`).
 
 ## Tests

@@ -19,7 +19,8 @@ export function render(root, ctx) {
     return;
   }
   const w = d.worst;
-  const own = d.targetSource === "own";
+  // a target of your own is judged only once most of the money is classified: on a guess, show what is held
+  const own = d.targetSource === "own" && d.verdict !== "partial";
   const out = ui.h("div");
   if (pending) {
     const n = ui.notice("ok", pending.text ?? pending), share = pending.stocks;
@@ -31,7 +32,7 @@ export function render(root, ctx) {
   if (d.verdict === "pick" || d.verdict === "partial") {
     const fund = d.choices.find((c) => c.key === "fund"), planC = d.choices.find((c) => c.key === "plan");
     root.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, d.verdict === "partial" ? "Add what's in your other accounts first" : `You hold ${pts(d.stockShareActual)} stocks and ${pts(1 - d.stockShareActual)} bonds and cash`),
+      ui.h("h1", {}, d.verdict === "partial" ? "Add what's in your other accounts first" : (d.restWords ? `You hold ${pts(d.stockShareActual)} stocks and ${pts(1 - d.stockShareActual)} ${d.restWords}` : `You hold ${pts(d.stockShareActual)} stocks`)),
       ui.h("p", { class: "lede" }, d.verdict === "partial"
         ? `The funds typed so far cover ${pts(d.known)} of the money in your investment accounts, so the mix below is a guess. Add each account's funds on Holdings, and pick a class for any marked unknown.`
         : `Pick the mix you want and this page will tell you when you drift away from it.${fund ? ` A ${fund.year} target-date fund holds about ${pts(fund.stocks)} stocks; your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.` : ` Your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.`}`),
@@ -51,7 +52,7 @@ export function render(root, ctx) {
     }
   } else root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.flaggedCount ? `${d.flaggedCount === 1 ? "One class has" : `${d.flaggedCount} classes have`} drifted past the band` : "Your mix is close to the target"),
-    ui.h("p", { class: "lede" }, `${pts(d.stockShareActual)} in stocks against a target of ${pts(d.stockShareTarget)}, across ${money(d.total)} of classified holdings. ${w && d.flaggedCount ? `The biggest gap is ${w.label}: ${pts(w.actual)} held, ${pts(w.target)} wanted (${w.drift > 0 ? "over" : "under"} by ${money(Math.abs(w.move))}).` : "Nothing is more than the band away from its target."}${d.flaggedCount ? " The Rebalance page turns that into trades." : ""}`),
+    ui.h("p", { class: "lede" }, `${pts(d.stockShareActual)} in stocks against a target of ${pts(d.stockShareTarget)}, across ${money(d.total)} of classified holdings. ${w && d.flaggedCount ? `The biggest gap is ${w.label}: ${pts(w.actual)} held, ${pts(w.target)} wanted (${w.drift > 0 ? "over" : "under"} by ${money(Math.abs(w.move))}).` : "Nothing is more than the band away from its target."}${d.flaggedCount ? " The Rebalance page says how to move back." : ""}`),
     ui.h("p", { class: "muted small" }, `A class is flagged when it is more than ${Math.round(d.band * 100)} points off, or more than a quarter of its own target off (the 5/25 rule). Balanced and target-date funds are split into their parts.`),
   ));
   if (d.verdict === "drift" || d.verdict === "ok") root.append(out);
@@ -76,7 +77,8 @@ export function render(root, ctx) {
 
 function targetFold(ctx, d) {
   const { ui, store, plan } = ctx;
-  const t = d.target ?? {};
+  // the boxes start blank unless you chose a target: the Projection's default is not yours to save by accident
+  const t = d.targetSource === "own" ? d.target ?? {} : {};
   const FIELDS = [
     ...TARGET_CLASSES.map((cls) => ({ key: cls, label: ASSET_CLASSES[cls].label, type: "number", min: 0, max: 100, step: "1", help: cls === "us_stocks" ? "percent of the whole portfolio; the six add up to 100" : undefined })),
     { key: "band", label: "Rebalance band", type: "number", min: 1, max: 25, step: "1", help: "points a class may drift before it is flagged; 5 is the usual" },

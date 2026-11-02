@@ -13,6 +13,8 @@ Holdings (the mix held, collapsed to stocks/bonds/cash), the Allocation target, 
 `runMix` over 1871-2025 and 1970-2025, `seriesStats`, `maxDrawdown` (`core/math/returns.js`). A "bad year" is one standard deviation below zero. The plan's own volatility is the root of the summed squared stock and bond terms (no correlation term).
 
 ## Edge cases
+With no target chosen on Allocation, the comparison mix is the Projection's stock share and is called "The Projection's
+mix", not "Your target mix" (2026-11-02).
 International stocks, REITs and other assets are run as US stocks (the only series as long). Within five years of retirement and over 70% stocks a warning names the worst fall.
 
 ## Tests

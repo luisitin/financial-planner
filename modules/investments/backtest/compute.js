@@ -52,20 +52,23 @@ export function runMix(weights, { from = 1871, to = Infinity, start = 10000, rea
 
 /**
  * compute(plan, { today, mixA, mixB, from, real }) -> { a: runMix, b: runMix, mixA: { stocks, bonds, bills, label }, mixB, from, real, firstYear, lastYear, presets, startYears, notes }
- * mixA defaults to the plan's target (Allocation), mixB to 60/40; either may be a preset key or { stocks, bonds, bills }.
+ * mixA defaults to the target chosen on Allocation, else to what is held (defaultA says which), mixB to 60/40; either may be a preset key or { stocks, bonds, bills }.
  */
 export function compute(plan, params = {}) {
-  const t = targetMix(plan).mix;
-  const own = { ...toHistoryWeights(t), label: "Your target mix" };
+  const { mix: t, source } = targetMix(plan);
+  // "own" is the target chosen on Allocation; with none chosen it is the Projection's stock share, and says so
+  const own = { ...toHistoryWeights(t), label: source === "own" ? "Your target mix" : "The Projection's mix" };
   const h = computeHoldings(plan, params);
   const held = h.hasData && h.classifiedShare > 0 ? { ...toHistoryWeights(Object.fromEntries(h.byClass.filter((c) => c.cls !== "unknown").map((c) => [c.cls, c.share]))), label: "What you hold" } : null;
   const pick = (m, fallback) => { if (!m) return fallback; if (typeof m === "string") { if (m === "own") return own; if (m === "held" && held) return held; const p = PRESETS.find((x) => x.key === m); return p ? { stocks: p.stocks, bonds: p.bonds, bills: p.bills, label: p.label } : fallback; } return { stocks: Number(m.stocks) || 0, bonds: Number(m.bonds) || 0, bills: Number(m.bills) || 0, label: m.label ?? "Custom" }; };
-  const mixA = pick(params.mixA, own), mixB = pick(params.mixB, { stocks: 0.6, bonds: 0.4, bills: 0, label: "60 / 40" });
+  // the first mix: your target when you chose one, else what you hold (a default nobody chose is not the headline)
+  const defaultA = source === "own" || !held ? "own" : "held";
+  const mixA = pick(params.mixA, defaultA === "own" ? own : held), mixB = pick(params.mixB, { stocks: 0.6, bonds: 0.4, bills: 0, label: "60 / 40" });
   const from = START_YEARS.includes(Number(params.from)) ? Number(params.from) : 1928;
   const real = params.real === true;
   const a = runMix(mixA, { from, real }), b = runMix(mixB, { from, real });
   const notes = [];
   if (from < 1928) notes.push("Before 1928 the figures come from Shiller's S&P and long-bond series; cash is the January long-bond yield standing in for short rates, so treat the cash part of those years as approximate.");
   notes.push("Stocks are the S&P 500 (large US companies); international stocks, REITs and gold in your mix are run as US stocks here, for want of a history as long. One rebalance a year, no fees, no taxes.");
-  return { a, b, mixA, mixB, own, held, from, real, firstYear: HISTORY[0].year, lastYear: HISTORY[HISTORY.length - 1].year, presets: PRESETS, startYears: START_YEARS, notes };
+  return { a, b, mixA, mixB, own, held, ownSource: source, defaultA, from, real, firstYear: HISTORY[0].year, lastYear: HISTORY[HISTORY.length - 1].year, presets: PRESETS, startYears: START_YEARS, notes };
 }

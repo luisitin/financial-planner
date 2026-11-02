@@ -29,5 +29,16 @@ test("no trades against a mix nobody chose, and a target-date fund is never sold
   p.investments.target = { us_stocks: 0.3, intl_stocks: 0.2, bonds: 0.5, cash: 0, real_estate: 0, other: 0 };
   const o = compute(p, T);
   assert.ok(o.sells.every((s) => s.symbol !== "FFFHX"));
-  assert.ok(o.overOnlyBlended.length > 0); assert.ok(o.notes.some((n) => /keeps its own mix/.test(n)), o.notes.join(" | "));
+  assert.ok(o.overOnlyBlended.length > 0);
+  // nothing can be sold: the page says the ways to move the fund's mix instead of an empty trade list
+  assert.equal(o.sells.length, 0); assert.ok(o.onlyInFund, "only the fund holds what is over");
+  assert.deepEqual(o.onlyInFund.funds.map((x) => x.symbol), ["FFFHX"]); assert.equal(o.onlyInFund.taxFree, true, "inside the 401(k)");
+  assert.ok(!o.notes.some((n) => /keeps its own mix|could not be placed/.test(n)), "the hero says it, not two notes");
+  // the fund alone, its own mix picked: no rebalance, and no note telling them to pick it
+  p.holdings = p.holdings.filter((h) => h.symbol === "FFFHX"); p.accounts.find((a) => a.id === "a-brk").balance = 0;
+  p.investments.target = null;
+  p.investments.target = allocation(p, T).choices.find((c) => c.key === "fund").mix;
+  const k = compute(p, T);
+  assert.equal(k.needed, false); assert.equal(k.onlyInFund, null); assert.deepEqual(k.overOnlyBlended, []);
+  assert.ok(!k.notes.some((n) => /pick a target that matches|could not be placed/.test(n)), k.notes.join(" | "));
 });

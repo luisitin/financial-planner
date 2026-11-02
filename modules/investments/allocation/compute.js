@@ -22,8 +22,9 @@ export function targetMix(plan) {
  *   ready, total, rows: [{ cls, label, icon, actual (fraction), target, drift, value, targetValue, move (dollars to reach target), flagged, reason }],
  *   band, flaggedCount, worst (the biggest drift), stockShareActual, stockShareTarget, target (mix), targetSource,
  *   unknownValue (not classified), coverage: { holdingsValue, investedBalance, share }, byAccountClass: [{ account, classes: { cls: value } }], notes,
- *   known (classified holdings as a share of the money invested), verdict: "pick" (no target of your own: no drift is
- *   called) | "partial" (under KNOWN_ENOUGH of the money is classified) | "drift" | "ok", choices: [{ key, label, stocks, mix }]
+ *   known (classified holdings as a share of the money invested), verdict: "partial" (under KNOWN_ENOUGH of the money is
+ *   classified: no mix to pick, no drift, whatever the target) | "pick" (no target of your own: no drift is called) | "drift" | "ok",
+ *   choices: [{ key, label, stocks, mix }], restWords (what is held outside stocks, in words)
  * }
  */
 /** Below this share of the invested money classified, no drift verdict is given: the mix would be a guess. */
@@ -64,28 +65,37 @@ export function compute(plan, params = {}) {
   const thisYear = Number(String(params.today ?? "").slice(0, 4)) || null;
   const dated = h.items.filter((x) => x.cls === "balanced" && x.targetYear).sort((x, y) => y.value - x.value)[0] ?? null;
   const planStocks = Math.min(1, Math.max(0, Number(plan.retirement?.stocksNow ?? 0.7)));
-  // a choice changes only how much is in stocks: inside stocks and inside the rest it keeps what you hold (US against
-  // international, bonds against cash), so picking 90% when you hold 92% is not then a call to trade between them
-  const STOCK = TARGET_CLASSES.filter((c) => ASSET_CLASSES[c].kind === "stocks"), REST = TARGET_CLASSES.filter((c) => !STOCK.includes(c));
-  const heldS = stocksOf(actualMix), heldR = 1 - heldS;
-  const shaped = (S) => Object.fromEntries([
-    ...STOCK.map((c) => [c, heldS > 0 ? S * (actualMix[c] ?? 0) / heldS : S * (c === "us_stocks" ? 0.6 : c === "intl_stocks" ? 0.4 : 0)]),
-    ...REST.map((c) => [c, heldR > 0 ? (1 - S) * (actualMix[c] ?? 0) / heldR : c === "bonds" ? 1 - S : 0]),
-  ]);
+  // a choice changes only how much is in stocks. The stock part goes to US and international funds in the split you hold
+  // (60/40 when you hold neither), REITs keep no more than what you hold; the rest goes to bonds (to bonds and cash in the
+  // split you hold when you hold bonds), gold and other keep no more than what you hold. So picking 90% when you hold 92%
+  // is not a call to trade between US and international, and "the plan's mix" never becomes 70% REITs or 30% gold.
+  const held = (c) => actualMix[c] ?? 0;
+  const shaped = (S) => {
+    const re = Math.min(held("real_estate"), S), oth = Math.min(held("other"), 1 - S);
+    const st = S - re, safe = 1 - S - oth;
+    const us = held("us_stocks") + held("intl_stocks") > 0 ? held("us_stocks") / (held("us_stocks") + held("intl_stocks")) : 0.6;
+    const b = held("bonds") > 0 ? held("bonds") / (held("bonds") + held("cash")) : 1;
+    return { us_stocks: st * us, intl_stocks: st * (1 - us), real_estate: re, bonds: safe * b, cash: safe * (1 - b), other: oth };
+  };
   const choices = total > 0 ? [
     { key: "now", label: "What I hold now", mix: tidy(actualMix) },
     dated && thisYear ? { key: "fund", year: dated.targetYear, label: `What a ${dated.targetYear} target-date fund holds`, mix: tidy(shaped(stocksOf(targetDateMix(dated.targetYear, thisYear)))) } : null,
     { key: "plan", label: "The plan's mix", mix: tidy(shaped(planStocks)) },
   ].filter(Boolean).map((c) => ({ ...c, stocks: stocksOf(c.mix) })) : [];
   const known = total > 0 ? total / Math.max(total + unknownValue, investedBalance, total) : 0;
-  const verdict = source !== "own" ? "pick" : known < KNOWN_ENOUGH ? "partial" : rows.some((r) => r.flagged) ? "drift" : "ok";
+  // a guess of the mix comes first: no mix to pick, no drift, until most of the money is classified
+  const verdict = known < KNOWN_ENOUGH ? "partial" : source !== "own" ? "pick" : rows.some((r) => r.flagged) ? "drift" : "ok";
+  // what the part outside stocks is, in words: "bonds and cash", "gold and other", "bonds, cash and gold and other"
+  const REST_WORDS = { bonds: "bonds", cash: "cash", other: "gold and other" };
+  const restParts = Object.keys(REST_WORDS).filter((c) => (actualMix[c] ?? 0) > 0.0005).map((c) => REST_WORDS[c]);
+  const restWords = restParts.length ? restParts.length === 1 ? restParts[0] : `${restParts.slice(0, -1).join(", ")} and ${restParts.at(-1)}` : "";
   const notes = [];
   if (unknownValue > 0) notes.push(`$${Math.round(unknownValue).toLocaleString("en-US")} of holdings have no asset class yet and are left out; pick classes on the Holdings page.`);
-  if (investedBalance > h.total * 1.05 && h.total > 0) notes.push(`The holdings cover ${Math.round(h.total / investedBalance * 100)}% of the ${Math.round(investedBalance).toLocaleString("en-US")} in your investment accounts (Net worth); the rest is not broken down yet.`);
+  if (investedBalance > h.total * 1.05 && h.total > 0) notes.push(`The holdings cover ${Math.round(h.total / investedBalance * 100)}% of the $${Math.round(investedBalance).toLocaleString("en-US")} in your investment accounts (Net worth); the rest is not broken down yet.`);
   return {
     ready: h.hasData && total > 0, total, rows, band, flaggedCount: rows.filter((r) => r.flagged).length, worst,
     stockShareActual: stocksOf(actualMix), stockShareTarget: stocksOf(target), target, targetSource: source, unknownValue,
     coverage: { holdingsValue: h.total, investedBalance, share: investedBalance > 0 ? h.total / investedBalance : 1 }, byAccountClass, notes, holdings: h,
-    known, verdict, choices,
+    known, verdict, choices, restWords,
   };
 }

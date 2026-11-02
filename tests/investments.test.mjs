@@ -142,7 +142,7 @@ test("risk and backtest: history since 1871, the worst year and deepest fall of 
   assert.equal(b.a.from, 1871); assert.equal(b.mixA.label, "What you hold"); assert.equal(b.mixB.label, "All bonds"); assert.ok(b.a.end > b.b.end);
   const r = risk(investmentsPlan(), { today: TODAY });
   assert.equal(r.main.label, "What you hold"); assert.equal(r.verdict, "rough"); assert.ok(r.main.worstYearDollars < -300000); assert.equal(r.comparison.length, 6);
-  const e = risk(emptyPlan(), { today: TODAY }); assert.equal(e.main.label, "Your target mix"); assert.equal(e.amount, 0);
+  const e = risk(emptyPlan(), { today: TODAY }); assert.equal(e.main.label, "The Projection's mix", "no target chosen on Allocation: named for what it is"); assert.equal(e.amount, 0);
 });
 
 test("limits: each person's limits with catch-ups against the contributions, the Roth income check, the deadlines", () => {

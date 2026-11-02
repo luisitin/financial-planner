@@ -27,6 +27,16 @@ share and say "3 classes have drifted past the band ... trim $69,581" to a 36-ye
   and the Net worth balances of investment accounts): "Add what's in your other accounts first".
 - `"drift"` / `"ok"` as before, against the owner's own target.
 
+Review fixes (2026-11-02): `"partial"` is checked before `"pick"`, so with most of the money not typed in there is no "What
+I hold now" button and no offer to change the Projection's stock share (one bond fund typed out of $177,000 used to offer
+"What I hold now: 0% stocks" and then "Use 0% stocks on the Projection too"); with a target of your own, a partial page
+shows what is held without add/trim amounts. The one-tap mixes give the stock part to US and international funds in the
+split held (60/40 when neither is held), keep REITs and gold/other at no more than what is held, and put the rest in bonds
+(in the held bonds/cash split only when bonds are held), so "the plan's mix" is never 70% REITs, 30% gold or 30% cash.
+`restWords` names what is held outside stocks ("You hold 75% stocks and 25% gold and other"). "Type my own" starts blank
+unless you chose a target, so saving only the band no longer saves the Projection's default as yours. The left-out and
+coverage notes say dollars.
+
 ## Edge cases
 No holdings: the target form still works. Accounts without holdings are not in the mix; a note gives the coverage.
 

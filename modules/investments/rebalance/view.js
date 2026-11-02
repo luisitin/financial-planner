@@ -24,7 +24,21 @@ export function render(root, ctx) {
       ui.row(ui.h("a", { class: "btn", href: d.waiting === "pick" ? "#/investments/allocation" : "#/investments/holdings" }, d.waiting === "pick" ? "Pick a mix on Allocation" : "Open Holdings"))));
     return;
   }
-  root.append(ui.h("section", { class: "card accent hero" },
+  const f = d.onlyInFund;
+  if (f) {
+    // the mix is set inside a fund the page never sells: say the three ways to move it instead of an empty trade list
+    const fund = f.funds.length === 1 ? (f.funds[0].symbol || f.funds[0].name || "your target-date fund") : "your balanced or target-date funds";
+    const short = f.short.map((x) => x.label.toLowerCase()).join(" and ") || "the classes that are short";
+    root.append(ui.h("section", { class: "card accent hero" },
+      ui.h("h1", {}, `${f.funds.length === 1 ? "The fund sets" : "Your funds set"} this mix`),
+      ui.h("p", { class: "lede" }, `${d.flaggedCount === 1 ? "One class is" : `${d.flaggedCount} classes are`} past the ${Math.round(d.band * 100)}-point band, but what is over sits inside ${fund}, which keeps its own mix and is not sold here.`),
+      ui.h("ul", { class: "records" }, [
+        [`Move part of ${fund}`, `${f.funds.length === 1 && f.funds[0].account ? `Inside ${f.funds[0].account}, exchange` : "Exchange"} part of it for a ${short} fund${f.taxFree ? ": no tax inside a 401(k), IRA or Roth" : "; in a taxable account that sale may be taxed"}.`],
+        ["Send new money there", `Put new money into a ${short} fund until the mix is back.`],
+        ["Or keep the fund's mix", "Pick the fund's own mix on Allocation, and let the fund rebalance itself."],
+      ].map(([t, x]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, x)))),
+      ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Open Allocation"))));
+  } else root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.needed ? (d.newMoneyEnough ? "New money alone puts you back on target" : "Time to rebalance") : "No rebalance needed"),
     ui.h("p", { class: "lede" }, d.needed
       ? `${d.flaggedCount === 1 ? "One class is" : `${d.flaggedCount} classes are`} past the ${Math.round(d.band * 100)}-point band${d.worst ? `; the biggest gap is ${d.worst.label}, ${d.worst.move > 0 ? "short" : "over"} by ${money(Math.abs(d.worst.move))}` : ""}. ${d.newMoney > 0 ? d.newMoneyEnough ? `Putting the ${money(d.newMoney)} of new money into the underweight classes is enough: nothing has to be sold.` : `The ${money(d.newMoney)} of new money helps but does not close the gap; the full list below sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same.` : `With no new money, the full rebalance sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same${d.taxableSells > 0 ? `, ${money(d.taxableSells)} of it in taxable accounts` : ", all inside tax-advantaged accounts"}.`}`
@@ -42,7 +56,7 @@ export function render(root, ctx) {
     d.newMoneyBuys.length ? ui.h("ul", { class: "records" }, d.newMoneyBuys.map((b) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Buy ${b.label}`), ui.h("span", { class: "rec-value" }, money(b.amount)))))) : d.newMoney > 0 ? ui.h("p", { class: "small" }, "Nothing is underweight; spread it by the target.") : null,
   ));
   // the trades only when a rebalance is due: inside the band, small sells read as advice to trade anyway
-  if (d.needed) root.append(ui.card("The full rebalance",
+  if (d.needed && !f) root.append(ui.card("The full rebalance",
     d.trades.length ? ui.h("ul", { class: "records" }, [...d.sells, ...d.buys].map((t) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t.kind === "sell" ? `Sell ${t.symbol}` : `Buy ${t.label}`, " ", ui.h("span", { class: t.kind === "sell" ? "pill warn" : "pill ok" }, t.kind)), ui.h("span", { class: "rec-value" }, money(t.amount))),
       ui.h("div", { class: "rec-sub" }, `${t.account}${t.kind === "sell" ? ` · ${t.label}` : " · a fund in that class"}${t.taxNote ? ` · ${t.taxNote}` : ""}`)))) : ui.h("p", { class: "small" }, "Nothing to trade."),
