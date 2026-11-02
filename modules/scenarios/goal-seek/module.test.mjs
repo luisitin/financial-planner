@@ -76,6 +76,7 @@ test("the claiming lever moves only who has not claimed, from the ages still pos
   const lever = d.levers?.find((l) => l.id === "claim");
   if (!lever) return;   // the plan cannot be judged on this fixture: nothing to say
   assert.deepEqual(lever.who, ["lee"]);
-  assert.ok(lever.results.every((r) => r.age >= 70), "69 and 5 months: only 70 is still a whole age to choose");
-  assert.match(lever.sentence, /^Lee claiming at 70/); assert.match(lever.sentence, /Sam already gets it/);
+  // 69 and 5 months: "now" (to the month, the Social Security page's first choice) and 70 are what is left (review 2026-11-02)
+  assert.deepEqual(lever.results.map((r) => Math.round(r.age * 12)), [69 * 12 + 5, 70 * 12]);
+  assert.match(lever.sentence, /^Lee claiming (at 70|now \(69 and 5 months\))/); assert.match(lever.sentence, /Sam already gets it/);
 });

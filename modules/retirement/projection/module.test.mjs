@@ -144,3 +144,24 @@ test("round 4: a retired household drawing from savings as the plan intends is t
   assert.equal(householdRetired(w, T), false); assert.equal(next(w, T).drawing, null);
   assert.ok(alerts(w, T).alerts.some((a) => a.id === "overspend"));
 });
+
+test("review 2026-11-02: a retired household with the retirement age left blank is retired (the plan's own age); a benefit started early counts from now", async () => {
+  const { householdRetired, compute } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-02";
+  const p = emptyPlan();
+  p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10" }, { id: "s", name: "Sam", role: "partner", birthDate: "1957-06-20" }];
+  p.income = [{ id: "pen", name: "Sam's pension", type: "pension", personId: "s", amount: 1500, period: "monthly" }];
+  assert.equal(householdRetired(p, { today: T }), true);
+  p.income.push({ id: "pay", name: "Sam's pay", type: "salary", personId: "s", amount: 2000, period: "monthly" });
+  assert.equal(householdRetired(p, { today: T }), false, "pay still coming in");
+  // 50, getting it now: the projection's income starts this year, not at 62
+  const q = emptyPlan();
+  q.household.people = [{ id: "pat", name: "Pat", role: "self", birthDate: "1976-04-10", retirementAge: 67 }];
+  q.accounts = [{ id: "a", name: "Savings", type: "savings", balance: 20000 }];
+  q.retirement.spendingMonthly = 2000;
+  q.guide = { setup: { ss: { pat: "getting" } } }; q.retirement.socialSecurity = { pat: { claimAge: 62, monthlyAtFRA: 2142.9 } };
+  const d = compute(q, { today: T });
+  const first = d.rows[0];
+  assert.ok(first.incomeLines.some((x) => /Social Security/.test(x.name) && x.amount > 0), "paid from this year");
+});

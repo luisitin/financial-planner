@@ -132,7 +132,8 @@ export function buildInputs(plan, params = {}) {
   }).filter((c) => c.yearly > 0);
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });
-  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: Math.floor(p.claimAge), cola: true, taxable: true, kind: "social" });
+  // someone already getting it before the claim age on file (disability or survivor benefits) gets it from now
+  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.startedEarly && p.ageNow !== null ? Math.floor(p.ageNow) : Math.floor(p.claimAge), cola: true, taxable: true, kind: "social" });
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
@@ -222,7 +223,9 @@ export function householdRetired(plan, params = {}) {
   try { inc = computeIncome(plan, { today }); } catch { inc = null; }
   const paid = (id) => (inc?.active ?? []).some((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type) && (Number(x.yearly) || 0) > 0);
   const ageNow = (p) => { if (!p.birthDate) return null; const [by, bm, bd] = p.birthDate.split("-").map(Number); const [ty, tm, td] = today.split("-").map(Number); return ty - by - (tm < bm || (tm === bm && td < (bd || 1)) ? 1 : 0); };
-  return adults.every((p) => said[p.id] === "retired" || (!paid(p.id) && ageNow(p) !== null && Number(p.retirementAge) > 0 && ageNow(p) >= Number(p.retirementAge)));
+  // a retirement age left blank (the People page's default) is the plan's own, as the projection uses it (review 2026-11-02)
+  const ra = (p) => (Number(p.retirementAge) > 0 ? Number(p.retirementAge) : Number(plan?.assumptions?.retirementAge ?? 65));
+  return adults.every((p) => said[p.id] === "retired" || (!paid(p.id) && ageNow(p) !== null && ageNow(p) >= ra(p)));
 }
 
 /**

@@ -27,5 +27,8 @@ Not ready without the plan basics. No retirement lever once retired, no saving l
 ## Tests
 `module.test.mjs`: the search helpers; each answer checked as the edge (it meets the goal there, and a step beyond it does not); a $3 million legacy (out of reach for spending and retiring; the saving, return and lump-sum answers verified by re-running the plan); the claiming curve.
 
+## Review fix 2026-11-02 (claim now)
+The claiming lever tries "now" (today's age to the month, the Social Security page's first choice) as well as each whole age to 70, so "claiming at 70 spends the most" is checked against claiming now; ages read "69 and 5 months".
+
 ## Ideas / not yet
 - Two levers at once ("retire at 60 and spend $8,000: what must I save?"); goal seek on the Monte Carlo chance (90% instead of expected returns); save a solved value into the plan with one tap.

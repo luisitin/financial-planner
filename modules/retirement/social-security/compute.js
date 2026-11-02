@@ -144,7 +144,15 @@ export function compute(plan, params = {}) {
     // Security on the Income page) is shown a fact, not a choice of claiming ages; someone past 62 who has not claimed
     // chooses only from today's age to 70, with "now or at 70" answered directly
     const exact = p.birthDate && today ? ((Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7))) - (birthYear * 12 + Number(String(p.birthDate).slice(5, 7)))) / 12 : null;
-    const claimed = plan.guide?.setup?.ss?.[p.id] === "getting" || (plan.income ?? []).some((x) => x.type === "social" && x.personId === p.id);
+    // Social Security on Income counts as claimed only while it is being paid: going, not a one-off, not ended, not starting
+    // later (review 2026-11-02: a 2030 start date or an ended survivor benefit read as "already gets it")
+    const paidLine = (plan.income ?? []).find((x) => x.type === "social" && x.personId === p.id && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < today) && !(x.startDate && today && String(x.startDate) > today)) ?? null;
+    const claimed = plan.guide?.setup?.ss?.[p.id] === "getting" || !!paidLine;
+    // the month it started: birth month + the claim age; only a month already gone is said ("since 2016"). Someone who gets
+    // it before the claim age on file (disability, survivor benefits under 62) is getting it now, not from that age
+    const claimMonth = birthYear && p.birthDate ? birthYear * 12 + (Number(String(p.birthDate).slice(5, 7)) - 1) + Math.round(claimAge * 12) : null;
+    const todayMonth = today ? Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7)) - 1 : null;
+    const startedEarly = claimed && claimMonth !== null && todayMonth !== null && claimMonth > todayMonth;
     const choose = !claimed && exact !== null && exact > 62 ? (() => {
       const now = Math.min(70, Math.ceil(exact * 12) / 12);
       const ages = [now, ...[63, 64, 65, 66, 67, 68, 69].filter((a) => a > now + 1 / 24), ...(fra && fra.asYears > now + 1 / 24 && !Number.isInteger(fra.asYears) ? [fra.asYears] : []), ...(now < 70 ? [70] : [])];
@@ -160,7 +168,11 @@ export function compute(plan, params = {}) {
       return { nowAge: first.claimAge, nowMonthly: first.monthly, at70Monthly: last.monthly, at70, breakEven: Math.round(breakEven * 10) / 10 };
     })() : null;
     return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
-      options: choose ?? options, claimed, claimedYear: claimed && birthYear ? birthYear + Math.floor(claimAge) : null, pastClaimAge: !claimed && exact !== null && claimAge < exact - 1 / 24, wait,
+      options: choose ?? options, claimed, startedEarly, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
+      claimedYear: claimed && birthYear && !startedEarly ? birthYear + Math.floor(claimAge) : null,
+      // a saved claim age gone by without a claim: only when there are figures to claim with and "won't get it" was not said;
+      // from 70 on, a saved 70 is up to date (review 2026-11-02)
+      pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && claimAge < Math.min(exact, 70) - 1 / 24, wait,
       spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
   });
   return { people, couple: couple(people), householdYearly: people.reduce((s, p) => s + p.yearly, 0), hasData: people.some((p) => p.source !== "none") };
@@ -182,4 +194,10 @@ export function couple(people) {
   const survivorMonthly = { [a.id]: Math.max(a.monthly, b.survivor), [b.id]: Math.max(b.monthly, a.survivor) };
   const bothMonthly = a.monthly + b.monthly + spousal[a.id] + spousal[b.id];
   return { spousal, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
+}
+
+/** The full-retirement-age amount that pays `monthly` at `claimAge` (the box "What <name> gets a month now" stores this), to the dime. */
+export function fraFromMonthly(birthYear, claimAge, monthly) {
+  const f = claimFactor(birthYear, claimAge);
+  return f > 0 ? Math.round((Number(monthly) / f) * 10) / 10 : Number(monthly);
 }

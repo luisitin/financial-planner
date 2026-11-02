@@ -29,5 +29,8 @@ Not ready without the plan basics. No retirement-age row once retired; no saving
 ## Tests
 `module.test.mjs`: the eleven rows for the family and their order, one end checked against a hand-made change (stock return, Social Security cut), the direction each input pushes, the rows that drop out.
 
+## Review fix 2026-11-02 (who can still claim)
+"When Social Security starts" moves only who has not claimed and is under 70 (the Social Security page's `claimed`, as Goal seek does), from now (to the month, never before 62) to 70; the row says when the others already get it, and is left out when nobody can still choose.
+
 ## Ideas / not yet
 - Nudges sized by each input's real uncertainty (a standard deviation) instead of round steps; two inputs at once (a heat map); the Monte Carlo chance as a third measure.

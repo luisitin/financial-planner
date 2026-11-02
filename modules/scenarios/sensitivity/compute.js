@@ -4,6 +4,7 @@
 // swings the answer: the tornado.
 import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
+import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -73,11 +74,19 @@ export function compute(plan, params = {}) {
       { label: pct1(I.rates.salaryGrowth + NUDGE.raises), inputs: fromInputs((c) => { c.rates.salaryGrowth += NUDGE.raises; }) });
   }
   const ss = plan.retirement?.socialSecurity ?? {};
-  if (I.incomes.some((x) => x.kind === "social")) {
-    const claimAll = (age) => fromPlan((p) => { for (const id of Object.keys(p.retirement.socialSecurity ?? {})) p.retirement.socialSecurity[id].claimAge = age; });
-    const claims = [...new Set(Object.values(ss).map((s) => Number(s.claimAge) || 67))];
-    add("claim", "When Social Security starts", "everyone claims at the same age", claims.length === 1 ? `at ${claims[0]}` : "as on the page",
-      { label: "at 62", inputs: claimAll(62) }, { label: "at 70", inputs: claimAll(70) });
+  // only who has not claimed yet and is under 70 can still move, and not before today (review 2026-11-02: a couple where one
+  // has drawn it for ten years saw that claim moved to 62 and 70); as Goal seek's claiming lever does
+  let sp = null;
+  try { sp = computeSocialSecurity(plan, { today: params.today ?? null }); } catch { sp = null; }
+  const movable = (sp?.people ?? []).filter((x) => ss[x.id] && !x.claimed && !(x.ageNow !== null && x.ageNow >= 70 - 1 / 24));
+  if (I.incomes.some((x) => x.kind === "social") && movable.length) {
+    const claimAll = (age) => fromPlan((p) => { for (const x of movable) p.retirement.socialSecurity[x.id].claimAge = age; });
+    const claims = [...new Set(movable.map((x) => Number(ss[x.id].claimAge) || 67))];
+    const low = Math.min(70, Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow * 12 - 1e-9) / 12 : 62))));
+    const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
+    const names = movable.map((x) => x.name);
+    add("claim", "When Social Security starts", movable.length < (sp?.people ?? []).filter((x) => ss[x.id]).length ? `${names.join(" and ")} only: the others already get it` : "everyone claims at the same age", claims.length === 1 ? `at ${ageWords(claims[0])}` : "as on the page",
+      { label: low > 62 ? `now (${ageWords(low)})` : "at 62", inputs: claimAll(low) }, { label: "at 70", inputs: claimAll(70) });
     add("ss-cut", "Social Security paid in full", `if the trust fund runs dry in 2033, about ${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}% of benefits can be paid (2025 Trustees Report)`, "in full",
       { label: `${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}%`, inputs: fromInputs((c) => { for (const x of c.incomes) if (x.kind === "social") x.yearly *= SS_PAYABLE_IF_DEPLETED; }) },
       { label: "in full", inputs: copyInputs(I) });

@@ -425,3 +425,23 @@ test("round 4: the retirement guide for a household already retired (no paycheck
   const bar = barFor(q, { page: "retirement/projection", query: { guide: "retire", step: "spend" }, today });
   assert.equal(bar.step.title, "Say what you spend"); assert.equal(bar.total, 6);
 });
+
+test("review 2026-11-02: the retiree guide with the retirement age blank, an ended pension, no pension, and no required withdrawal yet", () => {
+  const today = "2026-11-02";
+  const q = empty();
+  q.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10" }, { id: "s", name: "Sam", role: "partner", birthDate: "1957-06-20" }];
+  q.accounts = [{ id: "ira", name: "Ruth's IRA", type: "ira", balance: 300000 }];
+  q.income = [{ id: "pen", name: "Old pension", type: "pension", personId: "s", amount: 900, period: "monthly", endDate: "2025-12-31" }];
+  const r = journeyStatus(J("retire"), q, { today });
+  assert.equal(r.total, 6, "a blank retirement age is the plan's own: they are retired");
+  assert.equal(st(r, "pension").state, "todo", "a pension that has ended does not count");
+  assert.equal(r.finish.text, "Your ages, savings and spending are in your plan.", "no Social Security or pension named when there is none");
+  assert.equal(st(r, "ss").alt.ask.startsWith("Choose Social Security under Kind of income"), true);
+  // Ruth is 76 with an IRA: this year's withdrawal; with only a Roth there is none to take, and the row goes
+  assert.ok(r.more.some((m) => m.page === "retirement/rmd" && m.title === "This year's required withdrawal"));
+  const roth = structuredClone(q); roth.accounts = [{ id: "ro", name: "Roth", type: "roth", balance: 100000 }];
+  assert.ok(!journeyStatus(J("retire"), roth, { today }).more.some((m) => m.page === "retirement/rmd"));
+  // both 66: none due yet
+  const young = structuredClone(q); young.household.people[0].birthDate = "1960-02-01"; young.household.people[1].birthDate = "1960-05-01";
+  assert.ok(journeyStatus(J("retire"), young, { today }).more.some((m) => m.page === "retirement/rmd" && m.title === "When must I start taking money out?"));
+});

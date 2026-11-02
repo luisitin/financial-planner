@@ -83,3 +83,30 @@ test("decisions already made (round 4): getting it is a fact; past 62 the choice
   const [r2, s2] = compute(q, { today: T }).people;
   assert.equal(r2.claimed, true); assert.equal(s2.pastClaimAge, true);
 });
+
+test("review 2026-11-02: claimed only while paid; a benefit started before the claim age is 'now'; no past-age warning without figures", async () => {
+  const { compute, fraFromMonthly, claimFactor } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-02";
+  const base = () => { const p = emptyPlan(); p.household.people = [{ id: "pat", name: "Pat", role: "self", birthDate: "1976-04-10", retirementAge: 67 }]; return p; };
+  // 50 and on disability benefits ("I get it now" in setup, saved at 62): getting it now, not "since 2038"
+  const dis = base(); dis.guide = { setup: { ss: { pat: "getting" } } }; dis.retirement.socialSecurity = { pat: { claimAge: 62, monthlyAtFRA: 2142.9 } };
+  const a = compute(dis, { today: T }).people[0];
+  assert.equal(a.claimed, true); assert.equal(a.startedEarly, true); assert.equal(a.claimedYear, null);
+  // Social Security typed on Income with a start date to come, as a one-off or ended: not claimed
+  for (const line of [{ startDate: "2030-01-01", period: "monthly" }, { period: "once" }, { endDate: "2025-12-31", period: "monthly" }]) {
+    const q = base(); q.household.people[0].birthDate = "1963-05-01";
+    q.income = [{ id: "s", name: "Pat's Social Security", type: "social", personId: "pat", amount: 1800, ...line }];
+    assert.equal(compute(q, { today: T }).people[0].claimed, false, JSON.stringify(line));
+  }
+  // past 62 with a claim age on file but no figures, or "won't get it": no "has passed" warning
+  const none = base(); none.household.people[0].birthDate = "1957-01-01"; none.retirement.socialSecurity = { pat: { claimAge: 67 } };
+  assert.equal(compute(none, { today: T }).people[0].pastClaimAge, false);
+  none.retirement.socialSecurity.pat.monthlyAtFRA = 2000;
+  assert.equal(compute(none, { today: T }).people[0].pastClaimAge, true, "with a figure, a claim age gone by is said");
+  // 76, never claimed, 70 on file: up to date
+  const old = base(); old.household.people[0].birthDate = "1950-03-10"; old.retirement.socialSecurity = { pat: { claimAge: 70, monthlyAtFRA: 2000 } };
+  assert.equal(compute(old, { today: T }).people[0].pastClaimAge, false);
+  // what arrives now, back to the full-age amount, to the dime
+  assert.equal(fraFromMonthly(1950, 66, 2100), Math.round((2100 / claimFactor(1950, 66)) * 10) / 10);
+});

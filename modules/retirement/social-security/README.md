@@ -34,5 +34,11 @@ No birth date: nothing computed. A record with under 40 credits: shown as not ye
 ## Won't get it (review 2026-11-02)
 Each person with no figure, no record and no Social Security on Income gets an outlined "<name> won't get Social Security" button, saved as the setup's own `guide.setup.ss[id] = "none"` (what the retirement pages' notice saves), with an Undo. Saving a figure clears an earlier "none". Plan health score and the Timeline send people here, so the answer they name is on this page.
 
+## Review fixes 2026-11-02 (decisions already made)
+- Claimed = setup's "getting", or Social Security on Income that is being paid now (going, not a one-off, not ended, not starting later). `paidLine` is that Income line; with no figures here the page says what it pays and that the plan counts it.
+- `startedEarly`: claimed while the claim age on file is still to come (disability or survivor benefits before 62). The page says "now", not "since <year>", and the projection counts it from today's age.
+- `pastClaimAge` only with figures to claim with, never after "won't get it", and from 70 on a saved 70 is up to date. Someone 70 or over who never claimed reads "can claim now: about $X a month. Waiting adds nothing after 70", with no age picker.
+- For someone already paid, the amount box is "What <name> gets a month now" (prefilled); it is stored as the full-age amount that pays it at the claim age (`fraFromMonthly`, as setup does), and setup's own Income line for it follows.
+
 ## Ideas / not yet
 - The earnings test before full retirement age; survivors claiming before their own full retirement age (71.5% at 60); the family maximum; taxation of benefits (in the tax pages); Medicare premiums.

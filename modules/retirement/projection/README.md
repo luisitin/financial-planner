@@ -66,6 +66,10 @@ No adult with a birth date, no accounts, or no spending figure: the page lists w
 ## Tests
 `module.test.mjs` (inputs from the fixture couple, the run, fallbacks) and `tests/retirement.test.mjs` (the engine: buckets in order, gross-up, RMD, sequences, strategies, affordable spending).
 
+## Review fixes 2026-11-02
+- `householdRetired`: a retirement age left blank is the plan's own (Assumptions, 65 by default), as the projection uses it, so a retired couple added on People with the age blank counts as retired.
+- Social Security already paid before the claim age on file (the Social Security page's `startedEarly`) counts from today's age.
+
 ## Ideas / not yet
 - Real tax brackets instead of one rate (Phase 6); Roth conversions; a survivor scenario (one Social Security stops); one-off events (sell the house, an inheritance).
 

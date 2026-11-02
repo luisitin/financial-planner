@@ -107,22 +107,26 @@ export function compute(plan, params = {}) {
   const movable = (sp?.people ?? []).filter((x) => ss[x.id] && !x.claimed && !(x.ageNow !== null && x.ageNow >= 70 - 1 / 24));
   if (I.incomes.some((x) => x.kind === "social") && movable.length) {
     const claims = [...new Set(movable.map((x) => Number(ss[x.id].claimAge) || 67))];
-    const from = Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow - 1e-9) : 62)));
+    // the ages still possible: "now" (to the month, as the Social Security page offers it first), then each whole age to 70
+    // (review 2026-11-02: "now" at 69 and 5 months was never tried, so "70 spends the most" could be false)
+    const nowAge = Math.min(70, Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow * 12 - 1e-9) / 12 : 62))));
+    const candidates = [nowAge, ...[63, 64, 65, 66, 67, 68, 69, 70].filter((a) => a > nowAge + 1 / 24)];
     let best = null;
     const results = [];
-    for (let a = Math.min(70, from); a <= 70; a++) {
+    for (const a of candidates) {
       const inp = withPlan((p) => { for (const x of movable) p.retirement.socialSecurity[x.id].claimAge = a; });
       if (!inp) continue;
       const s = largestWhere((x) => meets({ ...copyInputs(inp), strategy: "fixed-real", spending: { yearly: x } }), 0, Math.max(12000, I.spending.yearly * 2), 5);
       results.push({ age: a, monthly: s === null ? 0 : s / 12 });
       if (s !== null && (!best || s / 12 > best.monthly + 0.5)) best = { age: a, monthly: s / 12 };
     }
-    const nowAt = results.find((r) => r.age === Math.round(claims[0]));
+    const nowAt = results.find((r) => Math.abs(r.age - claims[0]) < 1 / 24) ?? null;
+    const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
     const names = movable.map((x) => x.name);
     const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
-    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && best.age === Math.round(claims[0]) ? "same" : "room", results, who: movable.map((x) => x.id),
-      sentence: !best ? "No claiming age still open gets there on its own." : `${who} claiming at ${best.age} lets the plan spend the most, about ${fmt(best.monthly)} a month${nowAt && best.age !== nowAt.age ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${nowAt.age}` : ""}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
+    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id),
+      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim now (${ageWords(best.age)}): about ${fmt(best.monthly)} a month can be spent` : `${who} claiming ${best.age === nowAge && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
   return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, levers };

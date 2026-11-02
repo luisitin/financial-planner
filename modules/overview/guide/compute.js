@@ -17,7 +17,7 @@ export const guideHref = (id) => `#/overview/guide/${id}`;
 export const stepHref = (journeyId, step, viaAlt = false) => `#/${viaAlt && step.alt ? step.alt.page : step.page}?guide=${journeyId}&step=${step.key}`;
 const progressOf = (plan, id) => plan?.guide?.journeys?.[id] ?? {};
 const plain = (step) => { if (!step) return null; const { check, show, variant, ...rest } = step; return { ...rest, hasCheck: !!check }; };
-const safe = (fn, plan) => { try { return !!fn(plan); } catch { return false; } };
+const safe = (fn, plan, today = null) => { try { return !!fn(plan, { today }); } catch { return false; } };
 
 /**
  * The guide as it reads for this plan: a journey's `variant(plan, { today })` may return other words for the guide
@@ -40,8 +40,8 @@ export function visibleSteps(journey, plan, off = []) {
 }
 
 /** "done" | "none" | "later" | "todo": the plan's data first, then a look-only step's tick, then "does not apply", then "skipped for now". */
-export function stepState(step, plan, progress = {}) {
-  if (step.check && safe(step.check, plan)) return "done";
+export function stepState(step, plan, progress = {}, today = null) {
+  if (step.check && safe(step.check, plan, today)) return "done";
   if (step.looked && progress.done?.[step.key]) return "done";
   if (progress.none?.[step.key]) return "none";
   if (progress.later?.[step.key]) return "later";
@@ -55,7 +55,7 @@ export function journeyStatus(base, plan, { off = [], today = null } = {}) {
   const prog = progressOf(plan, journey.id);
   let n = 0;
   const steps = visibleSteps(journey, plan, off).map((s) => {
-    const state = stepState(s, plan, prog);
+    const state = stepState(s, plan, prog, today);
     return { ...plain(s), optional: !!s.optional, index: s.optional ? null : ++n, state, href: stepHref(journey.id, s) };
   });
   for (const s of steps) {

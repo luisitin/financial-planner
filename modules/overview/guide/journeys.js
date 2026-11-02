@@ -31,6 +31,8 @@ import { isHouseGoal } from "../../goals/house/compute.js";
 import { compute as consolidation } from "../../debt/consolidation/compute.js";
 import { householdRetired } from "../../retirement/projection/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
+import { RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 const RETIRE = ["401k", "ira", "roth", "hsa"];
@@ -48,7 +50,7 @@ export const houseGoal = (p) => L(p, "goals").some(isHouseGoal);
 // Social Security already paid and typed on the Income page counts as saved too
 const socialSecurity = (p) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0) || (p?.income ?? []).some((x) => x.type === "social" && x.period !== "once" && Number(x.amount) > 0);
 /** A pension saved on Pensions, or one already paid and typed on the Income page. */
-const pension = (p) => L(p?.retirement, "pensions").length > 0 || L(p, "income").some((x) => x.type === "pension" && x.period !== "once" && Number(x.amount) > 0);
+const pension = (p, { today = null } = {}) => L(p?.retirement, "pensions").length > 0 || L(p, "income").some((x) => x.type === "pension" && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
 /** Every adult is 65 or over today (Medicare age): the guide stops offering pages about the years before it. */
 const all65 = (p, today) => !!today && adults(p).length > 0 && adults(p).every((x) => x.birthDate && ageOn(x.birthDate, today) >= 65);
 /**
@@ -63,7 +65,8 @@ const retiredVariant = (p, { today }) => {
   const more = [
     { page: "retirement/withdrawal-strategy", title: "How much can I take out each year?" },
     { page: "scenarios/goal-seek", title: "How much more could I spend?" },
-    { page: "retirement/rmd", title: "This year's required withdrawal" },
+    // a required withdrawal is due this year, or not yet (then "when"), or never (no pre-tax account: left out)
+    hasType(p, ...RMD_ACCOUNT_TYPES) ? { page: "retirement/rmd", title: (() => { try { return rmdThisYear(p, { today }).people.length ? "This year's required withdrawal" : "When must I start taking money out?"; } catch { return "When must I start taking money out?"; } })() } : null,
     old ? null : { page: "retirement/healthcare", title: "What will health care cost before 65?" },
     { page: "retirement/medicare", title: old ? "What Medicare costs each year" : "What will Medicare cost me?" },
     { page: "retirement/roth-conversions", title: "Should I move money to a Roth?" },
@@ -75,11 +78,11 @@ const retiredVariant = (p, { today }) => {
     line: "Whether your money lasts for the rest of your life, what to take out each year, and what Social Security and pensions add.",
     haveReady: "Your latest account statements, and what Social Security and any pension pay you a month.",
     more,
-    finish: { page: "retirement/projection", label: "Open your retirement forecast", text: "Your ages, savings, spending, Social Security and pensions are in your plan." },
+    finish: { page: "retirement/projection", label: "Open your retirement forecast", text: (() => { const parts = ["ages", "savings", "spending", socialSecurity(p) ? "Social Security" : null, pension(p, { today }) ? "pensions" : null].filter(Boolean); return `Your ${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]} are in your plan.`; })() },
     steps: {
       people: { ask: "Give each adult a birth date, then tap Add person or Save changes." },
       spend: { title: "Say what you spend", short: "Say what you spend", ask: "Open Retirement settings near the bottom, type what you spend a month now, then tap Save settings.", alt: { page: "cashflow/expenses", label: "Rather list your bills? Enter them on Expenses instead", ask: "List your regular bills and spending, then tap Add expense; the plan uses them as what you spend in retirement." } },
-      ss: { ask: "If you get it already, add what arrives each month on the Income page (the link below); if not yet, type the amount your statement shows at full retirement age, then tap Save.", alt: { page: "cashflow/income", label: "Already getting it? Add what arrives each month on Income", ask: "Tap + Add another income, choose Social Security under Kind of income, type what arrives each month, then tap Add income." } },
+      ss: { ask: "If you get it already, add what arrives each month on the Income page (the link below); if not yet, type the amount your statement shows at full retirement age, then tap Save.", alt: { page: "cashflow/income", label: "Already getting it? Add what arrives each month on Income", ask: "Choose Social Security under Kind of income (if incomes are listed already, tap + Add another income first), type what arrives each month, then tap Add income." } },
       saving: null,
       pension: { ask: "If you get a pension, say what it pays a month, then tap Add pension; one already on the Income page counts." },
     },
