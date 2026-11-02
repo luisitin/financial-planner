@@ -6,6 +6,7 @@
 import { isTransfer, monthOf, coverage, monthCover, COVER_SLACK } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
+import { compute as computeExpenses } from "../expenses/compute.js";
 
 const spendingOf = (plan, ym) => (plan.transactions ?? []).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
 const byCat = (txs) => { const m = new Map(); for (const t of txs) m.set(t.category || "", (m.get(t.category || "") ?? 0) - (Number(t.amount) || 0)); return m; };
@@ -18,7 +19,9 @@ const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 
  *   totals: { amount, available, spent, left }, unbudgeted: [{ category, label, icon, spent }] (spending this month with no envelope),
  *   suggestions: [{ category, label, icon, average, months }] for categories without an envelope, hasBudget, hasData,
  *   suggestFrom: [ym] (the whole months the suggestions average over), cover: { from, to } | null (the days the bank files cover),
- *   stale (the files stop more than COVER_SLACK days before today in this month, so "spent so far" is missing the latest days)
+ *   stale (the files stop more than COVER_SLACK days before today in this month, so "spent so far" is missing the latest days),
+ *   fromExpenses: [{ category, label, icon, amount }] (no envelopes and no whole bank month: Expenses' monthly amount per kind
+ *   of spending, debt payments included), fromExpensesTotal
  * }
  */
 export function compute(plan, params = {}) {
@@ -62,10 +65,32 @@ export function compute(plan, params = {}) {
   for (const ym of suggestFrom) for (const [c, v] of byCat(spendingOf(plan, ym))) sums.set(c, (sums.get(c) ?? 0) + v);
   const n = suggestFrom.length;
   const suggestions = n ? [...sums.entries()].filter(([c, v]) => c && !budgeted.has(c) && v > 0 && categoriesOf(plan).some((x) => x.id === c && x.kind === "expense")).map(([category, total]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), average: Math.round(total / n), months: n })).sort((a, b) => b.average - a.average) : [];
+  // no whole bank month to average yet: start from what the Expenses page already holds (each kind of spending's monthly
+  // amount, debt payments included), so "Set a budget" is one tap instead of retyping every bill (round 4, 2026-11-02)
+  let fromExpenses = [];
+  if (!n && !budgets.length) {
+    let ex = null;
+    try { ex = computeExpenses(plan, { today }); } catch { ex = null; }
+    fromExpenses = (ex?.byCategory ?? []).filter((c) => c.monthly >= 0.5 && categoriesOf(plan).some((x) => x.id === c.category && x.kind === "expense"))
+      .map((c) => ({ category: c.category, label: categoryLabel(plan, c.category), icon: categoryIcon(plan, c.category), amount: Math.round(c.monthly) }));
+  }
   // this month's "spent so far" is short when the files stop more than COVER_SLACK days before today
   const dayNo = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 864e5;
   const stale = !!(cov && today && today.slice(0, 7) === month && dayNo(today) - dayNo(cov.to) > COVER_SLACK);
   const totals = { amount: envelopes.reduce((s, e) => s + e.amount, 0), available: envelopes.reduce((s, e) => s + e.available, 0), spent: envelopes.reduce((s, e) => s + e.spent, 0) };
   totals.left = totals.available - totals.spent;
-  return { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, cover: cov, stale };
+  return { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, cover: cov, stale,
+    fromExpenses, fromExpensesTotal: fromExpenses.reduce((t, x) => t + x.amount, 0) };
+}
+
+/** useExpenses(draft, rows): one envelope per row ({ category, amount }) not budgeted yet. -> the number added. */
+export function useExpenses(draft, rows, newId) {
+  draft.budgets = draft.budgets ?? [];
+  let added = 0;
+  for (const r of rows ?? []) {
+    if (!r?.category || draft.budgets.some((b) => b.category === r.category)) continue;
+    draft.budgets.push({ id: newId(), category: r.category, amount: Math.max(0, Math.round(Number(r.amount) || 0)), period: "monthly", rollover: false });
+    added++;
+  }
+  return added;
 }

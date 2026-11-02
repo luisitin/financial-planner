@@ -31,5 +31,15 @@ No today and no month: nothing. A past month counts as complete (day = days in m
 ## Tests
 `module.test.mjs`: spent/carried/available/left, pace states, unbudgeted list, suggestion averages over whole months only (a cut first month left out), no suggestions without a whole month, stale files, a past month.
 
+## Start from your expenses (round 4, 2026-11-02)
+With no envelopes and no whole bank month to average, `compute` returns `fromExpenses`: the Expenses page's monthly amount
+per kind of spending (its `byCategory`, debt payments included), rounded to the dollar, and `fromExpensesTotal`. The page
+shows them in a "Start from your expenses" card with one filled button, "Use these as my budget" (`useExpenses(draft,
+rows, newId)` adds one envelope per kind not budgeted yet, in one save), and "Import a bank file instead". It also says
+what is left after them, tax and saving, read from Next best action's `spare.monthly` (the Dashboard's figure), so no new
+left-over number is made. Before, "Set a budget" (the spending guide's step) opened an empty form and the person retyped
+every bill. With envelopes but no bank file yet, the page says spending shows once a file is in, and drops the
+"on track" pills and "left" amounts that read $0 spent. The confirmation shows at the top.
+
 ## Ideas / not yet
 - Yearly envelopes and per-envelope notes; "money to assign" against income.

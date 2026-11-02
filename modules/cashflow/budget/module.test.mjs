@@ -70,3 +70,24 @@ test("a bill paid once a month reads paid, not spending fast; two payments or le
   d = compute(p, { today: "2026-09-02" });
   assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "over");
 });
+
+test("no envelopes and no whole bank month: start from Expenses' amounts, added in one go (round 4)", async () => {
+  const { useExpenses } = await import("./compute.js");
+  const { compute: expenses } = await import("../expenses/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.transactions = []; p.budgets = [];
+  const d = compute(p, { today: T });
+  const ex = expenses(p, { today: T });
+  assert.equal(d.fromExpenses.length, ex.byCategory.length);
+  assert.deepEqual(d.fromExpenses[0], { category: "housing", label: "Rent or mortgage", icon: "🏠", amount: 1980 });
+  assert.ok(d.fromExpenses.some((x) => x.category === "debt"), "debt payments count as spending to budget");
+  assert.ok(Math.abs(d.fromExpensesTotal - ex.monthly) <= d.fromExpenses.length * 0.5, `${d.fromExpensesTotal} vs ${ex.monthly}`);
+  // one tap: an envelope each, never twice
+  let k = 0; const id = () => `b${++k}`;
+  assert.equal(useExpenses(p, d.fromExpenses, id), d.fromExpenses.length);
+  assert.equal(useExpenses(p, d.fromExpenses, id), 0);
+  assert.equal(p.budgets.find((b) => b.category === "groceries").amount, d.fromExpenses.find((x) => x.category === "groceries").amount);
+  // with envelopes, or with a whole bank month to average, it is not offered
+  assert.deepEqual(compute(p, { today: T }).fromExpenses, []);
+});
