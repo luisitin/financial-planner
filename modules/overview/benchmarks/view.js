@@ -14,7 +14,7 @@ const STYLE = `
 .bm-root .bm-s { color: var(--text-2); font-size: var(--fs-sm); }
 .bm-root .bm-src { color: var(--muted); font-size: var(--fs-xs); margin-top: 4px; }
 `;
-const PILL = { ahead: ["ok", "ahead"], "on par": ["accent", "on par"], behind: ["warn", "behind"], unknown: ["", "not yet"] };
+const PILL = { ahead: ["ok", "ahead"], "on par": ["accent", "on par"], behind: ["warn", "behind"], rule: ["", "your plan lasts"], unknown: ["", "not yet"] };
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;

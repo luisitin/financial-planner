@@ -27,7 +27,23 @@ export function render(root, ctx) {
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
     ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The Projection page adds these every year until each person retires.` : "What you put into 401(k)s, IRAs, Roths and HSAs each pay period, plus what an employer adds. The projection needs it to know how the pot grows before retirement."),
     !accounts.length ? ui.h("p", { class: "muted small" }, "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), " (401(k), IRA, Roth, HSA, brokerage).") : null,
+    d.hasData ? enoughLine() : null,
   ));
+  // "are we saving enough?": the share of pay, then the plan's own answer (Will the money last?), the same one the
+  // Dashboard, How am I doing? and Next best action give
+  function enoughLine() {
+    const st = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing ?? null;
+    const inc = ctx.computeOf?.("cashflow/income", { today: fmt.today() }) ?? null;
+    const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
+    const share = pay > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
+    const r = st?.retire ?? null;
+    const said = !st?.retirementKnown ? `Once Social Security is in the plan, this says whether that is enough.`
+      : !r ? "" : r.verdict === "on track" ? "At this rate the money lasts to the end of the plan: you are on track."
+      : r.verdict === "tight" ? "At this rate the money lasts, with little to spare."
+      : `At this rate the money runs out${r.shortAge ? ` at about ${r.shortAge}` : ""}: saving more is the surest fix.`;
+    if (!share && !said) return null;
+    return ui.h("p", { class: "small" }, `${share}${said} `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›"));
+  }
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   const out = ui.h("div");
   if (pending && typeof pending === "object") {

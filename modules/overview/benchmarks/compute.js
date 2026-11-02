@@ -10,6 +10,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
+import { savingVerdict } from "../../retirement/projection/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { MEDIAN_NET_WORTH_BY_AGE, MEDIAN_NET_WORTH_ALL, SCF_YEAR, SAVINGS_MULTIPLE_BY_AGE } from "./data/scf.js";
@@ -68,6 +69,15 @@ export function compute(plan, params = {}) {
     const rate = con.totalYearly / pay;
     add({ id: "saving-rate", title: "Saving for retirement", you: rate, benchmark: RULES.saving, unit: "share", better: "higher", verdict: verdictOf(rate, RULES.saving, "higher", 0.07),
       sentence: `${money(con.totalYearly)} a year goes into retirement accounts, employer money included: ${pctW(rate)} of pay. The usual aim is ${pctW(RULES.saving)}.`, source: "Fidelity: save 15% of pay a year, the employer match included", go: ["retirement", "contributions"] });
+  }
+
+  // the two retirement rows are rules of thumb; the plan's own answer (Will the money last?) says whether being behind
+  // them matters: behind but lasting reads "behind the rule of thumb" (not amber), short says so
+  let own = null;
+  try { own = savingVerdict(plan, { today }); } catch { own = null; }
+  for (const x of items.filter((y) => (y.id === "savings-multiple" || y.id === "saving-rate") && y.verdict === "behind")) {
+    if (own && own.verdict !== "short") { x.verdict = "rule"; x.sentence += " Behind the rule of thumb, but your own plan lasts (Will the money last?)."; }
+    else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).`;
   }
 
   // 4. cash: months of must-pay bills

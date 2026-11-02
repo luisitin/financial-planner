@@ -22,6 +22,12 @@ Verdicts: "ahead" 10% or more past the benchmark (7% for rates), "on par" within
 
 The SCF figures match Table 2 of the Federal Reserve's report (thousands of 2025 dollars, p. 12), checked on 2026-10-31; they were first typed on 2026-10-30 from news reports of the release. The survey is every three years: update `data/scf.js` when the 2028 survey is out (2029).
 
+## The rules of thumb against the plan's own answer (2026-11-02)
+"Retirement savings for your age" and "Saving for retirement" are rules of thumb. When one is behind and the plan's own
+answer (`savingVerdict` in retirement/projection, once Social Security is known) says the money lasts, its verdict is
+`"rule"`: a neutral "your plan lasts" pill and "Behind the rule of thumb, but your own plan lasts (Will the money
+last?)." Amber "behind" stays when the plan runs short (the sentence then says at what age) or has no answer yet.
+
 ## Tests
 `module.test.mjs`: the age groups and the savings multiple, not ready without a birth date, the family's six items and verdicts.
 

@@ -12,7 +12,7 @@ import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-wor
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE } from "../next-best-action/compute.js";
-import { compute as computeProjection } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, retirementKnown } from "../../retirement/projection/compute.js";
 import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
@@ -805,12 +805,9 @@ export function reflect(plan, screen) {
 }
 
 export const FOCUS_GUIDE = { debt: { title: "Make a plan to pay off what you owe", href: "#/overview/guide/debt" }, retire: { title: "Check your retirement step by step", href: "#/overview/guide/retire" }, home: { title: "Work out the home you can afford", href: "#/overview/guide/home" } };
-/** Is retirement checkable: every adult has a birth date and Social Security (estimated, typed, a record) or said they get none. */
-export function retirementKnown(plan) {
-  const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
-  const ad = adults(plan);
-  return ad.length > 0 && ad.every((p) => p.birthDate && ssKnown(ss, said, p.id));
-}
+/** Is retirement checkable: every adult has a birth date and Social Security (estimated, typed, a record) or said they get
+ * none. One rule for every page: it lives in retirement/projection (`retirementKnown`), re-exported here. */
+export { retirementKnown };
 const ssKnown = (ss, said, pid) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none";
 /** The adults with no Social Security figure in the plan who have not said they get none (the retirement pages' notice). */
 export function ssMissingFor(plan) {
@@ -865,9 +862,9 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     case "high-debt": { const list = costly(HIGH_RATE, Infinity); return { title: list.length && list.every((d) => d.card) ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail }; }
     case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
     case "hsa": return { title: "Fill your health savings account", detail: step.detail };
-    case "ira": return { title: several ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${several ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail };
+    case "ira": return { title: several ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${several ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail}` };
     case "mid-debt": { const list = costly(MODERATE_RATE, HIGH_RATE); return { title: "Pay down the loans that cost the most", detail: list.length ? `${said(list)}. Paying them early saves that interest.` : step.detail }; }
-    case "max-401k": return { title: "Put more into your 401(k)", detail: step.roomYearly > 0 ? `${money(step.roomYearly)} more is allowed this year, and it grows sheltered from tax.` : step.detail };
+    case "max-401k": return { title: "Put more into your 401(k)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `${money(step.roomYearly)} more is allowed this year, and it grows sheltered from tax.` : step.detail}` };
     case "goals": return { title: "Catch up on your goals", detail: step.detail };
     default: return { title: step.title, detail: step.detail ?? step.why ?? null };
   }

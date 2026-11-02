@@ -38,6 +38,16 @@ of two adults is missing, the notice and button name that person ("Bo won't get 
 other. A figure typed later wins over the "none" (Set up my plan's ages screen shows and keeps it). Before, only a grey sentence
 at the end of a paragraph said why the plan looked short.
 
+## One answer to "are we saving enough?" (2026-11-02)
+`retirementKnown(plan)`: every adult has a birth date and Social Security (a figure or a record) or said in Get started
+that they get none; until then no page calls retirement short or on track (moved here from overview/setup, which
+re-exports it, so every page uses one rule). `savingVerdict(plan, { today })` -> `{ verdict, shortAge, affordable,
+spendingYearly }` or null: this page's verdict for other pages. The round-3 walk-through found four answers for one
+household: Retirement contributions said nothing, How am I doing? two amber "behind" rows, this page "On track", Next
+best action "max out the IRA and the 401(k)". Now Retirement contributions says the share of pay and this verdict, How am
+I doing? reads its two rules of thumb against it, and Next best action marks the IRA and 401(k) steps optional when the
+plan already lasts.
+
 ## Edge cases
 No adult with a birth date, no accounts, or no spending figure: the page lists what is missing and still shows the settings. Already retired: retirement year = this year. A partner retiring after the primary: their pay counts as income until then.
 

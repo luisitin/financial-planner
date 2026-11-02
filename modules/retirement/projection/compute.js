@@ -164,3 +164,20 @@ export function compute(plan, params = {}) {
     verdict, shortYear: result.failYear, shortAge: result.failAge, people: b.people, strategy: result.strategy, orderLabel: b.orderLabel,
   };
 }
+
+/** Is retirement checkable: every adult has a birth date and Social Security (a figure or a record on Social Security)
+ * or said in Get started that they get none. Until then no page calls retirement short or on track. */
+export function retirementKnown(plan) {
+  const ss = plan?.retirement?.socialSecurity ?? {}, said = plan?.guide?.setup?.ss ?? {};
+  const ad = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent");
+  return ad.length > 0 && ad.every((p) => p.birthDate && (Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0 || said[p.id] === "none"));
+}
+
+/** The plan's own answer to "are we saving enough?" for other pages: this page's verdict once retirement is checkable,
+ * else null (Retirement contributions, How am I doing?, Next best action read it, so they never contradict it). */
+export function savingVerdict(plan, params = {}) {
+  if (!retirementKnown(plan)) return null;
+  let d = null;
+  try { d = compute(plan, params); } catch { d = null; }
+  return d?.ready ? { verdict: d.verdict, shortAge: d.shortAge ?? null, affordable: d.affordable, spendingYearly: d.spendingYearly } : null;
+}

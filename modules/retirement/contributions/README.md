@@ -35,6 +35,13 @@ When every 401(k) a paid person has is from a job left (`newJob` in the ask), th
 Bo's job now have a retirement plan with a match?", with "Yes: add Bo's new 401(k)" (opens Net worth, where accounts are
 added) and "No plan or no match at Bo's job" (saves `retirement.workPlans[id].match = false`).
 
+## Is it enough? (2026-11-02)
+Under the yearly total the hero says the share of pay (own money and employer money over salary and bonus) and the plan's
+own answer from Will the money last? (overview/setup `standing().retire`, the Dashboard's): "That is 12% of your pay, your
+employers' money included. At this rate the money lasts to the end of the plan: you are on track. Will the money last? ›"
+(tight: "lasts, with little to spare"; short: "runs out at about 84: saving more is the surest fix"; no Social Security
+yet: "Once Social Security is in the plan, this says whether that is enough").
+
 ## Formulas
 - Yearly = amount x times per year (`core/math/periods.js`) + employer match.
 - Limits (`data/limits.js`, IRS, read through `limitsFor`): 2026: 401(k)/403(b) 24,500 (+8,000 from 50; 11,250 from 60 to 63), IRA 7,500 traditional and Roth together (+1,100 from 50), HSA 4,400 self-only (+1,000 from 55; 8,750 family). 2025 also listed; 2027 has only the HSA so far (4,500 / 9,000, Rev. Proc. 2026-24 s.3.01(1)). The HSA row of each person is `hsaPicture`'s: it follows the HSA page's cover (a spouse outside self-only cover has a limit of 0 and is told why; spouses with family cover share the family limit). The age reached in the year is what counts. A Roth account counts as a Roth 401(k)/403(b) (with the 401(k) limit, IRC 402A(c)(2)) when it has an employer match or its name says 401(k), 403(b), 457 or TSP; otherwise as a Roth IRA (the IRA limit, 408A(c)(2)) (`limitKind`). An employer's 401(k) match is outside the elective-deferral limit; an employer's HSA deposits share the HSA limit (IRS Pub. 969, Employer contributions).

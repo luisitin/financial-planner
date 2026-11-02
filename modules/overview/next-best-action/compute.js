@@ -12,6 +12,8 @@ import { compute as computeContributions } from "../../retirement/contributions/
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
+import { savingVerdict } from "../../retirement/projection/compute.js";
+import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -137,10 +139,17 @@ export function compute(plan, params = {}) {
 
   // 6. an IRA for each adult with earned income
   const earners = adults.filter((p) => inc.active.some((x) => x.personId === p.id && ["salary", "bonus", "business"].includes(x.type)));
+  // the plan's own answer to "are we saving enough?" (Will the money last?): when it already lasts, more saving is a choice
+  let saving = null;
+  try { saving = savingVerdict(plan, { today }); } catch { saving = null; }
+  const optional = saving?.verdict === "on track" ? "Optional: your plan already lasts (Will the money last?); more saving buys an earlier retirement or more to spend. " : "";
   const iraRoom = earners.map((p) => { const used = (con.byPerson.find((q) => q.personId === p.id)?.limits ?? []).filter((l) => l.kind === "ira").reduce((s, l) => s + l.used, 0); const age = con.byPerson.find((q) => q.personId === p.id)?.age; const limit = L.ira.limit + (age !== null && age !== undefined && age >= L.ira.catchUpAge ? L.ira.catchUp : 0); return { p, room: Math.max(0, limit - used), limit }; });
   const iraTotal = iraRoom.reduce((s, x) => s + x.room, 0);
-  if (earners.length) add({ id: "ira", title: "An IRA for each of you", why: "Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.", status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal,
-    detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)} each). Above the income limit a Roth needs the backdoor route.` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
+  // the backdoor route is said only when this household's income is in or over the Roth limit range (Contribution limits)
+  let rothNear = false;
+  try { const r = computeLimits(plan, { today }).roth; rothNear = !!r && (r.status === "partial" || r.status === "over"); } catch { rothNear = false; }
+  if (earners.length) add({ id: "ira", title: "An IRA for each of you", why: `${optional}Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.`, status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional,
+    detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)} each).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
 
   // 7. moderate debt (not the mortgage)
   const mid = debts.filter((d) => d.rate !== null && d.rate >= MODERATE_RATE && d.rate < HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);
@@ -152,7 +161,7 @@ export function compute(plan, params = {}) {
   if (k401.length) {
     const k = (con.byPerson ?? []).map((p) => { const l = p.limits.find((x) => x.kind === "401k"); return l ? { name: p.name, room: Math.max(0, l.limit - l.used), limit: l.limit } : null; }).filter(Boolean);
     const room = k.reduce((s, x) => s + x.room, 0);
-    if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: "Tax-sheltered growth on every dollar the law allows.", status: room > 0 ? "now" : "done", roomYearly: room,
+    if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: `${optional}Tax-sheltered growth on every dollar the law allows.`, optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
       detail: room > 0 ? `${k.filter((x) => x.room > 0).map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
   }
 

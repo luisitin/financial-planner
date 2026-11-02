@@ -28,6 +28,10 @@ The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bog
 6. An IRA for each adult with earned income: this year's room, catch-up at 50.
 7. Middling debt: `MODERATE_RATE` 4% up to 10%, mortgages aside.
 8. The 401(k) to the limit: this year's room (the employee's own money).
+   The IRA and 401(k) steps carry `optional: true` and start "Optional: your plan already lasts (Will the money last?);
+   more saving buys an earlier retirement or more to spend." when `savingVerdict` (retirement/projection) is "on track"
+   (2026-11-02). The IRA step mentions the backdoor route only when the household's income is in or over the Roth limit
+   range (Contribution limits' `roth.status` "partial" or "over"); it used to say it to everyone.
 9. Goals that are behind: the extra a month they need.
 10. Then a choice: taxable investing, the mortgage, a 529, retiring earlier, giving.
 

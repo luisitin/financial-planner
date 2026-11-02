@@ -121,3 +121,12 @@ test("protection: done once the cover on file reaches the need; no step for a ho
   single.income = single.income.filter((x) => x.personId === "p-ana");
   assert.equal(compute(single, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "one adult, no children: nobody to protect");
 });
+
+test("saving: when the plan already lasts, the IRA and 401(k) steps say they are optional; the backdoor only near the Roth limit", () => {
+  const d = compute(familyPlan("2026-11-02"), { today: "2026-11-02" });
+  for (const id of ["ira", "max-401k"]) { const s = d.steps.find((x) => x.id === id); assert.equal(s.optional, true, id); assert.match(s.why, /^Optional: your plan already lasts/); }
+  assert.doesNotMatch(d.steps.find((x) => x.id === "ira").detail, /backdoor/, "$163,800 of pay is well under the Roth limit");
+  const rich = familyPlan("2026-11-02");
+  rich.income.find((x) => x.personId === "p-ana" && x.type === "salary").amount = 12000;   // every two weeks: $312,000 a year
+  assert.match(compute(rich, { today: "2026-11-02" }).steps.find((x) => x.id === "ira").detail, /backdoor route/);
+});
