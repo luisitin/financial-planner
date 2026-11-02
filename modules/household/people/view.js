@@ -1,6 +1,6 @@
 // modules/household/people/view.js -- DOM only. A list of people you tap to edit, one form,
 // and the household's tax filing status and state.
-import { compute, ROLES, FILING_STATUSES, US_STATES } from "./compute.js";
+import { compute, ROLES, FILING_STATUSES, US_STATES, tiedTo, removePerson } from "./compute.js";
 
 const FIELDS = (assumptions) => [
   { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. Ana" },
@@ -11,14 +11,24 @@ const FIELDS = (assumptions) => [
 ];
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render
-// (design log 2026-09-15). { card: "people" | "taxes", text }
+// (design log 2026-09-15). { card: "people" | "taxes", text, undo? (the plan as it was: an Undo button puts it back) }
 let pending = null;
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
+  const cur = plan.meta?.currency;
   const d = compute(plan, { today: fmt.today() });
   let editing = null;
-  const flash = (host) => { if (!pending) return; const n = ui.notice("ok", pending.text); host.append(n); setTimeout(() => n.remove(), 4000); pending = null; };
+  let removing = null;   // the person whose Remove was tapped: the form shows what goes with them instead
+  const flash = (host) => {
+    if (!pending) return;
+    const n = ui.notice("ok", pending.text);
+    const was = pending.undo;
+    // a removal can be taken back while its message shows (until the next change re-draws the page)
+    if (was) n.append(" ", ui.button("Undo", () => { pending = { card: "people", text: "Put back as it was." }; store.update((d) => { for (const k of Object.keys(d)) delete d[k]; Object.assign(d, structuredClone(was)); }); }, { class: "secondary small" }));
+    else setTimeout(() => n.remove(), 4000);
+    host.append(n); pending = null;
+  };
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -46,6 +56,7 @@ export function render(root, ctx) {
   let showForm = d.count === 0;
   const drawForm = () => {
     formHost.innerHTML = "";
+    if (removing) { formHost.append(removePanel(removing)); return; }
     if (!showForm && !editing) {
       formHost.append(ui.button("+ Add another person", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
@@ -65,13 +76,42 @@ export function render(root, ctx) {
         });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add person", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
-        if (!ui.confirm(`Remove ${editing.name} from the plan?`)) return;
-        const id = editing.id; const name = editing.name; editing = null;
-        pending = { card: "people", text: `${name} removed.` };
-        store.update((p) => { p.household.people = (p.household.people ?? []).filter((x) => x.id !== id); });
-      }, { class: "danger" })) : null,
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => { removing = editing; editing = null; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "danger" })) : null,
     ));
+  };
+  // Remove used to drop only the person, so their pay and accounts went on counting as the household's without a word.
+  // Now it lists what is theirs and asks once: take it out too, or keep it as the household's.
+  const removePanel = (person) => {
+    const t = tiedTo(plan, person.id);
+    const name = person.name;
+    const finish = (keep) => {
+      const n = t.items.length;
+      const what = n === 1 ? t.items[0].name : `${n} things that were ${name}'s`;
+      const text = !n ? `${name} removed.` : keep ? `${name} removed. ${n === 1 ? `${t.items[0].name} now counts` : `${n} things that were ${name}'s now count`} as the household's.` : `${name} removed, with ${what}.`;
+      pending = { card: "people", text: text + (t.leavesOneAdult && t.married ? " Taxes are now Single." : ""), undo: structuredClone(plan) };
+      removing = null;
+      store.update((p) => { removePerson(p, person.id, { keep }); });
+    };
+    const amount = (i) => i.amount === null ? null : i.every === "a month" ? `${fmt.money(i.amount, cur)} a month` : i.every === "one time" ? `${fmt.money(i.amount, cur)} one time` : i.every === "owed" ? `${fmt.money(i.amount, cur)} owed` : i.every === "cover" ? `${fmt.money(i.amount, cur)} cover` : fmt.money(i.amount, cur);
+    const kids = t.dependents ? (plan.household?.people ?? []).filter((x) => x.id !== person.id && x.role === "dependent").map((x) => x.name) : [];
+    return ui.h("div", { class: "remove-person", style: { marginTop: "20px" } },
+      ui.h("h2", {}, `Remove ${name} from the plan?`),
+      t.items.length ? [
+        ui.h("p", {}, `These are ${name}'s in the plan:`),
+        ui.h("ul", { class: "page-list" }, t.items.map((i) => ui.h("li", {},
+          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
+          amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null))),
+        ui.h("p", { class: "muted small" }, `If ${name} has left the household, take these out too. If they stay with you (a joint account, an inherited one), keep them as the household's.`),
+      ] : ui.h("p", { class: "muted" }, `Nothing else in the plan is tied to ${name}.`),
+      t.leavesOneAdult && t.married ? ui.notice("warn", `Taxes are set to ${FILING_STATUSES[plan.household.filingStatus]}. With one adult left the plan will use Single.${kids.length ? ` With ${kids.join(" and ")} at home you may file as head of household, which costs less tax: pick it under Taxes below.` : " Change it under Taxes below if you still file together this year."}`) : null,
+      t.named.length ? ui.h("div", { class: "notice warn" }, `${name} is still named as a beneficiary on ${t.named.map((x) => x.name).join(" and ")}. Removing ${name} here does not change that: only the bank or insurer can. `, ui.h("a", { href: t.named[0].href }, "Beneficiary audit")) : null,
+      ui.h("div", { class: "row", style: { marginTop: "12px" } },
+        t.items.length
+          ? [ui.button(`Remove ${name} and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}`, () => finish(false), { class: "danger" }),
+             ui.button(`Remove ${name}, keep ${t.items.length === 1 ? "it" : "these"} as the household's`, () => finish(true), { class: "secondary" })]
+          : ui.button(`Remove ${name}`, () => finish(false), { class: "danger" }),
+        ui.button("Cancel", () => { removing = null; drawForm(); }, { class: "secondary" })),
+    );
   };
   drawForm();
 
