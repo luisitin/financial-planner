@@ -137,7 +137,7 @@ export function render(root, ctx) {
           ui.h("div", { class: "t" }, g.name, " ", ui.h("span", { class: `pill ${k}` }, t), g.priority === 1 ? ui.h("span", { class: "pill" }, "must have") : null, broken.has(g.id) ? ui.h("span", { class: "pill warn" }, "check account") : null),
           ui.h("div", { class: "d" }, sub(g)),
           (() => { const pl = plannerFor(g); if (!pl) return null; const f = figureOf(plans.get(g.id) ?? g, g); const say = differs(plans.get(g.id) ?? g, f) ? `${pl.label} works it out at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words} ›` : `What it costs: ${pl.label} ›`;
-            return ui.h("a", { class: "small", href: `#/${pl.page}`, style: { display: "inline-block", marginTop: "6px", minHeight: "32px" }, onClick: (e) => e.stopPropagation() }, say); })(),
+            return ui.h("a", { class: "small", href: `#/${pl.page}`, style: { display: "inline-flex", alignItems: "center", marginTop: "2px", minHeight: "44px" }, onClick: (e) => e.stopPropagation() }, say); })(),
           ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(g.progress * 100)}%` } }))),
         ui.h("span", { class: "st muted" }, "Edit ›"),
       ); })),

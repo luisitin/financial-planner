@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Goals: the "What it costs" link under each goal is a 44 px tap target (the phone smoke test found 32 px).
 - [builder:claude-b] - [builder:claude-b] Get started asks someone paid by their own business what estimated tax they have paid this year, spread over the quarters already due, so Estimated payments, Needs attention and Next best action start from it instead of asking later.
 - [builder:claude-b] - [builder:claude-b] Social Security says what a couple keeps after the first death: "If one of you dies, the one left keeps about $2,900 a month of the $5,550 you get together", and in each person's fold what they keep if the other dies first and any spouse's top-up (F-033).
 - [builder:claude-b] - [builder:claude-b] Goal seek: claiming Social Security now reads "now" on the card and its bars, not "age 69.41666666666667".
