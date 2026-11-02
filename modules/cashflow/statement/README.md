@@ -47,6 +47,9 @@ so the cash left less goal saving is Next best action's money left, a year, in e
 `module.test.mjs`: a year of payments by hand, matching, not ready, the family's year line by line against the plan's
 spare money, a state tax line, an unmatched loan payment, the bank files' window and classification.
 
+## countOn (round 4, 2026-11-02)
+Next best action's `spare.held` is a line, "Uneven pay not counted on, after its tax (Side income)", so the cash left matches the Dashboard.
+
 ## Ideas / not yet
 - Investing from the bank files when transfers into investment accounts are tagged.
 - The same statement for last year from the transactions, next to this year's plan.

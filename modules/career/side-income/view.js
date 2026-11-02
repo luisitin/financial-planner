@@ -69,6 +69,10 @@ export function render(page, ctx) {
   rulesCard();
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/emergency-fund" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/career/business" }, "Small business"))));
 
+  function setCount(it, value) {
+    pending = value === null ? `${it.name}: the plan counts the full ${money(it.monthly)} a month again.` : `${it.name}: your left-over figure and forecast now count on ${money(value)} a month. Tax stays on ${money(it.monthly)}.`;
+    store.update((p) => { const x = (p.income ?? []).find((y) => y.id === it.id); if (!x) return; if (value === null) delete x.countOn; else x.countOn = value; });
+  }
   function itemCard(it) {
     const s = it.stats;
     const card = ui.card(it.name);
@@ -78,11 +82,14 @@ export function render(page, ctx) {
         ui.stat("Average", money(s.average), `a month; from ${money(s.low)} to ${money(s.high)}`),
       ));
       card.append(bars(it));
-      if (it.gap > 0.5 && it.countOn > 0) card.append(ui.h("p", { class: "si-say" }, `The Income page counts ${money(it.monthly)} a month, but less than that came in during ${it.below} of the ${s.n} months. Planning with ${money(it.countOn)} keeps the lean months from catching you out; the rest is a bonus to save.`),
-        ui.row(ui.button(`Count on ${money(it.countOn)} a month`, () => {
-          pending = `${it.name} now counts ${money(it.countOn)} a month on the Income page.`;
-          store.update((p) => { const x = (p.income ?? []).find((y) => y.id === it.id); if (x) { x.amount = Math.round(it.countOn); x.period = "monthly"; } });
-        })));
+      // "count on" is saved apart (income[].countOn): the left-over figure, Forecast and Budget plan with it, while tax stays on
+      // the Income page's amount. It used to overwrite that amount, so every tax page dropped and the quarterly payment shrank
+      // to a third (round 4, 2026-11-02)
+      if (it.counted !== null) card.append(ui.h("p", { class: "si-say" }, `Your plan counts on ${money(it.counted)} a month from this for spending and saving (the left-over figure and the forecast). Tax is still worked on the Income page's ${money(it.monthly)} a month, so the tax set aside below stays right; what comes in above ${money(it.counted)} is a bonus to save.`),
+        ui.row(Math.abs(it.counted - (it.countOn ?? it.counted)) >= 1 && it.countOn > 0 ? ui.button(`Count on ${money(it.countOn)} instead`, () => setCount(it, Math.round(it.countOn)), { class: "secondary" }) : null,
+          ui.button(`Count the full ${money(it.monthly)} again`, () => setCount(it, null), { class: "secondary" })));
+      else if (it.gap > 0.5 && it.countOn > 0) card.append(ui.h("p", { class: "si-say" }, `The Income page counts ${money(it.monthly)} a month, but less than that came in during ${it.below} of the ${s.n} months. Planning your spending with ${money(it.countOn)} keeps the lean months from catching you out; the rest is a bonus to save. Tax stays on ${money(it.monthly)}.`),
+        ui.row(ui.button(`Count on ${money(it.countOn)} a month`, () => setCount(it, Math.round(it.countOn)))));
       else if (it.countOn <= 0) card.append(ui.h("p", { class: "si-say" }, `More than 1 month in 4 brought nothing, so there is no amount the plan can safely count on every month: keep it out of the monthly budget and save what comes.`));
       else card.append(ui.h("p", { class: "si-say" }, `The Income page's ${money(it.monthly)} a month is a careful figure: at least that much came in during ${s.n - it.below} of the ${s.n} months.`));
       if (s.cushion > 0.5) card.append(ui.h("p", {}, `To pay yourself the average, ${money(s.average)}, every month, you would have needed ${money(s.cushion)} saved at the worst point (${monthName(s.deepest)}). Keep a cushion like that in savings for this income.`));

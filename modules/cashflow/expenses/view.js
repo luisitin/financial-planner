@@ -31,7 +31,7 @@ export function render(root, ctx) {
     if (!d.income) return null;
     // the tile opens Next best action's "Each month's money", which shows how the figure is reached
     const linked = (t) => { t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href: "#/overview/next-best-action", class: "stat-link", "aria-label": `${t.textContent.replace("\u203a", "").trim()}. See how it is worked out` }, t); };
-    if (nba?.ready) { const v = nba.spare.monthly; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving", { link: true })); }
+    if (nba?.ready) { const v = nba.spare.monthly; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}${nba.spare.held > 0.5 ? `, counting uneven pay at what you can count on` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving", { link: true })); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;

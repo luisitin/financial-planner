@@ -123,5 +123,8 @@ Not ready without income and expenses. Spare money below zero: the bills are the
 - A saved debt plan aimed at the card no longer hides the move when the cash is there: the debts it reaches are paid from savings too.
 - The IRA step carries `people` (earners with room); "each" only when more than one, and setup's reveal words follow it.
 
+## Uneven pay counted carefully (round 4, 2026-11-02)
+`spare.heldGross` is income's `heldMonthly`; `spare.held` is that less the tax set aside from it, worked as the difference between `yearTaxes` on the plan and on the plan with each `countOn` as the amount. `spare.monthly` takes off `held`, so the month equals typing the careful figure as the income, while `federalTax`, `payrollTax` and `stateTax` stay the whole year's, as every tax page says them.
+
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).

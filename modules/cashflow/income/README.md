@@ -38,6 +38,9 @@ A salary typed as a yearly (or quarterly) figure, the setup's default, is paid i
 ## Tests
 `module.test.mjs`: empty plan, bi-weekly normalisation, next-year raise, start/end/one-off handling, warnings, byType.
 
+## countOn (round 4, 2026-11-02)
+`income[].countOn` (a month, optional; set on Side income) is the careful figure for uneven pay. `monthly`/`yearly` keep the full amount, which every tax page uses. Each item gets `heldMonthly` (amount a month minus countOn, never below 0) and the result `heldMonthly` (active items). The Income list says "the plan counts on $X a month (Side income)".
+
 ## Ideas / not yet
 - Pay-stub detail (pre-tax deductions, 401(k) match) for the tax and retirement pages.
 - Irregular income smoothing (average of the last 12 months of transactions) once phase 3 lands.

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Side income's "Count on" no longer cuts every tax figure: it saves `income[].countOn` (new optional field) and leaves the amount alone; the left-over figure, Forecast and statements plan with the careful figure (after the tax it would carry), while quarterly payments and the April bill stay right.
+- [builder:claude-b] - [builder:claude-b] The printable income and cash-flow statements now show state tax, business costs, the saved debt extra and uneven pay held back, so their bottom line follows from the lines above it.
 - [builder:claude-b] - [builder:claude-b] Life timeline: a goal waiting its turn on Next best action says when it starts instead of "Behind", the same as Goals and the Dashboard (last open review finding).
 - [builder:claude-b] - [builder:claude-b] Budget starts from Expenses: with no envelopes and no whole bank month, the page lists the amounts already typed on Expenses with one "Use these as my budget" button, says what is left after them (the Dashboard's figure), and stops calling $0-spent envelopes "on track" before a bank file is in.
 - [builder:claude-b] - [builder:claude-b] Review fixes (round 4): typing slips are judged on the digits (a stray zero inside a figure is caught; checking from $600 to $5,400 is not asked about); "It changed" is the default answer; several flagged boxes get one answer each; Enter cannot save past the question; a history fix offers Undo and moves only the totals that held the wrong figure (`accounts[].typedOn`).

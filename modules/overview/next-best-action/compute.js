@@ -31,7 +31,8 @@ export const HORIZON_MONTHS = 120;
 /**
  * compute(plan, { today }) -> {
  *   ready, missing,
- *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, stateKnown, state, spending, retirementSaving, goalSaving, debtExtra }
+ *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
+ *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses) }
  *            (all a month; spare may be negative; stateKnown: the state's income tax could be worked out, or the state has none;
  *            debtExtra: the extra a month the saved debt plan pays on top of the required payments, Pay off debts' `extra`),
  *   debtPlan: { extra, names, ids, until, months } | null (that saved extra: the debts it goes to, and when the last of them is gone),
@@ -93,7 +94,21 @@ export function compute(plan, params = {}) {
     return { extra: pay.extra, ids, names: ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean), until: last?.endDate ?? null, months: last ? last.months : null };
   })() : null;
   spare.debtExtra = debtPlan ? debtPlan.extra : 0;
-  spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra;
+  // uneven pay counted carefully (Side income's "count on"): the rest of it is not planned with, and neither is the tax
+  // set aside from it (a lean month sets aside less), so the month is the careful income less the tax on the careful
+  // income. The tax lines stay the whole year's, as every tax page says them; `held` is the part not counted on after its
+  // tax: the year's taxes worked again with the careful figures, the difference taken off it
+  spare.heldGross = inc.heldMonthly ?? 0;
+  spare.held = spare.heldGross;
+  if (spare.held > 0.005 && T) {
+    try {
+      const careful = { ...plan, income: (plan.income ?? []).map((x) => (Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" && x.period !== "once" ? { ...x, amount: Number(x.countOn), period: "monthly" } : x)) };
+      const TC = yearTaxes(careful, { today, inc: computeIncome(careful, { today }) });
+      const taxOnHeld = ((T.federal + T.payroll + T.state) - (TC.federal + TC.payroll + TC.state)) / 12;
+      spare.held = Math.max(0, spare.heldGross - Math.max(0, taxOnHeld));
+    } catch { spare.held = spare.heldGross; }
+  }
+  spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra - spare.held;
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);

@@ -62,6 +62,9 @@ cushion, the family's photography against its Income figure, the tax worked on t
 last year's average state rate, no taxable business, too few months, the year's rules (a later year labelled as the
 latest known) and mileage dates, not ready.
 
+## Count on, kept apart (round 4, 2026-11-02)
+"Count on $X a month" saves `income[].countOn` and leaves the Income page's amount alone. Before, it overwrote the amount, so every tax page dropped with it (a freelancer's next quarterly payment went from $2,800 to $1,687 and the April bill from $9,453 to $2,807) while this page still said the tax was higher. Now the left-over figure, Forecast and the statements plan with the careful figure, tax stays on the amount, and the card says so, with "Count the full $X again" (deletes `countOn`) and "Count on $Y instead" when the months change. `items[].counted` is the figure on file.
+
 ## Ideas / not yet
 - The months read from the ledger: deposits from the same payer into the account it lands in.
 - Expenses per side income (mileage logged here feeding the Self-employment page's expenses).

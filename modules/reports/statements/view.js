@@ -40,10 +40,15 @@ export function render(page, ctx) {
     // the income statement
     if (d.income) {
       const i = d.income, is = [line("Income", null, { bold: true }), ...i.lines.map((l) => line(l.label, l.yearly, { indent: true })), line("Total income", i.total, { bold: true }),
+        i.businessCosts > 0.5 ? line("Business costs", i.businessCosts, { paren: true }) : null,
         line("Taxes", null, { bold: true }), line("Federal income tax", i.federalTax, { indent: true, paren: true }), line("Social Security and Medicare", i.payrollTax, { indent: true, paren: true }),
+        i.stateTax > 0.5 ? line("State income tax", i.stateTax, { indent: true, paren: true }) : null,
         line("Spending", null, { bold: true }), ...i.expenses.map((e) => line(e.label, e.yearly, { indent: true, paren: true })), line("Total spending", i.expensesTotal, { bold: true, paren: true }),
-        line("Saved for retirement", i.retirementSaving, { paren: true }), line("Saved for goals", i.goalSaving, { paren: true }), line(i.net >= 0 ? "Left over" : "Short", i.net, { bold: true })];
-      sheet.append(section(ui, "Income statement, a year (from the plan)", stmt(is), ui.h("p", { class: "rp-sub" }, "From the Income, Expenses, Contributions and Goals pages, at today's amounts. State and local income tax is not included.")));
+        line("Saved for retirement", i.retirementSaving, { paren: true }), line("Saved for goals", i.goalSaving, { paren: true }),
+        i.debtExtra > 0.5 ? line("Extra on debts (Pay off debts)", i.debtExtra, { paren: true }) : null,
+        i.held > 0.5 ? line("Uneven pay not counted on, after its tax (Side income)", i.held, { paren: true }) : null,
+        line(i.net >= 0 ? "Left over" : "Short", i.net, { bold: true })].filter(Boolean);
+      sheet.append(section(ui, "Income statement, a year (from the plan)", stmt(is), ui.h("p", { class: "rp-sub" }, "From the Income, Expenses, Contributions and Goals pages, at today's amounts: the same month as the Dashboard's left-over figure, a year of it. Local income tax is not included.")));
     }
     if (d.actual) sheet.append(section(ui, `The bank files: ${monthYear(d.actual.from)} to ${monthYear(d.actual.to)}`,
       stmt([line("Money in", d.actual.in), line("Money out", d.actual.out, { paren: true }), line(d.actual.net >= 0 ? "Kept" : "Short", d.actual.net, { bold: true })]),
@@ -53,9 +58,13 @@ export function render(page, ctx) {
     if (d.cashflow) {
       const c = d.cashflow;
       sheet.append(section(ui, "Cash-flow statement, a year",
-        stmt([line("From living", null, { bold: true }), line("Income", c.income, { indent: true }), line("Taxes", c.taxes, { indent: true, paren: true }), line("Spending, loan payments as typed", c.living, { indent: true, paren: true }), line("Cash from living", c.fromLiving, { bold: true }),
+        stmt([line("From living", null, { bold: true }), line("Income", c.income, { indent: true }), line("Taxes", c.taxes, { indent: true, paren: true }), line("Spending, loan payments as typed", c.living, { indent: true, paren: true }),
+          c.businessCosts > 0.5 ? line("Business costs", c.businessCosts, { indent: true, paren: true }) : null,
+          c.held > 0.5 ? line("Uneven pay not counted on, after its tax", c.held, { indent: true, paren: true }) : null,
+          line("Cash from living", c.fromLiving, { bold: true }),
           line("Put to work", null, { bold: true }), line("Retirement accounts", c.retirement, { indent: true, paren: true }), line("Goals", c.goals, { indent: true, paren: true }),
-          line(c.net >= 0 ? "Left in cash" : "Taken from cash", c.net, { bold: true })]),
+          c.debtExtra > 0.5 ? line("Extra on debts", c.debtExtra, { indent: true, paren: true }) : null,
+          line(c.net >= 0 ? "Left in cash" : "Taken from cash", c.net, { bold: true })].filter(Boolean)),
         c.debt.payments > 0 ? ui.h("p", {}, `Of the ${money(c.debt.payments)} a year of loan and card payments on the Debts page, about ${money(c.debt.interest)} is interest and ${money(c.debt.principal)} pays down what you owe.`) : null,
         list(ui, [`Net worth grows by about ${money(c.netWorthGrowth)} a year from saving and paying down debt, before investment returns and changes in what the house is worth.`])));
     }

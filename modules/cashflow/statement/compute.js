@@ -77,6 +77,8 @@ export function compute(plan, params = {}) {
       // the state's tax as Next best action takes it off the month (the State page's rate on this income), so the cash left matches
       (nb.ready ? s.stateTax * 12 : st.tax) > 0 ? { label: `${st.name} income tax`, amount: -(nb.ready ? s.stateTax * 12 : st.tax) } : null,
       { label: "Living costs", amount: -living },
+      // the part of uneven pay the plan does not count on (Side income), so the cash left matches the Dashboard
+      (s.held ?? 0) > 0 ? { label: "Uneven pay not counted on, after its tax (Side income)", amount: -s.held * 12 } : null,
     ].filter((l) => l && Math.abs(l.amount) >= 0.5);
     const taxable = (con.items ?? []).filter((c) => ["brokerage", "crypto"].includes(c.accountType)).reduce((t, c) => t + c.yearly, 0);
     const invLines = [

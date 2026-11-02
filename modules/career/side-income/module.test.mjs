@@ -110,3 +110,38 @@ test("not ready without a side income; one-off business income is left out", () 
   p.income.push({ id: "x", name: "One sale", type: "business", personId: "p-bo", amount: 900, period: "once" });
   assert.equal(compute(p, { today: TODAY }).ready, false);
 });
+
+test("'count on' is kept apart: the month plans with it, every tax figure stays on the Income amount (round 4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: income } = await import("../../cashflow/income/compute.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { taxAnswer } = await import("../../taxes/withholding/compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const { compute: statements } = await import("../../reports/statements/compute.js");
+  const { compute: cashStatement } = await import("../../cashflow/statement/compute.js");
+  const T = "2026-11-02";
+  const before = familyPlan(T), after = familyPlan(T);
+  const side = after.income.find((x) => x.id === "i-side");
+  side.countOn = 300;   // $600 a month on average; plan the month with $300
+  // the amount is untouched; the income compute says what is held back
+  assert.equal(after.income.find((x) => x.id === "i-side").amount, before.income.find((x) => x.id === "i-side").amount);
+  const ia = income(after, { today: T });
+  assert.equal(ia.heldMonthly, side.amount - 300); assert.equal(ia.monthly, income(before, { today: T }).monthly);
+  // the month is the careful one: the same as typing $300 as the income (less income, less tax set aside from it)...
+  const nb = next(before, { today: T }).spare, na = next(after, { today: T }).spare;
+  const typed300 = familyPlan(T); typed300.income.find((x) => x.id === "i-side").amount = 300;
+  assert.ok(Math.abs(na.monthly - next(typed300, { today: T }).spare.monthly) < 0.01, `${na.monthly} vs ${next(typed300, { today: T }).spare.monthly}`);
+  assert.equal(na.heldGross, side.amount - 300); assert.ok(na.held > 0 && na.held < na.heldGross, "held back after the tax on it");
+  // ...while the tax lines stay the whole year's, as on every tax page
+  assert.equal(na.federalTax, nb.federalTax); assert.equal(na.payrollTax, nb.payrollTax);
+  assert.equal(taxAnswer(after, { today: T })?.totalTax, taxAnswer(before, { today: T })?.totalTax);
+  assert.equal(estimated(after, { today: T }).nextDue?.amount, estimated(before, { today: T }).nextDue?.amount);
+  // Side income knows what is on file
+  assert.equal(compute(after, { today: T }).items.find((x) => x.id === "i-side").counted, 300);
+  // the printable statements add up to the same month, and the cash-flow statement names the line
+  const c = statements(after, { today: T }).cashflow;
+  assert.ok(Math.abs(c.fromLiving - c.retirement - c.goals - c.debtExtra - c.net) < 0.01, "Left in cash follows from the lines");
+  assert.ok(Math.abs(c.net - na.monthly * 12) < 0.01);
+  const cs = cashStatement(after, { today: T });
+  assert.ok(JSON.stringify(cs).includes("Uneven pay not counted on, after its tax (Side income)"));
+});

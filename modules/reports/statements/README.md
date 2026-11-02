@@ -18,5 +18,8 @@ Amounts in brackets are owed or going out. Prints through `../report-kit.js`.
 ## Tests
 `module.test.mjs`: the balance sheet adds up (groups, short and long debt, owners); the income and cash-flow statements close; the bank files use complete months only.
 
+## The statements add up (round 4, 2026-11-02)
+The income statement and cash-flow statement show every line Next best action takes off the month: state income tax, business costs, the saved debt extra and uneven pay not counted on (after its tax). Before, their "Left over" and "Left in cash" (Next best action's month) did not follow from the lines printed above them, and the note said state tax was left out.
+
 ## Ideas / not yet
 - Last year's balance sheet beside this year's (from the net-worth history); the statements over the bank files' categories (operating, investing, financing) once transfers to investment accounts are tagged.

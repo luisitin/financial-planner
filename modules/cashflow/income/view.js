@@ -121,6 +121,8 @@ export function render(root, ctx) {
       if (x.ended) bits.push(`ended ${fmt.date(x.endDate)}`);
       else if (x.endDate) bits.push(`until ${fmt.date(x.endDate)}`);
       if (x.taxable === false) bits.push("not taxed");
+      // Side income's careful figure: spending plans with it, tax keeps the amount above
+      if (x.heldMonthly > 0.5) bits.push(`the plan counts on ${fmt.money(x.monthly - x.heldMonthly, cur)} a month (Side income)`);
       return bits.join(" · ");
     };
     const rows = [...d.items].sort((a, b) => Number(b.active) - Number(a.active) || b.monthly - a.monthly);

@@ -82,7 +82,9 @@ export function compute(plan, params = {}) {
     ...(planRow ? [planRow] : []),
     ...(plan.income ?? []).filter((i) => i.period !== "once").map((i0) => {
       // a salary typed as a yearly figure lands as paychecks (the Paycheck page's count), not one deposit a year
-      const rh = payRhythm(i0, plan), i = rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0;
+      // uneven pay counted carefully (Side income's "count on"): the forecast plans with that figure, a month
+      const careful = Number.isFinite(Number(i0.countOn)) && i0.countOn !== null && i0.countOn !== "" ? { ...i0, amount: Number(i0.countOn), period: "monthly" } : null;
+      const rh = careful ? null : payRhythm(i0, plan), i = careful ?? (rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0);
       const typedAmount = Number(i.amount) || 0, r = th.ratio[i.id];
       return r !== undefined && r < 1 ? { ...i, kind: "income", signed: typedAmount * r, beforeTax: typedAmount } : { ...i, kind: "income", signed: typedAmount };
     }),

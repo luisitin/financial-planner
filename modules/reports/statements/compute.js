@@ -25,7 +25,7 @@ export const SHORT_TERM_DEBT = ["credit"];
  * compute(plan, { today }) -> {
  *   ready, missing, today,
  *   balance: { groups: [{ id, label, accounts: [{ name, type, owner, balance }], total }], assets, short: { accounts, total }, long: { accounts, total }, liabilities, netWorth, byOwner: [{ name, assets, liabilities, netWorth }] },
- *   income: { lines: [{ label, yearly }], total, federalTax, payrollTax, expenses: [{ label, yearly }], expensesTotal, retirementSaving, goalSaving, net } | null,
+ *   income: { lines: [{ label, yearly }], total, federalTax, payrollTax, stateTax, businessCosts, debtExtra, held, expenses: [{ label, yearly }], expensesTotal, retirementSaving, goalSaving, net } | null,
  *   actual: { months, in, out, net, rate, from, to } | null,
  *   cashflow: { income, taxes, living, fromLiving, retirement, goals, saving, net, debt: { payments, interest, principal }, netWorthGrowth } | null
  * }
@@ -59,16 +59,20 @@ export function compute(plan, params = {}) {
     const s = nb.spare;
     income = {
       lines: Object.entries(inc.byType).map(([t, y]) => ({ label: INCOME_TYPES[t]?.label ?? t, yearly: y })).sort((a, b) => b.yearly - a.yearly), total: s.gross * 12,
-      federalTax: s.federalTax * 12, payrollTax: s.payrollTax * 12,
+      federalTax: s.federalTax * 12, payrollTax: s.payrollTax * 12, stateTax: (s.stateTax ?? 0) * 12, businessCosts: (s.businessCosts ?? 0) * 12,
+      debtExtra: (s.debtExtra ?? 0) * 12, held: (s.held ?? 0) * 12,
       expenses: exp.byCategory.map((c) => ({ label: c.label, yearly: c.monthly * 12 })), expensesTotal: s.spending * 12,
       retirementSaving: s.retirementSaving * 12, goalSaving: s.goalSaving * 12, net: s.monthly * 12,
     };
     const li = computeLiabilities(plan, { today });
     const payments = li.payments * 12, interest = li.interestMonthly * 12;
-    const living = s.spending * 12, taxes = (s.federalTax + s.payrollTax) * 12;
+    // every line Next best action takes off the month is here, so "Left in cash" follows from the lines above it (state tax,
+    // business costs, the saved debt extra and uneven pay not counted on were missing: round 4, 2026-11-02)
+    const living = s.spending * 12, taxes = (s.federalTax + s.payrollTax + (s.stateTax ?? 0)) * 12;
+    const businessCosts = (s.businessCosts ?? 0) * 12, held = (s.held ?? 0) * 12, debtExtra = (s.debtExtra ?? 0) * 12;
     cashflow = {
-      income: s.gross * 12, taxes, living, fromLiving: s.gross * 12 - taxes - living,
-      retirement: s.retirementSaving * 12, goals: s.goalSaving * 12, saving: (s.retirementSaving + s.goalSaving) * 12, net: s.monthly * 12,
+      income: s.gross * 12, taxes, living, businessCosts, held, fromLiving: s.gross * 12 - taxes - living - businessCosts - held,
+      retirement: s.retirementSaving * 12, goals: s.goalSaving * 12, debtExtra, saving: (s.retirementSaving + s.goalSaving) * 12, net: s.monthly * 12,
       debt: { payments, interest: Math.min(interest, payments), principal: Math.max(0, payments - interest) },
       netWorthGrowth: (s.retirementSaving + s.goalSaving + Math.max(0, s.monthly)) * 12 + Math.max(0, payments - interest),
     };

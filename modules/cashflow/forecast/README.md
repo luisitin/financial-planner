@@ -39,6 +39,9 @@ year's take-home on one day, then nothing for the rest of the window; 2026-11-02
 ## Tests
 `module.test.mjs`: planned dates (1st/15th/start/end dates), no data, the 90-day run on the shared fixture (found vs typed, coverage, lowest), a dated shortfall; salaries at take-home and side income as typed; `takeHome` (shares from the Paycheck page, the monthly total, no earner); a payroll deposit covering only the salary it is closest to; a deposit outside the band covering nothing; an ended job not taking the new job's deposit; a payday due today; a later first job at take-home; Debts payments added only when nothing is filed under loan and card payments.
 
+## countOn (round 4, 2026-11-02)
+An income with `countOn` lands in the forecast as that figure a month (Side income's careful amount), not the typed amount.
+
 ## Ideas / not yet
 - Let the person move a typed bill to the right day of month from this page.
 - Contributions paid from checking rather than from pay (an IRA, a brokerage account) are not events yet; Next best action takes them out of the left-over, so the Forecast can read a little higher than the Dashboard.

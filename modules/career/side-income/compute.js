@@ -47,7 +47,7 @@ export function monthStats(values, labels = []) {
 
 /**
  * compute(plan, { today }) -> {
- *   ready, year, months (labels), items: [{ id, name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, gap, below }],
+ *   ready, year, months (labels), items: [{ id, name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, counted (income[].countOn on file, or null), gap, below }],
  *   setAside: { rate (of each payment received), yearly (the tax this income adds), quarter, state, stateKnown, stateAverage, onAverage } | null,
  *   estimates: { needed, nextDue: { due, label, amount } | null (the next quarter not yet past), overdue: { due, label, amount } | null (past quarters not paid) } (the whole return, from the Estimated payments page),
  *   rules: { year (of the table used), stale, form1099NEC, form1099K: { apps: { amount, payments }, cards }, mileage, mileageSteps }, notes
@@ -72,6 +72,8 @@ export function compute(plan, params = {}) {
     return {
       id: x.id, name: x.name || "Side income", personName: x.personName, monthly: x.monthly, period: x.period, typedMonths, stats, enough,
       countOn: enough ? stats.reliable : null,
+      // the careful figure already saved for cash flow (income[].countOn), or null: tax keeps the Income page's amount
+      counted: Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" ? Number(x.countOn) : null,
       gap: enough ? x.monthly - stats.reliable : null,   // how far the Income page's figure is above the reliable one
       below: enough ? typedMonths.filter((v) => v !== null && v < x.monthly - 0.5).length : null,
     };

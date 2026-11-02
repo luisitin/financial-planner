@@ -22,6 +22,8 @@ export const INCOME_TYPES = {
  *   active: [items that count today], count,
  *   monthly, yearly (active, recurring only), nextYear (yearly after each item's raise),
  *   taxableYearly, untaxedYearly, oneTime (sum of active one-offs, not in monthly/yearly),
+ *   heldMonthly (the part of uneven pay the plan does not count on: amount a month minus income[].countOn, active only;
+ *   monthly and yearly keep the full amount, which tax uses),
  *   byType: { [type]: yearly }, byPerson: [{ personId, name, yearly, monthly }], warnings: [text]
  * }
  * `today` decides which items are active (start/end dates); without it everything counts.
@@ -35,6 +37,10 @@ export function compute(plan, params = {}) {
     const active = today ? activeOn(x, today) : true;
     const yearly = perYear(x.amount, x.period);
     const growth = Number(x.growth) || 0;
+    // "count on" (Side income's careful figure, a month): cash-flow pages plan with it; tax keeps the amount, what comes in
+    // on average. heldMonthly is the part of the amount the plan does not count on (round 4, 2026-11-02)
+    const careful = x.period !== "once" && Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" && Number(x.countOn) >= 0 ? Number(x.countOn) : null;
+    const held = careful !== null ? Math.max(0, perMonth(x.amount, x.period) - careful) : 0;
     return {
       ...x, typeLabel: t.label, icon: t.icon, periodLabel: periodLabel(x.period), personName: nameOf(x.personId),
       monthly: perMonth(x.amount, x.period), yearly, active,
@@ -42,6 +48,7 @@ export function compute(plan, params = {}) {
       ended: !!(today && x.endDate && String(x.endDate) < today),
       nextYear: yearly * (1 + growth),
       oneTime: x.period === "once" ? Number(x.amount) || 0 : 0,
+      heldMonthly: held,
     };
   });
   const active = items.filter((x) => x.active);
@@ -66,6 +73,7 @@ export function compute(plan, params = {}) {
     taxableYearly: sum(active.filter((x) => x.taxable !== false), "yearly"),
     untaxedYearly: sum(active.filter((x) => x.taxable === false), "yearly"),
     oneTime: sum(active, "oneTime"),
+    heldMonthly: sum(active, "heldMonthly"),
     byType, byPerson: [...byPersonMap.values()].sort((a, b) => b.yearly - a.yearly),
     warnings,
   };
