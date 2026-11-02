@@ -11,6 +11,7 @@ import { compute as liquidity } from "../../balance/liquidity/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
 import { compute as nextBest } from "../next-best-action/compute.js";
+import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
@@ -108,6 +109,10 @@ export function compute(plan, params = {}) {
     if (r.neverPaysOff) add(`debt-never-${r.id}`, "bad", `${r.name} never pays off at its payment`, "The payment does not cover the interest. Raise it, even a little.", ["balance", "liabilities"]);
     else if (r.expensive && !inHand.has(r.id)) add(`debt-expensive-${r.id}`, "warn", `${r.name} is expensive debt`, `About ${money(r.interestMonthly)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. Extra payments here save the most.`, ["balance", "liabilities"]);
   }
+  // the bank files show more going out than Expenses lists: the plan's figures are too rosy until the rest is listed
+  let bank = null;
+  try { bank = bankVsPlan(plan, p); } catch { bank = null; }
+  if (bank?.over) add("bank-over", "warn", "Your bank shows more going out than Expenses lists", `About ${money(Math.round(bank.gap / 10) * 10)} a month more, over the last ${bank.months} whole months of bank files. Add the rest on Expenses and the plan's figures follow.`, ["cashflow", "expenses"]);
   // a loan paid off whose payment is still on Expenses: the money is free once it is stopped there
   for (const x of exp.ended ?? []) add(`debt-paid-${x.debtId}`, "warn", `${x.debtName} is paid off`, `Its payment, ${x.name} (${money(x.monthly)} a month), is still counted on Expenses. Stop it there and that money is free.`, ["cashflow", "expenses"]);
   if (debt.count && debt.withDetail < debt.count) add("debt-details", "info", `${debt.count - debt.withDetail} ${debt.count - debt.withDetail === 1 ? "debt has" : "debts have"} no rate or payment`, "Add them to see payoff dates and what interest costs.", ["balance", "liabilities"]);

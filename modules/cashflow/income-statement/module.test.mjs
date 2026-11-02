@@ -52,3 +52,45 @@ test("plan versus real compares the bank's money in with take-home pay, and call
   d = compute(p, { today: "2026-11-01" });
   assert.equal(d.inShort, true); near(d.inGap, Math.round(net * 0.8 * 100) / 100 - net);
 });
+
+test("bank versus plan: the bank's whole months against Expenses, by kind; flagged only when the bank shows clearly more (round 4)", async () => {
+  const { bankVsPlan, BANK_OVER } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { standing } = await import("../../overview/setup/compute.js");
+  const { compute: alerts } = await import("../../overview/alerts/compute.js");
+  const T = "2026-11-02";
+  const fill = (p, extraShopping) => {
+    p.transactions = [];
+    let n = 0;
+    const add = (date, amount, category) => p.transactions.push({ id: `t${++n}`, date, amount, payee: category || "x", accountId: "a-chk", category, tags: [], note: "" });
+    for (const ym of ["2026-08", "2026-09", "2026-10"]) {
+      add(`${ym}-01`, 10950, "income-salary");
+      add(`${ym}-02`, -1980, "housing"); add(`${ym}-05`, -953, "groceries"); add(`${ym}-06`, -410, "debt");
+      add(`${ym}-09`, -extraShopping, "shopping"); add(`${ym}-10`, -500, "transfer"); add(`${ym}-12`, -900, "taxes"); add(`${ym}-15`, -100, "");
+      add(`${ym}-28`, -20, "dining");
+    }
+    add("2026-11-01", -5000, "shopping");   // this month: not whole yet, left out
+    return p;
+  };
+  const p = fill(familyPlan(T), 3000);
+  const b = bankVsPlan(p, { today: T });
+  assert.equal(b.months, 3);
+  // out: housing 1980 + groceries 953 + debt 410 + shopping 3000 + unfiled 100 + dining 20; transfers and taxes left out
+  assert.ok(Math.abs(b.bankOut - (1980 + 953 + 410 + 3000 + 100 + 20)) < 0.01, String(b.bankOut));
+  assert.ok(b.over, "the bank shows about $3,000 a month more than Expenses lists");
+  assert.equal(b.lines[0].category, "shopping"); assert.ok(Math.abs(b.lines[0].more - 3000) < 0.01); assert.equal(b.lines[0].plan, 0);
+  assert.ok(Math.abs(b.unfiled - 100) < 0.01);
+  assert.ok(b.lines.every((x) => x.more >= BANK_OVER.lineAtLeast));
+  // the Dashboard: the first move is to put the rest on Expenses, and the headline says the figures may be too rosy
+  const st = standing(p, { today: T });
+  assert.equal(st.moves[0].id, "bank"); assert.equal(st.moves[0].href, "#/cashflow/expenses");
+  assert.match(st.headline, /^Your bank shows about \$[\d,]+ a month more going out than your plan lists/);
+  assert.ok(st.bank && Math.abs(st.bank.gap - b.gap) < 0.01);
+  assert.ok(alerts(p, { today: T }).alerts.some((a) => a.id === "bank-over"));
+  // a bank close to the plan is not flagged; nor are fewer than two whole months
+  const q = fill(familyPlan(T), 0);
+  assert.equal(bankVsPlan(q, { today: T }).over, false);
+  assert.equal(standing(q, { today: T }).bank, null);
+  q.transactions = q.transactions.filter((t) => t.date >= "2026-10-01");
+  assert.equal(bankVsPlan(q, { today: T }), null);
+});

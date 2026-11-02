@@ -37,6 +37,11 @@ From the 1st to the 10th of a month, while the month just ended has no entry in 
 card has one row "Your October check-in · Start ›" opening the Monthly review. Its first step is the balances, so the
 row takes the stale-balances row's place instead of adding a second one; the owner's three What-to-do-now cards stay.
 
+## When the bank shows more going out (2026-11-02, round 4)
+With setup's `standing.bank` (the bank files show clearly more going out than Expenses lists), the left-over row is amber,
+says "By your plan. Your bank shows about $5,350 a month more going out" and opens Expenses; the headline and the first
+move say the same. A row reading $3,804 in green beside a bank that shows the household short was the round-4 finding.
+
 ## Inputs
 Reads the plan sections listed in `needs` only to decide which setup steps are done. Money
 numbers come from other modules through `ctx.computeOf("balance/net-worth")` etc.; where you stand from

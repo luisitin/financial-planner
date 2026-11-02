@@ -1,10 +1,11 @@
 // modules/cashflow/income-statement/compute.js -- PURE. Month by month: what came in, what
 // went out, what was kept, from the transactions (transfers excluded). Next to it, what the
 // Income and Expenses pages say should happen each month, so the two can be compared.
-import { isTransfer, monthOf, monthLabel } from "../../transactions/ledger/compute.js";
+import { isTransfer, monthOf, monthLabel, coverage, monthCover } from "../../transactions/ledger/compute.js";
 import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { compute as computeIncome } from "../income/compute.js";
-import { compute as computeExpenses } from "../expenses/compute.js";
+import { compute as computeExpenses, CATEGORIES } from "../expenses/compute.js";
+import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { takeHome } from "../paycheck/compute.js";
 
 /** Plan versus real: money in from the bank more than this share below the plan's take-home is a gap worth a look (two paychecks in a month of a pay every two weeks are 12/13 of the average month, 7.7% below). */
@@ -59,4 +60,56 @@ export function compute(plan, params = {}) {
   const inShort = inGap !== null && inGap < 0 && -inGap > Math.max(50, IN_BAND * takeHomeIn);
   const top = (map) => [...map.values()].sort((a, b) => b.total - a.total);
   return { rows, totals, average, planned, inGap, inShort, byCategory: { in: top(cat.in), out: top(cat.out) }, hasData: rows.length > 0, monthsWanted: want };
+}
+
+/** Bank versus plan: the bank shows more going out than Expenses lists by at least this much a month, and this share of it. */
+export const BANK_OVER = { dollars: 200, share: 0.1, minMonths: 2, maxMonths: 6, lineAtLeast: 50 };
+/**
+ * bankVsPlan(plan, { today }) -> null | { months, bankOut, planOut, gap, over, lines: [{ category, label, icon, essential, bank, plan, more }],
+ *   unfiled } (all a month)
+ * What the bank files show going out, on average over the whole months they cover (the last BANK_OVER.maxMonths, at least
+ * minMonths; transfers between your own accounts left out), against what the Expenses page lists (plus a saved Pay off
+ * debts extra). Taxes are left out on both sides (they come off income elsewhere). `over` when the bank shows at least
+ * BANK_OVER.dollars and BANK_OVER.share more; that direction is safe, since a card or account whose file is missing makes
+ * the bank show less, never more. `lines`: each spending kind the bank shows at least lineAtLeast a month more of than
+ * Expenses lists, largest first; `unfiled`: bank spending not filed under a kind yet. Round 4 (2026-11-02): the Dashboard,
+ * Next best action and the Forecast were worked out from the typed Expenses only, so a household whose bank showed it
+ * short was told "Your month works".
+ */
+export function bankVsPlan(plan, params = {}) {
+  const today = params.today ?? null;
+  const txs = (plan.transactions ?? []).filter((t) => !isTransfer(t, plan));
+  if (!txs.length || !today || !(plan.expenses ?? []).length) return null;
+  const cov = coverage(plan);
+  const thisMonth = String(today).slice(0, 7);
+  const yms = [...new Set(txs.map((t) => monthOf(t.date)).filter((m) => m && m < thisMonth))].sort().reverse()
+    .filter((ym) => monthCover(cov, ym, today).full).slice(0, BANK_OVER.maxMonths);
+  if (yms.length < BANK_OVER.minMonths) return null;
+  const inWindow = new Set(yms);
+  const byCat = new Map();
+  let out = 0, unfiled = 0;
+  for (const t of txs) {
+    if (!inWindow.has(monthOf(t.date))) continue;
+    const amt = Number(t.amount) || 0;
+    const c = categoryById(plan, t.category);
+    const kind = c?.kind ?? (amt >= 0 ? "income" : "expense");
+    if (kind !== "expense") continue;
+    const key = CATEGORIES[t.category] ? t.category : t.category ? "other" : "";
+    if (key === "taxes") continue;
+    out += -amt;
+    if (!key) unfiled += -amt; else byCat.set(key, (byCat.get(key) ?? 0) - amt);
+  }
+  const n = yms.length;
+  const exp = computeExpenses(plan, { today });
+  const planCat = new Map(exp.byCategory.map((c) => [c.category, c.monthly]));
+  let extra = 0;
+  try { const pay = computePayoff(plan, { today }); extra = pay?.hasData && pay.extra > 0 ? pay.extra : 0; } catch { extra = 0; }
+  const planOut = exp.monthly - (planCat.get("taxes") ?? 0) + extra;
+  const bankOut = out / n;
+  const gap = bankOut - planOut;
+  const lines = [...byCat].map(([category, total]) => {
+    const bank = total / n, planned = (planCat.get(category) ?? 0) + (category === "debt" ? extra : 0);
+    return { category, label: CATEGORIES[category].label, icon: CATEGORIES[category].icon, essential: CATEGORIES[category].essential, bank, plan: planned, more: bank - planned };
+  }).filter((x) => x.more >= BANK_OVER.lineAtLeast).sort((a, b) => b.more - a.more);
+  return { months: n, bankOut, planOut, gap, over: gap >= Math.max(BANK_OVER.dollars, BANK_OVER.share * planOut), lines, unfiled: unfiled / n };
 }

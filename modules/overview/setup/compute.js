@@ -7,6 +7,7 @@
 // the plan already has (made on its own page) is shown and not asked again; nothing that another record points at is
 // ever removed; a blank box saves nothing.
 import { CATEGORIES, compute as computeExpenses } from "../../cashflow/expenses/compute.js";
+import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
@@ -902,7 +903,12 @@ export function standing(plan, { today }) {
   const focus = [...(drawing ? ["retire"] : []), ...(setupOf(plan).focus ?? []), ...(picks(plan, "goals").includes("home") ? ["home"] : [])];
   const debtStep = open.slice(0, 1).some((m) => m.id === "high-debt" || m.id === "mid-debt");   // the debt guide would repeat it
   const guides = focus.filter((f, i) => FOCUS_GUIDE[f] && focus.indexOf(f) === i && !(f === "debt" && debtStep)).map((f) => ({ id: `guide-${f}`, title: FOCUS_GUIDE[f].title, detail: null, href: FOCUS_GUIDE[f].href }));
-  const moves = (drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)]).slice(0, 3);
+  // the bank files show more going out than Expenses lists (bankVsPlan): every figure here is worked out from Expenses, so
+  // putting the rest on Expenses comes first (round 4, 2026-11-02)
+  let bank = null;
+  try { const b = bankVsPlan(plan, { today }); bank = b?.over ? b : null; } catch { bank = null; }
+  const bankMove = bank ? [{ id: "bank", title: "Add what your bank shows to Expenses", detail: `Your bank files show about ${fmtMoney(Math.round(bank.gap / 10) * 10, plan?.meta?.currency ?? "USD")} a month more going out than Expenses lists.`, href: "#/cashflow/expenses" }] : [];
+  const moves = [...bankMove, ...(drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)])].slice(0, 3);
   // what was left out, so the person knows what a figure is missing
   const later = [];
   const missing = retirementMissing(plan);
@@ -925,7 +931,8 @@ export function standing(plan, { today }) {
   const first = open[0]?.id ?? null;
   const saved = savedTotal(plan);
   const cur = plan?.meta?.currency ?? "USD";
-  const headline = drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
+  const headline = bank ? `Your bank shows about ${fmtMoney(Math.round(bank.gap / 10) * 10, cur)} a month more going out than your plan lists, so the figures below may be too rosy. The first move fixes that.`
+    : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
       : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
         : first === "protect" ? "Life cover for the people who count on you comes first. The moves below start there."
@@ -939,6 +946,7 @@ export function standing(plan, { today }) {
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
+    bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null,
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),

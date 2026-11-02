@@ -1,5 +1,6 @@
 // modules/cashflow/expenses/view.js -- DOM only. Totals, a breakdown by category with bars,
 // a tappable list of expenses, one form to add or edit.
+import { bankVsPlan } from "../income-statement/compute.js";
 import { compute, CATEGORIES, closeGap } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
 
@@ -89,6 +90,24 @@ export function render(root, ctx) {
       `Next year about ${fmt.money(d.nextYear, cur)} after inflation.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
+    // the bank files show more going out than this page lists (bankVsPlan): each kind the bank shows more of, one tap to add
+    // the rest, so every figure in the plan follows (round 4, 2026-11-02)
+    let bk = null;
+    try { bk = bankVsPlan(plan, { today: fmt.today() }); } catch { bk = null; }
+    if (bk?.over) {
+      const ten = (v) => Math.round(v / 10) * 10;
+      root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Your bank shows more going out"),
+        ui.h("p", {}, `Over the last ${bk.months} whole months your bank files show about ${fmt.money(ten(bk.bankOut), cur)} a month going out; this page lists ${fmt.money(ten(bk.planOut), cur)}. Add what is missing, and every figure in the plan follows.`),
+        bk.lines.length ? ui.h("ul", { class: "page-list" }, bk.lines.map((x) => ui.h("li", {},
+          ui.h("span", { class: "ic" }, x.icon),
+          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.label), ui.h("div", { class: "d" }, x.plan > 0.5 ? `bank about ${fmt.money(ten(x.bank), cur)} a month, listed here ${fmt.money(ten(x.plan), cur)}` : `bank about ${fmt.money(ten(x.bank), cur)} a month, not listed here`)),
+          ui.h("span", { class: "st" }, ui.button(`Add ${fmt.money(ten(x.more), cur)}`, () => {
+            const name = x.plan > 0.5 ? `${x.label}: the rest the bank shows` : x.label;
+            pending = `Added ${name}: ${fmt.money(ten(x.more), cur)} a month.`;
+            store.update((p) => { p.expenses = p.expenses ?? []; p.expenses.push({ id: ui.uid(), name, category: x.category, amount: ten(x.more), period: "monthly", essential: x.essential, inflates: true }); });
+          }, { class: "secondary small" }))))) : null,
+        bk.unfiled >= 50 ? ui.h("p", { class: "muted small" }, `About ${fmt.money(ten(bk.unfiled), cur)} a month of it is not filed under a kind yet. `, ui.h("a", { href: "#/transactions/categorize" }, "File it \u203a")) : null));
+    }
     const gc = gapCard();
     if (gc) root.append(gc);
     // a debt paid off whose payment is still listed: one tap stops it from today, and the left-over figure grows by it

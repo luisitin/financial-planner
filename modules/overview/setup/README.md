@@ -208,6 +208,9 @@ spendMode, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, 
 `docs/DATA_MODEL.md` under `guide`.
 
 ## Choices made (the owner said: decide and note it here)
+- When the bank files show clearly more going out than Expenses lists (income-statement `bankVsPlan().over`), `standing`
+  returns `bank`, the headline says the figures may be too rosy, and the first move is "Add what your bank shows to
+  Expenses": every figure here comes from Expenses, so that comes before the plan's own order (2026-11-02).
 - The left-over figure takes off the state's income tax once it can be worked out (Next best action's `spare.stateKnown`:
   a no-tax or flat-rate state, or a rate typed on the State page); the "not counted yet" line under the figures then goes,
   and the figure says "After tax". A graduated state with no rate typed is asked for by name (2026-11-02).
