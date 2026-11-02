@@ -543,6 +543,11 @@ test("the first moves are in plain words: no 'each of you' for one adult, no 'ba
   assert.equal(S.revealWords({ id: "full-fund", title: "A full emergency fund (4 months)", detail: "x" }, p).title, "Build your cushion to 4 months");
   const f = S.standing(family(), { today: T }).moves.find((m) => m.id === "ira");
   if (f) assert.match(f.title, /each of you/);
+  // a 401(k) with nothing going in is a question first: it may be an old job's, or the job may not match
+  assert.equal(S.revealWords({ id: "match", status: "check", ask: [{ personId: "p-bo", name: "Bo", accounts: ["a"] }] }, p).title, "Check if Bo's job matches retirement saving");
+  assert.equal(S.revealWords({ id: "match", status: "check", ask: [{ personId: "s", name: "Me", accounts: ["a"] }] }, p).title, "Check if your job matches retirement saving");
+  assert.equal(S.revealWords({ id: "match", status: "check", ask: [{ name: "Ana" }, { name: "Bo" }] }, p).title, "Check if your jobs match retirement saving");
+  assert.equal(S.revealWords({ id: "match", status: "done", ask: [] }, p).title, "Get all of your employer's match");
 });
 
 test("what is not counted yet names only what is missing, an unmarried couple's tax and an estimated Social Security", () => {

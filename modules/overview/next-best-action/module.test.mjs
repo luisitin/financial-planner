@@ -63,3 +63,23 @@ test("an HSA account but no high-deductible plan this year: no HSA step (IRC 223
   p.taxes.hsa = { ...p.taxes.hsa, coverage: "none" };
   assert.equal(step(compute(p, { today: TODAY }), "hsa"), undefined);
 });
+
+test("the match step: a 401(k) from a job left, or a job with no match, leaves nothing to check; the step names who to ask", () => {
+  const p = familyPlan("2026-11-02");
+  const d0 = compute(p, { today: "2026-11-02" });
+  const m0 = step(d0, "match");
+  assert.equal(m0.status, "check", "Bo has a 401(k) and pay, nothing going in");
+  assert.deepEqual(m0.ask.map((a) => a.personId), ["p-bo"]);
+  assert.ok(m0.ask[0].accounts.length >= 1);
+  // the 401(k) is from a job Bo left
+  const p1 = familyPlan("2026-11-02");
+  for (const a of p1.accounts) if (m0.ask[0].accounts.includes(a.id)) a.formerJob = true;
+  const m1 = step(compute(p1, { today: "2026-11-02" }), "match");
+  assert.ok(!m1 || m1.status === "done", "no question about an old job's 401(k)");
+  // Bo's job has no match
+  const p2 = familyPlan("2026-11-02");
+  p2.retirement.workPlans = { "p-bo": { match: false } };
+  const m2 = step(compute(p2, { today: "2026-11-02" }), "match");
+  assert.ok(!m2 || m2.status === "done", "nothing to check once Bo said there is no match");
+  assert.equal(m2?.ask?.length ?? 0, 0);
+});

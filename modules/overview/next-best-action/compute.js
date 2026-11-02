@@ -28,7 +28,8 @@ export const HORIZON_MONTHS = 120;
  *   ready, missing,
  *   spare: { monthly, gross, federalTax, payrollTax, spending, retirementSaving, goalSaving } (all a month; spare may be negative),
  *   steps: [{ id, n, title, why, status: "done"|"now"|"later"|"check"|"skip", detail, gap (one-off amount left) | null, roomYearly | null,
- *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go }],
+ *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go,
+ *             ask (the match step: [{ personId, name, accounts: [401(k) ids] }] with pay, a 401(k) and nothing going in) }],
  *   next: the first step that is not done (or null)
  * }
  * Steps that do not apply to this household (no 401(k), no HSA) are left out.
@@ -77,16 +78,20 @@ export function compute(plan, params = {}) {
   add({ id: "starter", title: "A starter emergency fund", why: "One month of must-pay bills in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
     detail: starterGap <= 0 ? `Usable cash ${money(liq.now)} covers a month of must-pay bills (${money(essential)}).` : `${money(starterGap)} more in usable cash reaches one month of must-pay bills (${money(essential)}).`, go: ["balance", "liquidity"] });
 
-  // 2. the employer match
+  // 2. the employer match: a 401(k) marked as from a job left (`formerJob`) takes no new money, and a person who said their
+  // job has no plan or no match (`retirement.workPlans[id].match === false`) has nothing to check
   const k401 = accounts.filter((a) => a.type === "401k");
-  if (k401.length) {
-    const owners = adults.filter((p) => k401.some((a) => a.ownerId === p.id) || (p.role === "self" && k401.some((a) => !a.ownerId)));
-    const working = owners.filter((p) => inc.active.some((x) => x.personId === p.id && (x.type === "salary" || x.type === "bonus")));
+  const atWork = k401.filter((a) => !a.formerJob);
+  const noMatch = (id) => plan.retirement?.workPlans?.[id]?.match === false;
+  if (atWork.length) {
+    const owners = adults.filter((p) => atWork.some((a) => a.ownerId === p.id) || (p.role === "self" && atWork.some((a) => !a.ownerId)));
+    const working = owners.filter((p) => !noMatch(p.id) && inc.active.some((x) => x.personId === p.id && (x.type === "salary" || x.type === "bonus")));
     const contributing = working.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && k401.some((a) => a.id === c.accountId)));
     const matched = contributing.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && Number(c.employerMatch) > 0));
     const missingMatch = working.filter((p) => !contributing.includes(p));
     if (working.length) add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: missingMatch.length ? "check" : "done",
-      detail: missingMatch.length ? `${missingMatch.map((p) => p.name).join(" and ")} ${missingMatch.length === 1 ? "has" : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it.` : `${matched.map((p) => p.name).join(" and ") || "Everyone with a 401(k)"} ${matched.length > 1 ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`, go: ["retirement", "contributions"] });
+      detail: missingMatch.length ? `${missingMatch.map((p) => p.name).join(" and ")} ${missingMatch.length === 1 ? "has" : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : `${matched.map((p) => p.name).join(" and ") || "Everyone with a 401(k)"} ${matched.length > 1 ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
+      ask: missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id) })), go: ["retirement", "contributions"] });
   }
 
   // 3. expensive debt, most expensive first (mortgages left out)

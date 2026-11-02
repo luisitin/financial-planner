@@ -851,7 +851,12 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
       ? { title: "See how long your savings last", detail: `About ${money(-(step.spare ?? 0))} a month comes from savings. The retirement check shows how many years that covers.` }
       : { title: "Spend less than comes in", detail: step.detail };
     case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
-    case "match": return { title: "Get all of your employer's match", detail: "Money your employer adds when you save for retirement. Put in at least enough to get every dollar of it." };
+    case "match": {
+      // a 401(k) with nothing going in: a question first (it may be from a job left, or the job may not match)
+      const who = (step.ask ?? []).map((a) => (a.name === "Me" || !a.name ? "your" : `${a.name}'s`));
+      if (step.status === "check" && who.length) return { title: `Check if ${who.length === 1 ? `${who[0]} job matches` : "your jobs match"} retirement saving`, detail: "Money an employer adds when you save for retirement. If there is a match, put in at least enough to get every dollar of it." };
+      return { title: "Get all of your employer's match", detail: "Money your employer adds when you save for retirement. Put in at least enough to get every dollar of it." };
+    }
     case "high-debt": { const list = costly(HIGH_RATE, Infinity); return { title: list.length && list.every((d) => d.card) ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail }; }
     case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
     case "hsa": return { title: "Fill your health savings account", detail: step.detail };

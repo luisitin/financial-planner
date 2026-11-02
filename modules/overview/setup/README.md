@@ -191,7 +191,10 @@ as "statement", so going through the ages screen again keeps it.
   living on savings, as planned: the retirement guide comes first and "Spend less than comes in" becomes "See how long
   your savings last". The words are plainer than on Next best action (`revealWords`): "Pay down the cards first" with
   each card's rate (and "(a typical rate: type yours on What you owe)" for a guess), "A retirement account of your own
-  (an IRA)" ("for each of you" only for two adults), no "backdoor", "Put more into your 401(k)".
+  (an IRA)" ("for each of you" only for two adults), no "backdoor", "Put more into your 401(k)". A match step that is
+  a question (a 401(k) and pay with nothing going in, 2026-11-02) reads "Check if Bo's job matches retirement saving"
+  ("your job" for Me, "your jobs" for two), since the 401(k) may be an old job's or the job may not match; its page,
+  Retirement contributions, answers it in one tap.
 - **Not counted yet**: what no figure above already links to: state income tax; for an unmarried couple, federal tax
   as two returns (the federal estimate works one return for both today, so the left-over figure reads a little low);
   an estimated Social Security; each guessed rate and payment.

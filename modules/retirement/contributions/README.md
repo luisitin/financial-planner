@@ -21,6 +21,15 @@
   - Not modelled: the month-by-month limit for part-year cover (223(b)(2)), Medicare ending eligibility (223(b)(7)), a general-purpose FSA ending eligibility (223(c)(1)(A)(ii); the HSA page warns).
   Checked against the answer key's `hsa_*` columns (3,000 households, `tests/golden/limits/households.csv`): every per-adult and household figure agrees when the plan names its cover.
 
+## The match question (2026-11-02)
+Next best action asks about the employer match when an adult is paid and has a 401(k) with nothing going in; the Dashboard's
+button then reads "Check if Bo's job matches retirement saving" and opens this page. The page asks it as one question
+with three answers, so the move is done here: "Yes: add what Bo puts in" opens the add form with Bo and that 401(k) chosen;
+"No match at Bo's job" saves `retirement.workPlans[personId].match = false`; "That 401(k) is from a job Bo left" saves
+`accounts[].formerJob = true`. Both are optional fields (DATA_MODEL), shown under the question with a Change button that
+takes them back. The confirmation names the new next move from the Dashboard's list. A new contribution's account box starts
+on a retirement account (not a brokerage one, not an old job's 401(k)).
+
 ## Formulas
 - Yearly = amount x times per year (`core/math/periods.js`) + employer match.
 - Limits (`data/limits.js`, IRS, read through `limitsFor`): 2026: 401(k)/403(b) 24,500 (+8,000 from 50; 11,250 from 60 to 63), IRA 7,500 traditional and Roth together (+1,100 from 50), HSA 4,400 self-only (+1,000 from 55; 8,750 family). 2025 also listed; 2027 has only the HSA so far (4,500 / 9,000, Rev. Proc. 2026-24 s.3.01(1)). The HSA row of each person is `hsaPicture`'s: it follows the HSA page's cover (a spouse outside self-only cover has a limit of 0 and is told why; spouses with family cover share the family limit). The age reached in the year is what counts. A Roth account counts as a Roth 401(k)/403(b) (with the 401(k) limit, IRC 402A(c)(2)) when it has an employer match or its name says 401(k), 403(b), 457 or TSP; otherwise as a Roth IRA (the IRA limit, 408A(c)(2)) (`limitKind`). An employer's 401(k) match is outside the elective-deferral limit; an employer's HSA deposits share the HSA limit (IRS Pub. 969, Employer contributions).
