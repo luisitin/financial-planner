@@ -31,15 +31,22 @@ export const STALE_HISTORY_DAYS = 35;
  * are behind are one alert ("3 goals are behind") with the extra they need in all.
  */
 /**
- * goalsBehind(goalsResult) -> { behind: [goals behind, nothing-going-in first], need (a month, more than now, in all), idle: [...], pastDue: [...] }
+ * goalsBehind(goalsResult, { nba, today }) -> { behind: [goals behind, nothing-going-in first], need (a month, more than now, in all), idle: [...],
+ *   pastDue: [...], queued: [goals with nothing going in whose turn comes later], turn (the day Next best action's goals step starts, or null) }
  * Only goals behind their pace count toward the monthly need; a goal past its date is counted apart (its whole remaining
  * amount is not a monthly figure). Needs attention and the Dashboard's Goals tile both use it, so they say the same.
  */
-export function goalsBehind(gl) {
+export function goalsBehind(gl, { nba = null, today = null } = {}) {
   const goals = gl?.goals ?? [];
-  const behind = goals.filter((g) => g.status === "behind").sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
+  // a goal with nothing going in yet, whose turn Next best action gives later (its goals step starts getting money in a
+  // later month, after the cards and the cushion), is waiting its turn, not behind: a goal set a minute ago is not late
+  const step = nba?.ready ? (nba.steps ?? []).find((x) => x.id === "goals") : null;
+  const turn = step?.startDate && today && step.startDate.slice(0, 7) > today.slice(0, 7) ? step.startDate : null;
+  const all = goals.filter((g) => g.status === "behind");
+  const queued = turn ? all.filter((g) => !(g.monthly > 0)) : [];
+  const behind = all.filter((g) => !queued.includes(g)).sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
   const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
-  return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due") };
+  return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn };
 }
 
 export function compute(plan, params = {}) {
@@ -121,7 +128,7 @@ export function compute(plan, params = {}) {
   // goals
   // goals that are behind: one alert when there are two or more (four "X is behind" rows read as four problems); those
   // with nothing going in are named first (F-015: the most behind of all), and the left-over each month is beside the need
-  const { behind: behindGoals, need, idle } = goalsBehind(gl);
+  const { behind: behindGoals, need, idle } = goalsBehind(gl, { nba, today });
   if (behindGoals.length > 1) {
     const names = behindGoals.map((g) => g.name);
     const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
@@ -131,7 +138,7 @@ export function compute(plan, params = {}) {
   }
   for (const g of gl.goals) {
     if (g.status === "past due") add(`goal-late-${g.id}`, "warn", `${g.name}: the date has passed`, `${money(g.remaining)} still to go. Set a new date or adjust the amount.`, ["goals", "goals"]);
-    else if (g.status === "behind" && behindGoals.length === 1) add(`goal-behind-${g.id}`, "info", `${g.name} is behind`, g.monthly > 0 ? `Needs about ${money(g.neededMonthly)} a month; you put in ${money(g.monthly)}.` : `Needs about ${money(g.neededMonthly)} a month; nothing is going in yet.`, ["goals", "goals"]);
+    else if (g.status === "behind" && behindGoals.length === 1 && behindGoals.includes(g)) add(`goal-behind-${g.id}`, "info", `${g.name} is behind`, g.monthly > 0 ? `Needs about ${money(g.neededMonthly)} a month; you put in ${money(g.monthly)}.` : `Needs about ${money(g.neededMonthly)} a month; nothing is going in yet.`, ["goals", "goals"]);
   }
   // a goal past its date already has its own alert above: its warning from the Goals page would say the same thing again
   const late = gl.goals.filter((g) => g.status === "past due").map((g) => g.name);

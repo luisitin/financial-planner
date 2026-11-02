@@ -42,6 +42,16 @@ With setup's `standing.bank` (the bank files show clearly more going out than Ex
 says "By your plan. Your bank shows about $5,350 a month more going out" and opens Expenses; the headline and the first
 move say the same. A row reading $3,804 in green beside a bank that shows the household short was the round-4 finding.
 
+## The first day (2026-11-02, round 4)
+- Set up my plan stopped part way: the start-here tile says "Question 3 of 7. Next: your ages. Pick up where you left off"
+  and links to that screen (start/compute.js `setupCard`, the same card Get started shows). With money in the plan the
+  six-step card becomes one card, "Set up my plan: question 4 of 7", with "Pick up at question 4"; the old six-step list
+  and its "Do step 1: Add your accounts" (the raw form the questions replaced) no longer show beside it.
+- Finished with only the assumptions look left (also on Needs attention), the folded line reads "Set up my plan: done ✓",
+  not "5 of 6 done" right after "You did it".
+- The check-in row uses monthly-review's `checkInDue`: a plan made this month is not asked about last month.
+- The Goals tile counts a goal waiting its turn apart: "1 starts in April 2028" (alerts' `goalsBehind`).
+
 ## Inputs
 Reads the plan sections listed in `needs` only to decide which setup steps are done. Money
 numbers come from other modules through `ctx.computeOf("balance/net-worth")` etc.; where you stand from

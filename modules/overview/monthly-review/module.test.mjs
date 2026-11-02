@@ -130,3 +130,31 @@ test("the month still running is not marked reviewed: it ends first, and is fini
   assert.equal(late.month, "2026-11"); assert.equal(late.ended, false, "still running on its last day");
   assert.equal(compute(familyPlan("2026-12-01"), { today: "2026-12-01" }).finishIn, "December", "November, opened on Dec 1, is finished in December");
 });
+
+// ---- a plan made this month is not asked about last month (round 4, 2026-11-02)
+import { firstDay, checkInDue } from "./compute.js";
+test("firstDay: the earliest dated thing in the plan, not when the app was first opened", () => {
+  const p = emptyPlan(); p.meta.createdAt = "2026-09-01T00:00:00Z";
+  assert.equal(firstDay(p), null);
+  p.accounts = [{ id: "a", name: "Checking", type: "checking", balance: 100, asOf: "2026-11-02", history: [{ date: "2026-11-02", balance: 100 }] }];
+  assert.equal(firstDay(p), "2026-11-02");
+  p.transactions = [{ id: "t", date: "2026-10-14", amount: -5 }];
+  assert.equal(firstDay(p), "2026-10-14");
+  p.netWorthHistory = [{ date: "2026-01-01", assets: 1, liabilities: 0, netWorth: 1 }];
+  assert.equal(firstDay(p), "2026-01-01");
+});
+test("checkInDue: early in the month, last month not reviewed, and only for a plan that existed then", () => {
+  const made = emptyPlan();
+  made.accounts = [{ id: "a", name: "Checking", type: "checking", balance: 100, asOf: "2026-11-02", history: [] }];
+  assert.equal(checkInDue(made, "2026-11-02"), null, "made today: no October check-in");
+  assert.equal(defaultMonth("2026-11-02", made), "2026-11", "Monthly review opens on this month for it");
+  assert.deepEqual(checkInDue(made, "2026-12-03"), { month: "2026-11", name: "November" }, "its first check-in is in December");
+  const fam = familyPlan("2026-10-30");
+  assert.deepEqual(checkInDue(fam, "2026-11-02"), { month: "2026-10", name: "October" });
+  assert.equal(defaultMonth("2026-11-02", fam), "2026-10");
+  assert.equal(checkInDue(fam, "2026-11-11"), null, "after the tenth");
+  fam.reviews = [{ month: "2026-10", at: "2026-11-01" }];
+  assert.equal(checkInDue(fam, "2026-11-02"), null, "already reviewed");
+  assert.equal(checkInDue(emptyPlan(), "2026-11-02"), null, "no accounts");
+  assert.equal(defaultMonth("2026-11-02"), "2026-10", "without a plan the old rule stands");
+});

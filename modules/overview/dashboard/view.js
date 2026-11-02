@@ -4,6 +4,8 @@
 import { PHASES } from "../../../core/phases.js";
 import { usable } from "../guide/act.js";
 import { goalsBehind } from "../alerts/compute.js";
+import { checkInDue } from "../monthly-review/compute.js";
+import { setupCard } from "../start/compute.js";
 import { aiHealth } from "../../ai/health.js";
 
 // scoped to the where-you-stand card (no new global CSS)
@@ -80,11 +82,9 @@ export function render(root, ctx) {
       const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;
       // the first ten days of a month, while the month just ended is not reviewed: one row inviting the check-in (its first
       // step is the balances, so it takes the balances row's place rather than adding a second one)
-      const day = Number(today.slice(8, 10));
-      const ended = (() => { const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7)); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; })();
-      const endedName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(ended.slice(5, 7)) - 1];
-      const checkIn = day <= 10 && (plan.accounts ?? []).length > 0 && usable(ctx, "overview/monthly-review") && !(plan.reviews ?? []).some((r) => r.month === ended);
-      if (checkIn) rows.push({ dot: oldDays >= 25 ? "warn" : "", k: `Your ${endedName} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "About ten minutes, once a month", v: "Start ›", open: true, href: "#/overview/monthly-review" });
+      // (a plan made this month is never asked about last month: checkInDue wants something dated before the 1st)
+      const due = usable(ctx, "overview/monthly-review") ? checkInDue(plan, today) : null;
+      if (due) rows.push({ dot: oldDays >= 25 ? "warn" : "", k: `Your ${due.name} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "About ten minutes, once a month", v: "Start ›", open: true, href: "#/overview/monthly-review" });
       else if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
       const move = st.moves[0] ?? null;
       moveShown = !!move;
@@ -104,8 +104,10 @@ export function render(root, ctx) {
     const savedToday = (nw.history ?? []).some((h) => h.date === today);
     const gl = computeOf("goals/goals", { today: fmt.today() }) ?? {};
     // how far behind, as money a month (Needs attention's own sum), not only how many; a goal past its date is said apart
-    const gb = goalsBehind(gl), behind = gb.behind.length, late = gb.pastDue.length;
-    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind${gb.need >= 1 ? `, about ${fmt.money(gb.need, cur)} more a month` : ""}` : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join(", ") || "all on track";
+    const gb = goalsBehind(gl, { nba: gl.count ? computeOf("overview/next-best-action", { today }) : null, today }), behind = gb.behind.length, late = gb.pastDue.length;
+    // a goal whose turn comes later (Next best action funds it after the cards and the cushion) is not "behind"
+    const turnWords = gb.turn ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(gb.turn.slice(5, 7)) - 1]} ${gb.turn.slice(0, 4)}` : "";
+    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind${gb.need >= 1 ? `, about ${fmt.money(gb.need, cur)} more a month` : ""}` : null, gb.queued.length ? (gb.queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turnWords}, after your earlier steps` : `${gb.queued.length} start${gb.queued.length === 1 ? "s" : ""} in ${turnWords}`) : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join(", ") || "all on track";
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
@@ -120,8 +122,13 @@ export function render(root, ctx) {
   // Before the first account: how to start. After it: what to do now (design log 2026-09-15, pass 2).
   const al = d.hasMoney ? computeOf("overview/alerts", { today: fmt.today() }) : null;
   const alN = al?.total ?? 0;
+  // "Set up my plan" stopped part way: every place that offers it picks up at the question reached (Get started's own card),
+  // never a fresh "Seven easy questions" beside a second count of six steps
+  const sc = setupOn ? setupCard(plan, { today: fmt.today() }) : null;
+  const resume = sc?.state === "started" ? sc : null;
   const actions = !d.hasMoney ? [
-    setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }
+    resume ? { icon: "🌱", t: "Set up my plan", d: `Question ${resume.q} of ${resume.total}${resume.next ? `. Next: ${resume.next}` : ""}. Pick up where you left off.`, href: resume.href }
+    : setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }
       : { icon: "💰", t: "Add your accounts", d: "Checking, savings, retirement, loans. This is where the numbers start.", go: ["balance", "net-worth"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
     { icon: "📱", t: "Set up your phone", d: "Connect this device to the PC and add the app to your home screen.", go: ["system", "settings"] },
@@ -131,11 +138,11 @@ export function render(root, ctx) {
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
   ];
   const askOff = (st) => st !== "on";
-  const tiles = actions.map((a) => ui.h("a", { href: `#/${a.go.join("/")}`, class: "action" },
+  const tiles = actions.map((a) => ui.h("a", { href: a.href ?? `#/${a.go.join("/")}`, class: "action" },
     ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d))));
   root.append(ui.card(d.hasMoney ? "What to do now" : "Start here", ui.h("div", { class: "grid" }, tiles)));
   // the AI helper off or not answering: the tile stays "Ask a question" (design log) and opens the plan's own answers
-  const askTile = tiles[actions.findIndex((a) => a.go[0] === "ai")];
+  const askTile = tiles[actions.findIndex((a) => a.go?.[0] === "ai")];
   const showAsk = (st) => { if (!askTile || !askOff(st)) return; askTile.setAttribute("href", "#/overview/quick"); askTile.querySelector(".d").textContent = st === "off" ? "The AI helper is turned off, so this opens your plan's own answers." : "The AI helper isn't answering right now, so this opens your plan's own answers."; };
   if (askTile) { if (aiSeen.st !== null) showAsk(aiSeen.st); aiAnswers(ctx.ai).then(showAsk); }
 
@@ -154,12 +161,19 @@ export function render(root, ctx) {
           ui.h("span", { class: "lbl" }, s.label, soon ? ui.h("span", { class: "pill warn" }, "coming soon") : null),
           ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
     }));
-  if (!next || d.setupFinished) {
+  if (resume) {
+    // the questions part way through: one way on, at the question reached (the start-here tile says it when the plan
+    // has no money in yet, so this card would only repeat it)
+    if (d.hasMoney) root.append(ui.card(`Set up my plan: question ${resume.q} of ${resume.total}`,
+      ui.h("p", { class: "muted" }, `${resume.next ? `Next: ${resume.next}. ` : ""}What you have answered is kept.`),
+      ui.h("div", { class: "steps-cta" }, ui.h("a", { href: resume.href, class: moveShown ? "btn secondary" : "btn" }, `Pick up at question ${resume.q}`))));
+  } else if (!next || d.setupFinished) {
     // All done, or "Set up my plan" finished: one folded line (design log 2026-09-15, pass 2). A step still open (the
     // assumptions) stays inside and on Needs attention; the page's filled button is then your next move.
     root.append(ui.h("details", { class: "card fold fold-card" },
       // "done ✓" only when every step is done; finished Set up my plan with a step still open says how many (it said done)
-      ui.h("summary", {}, ui.h("h2", {}, next ? `Set up your plan: ${d.doneCount} of ${d.total} done` : `Set up your plan: all ${d.total} steps done \u2713`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      // finished Set up my plan with only the assumptions look left (it lives in Needs attention too): done, not "5 of 6"
+      ui.h("summary", {}, ui.h("h2", {}, !next ? `Set up your plan: all ${d.total} steps done \u2713` : d.setupFinished && next.key === "assumptions" && d.doneCount === d.total - 1 ? "Set up my plan: done \u2713" : `Set up your plan: ${d.doneCount} of ${d.total} done`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, stepsList(), d.setupFinished && setupOn ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: "#/overview/setup", class: "btn secondary" }, "Change an answer")) : null)));
   } else if (setupOn && d.doneCount === 0) {
     // nothing in the plan yet: the first five steps in one go, as easy questions

@@ -22,8 +22,45 @@ export const LOOK_BACK_DAYS = 10;
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const monthLabel = (ym) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 export const prevMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; };
-/** The month a review on `today` is about: last month in the first LOOK_BACK_DAYS days, else this one. */
-export const defaultMonth = (today) => (Number(today.slice(8, 10)) <= LOOK_BACK_DAYS ? prevMonth(today.slice(0, 7)) : today.slice(0, 7));
+/**
+ * The month a review on `today` is about: last month in the first LOOK_BACK_DAYS days, else this one. With `plan`, a plan
+ * that holds nothing dated before this month (made this month) is about this month: there is no last month to look back on.
+ */
+export const defaultMonth = (today, plan = null) => {
+  const back = Number(today.slice(8, 10)) <= LOOK_BACK_DAYS ? prevMonth(today.slice(0, 7)) : today.slice(0, 7);
+  if (plan && back < today.slice(0, 7)) { const f = firstDay(plan); if (!f || f.slice(0, 7) >= today.slice(0, 7)) return today.slice(0, 7); }
+  return back;
+};
+
+const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d ?? ""));
+/**
+ * firstDay(plan) -> "YYYY-MM-DD" | null: the earliest day the plan holds anything for: an account's balance date or a
+ * point in its history, a saved net worth total, a bank line, a review. Not meta.createdAt: an app opened empty in
+ * October and filled in on November 2 has nothing to look back on in October.
+ */
+export function firstDay(plan) {
+  let first = null;
+  const see = (d) => { if (isDay(d) && (!first || d < first)) first = d; };
+  for (const a of plan.accounts ?? []) { see(a.asOf); for (const h of a.history ?? []) see(h?.date); }
+  for (const h of plan.netWorthHistory ?? []) see(h?.date);
+  for (const t of plan.transactions ?? []) see(t?.date);
+  for (const r of plan.reviews ?? []) see(r?.month ? `${r.month}-01` : null);
+  return first;
+}
+
+/**
+ * checkInDue(plan, today) -> { month, name } | null: the first LOOK_BACK_DAYS days of a month, with accounts on file, the
+ * month just ended not reviewed, and the plan holding something from before this month (so a plan made today is not
+ * asked about a month it never saw). The Dashboard's check-in row uses it.
+ */
+export function checkInDue(plan, today) {
+  if (!isDay(today) || Number(today.slice(8, 10)) > LOOK_BACK_DAYS || !(plan.accounts ?? []).length) return null;
+  const ended = prevMonth(today.slice(0, 7));
+  if ((plan.reviews ?? []).some((r) => r.month === ended)) return null;
+  const f = firstDay(plan);
+  if (!f || f.slice(0, 7) >= today.slice(0, 7)) return null;
+  return { month: ended, name: MONTHS[Number(ended.slice(5, 7)) - 1] };
+}
 
 /**
  * compute(plan, { today, month }) -> {
@@ -37,7 +74,7 @@ export const defaultMonth = (today) => (Number(today.slice(8, 10)) <= LOOK_BACK_
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   if (!today) return { ready: false, missing: ["today's date"] };
-  const month = /^\d{4}-\d{2}$/.test(params.month ?? "") ? params.month : defaultMonth(today);
+  const month = /^\d{4}-\d{2}$/.test(params.month ?? "") ? params.month : defaultMonth(today, plan);
   const label = monthLabel(month);
   const money = (n) => fmtMoney(Math.round(n), plan.meta?.currency ?? "USD");
   const steps = [];

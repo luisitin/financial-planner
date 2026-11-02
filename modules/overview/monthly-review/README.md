@@ -29,6 +29,14 @@ Once the month is marked reviewed, the hero says "October 2026 is done ✓" with
 
 From the 1st to the 10th, while the month just ended is not reviewed, the Dashboard's "where you stand" card has one row "Your October check-in · Start ›" (it takes the stale-balances row's place, since the review starts with the balances).
 
+## A plan made this month (2026-11-02, round 4)
+`firstDay(plan)` is the earliest day the plan holds anything for: an account's balance date or history point, a saved
+net worth total, a bank line, a review (not `meta.createdAt`: an app opened empty in October and filled in on November 2
+has nothing to look back on in October). `checkInDue(plan, today)` is the Dashboard's check-in row: the first ten days,
+accounts on file, last month not reviewed, and `firstDay` before the 1st of this month. `defaultMonth(today, plan)` opens
+on this month for a plan with nothing older, so a plan made on November 2 is not handed an "October 2026 review"; its
+first check-in comes in early December.
+
 ## Data
 New plan section `reviews: [{ month, at, note }]` (`core/schema/migrate.js`; `migrate()` adds it to older plans, no version bump; `docs/DATA_MODEL.md`).
 

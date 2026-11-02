@@ -1,6 +1,7 @@
 // modules/goals/goals/view.js -- DOM only. Totals, a tappable list of goals with progress
 // bars, one form to add or edit.
 import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiffers } from "./compute.js";
+import { goalsBehind } from "../../overview/alerts/compute.js";
 
 const FIELDS = (accounts) => [
   { key: "name", label: "What are you saving for", type: "text", required: true, placeholder: "e.g. Emergency fund" },
@@ -109,11 +110,18 @@ export function render(root, ctx) {
   drawForm();
 
   if (d.count > 0) {
-    const pill = (g) => ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["warn", "no amount"] })[g.status] ?? ["", g.status];
+    // a goal with nothing going in whose turn Next best action gives later is waiting, not behind (alerts' goalsBehind)
+    const gb = goalsBehind(d, { nba: ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) ?? null, today: fmt.today() });
+    const waiting = new Set(gb.queued.map((g) => g.id));
+    const turn = gb.turn ? new Date(`${gb.turn}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "";
+    const pill = (g) => waiting.has(g.id) ? ["", "starts later"] : ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["warn", "no amount"] })[g.status] ?? ["", g.status];
     const sub = (g) => {
-      const bits = [`${fmt.money(g.funded, cur)} of ${fmt.money(g.targetThen, cur)}`];
-      if (g.targetDate) bits.push(`by ${fmt.date(g.targetDate)}`);
-      if (g.status === "behind" || g.status === "on track") bits.push(`needs ${fmt.money(g.neededMonthly, cur)} a month${g.status === "behind" && g.monthly > 0 ? `; you put in ${fmt.money(g.monthly, cur)}` : ""}`);
+      // the amount as typed first; what rising prices make it by the date after (a typed $30,000 read as "$0 of $32,782")
+      const grown = g.targetThen > g.target * 1.005 && g.targetDate;
+      const bits = [`${fmt.money(g.funded, cur)} of ${fmt.money(g.target, cur)}`];
+      if (g.targetDate) bits.push(grown ? `about ${fmt.money(Math.round(g.targetThen / 100) * 100, cur)} by ${fmt.date(g.targetDate)} with rising prices` : `by ${fmt.date(g.targetDate)}`);
+      if (waiting.has(g.id)) bits.push(`its turn comes in ${turn}, after the steps before it on Next best action`);
+      else if (g.status === "behind" || g.status === "on track") bits.push(`needs ${fmt.money(g.neededMonthly, cur)} a month${g.status === "behind" && g.monthly > 0 ? `; you put in ${fmt.money(g.monthly, cur)}` : ""}`);
       if (g.fundedFrom.length) bits.push(`in ${g.fundedFrom.join(", ")}${g.sharedWith.length ? ` (shared with ${g.sharedWith.join(", ")})` : ""}`);
       return bits.join(" · ");
     };

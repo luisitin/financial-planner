@@ -187,3 +187,21 @@ test("protection: no life cover on an earner others depend on, and no guardian f
   p.insurance.policies[0].benefit = 300000;
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id.startsWith("life-cover")), "covered: nothing");
 });
+
+// ---- a goal whose turn comes later is not behind (round 4, 2026-11-02)
+import { goalsBehind } from "./compute.js";
+test("goalsBehind: a goal with nothing going in waits its turn when Next best action funds goals in a later month", () => {
+  const gl = { goals: [
+    { id: "h", name: "House", status: "behind", monthly: 0, neededMonthly: 859 },
+    { id: "c", name: "Car", status: "behind", monthly: 100, neededMonthly: 300 },
+    { id: "t", name: "Trip", status: "on track", monthly: 50, neededMonthly: 50 },
+  ] };
+  const later = { ready: true, steps: [{ id: "goals", startDate: "2028-06-02" }] };
+  const g = goalsBehind(gl, { nba: later, today: "2026-11-02" });
+  assert.deepEqual(g.queued.map((x) => x.id), ["h"]);
+  assert.deepEqual(g.behind.map((x) => x.id), ["c"]);
+  assert.equal(g.need, 200); assert.equal(g.turn, "2028-06-02");
+  const now = goalsBehind(gl, { nba: { ready: true, steps: [{ id: "goals", startDate: "2026-11-02" }] }, today: "2026-11-02" });
+  assert.deepEqual(now.queued, []); assert.deepEqual(now.behind.map((x) => x.id), ["h", "c"]);
+  assert.deepEqual(goalsBehind(gl).queued, [], "without Next best action nothing waits");
+});

@@ -46,6 +46,12 @@ Review fixes (2026-11-02, 7 of 8 confirmed): a figure is offered only when it se
   to save the amount alone and drop the rest). The notice says "in the dollars of its date" for a goal that does not grow.
 - Refuted, not changed: the link's 32 px height and Enter on it (a phone tap opens the page; a near miss opens the form).
 
+## How a row reads (2026-11-02, round 4)
+The amount as typed comes first, then what rising prices make it by the date: "$0 of $30,000 · about $32,800 by
+11/2/2029 with rising prices" (it used to read "$0 of $32,782", a figure nobody typed). A goal waiting its turn
+(`goalsBehind` in overview/alerts: nothing going in, Next best action funds goals from a later month) gets a neutral
+"starts later" pill and "its turn comes in April 2028, after the steps before it on Next best action", not an orange "behind".
+
 ## Edge cases
 No date: needed/projected are null, status "no date". Date in the past and not done: "past due" plus a warning. Linked account deleted: ignored in the sum, warning. Negative target: warning. Rate 0: straight-line saving.
 

@@ -34,6 +34,12 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
   (`behind` > 0): "About $1,552 of estimated tax is past due", opening Estimated payments. Without pay there is no April-bill
   alert, so before this nothing said the quarters were missed (2026-11-02).
 
+## A goal waiting its turn (2026-11-02, round 4)
+`goalsBehind(gl, { nba, today })`: a goal with nothing going in (`monthly` 0), when Next best action's goals step starts
+getting money in a later month (`startDate`, after the cards and the cushion), is `queued`, not behind: no "is behind"
+alert, not in the monthly need, and the Dashboard's Goals tile says "starts in April 2028". `turn` is that start date.
+A goal with some money going in that is short stays behind (its own choice of amount is short).
+
 ## Edge cases
 Empty plan: five setup alerts. Complete healthy plan: all clear. No `today`: no date checks.
 
