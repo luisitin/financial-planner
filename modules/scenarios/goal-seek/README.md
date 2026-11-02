@@ -32,3 +32,6 @@ The claiming lever tries "now" (today's age to the month, the Social Security pa
 
 ## Ideas / not yet
 - Two levers at once ("retire at 60 and spend $8,000: what must I save?"); goal seek on the Monte Carlo chance (90% instead of expected returns); save a solved value into the plan with one tap.
+
+Today's age as a claiming age is in years and months (69.4166...): the card's big figure says "now" and its bar "now";
+the sentence says "now (69 and 5 months)" (2026-11-02: the first version printed "age 69.41666666666667").

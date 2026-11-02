@@ -22,6 +22,9 @@ const STYLE = `
 `;
 const PILL = { room: ["ok", "room to spare"], same: ["", "just right"], needs: ["warn", "needs a change"], cannot: ["bad", "not on its own"] };
 
+/** 69.4166... -> "69 and 5 months"; a whole age as it is. */
+const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
+
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
   if (legacy === null) legacy = legacyTarget(plan).target;
@@ -57,7 +60,7 @@ export function render(page, ctx) {
       ui.h("form", { class: "gs-goal", onSubmit: (e) => { e.preventDefault(); legacy = Math.max(0, Number(box.value) || 0); load(); } }, ui.field("Or leave at least", box), ui.h("button", { type: "submit", class: "secondary" }, "Use this"))));
 
     // the levers
-    const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : `age ${l.value}`;
+    const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : "now";
     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each lever could move" : "What each lever would have to be"),
       ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less."),
@@ -84,6 +87,7 @@ export function render(page, ctx) {
 function claimBars(ui, l, money) {
   const max = Math.max(...l.results.map((r) => r.monthly), 1);
   return ui.h("div", { "aria-label": "What the plan can spend a month by claiming age" },
-    ui.h("div", { class: "gs-claims" }, l.results.map((r) => ui.h("span", { class: r.age === l.value ? "best" : null, title: `${r.age}: ${money(r.monthly)} a month`, style: { height: `${Math.max(4, Math.round((r.monthly / max) * 100))}%` } }))),
-    ui.h("div", { class: "gs-ages" }, l.results.map((r) => ui.h("span", {}, String(r.age)))));
+    // today's age is claimable in years and months (69 and 5 months): "now" on the bar, never 69.4166... (review 2026-11-02)
+    ui.h("div", { class: "gs-claims" }, l.results.map((r) => ui.h("span", { class: r.age === l.value ? "best" : null, title: `${ageWords(r.age)}: ${money(r.monthly)} a month`, style: { height: `${Math.max(4, Math.round((r.monthly / max) * 100))}%` } }))),
+    ui.h("div", { class: "gs-ages" }, l.results.map((r) => ui.h("span", {}, Number.isInteger(r.age) ? String(r.age) : "now"))));
 }
