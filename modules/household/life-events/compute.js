@@ -7,6 +7,8 @@ import { US_STATES, FILING_STATUSES } from "../people/compute.js";
 import { addDays } from "../../cashflow/recurring/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 
+const usDate = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}/${iso.slice(0, 4)}`;
+
 /** Days ahead a deadline counts as "soon". */
 export const SOON_DAYS = 14;
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? ""));
@@ -124,6 +126,17 @@ export function applyChange(draft, eventId, change, values = {}, today = null) {
       draft.income = draft.income ?? [];
       const period = ["weekly", "biweekly", "semimonthly", "monthly", "annual"].includes(values.period) ? values.period : "annual";
       let inc = draft.income.find((x) => x.id === values.incomeId);
+      // a first payday still to come: today's pay runs until the day before and the new pay starts that day, so the months
+      // between keep their income (it used to overwrite today's pay with a future start, and the plan showed no pay until then)
+      const later = inc && isDate(values.startDate) && today && values.startDate > today;
+      const who = (h.people ?? []).find((p) => p.id === inc?.personId)?.name;
+      const yearly = (a) => `${Math.round(a).toLocaleString("en-US")}${{ annual: " a year", monthly: " a month", semimonthly: " twice a month", biweekly: " every two weeks", weekly: " a week" }[period]}`;
+      if (later) {
+        if (!inc.endDate || inc.endDate >= values.startDate) inc.endDate = addDays(values.startDate, -1);
+        const next = { ...inc, id: values.id, name: name || `${inc.name || "Pay"} (new job)`, amount, period, startDate: values.startDate, endDate: "" };
+        draft.income.push(next);
+        tick("pay"); return { ok: true, text: `From ${usDate(values.startDate)} ${who && who !== "Me" ? `${who}'s` : "your"} pay is ${yearly(amount)}; until then the pay on file stays. Both are on Income.` };
+      }
       if (inc) { inc.amount = amount; inc.period = period; if (isDate(values.startDate)) inc.startDate = values.startDate; }
       else { inc = { id: values.id, name: name || "Pay from the new job", type: "salary", personId: text(values.personId), amount, period, growth: null, startDate: isDate(values.startDate) ? values.startDate : "", endDate: "", taxable: true }; draft.income.push(inc); }
       tick("pay"); return { ok: true, text: `Pay updated on Income: ${inc.name}.` };

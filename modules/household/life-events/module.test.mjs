@@ -103,3 +103,22 @@ test("starting, re-dating and removing events; unknown kinds; the empty plan", (
   const e = compute(emptyPlan(), { today: TODAY });
   assert.deepEqual(e.events, []); assert.deepEqual(e.urgent, []); assert.equal(e.kinds.length, 6); assert.ok(e.states.includes("DC"));
 });
+
+test("a new job whose first payday is still to come keeps today's pay until the day before, then the new pay (the month never reads empty)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: incomeOf } = await import("../../cashflow/income/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const ana = p.income.find((x) => x.personId === "p-ana" && x.type === "salary");
+  const before = incomeOf(p, { today: T }).monthly;
+  startEvent(p, { id: "j", kind: "job", date: "2027-01-04" }, T);
+  const r = applyChange(p, "j", "updatePay", { id: "n2", incomeId: ana.id, amount: 88000, period: "annual", startDate: "2027-01-04" }, T);
+  assert.equal(r.ok, true);
+  assert.match(r.text, /^From 1\/4\/2027 Ana's pay is 88,000 a year; until then the pay on file stays\./);
+  const old = p.income.find((x) => x.id === ana.id), next = p.income.find((x) => x.id === "n2");
+  assert.equal(old.endDate, "2027-01-03"); assert.equal(old.amount, ana.amount, "today's pay is not overwritten");
+  assert.deepEqual([next.personId, next.amount, next.period, next.startDate, next.endDate, next.type], ["p-ana", 88000, "annual", "2027-01-04", "", "salary"]);
+  assert.equal(next.name, `${ana.name} (new job)`);
+  assert.ok(Math.abs(incomeOf(p, { today: T }).monthly - before) < 0.01, "this month's income is unchanged");
+  assert.ok(Math.abs(incomeOf(p, { today: "2027-02-01" }).monthly - (before - ana.amount * 26 / 12 + 88000 / 12)) < 1, "from February: the new pay");
+});

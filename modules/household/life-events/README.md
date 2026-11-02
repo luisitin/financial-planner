@@ -58,6 +58,12 @@ holds `EVENTS` (the steps).
   often, first payday; or a new salary); an inherited account (name, kind, value; dated today, noted "Inherited").
   Each is refused with a reason when what it needs is missing; the view runs it on a copy first to show that reason.
 
+## A new job that starts later (2026-11-02)
+"Update pay" on an existing pay with a first payday after today ends that pay the day before (`endDate`) and adds the new
+pay from that day (same person, growth and tax flag, named "<pay> (new job)"), so the months in between keep their income.
+It used to overwrite today's pay with a future start date, and the Dashboard said more goes out than comes in until then.
+A first payday today or earlier still changes the pay in place. "Whose pay" is asked only for new pay.
+
 ## Edge cases
 - No events: a hero with the six events to pick from; afterwards they sit under "Something else happening?".
 - The single-parent filing step shows only for a single (or unset) filing status.

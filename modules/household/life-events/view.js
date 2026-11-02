@@ -120,7 +120,7 @@ export function render(page, ctx) {
         { key: "amount", label: "New pay", type: "money", required: true },
         { key: "period", label: "How often", type: "select", options: [{ value: "annual", label: "A year" }, { value: "monthly", label: "A month" }, { value: "semimonthly", label: "Twice a month" }, { value: "biweekly", label: "Every two weeks" }, { value: "weekly", label: "A week" }] },
         { key: "startDate", label: "First payday", type: "date" },
-        ...(people.filter((p) => p.role !== "dependent").length > 1 ? [{ key: "personId", label: "Whose pay (for new pay)", type: "select", options: people.filter((p) => p.role !== "dependent").map((p) => ({ value: p.id, label: p.name })) }] : []),
+        ...(people.filter((p) => p.role !== "dependent").length > 1 ? [{ key: "personId", label: "Whose pay", type: "select", options: people.filter((p) => p.role !== "dependent").map((p) => ({ value: p.id, label: p.name })) }] : []),
       ],
       addAccount: [{ key: "name", label: "What it is", required: true, placeholder: "For example: inherited IRA" }, { key: "type", label: "Kind", type: "select", options: [{ value: "savings", label: "Cash in savings" }, { value: "brokerage", label: "Shares or funds" }, { value: "ira", label: "IRA" }, { value: "roth", label: "Roth IRA" }, { value: "401k", label: "401(k)" }, { value: "property", label: "A house or land" }, { value: "other_asset", label: "Something else" }] }, { key: "balance", label: "What it is worth", type: "money", required: true }],
     }[s.change] ?? [];
@@ -134,6 +134,9 @@ export function render(page, ctx) {
       store.update((q) => { applyChange(q, e.id, s.change, values, today); });
     }, { submitLabel: fields.length ? "Make this change" : changeLabel(s.change), onCancel: () => { open = null; rerender(); } });
     form.classList.add("le-form");
+    // "Whose pay" is only asked for new pay: an existing pay already belongs to someone
+    const which = form.querySelector('[name="incomeId"]'), whose = form.querySelector('[name="personId"]')?.closest(".field");
+    if (which && whose) { const sync = () => { whose.hidden = which.value !== ""; }; which.addEventListener("change", sync); sync(); }
     return form;
   }
 }
