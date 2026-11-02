@@ -17,6 +17,7 @@ import { compute as computeProjection, retirementKnown, ssOnIncome } from "../..
 import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
+import { QUARTERS } from "../../taxes/estimated/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { pmt, nper } from "../../../core/math/finance.js";
@@ -416,6 +417,17 @@ export function applyMoney(draft, v) {
     if (kind && OTHER_KINDS.some((k) => k.name === r.name) && r.name !== kind.name) r.name = kind.name;   // follow the kind unless renamed on Income
   }
   draft.income = draft.income.filter((x) => !isSetupId(x.id) || x.id.startsWith("setup-ss-") || keep.has(x.id));
+  // estimated tax already paid this year, asked of someone paid by their own business (review 2026-11-02): spread over the
+  // quarters already due, so Estimated payments, Needs attention and Next best action start from what was paid, not "$0"
+  const taxPaid = v.taxPaid === "" || v.taxPaid === null || v.taxPaid === undefined ? null : nonneg(v.taxPaid);
+  if (taxPaid !== null && v.today && adults(draft).some((p) => byId(draft.income, `setup-pay-${p.id}`)?.type === "business")) {
+    const due = Math.max(1, QUARTERS(Number(v.today.slice(0, 4))).filter((q) => q.due <= v.today).length);
+    const per = Math.floor((taxPaid / due) * 100) / 100;
+    const paid = [0, 1, 2, 3].map((k) => (k < due ? per : 0));
+    paid[due - 1] = Math.round((taxPaid - per * (due - 1)) * 100) / 100;
+    draft.taxes = draft.taxes ?? {};
+    draft.taxes.estimated = { ...(draft.taxes.estimated ?? {}), paid, typedAt: v.today };
+  }
 }
 /** This year's pay before tax for a person (Income page, any salary or business pay still going). */
 export const yearlyPay = (plan, pid) => L(plan, "income").filter((x) => x.personId === pid && (x.type === "salary" || x.type === "business") && !x.endDate).reduce((s, x) => s + perYear(x.amount, x.period), 0);
@@ -769,6 +781,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
         return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "" }];
       })),
       other: { kind: OTHER_KINDS.some((k) => k.value === o?.type) ? o.type : "", amount: o?.amount ?? "" },
+      // the estimated tax paid so far, once it was typed (here or on Estimated payments); blank until then
+      taxPaid: plan?.taxes?.estimated?.typedAt ? (plan.taxes.estimated.paid ?? []).reduce((t, x) => t + (Number(x) || 0), 0) : "",
     };
   }
   if (screen === "ages") {

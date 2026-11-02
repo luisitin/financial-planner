@@ -504,6 +504,11 @@ export function render(page, ctx) {
       if (!ad.length) return needYou("💵", "What comes in?");
       head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax: pay from a job, or what your own work brings in. Pick how often it comes.");
       const v = draft(() => valuesFor(plan, "money"));
+      // someone paid by their own business: what they already sent the IRS this year, so no page starts from "$0 paid"
+      const taxHost = ui.h("div");
+      const drawTax = () => swap(taxHost, ad.some((q) => v.people[q.id]?.status === "work" && v.people[q.id]?.by === "self" && !existingPay(plan, q.id).filter((i) => i.id !== `setup-pay-${q.id}`).length)
+        ? group("Tax on your own work", field("Estimated tax paid so far this year", moneyIn(v.taxPaid, (val) => { v.taxPaid = val; }, { label: "Estimated tax paid so far this year", placeholder: "0" }), "The quarterly payments sent to the IRS for this year. Type 0 if none; leave it blank if you are not sure."))
+        : "");
       for (const p of ad) {
         const x = v.people[p.id];
         const own = existingPay(plan, p.id);
@@ -521,7 +526,7 @@ export function render(page, ctx) {
             const amountField = by === "self"
               ? field("What your work brings in, before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "what the work brings in"), placeholder: "65,000" }), "If it changes month to month, give a typical year. Business costs come later, on Small business.")
               : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax"), placeholder: "65,000" }));
-            swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); }, named(p, "who pays") ?? "Who pays you")),
+            swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
               fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live);
             showMo();
@@ -530,10 +535,11 @@ export function render(page, ctx) {
           swap(body, x.status === "retired" ? field("A pension a month, if any", moneyIn(x.pension, (val) => { x.pension = val; }, { label: named(p, "pension a month") }), "Social Security comes on the next question. Leave this blank if there is no pension.")
             : x.status === "none" ? ui.h("p", { class: "su-sub" }, "Nothing counted for now. You can add pay any time on Income.") : "");
         };
-        const tilesEl = tileGroup(named(p, "work") ?? "Work", STATUS, { cls: " three", radio: true, isOn: (o) => x.status === o.key, onPick: (o) => { x.status = o.key; drawBody(); } });
+        const tilesEl = tileGroup(named(p, "work") ?? "Work", STATUS, { cls: " three", radio: true, isOn: (o) => x.status === o.key, onPick: (o) => { x.status = o.key; drawBody(); drawTax(); } });
         drawBody();
         add(card, group(who(p), tilesEl, body));
       }
+      drawTax(); add(card, taxHost);
       const o = v.other;
       add(card, group("Any other money coming in each month?",
         field("A month", moneyIn(o.amount, (val) => { o.amount = val; }, { label: "Other money a month" }), "Leave it blank if there is none."),
@@ -549,7 +555,7 @@ export function render(page, ctx) {
         }
         return null;
       };
-      current = { apply: (d) => applyMoney(d, v), check, words: (p2) => { const r = reflect(p2, "money"); return r ? `Got it: about ${money(r.monthly)} a month before tax.` : null; } };
+      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const r = reflect(p2, "money"); return r ? `Got it: about ${money(r.monthly)} a month before tax.` : null; } };
       actions();
     },
 

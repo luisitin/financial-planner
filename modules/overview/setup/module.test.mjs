@@ -704,3 +704,27 @@ test("someone paid by their own business: the name follows after they are named,
   S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
   assert.equal(S.valuesFor(q, "have-amounts")["kind-setup-self"], "work");
 });
+
+test("someone paid by their own business is asked what estimated tax is paid so far; it is spread over the quarters due (review 2026-11-02)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const q = empty(); S.applyYou(q, { who: "me" });
+  q.household.people.find((x) => x.id === "setup-self").birthDate = "1990-05-01";
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {}, taxPaid: "8,400", today: T });
+  assert.deepEqual(q.taxes.estimated.paid, [2800, 2800, 2800, 0], "three quarters were due by November 2");
+  assert.equal(q.taxes.estimated.typedAt, T);
+  assert.equal(S.valuesFor(q, "money").taxPaid, 8400, "asked again, the answer stays");
+  const e = estimated(q, { today: T });
+  assert.equal(e.paidTyped, true); assert.equal(e.paid, 8400);
+  // an uneven total: the cents land on the last quarter due
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {}, taxPaid: "1000", today: T });
+  assert.deepEqual(q.taxes.estimated.paid, [333.33, 333.33, 333.34, 0]);
+  // blank: nothing written (the pages ask later); an employee is never asked
+  const r = empty(); S.applyYou(r, { who: "me" });
+  S.applyMoney(r, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {}, taxPaid: "", today: T });
+  assert.equal(r.taxes?.estimated?.typedAt, undefined);
+  const w = empty(); S.applyYou(w, { who: "me" });
+  S.applyMoney(w, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {}, taxPaid: "500", today: T });
+  assert.equal(w.taxes?.estimated?.typedAt, undefined);
+  assert.equal(S.valuesFor(w, "money").taxPaid, "");
+});

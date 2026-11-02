@@ -281,3 +281,7 @@ this README with its source; the debt guide's rates step waiting for real rates 
 - The pay's name follows the answer also when the person was named or renamed in between ("My pay" becomes "Dee's
   business"): any name of the setup's shape (`My|<name>'s pay|business`) follows when the kind changes, and "My ..." follows
   a new name; a name typed on Income of another shape stays.
+- When someone's setup pay is their own business, the money screen also asks "Estimated tax paid so far this year" (once
+  for the household: the return is one). A typed amount is spread evenly over the quarters already due (taxes/estimated
+  `QUARTERS`; the cents on the last one) and saved with `taxes.estimated.typedAt`, so Estimated payments, Needs attention
+  and Next best action start from it. Blank writes nothing, and the pages ask later ("if none were made").

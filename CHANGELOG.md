@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Get started asks someone paid by their own business what estimated tax they have paid this year, spread over the quarters already due, so Estimated payments, Needs attention and Next best action start from it instead of asking later.
 - [builder:claude-b] - [builder:claude-b] Social Security says what a couple keeps after the first death: "If one of you dies, the one left keeps about $2,900 a month of the $5,550 you get together", and in each person's fold what they keep if the other dies first and any spouse's top-up (F-033).
 - [builder:claude-b] - [builder:claude-b] Goal seek: claiming Social Security now reads "now" on the card and its bars, not "age 69.41666666666667".
 - [builder:claude-b] - [builder:claude-b] Review fixes (freelancers): the Forecast takes the quarterly estimated tax out on its due dates (business income landed untaxed, thousands high) unless the bank already shows tax payments; a bill like "Comcast Business" no longer hides "Dee's business" income, and only setup's "typical year" is spread by month (a real once-a-year retainer lands on its date); with no estimated payments ever typed, Needs attention, Next best action, Emergency fund and the Forecast ask what was paid and say what was due if none were made, instead of "$0 is paid so far"; the Income page says business income reaches the bank before its tax; setup starts a business owner's retirement "On my own" with no pay-stub match, and the pay's name follows a name typed later ("Dee's business").
