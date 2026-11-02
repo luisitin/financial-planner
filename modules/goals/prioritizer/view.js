@@ -41,7 +41,7 @@ export function render(page, ctx) {
   )));
 
   const list = ui.h("ul", { class: "gp-list" }, d.rows.map((r) => {
-    const state = r.noDate ? (r.allocated > 0 ? ["gp-ok", "no date: gets what is left"] : ["gp-none", "no date: nothing left for it"]) : r.onTime ? ["gp-ok", `on time (${r.targetDate})`] : r.allocated <= 0.5 ? ["gp-none", "nothing left for it"] : r.slipMonths !== null ? ["gp-late", `${span(r.slipMonths)} late`] : ["gp-late", "late"];
+    const state = r.noDate ? (r.allocated > 0 ? ["gp-ok", "no date: gets what is left"] : ["gp-none", "no date: nothing left for it"]) : r.onTime ? ["gp-ok", `on time (${fmt.date(r.targetDate)})`] : r.allocated <= 0.5 ? ["gp-none", "nothing left for it"] : r.slipMonths !== null ? ["gp-late", `${span(r.slipMonths)} late`] : ["gp-late", "late"];
     return ui.h("li", {}, ui.h("span", { class: "gp-ic" }, r.icon || "🎯"),
       ui.h("span", { class: "gp-body" }, ui.h("div", { class: "gp-t" }, r.name), ui.h("div", { class: "gp-d" }, `${PRIORITIES[r.priority] ?? ""}${r.needed !== null ? ` · needs ${money(r.needed)} a month` : ""} · gets ${money(r.current)} now`), ui.h("div", { class: `gp-d ${state[0]}` }, state[1])),
       ui.h("span", { class: "gp-v" }, money(r.allocated), ui.h("span", {}, "a month")));

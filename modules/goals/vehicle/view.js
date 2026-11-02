@@ -28,7 +28,7 @@ export function render(page, ctx) {
     ui.h("p", { class: "lede" }, "Save up and pay cash, or finance it? Saving costs nothing but time; a loan costs interest. Most people do some of each: save what they can, borrow the rest for a short time. The figures below are an example: change them to the car you have in mind.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
-  root.append(ui.card(`${money(x.price)} car${x.date ? `, by ${x.date}` : ""}`, ui.row(
+  root.append(ui.card(`${money(x.price)} car${x.date ? `, by ${fmt.date(x.date)}` : ""}`, ui.row(
     ui.stat("To pay cash", money(d.cash.neededMonthly), `a month for ${d.monthsToDate} months`),
     ui.stat("Saved by then", money(d.savedByDate), `at ${money(d.monthly)} a month${d.goal ? ` ("${d.goal.name}")` : ""}`),
   ), ui.h("p", { class: "vh-d" }, `With sales tax${x.tradeIn ? " and less the trade-in" : ""} it takes ${money(d.net)}. ${f.loan > 0 ? `If you keep saving ${money(d.monthly)} a month, you would borrow about ${money(f.loan)}.` : "What you save covers it: no loan needed."}`),

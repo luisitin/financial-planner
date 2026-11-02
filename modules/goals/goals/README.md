@@ -22,6 +22,16 @@ Goal shape: `{ id, name, icon, target, targetDate, priority (1 must, 2 want, 3 n
 - Progress: min(1, funded / target then).
 - Status order: no amount -> done -> no date -> past due -> on track (monthly > 0 and projected enough) -> behind.
 
+## Each goal leads to the page that works out its cost (2026-11-02)
+A goal used to open only its edit form, and nothing led to Education, Vehicle, House down payment, Emergency fund or
+Travel, which give their own (different) figures. `plannerFor(goal)` picks the page by icon or name (🎓 college, 🚗 car,
+🏠 house, 🛟 emergency, ✈️ trip). Each goal row has a link: "What it costs: Education ›", or, when that page's figure is 5%
+or more away from the goal's amount (`plannerDiffers`), "Education works it out at $117,813 in today's money ›". The edit
+form then says both figures and offers "Use $117,810 from Education", which sets the goal's amount (today's dollars) and
+confirms it. `plannerFigure(goal, row, page, result)` turns the page's result into today's dollars: Education's
+`totalToday`; Vehicle's net (price + sales tax - trade-in, in purchase-day dollars) x target / targetThen; Emergency
+fund's target; House down payment's cash to close. Vehicle and Which goal first? print dates as 3/1/2029, not 2029-03-01.
+
 ## Edge cases
 No date: needed/projected are null, status "no date". Date in the past and not done: "past due" plus a warning. Linked account deleted: ignored in the sum, warning. Negative target: warning. Rate 0: straight-line saving.
 

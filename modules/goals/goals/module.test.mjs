@@ -66,3 +66,20 @@ test("past due, no amount, own rate, and totals", () => {
   assert.equal(d.contributing, 100);
   near(d.neededMonthly, 900 + 100, 1e-9, "past-due goal needs the whole remainder now (n = 0)");
 });
+
+test("a goal leads to the page that works out its cost, and says that page's figure when it differs by 5% or more", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { plannerFor, plannerFigure, plannerDiffers } = await import("./compute.js");
+  const { compute: education } = await import("../education/compute.js");
+  const { compute: vehicle } = await import("../vehicle/compute.js");
+  const p = familyPlan("2026-11-02"), T = { today: "2026-11-02" };
+  const rows = compute(p, T).goals, byId = (id) => p.goals.find((g) => g.id === id), row = (id) => rows.find((g) => g.id === id);
+  assert.deepEqual(p.goals.map((g) => plannerFor(g)?.page ?? null), ["goals/emergency-fund", "goals/vehicle", "goals/education", "goals/travel"]);
+  const col = plannerFigure(byId("g-col"), row("g-col"), "goals/education", education(p, T));
+  assert.equal(Math.round(col.amount), Math.round(education(p, T).children[0].totalToday)); assert.equal(plannerDiffers(byId("g-col"), col), true);
+  const v = vehicle(p, T), car = plannerFigure(byId("g-car"), row("g-car"), "goals/vehicle", v);
+  // the car's net (purchase-day dollars) scaled back to today's like the goal's own amount: target x net / targetThen
+  assert.ok(Math.abs(car.amount - 25000 * v.net / row("g-car").targetThen) < 1e-6); assert.equal(car.shown, v.net);
+  assert.equal(plannerFigure(byId("g-trip"), row("g-trip"), "goals/vehicle", v), null, "the Vehicle page works out another goal");
+  assert.equal(plannerDiffers({ target: 100000 }, { amount: 104000 }), false, "under 5%: not mentioned");
+});

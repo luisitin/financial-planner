@@ -1,6 +1,6 @@
 // modules/goals/goals/view.js -- DOM only. Totals, a tappable list of goals with progress
 // bars, one form to add or edit.
-import { compute, PRIORITIES, GOAL_ICONS } from "./compute.js";
+import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiffers } from "./compute.js";
 
 const FIELDS = (accounts) => [
   { key: "name", label: "What are you saving for", type: "text", required: true, placeholder: "e.g. Emergency fund" },
@@ -18,6 +18,8 @@ const FIELDS = (accounts) => [
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
 
+
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -28,6 +30,12 @@ export function render(root, ctx) {
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   // A goal whose account is gone: the warning names the goal as a tap that opens its form.
   const broken = new Set((plan.goals ?? []).filter((g) => (g.fundedBy ?? []).some((id) => !accounts.some((a) => a.id === id))).map((g) => g.id));
+  // what the goal's own page works out, when it works it out for this goal: { amount (today's dollars, as the goal's
+  // "Amount needed"), words, monthly }; null when that page has no figure for it
+  const memo = new Map();
+  const of = (page) => { if (!memo.has(page)) { let r = null; try { r = ctx.computeOf?.(page, { today: fmt.today() }) ?? null; } catch { r = null; } memo.set(page, r); } return memo.get(page); };
+  const figureOf = (g, gr) => { const pl = plannerFor(g); return pl ? plannerFigure(g, gr, pl.page, of(pl.page)) : null; };
+  const differs = plannerDiffers;
   const openGoal = (id) => { editing = plan.goals.find((y) => y.id === id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
   if (d.count === 0) {
@@ -72,6 +80,19 @@ export function render(root, ctx) {
         });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add goal", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
+      (() => {
+        if (!editing) return null;
+        const gr = d.goals.find((x) => x.id === editing.id), f = figureOf(editing, gr), pl = plannerFor(editing);
+        if (!differs(editing, f)) return pl ? ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, ui.h("a", { href: `#/${pl.page}` }, `Work out what it costs on ${pl.label} ›`)) : null;
+        const to = Math.round(f.amount / 10) * 10, id = editing.id, name = editing.name;
+        return ui.h("div", { class: "notice info", style: { marginTop: "12px" } },
+          ui.h("p", { style: { margin: 0 } }, `${pl.label} works it out at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words}${f.monthly ? ` (${fmt.money(f.monthly, cur)} a month)` : ""}; this goal counts ${fmt.money(Number(editing.target) || 0, cur)} in today's dollars.`),
+          ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Use ${fmt.money(to, cur)} from ${pl.label}`, () => {
+            pending = `${name} now aims for ${fmt.money(to, cur)} in today's dollars, the ${pl.label} page's figure.`;
+            editing = null;
+            store.update((p) => { const y = (p.goals ?? []).find((z) => z.id === id); if (y) y.target = to; });
+          }, { class: "secondary" })));
+      })(),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
         if (!ui.confirm(`Remove the goal ${editing.name}?`)) return;
         const id = editing.id; const name = editing.name; editing = null;
@@ -91,6 +112,7 @@ export function render(root, ctx) {
       if (g.fundedFrom.length) bits.push(`in ${g.fundedFrom.join(", ")}${g.sharedWith.length ? ` (shared with ${g.sharedWith.join(", ")})` : ""}`);
       return bits.join(" · ");
     };
+    const plans = new Map((plan.goals ?? []).map((x) => [x.id, x]));
     const order = { "past due": 0, behind: 1, "on track": 2, "no date": 3, "no amount": 4, done: 5 };
     const rows = [...d.goals].sort((a, b) => (a.priority ?? 2) - (b.priority ?? 2) || order[a.status] - order[b.status]);
     root.append(ui.card("Your goals",
@@ -101,6 +123,8 @@ export function render(root, ctx) {
         ui.h("span", { class: "body" },
           ui.h("div", { class: "t" }, g.name, " ", ui.h("span", { class: `pill ${k}` }, t), g.priority === 1 ? ui.h("span", { class: "pill" }, "must have") : null, broken.has(g.id) ? ui.h("span", { class: "pill warn" }, "check account") : null),
           ui.h("div", { class: "d" }, sub(g)),
+          (() => { const pl = plannerFor(g); if (!pl) return null; const f = figureOf(plans.get(g.id) ?? g, g); const say = differs(plans.get(g.id) ?? g, f) ? `${pl.label} works it out at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words} ›` : `What it costs: ${pl.label} ›`;
+            return ui.h("a", { class: "small", href: `#/${pl.page}`, style: { display: "inline-block", marginTop: "6px", minHeight: "32px" }, onClick: (e) => e.stopPropagation() }, say); })(),
           ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(g.progress * 100)}%` } }))),
         ui.h("span", { class: "st muted" }, "Edit ›"),
       ); })),

@@ -87,3 +87,33 @@ export function compute(plan, params = {}) {
     warnings,
   };
 }
+
+// Each kind of goal has a page that works out what it costs; a goal leads to it, and says when that page's figure differs.
+const PLANNERS = [
+  { page: "goals/education", label: "Education", test: (g) => g.icon === "🎓" || /college|education|school|tuition|529/i.test(g.name ?? "") },
+  { page: "goals/vehicle", label: "Vehicle", test: (g) => g.icon === "🚗" || /\b(car|vehicle|truck|suv)\b/i.test(g.name ?? "") },
+  { page: "goals/house", label: "House down payment", test: (g) => g.icon === "🏠" || /\b(house|home|down payment)\b/i.test(g.name ?? "") },
+  { page: "goals/emergency-fund", label: "Emergency fund", test: (g) => g.icon === "🛟" || g.isEmergencyFund || /emergency|rainy day|cushion/i.test(g.name ?? "") },
+  { page: "goals/travel", label: "Travel", test: (g) => g.icon === "✈️" || /trip|travel|vacation|holiday/i.test(g.name ?? "") },
+];
+export const plannerFor = (g) => PLANNERS.find((x) => x.test(g)) ?? null;
+
+/**
+ * plannerFigure(goal, goalRow, page, result) -> { amount, shown?, words, monthly } | null: what the goal's own page (its
+ * compute `result`) works out for this goal, as `amount` in today's dollars like the goal's "Amount needed". Education:
+ * the child's `totalToday`. Vehicle: price + sales tax - trade-in is in the dollars of the day it is bought, like the
+ * goal's amount then (`targetThen`), so amount = target x net / targetThen, and `shown` is the net. Emergency fund: its
+ * target (months x must-pay bills). House: the cash to close (down payment, closing costs, reserves). null when the page
+ * works out nothing for this goal (another goal, or nothing typed there).
+ */
+export function plannerFigure(g, gr, page, r) {
+  if (!g || !r) return null;
+  if (page === "goals/education") { const c = (r.children ?? []).find((x) => (x.goal?.id ?? x.goal) === g.id); return c && c.totalToday > 0 ? { amount: c.totalToday, words: "in today's money", monthly: c.neededMonthly ?? null } : null; }
+  if (page === "goals/vehicle") return r.goal?.id === g.id && r.net > 0 && gr?.targetThen > 0 ? { amount: (Number(g.target) || 0) * r.net / gr.targetThen, shown: r.net, words: "with sales tax", monthly: r.cash?.neededMonthly ?? null } : null;
+  if (page === "goals/emergency-fund") return r.goal?.id === g.id && r.target > 0 ? { amount: r.target, words: `for ${r.months} months of must-pay bills`, monthly: null } : null;
+  if (page === "goals/house") return r.goal?.id === g.id && r.cash?.total > 0 ? { amount: r.cash.total, words: "down payment, closing and reserves", monthly: r.neededMonthly ?? null } : null;
+  return null;
+}
+
+/** The page's figure is worth mentioning when it is 5% or more away from the goal's amount. */
+export const plannerDiffers = (g, f) => !!f && Math.abs(f.amount - (Number(g.target) || 0)) >= 0.05 * Math.max(1, Number(g.target) || 0);
