@@ -109,3 +109,22 @@ test("review: one earner typed, only the year so far typed, other payments: neve
   const s = compute(familyPlan(T), { today: T }).estimate.suggestion;
   assert.equal(s.kind, "add"); assert.ok(s.paychecks > 0); assert.equal(s.perPaycheck, Math.ceil(base.balance / s.paychecks));
 });
+
+test("review: the year's tax counts self-employment tax on business income, as the Self-employment page works it out", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: fedOf } = await import("../federal/compute.js");
+  const { compute: seOf } = await import("../self-employment/compute.js");
+  const { taxAnswer } = await import("./compute.js");
+  const { compute: estOf } = await import("../estimated/compute.js");
+  const T = { today: "2026-11-02" };
+  const p = familyPlan("2026-11-02");   // Bo's weekend photography: $600 a month of business income
+  const d = compute(p, T), fed = fedOf(p, T).result.totalTax, se = seOf(p, T);
+  assert.ok(se.ready && se.seTotal > 0);
+  assert.equal(d.incomeTax, fed); assert.equal(d.totalTax, se.taxWith);
+  assert.ok(d.seTax > 0 && d.seTax < se.seTotal, "the 15.3% tax less what its two deductions save");
+  assert.equal(taxAnswer(p, T).seTax, d.seTax);
+  assert.equal(estOf(p, T).totalTax, d.totalTax, "Estimated payments uses the same year's tax");
+  p.income = p.income.filter((x) => x.type !== "business");
+  const n = compute(p, T);
+  assert.equal(n.seTax, 0); assert.equal(n.totalTax, fedOf(p, T).result.totalTax, "no business: the Federal estimate's total");
+});

@@ -120,3 +120,13 @@ test("review: a month the files barely reach is not imported, filed or within bu
   assert.equal(step(oct, "budget").status, "info"); assert.equal(step(oct, "budget").state, "todo");
   assert.ok(!oct.steps.some((x) => x.status === "todo" && x.id === "budget"));
 });
+
+test("the month still running is not marked reviewed: it ends first, and is finished in early next month", () => {
+  const now = compute(familyPlan("2026-11-02"), { today: "2026-11-02", month: "2026-11" });
+  assert.equal(now.ended, false); assert.equal(now.finishIn, "December");
+  const last = compute(familyPlan("2026-11-02"), { today: "2026-11-02", month: "2026-10" });
+  assert.equal(last.ended, true, "October is over on November 2");
+  const late = compute(familyPlan("2026-11-30"), { today: "2026-11-30" });
+  assert.equal(late.month, "2026-11"); assert.equal(late.ended, false, "still running on its last day");
+  assert.equal(compute(familyPlan("2026-12-01"), { today: "2026-12-01" }).finishIn, "December", "November, opened on Dec 1, is finished in December");
+});

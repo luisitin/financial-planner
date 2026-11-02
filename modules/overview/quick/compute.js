@@ -78,7 +78,7 @@ export function answerFor(guide, plan, params = {}) {
     }
     return {
       headline: a.verdict === "owe" ? `Owe about ${m(a.balance)} in April` : a.verdict === "refund" ? `About ${m(-a.balance)} back in April` : "About right: no big bill or refund",
-      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
+      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${a.seTax >= 1 ? `self-employment tax included` : rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
       status: a.verdict === "owe" ? "warn" : "ok",
     };
   }

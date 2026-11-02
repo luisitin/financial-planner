@@ -12,6 +12,7 @@ import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
 import { compute as nextBest } from "../next-best-action/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
+import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -75,7 +76,14 @@ export function compute(plan, params = {}) {
   // from pay) and what is already paid, the same answer as Withholding check; flagged from $1,000 left to pay
   let tax = null;
   try { tax = inc.count ? taxAnswer(plan, { today }) : null; } catch { tax = null; }
-  if (tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `About ${money(tax.balance)} of tax to pay in April`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : tax.from === "mixed" ? " (partly estimated from pay)" : ""}${tax.paid > 0 ? ` and ${money(tax.paid)} is already paid` : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
+  if (tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `About ${money(tax.balance)} of tax to pay in April`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}${tax.seTax >= 1 ? ` (${money(tax.seTax)} of it self-employment tax)` : ""}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : tax.from === "mixed" ? " (partly estimated from pay)" : ""}${tax.paid > 0 ? ` and ${money(tax.paid)} is already paid` : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
+  // no paycheck takes tax out (a retiree, the self-employed): the bill is paid by quarterly estimates, so a payment past
+  // due is the thing to fix (Estimated payments' own figure)
+  if (tax && tax.from === "none" && !(inc.active ?? []).some((x) => x.type === "salary" || x.type === "bonus")) {
+    let e = null;
+    try { e = estimatedOf(plan, { today }); } catch { e = null; }
+    if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
+  }
   if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);
   for (const r of debt.rows) {

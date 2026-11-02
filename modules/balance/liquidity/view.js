@@ -46,6 +46,9 @@ export function render(root, ctx) {
   }
   const nba = d.expenses ? ctx.computeOf?.("overview/next-best-action", { today }) : null;
   const move = nba?.ready && nba.next && (nba.next.id === "starter" || nba.next.id === "full-fund") && nba.next.gap >= 0.5 ? nba.next : null;
+  // the move card goes right under the fund card: the owner put the fund card first, months as the headline (DESIGN_LOG
+  // 2026-09-15, round 13, Finding 2), so the move follows it instead of pushing it down
+  let moveCard = null;
   if (move) {
     const spare = Math.max(0, nba.spare.monthly);
     const essential = d.expenses?.essentialMonthly ?? 0;
@@ -75,7 +78,7 @@ export function render(root, ctx) {
       boxes.length ? ui.h("p", { class: "small", style: { margin: "12px 0 6px" } }, `When the money is in, type the new balance${cash.length === 1 ? "" : "s"}:`) : null,
       ...boxes.map((b) => ui.h("label", { class: "lq-row" }, ui.h("span", { class: "lq-name" }, b.a.name), b.m.box)),
       boxes.length ? ui.h("div", { style: { marginTop: "12px" } }, ui.h("button", { type: "submit" }, cash.length === 1 ? "Save the new balance" : "Save the new balances")) : ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add a savings account")));
-    root.append(ui.h("section", { class: "card", "aria-labelledby": "lq-move-h" },
+    moveCard = ui.h("section", { class: "card", "aria-labelledby": "lq-move-h" },
       ui.h("h2", { id: "lq-move-h" }, move.id === "starter" ? "Your next move: one month of bills in cash" : `Your next move: ${d.targetMonths} months of bills in cash`),
       ui.h("p", {}, move.id === "starter"
         ? `${fmt.money(move.gap, cur)} more in cash you can use gets you to one month of must-pay bills (${fmt.money(essential, cur)}).${when}`
@@ -86,7 +89,7 @@ export function render(root, ctx) {
           pending = { step: move.id, text: `Done: the "${efGoal.name}" goal's money now counts as your emergency fund.` };
           store.update((p) => { const g = (p.goals ?? []).find((y) => y.id === efGoal.id); if (g) g.isEmergencyFund = true; });
         }, { class: "secondary" }))) : null,
-      form));
+      form);
   }
 
   const statusText = { ok: "covered", warn: "getting there", bad: "thin", unknown: "" }[d.status];
@@ -105,6 +108,7 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, "The target is months x your must-pay expenses. Change the months on the Assumptions page; mark expenses as must-pay on the Expenses page."),
     ));
   }
+  if (moveCard) root.append(moveCard);
   root.append(ui.card(null, ui.row(
     ui.stat("Usable today", fmt.money(d.now, cur), d.earmarked ? `${TIERS.now.desc}; ${fmt.money(d.earmarked, cur)} more is set aside for goals` : TIERS.now.desc),
     d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of must-pay bills after them` : ""}`) : null,

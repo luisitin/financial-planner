@@ -31,6 +31,10 @@ takes them back. With two or more 401(k)s the question lists them and has one "<
 each; "Yes" picks the account whose name does not say old, former, previous, prior or rollover. The confirmation names the new next move from the Dashboard's list. A new contribution's account box starts
 on a retirement account (not a brokerage one, not an old job's 401(k)).
 
+When every 401(k) a paid person has is from a job left (`newJob` in the ask), the question is about the job now: "Does
+Bo's job now have a retirement plan with a match?", with "Yes: add Bo's new 401(k)" (opens Net worth, where accounts are
+added) and "No plan or no match at Bo's job" (saves `retirement.workPlans[id].match = false`).
+
 ## Formulas
 - Yearly = amount x times per year (`core/math/periods.js`) + employer match.
 - Limits (`data/limits.js`, IRS, read through `limitsFor`): 2026: 401(k)/403(b) 24,500 (+8,000 from 50; 11,250 from 60 to 63), IRA 7,500 traditional and Roth together (+1,100 from 50), HSA 4,400 self-only (+1,000 from 55; 8,750 family). 2025 also listed; 2027 has only the HSA so far (4,500 / 9,000, Rev. Proc. 2026-24 s.3.01(1)). The HSA row of each person is `hsaPicture`'s: it follows the HSA page's cover (a spouse outside self-only cover has a limit of 0 and is told why; spouses with family cover share the family limit). The age reached in the year is what counts. A Roth account counts as a Roth 401(k)/403(b) (with the 401(k) limit, IRC 402A(c)(2)) when it has an employer match or its name says 401(k), 403(b), 457 or TSP; otherwise as a Roth IRA (the IRA limit, 408A(c)(2)) (`limitKind`). An employer's 401(k) match is outside the elective-deferral limit; an employer's HSA deposits share the HSA limit (IRS Pub. 969, Employer contributions).

@@ -156,3 +156,18 @@ test("a likely bill in April: paychecks short of the year's tax by $1,000 or mor
   p.taxes.withholding = { self: { perPaycheck: 600, period: "biweekly" }, partner: { perPaycheck: 700, period: "monthly" } };
   assert.equal(compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill"), undefined);
 });
+
+test("no paycheck takes tax out: a past-due estimated payment is one alert, pointing to Estimated payments", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-02");
+  p.income = p.income.filter((x) => x.type !== "salary" && x.type !== "bonus");
+  p.income.push({ id: "pen", name: "Pension", type: "pension", personId: "p-ana", amount: 5000, period: "monthly", taxable: true, startDate: "", endDate: "" });
+  const a = compute(p, { today: "2026-11-02" }).alerts;
+  const e = a.find((x) => x.id === "estimates-behind");
+  assert.ok(e, "the alert is there");
+  assert.match(e.title, /^About \$[\d,]+ of estimated tax is past due$/);
+  assert.deepEqual(e.go, ["taxes", "estimated"]);
+  assert.ok(!a.some((x) => x.id === "tax-bill"), "no April-bill alert without withholding");
+  p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [5000, 0, 0, 0] };
+  assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id === "estimates-behind"), "nothing once the year is paid ahead");
+});

@@ -3,6 +3,7 @@
 // will take, against the year's estimated tax; the refund or bill at filing time; the W-4
 // change that would land it near zero; and the safe-harbour rule that avoids a penalty.
 import { compute as computeFederal } from "../federal/compute.js";
+import { compute as computeSelfEmployment } from "../self-employment/compute.js";
 import { compute as computePaycheck } from "../../cashflow/paycheck/compute.js";
 import { PERIODS } from "../../../core/math/periods.js";
 import { daysBetween } from "../../../core/math/dates.js";
@@ -92,8 +93,22 @@ export function withholdingEstimate(plan, params = {}) {
 }
 
 /**
+ * yearTax(plan, fed, { today }) -> { total, income, se }: the year's federal tax to pay. `income` is the Federal estimate's
+ * total (income tax only; it counts business income as ordinary income); with business income on the Income page, `total`
+ * is the Self-employment page's figure instead: the same tax with the 15.3% self-employment tax (IRC 1401) and its two
+ * deductions (half of it, IRC 164(f); 20% of qualified business income, IRC 199A), and `se` the difference. Safe harbour and
+ * Form 2210 count self-employment tax as part of the year's tax.
+ */
+export function yearTax(plan, fed, params = {}) {
+  const income = Math.max(0, Number(fed?.result?.totalTax) || 0);
+  const s = computeSelfEmployment(plan, params);
+  const total = s.ready ? Math.max(0, s.taxWith) : income;
+  return { total, income, se: total - income };
+}
+
+/**
  * compute(plan, { today }) -> {
- *   year, totalTax, withholding: projectedWithholding, estimatedPaid, balance (tax - withholding - estimates; + owe, - refund),
+ *   year, totalTax (yearTax: self-employment tax included), incomeTax, seTax, withholding: projectedWithholding, estimatedPaid, balance (tax - withholding - estimates; + owe, - refund),
  *   verdict: "about right" | "refund" | "owe" | "unknown", harbour, penaltyRisk,
  *   suggestion: { kind: "add" | "cut" | "none", perPaycheck, paychecks, text } for the main earner's W-4,
  *   notes, hasIncome, estimate: withholdingEstimate plus { balance, verdict } (the typed figures, else estimated from pay)
@@ -103,7 +118,8 @@ export function compute(plan, params = {}) {
   const fed = computeFederal(plan, params);
   const wh = projectedWithholding(plan, params);
   const t = plan.taxes ?? {};
-  const totalTax = Math.max(0, fed.result.totalTax);
+  const yt = yearTax(plan, fed, params);
+  const totalTax = yt.total;
   const estimatedPaid = (t.estimated?.paid ?? []).reduce((s, x) => s + (Math.max(0, Number(x)) || 0), 0);
   const balance = totalTax - wh.projected - estimatedPaid;
   const harbour = safeHarbour(totalTax, t.priorYear?.tax, t.priorYear?.agi, fed.filingStatus);
@@ -130,16 +146,16 @@ export function compute(plan, params = {}) {
   const lead = [...est.people].filter((p) => p.left > 0).sort((a, b) => b.yearly - a.yearly)[0] ?? null;
   estimate.suggestion = lead && estimate.verdict === "owe" ? { kind: "add", name: lead.name, perPaycheck: Math.ceil(estBalance / lead.left), paychecks: lead.left }
     : lead && estimate.verdict === "refund" ? { kind: "cut", name: lead.name, perPaycheck: Math.floor(-estBalance / lead.left), paychecks: lead.left } : { kind: "none" };
-  return { year: fed.year, totalTax, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome: fed.hasIncome, effectiveRate: fed.result.effectiveRate, wages: fed.result.income.wages, estimate };
+  return { year: fed.year, totalTax, incomeTax: yt.income, seTax: yt.se, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome: fed.hasIncome, effectiveRate: fed.result.effectiveRate, wages: fed.result.income.wages, estimate };
 }
 
 /**
- * taxAnswer(plan, { today }) -> { year, totalTax, projected, from, paid (estimated and other payments), balance (+ owe, - back), verdict, effectiveRate, people } | null
+ * taxAnswer(plan, { today }) -> { year, totalTax, seTax, projected, from, paid (estimated and other payments), balance (+ owe, - back), verdict, effectiveRate, people } | null
  * "Will we owe or get a refund?" in one place for the Federal estimate, Quick answers and Needs attention: the year's tax
  * against what the paychecks take out by December (withholdingEstimate) and the estimated payments made. null without income.
  */
 export function taxAnswer(plan, params = {}) {
   const d = compute(plan, params);
   if (!d.hasIncome) return null;
-  return { year: d.year, totalTax: d.totalTax, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid + d.estimate.otherPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate, people: d.estimate.people };
+  return { year: d.year, totalTax: d.totalTax, seTax: d.seTax, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid + d.estimate.otherPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate, people: d.estimate.people };
 }

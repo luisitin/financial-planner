@@ -28,6 +28,17 @@ it; other payments typed on the Federal estimate (`taxes.thisYear.paid`) count a
 per paycheck, on the main earner's paychecks left (`estimate.suggestion`). Each "paid how often" box starts on that person's salary period on Income (it was always every two weeks,
 so a monthly earner's stub figure was counted 26 times).
 
+## Self-employment tax in the year's tax (2026-11-02)
+`yearTax(plan, fed, { today })` -> `{ total, income, se }`. `income` is the Federal estimate's total, which counts business
+income as ordinary income and leaves out the self-employment tax. With business income on the Income page, `total` is the
+Self-employment page's figure (`taxWith`): the same income tax less what half the self-employment tax (IRC 164(f)) and the
+20% business deduction (IRC 199A) save, plus the 15.3% self-employment tax (IRC 1401, on 92.35% of profit) and any
+Additional Medicare Tax. `se` is the difference ($611 for the sample family's $7,200 of photography profit: $1,017 of
+self-employment tax less about $406 of income tax the deductions save). This page, Estimated payments, the Federal
+estimate's answer, Quick answers and Needs attention all use `total`: the safe-harbour amount and Form 2210 count
+self-employment tax as part of the year's tax (the Form 1040-ES estimated tax worksheet adds it to income tax; Schedule 2 carries it to the 1040's total tax). Before, the April bill left it out
+($5,602 instead of $6,213 for the family). A plan with no business income is unchanged (the answer key has none).
+
 ## Edge cases
 "About right" is within 500 either way. Without a paycheck figure the verdict is unknown. The paychecks-left count is by calendar days, not the employer's actual pay dates.
 

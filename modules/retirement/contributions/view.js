@@ -46,6 +46,20 @@ export function render(root, ctx) {
   const formCard = ui.card(null);
   for (const a of ask.slice(0, 1)) {
     const whose = a.name === "Me" || !a.name ? "your" : `${a.name}'s`, who = a.name === "Me" || !a.name ? "you" : a.name;
+    const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
+    // every 401(k) on file is from a job left: ask about the job now, whose plan is not in the plan yet
+    if (a.newJob) {
+      const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+      const old = (a.old ?? []).map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean);
+      root.append(ui.h("section", { class: "card" },
+        ui.h("h2", {}, `Does ${whose} job now have a retirement plan with a match?`),
+        ui.h("p", {}, `${old.length ? old.join(" and ") : `${cap(whose)} 401(k)`} ${old.length > 1 ? "are" : "is"} from a job ${who === "you" ? "you" : who} left. If the job ${who === "you" ? "you have" : `${who} has`} now offers a 401(k) with a match, putting in enough to get all of it is free money.`),
+        ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+          ui.h("a", { class: "btn", href: "#/balance/net-worth" }, `Yes: add ${whose} new 401(k)`),
+          ui.button(`No plan or no match at ${whose} job`, noPlanAnswer, { class: "secondary" })),
+        ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Add the new 401(k) on Net worth, then come back here to add what goes in each paycheck. Not sure? The job's benefits site says whether there is a plan and a match.")));
+      continue;
+    }
     const acct = (plan.accounts ?? []).find((x) => x.id === a.accounts[0]);
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Does ${whose} job add money when ${who === "you" ? "you save" : `${who} saves`} for retirement?`),

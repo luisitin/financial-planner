@@ -69,7 +69,7 @@ export function compute(plan, params = {}) {
   const filesIn = !!(txMonth.length && mc && (mc.full || (current && mc.firstDay <= 1 + COVER_SLACK && daysBetween(cov.to, today) <= COVER_SLACK)));
   const partial = txMonth.length && !filesIn;
   add({ id: "import", title: "Bring in the bank files", status: !hasTx ? "skip" : filesIn ? "done" : "todo",
-    detail: !hasTx ? "Optional: the app works without transactions; import a bank file to see real spending." : filesIn ? `${txMonth.length} transactions dated in ${label}.`
+    detail: !hasTx ? "Optional: the app works without transactions; import a bank file to see real spending." : filesIn ? `${txMonth.length} transaction${txMonth.length === 1 ? "" : "s"} dated in ${label}.`
       : partial ? `Your files ${mc.firstDay > 1 + COVER_SLACK ? `start on ${fmtDate(mc.from)}` : `stop on ${fmtDate(cov.to)}`}: import the rest of ${label}.` : `Nothing dated in ${label} yet: download this month's file from each bank and import it.`, go: ["transactions", "import"] });
   // until the month's files are in, filing (with nothing left to file) and the budget wait for them, never "done"
   add({ id: "file", title: "File what came in", status: !hasTx || (!filesIn && !unfiled.length) ? "skip" : unfiled.length ? "todo" : "done",
@@ -118,7 +118,11 @@ export function compute(plan, params = {}) {
   ].filter(Boolean);
   // the next review is the next month's, early in the month after it (October's on Nov 2: November's in early December)
   const nextCheck = { month: nextMonth(month), when: MONTHS[Number(nextMonth(nextMonth(month)).slice(5, 7)) - 1] };
-  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck };
+  // a month still running is not marked reviewed: marked on the 2nd, it would hide the real check-in in early next month
+  // (the Dashboard asks only for a month not yet reviewed), and its files and spending are not in yet
+  const ended = month < today.slice(0, 7);
+  const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
+  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
 }
 
 export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };

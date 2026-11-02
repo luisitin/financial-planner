@@ -24,6 +24,10 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
 
 - `tax-bill`: warn. The paychecks look $1,000 or more short of the year's federal tax (`taxAnswer` in taxes/withholding:
   typed withholding, else estimated from pay, and the estimated payments), opening Withholding check (2026-11-02).
+  The year's tax counts self-employment tax on business income (`yearTax`), and the line says how much of it that is.
+- `estimates-behind`: warn. No pay is on file (a retiree, the self-employed) and Estimated payments has a payment past due
+  (`behind` > 0): "About $1,552 of estimated tax is past due", opening Estimated payments. Without pay there is no April-bill
+  alert, so before this nothing said the quarters were missed (2026-11-02).
 
 ## Edge cases
 Empty plan: five setup alerts. Complete healthy plan: all clear. No `today`: no date checks.

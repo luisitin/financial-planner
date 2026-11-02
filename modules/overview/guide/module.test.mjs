@@ -273,6 +273,8 @@ test("barFor: nothing without a followed guide; guide mode only for the followed
   assert.equal(barFor(p, { page: "balance/liabilities", query: { guide: "budget", step: "rates" } }), null, "a guide that is not followed is ignored, and a done step reached another way shows nothing");
   const c = barFor(p, { page: "debt/payoff" });
   assert.equal(c.mode, "compact"); assert.equal(c.step.key, "order");
+  assert.deepEqual(barFor(p, { page: "debt/payoff", query: { from: "review", review: "2026-10" } }), { mode: "review", month: "2026-10" }, "from a Monthly review step, the way back to the check-in wins over the guide's one line");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { guide: "debt", step: "order", from: "review", review: "2026-10" } }).mode, "guide", "the guide's own address still shows the full bar");
   assert.equal(barFor(p, { page: "goals/house" }), null, "a page that is not a step");
   assert.equal(barFor(p, { page: "goals/house", query: { from: "quick" } }).mode, "quick");
   leaveGuide(p);

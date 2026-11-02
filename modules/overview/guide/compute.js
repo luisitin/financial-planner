@@ -105,15 +105,20 @@ export function activeJourney(plan, today) {
  *  - "compact": the page is a step of the followed guide but was reached another way (the menu, a page's own link):
  *    one line, only while that step is still to do, and never once the guide is complete.
  *  - "quick": opened from Quick answers (?from=quick) and no guide applies.
- *  - "review": opened from a step of the Monthly review (?from=review&review=YYYY-MM) and no guide applies.
+ *  - "review": opened from a step of the Monthly review (?from=review&review=YYYY-MM), unless the address names the
+ *    followed guide (then "guide"); it wins over "compact".
  * Only plan.guide.active switches a guide on; query.step only picks which step (inside the followed guide).
  */
 export function barFor(plan, { page, query = {}, off = [], today = null } = {}) {
   if (!page || OWN_PAGES.includes(page)) return null;
+  const review = query.from === "review" && page !== "overview/monthly-review" ? { mode: "review", month: /^\d{4}-\d{2}$/.test(query.review ?? "") ? query.review : null } : null;
   const j = activeJourney(plan, today);
   if (j) {
     const status = journeyStatus(j, plan, { off });
     const full = query.guide === j.id;
+    // opened from a Monthly review step, the way back to the check-in wins over the followed guide's one-line reminder
+    // (the guide's own address, ?guide=, still shows the full bar)
+    if (review && !full) return review;
     const found = stepForPage(status, page, full ? query.step : undefined);
     if (found) {
       const { step, viaAlt } = found;
@@ -131,7 +136,7 @@ export function barFor(plan, { page, query = {}, off = [], today = null } = {}) 
   }
   if (query.from === "quick") return { mode: "quick" };
   // a step of the Monthly review (?from=review&review=2026-10): one line back to the check-in
-  if (query.from === "review" && page !== "overview/monthly-review") return { mode: "review", month: /^\d{4}-\d{2}$/.test(query.review ?? "") ? query.review : null };
+  if (review) return review;
   return null;
 }
 

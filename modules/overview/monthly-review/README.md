@@ -21,6 +21,10 @@
 
 Each step opens its page with `?from=review&review=YYYY-MM`: the page shows "‹ Back to the October 2026 check-in" (overview/guide's frame, mode "review"), and Budget and Where the money went open on the month under review (`?month=`) until a month is picked there.
 
+The month still running cannot be marked reviewed (`ended` false): its steps can be done, and the card says "November 2026
+is still going: mark it reviewed in early December", with a button to the month just ended. Marked on the 2nd, it hid the
+real check-in (the Dashboard asks only for a month not yet reviewed) though its files and spending were not in yet (2026-11-02).
+
 Once the month is marked reviewed, the hero says "October 2026 is done ✓" with the month in a line (`summary`: net worth's change since the point before, spending and its change) and the next check-in ("early December, for November 2026", `nextCheck`); the steps fold behind "All steps". Nothing new is stored.
 
 From the 1st to the 10th, while the month just ended is not reviewed, the Dashboard's "where you stand" card has one row "Your October check-in · Start ›" (it takes the stale-balances row's place, since the review starts with the balances).

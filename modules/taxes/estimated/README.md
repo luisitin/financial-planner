@@ -23,6 +23,8 @@ clears the April bill (`balanceAtFiling`). "Behind: pay it now" stays for income
 as the fix the quarters read "not paid" in a neutral pill, not "short" in red, and the penalty sentence is left out:
 raising withholding before December covers them. When one earner's pay stub figure is typed and another's is not,
 the estimate is "mixed" (the typed figure for one, the Paycheck page's estimate for the other) and says "partly estimated".
+The year's tax includes self-employment tax on business income (`yearTax` in taxes/withholding; Form 2210 counts it), so the
+safe-harbour amount and the quarters do too (2026-11-02).
 
 ## Edge cases
 The annualised-income method (uneven income through the year) is not modelled; nor is the penalty itself (it runs like interest from each due date).

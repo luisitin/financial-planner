@@ -28,6 +28,9 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
   sense (with Undo), "All steps ›" and help.
 - **Compact mode** (the guide is followed but the page was reached from the menu or a page's own link): one line,
   "Following: Pay off what I owe · Step 2 of 3 ›", only while that step is still to do; nothing once the guide is done.
+- **Review mode** (opened from a Monthly review step, `?from=review&review=YYYY-MM`): one line, "‹ Back to the October
+  2026 check-in". It wins over compact mode (the way back to the check-in matters more than the guide reminder there), not
+  over guide mode (2026-11-02).
 - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
   question>" (session storage, wrapped in try/catch).
 - Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,

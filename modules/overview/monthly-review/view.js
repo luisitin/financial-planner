@@ -38,7 +38,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.reviewed ? `${d.label} is done ✓` : `${d.label} review`),
     d.reviewed ? ui.h("p", { class: "lede" }, d.summary.length ? `${cap(d.summary.join(" · "))}.` : `Reviewed on ${long(d.reviewed.at)}.`) : null,
-    ui.h("p", { class: d.reviewed ? "muted small" : "lede" }, d.reviewed ? `${d.summary.length ? `Reviewed on ${long(d.reviewed.at)}. ` : ""}${d.streak > 1 ? `${d.streak} months in a row. ` : ""}Next check-in: early ${d.nextCheck.when}, for ${monthLabel(d.nextCheck.month)}.` : left > 0 ? `${d.done} of ${d.todo} steps done: ${left} to go. Ten minutes, once a month, keeps every page in the app true.` : "Every step is done. Mark the month reviewed below."),
+    ui.h("p", { class: d.reviewed ? "muted small" : "lede" }, d.reviewed ? `${d.summary.length ? `Reviewed on ${long(d.reviewed.at)}. ` : ""}${d.streak > 1 ? `${d.streak} months in a row. ` : ""}Next check-in: early ${d.nextCheck.when}, for ${monthLabel(d.nextCheck.month)}.` : left > 0 ? `${d.done} of ${d.todo} steps done: ${left} to go. Ten minutes, once a month, keeps every page in the app true.` : d.ended ? "Every step is done. Mark the month reviewed below." : `Every step so far is done. ${d.label} is still going: finish it in early ${d.finishIn}.`),
     d.todo && !d.reviewed ? ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.done / d.todo) * 100)}%` } })) : null,
     ui.h("div", { class: "chips", role: "group", "aria-label": "Month", style: { marginTop: "10px", marginBottom: "0" } }, d.choices.map((ym) => ui.h("button", { type: "button", class: `chip${ym === d.month ? " on" : ""}`, "aria-pressed": ym === d.month ? "true" : "false", onClick: () => { month = ym; store.update(() => {}); } }, monthLabel(ym))))));
   if (pending) { root.append(ui.notice(...pending)); pending = null; }
@@ -53,7 +53,11 @@ export function render(page, ctx) {
     ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, `All steps (${d.done} of ${d.todo} done)`), list)
     : ui.h("section", { class: "card" }, ui.h("h2", {}, "The steps"), list));
   const note = ui.h("textarea", { rows: 3, placeholder: "What happened this month, what to change next month (optional)", "aria-label": "Note" }, d.reviewed?.note ?? "");
-  root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.reviewed ? `${d.label} is reviewed` : `Done with ${d.label}?`),
+  // the month still running: its steps can be done now, the marking waits until it is over
+  if (!d.reviewed && !d.ended) root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, `${d.label} is still going`),
+    ui.h("p", {}, `Any step can be done now. Mark it reviewed in early ${d.finishIn}, once the whole month's bank files are in; the Dashboard reminds you from the 1st.`),
+    d.choices[1] && d.choices[1] !== d.month ? ui.row(ui.button((plan.reviews ?? []).some((r) => r.month === d.choices[1]) ? `Open ${monthLabel(d.choices[1])}` : `Review ${monthLabel(d.choices[1])} instead`, () => { month = d.choices[1]; store.update(() => {}); }, { class: "secondary" })) : null));
+  else root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.reviewed ? `${d.label} is reviewed` : `Done with ${d.label}?`),
     ui.field("A note for the month", note),
     ui.row(ui.button(d.reviewed ? "Save the note" : `Mark ${d.label} reviewed`, () => {
       try { store.update((draft) => markReviewed(draft, d.month, today, note.value)); pending = ["ok", d.reviewed ? "Note saved." : `${d.label} marked reviewed.`]; }

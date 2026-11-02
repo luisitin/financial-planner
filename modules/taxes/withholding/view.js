@@ -18,16 +18,18 @@ export function render(root, ctx) {
   const sg = guessed ? est.suggestion : d.suggestion;
   const paidElse = d.estimatedPaid + (est.otherPaid || 0);
   const estNames = est.people.filter((p) => p.estimated);
+  // with business income the year's tax includes self-employment tax (yearTax), which the Federal estimate's total leaves out
+  const seBit = d.seTax >= 1 ? `, ${money(d.seTax)} of it self-employment tax on business income` : "";
   const w4 = (x) => x.kind === "add" ? ` Asking for ${money(x.perPaycheck)} more per paycheck on ${x.name === "Me" || !x.name ? "your" : `${x.name}'s`} W-4 (Step 4(c), "extra withholding") for the ${x.paychecks} paychecks left clears it.`
     : x.kind === "cut" ? ` That is about ${money(x.perPaycheck)} a paycheck lent to the IRS: a new W-4 with an amount in Step 3 or 4(b) brings take-home up and the refund down.` : "";
   const head = v === "owe" ? `You would ${guessed ? "likely " : ""}owe about ${money(bal)} in April` : v === "refund" ? `You would ${guessed ? "likely " : ""}get about ${money(-bal)} back` : v === "about right" ? `Your withholding ${guessed ? "looks" : "is"} about right` : "Is enough tax coming out of your pay?";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, head),
     ui.h("p", { class: "lede" }, guessed
-      ? `${d.year}: about ${money(d.totalTax)} of federal tax; the paychecks take out about ${money(est.projected)} over the year${paidElse > 0 ? `, and ${money(paidElse)} is paid otherwise` : ""}.${v === "about right" ? " Within a few hundred dollars either way: nothing to change." : w4(sg)}`
+      ? `${d.year}: about ${money(d.totalTax)} of federal tax${seBit}; the paychecks take out about ${money(est.projected)} over the year${paidElse > 0 ? `, and ${money(paidElse)} is paid otherwise` : ""}.${v === "about right" ? " Within a few hundred dollars either way: nothing to change." : w4(sg)}`
       : d.verdict === "unknown"
-      ? `The plan estimates ${money(d.totalTax)} of federal tax for ${d.year}. Type what one paycheck withholds and it will say whether the year's paychecks cover it, or leave you a bill or a refund.`
-      : `${d.year}: about ${money(d.totalTax)} of federal tax, ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
+      ? `The plan estimates ${money(d.totalTax)} of federal tax for ${d.year}${seBit}. Type what one paycheck withholds and it will say whether the year's paychecks cover it, or leave you a bill or a refund.`
+      : `${d.year}: about ${money(d.totalTax)} of federal tax${seBit}; ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
     guessed ? ui.h("p", { class: "muted small" }, `${est.from === "mixed" ? `${estNames.map((p) => p.name).join(" and ")}'s withholding is estimated` : "Estimated"} from pay the way payroll works it out (${estNames.map((p) => `${p.name} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
     d.penaltyRisk && !guessed ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
   ));
@@ -36,7 +38,7 @@ export function render(root, ctx) {
   root.append(out);
   for (const n of d.notes) if (!guessed || !/^Type the federal tax/.test(n)) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
-    ui.stat("Tax for the year", money(d.totalTax), `${fmt.pct(d.effectiveRate, 1)} of income`),
+    ui.stat("Tax for the year", money(d.totalTax), d.seTax >= 1 ? `with ${money(d.seTax)} of self-employment tax` : `${fmt.pct(d.effectiveRate, 1)} of income`),
     guessed ? ui.stat("Withheld by December", money(est.projected), est.from === "mixed" ? "partly estimated from pay" : "estimated from your pay")
       : ui.stat("Withheld by December", money(d.withholding.projected), d.withholding.people.length ? d.withholding.people.map((p) => `${p.name}: ${money(p.perPaycheck)} × ${p.left} left`).join(" · ") : "type a paycheck below"),
     d.verdict === "unknown" && !guessed ? null : ui.stat(bal >= 0 ? "Still to pay" : "Refund", money(Math.abs(bal)), guessed ? "at filing time, estimated" : "at filing time"),

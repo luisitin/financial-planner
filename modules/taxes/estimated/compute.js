@@ -2,7 +2,7 @@
 // tax comes to, how much of it withholding will cover, the safe-harbour amount that keeps you
 // clear of the underpayment penalty, what is due each quarter, and where you stand today.
 import { compute as computeFederal } from "../federal/compute.js";
-import { withholdingEstimate, safeHarbour } from "../withholding/compute.js";
+import { withholdingEstimate, safeHarbour, yearTax } from "../withholding/compute.js";
 import { dueDay } from "../../household/calendar/compute.js";
 
 /**
@@ -40,7 +40,9 @@ export function compute(plan, params = {}) {
   const est = withholdingEstimate(plan, params);
   const wh = est.detail, withholdingFrom = est.from;
   const t = plan.taxes ?? {};
-  const totalTax = Math.max(0, fed.result.totalTax);
+  // the year's tax with self-employment tax (the Form 1040-ES worksheet and Form 2210 count it), as Withholding check counts it
+  const yt = yearTax(plan, fed, params);
+  const totalTax = yt.total;
   const harbour = safeHarbour(totalTax, t.priorYear?.tax, t.priorYear?.agi, fed.filingStatus);
   const paidList = (t.estimated?.paid ?? [0, 0, 0, 0]).map((x) => Math.max(0, Number(x) || 0));
   const paid = paidList.reduce((s, x) => s + x, 0);
@@ -73,5 +75,5 @@ export function compute(plan, params = {}) {
   if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
   // the penalty is figured for each due date on its own (Form 2210 instructions): a quarter paid late counts even once caught up
   const lateQuarter = quarters.find((q) => q.late) ?? null;
-  return { year: fed.year, totalTax, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
+  return { year: fed.year, totalTax, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
 }

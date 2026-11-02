@@ -17,8 +17,9 @@ Plan sections read (`needs`): `accounts` (types from `balance/net-worth` `ACCOUN
 - Status: ok at 100% of target, warn from 50%, bad below; unknown when there is no target (no expenses, or none marked must-pay).
 
 ## The next move (2026-11-02)
-When Next best action's next step is the starter fund ("Keep one month of bills in cash") or the full fund, the page opens
-with that move, because the Dashboard's button sends people here: how much more cash (the step's `gap`), where to keep it,
+When Next best action's next step is the starter fund ("Keep one month of bills in cash") or the full fund, the page shows
+that move right under the fund card (which stays first, months as the headline: DESIGN_LOG 2026-09-15, round 13, Finding 2;
+the first version put the move above it), because the Dashboard's button sends people here: how much more cash (the step's `gap`), where to keep it,
 and when the money left over each month after tax, bills and saving (Next best action's `spare`) gets there (the step's
 `doneDate`). Under it are balance boxes for the cash accounts (cash, checking, savings) that no goal saves in: money put in
 an account a goal claims counts for that goal (F-020), not the cushion. Saving them works as Update my balances does

@@ -85,15 +85,23 @@ export function compute(plan, params = {}) {
   const atWork = k401.filter((a) => !a.formerJob);
   // match tiers typed on Open enrollment (career/benefits) say it more exactly; without them, the answer on Contributions
   const noMatch = (id) => { const t = plan.whatIfs?.benefits?.[id]?.matchTiers; return Array.isArray(t) ? !t.some((x) => Number(x.rate) > 0 && Number(x.upTo) > 0) : plan.retirement?.workPlans?.[id]?.match === false; };
-  if (atWork.length) {
+  const paid = (p) => inc.active.some((x) => x.personId === p.id && (x.type === "salary" || x.type === "bonus"));
+  const ownOf = (p) => k401.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId));
+  // a paid adult whose every 401(k) is from a job left: the job now may have a plan with a match, so it is still asked
+  // (unless they said there is none); `newJob` in the ask, with no accounts to put money in yet
+  const leftOnly = adults.filter((p) => { const own = ownOf(p); return own.length && own.every((a) => a.formerJob) && paid(p) && !noMatch(p.id); });
+  if (atWork.length || leftOnly.length) {
     const owners = adults.filter((p) => atWork.some((a) => a.ownerId === p.id) || (p.role === "self" && atWork.some((a) => !a.ownerId)));
-    const working = owners.filter((p) => !noMatch(p.id) && inc.active.some((x) => x.personId === p.id && (x.type === "salary" || x.type === "bonus")));
+    const working = owners.filter((p) => !noMatch(p.id) && paid(p));
     const contributing = working.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && k401.some((a) => a.id === c.accountId)));
     const matched = contributing.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && Number(c.employerMatch) > 0));
     const missingMatch = working.filter((p) => !contributing.includes(p));
-    if (working.length) add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: missingMatch.length ? "check" : "done",
-      detail: missingMatch.length ? `${missingMatch.map((p) => p.name).join(" and ")} ${missingMatch.length === 1 ? "has" : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : `${matched.map((p) => p.name).join(" and ") || "Everyone with a 401(k)"} ${matched.length > 1 ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
-      ask: missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id) })), go: ["retirement", "contributions"] });
+    const toAsk = [...missingMatch, ...leftOnly];
+    const left = leftOnly.length ? ` ${leftOnly.map((p) => p.name).join(" and ")}'s 401(k) is from a job left: check whether the job now has a plan with a match.` : "";
+    if (working.length || leftOnly.length) add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length ? "check" : "done",
+      detail: toAsk.length ? `${missingMatch.length ? `${missingMatch.map((p) => p.name).join(" and ")} ${missingMatch.length === 1 ? "has" : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : `${matched.map((p) => p.name).join(" and ") || "Everyone with a 401(k)"} ${matched.length > 1 ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
+      ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id) })),
+        ...leftOnly.map((p) => ({ personId: p.id, name: p.name, accounts: [], newJob: true, old: ownOf(p).map((a) => a.id) }))], go: ["retirement", "contributions"] });
   }
 
   // 3. expensive debt, most expensive first (mortgages left out)

@@ -47,7 +47,8 @@ Rows open `#/<key>?from=quick`, so the page shows a "‹ Quick answers" bar on t
 ## The tax answer (2026-11-02)
 "What will I owe in tax this year?" answers with the April bill or refund first ("Owe about $5,602 in April"), from
 `taxAnswer` in taxes/withholding, and the year's tax and what the paychecks take out in the line. It used to headline the
-year's whole tax ("About $15,072 of federal tax"), which read like a $15,072 bill.
+year's whole tax ("About $15,072 of federal tax"), which read like a $15,072 bill. With business income the year's tax
+includes self-employment tax and the line says "self-employment tax included" in place of the overall rate.
 
 ## Sources
 GOV.UK start pages and NN/g on task-based navigation (pick by what you want done); NerdWallet's and Vanguard's
