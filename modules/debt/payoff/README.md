@@ -55,5 +55,8 @@ Debts without a rate or payment are listed as missing and left out. A plan whose
 ## Tests
 `tests/payoff.test.mjs` (the math against nper), `tests/debt-pages.test.mjs` and `module.test.mjs` (the page on the shared household; the payment split, the preview overrides, the roll-over and the tie). The math itself is unchanged and still matches the frozen key `tests/golden/debt/payoff.csv`.
 
+## Both dates (`twoDates`, round 4, 2026-11-02)
+`twoDates(plan, { today })` lists each debt the plan finishes at least a month sooner than its own payment does: `own` (the Debts page's date, its payment alone), `plan` (this page's: finished debts' payments move onto it, plus any extra), and `from` (the debts finished first, whose payments move onto it). Debts, Mortgage, the Timeline and the Plan summary use it to show both dates and why, so the family's mortgage reads "January 2046 on its own payment, March 2039 on your payoff plan" instead of one date on some pages and the other elsewhere.
+
 ## Ideas / not yet
 - A payoff timeline drawing (designer), one-off lump sums, pausing a debt (0% promo).

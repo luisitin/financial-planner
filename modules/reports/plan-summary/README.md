@@ -18,5 +18,8 @@ No people: not ready. No plan basics: the retirement, protection and health sect
 ## Tests
 `module.test.mjs`: not ready without people; the family's figures match each page's own; the debt dates agree with the timeline; milestones stop ten years out.
 
+## Both payoff dates (round 4, 2026-11-02)
+`debts[].ownPayoffDate`: the Debts page's date (its own payment) when it is later than the payoff plan's `payoffDate`, else null. The sheet notes under the table that the dates are the payoff plan's and gives the own-payment date for those debts.
+
 ## Ideas / not yet
 - The advisor's plan side by side (`scenarios/advisor-plan`), a net-worth chart, a cover page with the household's name; a monthly or yearly copy saved with the date.

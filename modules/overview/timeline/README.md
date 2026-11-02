@@ -47,6 +47,9 @@ The top box says neither "Savings run out" nor "The money lasts" until Social Se
 A goal waiting its turn on Next best action (alerts' `goalsBehind`: nothing going in, dated after the goals step starts)
 reads "Starts in <Month YYYY>, its turn on Next best action" with no amber, as on Goals and the Dashboard.
 
+## Both payoff dates (round 4, 2026-11-02)
+A debt event dated by the payoff plan sooner than its own payment (debt/payoff `twoDates`) adds: "This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046."
+
 ## Ideas / not yet
 - A pension's start (once `retirement/pensions` exists), the partner's survivor years (Social Security's `couple.survivorMonthly`), long-term-care odds by age, estate-document reviews.
 - Drag along the line to see the balance sheet in that year.

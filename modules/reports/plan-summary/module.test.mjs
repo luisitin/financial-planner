@@ -31,3 +31,11 @@ test("debt payoff dates agree with the timeline; milestones stop ten years out",
   assert.equal(d.debts.find((x) => x.name === "Mortgage").payoffDate, t.events.find((e) => e.id === "debt-a-mort").date);
   assert.ok(d.milestones.every((m) => m.year <= 2026 + MILESTONE_YEARS)); assert.ok(d.milestones.length <= 10);
 });
+
+test("debts: the payoff plan's date, and the own-payment date where it is later (the Debts page's)", () => {
+  const today = "2026-11-02";
+  const d = compute(familyPlan(today), { today });
+  const m = d.debts.find((x) => x.name === "Mortgage");
+  assert.equal(m.payoffDate.slice(0, 7), "2039-03"); assert.equal(m.ownPayoffDate.slice(0, 7), "2046-01");
+  assert.equal(d.debts.find((x) => x.name === "Visa card").ownPayoffDate, null);
+});

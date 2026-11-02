@@ -71,7 +71,7 @@ export function compute(plan, params = {}) {
     protection: st?.ready ? { passed: st.passed, total: st.total, failing: st.scenarios.filter((s) => !s.success).map((s) => ({ title: s.title, failAge: s.failAge, failYear: s.failYear, roomMonthly: s.roomMonthly })) } : null,
     goals: gl.goals.map((g) => ({ name: g.name, icon: g.icon, target: g.targetThen ?? g.target, targetDate: g.targetDate, status: g.status, progress: g.progress, monthly: g.monthly, neededMonthly: g.neededMonthly })),
     // payoff dates from the payoff plan (freed payments roll onto the next debt), as on the timeline; a debt outside the plan keeps its own date
-    debts: li.rows.filter((r) => r.owed > 0).map((r) => ({ name: r.name, owed: r.owed, rate: r.rate, payment: r.payment, payoffDate: payoffPlan?.debts.find((x) => x.id === r.id)?.endDate ?? r.payoffDate })),
+    debts: li.rows.filter((r) => r.owed > 0).map((r) => ({ name: r.name, owed: r.owed, rate: r.rate, payment: r.payment, payoffDate: payoffPlan?.debts.find((x) => x.id === r.id)?.endDate ?? r.payoffDate, ownPayoffDate: payoffPlan?.debts.find((x) => x.id === r.id)?.endDate && r.payoffDate && r.payoffDate.slice(0, 7) > payoffPlan.debts.find((x) => x.id === r.id).endDate.slice(0, 7) ? r.payoffDate : null })),
     milestones: tl.ready ? tl.events.filter((e) => e.kind !== "now" && e.year <= year + MILESTONE_YEARS).slice(0, 10).map((e) => ({ date: e.date, year: e.year, title: e.title, icon: e.icon })) : [],
     nextSteps,
     assumptions: { inflation: Number(a.inflation ?? 0.03), returnStocks: Number(a.returnStocks ?? 0.07), returnBonds: Number(a.returnBonds ?? 0.04), retirementAge: Number(a.retirementAge ?? 65), planEndAge: Number(a.planEndAge ?? 95), taxMode: plan.retirement?.taxMode ?? "flat" },

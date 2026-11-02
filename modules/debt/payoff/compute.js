@@ -83,3 +83,26 @@ export function compute(plan, params = {}) {
   }).filter((x) => x.planEnd && x.ownEnd && x.planEnd.slice(0, 7) < x.ownEnd.slice(0, 7) && extra === 0);
   return { debts, missing, extra, extraTyped, extraSaved, order, customOrder, targets, targetsDone, budget: chosen ? debts.reduce((s, d) => s + d.minPayment, 0) + extra : 0, required, alreadyExtra, tie, rollover, plans, chosen, best: best.k, plus100, baseline, hasData: true };
 }
+
+/**
+ * twoDates(plan, { today }) -> { [debtId]: { own, plan, from: [names], extra } }: for each debt that the payoff plan finishes
+ * at least a month sooner than its own payment does, both dates and why. `own` is the Debts page's date (its own payment
+ * alone); `plan` is this page's (each finished debt's payment moves onto the next, plus any extra a month); `from` names the
+ * debts the plan finishes first, whose payments move onto it. Round 4, 2026-11-02: Debts and Mortgage said January 2046
+ * for the family's mortgage while the Timeline, Plan summary and Quick answers said March 2039, with no word on why.
+ */
+export function twoDates(plan, params = {}) {
+  let P = null;
+  try { P = compute(plan, params); } catch { P = null; }
+  if (!P?.hasData || !P.chosen) return {};
+  let li = null;
+  try { li = computeDebts(plan, params); } catch { li = null; }
+  const out = {};
+  for (const d of P.chosen.debts) {
+    const own = li?.rows.find((r) => r.id === d.id)?.payoffDate ?? null;
+    if (!own || !d.endDate || d.endDate.slice(0, 7) >= own.slice(0, 7)) continue;
+    const from = P.chosen.debts.filter((x) => x.id !== d.id && x.endDate && x.endDate < d.endDate).map((x) => x.name).filter(Boolean);
+    out[d.id] = { own, plan: d.endDate, from, extra: P.extra };
+  }
+  return out;
+}

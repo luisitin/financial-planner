@@ -1,6 +1,8 @@
 // modules/debt/mortgage/view.js -- DOM only. The mortgage today, what extra or biweekly
 // payments would save, a recast, when mortgage insurance can go, the year-by-year balance.
 import { compute } from "./compute.js";
+import { twoDates } from "../payoff/compute.js";
+const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
 const state = { extra: null, lump: 0 };
 
@@ -19,9 +21,14 @@ export function render(root, ctx) {
     return;
   }
   const m = d.mortgage;
+  const monthYear = (iso) => { const t = new Date(`${String(iso).slice(0, 10)}T12:00:00`); return Number.isNaN(t.getTime()) ? String(iso) : t.toLocaleDateString(plan.meta.locale, { month: "long", year: "numeric" }); };
+  let rolled = null;
+  try { rolled = twoDates(plan, { today: fmt.today() })[m.id] ?? null; } catch { rolled = null; }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, m.name),
-    ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)}, ${fmt.money(m.payment, cur)} a month. At that pace it ends ${d.base.endDate ? `in ${fmt.date(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
+    ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)}, ${fmt.money(m.payment, cur)} a month. At that pace it ends ${d.base.endDate ? `in ${monthYear(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
+    // the payoff plan's date, which the Timeline and the Plan summary show: said here with the reason (round 4, 2026-11-02)
+    rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto the mortgage` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
   ));
   const extraIn = ui.input({ type: "number", value: d.withExtra.extra, min: 0, step: "25", inputmode: "decimal", "aria-label": "Extra each month", onChange: (e) => { state.extra = Math.max(0, Number(e.target.value) || 0); redraw(); } });
   const lumpIn = ui.input({ type: "number", value: state.lump || "", min: 0, step: "1000", inputmode: "decimal", placeholder: "e.g. 20000", "aria-label": "Lump sum", onChange: (e) => { state.lump = Math.max(0, Number(e.target.value) || 0); redraw(); } });

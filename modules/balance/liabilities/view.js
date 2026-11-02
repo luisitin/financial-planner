@@ -1,6 +1,7 @@
 // modules/balance/liabilities/view.js -- DOM only. Totals, a tappable list of debts, and one
 // form for the selected debt's rate and payments.
 import { compute } from "./compute.js";
+import { twoDates } from "../../debt/payoff/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -64,12 +65,16 @@ export function render(root, ctx) {
     ));
   };
 
+  let two = {};
+  try { two = twoDates(plan, { today: fmt.today() }); } catch { two = {}; }
   const sub = (r) => {
     if (!r.detail) return "add the rate and payment";
     // paid off: nothing is due any more, so no payment is said (it counts as $0 a month)
     const bits = r.paidOff ? [`${fmt.pct(r.rate, 1)}`] : [`${fmt.pct(r.rate, 1)}`, `${fmt.money(r.payment, cur)} a month`];
     if (r.neverPaysOff) bits.push("never pays off at this payment");
     else if (r.months === 0) bits.push("paid off");
+    // the payoff plan finishes it sooner (finished debts' payments move onto it): both dates, so no page seems to disagree
+    else if (r.payoffDate && two[r.id]) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} on its own payment, ${monthYear(two[r.id].plan, plan.meta.locale)} on your payoff plan`);
     else if (r.payoffDate) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)}`);
     if (r.totalInterest) bits.push(`${fmt.money(r.totalInterest, cur)} interest to come`);
     if (r.securedBy) bits.push(`secured by ${r.securedBy}`);
@@ -86,6 +91,7 @@ export function render(root, ctx) {
       ui.h("span", { class: "st" }, ui.h("div", {}, fmt.money(r.owed, cur)), ui.h("div", { class: "muted small", style: { textAlign: "right" } }, "Edit ›")),
     ))),
     ui.h("p", { class: "muted small" }, "Highest interest rate first: that is the order that saves the most if you pay extra. Tap a debt to enter or change its rate and payments."),
+    Object.keys(two).length ? ui.h("p", { class: "small" }, "On your payoff plan, each debt's payment moves onto the next one once it is paid off, so the later ones end sooner without paying more each month. ", ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     out, formHost,
   ));
   drawForm();

@@ -86,3 +86,22 @@ test("offer: Next best action's amount aimed at the step's debts, until they are
   assert.equal(offer(cardAndHome(), { today: "2026-11-01", amount: 500, stepId: "full-fund" }), null);
   assert.equal(offer(cardAndHome(), { today: "2026-11-01", amount: 500, stepId: "mid-debt" }), null, "no debt from 4% to 10% but the mortgage");
 });
+
+test("twoDates: a debt the payoff plan finishes sooner than its own payment, with both dates and whose payments move onto it", async () => {
+  const { twoDates } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: debts } = await import("../../balance/liabilities/compute.js");
+  const today = "2026-11-02";
+  const plan = familyPlan(today);
+  const t = twoDates(plan, { today });
+  const P = compute(plan, { today });
+  const own = debts(plan, { today }).rows.find((r) => r.type === "mortgage");
+  const inPlan = P.chosen.debts.find((x) => x.id === own.id);
+  // the family's mortgage: January 2046 on its own $1,980, March 2039 once the card's and the car's payments move onto it
+  assert.deepEqual(t[own.id], { own: own.payoffDate, plan: inPlan.endDate, from: P.chosen.debts.filter((x) => x.id !== own.id && x.endDate < inPlan.endDate).map((x) => x.name), extra: P.extra });
+  assert.ok(t[own.id].plan < t[own.id].own);
+  assert.deepEqual(t[own.id].from, ["Visa card", "Car loan"]);
+  // a debt that ends the same month either way is not listed
+  for (const d of P.chosen.debts) if (d.id !== own.id) assert.equal(t[d.id], undefined);
+  assert.deepEqual(twoDates(emptyPlan(), { today }), {});
+});

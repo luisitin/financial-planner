@@ -11,10 +11,11 @@ import { money as fmtMoney } from "../../../core/format.js";
 import { compute as computePeople } from "../../household/people/compute.js";
 import { buildInputs, retirementKnown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
-import { compute as computePayoff } from "../../debt/payoff/compute.js";
+import { compute as computePayoff, twoDates } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { retirementGap } from "../setup/compute.js";
 import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
+const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 import { goalsBehind } from "../alerts/compute.js";
 import { compute as computeFire } from "../../retirement/fire/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
@@ -158,10 +159,15 @@ export function compute(plan, params = {}) {
   const pay = computePayoff(plan, { today });
   if (pay.hasData && pay.chosen) {
     const typeOf = (id) => accounts.find((a) => a.id === id)?.type;
+    let rolledEnds = {};
+    try { rolledEnds = twoDates(plan, { today }); } catch { rolledEnds = {}; }
     for (const d of pay.chosen.debts) {
       if (!d.endDate) continue;
       const isMortgage = typeOf(d.id) === "mortgage";
-      add({ id: `debt-${d.id}`, kind: isMortgage ? "mortgage" : "debt", date: d.endDate, title: `${d.name} paid off`, detail: isMortgage ? `The house is yours. That frees the monthly payment for everything else.${d.interest ? ` Interest from here on: about ${money(d.interest)}.` : ""}` : `${d.interest ? `About ${money(d.interest)} of interest from here on. ` : ""}Its payment then rolls onto the next debt.`, tone: "ok", go: ["debt", isMortgage ? "mortgage" : "payoff"] });
+      // finished sooner than its own payment would (the Debts page's date): say both, and why
+      const two = rolledEnds[d.id];
+      const both = two ? ` This date has the ${listWords(two.from)} payment${two.from.length > 1 ? "s" : ""} moving onto it once ${two.from.length > 1 ? "they are" : "it is"} paid off; on its own payment it runs to ${monthWords(two.own)}.` : "";
+      add({ id: `debt-${d.id}`, kind: isMortgage ? "mortgage" : "debt", date: d.endDate, title: `${d.name} paid off`, detail: isMortgage ? `The house is yours. That frees the monthly payment for everything else.${d.interest ? ` Interest from here on: about ${money(d.interest)}.` : ""}${both}` : `${d.interest ? `About ${money(d.interest)} of interest from here on. ` : ""}Its payment then rolls onto the next debt.`, tone: "ok", go: ["debt", isMortgage ? "mortgage" : "payoff"] });
     }
     if (pay.chosen.debts.length > 1 && pay.chosen.endDate) add({ id: "debtfree", kind: "debtfree", date: pay.chosen.endDate, title: "Debt-free", detail: `Every loan and card is paid off, ${money(pay.chosen.totalInterest)} of interest in all from today.`, tone: "ok", go: ["debt", "payoff"] });
   }

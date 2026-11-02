@@ -22,5 +22,8 @@ No mortgage account, or no rate/payment: empty state pointing to the right page.
 ## Tests
 `tests/debt-pages.test.mjs`, `module.test.mjs`.
 
+## The payoff plan's date (round 4, 2026-11-02)
+When the payoff plan finishes the mortgage sooner (debt/payoff `twoDates`), the hero adds: "On your payoff plan it ends in March 2039 instead: once the Visa card and Car loan are paid off, their payments move onto the mortgage", with a link. The Timeline and the Plan summary show that date; this page's own figures stay on the mortgage's own payment.
+
 ## Ideas / not yet
 - Points and rate buydown; ARM resets; property tax and insurance escrow lines.

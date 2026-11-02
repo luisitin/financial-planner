@@ -76,7 +76,9 @@ export function render(page, ctx) {
       rtable(ui, [{ label: "Goal", get: (g) => `${g.icon ? g.icon + " " : ""}${g.name}` }, { label: "Target", num: true, get: (g) => money(g.target) }, { label: "By", get: (g) => monthYear(g.targetDate) }, { label: "Status", get: (g) => ui.h("span", { class: g.status === "done" || g.status === "on track" ? "rp-ok" : g.status === "behind" || g.status === "past due" ? "rp-warn" : null }, g.status) }], d.goals)));
 
     if (d.debts.length) sheet.append(section(ui, "Debts",
-      rtable(ui, [{ label: "Debt", get: (x) => x.name }, { label: "Owed", num: true, get: (x) => money(x.owed) }, { label: "Rate", num: true, get: (x) => (x.rate === null ? "-" : pct(x.rate, 1)) }, { label: "Payment", num: true, get: (x) => (x.payment ? money(x.payment) : "-") }, { label: "Paid off", get: (x) => monthYear(x.payoffDate) }], d.debts)));
+      rtable(ui, [{ label: "Debt", get: (x) => x.name }, { label: "Owed", num: true, get: (x) => money(x.owed) }, { label: "Rate", num: true, get: (x) => (x.rate === null ? "-" : pct(x.rate, 1)) }, { label: "Payment", num: true, get: (x) => (x.payment ? money(x.payment) : "-") }, { label: "Paid off", get: (x) => monthYear(x.payoffDate) }], d.debts),
+      // the payoff plan's dates: say so, and the own-payment date where it differs (the Debts page's)
+      d.debts.some((x) => x.ownPayoffDate) ? ui.h("p", { class: "small" }, `Paid off: on the payoff plan, each debt's payment moving onto the next once it is paid off. On its own payment ${d.debts.filter((x) => x.ownPayoffDate).map((x) => `the ${x.name} runs to ${monthYear(x.ownPayoffDate)}`).join(", ")}.`) : null));
 
     if (d.milestones.length) sheet.append(section(ui, "The next ten years",
       rtable(ui, [{ label: "When", get: (e) => (e.date ? monthYear(e.date) : String(e.year)) }, { label: "", get: (e) => `${e.icon} ${e.title}` }], d.milestones)));

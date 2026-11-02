@@ -30,6 +30,9 @@ No liability accounts: empty state pointing to Net worth. Debt without detail: l
 ## Tests
 `module.test.mjs`: no debts, missing detail, nper agreement and payoff date, expensive flag, weighted rate, DTI, never-pays-off and zero balance.
 
+## Both payoff dates (round 4, 2026-11-02)
+A debt the payoff plan finishes sooner (debt/payoff `twoDates`) reads "paid off by January 2046 on its own payment, March 2039 on your payoff plan", and a line under the list says why (each debt's payment moves onto the next once it is paid off), with a link to Pay off debts.
+
 ## Ideas / not yet
 - Snowball vs avalanche schedules with a fixed extra budget (phase 4 `debt/payoff`).
 - Amortisation tables and refinance comparison (phase 4 `debt/mortgage`, `debt/refinance`).

@@ -128,3 +128,11 @@ test("a goal waiting its turn on Next best action says when it starts, not 'Behi
   const trip = compute(p, { today: T }).events.find((e) => e.id === "goal-g-trip");
   assert.match(trip.detail, /Behind/); assert.equal(trip.tone, "warn");
 });
+
+test("the mortgage paid off: the payoff plan's date, and its own payment's date with the reason (both dates, round 4)", () => {
+  const today = "2026-11-02";
+  const d = compute(familyPlan(today), { today });
+  const e = (d.events ?? []).find((x) => x.kind === "mortgage");
+  assert.equal(e.date.slice(0, 7), "2039-03");
+  assert.match(e.detail, /This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046\./);
+});
