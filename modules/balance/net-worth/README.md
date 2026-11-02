@@ -24,6 +24,13 @@ The form's "Whose account" is a choice of the people on the People page, saved a
 exactly one person's name into their id when the plan is opened, and a name that matches no one stays selectable in the
 form marked "typed before; choose a person".
 
+## Mistakes in the history (2026-11-02)
+- Editing a balance to a figure that looks like the old one with a key slipped (`looksLikeSlip`, balance/update) asks
+  once: "$115,000 was a mistake" fixes it where it stood (`correctSlip`: the account's points and the saved totals),
+  so no fall is drawn; "Both are right: it changed" keeps the old figure as a point, as before.
+- Each saved total under "Over time" has a Remove button (the table on a wide screen, stacked records on a phone), for
+  a day saved while a balance was wrong. The accounts are not touched.
+
 ## Edge cases
 Unknown `type` is treated as `other_asset`. Non-numeric balances count as 0. One snapshot per
 calendar day (the later one wins).

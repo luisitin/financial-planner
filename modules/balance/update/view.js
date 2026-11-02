@@ -1,5 +1,5 @@
 // modules/balance/update/view.js -- DOM only. Every account in one list with its balance box; one Save at the bottom.
-import { saveAll } from "./compute.js";
+import { saveAll, slipsIn } from "./compute.js";
 
 // The shell re-renders after store.update, so the confirmation waits here for the next render: { kind, text }.
 let pending = null;
@@ -13,6 +13,7 @@ const STYLE = `
 .bu-root .bu-sub { color: var(--text-2); font-size: var(--fs-sm); }
 .bu-root .bu-side { margin: 14px 0 4px; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .bu-root .bu-save { margin-top: 16px; }
+.bu-root .bu-ask:not(:empty) { margin-bottom: 16px; }
 @media (min-width: 720px) { .bu-root .bu-list { grid-template-columns: 1fr 1fr; column-gap: 24px; } .bu-root .bu-row:nth-child(2) { border-top: 0; } }
 `;
 
@@ -62,22 +63,47 @@ export function render(root, ctx) {
       ui.h("div", { class: "bu-sub", style: { marginTop: "4px" } }, r.debt ? `${r.typeLabel}: what you still owe` : r.typeLabel));
   };
   const own = d.rows.filter((r) => !r.debt), owe = d.rows.filter((r) => r.debt);
+  const ask = ui.h("div", { class: "bu-ask" });
+  const saveBtn = ui.h("button", { type: "submit" }, "Save all balances");   // hidden while the typing-slip question is open
+  let asked = false;
+  const finish = (typed, corrections) => {
+    let r = null;
+    store.update((draft) => { r = saveAll(draft, typed, today, { corrections }); });
+    if (!r || !r.saved) { pending = { kind: "error", text: "Nothing was saved: every box was empty. Type at least one balance, then save." }; return; }
+    const kept = r.saved - r.changed - r.corrected;
+    const move = r.before && r.netWorth !== null ? (Math.abs(r.netWorth - r.before.netWorth) < 0.5 ? `, the same as on ${fmt.date(r.before.date)}` : `, ${r.netWorth >= r.before.netWorth ? "up" : "down"} ${fmt.money(Math.abs(r.netWorth - r.before.netWorth), cur)} since ${fmt.date(r.before.date)}`) : "";
+    const parts = [r.changed || (!r.corrected && !kept) ? `${r.changed} changed` : null, r.corrected ? `${r.corrected} typing mistake${r.corrected === 1 ? "" : "s"} fixed in the history` : null, kept ? `${kept} still right` : null].filter(Boolean);
+    pending = { kind: "ok", text: `Balances saved for today: ${parts.join(", ")}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.` };
+  };
   const form = ui.h("form", { class: "card", novalidate: null, onSubmit: (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
     const typed = Object.fromEntries(boxes.map((b) => [b.id, ui.moneyValue(b.input)]));
-    let r = null;
-    store.update((draft) => { r = saveAll(draft, typed, today); });
-    if (!r || !r.saved) { pending = { kind: "error", text: "Nothing was saved: every box was empty. Type at least one balance, then save." }; return; }
-    const kept = r.saved - r.changed;
-    const move = r.before && r.netWorth !== null ? `, ${r.netWorth >= r.before.netWorth ? "up" : "down"} ${fmt.money(Math.abs(r.netWorth - r.before.netWorth), cur)} since ${fmt.date(r.before.date)}` : "";
-    pending = { kind: "ok", text: `Balances saved for today: ${r.changed} changed${kept ? `, ${kept} still right` : ""}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.` };
+    // a new figure that looks like the one on file with a key slipped (11,500 against 115,000): ask before saving, so
+    // fixing an old typo is not recorded as a fall in net worth
+    const slips = slipsIn(plan, typed);
+    if (slips.length && !asked) {
+      const one = slips.length === 1;
+      const m = (n) => fmt.money(n, cur);
+      ask.replaceChildren(ui.notice("warn", one
+        ? `${slips[0].name}: ${m(slips[0].was)} on file, ${m(slips[0].now)} typed. One of them looks like a typing slip.`
+        : `These look like typing slips: ${slips.map((x) => `${x.name}, ${m(x.was)} on file and ${m(x.now)} typed`).join("; ")}.`),
+        ui.h("div", { class: "row" },
+          ui.button(one ? `${m(slips[0].was)} was a mistake` : "The ones on file were mistakes", () => finish(typed, slips.map((x) => x.id))),
+          ui.button(one ? "Both are right: it changed" : "Both are right: they changed", () => finish(typed, []), { class: "secondary" }),
+          ui.button("Let me fix what I typed", () => { ask.replaceChildren(); asked = false; saveBtn.style.display = ""; const b = boxes.find((x) => x.id === slips[0].id); b?.input.focus(); b?.input.select?.(); }, { class: "secondary" })),
+        ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
+      asked = true; saveBtn.style.display = "none";
+      ask.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    finish(typed, []);
   } },
     own.length ? ui.h("h2", { class: "bu-side" }, "What you own") : null,
     ui.h("div", { class: "bu-list" }, own.map(rowOf)),
     owe.length ? ui.h("h2", { class: "bu-side" }, "What you owe") : null,
     ui.h("div", { class: "bu-list" }, owe.map(rowOf)),
-    ui.h("div", { class: "bu-save" }, ui.h("button", { type: "submit" }, "Save all balances")),
+    ui.h("div", { class: "bu-save" }, ask, saveBtn),
     ui.h("p", { class: "muted small" }, "Each balance is dated today and kept in its account's history, and today's totals go on your net worth history."));
   // the phone keyboard's Next goes to the next box; on the last one it saves
   form.addEventListener("keydown", (e) => {

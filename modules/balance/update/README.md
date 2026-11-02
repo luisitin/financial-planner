@@ -39,6 +39,22 @@ No outside code or figures.
 A loan or card saved at $0 whose payment is still on Expenses (Expenses' `ended`): a green line under the saved notice
 says it is paid off and links to Expenses to stop the payment (2026-11-02).
 
+## Typing slips (2026-11-02)
+Fixing an old typo used to be recorded as a real change: 115,000 typed for 11,500 last month, corrected today, kept the
+wrong figure as a point and put "-$103,500 since 10/2/2026" on the Dashboard for good.
+- `looksLikeSlip(was, now)`: the new figure looks like the one on file with a key slipped. A digit added or dropped (the
+  ratio is 8 to 12.5, or 80 to 125) or two neighbouring digits swapped with at least 15% between them. Both at least $100.
+  An ordinary big change (a card paid off to $0, a 20% move) is not asked about. The thresholds are the builder's choice,
+  set so a stray or missing zero is always caught and normal months never are.
+- `slipsIn(plan, typed)`: the boxes that look like slips. The page asks before saving: "$115,000 was a mistake",
+  "Both are right: it changed", or "Let me fix what I typed" (the slip may be the new figure: it puts the cursor back in
+  that box). The Save button hides while the question is open.
+- `correctSlip(draft, id, value)`: the account's points carrying the wrong figure, from the day it stood (the balance on
+  file's date, or the earliest of the run of equal points that ends the history), take the right one; Net worth's saved
+  totals from that day move by the difference (what is owed, for a debt). `saveAll(..., { corrections })` runs it first and
+  does not keep the wrong figure as a point; `corrected` counts them and the message says "1 typing mistake fixed in the history".
+- A move under 50 cents reads "the same as on <date>" (and "No change since" on Net worth and the Dashboard), not "up $0".
+
 ## Edge cases
 No accounts: a hero with Set up my plan and Net worth. Every box empty: nothing saved, a red notice says to type at least
 one. A box that is not an amount holds the form (the money box's own message). Debts can't be typed negative (min 0).

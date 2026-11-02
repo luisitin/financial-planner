@@ -72,9 +72,9 @@ test("an empty box leaves that account alone; nothing typed saves nothing", () =
   assert.equal(p.accounts.find((a) => a.id === "401").asOf, undefined, "not in the typed list: untouched");
   const q = plan();
   const none = saveAll(q, { chk: null, sav: undefined }, TODAY);
-  assert.deepEqual(none, { saved: 0, changed: 0, netWorth: null, before: { date: "2026-10-01", assets: 50000, liabilities: 14000, netWorth: 36000 } });
+  assert.deepEqual(none, { saved: 0, changed: 0, corrected: 0, netWorth: null, before: { date: "2026-10-01", assets: 50000, liabilities: 14000, netWorth: 36000 } });
   assert.equal(q.netWorthHistory.length, 2, "no totals saved when nothing was");
-  assert.deepEqual(saveAll(plan(), { chk: 1 }, "2026-02-30"), { saved: 0, changed: 0, netWorth: null, before: null }, "a bad day saves nothing");
+  assert.deepEqual(saveAll(plan(), { chk: 1 }, "2026-02-30"), { saved: 0, changed: 0, corrected: 0, netWorth: null, before: null }, "a bad day saves nothing");
 });
 
 test("a second save the same day replaces that day's points; a future 'as of' (a typo) becomes today", () => {
@@ -116,4 +116,43 @@ test("keeping the balance on file as a point: only with a real date and when tha
   const q = plan();
   assert.equal(keepOnFile(q, q.accounts[0], "2026-10-20"), false, "not before today");
   assert.equal(keepOnFile(q, q.accounts[0], TODAY), true);
+});
+
+// ---- a typing mistake on file is fixed where it stood, not recorded as a fall (round 4, 2026-11-02)
+import { looksLikeSlip, correctSlip, slipsIn } from "./compute.js";
+import { familyPlan as famPlan } from "../../../qa/fixtures/family-plan.mjs";
+test("looksLikeSlip: a digit added or dropped, or two neighbours swapped; not an ordinary change", () => {
+  for (const [a, b] of [[115000, 11500], [11500, 115000], [6400, 640], [100000, 1000], [15000, 51000], [86000, 68000]]) assert.equal(looksLikeSlip(a, b), true, `${a} -> ${b}`);
+  for (const [a, b] of [[12345, 12354], [6400, 0], [5000, 6000], [50, 500], [11500, 11500], [20000, 30000], [-6400, -640 * 2]]) assert.equal(looksLikeSlip(a, b), false, `${a} -> ${b}`);
+  assert.equal(looksLikeSlip(-6400, 640), true);   // a debt typed as what is owed
+});
+test("fixing a mistyped balance corrects its points and the saved totals from the day it was typed", () => {
+  const p = famPlan("2026-10-02");
+  saveAll(p, { "a-sav": 115000 }, "2026-10-02");    // the slip: 115,000 for 11,500
+  saveAll(p, { "a-chk": 4300 }, "2026-10-15");      // a later save carries it in the totals
+  const wrong10 = p.netWorthHistory.find((s) => s.date === "2026-10-15").netWorth;
+  assert.deepEqual(slipsIn(p, { "a-sav": 11500, "a-chk": 4300 }).map((x) => [x.id, x.was, x.now]), [["a-sav", 115000, 11500]]);
+  const fixed = structuredClone(p);
+  const r = saveAll(fixed, { "a-sav": 11500 }, "2026-11-02", { corrections: ["a-sav"] });
+  assert.equal(r.corrected, 1); assert.equal(r.changed, 0);
+  const ally = fixed.accounts.find((a) => a.id === "a-sav");
+  assert.ok(ally.history.every((h) => h.balance === 11500), "no point keeps the wrong figure");
+  assert.equal(fixed.netWorthHistory.find((s) => s.date === "2026-10-15").netWorth, wrong10 - 103500);
+  assert.equal(fixed.netWorthHistory.find((s) => s.date === "2026-01-01").netWorth, p.netWorthHistory.find((s) => s.date === "2026-01-01").netWorth, "totals before the slip are untouched");
+  assert.equal(r.netWorth - r.before.netWorth, 0, "no fall since the last save");
+  // the old way, for contrast: a fall of $103,500 and the wrong figure kept as a point
+  const plain = structuredClone(p);
+  const q = saveAll(plain, { "a-sav": 11500 }, "2026-11-02");
+  assert.equal(q.netWorth - q.before.netWorth, -103500);
+  assert.ok(plain.accounts.find((a) => a.id === "a-sav").history.some((h) => h.balance === 115000));
+});
+test("correctSlip on a debt moves what is owed in the saved totals and keeps the stored sign", () => {
+  const p = famPlan("2026-10-02");
+  const visa = p.accounts.find((a) => a.id === "a-visa"); visa.balance = -64000;   // a slip for 6,400, stored negative
+  p.netWorthHistory.push({ date: "2026-10-02", assets: 600000, liabilities: 349200, netWorth: 250800 });
+  const r = correctSlip(p, "a-visa", 6400);
+  assert.equal(visa.balance, -6400); assert.equal(r.wrong, 64000); assert.equal(r.from, "2026-10-02");
+  const s = p.netWorthHistory.find((x) => x.date === "2026-10-02");
+  assert.equal(s.liabilities, 349200 - 57600); assert.equal(s.netWorth, 250800 + 57600);
+  assert.deepEqual(correctSlip(p, "nope", 1), { fixed: 0, wrong: null, from: null });
 });

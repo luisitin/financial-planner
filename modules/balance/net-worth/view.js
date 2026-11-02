@@ -1,6 +1,6 @@
 // modules/balance/net-worth/view.js -- DOM only.
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
-import { keepOnFile } from "../update/compute.js";
+import { keepOnFile, looksLikeSlip, correctSlip } from "../update/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -39,7 +39,7 @@ export function render(root, ctx) {
     ));
   } else {
     root.append(ui.card(null, ui.row(
-      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.change ? `${fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
+      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.change ? `${Math.abs(d.change.sinceLast) < 0.5 ? "No change" : fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       ui.stat("You own", fmt.money(d.assets, cur), `${fmt.money(d.liquid, cur)} is cash or easy to sell`),
       ui.stat("You owe", fmt.money(d.liabilities, cur), d.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       ui.stat("Invested for later", fmt.money(d.investable, cur), investedLine(d, fmt, cur)),
@@ -58,14 +58,19 @@ export function render(root, ctx) {
     }
     const values = editing ? { ...editing } : { type: "checking", asOf: fmt.today() };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an account"));
-    formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
-      pending = { card: "accounts", text: editing ? `${v.name || editing.name} saved.` : `${v.name} added.` };
+    const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
+    formHost.append(ask);
+    const save = (v, typo) => {
+      const was = editing;
+      pending = { card: "accounts", text: !was ? `${v.name} added.` : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
       store.update((p) => {
-        if (editing) {
-          const i = p.accounts.findIndex((a) => a.id === editing.id);
+        if (was) {
+          const i = p.accounts.findIndex((a) => a.id === was.id);
           if (i >= 0) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
+            // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
+            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; return; }
             // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
@@ -74,6 +79,22 @@ export function render(root, ctx) {
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });
       });
       editing = null;
+    };
+    formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
+      // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
+      if (editing && looksLikeSlip(editing.balance, v.balance)) {
+        const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
+        ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. One of them looks like a typing slip.`),
+          ui.h("div", { class: "row" },
+            ui.button(`${wrong} was a mistake`, () => save(v, true)),
+            ui.button("Both are right: it changed", () => save(v, false), { class: "secondary" }),
+            ui.button("Let me fix what I typed", () => { ask.replaceChildren(); ask.style.marginBottom = ""; const box = formHost.querySelector('input[name="balance"]'); box?.focus(); box?.select?.(); }, { class: "secondary" })),
+          ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
+        ask.style.marginBottom = "16px";
+        ask.scrollIntoView({ behavior: "smooth", block: "center" });
+        return false;   // keep the form as typed behind the question
+      }
+      save(v, false);
     }, { submitLabel: editing ? "Save changes" : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null }));
   };
   drawForm();
@@ -121,13 +142,28 @@ export function render(root, ctx) {
       for (const a of p.accounts ?? []) { a.history = (a.history ?? []).filter((h) => h.date !== fmt.today()); a.history.push({ date: fmt.today(), balance: Number(a.balance) || 0 }); }   // per-account points feed investments/performance
     }); })),
     histOut,
-    d.history.length === 0 ? null : ui.table([
-      { key: "date", label: "Date", render: (h) => fmt.date(h.date) },
-      { key: "assets", label: "You own", align: "right", render: (h) => fmt.money(h.assets, cur) },
-      { key: "liabilities", label: "You owe", align: "right", render: (h) => fmt.money(h.liabilities, cur) },
-      { key: "netWorth", label: "Net worth", align: "right", render: (h) => fmt.money(h.netWorth, cur) },
-    ], [...d.history].reverse()),
+    d.history.length === 0 ? null : snapshots([...d.history].reverse()),
   ));
+  // a total saved on a bad day (a balance mistyped then) can be taken out; the accounts themselves are not touched
+  function snapshots(list) {
+    const drop = (h) => {
+      if (!ui.confirm(`Remove the totals saved on ${fmt.date(h.date)}? Your accounts are not changed.`)) return;
+      pending = { card: "history", text: `The totals of ${fmt.date(h.date)} are removed.` };
+      store.update((p) => { p.netWorthHistory = (p.netWorthHistory ?? []).filter((x) => x.date !== h.date); });
+    };
+    return ui.h("div", {},
+      ui.h("div", { class: "only-wide" }, ui.table([
+        { key: "date", label: "Date", render: (h) => fmt.date(h.date) },
+        { key: "assets", label: "You own", align: "right", render: (h) => fmt.money(h.assets, cur) },
+        { key: "liabilities", label: "You owe", align: "right", render: (h) => fmt.money(h.liabilities, cur) },
+        { key: "netWorth", label: "Net worth", align: "right", render: (h) => fmt.money(h.netWorth, cur) },
+        { key: "actions", label: "", render: (h) => ui.button("Remove", () => drop(h), { class: "danger small" }) },
+      ], list)),
+      ui.h("ul", { class: "records only-narrow" }, list.map((h) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, fmt.date(h.date)), ui.h("span", { class: "rec-value" }, fmt.money(h.netWorth, cur))),
+        ui.h("div", { class: "rec-sub" }, `You own ${fmt.money(h.assets, cur)} · you owe ${fmt.money(h.liabilities, cur)}`),
+        ui.h("div", { class: "rec-foot" }, ui.button("Remove", () => drop(h), { class: "danger small" }))))));
+  }
 }
 
 // Small line under "Invested for later": plain words at zero, no $0 parts otherwise.

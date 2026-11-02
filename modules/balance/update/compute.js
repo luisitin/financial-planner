@@ -50,22 +50,95 @@ export function keepOnFile(draft, a, today) {
 }
 
 /**
- * Save the balances typed on the page, all dated `today`. typed: { [accountId]: number | null } (null or missing = the box
- * was cleared or never shown: that account is left alone). A balance typed the same as the one on file still counts:
- * it says "still right today", so its date moves to today. A debt is typed as what is owed and keeps its stored sign.
- * Then today's totals go on Net worth's history (replacing an earlier save of the same day). Changes `draft` in place.
- * -> { saved: number of accounts dated today, changed: number whose amount changed, netWorth, before (the last
- * history point before today, or null) }
+ * looksLikeSlip(was, now) -> true when `now` looks like `was` with a key slipped, or the other way round: a digit added
+ * or dropped (about 10 or 100 times, or a tenth or a hundredth: 115,000 for 11,500) or two neighbouring digits swapped
+ * (51,000 for 15,000, at least 15% apart). Both must be at least $100. Only then do the balance pages ask whether the
+ * figure on file was a typing mistake: an ordinary big change (a card paid off, a bonus landing, a rollover) is not
+ * asked about. Signs are ignored (a debt is typed as what is owed).
  */
-export function saveAll(draft, typed, today) {
-  if (!isValidDate(today)) return { saved: 0, changed: 0, netWorth: null, before: null };
-  let saved = 0, changed = 0;
-  for (const a of draft.accounts ?? []) {
+export function looksLikeSlip(was, now) {
+  const a = Math.abs(Number(was)), b = Math.abs(Number(now));
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a < 100 || b < 100 || Math.abs(a - b) < 0.5) return false;
+  const r = Math.max(a, b) / Math.min(a, b);
+  if ((r >= 8 && r <= 12.5) || (r >= 80 && r <= 125)) return true;
+  const x = String(Math.round(a)), y = String(Math.round(b));
+  if (x.length === y.length && Math.abs(a - b) / Math.max(a, b) >= 0.15) {
+    const diff = [...x].map((c, i) => c !== y[i] ? i : -1).filter((i) => i >= 0);
+    if (diff.length === 2 && diff[1] === diff[0] + 1 && x[diff[0]] === y[diff[1]] && x[diff[1]] === y[diff[0]]) return true;
+  }
+  return false;
+}
+
+/**
+ * correctSlip(draft, accountId, value) -> { fixed (points and saved totals changed), wrong (the figure on file, as
+ * counted), from (the first day it stood, or null) }. The balance on file was a typing mistake and `value` (typed as
+ * counted: what is owed, for a debt) is what it always was. The account's points that carry the wrong figure, from the
+ * day it was typed on (the balance on file's date, or the earliest of the run of equal points ending the history),
+ * take the right one, and Net worth's saved totals from that day on move by the difference, so no fall or jump is drawn
+ * and "since" compares true figures. The balance on file becomes `value` with its date unchanged; callers date it.
+ * Changes `draft` in place.
+ */
+export function correctSlip(draft, accountId, value) {
+  const a = (draft.accounts ?? []).find((x) => x.id === accountId);
+  const v = Math.abs(Number(value));
+  if (!a || !Number.isFinite(v)) return { fixed: 0, wrong: null, from: null };
+  const debt = isLiability(a.type);
+  const wrong = debt ? countedBalance(a) : Number(a.balance) || 0;
+  const right = debt ? v : Number(value);
+  const sameAs = (h) => Math.abs((debt ? Math.abs(Number(h.balance) || 0) : Number(h.balance) || 0) - wrong) < 0.005;
+  const pts = [...(a.history ?? [])].filter((h) => isValidDate(h?.date)).sort((x, y) => String(x.date).localeCompare(String(y.date)));
+  let from = isValidDate(a.asOf) ? a.asOf : null;
+  for (let i = pts.length - 1; i >= 0 && sameAs(pts[i]); i--) if (!from || pts[i].date < from) from = pts[i].date;
+  let fixed = 0;
+  const signed = (n) => debt ? (Number(a.balance) < 0 ? -Math.abs(n) : Math.abs(n)) : n;
+  if (from) for (const h of a.history ?? []) if (isValidDate(h?.date) && h.date >= from && sameAs(h)) { h.balance = signed(right); fixed++; }
+  const delta = right - wrong;
+  if (from && Math.abs(delta) > 0.004) for (const s of draft.netWorthHistory ?? []) {
+    if (!isValidDate(s?.date) || s.date < from) continue;
+    if (debt) { s.liabilities = (Number(s.liabilities) || 0) + delta; s.netWorth = (Number(s.netWorth) || 0) - delta; }
+    else { s.assets = (Number(s.assets) || 0) + delta; s.netWorth = (Number(s.netWorth) || 0) + delta; }
+    fixed++;
+  }
+  a.balance = signed(right);
+  return { fixed, wrong, from };
+}
+
+/**
+ * slipsIn(plan, typed) -> [{ id, name, was, now }]: the boxes on Update my balances whose new figure looks like a slip
+ * of the keys next to the one on file (looksLikeSlip), so the page can ask before saving.
+ */
+export function slipsIn(plan, typed) {
+  const out = [];
+  for (const a of plan.accounts ?? []) {
     if (!Object.prototype.hasOwnProperty.call(typed ?? {}, a.id)) continue;
     const v = typed[a.id];
     if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) continue;
     const was = isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
-    keepOnFile(draft, a, today);
+    if (looksLikeSlip(was, v)) out.push({ id: a.id, name: a.name || "Account", was, now: Number(v) });
+  }
+  return out;
+}
+
+/**
+ * Save the balances typed on the page, all dated `today`. typed: { [accountId]: number | null } (null or missing = the box
+ * was cleared or never shown: that account is left alone). A balance typed the same as the one on file still counts:
+ * it says "still right today", so its date moves to today. A debt is typed as what is owed and keeps its stored sign.
+ * Then today's totals go on Net worth's history (replacing an earlier save of the same day). Changes `draft` in place.
+ * `corrections`: account ids whose figure on file the person said was a typing mistake (correctSlip first; the wrong
+ * figure is not kept as a point). -> { saved: number of accounts dated today, changed: number whose amount changed
+ * (a corrected one counts as unchanged), corrected, netWorth, before (the last history point before today, or null) }
+ */
+export function saveAll(draft, typed, today, { corrections = [] } = {}) {
+  if (!isValidDate(today)) return { saved: 0, changed: 0, corrected: 0, netWorth: null, before: null };
+  let saved = 0, changed = 0, corrected = 0;
+  for (const a of draft.accounts ?? []) {
+    if (!Object.prototype.hasOwnProperty.call(typed ?? {}, a.id)) continue;
+    const v = typed[a.id];
+    if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) continue;
+    // a figure on file that was a typing mistake: fix it where it stood instead of keeping it as a point (no fake fall)
+    if (corrections.includes(a.id)) { correctSlip(draft, a.id, Number(v)); corrected++; }
+    const was = isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
+    if (!corrections.includes(a.id)) keepOnFile(draft, a, today);
     const r = saveBalance(draft, a.id, today, Number(v));
     if (!r.saved) continue;
     if (!r.onFile) { a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(Number(v)) : Math.abs(Number(v))) : Number(v); a.asOf = today; }
@@ -80,5 +153,5 @@ export function saveAll(draft, typed, today) {
     draft.netWorthHistory = (draft.netWorthHistory ?? []).filter((h) => h.date !== today);
     draft.netWorthHistory.push({ date: today, assets: t.assets, liabilities: t.liabilities, netWorth: t.netWorth });
   }
-  return { saved, changed, netWorth, before };
+  return { saved, changed, corrected, netWorth, before };
 }
