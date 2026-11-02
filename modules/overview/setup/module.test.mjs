@@ -631,3 +631,13 @@ test("a Social Security figure typed after saying none wins: going through the a
   S2.applyAges(p, v, T2);
   assert.equal(p.retirement.socialSecurity.b.monthlyAtFRA, 2900, "and is not erased");
 });
+
+test("review: a plan made without names says 'yourself' and 'your spouse', never 'Me' or 'My spouse' in the life cover move", () => {
+  const p = family();
+  for (const x of p.household.people) { if (x.role === "self") x.name = "Me"; else if (x.role === "partner") x.name = "My spouse"; }
+  const st = S.standing(p, { today: T });
+  const m = st.moves.find((x) => x.id === "protect");
+  assert.ok(m, "the protection move is there");
+  assert.doesNotMatch(`${m.title} ${m.detail}`, /\bMe\b|My spouse/, `${m.title} | ${m.detail}`);
+  assert.match(m.title, /yourself|your spouse/);
+});

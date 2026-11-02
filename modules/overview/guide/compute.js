@@ -184,6 +184,13 @@ export function markNone(draft, id, key, today) {
   if (draft.guide?.journeys?.[id]?.none?.[key]) return false;
   const j = ensure(draft, id);
   j.none[key] = today; delete j.later[key]; touch(draft, today);
+  // "I won't get Social Security": saved as the setup's own "none" for each adult with no figure, as the retirement pages'
+  // notice does, so the Dashboard, Retirement contributions and the retirement check stop asking for it
+  if (key === "ss") {
+    const ss = draft.retirement?.socialSecurity ?? {};
+    draft.guide.setup = draft.guide.setup ?? {}; draft.guide.setup.ss = draft.guide.setup.ss ?? {};
+    for (const p of draft.household?.people ?? []) if (p.role !== "dependent" && !(Number(ss[p.id]?.monthlyAtFRA) > 0) && !(ss[p.id]?.record ?? []).length) draft.guide.setup.ss[p.id] = "none";
+  }
   return true;
 }
 /** "Skipped for now": still to do. Removes a "does not apply" mark for the same step. */

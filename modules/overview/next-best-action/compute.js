@@ -85,10 +85,10 @@ export function compute(plan, params = {}) {
   // 1b. the people who count on an earner: life cover for the gap Life insurance needs works out (its own answer: the
   // survivor's plan kept whole), right after the starter cushion; an action, not a sum to save, so no gap is filled
   const gaps = protectionGaps(plan, { today });
-  const who = (g) => g.depends.length > 1 ? `${g.depends.slice(0, -1).join(", ")} and ${g.depends.at(-1)}` : g.depends[0] ?? "the family";
+  // the words come from Life insurance needs (protectionGaps' title and sentence), so every page says the same thing
   if (gaps.length) add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term cover is the cheap way to buy it.", status: "now", gap: null,
-    people: gaps.map((g) => ({ personId: g.id, name: g.name, gap: g.gap, cover: g.cover, until: g.termUntil?.year ?? null, depends: g.depends })),
-    detail: gaps.map((g) => `If ${g.name} died this year, ${who(g)} would be about ${money(g.gap)} short${g.cover > 0 ? ` even with the ${money(g.cover)} of cover on file` : ""}. ${g.cover > 0 ? "More" : "Term life"} cover on ${g.name}${g.termUntil ? ` until about ${g.termUntil.year} (${g.termUntil.why})` : ""} closes it.`).join(" ") + " Cover you already have, through work too, goes on Policies.",
+    people: gaps.map((g) => ({ personId: g.id, name: g.name, who: g.who, whose: g.whose, gap: g.gap, cover: g.cover, until: g.until, depends: g.depends, ending: g.endsSoon.length > 0, title: g.title, sentence: g.sentence })),
+    detail: gaps.map((g) => g.sentence).join(" ") + " Cover you already have, through work too, goes on Policies.",
     go: ["insurance", "life-needs"] });
 
   // 2. the employer match: a 401(k) marked as from a job left (`formerJob`) takes no new money, and a person who said their

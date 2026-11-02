@@ -87,8 +87,9 @@ export function lifetimeEarnings({ pay, years, realGrowth, realDiscount }) {
  *     plan: { need, gapYears: [{ year, amount, benefits }], firstGap, benefits: { childMonthly, parentMonthly, familyMaxMonthly, childUntil }, withCover: { success, failAge, failYear } } | null,
  *     dime: { debts, finalExpenses, income, incomeYears, mortgage, education, total },
  *     lifetime: { yearly, years, total },
- *     need, method: "plan"|"dime", gap, spare, gapIfJobEnds, termUntil: { year, why } | null
- *   }], children: [{ name, age }], startYear
+ *     need, method: "plan"|"dime", gap, spare, gapIfJobEnds, termUntil: { year, why, who, event } | null (never a year already past),
+ *     endsSoon: [{ endDate, benefit }] (term cover ending by next year, before the need ends), gapAfterEnd, raise (protectionGaps' rule)
+ *   }], children: [{ name, age }] (everyone marked Dependent), startYear, unassignedCover (life cover on Policies naming nobody)
  * }
  * All figures are in today's dollars.
  */
@@ -99,6 +100,7 @@ export function compute(plan, params = {}) {
   const I = b.inputs;
   const startYear = I.startYear;
   const people = plan.household?.people ?? [];
+  // everyone marked Dependent on People counts as living on the pay, a grown child or a parent too (the role says so)
   const children = people.filter((q) => q.role === "dependent" && q.birthDate).map((q) => ({ id: q.id, name: q.name, birthDate: q.birthDate, age: ageOn(q.birthDate, today) }));
   const youngest = children.length ? children.reduce((y, c) => (c.birthDate > y.birthDate ? c : y)) : null;
   const yearsTo18 = youngest ? Math.max(0, shareUnderYears(youngest.birthDate, CHILD_UNTIL, today)) : 0;
@@ -114,6 +116,8 @@ export function compute(plan, params = {}) {
   const con = computeContributions(plan, { today });
   const ownSaving = (id) => con.byPerson?.find((p) => p.personId === id)?.yearly ?? 0;
   const pol = computePolicies(plan, { today });
+  // a life policy saved for "Household / everyone" names nobody, so it counts for no one: said, not guessed
+  const unassignedCover = pol.items.filter((x) => !x.ended && !x.personId && x.group === "life").reduce((s, x) => s + (Number(x.benefit) || 0), 0);
   const ss = computeSocialSecurity(plan, { today });
   const realGrowth = (1 + I.rates.salaryGrowth) / (1 + I.rates.inflation) - 1;
   const realDiscount = (1 + I.returns.bonds) / (1 + I.rates.inflation) - 1;
@@ -174,19 +178,29 @@ export function compute(plan, params = {}) {
         survivorRetireYear: S.retireYear, survivorPay: sPay,
       };
       const sRetire = sPerson?.birthDate ? Number(sPerson.birthDate.slice(0, 4)) + (S.people[0]?.retireAge ?? 65) : null;
-      termUntil = youngest ? { year: Number(youngest.birthDate.slice(0, 4)) + SCHOOL_DONE, why: `${youngest.name} turns ${SCHOOL_DONE}` } : sRetire ? { year: sRetire, why: `${sv.survivor.name} retires` } : null;
-    } else if (youngest) termUntil = { year: Number(youngest.birthDate.slice(0, 4)) + SCHOOL_DONE, why: `${youngest.name} turns ${SCHOOL_DONE}` };
+      termUntil = youngest ? { year: Number(youngest.birthDate.slice(0, 4)) + SCHOOL_DONE, why: `${youngest.name} turns ${SCHOOL_DONE}`, who: youngest.name, event: `turns ${SCHOOL_DONE}` } : sRetire ? { year: sRetire, why: `${sv.survivor.name} retires`, who: sv.survivor.name, event: "retires" } : null;
+    } else if (youngest) termUntil = { year: Number(youngest.birthDate.slice(0, 4)) + SCHOOL_DONE, why: `${youngest.name} turns ${SCHOOL_DONE}`, who: youngest.name, event: `turns ${SCHOOL_DONE}` };
+    // a year already past (a survivor who has retired) is no horizon to buy cover to
+    if (termUntil && termUntil.year <= startYear) termUntil = null;
 
     const method = planAnswer && planAnswer.need !== null ? "plan" : "dime";
-    const need = method === "plan" ? planAnswer.need : dime.total;
+    // the rule of thumb rounded up to $1,000 like the plan's answer, so every page shows the same figure
+    const need = method === "plan" ? planAnswer.need : Math.ceil(dime.total / 1000) * 1000;
+    // term cover that ends within a year or so, before the need does: it is on file today and gone soon
+    const endsSoon = termUntil ? mine.filter((x) => x.endDate && Number(String(x.endDate).slice(0, 4)) <= startYear + 1 && Number(String(x.endDate).slice(0, 4)) < termUntil.year).map((x) => ({ endDate: x.endDate, benefit: Number(x.benefit) || 0 })) : [];
+    const gapAfterEnd = Math.max(0, need - (cover - endsSoon.reduce((s2, x) => s2 + x.benefit, 0)));
+    const dependants = !!survivorName || children.length > 0;
     return {
       id: d.id, name: d.name, age, pay, cover, coverWork, survivorName,
       plan: planAnswer, dime, lifetime, need, method,
       gap: Math.max(0, need - cover), spare: Math.max(0, cover - need), gapIfJobEnds: Math.max(0, need - (cover - coverWork)),
-      dependants: !!survivorName || children.length > 0, termUntil,
+      dependants, termUntil, endsSoon, gapAfterEnd,
+      // the one rule for raising it outside this page (and for this page's headline): someone depends on the pay, and the
+      // gap, today or once cover that ends soon is gone, is at least MIN_GAP
+      raise: dependants && pay > 0 && Math.max(Math.max(0, need - cover), endsSoon.length ? gapAfterEnd : 0) >= MIN_GAP,
     };
   });
-  return { ready: true, missing: [], people: out, children: children.map((c) => ({ name: c.name, age: c.age })), startYear, spendingYearly };
+  return { ready: true, missing: [], people: out, children: children.map((c) => ({ name: c.name, age: c.age })), startYear, spendingYearly, unassignedCover };
 }
 
 /** Whole years (with the fraction) from today until a birthday age. */
@@ -199,11 +213,24 @@ function shareUnderYears(birthDate, age, today) {
 /** A gap smaller than this is not raised outside this page (Needs attention, Next best action). */
 export const MIN_GAP = 10000;
 
+/** A name as it reads in a sentence: the setup's "Me" is "you", its "My spouse" is "your spouse". */
+export const sayName = (n) => (n === "Me" || !n ? "you" : String(n).replace(/^My (spouse|partner)$/, "your $1"));
+/** The possessive: "your" for "Me", else "Ana's". */
+export const sayWhose = (n) => (n === "Me" || !n ? "your" : `${sayName(n)}'s`);
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
+const dollars = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+/** "Cy turns 22", "your spouse retires", "you retire": termUntil's reason with the setup's names said plainly. */
+const whyWords = (t) => (t.who === undefined ? t.why : t.event === "retires" && sayName(t.who) === "you" ? "you retire" : `${sayName(t.who)} ${t.event}`);
+const usDate = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return `${m}/${d}/${y}`; };
+
 /**
- * protectionGaps(plan, { today }) -> [{ id, name, need, cover, gap, depends: [names], termUntil }]
- * The earners whose death would leave the people who depend on them short by MIN_GAP or more (this page's own answer:
- * the plan's lump sum, else the rule of thumb), for Needs attention and Next best action. Nothing is worked out unless
- * someone has pay and there is a child or a second adult, so a household of one pays nothing for it.
+ * protectionGaps(plan, { today }) -> [{ id, personId, name, who, whose, need, cover, gap, depends: [names], dependsWords,
+ *   termUntil, until, method, endsSoon, unassignedCover, title, sentence }]
+ * The earners whose death would leave the people who depend on them short by MIN_GAP or more, today or once term cover
+ * that ends within a year is gone (this page's own answer: the plan's lump sum, else the rule of thumb, rounded to $1,000),
+ * for Needs attention, Next best action and the setup's moves, with the words they all show (`title`, `sentence`).
+ * Nothing is worked out unless someone has pay and there is a dependent or a second adult.
  */
 export function protectionGaps(plan, params = {}) {
   const people = plan.household?.people ?? [];
@@ -214,8 +241,29 @@ export function protectionGaps(plan, params = {}) {
   let d = null;
   try { d = compute(plan, params); } catch { d = null; }
   if (!d?.ready) return [];
-  return d.people.filter((p) => p.dependants && p.pay > 0 && p.gap >= MIN_GAP).map((p) => ({
-    id: p.id, name: p.name, need: p.need, cover: p.cover, gap: p.gap,
-    depends: [p.survivorName, ...d.children.map((c) => c.name)].filter(Boolean), termUntil: p.termUntil,
-  }));
+  return d.people.filter((p) => p.raise).map((p) => {
+    const ending = p.endsSoon.length > 0 && p.gapAfterEnd > p.gap;
+    const gap = ending ? p.gapAfterEnd : p.gap;
+    const depends = [p.survivorName, ...d.children.map((c) => c.name)].filter(Boolean);
+    const who = sayName(p.name), whose = sayWhose(p.name), dw = listOf(depends.map(sayName));
+    const term = p.termUntil ? ` until about ${p.termUntil.year} (${whyWords(p.termUntil)})` : "";
+    const unassigned = d.unassignedCover > 0 ? ` A ${dollars(d.unassignedCover)} life policy on Policies names nobody: pick who it covers there and it counts.` : "";
+    let title, sentence;
+    if (ending) {
+      const end = p.endsSoon.reduce((a, x) => (x.endDate < a.endDate ? x : a));
+      title = `${cap(whose)} term life cover ends ${usDate(end.endDate)}: ${dw} would then be about ${dollars(gap)} short`;
+      sentence = `${cap(whose)} ${dollars(end.benefit)} term policy ends on ${usDate(end.endDate)}, and ${dw} count on ${who}${p.termUntil ? ` until about ${p.termUntil.year}` : ""}: without it they would be about ${dollars(gap)} short. New term cover on ${who} from then closes it.`;
+    } else if (p.method === "dime") {
+      title = p.cover > 0 ? `${cap(whose)} life cover is about ${dollars(gap)} under the rule of thumb` : `No life insurance on ${who}: ${dw} would need about ${dollars(p.need)} by a common rule of thumb`;
+      sentence = `If ${who} died, a common rule of thumb (debts, ${who === "you" ? "your" : `${who}'s`} pay until the youngest is 18, the mortgage and college added up) puts what ${dw} would need at about ${dollars(p.need)}${p.cover > 0 ? `, ${dollars(gap)} more than the ${dollars(p.cover)} of cover on file` : ""}. Term life cover on ${who}${term} is the usual way to buy it.`;
+    } else {
+      title = p.cover > 0 ? `${cap(whose)} life cover is about ${dollars(gap)} short` : `No life insurance on ${who}: ${dw} would be about ${dollars(gap)} short`;
+      sentence = `If ${who} died this year, ${dw} would be about ${dollars(gap)} short${p.cover > 0 ? ` even with the ${dollars(p.cover)} of cover on file` : ""}. ${p.cover > 0 ? "More" : "Term life"} cover on ${who}${term} closes it.`;
+    }
+    return {
+      id: p.id, personId: p.id, name: p.name, who, whose, need: p.need, cover: p.cover, gap, depends, dependsWords: dw,
+      termUntil: p.termUntil, until: p.termUntil?.year ?? null, method: p.method, endsSoon: p.endsSoon, unassignedCover: d.unassignedCover,
+      title: title + (d.unassignedCover > 0 ? ` (a ${dollars(d.unassignedCover)} policy names nobody)` : ""), sentence: sentence + unassigned,
+    };
+  });
 }

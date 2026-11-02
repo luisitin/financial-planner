@@ -54,7 +54,8 @@ export function compute(plan, params = {}) {
     source: `Federal Reserve, Survey of Consumer Finances ${SCF_YEAR}, in ${SCF_YEAR} dollars (the median for all families is ${money(MEDIAN_NET_WORTH_ALL)})`, go: ["balance", "net-worth"] });
 
   // 2. retirement savings as a multiple of pay (Fidelity)
-  const pay = inc.active.filter((x) => x.type === "salary" || x.type === "bonus").reduce((s, x) => s + x.yearly, 0);
+  // pay: what is earned, a business's income included (a SEP or solo 401(k) is based on it), as Retirement contributions
+  const pay = inc.active.filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((s, x) => s + x.yearly, 0);
   const saved = (plan.accounts ?? []).filter((a) => RETIREMENT_TYPES.includes(a.type)).reduce((s, a) => s + countedBalance(a), 0);
   const target = savingsMultiple(age);
   if (pay > 0 && target > 0) {

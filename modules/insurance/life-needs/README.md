@@ -39,6 +39,26 @@ leave out the survivor's pay, Social Security and savings). "DIME" is no longer 
 `MIN_GAP` ($10,000) or more. It works nothing out unless someone has pay and there is a child or a second adult. Next best
 action's protection step and Needs attention's `life-cover-<id>` item read it.
 
+Review fixes (2026-11-02):
+- Everyone marked Dependent still counts, a grown child or a parent too: the review proposed counting only children, and
+  the verifier refuted it (the role says they depend on the pay).
+- `termUntil` is never a year already past (it said "until about 2022" when the youngest was 26); it falls back to the
+  survivor's retirement or nothing.
+- The rule of thumb is rounded up to $1,000 like the plan's answer, and is worded as a rule of thumb ("a common rule of
+  thumb puts what Cy would need at about $1,530,000"), never as "more than the plan holds".
+- Term cover that ends by next year, before the need ends (`endsSoon`), still raises the step: "Ana's term life cover ends
+  1/15/2027: Bo and Cy would then be about $212,000 short" (`gapAfterEnd`).
+- A life policy saved for "Household / everyone" names nobody: `unassignedCover`, a notice here and a sentence in the step
+  ("pick who it covers there and it counts"), rather than guessing whose it is.
+- Kept although the verifier called them minor or intended (they correct wording, not figures): the rule-of-thumb wording
+  above, "income" for a survivor with no pay, and the page's headline using the Dashboard's rule below.
+- `raise` is the one rule for the Dashboard, Needs attention and this page's headline (someone lives on the pay, gap of
+  `MIN_GAP` or more). A smaller gap, or one with no pay to replace (a retired couple), reads "Close to covered" with the gap
+  said plainly. "Sam's pay" says "income" when the survivor has no pay; the fold says "A rule of thumb" when it holds one.
+- `protectionGaps` returns the words too (`title`, `sentence`, `who`, `whose`): Next best action, Needs attention and the
+  setup's moves show the same sentence, and the setup's default names read "you", "your spouse" ("Get life insurance on
+  yourself"), never "Me" or "My spouse" (`sayName`, `sayWhose`).
+
 ## Edge cases
 - One adult with no children: no one depends on the income; only the funeral and debts are shown.
 - One adult with children: no survivor plan can be built (the plan needs an adult); DIME and lifetime earnings only.

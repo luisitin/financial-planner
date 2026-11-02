@@ -34,10 +34,12 @@ export function render(root, ctx) {
   function enoughLine() {
     const st = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing ?? null;
     const inc = ctx.computeOf?.("cashflow/income", { today: fmt.today() }) ?? null;
-    const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
+    // earned pay, a business's income included (what a SEP or solo 401(k) is based on), as How am I doing? counts it
+    const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
     const share = pay > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
     const r = st?.retire ?? null;
-    const said = !st?.retirementKnown ? `Once Social Security is in the plan, this says whether that is enough.`
+    // what is still missing, named (birth dates or Social Security), not always "Social Security"
+    const said = !st?.retirementKnown ? `Once ${st?.retirementMissing ?? "Social Security"} ${/ and |dates/.test(st?.retirementMissing ?? "") ? "are" : "is"} in the plan, this says whether that is enough.`
       : !r ? "" : r.verdict === "on track" ? "At this rate the money lasts to the end of the plan: you are on track."
       : r.verdict === "tight" ? "At this rate the money lasts, with little to spare."
       : `At this rate the money runs out${r.shortAge ? ` at about ${r.shortAge}` : ""}: saving more is the surest fix.`;

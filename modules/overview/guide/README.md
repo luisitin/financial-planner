@@ -156,6 +156,10 @@ The spec (2026-10-31) was checked by three critics before building (an engineer 
 - The guide opens a fold the ask names instead of editing other people's pages to open it; the pages' owners were told
   on the WORKBOARD.
 
+- "I won't get Social Security" on the retirement guide's Social Security step (`markNone(..., "ss")`) is also saved as the
+  setup's own `guide.setup.ss[id] = "none"` for each adult with no figure, as the retirement pages' notice does, so the
+  Dashboard, Retirement contributions and the retirement check stop asking (review fix, 2026-11-02).
+
 ## Sources
 GOV.UK Design System: "Complete multiple tasks" (task list: statuses in words, not colour) and "Question pages" (one
 thing per page, a way back); NN/g "Wizards: Definition and Design Recommendations" (verbs on buttons, "Next: what",

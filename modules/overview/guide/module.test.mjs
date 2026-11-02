@@ -381,3 +381,14 @@ test("Show me where: each step that says 'tap ...' names a button its page reall
     assert.ok(labels.some((l) => src.includes(l.replace(/^\+ /, ""))), `${j.id}/${s.key}: none of ${JSON.stringify(labels)} is in ${page}/view.js`);
   }
 });
+
+test("review: 'I won't get Social Security' in the retirement guide counts as the setup's 'none', so no page asks again", async () => {
+  const { markNone } = await import("./compute.js");
+  const { retirementKnown } = await import("../../retirement/projection/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-02"); p.retirement.socialSecurity = {};
+  assert.equal(retirementKnown(p), false);
+  markNone(p, "retire", "ss", "2026-11-02");
+  assert.deepEqual(p.guide.setup.ss, { "p-ana": "none", "p-bo": "none" });
+  assert.equal(retirementKnown(p), true);
+});

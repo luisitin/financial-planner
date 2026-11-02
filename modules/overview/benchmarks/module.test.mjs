@@ -23,8 +23,8 @@ test("the family against the benchmarks", () => {
   const d = compute(familyPlan(), { today: TODAY });
   assert.equal(d.age, 36); assert.equal(d.group.label, "35 to 44");
   const nw = item(d, "net-worth"); assert.equal(nw.verdict, "ahead"); assert.equal(nw.benchmark, 155600);
-  const m = item(d, "savings-multiple"); assert.ok(Math.abs(m.you - 159000 / 163800) < 1e-9); assert.equal(m.verdict, "rule", "behind the guideline, but the plan lasts");
-  const r = item(d, "saving-rate"); assert.ok(Math.abs(r.you - (470 * 26 + 3050 + 3600) / 163800) < 1e-9); assert.equal(r.verdict, "rule");
+  const m = item(d, "savings-multiple"); assert.ok(Math.abs(m.you - 159000 / (163800 + 7200)) < 1e-9, "pay counts Bo's photography business"); assert.equal(m.verdict, "rule", "behind the guideline, but the plan lasts");
+  const r = item(d, "saving-rate"); assert.ok(Math.abs(r.you - (470 * 26 + 3050 + 3600) / (163800 + 7200)) < 1e-9); assert.equal(r.verdict, "rule");
   assert.equal(item(d, "cash").verdict, "behind");
   const h = item(d, "housing"); assert.ok(Math.abs(h.you - 1980 / 14250) < 1e-9); assert.equal(h.verdict, "ahead");
   assert.equal(item(d, "debt").verdict, "ahead");

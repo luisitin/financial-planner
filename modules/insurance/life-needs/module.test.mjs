@@ -67,7 +67,7 @@ test("the family: the plan's answer, DIME and lifetime earnings for each of them
   assert.ok(ana.dime.incomeYears > 11 && ana.dime.incomeYears < 11.5);
   assert.equal(ana.lifetime.years, 65 - 36);
   assert.equal(ana.gap, ana.need); assert.equal(ana.cover, 0);
-  assert.deepEqual(ana.termUntil, { year: 2042, why: "Cy turns 22" });
+  assert.deepEqual(ana.termUntil, { year: 2042, why: "Cy turns 22", who: "Cy", event: "turns 22" });
 });
 
 test("the plan's answer is the smallest cover that works: a little less and the survivor's money runs out", () => {
@@ -98,4 +98,48 @@ test("the earnings test by the plan's first year (SSA: $24,480 in 2026, $25,560 
   assert.equal(earningsTestExempt(2026), 24480); assert.equal(earningsTestExempt(2027), 25560); assert.equal(earningsTestExempt(2035), 25560);
   const in2027 = familyBenefits({ pia: 2650, year: 2028, deathYear: 2027, children: [{ birthDate: "2020-03-03" }], parentPay: 69600 });
   near(in2027.parent, 0.75 * 2650 * 12 - (69600 - 25560) / 2);
+});
+
+test("review: no cover end year in the past; cover ending soon still leaves a gap; a policy naming nobody is said; the setup's 'Me' reads 'you'", async () => {
+  const { protectionGaps } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = { today: "2026-11-02" };
+  // Cy is 26: the cover runs to Bo's retirement, never to 2022
+  const c = familyPlan("2026-11-02"); c.household.people.find((x) => x.id === "p-cy").birthDate = "2000-03-03";
+  for (const x of protectionGaps(c, T)) { assert.ok(!x.until || x.until > 2026, String(x.until)); assert.doesNotMatch(x.sentence, /until about 20(1|2[0-6])/); }
+  const old = familyPlan("2026-11-02"); old.household.people.find((x) => x.id === "p-cy").birthDate = "1950-02-02";
+  assert.ok(compute(old, T).people.every((p) => !p.termUntil || p.termUntil.year > 2026));
+  // $250,000 of term cover ending in January: covered today, short from then; the step and its words stay
+  const e = familyPlan("2026-11-02");
+  e.insurance = { ...(e.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 250000, premium: 25, period: "monthly", endDate: "2027-01-15" }] };
+  const [ge] = protectionGaps(e, T);
+  assert.equal(ge.gap, 212000); assert.equal(ge.endsSoon.length, 1);
+  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $212,000 short");
+  const e2 = familyPlan("2026-11-02"); e2.insurance = { ...(e2.insurance ?? {}), policies: [{ ...e.insurance.policies[0], endDate: "2046-01-15" }] };
+  assert.deepEqual(protectionGaps(e2, T), [], "cover that lasts past 2042 covers it");
+  // a policy for "Household / everyone": not counted, and said
+  const h = familyPlan("2026-11-02"); h.insurance = { ...(h.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "", benefit: 250000, premium: 25, period: "monthly" }] };
+  assert.equal(compute(h, T).unassignedCover, 250000);
+  assert.match(protectionGaps(h, T)[0].sentence, /A \$250,000 life policy on Policies names nobody: pick who it covers there and it counts\.$/);
+  // the setup's default names
+  const m = familyPlan("2026-11-02");
+  m.household.people.find((x) => x.id === "p-ana").name = "Me"; m.household.people.find((x) => x.id === "p-bo").name = "My spouse"; m.household.people.find((x) => x.id === "p-cy").name = "Child 1";
+  const [gm] = protectionGaps(m, T);
+  assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $212,000 short");
+  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$212,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
+});
+
+test("review: one parent, the rule of thumb is rounded to $1,000 and said as a rule of thumb, not as the plan", async () => {
+  const { protectionGaps } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-02");
+  p.household.people = p.household.people.filter((x) => x.id !== "p-bo"); p.income = p.income.filter((x) => x.personId !== "p-bo");
+  p.retirement.contributions = (p.retirement.contributions ?? []).filter((x) => x.personId !== "p-bo");
+  p.household.filingStatus = "head_of_household";
+  const ana = compute(p, { today: "2026-11-02" }).people[0];
+  assert.equal(ana.method, "dime"); assert.equal(ana.need % 1000, 0); assert.ok(ana.need >= ana.dime.total && ana.need - ana.dime.total < 1000);
+  const [g] = protectionGaps(p, { today: "2026-11-02" });
+  assert.match(g.title, /^No life insurance on Ana: Cy would need about \$[\d,]+,000 by a common rule of thumb$/);
+  assert.match(g.sentence, /^If Ana died, a common rule of thumb \(debts, Ana's pay until the youngest is 18, the mortgage and college added up\) puts what Cy would need at about \$/);
+  assert.doesNotMatch(g.sentence, /more than the plan holds/);
 });

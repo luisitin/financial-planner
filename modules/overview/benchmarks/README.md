@@ -28,6 +28,11 @@ answer (`savingVerdict` in retirement/projection, once Social Security is known)
 `"rule"`: a neutral "your plan lasts" pill and "Behind the rule of thumb, but your own plan lasts (Will the money
 last?)." Amber "behind" stays when the plan runs short (the sentence then says at what age) or has no answer yet.
 
+Review fix (2026-11-02): pay counts business income too (salary + bonus + business), as Retirement contributions does, so
+a self-employed household gets the two retirement rows and both pages show the same share. (Three other proposals, a
+wider "on track" margin, amber for "tight" and cause-based advice, were refuted by the verifier as intended and are
+unchanged.)
+
 ## Tests
 `module.test.mjs`: the age groups and the savings multiple, not ready without a birth date, the family's six items and verdicts.
 

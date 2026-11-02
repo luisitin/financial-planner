@@ -850,8 +850,10 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
     case "protect": {
       const ppl = step.people ?? [];
-      const names = ppl.map((x) => x.name).join(" and ");
-      return { title: ppl.length && ppl.every((x) => x.cover > 0) ? `Raise the life cover on ${names}` : `Get life insurance on ${names || "the earners"}`, detail: step.detail };
+      // the setup's "Me" reads "yourself" / "your" (Life insurance needs' sayName)
+      const names = ppl.map((x) => (x.who === "you" ? "yourself" : x.who ?? x.name)).join(" and ");
+      const raise = ppl.length && ppl.every((x) => x.cover > 0);
+      return { title: raise ? (ppl.length === 1 && ppl[0].who === "you" ? "Raise your life cover" : `Raise the life cover on ${names}`) : `Get life insurance on ${names || "the earners"}`, detail: step.detail };
     }
     case "match": {
       // a 401(k) with nothing going in: a question first (it may be from a job left, or the job may not match)

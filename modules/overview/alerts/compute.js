@@ -89,10 +89,10 @@ export function compute(plan, params = {}) {
   // the people who count on an earner (Life insurance needs' answer, the same as Next best action's protection step), and a
   // guardian for the children: the two gaps that would hurt a family most, worked out on pages few people open
   let prot = [];
-  try { prot = nba?.ready ? (nba.steps.find((x) => x.id === "protect")?.people ?? []) : protectionGaps(plan, { today }).map((g) => ({ personId: g.id, name: g.name, gap: g.gap, cover: g.cover, until: g.termUntil?.year ?? null, depends: g.depends })); } catch { prot = []; }
+  try { prot = nba?.ready ? (nba.steps.find((x) => x.id === "protect")?.people ?? []) : protectionGaps(plan, { today }); } catch { prot = []; }
   const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
-  for (const g of prot) add(`life-cover-${g.personId}`, "warn", g.cover > 0 ? `${g.name}'s life cover is about ${money(g.gap)} short` : `No life insurance on ${g.name}: ${list(g.depends ?? [])} would be about ${money(g.gap)} short`,
-    `If ${g.name} died this year, ${list(g.depends ?? [])} would need about ${money(g.gap)} more than the plan holds to stay on track${g.cover > 0 ? `, on top of the ${money(g.cover)} of cover on file` : ""}. Term cover${g.until ? ` until about ${g.until}` : ""} is the usual way. Cover you already have, through work too, goes on Policies.`, ["insurance", "life-needs"]);
+  // the title and sentence are Life insurance needs' own (protectionGaps), the same words as the Dashboard's move
+  for (const g of prot) add(`life-cover-${g.personId}`, "warn", g.title, `${g.sentence} Cover you already have, through work too, goes on Policies.`, ["insurance", "life-needs"]);
   let docs = null;
   try { docs = estateDocs(plan, { today }); } catch { docs = null; }
   if (docs?.minors?.length && docs.items?.find((x) => x.kind === "guardian")?.status !== "done") {
