@@ -14,6 +14,7 @@ import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
 import { compute as computeLimits } from "../../investments/limits/compute.js";
+import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -29,8 +30,11 @@ export const HORIZON_MONTHS = 120;
 /**
  * compute(plan, { today }) -> {
  *   ready, missing,
- *   spare: { monthly, gross, federalTax, payrollTax, spending, retirementSaving, goalSaving } (all a month; spare may be negative),
- *   steps: [{ id, n, title, why, status: "done"|"now"|"later"|"check"|"skip", detail, gap (one-off amount left) | null, roomYearly | null,
+ *   spare: { monthly, gross, federalTax, payrollTax, spending, retirementSaving, goalSaving, debtExtra } (all a month; spare may be negative;
+ *            debtExtra: the extra a month the saved debt plan pays on top of the required payments, Pay off debts' `extra`),
+ *   debtPlan: { extra, names, ids, until, months } | null (that saved extra: the debts it goes to, and when the last of them is gone),
+ *   steps: [{ id, n, title, why, status: "done"|"now"|"later"|"check"|"skip"|"underway", detail, gap (one-off amount left) | null, roomYearly | null,
+ *             underway: { extra, names, until } (a debt step the saved debt plan already pays off: no spare money goes to it),
  *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go,
  *             ask (the match step: [{ personId, name, accounts: [401(k) ids] }] with pay, a 401(k) and nothing going in) }],
  *   next: the first step that is not done (or null)
@@ -62,7 +66,18 @@ export function compute(plan, params = {}) {
   const gl = computeGoals(plan, { today });
   const goalSaving = gl.goals.filter((g) => g.status !== "done").reduce((s, g) => s + (Number(g.monthly) || 0), 0);
   const spare = { gross: inc.monthly, federalTax: fed.result.totalTax / 12, payrollTax: payroll / 12, spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
-  spare.monthly = spare.gross - spare.federalTax - spare.payrollTax - spare.spending - spare.retirementSaving - spare.goalSaving;
+  // the saved debt plan (Pay off debts): an extra a month on top of the required payments is money already spoken for, until
+  // the debts it is aimed at are gone (all of them, when it is aimed at none: it rolls from one to the next)
+  let pay = null;
+  try { pay = computePayoff(plan, { today }); } catch { pay = null; }
+  const debtPlan = pay?.hasData && pay.extra > 0 ? (() => {
+    const ids = pay.targets.length ? pay.targets : pay.debts.map((x) => x.id);
+    const ends = ids.map((id) => pay.chosen.debts.find((x) => x.id === id)).filter(Boolean);
+    const last = ends.length === ids.length && ends.every((x) => Number.isFinite(x.months)) ? ends.reduce((a, b) => (b.months > a.months ? b : a)) : null;
+    return { extra: pay.extra, ids, names: ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean), until: last?.endDate ?? null, months: last ? last.months : null };
+  })() : null;
+  spare.debtExtra = debtPlan ? debtPlan.extra : 0;
+  spare.monthly = spare.gross - spare.federalTax - spare.payrollTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra;
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);
@@ -78,7 +93,8 @@ export function compute(plan, params = {}) {
   if (drawing) add({ id: "bills", title: "Spend within what the plan can carry", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
     detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. The plan can carry about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
   else add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
-    detail: spare.monthly >= 0 ? `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings.` : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving. Trim spending or pause a goal first.`, go: ["cashflow", "expenses"] });
+    detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}.`)
+      : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}. Trim spending${spare.debtExtra ? ", lower that extra" : ""} or pause a goal first.`, go: ["cashflow", "expenses"] });
 
   // 1. a starter emergency fund: one month of must-pay bills in cash you can use
   const essential = liq.expenses?.essentialMonthly ?? exp.essentialMonthly;
@@ -122,10 +138,25 @@ export function compute(plan, params = {}) {
   }
 
   // 3. expensive debt, most expensive first (mortgages left out)
+  // a debt the saved debt plan's extra reaches is being paid off already: the step is under way, with the month the last
+  // of them is gone (Pay off debts' own date), and no spare money is counted for it twice; one it does not reach stays to do
+  const reached = (d) => !!debtPlan && debtPlan.ids.includes(d.id) && Number.isFinite(pay.chosen.debts.find((x) => x.id === d.id)?.months);
+  const debtStep = (list) => {
+    const on = list.filter(reached), off = list.filter((d) => !reached(d));
+    const ends = on.map((d) => pay.chosen.debts.find((x) => x.id === d.id)).sort((a, b) => a.months - b.months);
+    const until = ends.length ? ends[ends.length - 1].endDate : null;
+    const names = on.map((d) => d.name);
+    const sentence = on.length && until ? `${money(debtPlan.extra)} a month extra already goes to ${listWords(names)} (Pay off debts), on top of the required payments: ${on.length === 1 ? "it is" : "they are"} gone by about ${monthWords(until)}.` : "";
+    return { on, off, until, names, sentence, gap: off.reduce((s, d) => s + d.owed, 0) };
+  };
   const high = debts.filter((d) => d.rate !== null && d.rate >= HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);
-  const highGap = high.reduce((s, d) => s + d.owed, 0);
-  add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 ? "now" : "done", gap: highGap,
-    detail: highGap > 0 ? `${high.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}: every extra dollar here earns the rate for sure.` : `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`, go: ["debt", "payoff"] });
+  const hs = debtStep(high);
+  const highGap = hs.gap;
+  const highWords = (list) => `${list.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}`;
+  if (high.length && !hs.off.length && hs.until) add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: "underway", gap: 0,
+    underway: { extra: debtPlan.extra, names: hs.names, until: hs.until }, detail: `Under way. ${hs.sentence}`, go: ["debt", "payoff"] });
+  else add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 ? "now" : "done", gap: highGap,
+    detail: highGap > 0 ? `${highWords(hs.off)}: every extra dollar here earns the rate for sure.${hs.sentence ? ` ${hs.sentence}` : ""}` : `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`, go: ["debt", "payoff"] });
 
   // 4. the full emergency fund
   const fullGap = (liq.gap ?? 0) < 0.5 ? 0 : liq.gap;
@@ -158,9 +189,12 @@ export function compute(plan, params = {}) {
 
   // 7. moderate debt (not the mortgage)
   const mid = debts.filter((d) => d.rate !== null && d.rate >= MODERATE_RATE && d.rate < HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);
-  const midGap = mid.reduce((s, d) => s + d.owed, 0);
-  if (mid.length) add({ id: "mid-debt", title: "Pay down middling debt", why: `Debt at ${Math.round(MODERATE_RATE * 100)}% to ${Math.round(HIGH_RATE * 100)}%: paying it is a sure return at that rate.`, status: "now", gap: midGap,
-    detail: `${mid.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}.`, go: ["debt", "payoff"] });
+  const ms = debtStep(mid);
+  const midWhy = `Debt at ${Math.round(MODERATE_RATE * 100)}% to ${Math.round(HIGH_RATE * 100)}%: paying it is a sure return at that rate.`;
+  if (mid.length && !ms.off.length && ms.until) add({ id: "mid-debt", title: "Pay down middling debt", why: midWhy, status: "underway", gap: 0,
+    underway: { extra: debtPlan.extra, names: ms.names, until: ms.until }, detail: `Under way. ${ms.sentence}`, go: ["debt", "payoff"] });
+  else if (mid.length) add({ id: "mid-debt", title: "Pay down middling debt", why: midWhy, status: "now", gap: ms.gap,
+    detail: `${highWords(ms.off)}.${ms.sentence ? ` ${ms.sentence}` : ""}`, go: ["debt", "payoff"] });
 
   // 8. the 401(k) to the limit
   if (k401.length) {
@@ -185,8 +219,10 @@ export function compute(plan, params = {}) {
   // the spare money, month by month: one-off gaps in order, then this year's room, ongoing
   const avail0 = Math.max(0, spare.monthly);
   const left = steps.map((s) => (s.status === "now" && s.gap ? s.gap : 0));
-  for (let m = 0; m < HORIZON_MONTHS && avail0 > 0; m++) {
-    let avail = avail0;
+  // once the saved debt plan's debts are gone, its extra is free again and joins the spare money
+  const freed = debtPlan && debtPlan.months !== null ? debtPlan.months : Infinity;
+  for (let m = 0; m < HORIZON_MONTHS && (avail0 > 0 || freed < HORIZON_MONTHS); m++) {
+    let avail = Math.max(0, spare.monthly + (m >= freed ? debtPlan.extra : 0));
     steps.forEach((s, i) => {
       if (avail <= 0 || s.status !== "now") return;
       if (s.gap) {
@@ -203,7 +239,11 @@ export function compute(plan, params = {}) {
   steps.forEach((s, i) => { s.n = i; });
   const next = steps.find((s) => s.status === "now" || s.status === "check") ?? null;
   if (next) for (const s of steps) if (s !== next && s.status === "now") s.status = "later";
-  return { ready: true, missing: [], spare, steps, next, drawing };
+  return { ready: true, missing: [], spare, steps, next, drawing, debtPlan };
 }
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "2028-01-15" -> "January 2028" (pure: no locale). */
+export const monthWords = (iso) => (iso ? `${MONTHS[Number(String(iso).slice(5, 7)) - 1]} ${String(iso).slice(0, 4)}` : "");
+const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 function pct(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }

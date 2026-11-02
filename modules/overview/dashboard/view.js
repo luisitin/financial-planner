@@ -69,7 +69,7 @@ export function render(root, ctx) {
       const rows = [];
       if (st.spare === null) rows.push({ dot: "", k: "Left over each month", s: "Needs your pay and spending", v: "Add ›", open: true, href: back((plan.income ?? []).length ? "spend" : "money") });
       else if (st.drawing) rows.push({ dot: "", k: "Drawn from savings each month", s: "What a pension and Social Security don't cover", v: money(-st.spare), href: "#/retirement/projection" });
-      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? "After tax, bills and saving" : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
+      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? (st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving") : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
       if (st.runway === null) rows.push({ dot: "", k: "Safety cushion", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : `Aim for ${st.runwayTarget ?? 6} months`, v: `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
       if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });

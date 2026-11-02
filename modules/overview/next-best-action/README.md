@@ -55,8 +55,29 @@ they have now may have a plan. Their ask entry is `{ personId, name, accounts: [
 and Retirement contributions asks "Does Bo's job now have a retirement plan with a match?" (2026-11-02: before, marking the
 only 401(k) as old dropped the question for good).
 
+## A saved debt plan (2026-11-02)
+An extra a month saved on Pay off debts (`plan.debtPlan.extra`, its `extra` as that page's compute returns it: 0 once
+every debt it was aimed at is paid off) is money already spoken for, like what goes to retirement and goals:
+`spare.debtExtra` = that extra, and `spare.monthly` = pay - federal tax - payroll tax - spending - retirement saving -
+goal saving - `debtExtra`. Before, the money promised to the cards still showed as left over, so doing the next move
+changed nothing and the step asked for the same money again (round-4 finding).
+- `debtPlan` = `{ extra, ids, names, until, months }`: the debts the extra goes to (`debtPlan.targets` still owed, or every
+  debt in the payoff plan when it is aimed at none: it rolls from one to the next) and the month the last of them is gone
+  (Pay off debts' own `chosen.debts[].endDate`; null when one never pays off).
+- A debt step (expensive, middling) whose every debt the extra reaches, each with a payoff month, is `status: "underway"`,
+  `gap: 0`, with `underway: { extra, names, until }` and the detail "Under way. $410 a month extra already goes to Visa
+  card (Pay off debts), on top of the required payments: it is gone by about July 2027." It is never the next step, gets
+  no spare money in the run below, and the setup's moves and the Dashboard leave it out. A debt the extra does not reach
+  stays to do, with only its own balance as the gap.
+- The page lists the extra under Each month's money ("Extra on Visa card (Pay off debts)", a striped key, not a colour
+  that means good or bad), with a pill "under way" on the step.
+- Elsewhere: the Dashboard's and the setup's "Left over each month" say "after tax, bills, saving and $410 extra on Visa
+  card"; Needs attention drops "Visa card is expensive debt" while the plan pays it off; the health score's saving part
+  counts the extra as saving (paying down debt adds to what you are worth as surely), so saving the plan never lowers the
+  score; Expenses' Close-the-gap card says lowering the extra is a way out when it tips the month over.
+
 ## The dates
-The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money. Interest on the debts and next year's new limits are left out, so the dates are about right.
+The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money. A saved debt plan's extra joins the spare money from the month its last debt is gone (`debtPlan.months`), and a date reached with it says "with the $410 a month that frees up after July 2027". Interest on the debts and next year's new limits are left out, so the dates are about right.
 
 ## Display
 - A federal tax below zero (refundable credits, such as the child tax credit's refundable part, paying back more than the tax) reads "+ $80" on a line "Federal income tax: credits pay back more than the tax" (2026-11-01); it read "- -$80". Its bar segment is 0 wide.

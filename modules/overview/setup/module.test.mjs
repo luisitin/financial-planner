@@ -641,3 +641,17 @@ test("review: a plan made without names says 'yourself' and 'your spouse', never
   assert.doesNotMatch(`${m.title} ${m.detail}`, /\bMe\b|My spouse/, `${m.title} | ${m.detail}`);
   assert.match(m.title, /yourself|your spouse/);
 });
+
+test("where you stand: a debt step the saved debt plan pays off is not a move, and the left-over figure says where the extra goes", () => {
+  const p = familyPlan(T);
+  p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 400000, premium: 25, period: "monthly", throughWork: false }] };
+  p.accounts.find((a) => a.id === "a-chk").balance += 6000;
+  const before = S.standing(p, { today: T });
+  assert.ok(before.moves.some((m) => m.id === "high-debt"), "the cards are a move before any plan is saved");
+  assert.equal(before.debtExtra, 0); assert.equal(before.debtOn, null);
+  p.debtPlan = { extra: 410, order: "avalanche", targets: ["a-visa"] };
+  const st = S.standing(p, { today: T });
+  assert.ok(!st.moves.some((m) => m.id === "high-debt"), "under way: not a move");
+  assert.equal(st.debtExtra, 410); assert.equal(st.debtOn, "Visa card"); assert.match(st.debtUntil, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(Math.abs(st.spare - (before.spare - 410)) < 0.01);
+});

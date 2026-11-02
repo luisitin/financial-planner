@@ -130,3 +130,49 @@ test("saving: when the plan already lasts, the IRA and 401(k) steps say they are
   rich.income.find((x) => x.personId === "p-ana" && x.type === "salary").amount = 12000;   // every two weeks: $312,000 a year
   assert.match(compute(rich, { today: "2026-11-02" }).steps.find((x) => x.id === "ira").detail, /backdoor route/);
 });
+
+test("a saved debt plan: its extra is spoken for, the debt step is under way with Pay off debts' own date, and nothing asks for it twice", async () => {
+  const { compute: payoff } = await import("../../debt/payoff/compute.js");
+  const { compute: alerts } = await import("../alerts/compute.js");
+  const { compute: health } = await import("../health-score/compute.js");
+  const base = familyPlan(), before = compute(base, { today: TODAY });
+  assert.equal(before.spare.debtExtra, 0); assert.equal(before.debtPlan, null);
+  const p = familyPlan(); p.debtPlan = { extra: 410, order: "avalanche", targets: ["a-visa"] };
+  const d = compute(p, { today: TODAY });
+  // the extra is not spare money: Each month's money takes it off, like saving
+  assert.equal(d.spare.debtExtra, 410);
+  near(d.spare.monthly, before.spare.monthly - 410, 0.01);
+  near(d.spare.monthly, d.spare.gross - d.spare.federalTax - d.spare.payrollTax - d.spare.spending - d.spare.retirementSaving - d.spare.goalSaving - d.spare.debtExtra, 0.01);
+  // the step is under way, with the month Pay off debts gives for the card, and the spare money is not sent to it again
+  const end = payoff(p, { today: TODAY }).chosen.debts.find((x) => x.id === "a-visa").endDate;
+  const hd = step(d, "high-debt");
+  assert.equal(hd.status, "underway"); assert.equal(hd.gap, 0); assert.equal(hd.doneDate, null);
+  assert.deepEqual(hd.underway, { extra: 410, names: ["Visa card"], until: end });
+  assert.match(hd.detail, /^Under way\. \$410 a month extra already goes to Visa card \(Pay off debts\), on top of the required payments: it is gone by about \w+ \d{4}\.$/);
+  assert.deepEqual(d.debtPlan, { extra: 410, ids: ["a-visa"], names: ["Visa card"], until: end, months: payoff(p, { today: TODAY }).chosen.debts.find((x) => x.id === "a-visa").months });
+  assert.notEqual(d.next.id, "high-debt");
+  // the car loan is not in the plan's aim, so middling debt stays to do, saying nothing about the extra
+  assert.equal(step(d, "mid-debt").status, "later"); assert.doesNotMatch(step(d, "mid-debt").detail, /already goes/);
+  // Needs attention drops "Visa card is expensive debt" while it is in hand; the health score's saving counts the extra as saving
+  assert.ok(alerts(base, { today: TODAY }).alerts.some((a) => a.id === "debt-expensive-a-visa"));
+  assert.ok(!alerts(p, { today: TODAY }).alerts.some((a) => a.id === "debt-expensive-a-visa"));
+  const sav = (x) => health(x, { today: TODAY }).parts.find((y) => y.id === "saving").points;
+  near(sav(p), sav(base), 0.01);
+  // aimed at no debt in particular, the extra rolls on: the car loan's step is under way too, until the last debt is gone
+  const q = familyPlan(); q.debtPlan = { extra: 410, order: "avalanche" };
+  const dq = compute(q, { today: TODAY });
+  assert.equal(step(dq, "high-debt").status, "underway"); assert.equal(step(dq, "mid-debt").status, "underway");
+  assert.match(step(dq, "mid-debt").detail, /Car loan/);
+  // the cards it was aimed at are paid off (none left in the plan): the extra has stopped and the step reads as before
+  const r = familyPlan(); r.debtPlan = { extra: 410, order: "avalanche", targets: ["a-gone"] };
+  const dr = compute(r, { today: TODAY });
+  assert.equal(dr.spare.debtExtra, 0); near(dr.spare.monthly, before.spare.monthly, 0.01);
+  assert.equal(step(dr, "high-debt").status, step(before, "high-debt").status);
+});
+
+test("a saved extra larger than the money left: the bills step says it counts, and that lowering it is a way out", () => {
+  const p = familyPlan(); p.debtPlan = { extra: 9000, order: "avalanche", targets: ["a-visa"] };
+  const d = compute(p, { today: TODAY });
+  assert.ok(d.spare.monthly < 0); assert.equal(d.next.id, "bills");
+  assert.match(step(d, "bills").detail, /counting the \$9,000 a month extra on debts \(Pay off debts\)\. Trim spending, lower that extra or pause a goal first\./);
+});

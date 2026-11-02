@@ -28,7 +28,7 @@ export function render(root, ctx) {
   const nba = d.income ? ctx.computeOf("overview/next-best-action", { today: fmt.today() }) : null;
   const leftTile = () => {
     if (!d.income) return null;
-    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? "each month, after tax, bills and saving" : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving"); }
+    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving"); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;
@@ -60,6 +60,8 @@ export function render(root, ctx) {
       g.bigMustPays.length ? ui.h("p", { class: "small", style: { margin: "12px 0 0" } }, g.picks.length ? "The rest has to come from a must-pay. The biggest:" : "The biggest must-pays:") : null,
       g.bigMustPays.length ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "must pay \u00b7 a cheaper version closes part of it"))) : null,
       g.goalSaving > 0 ? ui.h("p", { class: "muted small" }, `Or for now: ${m(g.goalSaving)} a month goes to your goals, and pausing some of it closes ${g.goalSaving >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/goals/goals" }, "Goals \u203a")) : null,
+      // the saved debt plan's extra counts as spoken for; when it is what tips the month over, lowering it is a way out too
+      nba.spare.debtExtra > 0 ? ui.h("p", { class: "muted small" }, `Or: ${m(nba.spare.debtExtra)} a month extra goes to debts on top of the required payments, and lowering it closes ${nba.spare.debtExtra >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/debt/payoff" }, "Pay off debts ›")) : null,
       ui.h("p", { class: "muted small" }, "Tap one to change its amount or give it an end date. The left-over figure updates as soon as you save."),
     );
   };

@@ -208,6 +208,9 @@ spendMode, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, 
 `docs/DATA_MODEL.md` under `guide`.
 
 ## Choices made (the owner said: decide and note it here)
+- A debt step a saved debt plan already pays off ("under way" on Next best action) is not a move: the moves skip it, and
+  `standing` returns `debtExtra`, `debtOn` (the debt's name, two names, or "your debts") and `debtUntil`, so "Left over each
+  month" says what the extra goes to (2026-11-02).
 - Seven questions, follow-ups only when needed: the critics' newcomer persona gave up past about eight screens.
 - Ages and Social Security share one screen (the stop-working age is what the estimate needs).
 - No "already saved" box on a goal: the money is already in the accounts you typed, so asking again counted it twice.

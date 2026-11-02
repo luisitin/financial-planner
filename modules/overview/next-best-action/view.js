@@ -18,6 +18,7 @@ const STYLE = `
 .nb-root .done .nb-num { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .nb-root .now .nb-num { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .nb-root .check .nb-num { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.nb-root .underway .nb-num { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); border-style: dashed; }
 .nb-root .nb-body { flex: 1; min-width: 0; }
 .nb-root .nb-t { font-weight: 650; }
 .nb-root .done .nb-t { color: var(--muted); }
@@ -42,7 +43,9 @@ export function render(page, ctx) {
     return;
   }
   const n = d.next;
-  const when = (s) => s.doneDate ? `Done by about ${month(s.doneDate)} at ${money(Math.max(0, d.spare.monthly))} a month.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
+  // the saved debt plan's extra joins the spare money once its debts are gone: a date reached with it says so
+  const freed = d.debtPlan?.until ? ` with the ${money(d.debtPlan.extra)} a month that frees up after ${month(d.debtPlan.until)}` : "";
+  const when = (s) => s.doneDate ? `Done by about ${month(s.doneDate)}${d.spare.monthly >= 5 ? ` at ${money(d.spare.monthly)} a month` : ""}${freed && s.doneDate > d.debtPlan.until ? `${d.spare.monthly >= 5 ? ", then more" : ""}${freed}` : ""}.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
     ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),
@@ -53,7 +56,9 @@ export function render(page, ctx) {
 
   // each month's money
   const s = d.spare;
-  const parts = [["Federal income tax", s.federalTax, "var(--muted)"], ["Social Security and Medicare tax", s.payrollTax, "var(--line-2)"], ["Spending", s.spending, "var(--text-2)"], ["Retirement saving", s.retirementSaving, "var(--ok)"], ["Saving for goals", s.goalSaving, "var(--accent)"]];
+  const parts = [["Federal income tax", s.federalTax, "var(--muted)"], ["Social Security and Medicare tax", s.payrollTax, "var(--line-2)"], ["Spending", s.spending, "var(--text-2)"], ["Retirement saving", s.retirementSaving, "var(--ok)"], ["Saving for goals", s.goalSaving, "var(--accent)"],
+    // the saved debt plan's extra (Pay off debts) is already spoken for, so it is not spare
+    ...(s.debtExtra > 0 ? [[`Extra on ${d.debtPlan?.names?.length && d.debtPlan.names.length <= 2 ? d.debtPlan.names.join(" and ") : "debts"} (Pay off debts)`, s.debtExtra, "repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px)"]] : [])];
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
@@ -62,13 +67,13 @@ export function render(page, ctx) {
       // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
       parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`))),
       ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
-    ui.h("p", { class: "muted small" }, "State and local income tax is not counted yet. Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away.")));
+    ui.h("p", { class: "muted small" }, `State and local income tax is not counted yet. Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`)));
 
   // the order
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The order"),
     ui.h("ol", { class: "nb-steps" }, d.steps.map((st, i) => {
       const body = [ui.h("span", { class: "nb-num", "aria-hidden": "true" }, st.status === "done" ? "✓" : st.status === "check" ? "?" : String(i)), ui.h("span", { class: "nb-body" },
-        ui.h("div", { class: "nb-t" }, st.title, st.status === "check" ? ui.h("span", { class: "pill warn" }, "check") : st === n ? ui.h("span", { class: "pill accent" }, "next") : null),
+        ui.h("div", { class: "nb-t" }, st.title, st.status === "check" ? ui.h("span", { class: "pill warn" }, "check") : st.status === "underway" ? ui.h("span", { class: "pill ok" }, "under way") : st === n ? ui.h("span", { class: "pill accent" }, "next") : null),
         ui.h("div", { class: "nb-d" }, st.detail),
         st.status !== "done" && when(st) ? ui.h("div", { class: "nb-when" }, when(st)) : null,
         ui.h("div", { class: "nb-why" }, st.why)), ui.h("span", { class: "nb-chev", "aria-hidden": "true" }, "›")];

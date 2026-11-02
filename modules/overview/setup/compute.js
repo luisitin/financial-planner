@@ -894,7 +894,10 @@ export function standing(plan, { today }) {
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
   const retired = allRetired(plan);
   const drawing = retired && spare !== null && spare < 0;
-  const steps = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.id !== "rest");
+  // a debt step the saved debt plan already pays off is under way, not a move to make
+  const steps = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.status !== "underway" && s.id !== "rest");
+  const debtExtra = nba?.ready ? nba.spare.debtExtra ?? 0 : 0;
+  const debtNames = nba?.debtPlan?.names ?? [];
   const open = steps.map((s) => ({ id: s.id, ...revealWords({ ...s, spare }, plan, { today, retired: drawing }), href: `#/${s.go.join("/")}` }));
   const focus = [...(drawing ? ["retire"] : []), ...(setupOf(plan).focus ?? []), ...(picks(plan, "goals").includes("home") ? ["home"] : [])];
   const debtStep = open.slice(0, 1).some((m) => m.id === "high-debt" || m.id === "mid-debt");   // the debt guide would repeat it
@@ -933,6 +936,7 @@ export function standing(plan, { today }) {
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
+    debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
   };
