@@ -54,7 +54,7 @@ export function render(page, ctx) {
     return ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, b.label), ui.h("span", { class: "rec-value" }, b.share === null ? money(b.monthly) : `${pct(b.share)}`)),
       split ? ui.h("div", { class: "bp-bar", role: "img", "aria-label": `${b.label}: ${pct(b.share)} against ${pct(b.target)}` }, ui.h("div", { class: `bp-fill${bad ? " over" : ""}`, style: `width:${(fill * 100).toFixed(1)}%` }), ui.h("div", { class: "bp-mark", style: `left:calc(${(b.target * 100).toFixed(1)}% - 1px)` })) : null,
-      ui.h("div", { class: "rec-sub" }, `${money(b.monthly)} a month${split ? `; the target ${pct(b.target)} is ${money(b.targetMonthly)}` : ""}.${b.key === "savings" ? ` Retirement ${money(d.saving.retirement)}, goals ${money(d.saving.goals)}${d.saving.leftover > 0.5 ? `, left over ${money(d.saving.leftover)}` : ""}.` : ""}`));
+      ui.h("div", { class: "rec-sub" }, `${money(b.monthly)} a month${split ? `; the target ${pct(b.target)} is ${money(b.targetMonthly)}` : ""}.${b.key === "savings" ? ` Retirement ${money(d.saving.retirement)}, goals ${money(d.saving.goals)}${d.saving.debts > 0.5 ? `, extra on debts ${money(d.saving.debts)}` : ""}${d.saving.leftover > 0.5 ? `, left over ${money(d.saving.leftover)}` : ""}.` : ""}`));
   }));
   const say = [];
   const by = Object.fromEntries(d.buckets.map((b) => [b.key, b]));

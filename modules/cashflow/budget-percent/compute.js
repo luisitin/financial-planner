@@ -124,7 +124,7 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
 export function compute(plan, params = {}) {
   const today = params.today ?? `${new Date().getFullYear()}-01-01`;
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
-  // the month's spending: Expenses' items going now, and the Debts page's payments when Expenses has none of its own;
+  // the month's spending: Expenses' items going now, and the Debts page's payments Expenses has no expense for;
   // taxes listed there are left out, as they come off income already
   const going = exp.items.filter((x) => x.active && x.monthly > 0);
   const items = going.filter((x) => x.category !== "taxes");
@@ -147,7 +147,14 @@ export function compute(plan, params = {}) {
   // goes to retirement accounts (your own money, not the employer's), to goals each month, and what is left over
   const row = (x) => ({ id: x.id, name: x.name || x.categoryLabel, category: x.categoryLabel, monthly: x.monthly });
   const needs = items.filter((x) => x.essential).map(row);
-  if (fromDebts > 0) needs.push({ id: null, name: "Loan and card payments (from Debts)", category: "Loan and card payments", monthly: fromDebts });
+  // each debt Expenses found no expense for, by name (one line for all when filed payments cover part of them): its
+  // required payment is a need; an extra set on Debts pays the debt down faster, so it is saving, as 50/30/20 counts it
+  const debtRequired = Math.min(fromDebts, pos(exp.debtRequired ?? fromDebts));
+  if (fromDebts > 0) {
+    if ((exp.fromDebts ?? []).length) for (const x of exp.fromDebts) needs.push({ id: null, name: `${x.name} payment (from Debts)`, category: "Loan and card payments", monthly: x.required ?? x.monthly });
+    else if (debtRequired > 0) needs.push({ id: null, name: "Loan and card payments (from Debts)", category: "Loan and card payments", monthly: debtRequired });
+  }
+  const debts = Math.max(0, fromDebts - debtRequired);
   needs.sort((a, b) => b.monthly - a.monthly);
   const wants = items.filter((x) => !x.essential).map(row).sort((a, b) => b.monthly - a.monthly);
   const needsMonthly = needs.reduce((t, x) => t + x.monthly, 0), wantsMonthly = wants.reduce((t, x) => t + x.monthly, 0);
@@ -155,9 +162,9 @@ export function compute(plan, params = {}) {
   const gl = computeGoals(plan, { today });
   const retirement = con.yearly / 12;
   const goals = (gl.goals ?? []).filter((g) => g.status !== "done").reduce((t, g) => t + pos(g.monthly), 0);
-  const rest = month.afterTax - needsMonthly - wantsMonthly - retirement - goals;
-  const saving = { retirement, goals, leftover: Math.max(0, rest), short: Math.max(0, -rest) };
-  const savingsMonthly = retirement + goals + saving.leftover;
+  const rest = month.afterTax - needsMonthly - wantsMonthly - retirement - goals - debts;
+  const saving = { retirement, goals, debts, leftover: Math.max(0, rest), short: Math.max(0, -rest) };
+  const savingsMonthly = retirement + goals + debts + saving.leftover;
   // money neither listed as spending nor sent to savings is counted as saved; much of it usually means spending is missing
   const unlisted = month.afterTax > 0 && saving.leftover > 0.1 * month.afterTax;
 

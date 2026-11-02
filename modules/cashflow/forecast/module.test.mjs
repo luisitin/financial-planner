@@ -114,8 +114,14 @@ test("loan and card payments kept only on Debts are paid on the 1st, as the Expe
   assert.equal(d.debtFromDebts, 560);
   p.expenses.push({ id: "cl", name: "Car loan", category: "debt", amount: 410, period: "monthly", essential: true });
   const filed = compute(p, { today: TODAY, days: 40 });
-  assert.equal(filed.debtFromDebts, 0);
-  assert.ok(!filed.days.flatMap((x) => x.events).some((e) => e.fromDebts), "something is filed under loan and card payments: the Debts page is not added (F-019)");
+  // the car loan's payment is filed: only the Visa's comes from Debts (each debt matched to its own expense, 2026-11-02)
+  assert.equal(filed.debtFromDebts, 150);
+  const ev = filed.days.flatMap((x) => x.events).filter((e) => e.fromDebts);
+  assert.ok(ev.length && ev.every((e) => e.name === "Visa payment"), "the filed car loan is not added again");
+  p.expenses.push({ id: "vp", name: "Visa", category: "debt", amount: 150, period: "monthly", essential: true });
+  const both = compute(p, { today: TODAY, days: 40 });
+  assert.equal(both.debtFromDebts, 0);
+  assert.ok(!both.days.flatMap((x) => x.events).some((e) => e.fromDebts), "both filed: nothing from Debts (F-019)");
 });
 
 // review findings (2026-11-01): each reproduction from the adversarial review, kept as a test

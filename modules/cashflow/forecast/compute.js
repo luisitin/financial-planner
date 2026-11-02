@@ -140,7 +140,7 @@ export function compute(plan, params = {}) {
 }
 
 /**
- * The Debts page's monthly payments the Expenses page adds (its `debtFromDebts`): each debt still owed with a payment, until its
+ * The Debts page's monthly payments the Expenses page adds (its `debtFromDebts`, the debts in its `fromDebts`): each debt still owed with a payment, until its
  * payoff month (the Debts page's own date), the mortgage left out when it is filed under housing. Each line carries the words that
  * tie it to a bank payment: its account's name and lender, without the words every loan shares (DEBT_WORDS).
  */
@@ -149,6 +149,9 @@ function debtLines(plan, today, exp) {
   const line = (r) => ({ id: `debt-${r.id}`, name: `${r.name || r.typeLabel} payment`, period: "monthly", kind: "expense", signed: -r.payment, fromDebts: true, words: specific(r), ...(r.payoffDate ? { endDate: r.payoffDate } : {}) });
   const all = computeLiabilities(plan, { today }).rows.filter((r) => r.payment > 0);
   const total = (list) => list.reduce((t, r) => t + r.payment, 0);
+  // the debts the Expenses page found no expense for (its `fromDebts`), each on its own line
+  const ids = new Set((exp.fromDebts ?? []).map((x) => x.id));
+  if (ids.size) { const own = all.filter((r) => ids.has(r.id)); if (Math.abs(total(own) - exp.debtFromDebts) <= 0.5) return own.filter((r) => r.owed > 0).map(line); }
   // the same total the Expenses page adds, whichever way it left the mortgage out; then only debts still owed are paid
   const pick = Math.abs(total(all) - exp.debtFromDebts) <= 0.5 ? all : all.filter((r) => r.type !== "mortgage");
   if (Math.abs(total(pick) - exp.debtFromDebts) > 0.5) return [{ id: "debt-all", name: "Loan and card payments (from Debts)", period: "monthly", kind: "expense", signed: -exp.debtFromDebts, fromDebts: true, words: [] }];

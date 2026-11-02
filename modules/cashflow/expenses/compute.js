@@ -56,8 +56,9 @@ export function compute(plan, params = {}) {
   });
   const active = items.filter((x) => x.active);
   const sum = (arr, k) => arr.reduce((s, x) => s + (Number(x[k]) || 0), 0);
-  // F-019: required debt payments live on the Debts page. When no expense is filed under "Loan and card
-  // payments", they are counted here as a must-pay line so the totals and the emergency-fund target are right.
+  // F-019: required debt payments live on the Debts page. Each debt is matched to its own expense here (round 4,
+  // 2026-11-02): one whose payment is not listed is counted as a line of its own, so listing the car payment no longer
+  // drops the card's. Before, any expense under "Loan and card payments" stopped every Debts payment from counting.
   const debts = (plan.debts ?? []).length ? computeDebts(plan, params) : null;
   // A mortgage's payment is often filed here under housing ("Mortgage payment"), not under loan payments. When a
   // housing expense is that payment (its name says mortgage, or it is within 10% of the mortgage's payment), the
@@ -68,11 +69,19 @@ export function compute(plan, params = {}) {
   const allDebtPayments = debts ? debts.payments : 0;
   const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);
   const filedDebt = sum(active.filter((x) => x.category === "debt"), "monthly");
-  const debtFromDebts = debtPayments > 0 && filedDebt === 0 ? debtPayments : 0;
+  const rows = (debts?.rows ?? []).filter((r) => (Number(r.payment) || 0) > 0 && !(mortgageFiled && r.type === "mortgage"));
+  const m = matchDebts(active.filter((x) => x.category === "debt"), rows);
+  // what is filed but matches no debt (one line for all of them, or an amount out of date) covers the unmatched debts up to its amount
+  const unmatchedRows = rows.filter((r) => !m.matched.has(r.id));
+  const missingTotal = unmatchedRows.reduce((t, r) => t + r.payment, 0);
+  const debtFromDebts = Math.max(0, missingTotal - m.spare);
+  const fromDebts = debtFromDebts > 0.005 && m.spare <= 0.005 ? unmatchedRows.map((r) => ({ id: r.id, name: r.name, monthly: r.payment, required: Math.min(r.payment, Number(r.minPayment) || r.payment) })) : [];
+  // the required part of a missing payment is a must-pay; an extra set on Debts is not
+  const debtRequired = fromDebts.length ? fromDebts.reduce((t, x) => t + x.required, 0) : Math.min(debtFromDebts, unmatchedRows.reduce((t, r) => t + Math.min(r.payment, Number(r.minPayment) || r.payment), 0));
   const monthly = sum(active, "monthly") + debtFromDebts;
   const cat = new Map();
   for (const x of active) { const k = CATEGORIES[x.category] ? x.category : "other"; const e = cat.get(k) ?? { category: k, label: CATEGORIES[k].label, icon: CATEGORIES[k].icon, monthly: 0 }; e.monthly += x.monthly; cat.set(k, e); }
-  if (debtFromDebts) cat.set("debt", { category: "debt", label: "Loan and card payments (from Debts)", icon: CATEGORIES.debt.icon, monthly: debtFromDebts, virtual: true });
+  if (debtFromDebts) { const had = cat.get("debt"); cat.set("debt", { category: "debt", label: had ? "Loan and card payments (some from Debts)" : "Loan and card payments (from Debts)", icon: CATEGORIES.debt.icon, monthly: (had?.monthly ?? 0) + debtFromDebts, virtual: true }); }
   const byCategory = [...cat.values()].filter((c) => c.monthly > 0).map((c) => ({ ...c, share: monthly ? c.monthly / monthly : 0 })).sort((a, b) => b.monthly - a.monthly);
   const percents = roundShares(byCategory.map((c) => c.monthly));   // F-009: whole percentages that add up to 100
   byCategory.forEach((c, i) => { c.percent = percents[i]; });
@@ -85,8 +94,10 @@ export function compute(plan, params = {}) {
   const nextYear = inflatingMonthly * 12 * (1 + inflation) + (yearly - inflatingMonthly * 12);   // F-018: next year's spending after inflation
   const leftOverNextYear = income ? income.nextYear - nextYear : null;
   const warnings = [];
+  // the filed loan payments against the Debts payments they stand for (the ones not added above): far apart, one is out of date
+  const covered = debtPayments - debtFromDebts;
   const off = (want) => want <= 0 || Math.abs(filedDebt - want) / want > 0.1;
-  if (debtPayments > 0 && filedDebt > 0 && off(debtPayments) && off(allDebtPayments)) warnings.push(`Loan and card payments here add up to ${money(filedDebt, plan.meta?.currency ?? "USD")} a month; the Debts page has ${money(debtPayments, plan.meta?.currency ?? "USD")}${mortgageFiled ? " (not counting the mortgage, which is under housing)" : ""}. ${filedDebt < debtPayments ? "A payment may be missing here" : "One may be out of date"}: check both.`);
+  if (covered > 0 && filedDebt > 0 && off(covered)) warnings.push(`Loan and card payments here add up to ${money(filedDebt, plan.meta?.currency ?? "USD")} a month; the Debts page has ${money(covered, plan.meta?.currency ?? "USD")}${mortgageFiled ? " (not counting the mortgage, which is under housing)" : ""}${debtFromDebts ? ` for the same debts (${money(debtFromDebts, plan.meta?.currency ?? "USD")} more is counted from Debts)` : ""}. ${filedDebt < covered ? "A payment may be missing here" : "One may be out of date"}: check both.`);
   for (const x of items) {
     if (!(Number(x.amount) > 0)) warnings.push(`${x.name || "An expense"} has no amount.`);
     if (x.startDate && x.endDate && String(x.endDate) < String(x.startDate)) warnings.push(`${x.name || "An expense"} ends before it starts.`);
@@ -96,14 +107,47 @@ export function compute(plan, params = {}) {
   if (overspend) warnings.push(overspend);
   return {
     items, active, count: items.length, monthly, yearly,
-    essentialMonthly: sum(active.filter((x) => x.essential), "monthly") + debtFromDebts,
-    optionalMonthly: sum(active.filter((x) => !x.essential), "monthly"),
+    essentialMonthly: sum(active.filter((x) => x.essential), "monthly") + debtRequired,
+    // an extra paid on a debt kept on Debts alone could be cut in a pinch: it is a nice-to-have, so the two add up to the total
+    optionalMonthly: sum(active.filter((x) => !x.essential), "monthly") + (debtFromDebts - debtRequired),
     inflatingMonthly, nextYear, leftOverNextYear,
-    debtPayments, debtFromDebts,
+    debtPayments, debtFromDebts, debtRequired, fromDebts, debtMatches: Object.fromEntries([...m.matched].map(([id, e]) => [id, e.id])),
     oneTime: sum(active, "oneTime"),
     byCategory, income, leftOver, savingsRate: income && income.monthly > 0 ? leftOver / income.monthly : null,
     warnings, overspend,
   };
+}
+
+/**
+ * matchDebts(debtExpenses, debts) -> { matched: Map(debt id -> expense), spare (a month: filed loan payments that match no debt,
+ *   and the part of a matched one more than 10% over its debt's payment, which pays other debts too) }
+ * Which expense under "Loan and card payments" is which debt's payment: first by name (the expense names a word of the
+ * debt's, "Visa payment" for "Visa card"; words every loan shares do not count), then by amount (within 10% of the payment
+ * or the required minimum, the closest pairs first). Each expense pays one debt at most.
+ */
+const SHARED_WORDS = new Set(["loan", "loans", "card", "cards", "credit", "payment", "payments", "the", "and", "for", "debt", "monthly", "bill"]);
+const words = (t) => String(t ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !SHARED_WORDS.has(w));
+export function matchDebts(debtExpenses, debts) {
+  const matched = new Map(), used = new Set();
+  const free = (x) => !used.has(x.id);
+  for (const d of debts) {
+    const dw = words(d.name);
+    const e = dw.length ? debtExpenses.find((x) => free(x) && words(x.name).some((w) => dw.includes(w))) : null;
+    if (e) { used.add(e.id); matched.set(d.id, e); }
+  }
+  // by amount: the closest pairs first, so a $410 car payment goes to the $410 loan, not to a $400 card it is also near
+  const pairs = [];
+  for (const d of debts) {
+    if (matched.has(d.id)) continue;
+    for (const x of debtExpenses.filter(free)) {
+      const off = Math.min(...[d.payment, d.minPayment].filter((p) => Number(p) > 0).map((p) => Math.abs(x.monthly - p) / Number(p)));
+      if (off <= 0.1) pairs.push({ d, x, off });
+    }
+  }
+  for (const { d, x } of pairs.sort((a, b) => a.off - b.off)) if (!matched.has(d.id) && free(x)) { used.add(x.id); matched.set(d.id, x); }
+  // an expense well over its debt's payment ("Mortgage and car") pays others too: the part over counts as filed
+  const over = [...matched].reduce((t, [id, e]) => { const d = debts.find((y) => y.id === id); const p = Number(d?.payment) || 0; return t + (e.monthly > p * 1.1 ? e.monthly - p : 0); }, 0);
+  return { matched, spare: over + debtExpenses.filter(free).reduce((t, x) => t + (Number(x.monthly) || 0), 0) };
 }
 
 /**

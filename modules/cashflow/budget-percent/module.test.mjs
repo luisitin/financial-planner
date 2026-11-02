@@ -75,7 +75,9 @@ test("needs are the bills marked \"I must pay this\", wants the rest, savings re
   const p = fam();
   const d = compute(p, { today: TODAY }), b = by(d);
   const exp = computeExpenses(p, { today: TODAY });
-  near(b.needs.monthly, exp.essentialMonthly); near(b.wants.monthly, exp.monthly - exp.essentialMonthly);
+  // the Visa's extra on Debts ($210 on top of its required $190) is saving, not a want (2026-11-02)
+  near(d.saving.debts, 210); near(b.needs.monthly, exp.essentialMonthly); near(b.wants.monthly, exp.monthly - exp.essentialMonthly - d.saving.debts);
+  assert.ok(d.needs.some((x) => x.name === "Visa card payment (from Debts)" && Math.abs(x.monthly - 190) < 0.01));
   const retirement = computeContributions(p, { today: TODAY }).yearly / 12;
   near(d.saving.retirement, retirement);
   near(b.savings.monthly, d.month.afterTax - b.needs.monthly - b.wants.monthly);
@@ -95,7 +97,8 @@ test("taxes listed on Expenses are left out (they come off income already); the 
   const exp = computeExpenses(p, { today: TODAY }), d = compute(p, { today: TODAY });
   assert.ok(exp.debtFromDebts > 0);
   near(by(d).needs.monthly, exp.essentialMonthly);
-  const row = d.needs.find((x) => x.id === null); near(row.monthly, exp.debtFromDebts);
+  near(d.needs.filter((x) => x.id === null).reduce((t, x) => t + x.monthly, 0), exp.debtRequired);
+  near(exp.debtFromDebts - exp.debtRequired, d.saving.debts);
 });
 
 test("over and under: needs and wants above their share by more than the slack, savings below theirs", () => {
@@ -107,7 +110,9 @@ test("over and under: needs and wants above their share by more than the slack, 
   const A = compute(q, { today: TODAY }).month.afterTax;
   const spend = fam((x) => { x.retirement.contributions = []; x.goals = []; x.expenses.push({ id: "x-fill", name: "Everything else", category: "fun", amount: A * 0.95 - computeExpenses(x, { today: TODAY }).monthly, period: "monthly", essential: false }); });
   const s = by(compute(spend, { today: TODAY }));
-  near(s.savings.share, 0.05, 1e-6); assert.equal(s.savings.status, "under"); near(s.savings.gap, (0.05 - 0.2) * A, 1e-6);
+  // the Visa's $210 extra on Debts is saving too (0.05 of spending left plus it)
+  const extra = compute(spend, { today: TODAY }).saving.debts, sh = 0.05 + extra / A;
+  near(s.savings.share, sh, 1e-6); assert.equal(s.savings.status, "under"); near(s.savings.gap, (sh - 0.2) * A, 1e-6);
   // within the slack counts as on target: needs at 51% are on, at 53% over
   const at = (share) => by(compute(fam((x) => { const A0 = compute(x, { today: TODAY }).month.afterTax; x.expenses.push({ id: "x-need", name: "Rent", category: "housing", amount: share * A0 - computeExpenses(x, { today: TODAY }).essentialMonthly, period: "monthly", essential: true }); }), { today: TODAY })).needs;
   assert.equal(SLACK, 0.02); near(at(0.51).share, 0.51, 1e-9); assert.equal(at(0.51).status, "on"); assert.equal(at(0.53).status, "over");
@@ -117,7 +122,7 @@ test("spending above income after tax: nothing left over, the shortfall, a note"
   const p = fam((q) => { q.expenses.push({ id: "x-big", name: "Too much", category: "fun", amount: 20000, period: "monthly", essential: false }); });
   const d = compute(p, { today: TODAY });
   assert.equal(d.saving.leftover, 0); assert.ok(d.saving.short > 0);
-  near(d.saving.short, by(d).needs.monthly + by(d).wants.monthly + d.saving.retirement + d.saving.goals - d.month.afterTax);
+  near(d.saving.short, by(d).needs.monthly + by(d).wants.monthly + d.saving.retirement + d.saving.goals + d.saving.debts - d.month.afterTax);
   assert.ok(d.saving.short > 0.5, "the view says the shortfall");
 });
 
@@ -125,7 +130,8 @@ test("a state with an income tax comes off; with no expense marked as a must-pay
   const pa = compute(fam((q) => { q.household.state = "PA"; }), { today: TODAY });
   assert.ok(pa.month.state > 0); near(pa.month.afterTax, pa.month.gross - pa.month.federal - pa.month.payroll - pa.month.state);
   const none = compute(fam((q) => { q.expenses.forEach((e) => { e.essential = false; }); }), { today: TODAY });
-  assert.equal(none.needs.length, 0); assert.ok(none.notes.some((n) => /No expense is marked/.test(n)));
+  // only the required payment of a debt kept on Debts alone is still a need
+  assert.ok(none.needs.every((x) => x.id === null)); assert.ok(none.notes.some((n) => /No expense is marked/.test(n)));
 });
 
 test("a state whose tax cannot be worked out: not counted, with a note", () => {

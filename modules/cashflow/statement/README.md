@@ -30,6 +30,11 @@
   (`transactions/ledger` `isTransfer`); income kinds in, the "Loan and card payments" category under debts, every
   other outflow living.
 
+Loan payments counted from Debts (2026-11-02): Living costs leave out Expenses' `debtFromDebts` too, as every debt's
+payments are under financing; a plan whose loan payments are only on Debts (as Set up my plan makes it) counted them
+twice before. A debt-category expense Expenses tied to its debt (`debtMatches`, by name or a near amount) is that debt's
+payment here as well. The cash left less what goes to goals is then Next best action's money left, a year.
+
 ## Edge cases
 - Nothing entered: a hero. Only bank files: just that part. Only the plan: just the year.
 - A debt with no payment adds nothing; a payment that does not cover the interest pays only interest.

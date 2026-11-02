@@ -57,10 +57,17 @@ export function compute(plan, params = {}) {
     const items = exp.items ?? (plan.expenses ?? []).map((e) => ({ ...e, monthly: perYear(e.amount, e.period) / 12 }));
     const active = items.filter((e) => e.active !== false && e.period !== "once");
     const matched = matchPayments(active, debts);
+    // a loan payment the Expenses page tied to its debt by name or a near amount is that debt's payment here too
+    for (const [did, eid] of Object.entries(exp.debtMatches ?? {})) {
+      const e = active.find((x) => x.id === eid);
+      if (e && !matched.has(did) && ![...matched.values()].includes(e) && debts.some((d) => d.id === did)) matched.set(did, e);
+    }
     const matchedIds = new Set([...matched.values()].map((e) => e.id));
     const otherDebt = active.filter((e) => !matchedIds.has(e.id) && e.category === "debt");
     const otherDebtYearly = otherDebt.reduce((s, e) => s + e.monthly * 12, 0);
-    const living = exp.monthly * 12 - [...matched.values(), ...otherDebt].reduce((s, e) => s + e.monthly * 12, 0);
+    // living costs leave out every loan payment: the ones filed as expenses and the ones Expenses counts from Debts (its
+    // `debtFromDebts`); all of them are under financing below, so none is counted twice (2026-11-02)
+    const living = exp.monthly * 12 - (Number(exp.debtFromDebts) || 0) * 12 - [...matched.values(), ...otherDebt].reduce((s, e) => s + e.monthly * 12, 0);
     const s = nb.ready ? nb.spare : { federalTax: 0, payrollTax: 0 };
     const opLines = [
       ...Object.entries(inc.byType ?? {}).filter(([, y]) => y > 0).map(([t, y]) => ({ label: INCOME_TYPES[t]?.label ?? t, amount: y })).sort((a, b) => b.amount - a.amount),

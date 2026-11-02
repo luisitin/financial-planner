@@ -77,14 +77,19 @@ test("a mortgage filed under housing is not counted twice, and does not set off 
   const d = base();
   d.expenses.push({ id: "e1", name: "Home costs", category: "housing", amount: 450, period: "monthly" }, { id: "e2", name: "Mortgage and car", category: "debt", amount: 1970, period: "monthly" });
   assert.equal(compute(d, {}).warnings.length, 0);
-  // 5. a card payment missing from the list: the check says so, in plain words
+  // 5. a card payment missing from the list: counted from Debts by name, so nothing is missing and nothing to warn about
+  // (2026-11-02; before, the total stayed short and a warning said "a payment may be missing")
   const e = base();
   e.accounts.push({ id: "v", name: "Visa", type: "credit", balance: 4000 });
   e.debts.push({ id: "dv", accountId: "v", rate: 0.24, minPayment: 400 });
   e.expenses.push({ id: "e1", name: "Mortgage payment", category: "housing", amount: 1650, period: "monthly" }, { id: "e2", name: "Car loan", category: "debt", amount: 320, period: "monthly" });
-  const w = compute(e, {}).warnings;
-  assert.equal(w.length, 1);
-  assert.match(w[0], /add up to \$320 a month; the Debts page has \$720 \(not counting the mortgage, which is under housing\)\. A payment may be missing here/);
+  const de = compute(e, {});
+  assert.equal(de.warnings.length, 0, de.warnings.join(" "));
+  assert.equal(de.debtFromDebts, 400); assert.deepEqual(de.fromDebts.map((x) => x.name), ["Visa"]); assert.equal(de.monthly, 1650 + 320 + 400);
+  // 6. a filed amount far from its debt's payment still says one may be out of date
+  const f = base();
+  f.expenses.push({ id: "e1", name: "Mortgage payment", category: "housing", amount: 1650, period: "monthly" }, { id: "e2", name: "Car loan", category: "debt", amount: 200, period: "monthly" });
+  assert.match(compute(f, {}).warnings[0], /add up to \$200 a month; the Debts page has \$320 \(not counting the mortgage, which is under housing\)\. A payment may be missing here/);
 });
 test("the before-tax overspend sentence is also returned on its own, so a page that knows the after-tax figure can show that instead", () => {
   const p = emptyPlan();
@@ -133,4 +138,35 @@ test("closeGap: the fewest nice-to-haves that close the gap, a trim on the last,
   assert.equal(r.goalSaving, 950);
   // no gap: nothing picked
   assert.deepEqual(closeGap(items, 0).picks, []);
+});
+
+test("each debt is matched to its own expense: the car payment listed does not drop the card's (round 4, 2026-11-02)", async () => {
+  const { matchDebts } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-10-30";
+  const p = familyPlan(T);
+  const d = compute(p, { today: T });
+  // the family lists the car payment ($410) and the mortgage (under housing); the Visa's $400 ($190 required + $210 extra on Debts) is on Debts only
+  assert.equal(d.debtFromDebts, 400);
+  assert.deepEqual(d.fromDebts, [{ id: "a-visa", name: "Visa card", monthly: 400, required: 190 }]);
+  assert.deepEqual(d.debtMatches, { "a-car": "e-car" });
+  const listed = d.active.reduce((t, x) => t + x.monthly, 0);
+  assert.ok(Math.abs(d.monthly - (listed + 400)) < 0.01);
+  assert.ok(Math.abs(d.essentialMonthly - (d.active.filter((x) => x.essential).reduce((t, x) => t + x.monthly, 0) + 190)) < 0.01, "the required $190 is a must-pay; the $210 extra is not");
+  assert.ok(Math.abs(d.essentialMonthly + d.optionalMonthly - d.monthly) < 0.01, "must-pay and nice-to-have add up to the total: the $210 extra is a nice-to-have");
+  assert.deepEqual(d.warnings, [], "nothing is missing any more, so no 'a payment may be missing' warning");
+  const cat = d.byCategory.find((c) => c.category === "debt");
+  assert.equal(cat.label, "Loan and card payments (some from Debts)"); assert.ok(Math.abs(cat.monthly - 810) < 0.01);
+  // listed as its own expense, by name, it is not counted twice
+  p.expenses.push({ id: "e-visa", name: "Visa payment", category: "debt", amount: 400, period: "monthly", essential: true });
+  const e = compute(p, { today: T });
+  assert.equal(e.debtFromDebts, 0); assert.deepEqual(e.fromDebts, []);
+  // one line for all loan payments ($810) covers both debts
+  const q = familyPlan(T);
+  q.expenses = q.expenses.filter((x) => x.id !== "e-car");
+  q.expenses.push({ id: "e-all", name: "Loans", category: "debt", amount: 810, period: "monthly", essential: true });
+  assert.equal(compute(q, { today: T }).debtFromDebts, 0);
+  // matching: by a word of the name first (words every loan shares do not count), then by an amount within 10%
+  const m = matchDebts([{ id: "x1", name: "Toyota", monthly: 300 }, { id: "x2", name: "Card payment", monthly: 395 }], [{ id: "v", name: "Visa card", payment: 400, minPayment: 190 }, { id: "c", name: "Car loan (Toyota Financial)", payment: 410 }]);
+  assert.equal(m.matched.get("c").id, "x1"); assert.equal(m.matched.get("v").id, "x2"); assert.equal(m.spare, 0);
 });

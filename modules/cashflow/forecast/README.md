@@ -23,6 +23,9 @@ Plan sections read (`needs`): `accounts` (checking, savings, cash), `transaction
 - A payment found in the transactions starts at the first date after its last line when that is today or later (2026-11-01). The recurring list gives the next date after today, so a payday due today was dropped and the 90 days ended a whole paycheck low.
 - Pay that still lands before tax (no take-home share) is marked; the note says to tie it to an adult when it is tied to nobody, and that the Paycheck page cannot work it out yet otherwise.
 
+Debts paid from the Debts page (2026-11-02): the debts in Expenses' `fromDebts` each get a payment line of their own,
+including when other loan payments are listed on Expenses (before, any listed loan payment stopped them all).
+
 ## Edge cases
 No everyday account or no today: no data. A chosen account only counts found payments on that account and all typed items. Horizon at least 7 days.
 

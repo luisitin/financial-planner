@@ -62,6 +62,11 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
 - **Left over above 10% of income after tax** is still counted as saved, with a note that unlisted spending usually
   explains it.
 
+Debts kept only on the Debts page (2026-11-02): each is a need line by name ("Visa card payment (from Debts)") at its
+required payment; the extra set on Debts pays the debt down faster, so it is saving ("extra on debts" under Savings),
+as the 50/30/20 rule counts extra debt payments. `saving.debts`; left over = after tax - needs - wants - retirement -
+goals - extra on debts.
+
 ## Edge cases
 - No income, or no regular spending (one-off and ended expenses, and taxes, do not count): an empty state naming what
   is missing, with buttons to the pages.

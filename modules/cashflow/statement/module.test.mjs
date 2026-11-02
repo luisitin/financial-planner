@@ -35,7 +35,9 @@ test("the family's year: living, investing and debts add up to the cash left", (
   const exp = computeExpenses(p, { today: TODAY });
   assert.deepEqual(y.matched, ["Mortgage payment", "Car payment"]);
   const living = y.operating.lines.find((l) => l.label === "Living costs").amount;
-  near(living, -(exp.monthly * 12 - (1980 + 410) * 12));
+  // the Visa's $400 a month, counted by Expenses from Debts, is under financing with the other debts, not living (2026-11-02)
+  assert.equal(exp.debtFromDebts, 400);
+  near(living, -(exp.monthly * 12 - exp.debtFromDebts * 12 - (1980 + 410) * 12));
   near(y.operating.lines.find((l) => l.label === "Federal income tax").amount, -s.federalTax * 12);
   near(y.operating.total, s.gross * 12 - s.federalTax * 12 - s.payrollTax * 12 + living);
   near(y.investing.total, -s.retirementSaving * 12); assert.equal(y.investing.match, 3050);
@@ -45,6 +47,8 @@ test("the family's year: living, investing and debts add up to the cash left", (
   near(y.principal, pay.reduce((t, x) => t + x.principal, 0));
   near(y.net, y.operating.total + y.investing.total + y.financing.total);
   near(y.goals, s.goalSaving * 12);
+  // one left-over figure: the cash left less what goes to goals is Next best action's money left, a year
+  near(y.net - y.goals, s.monthly * 12, 0.5);
   assert.equal(d.actual, null, "no bank files");
 });
 

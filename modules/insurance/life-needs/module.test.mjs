@@ -113,8 +113,8 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   const e = familyPlan("2026-11-02");
   e.insurance = { ...(e.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 250000, premium: 25, period: "monthly", endDate: "2027-01-15" }] };
   const [ge] = protectionGaps(e, T);
-  assert.equal(ge.gap, 212000); assert.equal(ge.endsSoon.length, 1);
-  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $212,000 short");
+  assert.equal(ge.gap, 235000); assert.equal(ge.endsSoon.length, 1);
+  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $235,000 short");
   const e2 = familyPlan("2026-11-02"); e2.insurance = { ...(e2.insurance ?? {}), policies: [{ ...e.insurance.policies[0], endDate: "2046-01-15" }] };
   assert.deepEqual(protectionGaps(e2, T), [], "cover that lasts past 2042 covers it");
   // a policy for "Household / everyone": not counted, and said
@@ -125,8 +125,8 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   const m = familyPlan("2026-11-02");
   m.household.people.find((x) => x.id === "p-ana").name = "Me"; m.household.people.find((x) => x.id === "p-bo").name = "My spouse"; m.household.people.find((x) => x.id === "p-cy").name = "Child 1";
   const [gm] = protectionGaps(m, T);
-  assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $212,000 short");
-  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$212,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
+  assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $235,000 short");
+  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$235,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
 });
 
 test("review: one parent, the rule of thumb is rounded to $1,000 and said as a rule of thumb, not as the plan", async () => {

@@ -28,7 +28,9 @@ export function render(root, ctx) {
   const nba = d.income ? ctx.computeOf("overview/next-best-action", { today: fmt.today() }) : null;
   const leftTile = () => {
     if (!d.income) return null;
-    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving"); }
+    // the tile opens Next best action's "Each month's money", which shows how the figure is reached
+    const linked = (t) => { t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href: "#/overview/next-best-action", class: "stat-link", "aria-label": `${t.textContent.replace("\u203a", "").trim()}. See how it is worked out` }, t); };
+    if (nba?.ready) { const v = nba.spare.monthly; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving", { link: true })); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;
@@ -95,6 +97,8 @@ export function render(root, ctx) {
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(c.share * 100)}%` } }))),
         ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.monthly, cur)), ui.h("div", { class: "muted small" }, `a month \u00b7 ${c.percent}%`)),
       ))),
+      // a payment kept only on the Debts page is counted, and said by name, so the total is never short of it
+      d.fromDebts?.length ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, `Counted from the Debts page, as no expense here is ${d.fromDebts.length === 1 ? "its" : "their"} payment: ${d.fromDebts.map((x) => `${x.name} ${fmt.money(x.monthly, cur)} a month`).join(", ")}. `, ui.h("a", { href: "#/balance/liabilities" }, "Debts \u203a")) : null,
     ));
   }
   // the before-tax "you spend more than comes in" gives way to the after-tax figure the tile shows, whichever way it falls
