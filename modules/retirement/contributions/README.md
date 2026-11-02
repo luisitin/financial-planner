@@ -27,7 +27,8 @@ button then reads "Check if Bo's job matches retirement saving" and opens this p
 with three answers, so the move is done here: "Yes: add what Bo puts in" opens the add form with Bo and that 401(k) chosen;
 "No match at Bo's job" saves `retirement.workPlans[personId].match = false`; "That 401(k) is from a job Bo left" saves
 `accounts[].formerJob = true`. Both are optional fields (DATA_MODEL), shown under the question with a Change button that
-takes them back. The confirmation names the new next move from the Dashboard's list. A new contribution's account box starts
+takes them back. With two or more 401(k)s the question lists them and has one "<account> is from a job Bo left" button
+each; "Yes" picks the account whose name does not say old, former, previous, prior or rollover. The confirmation names the new next move from the Dashboard's list. A new contribution's account box starts
 on a retirement account (not a brokerage one, not an old job's 401(k)).
 
 ## Formulas

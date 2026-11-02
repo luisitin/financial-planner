@@ -18,7 +18,7 @@ export function render(root, ctx) {
   // estimated from pay) and the estimated payments: the same answer as Withholding check, Estimated payments and Quick answers
   const ans = d.hasIncome ? taxAnswer(plan, { today: fmt.today() }) : null;
   const owes = ans && ans.from !== "none" ? ans.balance : null;
-  const paidBy = ans ? `${ans.from === "paycheck" ? "Your paychecks take out about" : "The paychecks take out"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is paid in estimates` : ""}` : "";
+  const paidBy = ans ? `${ans.from === "typed" ? "The paychecks take out" : "Your paychecks take out about"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ans.from === "mixed" ? " (partly estimated from pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is already paid` : ""}` : "";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? `About ${money(r.totalTax)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome

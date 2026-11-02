@@ -47,6 +47,8 @@ test("estimated: with no withholding typed, the Paycheck page's estimate; what i
   assert.equal(f.behind, 0); assert.equal(f.overdue, null); assert.equal(f.nextDue.due, "2026-04-15");
   // withholding typed on the Withholding check page wins
   p.taxes.withholding = { self: { perPaycheck: 400, period: "biweekly" } };
+  assert.equal(compute(p, { today: "2026-10-31" }).withholdingFrom, "mixed", "Bo's withholding is still estimated from pay, never $0");
+  p.taxes.withholding.partner = { perPaycheck: 500, period: "monthly" };
   assert.equal(compute(p, { today: "2026-10-31" }).withholdingFrom, "typed");
 });
 

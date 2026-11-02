@@ -79,3 +79,33 @@ test("one answer to refund or owe: typed figures, else withholding estimated fro
   // no income: no answer
   assert.equal(taxAnswer(emptyPlan(), { today: T }), null);
 });
+
+test("review: one earner typed, only the year so far typed, other payments: never an earner at $0, and paid counts", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { withholdingEstimate, taxAnswer, paychecksLeft } = await import("./compute.js");
+  const T = "2026-11-02";
+  const base = taxAnswer(familyPlan(T), { today: T });
+  // Ana's stub typed at about the estimate, Bo blank: Bo stays estimated from pay
+  const p = familyPlan(T);
+  const anaEst = withholdingEstimate(p, { today: T }).people.find((x) => x.name === "Ana");
+  p.taxes.withholding = { self: { perPaycheck: Math.round(anaEst.perPaycheck), period: "biweekly" } };
+  const mixed = withholdingEstimate(p, { today: T });
+  assert.equal(mixed.from, "mixed");
+  assert.deepEqual(mixed.people.map((x) => [x.name, x.estimated]), [["Ana", false], ["Bo", true]]);
+  assert.ok(Math.abs(taxAnswer(p, { today: T }).balance - base.balance) < 50, "about the same April bill, not $8,728");
+  // only the year so far typed: the paychecks left still count, estimated from pay
+  const q = familyPlan(T);
+  q.taxes.thisYear = { ...(q.taxes.thisYear ?? {}), withheld: 8000, withheldTyped: true };
+  const so = withholdingEstimate(q, { today: T });
+  assert.equal(so.from, "mixed");
+  const rest = so.people.reduce((t, x) => t + x.perPaycheck * paychecksLeft(x.period, T, 2026), 0);
+  assert.ok(rest > 0); assert.ok(Math.abs(so.projected - (8000 + rest)) < 0.01);
+  // other payments typed on the Federal estimate count as paid
+  const r = familyPlan(T);
+  r.taxes.thisYear = { ...(r.taxes.thisYear ?? {}), paid: 3000 };
+  const a = taxAnswer(r, { today: T });
+  assert.ok(Math.abs(a.balance - (base.balance - 3000)) < 0.01); assert.equal(a.paid, 3000);
+  // the W-4 change on the estimate is per paycheck, on the main earner's paychecks left
+  const s = compute(familyPlan(T), { today: T }).estimate.suggestion;
+  assert.equal(s.kind, "add"); assert.ok(s.paychecks > 0); assert.equal(s.perPaycheck, Math.ceil(base.balance / s.paychecks));
+});

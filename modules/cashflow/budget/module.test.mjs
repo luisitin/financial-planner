@@ -55,7 +55,13 @@ test("a bill paid once a month reads paid, not spending fast; two payments or le
   const p = plan();
   p.budgets.push({ id: "b3", category: "housing", amount: 1500, period: "monthly", rollover: false });
   let d = compute(p, { today: "2026-09-02" });
-  assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "paid", "the mortgage on the 1st");
+  assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "paid", "the mortgage on the 1st, as in August");
+  // one big grocery trip on the 2nd is not a bill: last month had several payments there
+  p.transactions.push(tx("13", "2026-09-02", -400, "groceries"), tx("14", "2026-09-02", -50, "dining"));
+  p.budgets.find((b) => b.id === "b1").amount = 200;
+  const g = compute(p, { today: "2026-09-02" }).envelopes.find((e) => e.category === "groceries");
+  assert.notEqual(g.pace, "paid");
+  p.transactions = p.transactions.filter((t) => !["13", "14"].includes(t.id)); p.budgets.find((b) => b.id === "b1").amount = 450;
   p.budgets.find((b) => b.id === "b3").amount = 2000;   // 1,500 of 2,000 is 75%: still fast on the 2nd
   d = compute(p, { today: "2026-09-02" });
   assert.equal(d.envelopes.find((e) => e.category === "housing").pace, "ahead");

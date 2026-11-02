@@ -9,6 +9,7 @@
 import { compute as projection } from "../../retirement/projection/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
+import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
@@ -67,11 +68,17 @@ export function answerFor(guide, plan, params = {}) {
     const a = taxAnswer(plan, params);
     if (!a) return null;
     const rate = `${(Math.round(a.effectiveRate * 1000) / 10).toFixed(1)}% of your income`;
-    const from = a.from === "paycheck" ? "estimated from your pay" : "from your pay stubs";
-    if (a.from === "none") return { headline: `About ${m(a.totalTax)} of federal tax for ${a.year}`, line: `${rate} overall. Type what a paycheck withholds to see the refund or bill.`, status: "ok" };
+    const from = a.from === "paycheck" ? "estimated from your pay" : a.from === "mixed" ? "partly estimated from pay" : "from your pay stubs";
+    if (a.from === "none") {
+      // no pay with tax taken out (retired, self-employed): the tax is paid by quarterly estimates
+      let e = null;
+      try { e = estimatedOf(plan, params); } catch { e = null; }
+      if (e?.needsEstimates && e.remaining > 0) return { headline: `About ${m(e.remaining)} left to pay in estimates for ${a.year}`, line: `About ${m(a.totalTax)} of federal tax (${rate}) and no paycheck takes it out${e.behind > 0 ? `; ${m(e.behind)} of it is past due` : ""}. The Estimated payments page splits it into four payments.`, status: e.behind > 0 ? "warn" : "ok" };
+      return { headline: `About ${m(a.totalTax)} of federal tax for ${a.year}`, line: `${rate} overall. Type what a paycheck withholds to see the refund or bill.`, status: "ok" };
+    }
     return {
       headline: a.verdict === "owe" ? `Owe about ${m(a.balance)} in April` : a.verdict === "refund" ? `About ${m(-a.balance)} back in April` : "About right: no big bill or refund",
-      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${rate}); your paychecks take out about ${m(a.projected)}, ${from}.`,
+      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
       status: a.verdict === "owe" ? "warn" : "ok",
     };
   }

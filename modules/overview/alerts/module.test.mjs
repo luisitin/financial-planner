@@ -151,7 +151,7 @@ test("a likely bill in April: paychecks short of the year's tax by $1,000 or mor
   const al = compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill");
   assert.ok(a.balance >= 1000, "the two-earner family is under-withheld");
   assert.equal(al.level, "warn"); assert.deepEqual(al.go, ["taxes", "withholding"]);
-  assert.match(al.title, /short of this year's tax/);
+  assert.match(al.title, /^About \$[\d,]+ of tax to pay in April$/);
   // enough withheld: no alert
   p.taxes.withholding = { self: { perPaycheck: 600, period: "biweekly" }, partner: { perPaycheck: 700, period: "monthly" } };
   assert.equal(compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill"), undefined);

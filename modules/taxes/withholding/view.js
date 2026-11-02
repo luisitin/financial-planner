@@ -10,20 +10,26 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
-  // with no pay stub figure typed, the answer comes from pay: the withholding payroll would work out (the Paycheck page),
-  // the same figure Estimated payments, the Federal estimate and Quick answers use; it never says "$0 withheld"
-  const est = d.estimate, guessed = d.verdict === "unknown" && est.from === "paycheck";
+  // whenever any earner's withholding comes from pay (no pay stub figure typed for them), the answer is the estimate: the
+  // withholding payroll would work out (the Paycheck page) for them and the typed figures for the rest, the same figure
+  // Estimated payments, the Federal estimate and Quick answers use; it never counts an earner as $0 withheld
+  const est = d.estimate, guessed = est.from === "paycheck" || est.from === "mixed";
   const v = guessed ? est.verdict : d.verdict, bal = guessed ? est.balance : d.balance;
+  const sg = guessed ? est.suggestion : d.suggestion;
+  const paidElse = d.estimatedPaid + (est.otherPaid || 0);
+  const estNames = est.people.filter((p) => p.estimated);
+  const w4 = (x) => x.kind === "add" ? ` Asking for ${money(x.perPaycheck)} more per paycheck on ${x.name === "Me" || !x.name ? "your" : `${x.name}'s`} W-4 (Step 4(c), "extra withholding") for the ${x.paychecks} paychecks left clears it.`
+    : x.kind === "cut" ? ` That is about ${money(x.perPaycheck)} a paycheck lent to the IRS: a new W-4 with an amount in Step 3 or 4(b) brings take-home up and the refund down.` : "";
   const head = v === "owe" ? `You would ${guessed ? "likely " : ""}owe about ${money(bal)} in April` : v === "refund" ? `You would ${guessed ? "likely " : ""}get about ${money(-bal)} back` : v === "about right" ? `Your withholding ${guessed ? "looks" : "is"} about right` : "Is enough tax coming out of your pay?";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, head),
     ui.h("p", { class: "lede" }, guessed
-      ? `${d.year}: about ${money(d.totalTax)} of federal tax; the paychecks take out about ${money(est.projected)} over the year${d.estimatedPaid > 0 ? `, and ${money(d.estimatedPaid)} is paid in estimates` : ""}.${v === "owe" && est.people.length ? ` Asking for about ${money(Math.ceil(bal / 10) * 10)} more over the paychecks left (W-4 Step 4(c), "extra withholding") clears it.` : ""}`
+      ? `${d.year}: about ${money(d.totalTax)} of federal tax; the paychecks take out about ${money(est.projected)} over the year${paidElse > 0 ? `, and ${money(paidElse)} is paid otherwise` : ""}.${v === "about right" ? " Within a few hundred dollars either way: nothing to change." : w4(sg)}`
       : d.verdict === "unknown"
       ? `The plan estimates ${money(d.totalTax)} of federal tax for ${d.year}. Type what one paycheck withholds and it will say whether the year's paychecks cover it, or leave you a bill or a refund.`
       : `${d.year}: about ${money(d.totalTax)} of federal tax, ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
-    guessed ? ui.h("p", { class: "muted small" }, `Estimated from your pay the way payroll works it out (${est.people.map((p) => `${p.name} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
-    d.penaltyRisk ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
+    guessed ? ui.h("p", { class: "muted small" }, `${est.from === "mixed" ? `${estNames.map((p) => p.name).join(" and ")}'s withholding is estimated` : "Estimated"} from pay the way payroll works it out (${estNames.map((p) => `${p.name} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
+    d.penaltyRisk && !guessed ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -31,10 +37,10 @@ export function render(root, ctx) {
   for (const n of d.notes) if (!guessed || !/^Type the federal tax/.test(n)) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
     ui.stat("Tax for the year", money(d.totalTax), `${fmt.pct(d.effectiveRate, 1)} of income`),
-    guessed ? ui.stat("Withheld by December", money(est.projected), "estimated from your pay")
+    guessed ? ui.stat("Withheld by December", money(est.projected), est.from === "mixed" ? "partly estimated from pay" : "estimated from your pay")
       : ui.stat("Withheld by December", money(d.withholding.projected), d.withholding.people.length ? d.withholding.people.map((p) => `${p.name}: ${money(p.perPaycheck)} × ${p.left} left`).join(" · ") : "type a paycheck below"),
     d.verdict === "unknown" && !guessed ? null : ui.stat(bal >= 0 ? "Still to pay" : "Refund", money(Math.abs(bal)), guessed ? "at filing time, estimated" : "at filing time"),
-    d.suggestion.kind === "add" ? ui.stat("Add per paycheck", money(d.suggestion.perPaycheck), `for ${d.suggestion.paychecks} paychecks: W-4 Step 4(c)`) : d.suggestion.kind === "cut" ? ui.stat("Could take home", money(d.suggestion.perPaycheck), "more per paycheck") : null,
+    sg.kind === "add" ? ui.stat("Add per paycheck", money(sg.perPaycheck), `for ${sg.paychecks} paychecks${sg.name ? ` on ${sg.name}'s W-4` : ""}: Step 4(c)`) : sg.kind === "cut" ? ui.stat("Could take home", money(sg.perPaycheck), "more per paycheck") : null,
   )));
   const w = plan.taxes?.withholding ?? {};
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");

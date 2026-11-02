@@ -22,7 +22,7 @@ export const QUARTERS = (year) => [
 
 /**
  * compute(plan, { today }) -> {
- *   year, totalTax, withholding (projected for the year), withholdingFrom ("typed": the Withholding check page or the year so far; "paycheck": estimated
+ *   year, totalTax, withholding (projected for the year), withholdingFrom ("typed": the Withholding check page or the year so far; "mixed": typed for some earners, estimated from pay for the rest; "paycheck": estimated
  *   from pay on the Paycheck page; "none"), harbour: safeHarbour, toPayByEstimates (required - withholding, floor 0),
  *   perQuarter, quarters: [{ n, label, covers, due, paid, share, cumulative (required by its due date), status: "paid" | "due" | "short" | "upcoming"
  *   (from everything paid so far), late (its own and earlier boxes were short on its due date) }],
@@ -69,6 +69,7 @@ export function compute(plan, params = {}) {
   const notes = [];
   if (!fed.hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
   if (withholdingFrom === "paycheck") notes.push("Withholding is estimated from your pay on the Paycheck page. Type what your pay stubs withhold on the Withholding check page for a firmer figure.");
+  else if (withholdingFrom === "mixed") notes.push(`Withholding for ${est.people.filter((x) => x.estimated).map((x) => x.name).join(" and ")} is estimated from pay on the Paycheck page. Type it from a pay stub on the Withholding check page for a firmer figure.`);
   if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
   // the penalty is figured for each due date on its own (Form 2210 instructions): a quarter paid late counts even once caught up
   const lateQuarter = quarters.find((q) => q.late) ?? null;

@@ -49,20 +49,27 @@ export function render(root, ctx) {
     const acct = (plan.accounts ?? []).find((x) => x.id === a.accounts[0]);
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Does ${whose} job add money when ${who === "you" ? "you save" : `${who} saves`} for retirement?`),
-      ui.h("p", {}, `${who === "you" ? "You are paid and have" : `${who} is paid and has`} ${acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into it in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
+      ui.h("p", {}, `${who === "you" ? "You are paid and have" : `${who} is paid and has`} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
       ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
         ui.button(`Yes: add what ${who === "you" ? "you put" : `${who} puts`} in`, () => {
-          prefill = { personId: a.personId, accountId: a.accounts[0] ?? accounts[0]?.id };
+          // the 401(k) at the job now: one whose name does not say it is an old one
+          const cur = a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)).filter(Boolean);
+          const now = cur.find((x) => !/\b(old|former|previous|prior|rollover)\b/i.test(x.name ?? "")) ?? cur[0];
+          prefill = { personId: a.personId, accountId: now?.id ?? accounts[0]?.id };
           editing = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" });
         }),
         ui.button(`No match at ${whose} job`, () => {
           pending = { text: `Noted: no match at ${whose} job.` };
           store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
         }, { class: "secondary" }),
-        ui.button(`That 401(k) is from a job ${who === "you" ? "you" : who} left`, () => {
-          pending = { text: `Noted: ${a.accounts.length === 1 && acct ? acct.name : "that 401(k)"} is from a job ${who === "you" ? "you" : who} left, so no money goes in.` };
-          store.update((p) => { for (const x of p.accounts ?? []) if (a.accounts.includes(x.id)) x.formerJob = true; });
-        }, { class: "secondary" })),
+        // one button per 401(k) when there are several, so only the old one is marked
+        ...(a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
+          const x = (plan.accounts ?? []).find((y) => y.id === id);
+          return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who === "you" ? "you" : who} left` : `That 401(k) is from a job ${who === "you" ? "you" : who} left`, () => {
+            pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who === "you" ? "you" : who} left, so no money goes in.` };
+            store.update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
+          }, { class: "secondary" });
+        })),
       ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Not sure? Your pay stub or your job's benefits site shows what goes in each paycheck and what the employer adds.")));
   }
   // what was answered, so it can be taken back

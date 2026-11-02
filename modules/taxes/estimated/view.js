@@ -13,7 +13,7 @@ export function render(root, ctx) {
   // can cover the whole shortfall, earlier quarters too, by raising withholding for the paychecks left: the easier fix,
   // and the one Withholding check and the Federal estimate point to
   const viaPay = d.needsEstimates && d.withholding > 0 && d.remaining > 0 && d.withholdingFrom !== "none";
-  const head = !d.hasIncome ? "Quarterly estimated payments" : !d.needsEstimates ? "No estimated payments needed" : viaPay ? `Raise your withholding: about ${money(Math.ceil(d.remaining / 10) * 10)} more this year` : d.behind > 0 ? `${money(d.behind)} behind: pay it now` : d.nextDue ? `${money(d.nextDue.amount)} due by ${fmt.date(d.nextDue.due)}` : "Estimated payments";
+  const head = !d.hasIncome ? "Quarterly estimated payments" : !d.needsEstimates ? "No estimated payments needed" : viaPay ? `Raise your withholding: about ${money(d.remaining)} more this year` : d.behind > 0 ? `${money(d.behind)} behind: pay it now` : d.nextDue ? `${money(d.nextDue.amount)} due by ${fmt.date(d.nextDue.due)}` : "Estimated payments";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, head),
     viaPay ? ui.h("p", { class: "lede" }, `Tax taken from pay counts as paid evenly through the year, so about ${money(d.remaining)} more withheld before December keeps you clear of the penalty, earlier quarters included${d.balanceAtFiling > d.remaining + 50 ? ` (about ${money(d.balanceAtFiling)} more clears the April bill too)` : ""}. Withholding check works out the W-4 change; paying the quarters below works as well.`) : null,
@@ -22,9 +22,9 @@ export function render(root, ctx) {
       ? "Money that arrives without withholding (self-employment, pensions, IRA withdrawals, investment income, a Roth conversion) has to be paid in four instalments through the year or the IRS charges interest. Add income first."
       : !d.needsEstimates
         ? `${d.year}: about ${money(d.totalTax)} of federal tax, ${money(d.withholding)} of it withheld from pay${d.paid > 0 ? ` and ${money(d.paid)} already paid in estimates` : ""}. ${d.balanceAfterWithholding < 1000 ? "The balance at filing time is under 1,000, so no instalments are required." : "Withholding alone reaches the safe-harbour amount, so no instalments are required."}`
-        : `${d.year}: about ${money(d.totalTax)} of federal tax and ${d.withholdingFrom === "paycheck" ? `about ${money(d.withholding)} withheld from pay (estimated from your paychecks)` : `only ${money(d.withholding)} withheld`}. To stay clear of the penalty you need ${money(d.harbour.required)} paid in during the year (${d.harbour.label}), so ${money(d.toPayByEstimates)} in four payments of ${money(d.perQuarter)}. ${money(d.paid)} paid so far, ${money(d.remaining)} to go.`),
+        : `${d.year}: about ${money(d.totalTax)} of federal tax and ${d.withholdingFrom === "paycheck" ? `about ${money(d.withholding)} withheld from pay (estimated from your paychecks)` : d.withholdingFrom === "mixed" ? `about ${money(d.withholding)} withheld from pay (partly estimated)` : `only ${money(d.withholding)} withheld`}. To stay clear of the penalty you need ${money(d.harbour.required)} paid in during the year (${d.harbour.label}), so ${money(d.toPayByEstimates)} in four payments of ${money(d.perQuarter)}. ${money(d.paid)} paid so far, ${money(d.remaining)} to go.`),
     d.behind > 0 && d.nextDue ? ui.h("p", { class: viaPay ? "muted small" : null }, viaPay ? `Paying by quarters instead: ${money(d.behind)} now for the quarters past, then ${money(d.nextDue.amount)} by ${fmt.date(d.nextDue.due)}.` : `Then ${money(d.nextDue.amount)} by ${fmt.date(d.nextDue.due)}.`) : null,
-    d.penaltyRisk ? ui.h("p", { class: "muted small" }, d.overdue ? `Payments from the ${d.overdue.label} (due ${fmt.date(d.overdue.due)}) on are behind: the penalty runs like interest from each due date, so paying now costs less than waiting.` : `The ${d.lateQuarter.label}'s payment came after its due date (${fmt.date(d.lateQuarter.due)}): the IRS charges a small penalty, like interest, from that date until the day it was paid. Paying the rest on time keeps it there.`) : null,
+    d.penaltyRisk && !viaPay ? ui.h("p", { class: "muted small" }, d.overdue ? `Payments from the ${d.overdue.label} (due ${fmt.date(d.overdue.due)}) on are behind: the penalty runs like interest from each due date, so paying now costs less than waiting.` : `The ${d.lateQuarter.label}'s payment came after its due date (${fmt.date(d.lateQuarter.due)}): the IRS charges a small penalty, like interest, from that date until the day it was paid. Paying the rest on time keeps it there.`) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -32,7 +32,7 @@ export function render(root, ctx) {
   for (const n of d.notes) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
     ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
-    ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : "Withholding check page"),
+    ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : d.withholdingFrom === "mixed" ? "partly estimated from pay" : "Withholding check page"),
     ui.stat("By estimates", money(d.toPayByEstimates), d.needsEstimates ? `${money(d.perQuarter)} a quarter` : "none needed"),
     ui.stat("At filing time", money(Math.abs(d.balanceAtFiling)), d.balanceAtFiling >= 0 ? "still to pay" : "refund"),
   )));
@@ -43,7 +43,8 @@ export function render(root, ctx) {
     pending = "Payments saved.";
     store.update((p) => { p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [0, 1, 2, 3].map((i) => v[`q${i}`] ?? 0) }; });
   }, { submitLabel: "Save payments" });
-  const badge = (s) => s === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : s === "short" ? ui.h("span", { class: "pill warn" }, "behind") : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;
+  // paying through withholding instead, a past quarter is not "behind": it is covered once the withholding is raised
+  const badge = (s) => s === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : s === "short" ? (viaPay ? ui.h("span", { class: "pill" }, "not paid") : ui.h("span", { class: "pill warn" }, "behind")) : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;
   root.append(ui.card(`The four payments for ${d.year}`,
     ui.h("ul", { class: "records" }, d.quarters.map((q) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, q.label, " ", badge(q.status)), ui.h("span", { class: "rec-value" }, d.needsEstimates ? money(q.share) : money(q.paid))),

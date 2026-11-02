@@ -32,7 +32,9 @@
   deferral limit. The whole match is at the highest `upTo` with a rate (`fullMatchAt`; none when every tier is 0).
   Left behind = match at the whole match − match now. Until the employer's own match is typed, the page assumes 50
   cents a dollar on the first 6% of pay, the most common formula in Vanguard's *How America Saves 2026* (2025 plan
-  data; average promised match 4.7% of pay), and says it is an assumption.
+  data; average promised match 4.7% of pay), and says it is an assumption. When Retirement saving's match question
+  was answered "No match" (`retirement.workPlans[id].match === false`) and no tiers are typed here, there is no
+  match and nothing is assumed.
 - **The 401(k) limit** (`limit401k`) for the age reached this year: $24,500 in 2026; + $8,000 catch-up from 50; or
   $11,250 instead from 60 to 63 (IRS Notice 2025-67; `retirement/contributions/data/limits.js`). Choices shown: now,
   the whole match, the limit (as a share of pay, capped at 100%).

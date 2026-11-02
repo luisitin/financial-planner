@@ -62,21 +62,33 @@ export function projectedWithholding(plan, params = {}) {
 }
 
 /**
- * withholdingEstimate(plan, { today }) -> { projected, from: "typed"|"paycheck"|"none", people: [{ name, perPaycheck, period,
- * paychecks, yearly }], detail (projectedWithholding, with `projected` replaced when estimated) }
- * The one figure every tax page uses for "what the paychecks take out this year": the figures typed on this page and the year
- * so far when there are any; else the Paycheck page's federal withholding worked out from pay the way payroll does (IRS
- * Pub. 15-T percentage method), for the whole year; else none. Estimated payments, the Federal estimate, Quick answers and
- * Needs attention read it, so "refund or owe" is one answer everywhere.
+ * withholdingEstimate(plan, { today }) -> { projected, from: "typed"|"paycheck"|"mixed"|"none", people: [{ key, name, perPaycheck,
+ * period, paychecks, yearly, left, estimated }], detail (projectedWithholding, with `projected` replaced when anything is estimated) }
+ * The one figure every tax page uses for "what the paychecks take out this year", earner by earner: the per-paycheck figure
+ * typed on this page for anyone who has one; for an earner with none, the Paycheck page's federal withholding worked out
+ * from pay the way payroll does (IRS Pub. 15-T percentage method). With the year so far typed, the estimated earners add
+ * their paychecks left to it (the so-far figure is the household's); without it, a whole year each. Estimated payments,
+ * the Federal estimate, Quick answers and Needs attention read it, so "refund or owe" is one answer everywhere. (Until a
+ * review on 2026-11-02 one typed earner made the other's withholding $0, and a typed year so far alone counted no more
+ * paychecks.)
  */
 export function withholdingEstimate(plan, params = {}) {
   const wh = projectedWithholding(plan, params);
-  if (wh.hasSetup) return { projected: wh.projected, from: "typed", people: wh.people.map((p) => ({ name: p.name, perPaycheck: p.perPaycheck, period: p.period, paychecks: PERIODS[p.period]?.perYear ?? null, yearly: p.yearly })), detail: wh };
-  const pc = computePaycheck(plan, params);
-  const people = pc.ready ? pc.people.filter((p) => Number(p.yearly?.federal) > 0).map((p) => ({ name: p.name, perPaycheck: Number(p.federal?.amount) || 0, period: p.period, paychecks: p.paychecks, yearly: Number(p.yearly.federal) })) : [];
-  const yearly = people.reduce((t, p) => t + p.yearly, 0);
-  if (yearly > 0) return { projected: yearly, from: "paycheck", people, detail: { ...wh, projected: yearly } };
-  return { projected: wh.projected, from: "none", people: [], detail: wh };
+  let pc = null;
+  try { pc = computePaycheck(plan, params); } catch { pc = null; }
+  const BY_COUNT = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
+  const typed = new Set(wh.people.map((p) => p.key));
+  const est = (pc?.ready ? pc.people : []).filter((p) => Number(p.yearly?.federal) > 0 && !typed.has(p.key)).map((p) => {
+    const period = PERIODS[p.period]?.perYear === p.paychecks ? p.period : BY_COUNT[p.paychecks] ?? "biweekly";
+    const left = paychecksLeft(period, params.today ?? null, wh.year);
+    return { key: p.key, name: p.name, perPaycheck: Number(p.federal?.amount) || 0, period, paychecks: p.paychecks, yearly: Number(p.yearly.federal), left, estimated: true };
+  });
+  const typedPeople = wh.people.map((p) => ({ key: p.key, name: p.name, perPaycheck: p.perPaycheck, period: p.period, paychecks: PERIODS[p.period]?.perYear ?? null, yearly: p.yearly, left: p.left, estimated: false }));
+  if (!est.length) return { projected: wh.projected, from: wh.hasSetup ? "typed" : "none", people: typedPeople, detail: wh };
+  // nothing typed at all: the whole year from pay, earner by earner
+  if (!wh.hasSetup) { const yearly = est.reduce((t, p) => t + p.yearly, 0); return { projected: yearly, from: "paycheck", people: est, detail: { ...wh, projected: yearly } }; }
+  const projected = wh.soFarTyped ? wh.soFar + wh.rest + est.reduce((t, p) => t + p.perPaycheck * p.left, 0) : wh.people.reduce((t, p) => t + p.yearly, 0) + est.reduce((t, p) => t + p.yearly, 0);
+  return { projected, from: "mixed", people: [...typedPeople, ...est], detail: { ...wh, projected } };
 }
 
 /**
@@ -109,18 +121,25 @@ export function compute(plan, params = {}) {
   // the best answer the plan has: the typed figures, else withholding estimated from pay (`estimate`); `balance` and `verdict`
   // above stay on the typed figures only (the answer key checks them), the page leads with `estimate`
   const est = withholdingEstimate(plan, params);
-  const estBalance = totalTax - est.projected - estimatedPaid;
-  const estimate = { ...est, balance: estBalance, verdict: est.from === "none" ? "unknown" : Math.abs(estBalance) < 500 ? "about right" : estBalance > 0 ? "owe" : "refund" };
+  // other payments typed on the Federal estimate (an extension payment, last year's overpayment applied) count as paid too,
+  // as the Federal estimate's own walk counts them
+  const otherPaid = Math.max(0, Number(t.thisYear?.paid) || 0);
+  const estBalance = totalTax - est.projected - estimatedPaid - otherPaid;
+  const estimate = { ...est, otherPaid, balance: estBalance, verdict: est.from === "none" ? "unknown" : Math.abs(estBalance) < 500 ? "about right" : estBalance > 0 ? "owe" : "refund" };
+  // the W-4 change on the estimate: the extra per paycheck on the main earner's paychecks left (as the typed suggestion does)
+  const lead = [...est.people].filter((p) => p.left > 0).sort((a, b) => b.yearly - a.yearly)[0] ?? null;
+  estimate.suggestion = lead && estimate.verdict === "owe" ? { kind: "add", name: lead.name, perPaycheck: Math.ceil(estBalance / lead.left), paychecks: lead.left }
+    : lead && estimate.verdict === "refund" ? { kind: "cut", name: lead.name, perPaycheck: Math.floor(-estBalance / lead.left), paychecks: lead.left } : { kind: "none" };
   return { year: fed.year, totalTax, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome: fed.hasIncome, effectiveRate: fed.result.effectiveRate, wages: fed.result.income.wages, estimate };
 }
 
 /**
- * taxAnswer(plan, { today }) -> { year, totalTax, projected, from, paid (estimated payments), balance (+ owe, - back), verdict, effectiveRate } | null
+ * taxAnswer(plan, { today }) -> { year, totalTax, projected, from, paid (estimated and other payments), balance (+ owe, - back), verdict, effectiveRate, people } | null
  * "Will we owe or get a refund?" in one place for the Federal estimate, Quick answers and Needs attention: the year's tax
  * against what the paychecks take out by December (withholdingEstimate) and the estimated payments made. null without income.
  */
 export function taxAnswer(plan, params = {}) {
   const d = compute(plan, params);
   if (!d.hasIncome) return null;
-  return { year: d.year, totalTax: d.totalTax, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate };
+  return { year: d.year, totalTax: d.totalTax, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid + d.estimate.otherPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate, people: d.estimate.people };
 }

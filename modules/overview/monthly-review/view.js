@@ -4,6 +4,7 @@
 import { compute, markReviewed, monthLabel } from "./compute.js";
 
 let month = null;      // the month picked on this device (null = the default for today)
+let arrival = null;    // the route ?month= was last taken from: each new arrival (a step's "Back to the check-in") takes it
 let pending = null;    // the confirmation shown on the next render
 
 const STYLE = `
@@ -24,6 +25,9 @@ const STYLE = `
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const today = fmt.today();
+  const qm = /^\d{4}-\d{2}$/.test(ctx.route?.query?.month ?? "") ? ctx.route.query.month : null;
+  if (qm && ctx.route !== arrival) month = qm;
+  arrival = ctx.route;
   const d = compute(plan, { today, month });
   const long = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const root = ui.h("div", { class: "mr-root" }, ui.h("style", {}, STYLE));

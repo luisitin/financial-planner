@@ -29,6 +29,9 @@ Payroll tax (`FICA`): Social Security 6.2% of pay up to the year's wage base and
 A 401(k) marked `formerJob` (from a job left) takes no new money, and a person whose job has no plan or no match
 (`retirement.workPlans[id].match === false`) has nothing to check, so neither makes the match step "check". The step lists
 who to ask in `ask: [{ personId, name, accounts }]`, which retirement/contributions turns into its question card.
+The match tiers typed on Work benefits (`whatIfs.benefits[id].matchTiers`) answer it too: tiers with no rate mean no
+match, any tier with a rate means there is one to check. A cash gap under half a dollar counts as filled (the
+balances are typed to the dollar, so 4,578 against 4,577.60 is done, not "$0 to go").
 
 ## The dates
 The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money. Interest on the debts and next year's new limits are left out, so the dates are about right.

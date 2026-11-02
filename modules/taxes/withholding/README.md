@@ -17,12 +17,15 @@ Paychecks left = floor(days left in the year / 365.25 x paychecks a year); a who
 and the year so far when there are any (`projectedWithholding`, unchanged); else the Paycheck page's federal withholding,
 worked out from pay the way payroll does (IRS Pub. 15-T percentage method), for the whole year; else none. `taxAnswer`
 puts it against the year's tax and the estimated payments made: Estimated payments, the Federal estimate, Quick answers
-and Needs attention (an alert at $1,000 or more short, where the underpayment rules start, IRC 6654(e)(1)) all read it,
+and Needs attention (an alert when $1,000 or more is left to pay in April after withholding and what is already paid) all read it,
 so the family plan says "about $5,602 in April" on every page (before, $15,072 on Quick answers, "owe $7,072" on the
 Federal estimate with only the year so far counted, nothing here until a stub was typed, and $9,470 withheld on Estimated
 payments). `compute()`'s `balance` and `verdict` still count the typed figures only (the estimated-payments answer key
 checks them); the page leads with `estimate` (that plus `balance`, `verdict`) and says when it is estimated, never
-"$0 withheld". Each "paid how often" box starts on that person's salary period on Income (it was always every two weeks,
+"$0 withheld". Earner by earner (review, 2026-11-02): a typed per-paycheck figure for whoever has one, the estimate from
+pay for the others (`from: "mixed"`), and with only the year so far typed, the estimated earners' paychecks left added to
+it; other payments typed on the Federal estimate (`taxes.thisYear.paid`) count as paid. The W-4 change on the estimate is
+per paycheck, on the main earner's paychecks left (`estimate.suggestion`). Each "paid how often" box starts on that person's salary period on Income (it was always every two weeks,
 so a monthly earner's stub figure was counted 26 times).
 
 ## Edge cases

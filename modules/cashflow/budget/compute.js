@@ -14,7 +14,7 @@ const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 
 /**
  * compute(plan, { today, month }) -> {
  *   month, label, dayOfMonth, daysInMonth, daysLeft,
- *   envelopes: [{ id, category, label, icon, amount, rollover, carried, available, spent, left, share, pace ("on"|"ahead"|"over"|"paid": one payment of 90% or more of the envelope, a monthly bill), expectedByNow }],
+ *   envelopes: [{ id, category, label, icon, amount, rollover, carried, available, spent, left, share, pace ("on"|"ahead"|"over"|"paid": one payment of 90% or more of the envelope, as last month: a monthly bill), expectedByNow }],
  *   totals: { amount, available, spent, left }, unbudgeted: [{ category, label, icon, spent }] (spending this month with no envelope),
  *   suggestions: [{ category, label, icon, average, months }] for categories without an envelope, hasBudget, hasData,
  *   suggestFrom: [ym] (the whole months the suggestions average over), cover: { from, to } | null (the days the bank files cover),
@@ -32,7 +32,9 @@ export function compute(plan, params = {}) {
   const spent = byCat(monthTx);
   const count = new Map(); for (const t of monthTx) count.set(t.category || "", (count.get(t.category || "") ?? 0) + 1);
   const prevYm = addMonths(`${month}-01`, -1).slice(0, 7);
-  const prev = byCat(spendingOf(plan, prevYm));
+  const prevTx = spendingOf(plan, prevYm);
+  const prev = byCat(prevTx);
+  const prevCount = new Map(); for (const t of prevTx) prevCount.set(t.category || "", (prevCount.get(t.category || "") ?? 0) + 1);
   const budgets = (plan.budgets ?? []).filter((b) => b.category);
   const envelopes = budgets.map((b) => {
     const amount = Number(b.amount) || 0;
@@ -41,8 +43,10 @@ export function compute(plan, params = {}) {
     const sp = spent.get(b.category) ?? 0;
     const left = available - sp;
     const expectedByNow = available * (dayOfMonth / daysInMonth);
-    // a bill paid once a month (the mortgage on the 1st) is not "spending fast": one payment of 90% or more of the envelope is "paid"
-    const paid = sp <= available && count.get(b.category) === 1 && sp >= 0.9 * available && available > 0;
+    // a bill paid once a month (the mortgage on the 1st) is not "spending fast": one payment of 90% or more of the envelope is
+    // "paid" when last month also had one payment there of about the same amount (within 10%), so one big grocery trip is not
+    const same = prevCount.get(b.category) === 1 && Math.abs((prev.get(b.category) ?? 0) - sp) <= 0.1 * sp;
+    const paid = sp <= available && count.get(b.category) === 1 && sp >= 0.9 * available && available > 0 && same;
     const pace = sp > available ? "over" : paid ? "paid" : sp > expectedByNow * 1.1 + 1 ? "ahead" : "on";
     return { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount, rollover: !!b.rollover, carried, available, spent: sp, left, share: available ? Math.min(1, sp / available) : 0, pace, expectedByNow };
   }).sort((a, b) => b.available - a.available);

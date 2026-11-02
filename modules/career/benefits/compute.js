@@ -142,8 +142,11 @@ export function compute(plan, params = {}) {
   const mine = (plan.retirement?.contributions ?? []).filter((c) => c.personId === person.id && accounts.find((a) => a.id === c.accountId)?.type === "401k");
   const nowYearly = mine.reduce((t, c) => t + perYear(c.amount, c.period), 0);
   const nowMatchPlan = mine.reduce((t, c) => t + (Number(c.employerMatch) || 0), 0);
-  const tiersAssumed = !Array.isArray(s.matchTiers);
-  const tiers = tiersAssumed ? DEFAULT_TIERS : s.matchTiers.map((t) => ({ rate: pos(t.rate), upTo: pos(t.upTo) })).filter((t) => t.upTo > 0 && t.rate > 0);
+  // "No match at this job" answered on Retirement contributions (`retirement.workPlans[id].match === false`) is the same answer
+  // as no match tiers here, unless tiers were typed on this page since (2026-11-02: the two used to disagree)
+  const noMatch = !Array.isArray(s.matchTiers) && plan.retirement?.workPlans?.[person.id]?.match === false;
+  const tiersAssumed = !Array.isArray(s.matchTiers) && !noMatch;
+  const tiers = noMatch ? [] : tiersAssumed ? DEFAULT_TIERS : s.matchTiers.map((t) => ({ rate: pos(t.rate), upTo: pos(t.upTo) })).filter((t) => t.upTo > 0 && t.rate > 0);
   const lim = limit401k(L, age);
   const caps = { compLimit: B.compLimit, limit: lim.limit };
   const payC = Math.min(pay, B.compLimit);

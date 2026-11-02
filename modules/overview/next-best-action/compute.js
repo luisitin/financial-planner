@@ -74,7 +74,8 @@ export function compute(plan, params = {}) {
 
   // 1. a starter emergency fund: one month of must-pay bills in cash you can use
   const essential = liq.expenses?.essentialMonthly ?? exp.essentialMonthly;
-  const starterGap = Math.max(0, essential - liq.now);
+  // under half a dollar short is done: the page shows whole dollars, so typing the amount it asks for must finish the step
+  const starterGap = essential - liq.now < 0.5 ? 0 : essential - liq.now;
   add({ id: "starter", title: "A starter emergency fund", why: "One month of must-pay bills in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
     detail: starterGap <= 0 ? `Usable cash ${money(liq.now)} covers a month of must-pay bills (${money(essential)}).` : `${money(starterGap)} more in usable cash reaches one month of must-pay bills (${money(essential)}).`, go: ["balance", "liquidity"] });
 
@@ -82,7 +83,8 @@ export function compute(plan, params = {}) {
   // job has no plan or no match (`retirement.workPlans[id].match === false`) has nothing to check
   const k401 = accounts.filter((a) => a.type === "401k");
   const atWork = k401.filter((a) => !a.formerJob);
-  const noMatch = (id) => plan.retirement?.workPlans?.[id]?.match === false;
+  // match tiers typed on Open enrollment (career/benefits) say it more exactly; without them, the answer on Contributions
+  const noMatch = (id) => { const t = plan.whatIfs?.benefits?.[id]?.matchTiers; return Array.isArray(t) ? !t.some((x) => Number(x.rate) > 0 && Number(x.upTo) > 0) : plan.retirement?.workPlans?.[id]?.match === false; };
   if (atWork.length) {
     const owners = adults.filter((p) => atWork.some((a) => a.ownerId === p.id) || (p.role === "self" && atWork.some((a) => !a.ownerId)));
     const working = owners.filter((p) => !noMatch(p.id) && inc.active.some((x) => x.personId === p.id && (x.type === "salary" || x.type === "bonus")));
@@ -101,7 +103,7 @@ export function compute(plan, params = {}) {
     detail: highGap > 0 ? `${high.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}: every extra dollar here earns the rate for sure.` : `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`, go: ["debt", "payoff"] });
 
   // 4. the full emergency fund
-  const fullGap = Math.max(0, liq.gap ?? 0);
+  const fullGap = (liq.gap ?? 0) < 0.5 ? 0 : liq.gap;
   add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: "Enough must-pay bills in cash to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
     detail: fullGap > 0 ? `${money(fullGap)} more reaches ${liq.targetMonths} months of must-pay bills (${money(liq.target)}).` : `Usable cash covers ${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
 

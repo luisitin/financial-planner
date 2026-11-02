@@ -72,10 +72,10 @@ export function compute(plan, params = {}) {
   const short = nba?.ready ? -nba.spare.monthly : exp.leftOver !== null ? -exp.leftOver : 0;
   if (short > 0) add("overspend", "bad", "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
   // a likely bill in April: the year's federal tax against what the paychecks take out by December (typed, else estimated
-  // from pay) and the estimated payments, the same answer as Withholding check; $1,000 is where the underpayment rules start
+  // from pay) and what is already paid, the same answer as Withholding check; flagged from $1,000 left to pay
   let tax = null;
   try { tax = inc.count ? taxAnswer(plan, { today }) : null; } catch { tax = null; }
-  if (tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `Your paychecks look about ${money(tax.balance)} short of this year's tax`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
+  if (tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `About ${money(tax.balance)} of tax to pay in April`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : tax.from === "mixed" ? " (partly estimated from pay)" : ""}${tax.paid > 0 ? ` and ${money(tax.paid)} is already paid` : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
   if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);
   for (const r of debt.rows) {

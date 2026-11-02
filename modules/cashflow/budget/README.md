@@ -21,6 +21,8 @@ Plan sections read (`needs`): `budgets` (`[{ id, category, amount, period: "mont
 ## A bill paid once a month (2026-11-02)
 An envelope whose month so far is one payment of 90% or more of its amount (and not over it) reads "paid", not
 "spending fast": the mortgage paid on the 1st is not a fast pace. Two payments, or one under 90%, pace as before.
+The month before must look the same (one payment in that category, within 10% of this one), so a single big
+grocery trip on the 2nd still reads "spending fast".
 Opened from the Monthly review (`?month=2026-10`), the page shows that month until a month is picked here.
 
 ## Edge cases

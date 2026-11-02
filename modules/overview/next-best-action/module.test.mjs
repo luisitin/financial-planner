@@ -83,3 +83,19 @@ test("the match step: a 401(k) from a job left, or a job with no match, leaves n
   assert.ok(!m2 || m2.status === "done", "nothing to check once Bo said there is no match");
   assert.equal(m2?.ask?.length ?? 0, 0);
 });
+
+test("review: a gap under half a dollar is done; Open enrollment's match tiers answer the match question too", () => {
+  const p = familyPlan("2026-11-02");
+  const T = "2026-11-02";
+  const gap = step(compute(p, { today: T }), "starter").gap;
+  p.accounts.find((a) => a.id === "a-chk").balance += Math.round(gap);   // the amount the page shows, in whole dollars
+  const st = step(compute(p, { today: T }), "starter");
+  assert.equal(st.status, "done"); assert.equal(st.gap, 0);
+  const q = familyPlan(T);
+  q.accounts.find((a) => a.id === "a-chk").balance += 1000;
+  q.whatIfs = { ...(q.whatIfs ?? {}), benefits: { "p-bo": { matchTiers: [] } } };
+  assert.ok(!step(compute(q, { today: T }), "match") || step(compute(q, { today: T }), "match").status === "done", "no match typed on Open enrollment");
+  q.whatIfs.benefits["p-bo"].matchTiers = [{ rate: 0.5, upTo: 0.06 }];
+  q.retirement.workPlans = { "p-bo": { match: false } };
+  assert.equal(step(compute(q, { today: T }), "match").status, "check", "a match typed there wins over an older no");
+});

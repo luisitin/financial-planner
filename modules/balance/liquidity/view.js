@@ -45,7 +45,7 @@ export function render(root, ctx) {
     root.append(n);
   }
   const nba = d.expenses ? ctx.computeOf?.("overview/next-best-action", { today }) : null;
-  const move = nba?.ready && nba.next && (nba.next.id === "starter" || nba.next.id === "full-fund") && nba.next.gap > 0 ? nba.next : null;
+  const move = nba?.ready && nba.next && (nba.next.id === "starter" || nba.next.id === "full-fund") && nba.next.gap >= 0.5 ? nba.next : null;
   if (move) {
     const spare = Math.max(0, nba.spare.monthly);
     const essential = d.expenses?.essentialMonthly ?? 0;
@@ -66,6 +66,7 @@ export function render(root, ctx) {
     const form = ui.h("form", { novalidate: null, onSubmit: (e) => {
       e.preventDefault();
       const typed = Object.fromEntries(boxes.map((b) => [b.a.id, ui.moneyValue(b.m.input)]));
+      if (!Object.values(typed).some((x) => x !== null && x !== undefined && x !== "")) { form.querySelector(".lq-err")?.remove(); const n = ui.notice("error", "Nothing was saved: the box is empty. Type the new balance, then tap Save."); n.classList.add("lq-err"); form.append(n); return; }
       let r = null;
       pending = { step: move.id };
       store.update((draft) => { r = saveAll(draft, typed, today); });

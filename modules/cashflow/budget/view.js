@@ -3,7 +3,7 @@
 import { compute } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
 
-const state = { month: "", query: null };   // query: the ?month= the page was last opened with (the Monthly review's link)
+const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
 
 let pending = null;   // confirmation kept across the shell re-render
 
@@ -13,8 +13,9 @@ export function render(root, ctx) {
   const today = fmt.today();
   // opened from the Monthly review with ?month=2026-10: that month, until a month is picked here
   const qm = /^\d{4}-\d{2}$/.test(ctx.route?.query?.month ?? "") ? ctx.route.query.month : null;
-  if (qm && qm !== state.query) { state.month = qm; }
-  state.query = qm;
+  // each arrival (a new route; a redraw after a save keeps the same one) takes the address's month; a month picked here stays
+  if (qm && ctx.route !== state.route) state.month = qm;
+  state.route = ctx.route;
   const d = compute(plan, { today, month: state.month || undefined });
   let editing = null;
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };

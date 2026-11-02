@@ -153,7 +153,7 @@ export function frame(ctx, page) {
   if (bar.mode === "review") {
     const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const name = bar.month ? `${M[Number(bar.month.slice(5, 7)) - 1]} ${bar.month.slice(0, 4)}` : "monthly";
-    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Back to your monthly check-in" }, ui.h("a", { href: "#/overview/monthly-review" }, `‹ Back to the ${name} check-in`))), after: null };
+    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Back to your monthly check-in" }, ui.h("a", { href: bar.month ? `#/overview/monthly-review?month=${bar.month}` : "#/overview/monthly-review" }, `‹ Back to the ${name} check-in`))), after: null };
   }
 
   if (bar.mode === "quick") {

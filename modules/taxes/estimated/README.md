@@ -19,7 +19,10 @@ Withholding comes from `withholdingEstimate` in taxes/withholding (the same fall
 before, now shared, so every tax page has one answer). When pay has tax taken out and estimates are needed, the page
 leads with raising withholding: tax withheld counts as paid evenly through the year (IRC 6654(g)(1)), so more withheld
 before December covers the earlier quarters too, and it says the penalty-free amount (`remaining`) and the amount that
-clears the April bill (`balanceAtFiling`). "Behind: pay it now" stays for income with no withholding.
+clears the April bill (`balanceAtFiling`). "Behind: pay it now" stays for income with no withholding. With withholding
+as the fix the quarters read "not paid" in a neutral pill, not "short" in red, and the penalty sentence is left out:
+raising withholding before December covers them. When one earner's pay stub figure is typed and another's is not,
+the estimate is "mixed" (the typed figure for one, the Paycheck page's estimate for the other) and says "partly estimated".
 
 ## Edge cases
 The annualised-income method (uneven income through the year) is not modelled; nor is the penalty itself (it runs like interest from each due date).

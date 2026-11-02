@@ -2,7 +2,7 @@
 // month, the categories with bars and change, the payees that took the most, the biggest single lines.
 import { compute } from "./compute.js";
 
-const state = { month: "", query: null };   // query: the ?month= the page was last opened with (the Monthly review's link)
+const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
 const ord = (n) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
 
 export function render(root, ctx) {
@@ -10,8 +10,9 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   // opened from the Monthly review with ?month=2026-10: that month, until a month is picked here
   const qm = /^\d{4}-\d{2}$/.test(ctx.route?.query?.month ?? "") ? ctx.route.query.month : null;
-  if (qm && qm !== state.query) { state.month = qm; }
-  state.query = qm;
+  // each arrival (a new route; a redraw after a save keeps the same one) takes the address's month; a month picked here stays
+  if (qm && ctx.route !== state.route) state.month = qm;
+  state.route = ctx.route;
   const d = compute(plan, { month: state.month, today: fmt.today() });
 
   if (!d.hasData) {
