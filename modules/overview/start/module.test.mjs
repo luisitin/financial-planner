@@ -129,3 +129,15 @@ test("tiles: a quick answer, six guides and a big life change, each a real page;
   const p = migrate(familyPlan("2026-10-31")); startGuide(p, "taxes", "2026-10-31");
   assert.match(compute(p).tiles.find((t) => t.id === "taxes").status, /^\d+ of \d+$/);
 });
+
+test("setupCard: a stored question whose screen is now hidden keeps its number (review 2026-11-02)", async () => {
+  const { setupCard } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  // the trip goal was added on the Goals page after reaching question 7, so "how much, and by when" is skipped
+  const p = familyPlan("2026-11-02"); p.guide = { ...(p.guide ?? {}), setup: { startedAt: "2026-10-20", at: "goal-details", picks: { goals: ["trip"] } } };
+  const c = setupCard(p, {});
+  assert.equal(c.state, "started"); assert.equal(c.q, 7); assert.equal(c.next, "where you stand");
+  // stopped at question 2: question 2
+  p.guide.setup = { startedAt: "2026-10-20", at: "money" };
+  assert.equal(setupCard(p, {}).q, 2);
+});

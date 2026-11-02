@@ -50,6 +50,7 @@ export function compute(plan, params = {}) {
   if (!today) return { ready: false, missing: ["today's date"] };
   const cur = plan.meta?.currency ?? "USD";
   const money = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
+  const exact = (n) => fmtMoney(Math.round(n), cur);   // a balance to pay off: to the dollar, as Pay off debts says it
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
   const missing = [];
   if (!inc.count) missing.push("what comes in, on the Income page");
@@ -168,23 +169,32 @@ export function compute(plan, params = {}) {
   const hs = debtStep(high);
   const highGap = hs.gap;
   const highWords = (list) => `${list.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}`;
-  if (high.length && !hs.off.length && hs.until) add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: "underway", gap: 0,
+  // usable cash above the full cushion pays costly debt today: the standard first move, a sure return at the debt's rate, and
+  // the cushion stays full (round 4, 2026-11-02; before, the card was scheduled from the monthly left-over even when savings
+  // could clear it now). Review fixes 2026-11-02: one-off costs coming up lower the cash but one-off income never raises it
+  // (it may be in the balances already); no must-pay bills marked means the cushion is unknown, so nothing is offered; the
+  // whole balance is said exactly when savings cover it (no $10 crumbs left at 23.9%); and a saved debt plan aimed at the
+  // card no longer hides this when the cash is there.
+  const cash = Math.min(liq.now ?? 0, liq.nowAfterOneOffs ?? liq.now ?? 0);
+  const above = (liq.target ?? 0) > 0 && essential > 0 ? Math.max(0, cash - liq.target) : 0;
+  const highOwed = high.reduce((t, d) => t + d.owed, 0);
+  const savingsCover = above >= 100 && highOwed > 0;
+  if (high.length && !hs.off.length && hs.until && !savingsCover) add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: "underway", gap: 0,
     underway: { extra: debtPlan.extra, names: hs.names, until: hs.until }, detail: `Under way. ${hs.sentence}`, go: ["debt", "payoff"] });
   else {
-    // usable cash above the full cushion (after one-off costs coming up) pays costly debt today: the standard first move,
-    // a sure return at the debt's rate, and the cushion stays full (round 4, 2026-11-02; before, the card was scheduled from
-    // the monthly left-over even when savings could clear it now)
-    const above = Math.max(0, (liq.nowAfterOneOffs ?? liq.now) - (liq.target ?? 0));
-    const fromSavings = highGap > 0 && above >= 100 ? Math.floor(Math.min(above, highGap) / 10) * 10 : 0;
-    const leftMonths = fromSavings && essential > 0 ? ((liq.nowAfterOneOffs ?? liq.now) - fromSavings) / essential : null;
-    const full = fromSavings > 0 && fromSavings >= highGap - 5;
-    const keep = `you would still have ${leftMonths !== null ? `${Math.round(leftMonths * 10) / 10} months of must-pay bills` : "a full cushion"} in cash${liq.targetMonths ? ` (the plan aims for ${liq.targetMonths})` : ""}`;
-    const rates = [...new Set(hs.off.map((d) => pct(d.rate)))].join(" and ");
-    const detail = highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
-      : full ? `Pay ${hs.off.length === 1 ? `the ${hs.off[0].name}'s ${money(hs.off[0].owed)}` : `all ${money(highGap)} (${hs.off.map((d) => d.name).join(" and ")})`} from savings now: ${keep}. Paying it is a sure ${rates} return.${hs.sentence ? ` ${hs.sentence}` : ""}`
-      : fromSavings ? `Pay ${money(fromSavings)} of the ${money(highGap)} (${hs.off.map((d) => `${d.name} at ${pct(d.rate)}`).join(", ")}) from savings now: ${keep}. The other ${money(highGap - fromSavings)} comes from what is left each month.${hs.sentence ? ` ${hs.sentence}` : ""}`
+    const pays = savingsCover && hs.on.length ? high : hs.off;   // a debt the plan's extra reaches is paid from savings too
+    const payOwed = pays.reduce((t, d) => t + d.owed, 0);
+    const fromSavings = !savingsCover || payOwed <= 0 ? 0 : above >= payOwed ? payOwed : Math.floor(above / 10) * 10;
+    const full = fromSavings > 0 && fromSavings >= payOwed - 0.5;
+    const leftMonths = fromSavings ? (cash - fromSavings) / essential : null;
+    const keep = `you would still have ${Math.round(leftMonths * 10) / 10} months of must-pay bills in cash (the plan aims for ${liq.targetMonths})`;
+    const rates = [...new Set(pays.map((d) => pct(d.rate)))].join(" and ");
+    const rest = Math.max(0, payOwed - fromSavings);
+    const detail = !fromSavings && highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
+      : full ? `Pay ${pays.length === 1 ? `the ${pays[0].name}'s ${exact(pays[0].owed)}` : `all ${exact(payOwed)} (${pays.map((d) => d.name).join(" and ")})`} from savings now: ${keep}. Paying it is a sure ${rates} return.${hs.sentence && pays === hs.off ? ` ${hs.sentence}` : ""}`
+      : fromSavings ? `Pay ${money(fromSavings)} of the ${money(payOwed)} (${pays.map((d) => `${d.name} at ${pct(d.rate)}`).join(", ")}) from savings now: ${keep}. The other ${money(rest)} ${pays === hs.off ? "comes from what is left each month" : "keeps going on your Pay off debts plan"}.${hs.sentence && pays === hs.off ? ` ${hs.sentence}` : ""}`
       : `${highWords(hs.off)}: every extra dollar here earns the rate for sure.${hs.sentence ? ` ${hs.sentence}` : ""}`;
-    add({ id: "high-debt", title: fromSavings ? "Pay off expensive debt from savings" : "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 ? "now" : "done",
+    add({ id: "high-debt", title: fromSavings ? "Pay off expensive debt from savings" : "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 || fromSavings > 0 ? "now" : "done",
       gap: Math.max(0, highGap - fromSavings), fromSavings, doneDate: full ? today : null, detail, go: ["debt", "payoff"] });
   }
 
@@ -214,8 +224,8 @@ export function compute(plan, params = {}) {
   // the backdoor route is said only when this household's income is in or over the Roth limit range (Contribution limits)
   let rothNear = false;
   try { const r = computeLimits(plan, { today }).roth; rothNear = !!r && (r.status === "partial" || r.status === "over"); } catch { rothNear = false; }
-  if (earners.length) add({ id: "ira", title: earners.length > 1 ? "An IRA for each of you" : "An IRA of your own", why: `${optional}Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.`, status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional,
-    detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)} each).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
+  if (earners.length) add({ id: "ira", title: earners.length > 1 ? "An IRA for each of you" : "An IRA of your own", why: `${optional}Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.`, status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional, people: iraRoom.filter((x) => x.room > 0).length,
+    detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)}${iraRoom.length > 1 ? " each" : ""}).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
 
   // 7. moderate debt (not the mortgage)
   const mid = debts.filter((d) => d.rate !== null && d.rate >= MODERATE_RATE && d.rate < HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);

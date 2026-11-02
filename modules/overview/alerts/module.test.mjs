@@ -192,7 +192,7 @@ test("protection: no life cover on an earner others depend on, and no guardian f
 import { goalsBehind } from "./compute.js";
 test("goalsBehind: a goal with nothing going in waits its turn when Next best action funds goals in a later month", () => {
   const gl = { goals: [
-    { id: "h", name: "House", status: "behind", monthly: 0, neededMonthly: 859 },
+    { id: "h", name: "House", status: "behind", monthly: 0, neededMonthly: 859, targetDate: "2031-06-01" },
     { id: "c", name: "Car", status: "behind", monthly: 100, neededMonthly: 300 },
     { id: "t", name: "Trip", status: "on track", monthly: 50, neededMonthly: 50 },
   ] };
@@ -204,6 +204,16 @@ test("goalsBehind: a goal with nothing going in waits its turn when Next best ac
   const now = goalsBehind(gl, { nba: { ready: true, steps: [{ id: "goals", startDate: "2026-11-02" }] }, today: "2026-11-02" });
   assert.deepEqual(now.queued, []); assert.deepEqual(now.behind.map((x) => x.id), ["h", "c"]);
   assert.deepEqual(goalsBehind(gl).queued, [], "without Next best action nothing waits");
+  // review 2026-11-02: a goal due before (or on) its turn cannot wait for it, and the emergency fund never waits for the goals step
+  const soon = { goals: [
+    { id: "gift", name: "Holiday gifts", status: "behind", monthly: 0, neededMonthly: 750, targetDate: "2026-12-20" },
+    { id: "ef", name: "Emergency fund", icon: "🛟", isEmergencyFund: true, status: "behind", monthly: 0, neededMonthly: 400, targetDate: "2029-06-30" },
+    { id: "h", name: "House", status: "behind", monthly: 0, neededMonthly: 859, targetDate: "2031-06-01" },
+  ] };
+  const s2 = goalsBehind(soon, { nba: later, today: "2026-11-02" });
+  assert.deepEqual(s2.queued.map((x) => x.id), ["h"]);
+  assert.deepEqual(s2.behind.map((x) => x.id).sort(), ["ef", "gift"]);
+  assert.equal(s2.need, 1150);
 });
 
 test("this year's required withdrawal is on Needs attention from October until it is marked taken", () => {

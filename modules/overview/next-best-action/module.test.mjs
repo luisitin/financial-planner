@@ -256,3 +256,30 @@ test("one cushion verdict: the starter month in cash and costly debt paid first 
   const r = familyPlan(T); r.accounts.find((a) => a.id === "a-sav").balance = 30000; r.debts = r.debts.filter((x) => x.accountId !== "a-visa"); r.accounts = r.accounts.filter((a) => a.id !== "a-visa");
   assert.equal(cushionLater(compute(r, { today: T })), null);
 });
+
+test("paying from savings, review 2026-11-02: one-off income is not cash yet, the whole balance exactly, a saved plan does not hide it, no cushion no offer", async () => {
+  const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+  const T = "2026-11-02";
+  const visaAcct = (p) => p.accounts.find((a) => a.id === "a-visa");
+  // one-time income coming (a car to sell) does not count as cash on hand: the cushion stays full
+  const a = familyPlan(T); a.goals = a.goals.filter((g) => g.id !== "g-ef");
+  const la = liquidity(a, { today: T });
+  a.accounts.find((x) => x.id === "a-sav").balance += la.target - la.now;   // exactly the full cushion
+  a.income.push({ id: "i-car", name: "Selling the old car", type: "other", amount: 8000, period: "once" });
+  const ha = step(compute(a, { today: T }), "high-debt");
+  assert.equal(ha.fromSavings, 0, "nothing above the cushion until the car money is in the bank");
+  // savings cover the card: the exact balance, no $10 left at 23.9%
+  const b = familyPlan(T); b.accounts.find((x) => x.id === "a-sav").balance = 60000; visaAcct(b).balance = 6409;
+  const hb = step(compute(b, { today: T }), "high-debt");
+  assert.equal(hb.fromSavings, 6409); assert.equal(hb.gap, 0); assert.equal(hb.doneDate, T);
+  assert.match(hb.detail, /^Pay the Visa card's \$6,409 from savings now/); assert.doesNotMatch(hb.detail, /The other \$/);
+  // a saved debt plan aimed at the card, with the cash there: pay it from savings, not 15 more months at 23.9%
+  const c = familyPlan(T); c.accounts.find((x) => x.id === "a-sav").balance = 90000; c.debtPlan = { extra: 100, order: "avalanche", targets: ["a-visa"] };
+  const hc = step(compute(c, { today: T }), "high-debt");
+  assert.notEqual(hc.status, "underway"); assert.equal(hc.fromSavings, 6400); assert.equal(hc.doneDate, T);
+  assert.match(hc.detail, /^Pay the Visa card's \$6,400 from savings now/); assert.doesNotMatch(hc.detail, /already goes/);
+  // no must-pay bills marked: the cushion is unknown, so no "you would still have a full cushion"
+  const d = familyPlan(T); d.accounts.find((x) => x.id === "a-sav").balance = 60000; d.expenses.forEach((e) => { e.essential = false; }); d.debts.forEach((x) => { x.minPayment = null; });
+  const dd = compute(d, { today: T });
+  assert.ok(dd.ready); const hd = step(dd, "high-debt"); assert.equal(hd.fromSavings ?? 0, 0); assert.doesNotMatch(hd.detail, /full cushion/);
+});

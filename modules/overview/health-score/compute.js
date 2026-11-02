@@ -6,6 +6,7 @@
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown } from "../../retirement/projection/compute.js";
+import { retirementGap } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
@@ -74,9 +75,10 @@ export function compute(plan, params = {}) {
   // "none") with birth dates, as the Dashboard does (projection's retirementKnown): without it the plan runs short and the
   // score said "runs out in 2067" and asked for $3,040 a month less spending (round 4, 2026-11-02)
   const known = retirementKnown(plan, today);
-  const ssFix = "Add Social Security for each adult on the Social Security page (an estimate from ssa.gov/myaccount is enough), or say you will not get it.";
+  // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02)
+  const gap = known ? null : retirementGap(plan);
   if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${pr.missing.join(" and ")}.`, ["retirement", "projection"]);
-  else if (!known) add("retirement", "Retirement on track", null, "Not scored yet: whether the money lasts needs Social Security for each adult, or word that you will not get it, and birth dates.", ssFix, ["retirement", "social-security"]);
+  else if (!known) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
     add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ratio < 1.15 ? `Full marks at 115% (room for bad luck): about ${money(Math.max(0, (1.15 * pr.spendingYearly - pr.affordable) / 12))} a month less spending, or the same in more saving or later retirement (Goal seek).` : null, ["scenarios", "goal-seek"]);
@@ -85,7 +87,7 @@ export function compute(plan, params = {}) {
   // 5. protection: the stress tests' life shocks (job loss, never working again, a death, a care home, a long life)
   const st = pr.ready && known ? computeStress(plan, { today }) : null;
   const life = st?.ready ? st.scenarios.filter((s) => s.group === "life") : [];
-  if (pr.ready && !known) add("protection", "Protection", null, "Not scored yet: the stress tests need Social Security first, like the retirement part.", "Scored as soon as Social Security is in (the step above).", ["retirement", "social-security"]);
+  if (pr.ready && !known) add("protection", "Protection", null, `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
   else if (!life.length) add("protection", "Protection", null, "The stress tests need the plan basics first.", "Fill in the basics on Will the money last?", ["scenarios", "stress-tests"]);
   else {
     const passed = life.filter((s) => s.success);

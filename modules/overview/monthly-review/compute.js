@@ -7,7 +7,7 @@ import { compute as computeCategorize } from "../../transactions/categorize/comp
 import { compute as computeBudget } from "../../cashflow/budget/compute.js";
 import { compute as computeSpending } from "../../cashflow/spending/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
-import { compute as computeAlerts } from "../alerts/compute.js";
+import { compute as computeAlerts, goalsBehind } from "../alerts/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { coverage, monthCover, COVER_SLACK } from "../../transactions/ledger/compute.js";
@@ -131,15 +131,19 @@ export function compute(plan, params = {}) {
 
   // 6. goals, 7. what needs attention, 8. the next step
   const gl = computeGoals(plan, { today });
-  const behind = gl.goals.filter((g) => g.status === "behind" || g.status === "past due");
+  const nb = computeNext(plan, { today });
+  // the same count as Goals, the Dashboard and Needs attention (alerts' goalsBehind): a goal with nothing going in whose
+  // turn on Next best action comes later is waiting, named apart, not behind (review 2026-11-02)
+  const gb = goalsBehind(gl, { nba: nb, today });
+  const behind = [...gb.behind, ...gb.pastDue];
+  const waits = gb.queued.length ? ` ${gb.queued.length === 1 ? `${gb.queued[0].name} starts` : `${gb.queued.length} start`} in ${monthLabel(gb.turn.slice(0, 7))}, its turn on Next best action.` : "";
   // goals, what needs attention and the next step are things to look at, not chores: a goal can be behind for a year and the
   // month is still reviewed, so they never hold the count back ("info"); their words say how they stand
   add({ id: "goals", title: "Check the goals", status: "info", state: !gl.goals.length ? null : behind.length ? "todo" : "done",
-    detail: !gl.goals.length ? "No goals yet: what are you saving for?" : behind.length ? `${behind.length} of ${gl.goals.length} behind: ${behind.map((g) => g.name).join(", ")}.` : `All ${gl.goals.length} done or on track.`, go: ["goals", "goals"] });
+    detail: !gl.goals.length ? "No goals yet: what are you saving for?" : behind.length ? `${behind.length} of ${gl.goals.length} behind: ${behind.map((g) => g.name).join(", ")}.${waits}` : gb.queued.length ? `None behind.${waits}` : `All ${gl.goals.length} done or on track.`, go: ["goals", "goals"] });
   const al = computeAlerts(plan, { today });
   add({ id: "attention", title: "Look at what needs attention", status: "info", state: al.counts.bad + al.counts.warn ? "todo" : "done",
     detail: al.total ? `${al.counts.bad} to fix, ${al.counts.warn} to check, ${al.counts.info} to do${al.alerts[0] ? `; first: ${al.alerts[0].title}` : ""}.` : "Nothing needs attention.", go: ["overview", "alerts"] });
-  const nb = computeNext(plan, { today });
   add({ id: "next", title: "Take the next step", status: nb.ready ? "info" : "skip", state: nb.ready && !nb.next ? "done" : null,
     detail: nb.ready ? (nb.next ? `${nb.next.title}: ${nb.next.detail}` : "Every step of the order is done.") : "Needs income and expenses.", go: ["overview", "next-best-action"] });
 

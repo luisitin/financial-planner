@@ -13,6 +13,7 @@ import { buildInputs, retirementKnown } from "../../retirement/projection/comput
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
+import { retirementGap } from "../setup/compute.js";
 import { compute as computeFire } from "../../retirement/fire/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
 
@@ -95,6 +96,8 @@ export function compute(plan, params = {}) {
   // the projection: savings by year, who withdraws what, whether the money lasts
   const b = buildInputs(plan, { today });
   const run = b.inputs ? project(b.inputs) : null;
+  const known = retirementKnown(plan, today);   // Social Security and birth dates in: the money lasting can be said
+  const gap = known ? null : retirementGap(plan);
   const rows = run ? run.rows : [];
   if (!run) notes.push(`Add ${b.missing.join(" and ")} to see your savings and whether the money lasts.`);
   const savings = rows.map((r) => ({ year: r.year, real: r.totalReal }));
@@ -193,7 +196,7 @@ export function compute(plan, params = {}) {
     if (peak.year > startYear && peak.year < rows[rows.length - 1].year) add({ id: "peak", kind: "peak", year: peak.year, title: "Savings peak", detail: `About ${money(peak.totalReal)} in today's dollars. From here the plan spends more than it earns, as it should in retirement.`, go: ["retirement", "cash-flow"] });
     // the money running out or lasting is said only once Social Security is known (projection's retirementKnown, the
     // Dashboard's rule): without it the path leaves Social Security out and ran short (round 4, 2026-11-02)
-    if (!retirementKnown(plan, today)) add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: "Not worked out yet: it needs Social Security for each adult (an estimate from ssa.gov/myaccount is enough), or word that you will not get it.", go: ["retirement", "social-security"] });
+    if (!known) { add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: `Not worked out yet. ${gap?.fix ?? "Add Social Security on the Social Security page."}`, go: gap?.go ?? ["retirement", "social-security"] }); }
     else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${self.name || "you"} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
   }
@@ -218,7 +221,8 @@ export function compute(plan, params = {}) {
   const debtFree = events.find((e) => e.kind === "debtfree") ?? (pay.chosen?.debts.length === 1 ? events.find((e) => e.kind === "debt" || e.kind === "mortgage") : null);
   const headline = {
     retireYear, retireIn: Math.max(0, retireYear - startYear), debtFreeYear: debtFree ? debtFree.year : null,
-    lastsTo: run ? (run.success ? rows[rows.length - 1].year : null) : null, shortYear: run && !run.success ? run.failYear : null,
+    // no "runs out" or "lasts" in the top box either until Social Security and birth dates are in (review 2026-11-02)
+    lastsTo: run && known ? (run.success ? rows[rows.length - 1].year : null) : null, shortYear: run && known && !run.success ? run.failYear : null, needsSS: !!run && !known, needs: run && !known ? gap?.what ?? null : null,
     fiYear: events.find((e) => e.kind === "fi")?.year ?? null, endYear,
   };
   return {

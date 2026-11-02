@@ -43,5 +43,8 @@ New plan section `reviews: [{ month, at, note }]` (`core/schema/migrate.js`; `mi
 ## Tests
 `module.test.mjs`: the month chosen for a date, the section added to old plans, the family's steps, a month with transactions, marking reviewed (replacing, the streak, a gap).
 
+## Review fixes 2026-11-02
+The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboard and Needs attention; goals waiting their turn are named apart ("Japan trip starts in December 2027, its turn on Next best action").
+
 ## Ideas / not yet
 - A short monthly report to keep (the review's figures frozen with the note); reminders on the Dashboard when the month is not reviewed by the 10th; the Annual review pack built from these.

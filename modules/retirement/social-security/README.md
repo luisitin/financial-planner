@@ -26,5 +26,8 @@ No birth date: nothing computed. A record with under 40 credits: shown as not ye
 ## Tests
 `module.test.mjs`: FRA table, claim factors (62, 65, 67, 70, born 1955), record parsing, credits, the formula on a synthetic record, future earnings, compute on a couple. `tests/golden-social-security.test.mjs`: all 2,000 invented histories x 33 claiming ages (66,000 rows) against an independent key worked from SSA's rules: AIME, PIA, the monthly benefit, the spouse amount and the survivor amount (the key's survivor column is the worker's benefit; the test applies the widow(er)'s limit to it) agree to the dime. One history (`w12-h04-steady-y1957`) is a dime low in the key itself (its generator floored 2,984.80 to 2,984.70); the test allows it.
 
+## Won't get it (review 2026-11-02)
+Each person with no figure, no record and no Social Security on Income gets an outlined "<name> won't get Social Security" button, saved as the setup's own `guide.setup.ss[id] = "none"` (what the retirement pages' notice saves), with an Undo. Saving a figure clears an earlier "none". Plan health score and the Timeline send people here, so the answer they name is on this page.
+
 ## Ideas / not yet
 - The earnings test before full retirement age; survivors claiming before their own full retirement age (71.5% at 60); the family maximum; taxation of benefits (in the tax pages); Medicare premiums.

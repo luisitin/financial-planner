@@ -51,12 +51,24 @@ test("no retirement verdict before Social Security is known: not scored, the top
   const d = compute(p, { today: T });
   const r = d.parts.find((x) => x.id === "retirement"), pr = d.parts.find((x) => x.id === "protection");
   assert.equal(r.status, "unknown"); assert.equal(r.points, 0); assert.match(r.detail, /^Not scored yet/); assert.doesNotMatch(r.detail, /runs out/);
-  assert.match(r.fix, /Add Social Security for each adult/); assert.deepEqual(r.go, ["retirement", "social-security"]);
+  assert.match(r.fix, /^Add Social Security for Ana and Bo on the Social Security page .*, or say there that you will not get it\.$/); assert.deepEqual(r.go, ["retirement", "social-security"]);
   assert.equal(pr.status, "unknown");
   assert.equal(d.gains[0].id, "retirement", "the biggest gain is adding Social Security, not spending less");
   assert.equal(answerFor("retire", p, { today: T }), null);
   const tl = timeline(p, { today: T });
   assert.ok(!tl.events.some((e) => e.id === "short" || e.id === "lasts")); assert.ok(tl.events.some((e) => e.id === "needs-ss"));
+  // review 2026-11-02: the Timeline's top box says neither "runs out" nor "lasts" until then
+  assert.equal(tl.headline.shortYear, null); assert.equal(tl.headline.lastsTo, null); assert.equal(tl.headline.needsSS, true);
+  // only a birth date missing: it says that, and goes to People, not the Social Security page
+  const nb = familyPlan(T); delete nb.household.people.find((x) => x.id === "p-bo").birthDate;
+  const rb = compute(nb, { today: T }).parts.find((x) => x.id === "retirement");
+  assert.equal(rb.status, "unknown");
+  assert.equal(rb.detail, "Not scored yet: whether the money lasts needs Bo's birth date."); assert.equal(rb.fix, "Add Bo's birth date on People."); assert.deepEqual(rb.go, ["household", "people"]);
+  const tb = timeline(nb, { today: T }).events.find((e) => e.id === "needs-ss");
+  assert.match(tb.detail, /Bo's birth date on People/); assert.deepEqual(tb.go, ["household", "people"]);
+  // one figure missing: named
+  const half = familyPlan(T); delete half.retirement.socialSecurity["p-bo"];
+  assert.match(compute(half, { today: T }).parts.find((x) => x.id === "retirement").fix, /^Add Social Security for Bo on the Social Security page .*, or say there that Bo will not get it\.$/);
   // said as "none" for both, it is judged again
   p.guide = { setup: { ss: { "p-ana": "none", "p-bo": "none" } } };
   assert.notEqual(compute(p, { today: T }).parts.find((x) => x.id === "retirement").status, "unknown");
@@ -65,4 +77,11 @@ test("no retirement verdict before Social Security is known: not scored, the top
   one.household.people = one.household.people.filter((x) => x.id !== "p-bo");
   one.income = one.income.filter((x) => x.personId !== "p-bo");
   assert.equal(next(one, { today: T }).steps.find((s) => s.id === "ira")?.title, "An IRA of your own");
+  // review 2026-11-02: two adults, one earner: one IRA's room, said the same on Next best action and the Dashboard's move
+  const { revealWords } = await import("../setup/compute.js");
+  const oneEarner = familyPlan(T); oneEarner.income = oneEarner.income.filter((x) => x.personId !== "p-bo");
+  const ira = next(oneEarner, { today: T }).steps.find((s) => s.id === "ira");
+  assert.equal(ira.title, "An IRA of your own"); assert.equal(ira.people, 1); assert.doesNotMatch(ira.detail, /each/);
+  const w = revealWords(ira, oneEarner, { today: T });
+  assert.equal(w.title, "A retirement account of your own (an IRA)"); assert.doesNotMatch(w.detail, /between you/);
 });

@@ -6,7 +6,7 @@ import { compute as netWorth } from "../../balance/net-worth/compute.js";
 import { compute as people } from "../../household/people/compute.js";
 import { compute as income } from "../../cashflow/income/compute.js";
 import { compute as expenses } from "../../cashflow/expenses/compute.js";
-import { compute as goals } from "../../goals/goals/compute.js";
+import { compute as goals, plannerFor } from "../../goals/goals/compute.js";
 import { compute as liquidity } from "../../balance/liquidity/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
@@ -44,7 +44,9 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   const step = nba?.ready ? (nba.steps ?? []).find((x) => x.id === "goals") : null;
   const turn = step?.startDate && today && step.startDate.slice(0, 7) > today.slice(0, 7) ? step.startDate : null;
   const all = goals.filter((g) => g.status === "behind");
-  const queued = turn ? all.filter((g) => !(g.monthly > 0)) : [];
+  // only a goal dated after its turn can wait for it (one due sooner stays behind, review 2026-11-02), and never the
+  // emergency fund: Next best action fills the cushion in its own earlier steps, not with the goals step
+  const queued = turn ? all.filter((g) => !(g.monthly > 0) && g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund") : [];
   const behind = all.filter((g) => !queued.includes(g)).sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
   const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
   return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn };

@@ -38,5 +38,8 @@ month less spending; now the biggest gain is adding Social Security.
 ## Tests
 `module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
 
+## Review fixes 2026-11-02
+The retirement and protection parts name what is missing with setup's `retirementGap`: a missing birth date says "Add Bo's birth date on People" and links to People; a missing Social Security figure names whose, and links to the Social Security page, which now has the "won't get it" answer.
+
 ## Ideas / not yet
 - The score over time (save it with the net-worth points); estate documents and insurance once those pages exist; a benchmark part (How am I doing).

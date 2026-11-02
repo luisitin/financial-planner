@@ -62,7 +62,7 @@ export function render(page, ctx) {
       statBox("Debt-free", h.debtFreeYear ? String(h.debtFreeYear) : "Now", h.debtFreeYear ? "the last loan or card paid off" : "nothing owed with a payment plan"),
       h.shortYear ? statBox("Savings run out", String(h.shortYear), "before the plan ends", "bad")
         : h.lastsTo ? statBox("The money lasts", String(h.lastsTo), "to the end of the plan", "good")
-        : statBox("Will it last?", "Not yet known", "add accounts and spending"),
+        : statBox("Will it last?", "Not yet known", h.needsSS ? `needs ${h.needs ?? "Social Security and birth dates"}` : "add accounts and spending"),
     )));
 
   if (d.savings.length > 1) {

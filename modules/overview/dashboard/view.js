@@ -125,7 +125,9 @@ export function render(root, ctx) {
   // "Set up my plan" stopped part way: every place that offers it picks up at the question reached (Get started's own card),
   // never a fresh "Seven easy questions" beside a second count of six steps
   const sc = setupOn ? setupCard(plan, { today: fmt.today() }) : null;
-  const resume = sc?.state === "started" ? sc : null;
+  // only while a step of the plan is still to do (the assumptions look aside): a plan built on its own pages after the
+  // first question keeps its "N of 6 done" checklist, not "pick up at question 2" (review 2026-11-02)
+  const resume = sc?.state === "started" && (!d.hasMoney || (d.next && d.next.key !== "assumptions")) ? sc : null;
   const actions = !d.hasMoney ? [
     resume ? { icon: "🌱", t: "Set up my plan", d: `Question ${resume.q} of ${resume.total}${resume.next ? `. Next: ${resume.next}` : ""}. Pick up where you left off.`, href: resume.href }
     : setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }

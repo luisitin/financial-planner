@@ -52,6 +52,9 @@ action's `drawing`, 2026-11-02).
 ## Emergency fund while costly debt comes first (round 4, 2026-11-02)
 When next-best-action's `cushionLater` is set (starter month in cash, costly debt paid before the full fund), the red "Emergency fund is thin" / amber "getting there" item is replaced by `emergency-later` (info): "Emergency fund: enough for now", the months covered (whole months, one decimal under 2, as on Emergency fund) and the month the debt is paid off. Before, the list said "fix" for a cushion the plan's own order deliberately builds later.
 
+## Review fixes 2026-11-02 (goals waiting their turn)
+`goalsBehind` queues a goal ("starts later") only when it is dated after the turn Next best action gives the goals step, and never an emergency-fund goal (Next best action fills the cushion in its own earlier steps). A goal due sooner stays behind and counts in the monthly need, so a December gift goal can no longer pass its date with no alert.
+
 ## Ideas / not yet
 - Dismiss or snooze an alert (store ids in the plan).
 - Budget overruns and bills due (phase 4), investment drift (phase 7), insurance gaps (phase 8) plug in here.

@@ -86,6 +86,9 @@ rows and their targets; the resume card; the Set up my plan card's three states;
 (not after "look around", not once finished); the eight tiles, each a real page, short enough for a phone tile, with a
 started guide's progress.
 
+## Review fixes 2026-11-02
+`setupCard` keeps the stored question's number when that screen is now hidden (a goal added on the Goals page hides "how much, and by when"): "question 7 of 7", not "question 1".
+
 ## Ideas / not yet
 - The dashboard's "Choose what to do first" tile on an empty plan, "Continue: <guide>" and "Start something new"
   (designer's lane; asked on the WORKBOARD).

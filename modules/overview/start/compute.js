@@ -74,7 +74,7 @@ export function setupCard(plan, { off = [], today = null } = {}) {
   }
   if (sp.started && sp.at && sp.at !== "welcome") {
     const at = SETUP_SCREENS.find((x) => x.id === sp.at);
-    return { state: "started", href: `#/overview/setup/${sp.at}`, q: at?.q ?? 1, total: QUESTIONS, share: sp.share, next: NEXT_LABEL[sp.at] ?? null };
+    return { state: "started", href: `#/overview/setup/${sp.at}`, q: at?.q ?? sp.q ?? 1, total: QUESTIONS, share: sp.share, next: NEXT_LABEL[sp.at] ?? null };
   }
   return { state: "new", href: "#/overview/setup/you", total: QUESTIONS };
 }

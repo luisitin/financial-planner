@@ -823,6 +823,26 @@ export function retirementMissing(plan) {
   const dates = ad.some((p) => !p.birthDate), soc = ad.some((p) => !ssKnown(ss, said, p.id, plan));
   return dates && soc ? "Social Security and birth dates" : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? "Social Security" : null;
 }
+/**
+ * retirementGap(plan) -> null | { ss: [names], dates: [names], what, fix, go }: what "whether the money lasts" still needs,
+ * named, for the pages that hold their verdict until it is in (Plan health score, Timeline). Only a missing birth date
+ * sends the person to People; a missing Social Security figure sends them to the Social Security page, which has the
+ * "won't get it" answer too (review 2026-11-02: a missing birth date was reported as "Add Social Security").
+ */
+export function retirementGap(plan) {
+  const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
+  const ad = adults(plan), one = ad.length === 1;
+  const nm = (p) => p.name || (p.role === "self" ? "you" : "your spouse");
+  const both = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  const soc = ad.filter((p) => !ssKnown(ss, said, p.id, plan)).map(nm), dates = ad.filter((p) => !p.birthDate).map(nm);
+  if (!soc.length && !dates.length) return null;
+  const ssWords = soc.length ? (one ? "your Social Security" : `Social Security for ${both(soc)}`) : null;
+  const dateWords = dates.length ? (one ? "your birth date" : dates.length === 1 ? `${dates[0]}'s birth date` : `the birth dates of ${both(dates)}`) : null;
+  const what = [ssWords, dateWords].filter(Boolean).join(" and ");
+  const ssFix = ssWords ? `Add ${ssWords} on the Social Security page (an estimate from ssa.gov/myaccount is enough), or say there that ${one ? "you" : soc.length === 1 ? soc[0] : "you"} will not get it.` : null;
+  const dateFix = dateWords ? `Add ${dateWords} on People.` : null;
+  return { ss: soc, dates, what, fix: [ssFix, dateFix].filter(Boolean).join(" "), go: soc.length ? ["retirement", "social-security"] : ["household", "people"] };
+}
 /** Money saved: what is in accounts that are not a home, a car or a debt (for the retiree's "drawn from savings" line). */
 const savedTotal = (plan) => L(plan, "accounts").filter((a) => { const t = ACCOUNT_TYPES[a.type]; return t && t.side === "asset" && (t.liquid || t.invested); }).reduce((s, a) => s + Math.max(0, Number(a.balance) || 0), 0);
 /**
@@ -871,7 +891,9 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     }
     case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
     case "hsa": return { title: "Fill your health savings account", detail: step.detail };
-    case "ira": return { title: several ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${several ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail}` };
+    // "each of you" only when Next best action gives room to more than one earner (review 2026-11-02: a one-earner couple
+    // read "An IRA of your own" there and "for each of you ... between you" here)
+    case "ira": { const each = (step.people ?? (several ? 2 : 1)) > 1; return { title: each ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${each ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail}` }; }
     case "mid-debt": { const list = costly(MODERATE_RATE, HIGH_RATE); return { title: "Pay down the loans that cost the most", detail: list.length ? `${said(list)}. Paying them early saves that interest.` : step.detail }; }
     case "max-401k": return { title: "Put more into your 401(k)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `${money(step.roomYearly)} more is allowed this year, and it grows sheltered from tax.` : step.detail}` };
     case "goals": return { title: "Catch up on your goals", detail: step.detail };

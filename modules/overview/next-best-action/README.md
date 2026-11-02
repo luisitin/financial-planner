@@ -116,5 +116,12 @@ Not ready without income and expenses. Spare money below zero: the bills are the
 ## One cushion verdict (round 4, 2026-11-02)
 `cushionLater(nba)` -> `{ until } | null`: the starter month of must-pay bills is done, costly debt (10%+) is not yet paid, and the full fund is not done. The order here pays costly debt before the full fund, so other pages must not call the cushion red "thin" at the same time. `until` is the date the spare money clears the costly debt (`high-debt.doneDate`), or Pay off debts' own date when a saved debt plan is on it (`debtPlan.until`). Used by Needs attention (`emergency-later`), Emergency fund ("enough for now") and the Dashboard's Safety cushion line (via setup `standing().cushionLater`). Test: "one cushion verdict".
 
+## Review fixes 2026-11-02 (paying from savings)
+- Cash for the from-savings move is `min(now, nowAfterOneOffs)`: one-off costs coming lower it, one-off income never raises it (it may already be in the balances).
+- No must-pay bills marked (cushion target 0): nothing is offered from savings, so it never says "a full cushion" while emptying the account.
+- Savings that cover the whole balance pay it exactly (`fromSavings = owed`, said to the dollar); only a partial amount is rounded down to $10.
+- A saved debt plan aimed at the card no longer hides the move when the cash is there: the debts it reaches are paid from savings too.
+- The IRA step carries `people` (earners with room); "each" only when more than one, and setup's reveal words follow it.
+
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).

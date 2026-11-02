@@ -2,6 +2,7 @@
 // record (or type the statement's figure), pick a claiming age, see the monthly benefit at
 // each age. Saved with a green line; the projection picks it up.
 import { compute, parseRecord } from "./compute.js";
+import { ssMissingFor } from "../../overview/setup/compute.js";
 
 let pending = null;
 let openFor = null;   // the person whose fold stays open after a save
@@ -21,11 +22,19 @@ export function render(root, ctx) {
   root.append(out);
   if (!d.people.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with their birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), " first."))); return; }
 
+  const missing = new Set(ssMissingFor(plan).map((m) => m.id));   // no figure, no record, not on Income, not "won't get it"
   // One fold per person; the first opens by default, the one just saved stays open
   // (design log 2026-09-16, pass 4).
   d.people.forEach((p, idx) => {
     const s = plan.retirement?.socialSecurity?.[p.id] ?? {};
-    const status = p.source === "record" ? `${fmt.money(p.monthly, cur)} a month at ${p.claimAge}` : p.source === "typed" ? `${fmt.money(p.monthly, cur)} a month at ${p.claimAge}` : "nothing yet";
+    // "won't get it" (the setup's own "none", the answer the retirement pages' notice saves): said here too, where Plan
+    // health score and Timeline send the person (review 2026-11-02: the page they were sent to had no such answer)
+    const none = p.source === "none" && plan.guide?.setup?.ss?.[p.id] === "none";
+    const status = p.source === "record" ? `${fmt.money(p.monthly, cur)} a month at ${p.claimAge}` : p.source === "typed" ? `${fmt.money(p.monthly, cur)} a month at ${p.claimAge}` : none ? "won't get it" : "nothing yet";
+    const setNone = (on) => {
+      pending = on ? `Saved: no Social Security for ${p.name}. The retirement pages plan without it.` : `${p.name}'s Social Security is open again: add a figure below.`; openFor = p.id;
+      store.update((pl) => { pl.guide = pl.guide ?? {}; pl.guide.setup = pl.guide.setup ?? {}; pl.guide.setup.ss = pl.guide.setup.ss ?? {}; if (on) pl.guide.setup.ss[p.id] = "none"; else delete pl.guide.setup.ss[p.id]; });
+    };
     const claimSel = ui.select([62, 63, 64, 65, 66, 67, 68, 69, 70].map((a) => ({ value: String(a), label: a === (p.fra?.years ?? 67) && !(p.fra?.months) ? `${a} (full retirement age)` : String(a) })), String(Math.round(p.claimAge)), { "aria-label": "Claiming age" });
     const recordBox = ui.h("textarea", { rows: 5, placeholder: "2024\t$69,000\n2023\t$66,500\n...", "aria-label": "Earnings record" }, (p.record ?? []).map((r) => `${r.year}\t${r.earnings}`).join("\n"));
     const typedIn = ui.input({ type: "number", value: p.monthlyAtFRA ?? "", min: 0, step: "10", inputmode: "decimal", placeholder: "e.g. 2800", "aria-label": "Monthly benefit at full retirement age" });
@@ -34,7 +43,11 @@ export function render(root, ctx) {
       const record = parseRecord(recordBox.value);
       const monthlyAtFRA = Number(typedIn.value) || null;
       pending = `${p.name}'s Social Security saved.`; openFor = p.id;
-      store.update((pl) => { pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = { claimAge: Number(claimSel.value), record, monthlyAtFRA, futureEarnings: futureSel.value }; });
+      store.update((pl) => {
+        pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = { claimAge: Number(claimSel.value), record, monthlyAtFRA, futureEarnings: futureSel.value };
+        // a figure replaces an earlier "won't get it"
+        if ((record.length || monthlyAtFRA) && pl.guide?.setup?.ss?.[p.id] === "none") delete pl.guide.setup.ss[p.id];
+      });
     };
     const est = p.estimate;
     root.append(ui.h("details", { class: "card fold fold-card", open: (openFor ? openFor === p.id : idx === 0) ? true : null },
@@ -48,7 +61,8 @@ export function render(root, ctx) {
         ui.field("Earnings record from ssa.gov", recordBox, "one year per line: year and earnings"),
         ui.field("If you have no record: monthly benefit at full retirement age", typedIn, "the figure on your Social Security statement"),
         ui.field("Future earnings", futureSel)),
-      ui.row(ui.button(`Save ${p.name}'s Social Security`, save)),
+      ui.row(ui.button(`Save ${p.name}'s Social Security`, save),
+        none ? ui.button(`Undo: ${p.name} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${p.name} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
     )));
   });
   root.append(ui.h("p", { class: "muted small" }, "The formula: earnings indexed to wages in the year you turn 60, the best 35 years averaged, bend points for the year you turn 62, cost-of-living increases from 62, then reduced or raised for the claiming age. Tables from the Social Security Administration via ssa.tools."));
