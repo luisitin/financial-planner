@@ -263,6 +263,9 @@ dashboard's six steps done); the headline never contradicting the cards; a retir
 plain words; what is not counted yet; retirement never "short" before Social Security is known; every typical rate in
 this README with its source; the debt guide's rates step waiting for real rates and payments.
 
+## cushionLater in standing (round 4, 2026-11-02)
+`standing()` returns `cushionLater` (next-best-action's `{ until } | null`) when the runway is short, for the Dashboard's Safety cushion line.
+
 ## Ideas / not yet
 - Bank file import as an alternative to typing balances ("I'd rather bring in my bank's file").
 - Ask the payoff date of a car loan (`termMonths`) for a cleaner debt-free date.

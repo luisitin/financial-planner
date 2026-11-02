@@ -223,3 +223,36 @@ test("costly debt is paid from savings above the full cushion, today; only the r
   const mv = standing(q, { today: T }).moves.find((m) => m.id === "high-debt");
   assert.equal(mv?.title, "Pay off the cards from your savings");
 });
+
+test("one cushion verdict: the starter month in cash and costly debt paid first reads 'enough for now' everywhere (round 4)", async () => {
+  const { cushionLater } = await import("./compute.js");
+  const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+  const { compute: alerts } = await import("../alerts/compute.js");
+  const { standing } = await import("../setup/compute.js");
+  const T = "2026-11-02";
+  // under one month: the starter is still the next step, and the cushion is thin (red) as before
+  const thin = familyPlan(T);
+  assert.equal(cushionLater(compute(thin, { today: T })), null);
+  assert.ok(alerts(thin, { today: T }).alerts.some((a) => a.id === "emergency-bad"));
+  assert.equal(standing(thin, { today: T }).cushionLater, null);
+  // about three months in cash: the starter is done, the Visa comes before the full six months
+  const p = familyPlan(T); p.accounts.find((a) => a.id === "a-sav").balance = 30000;
+  const d = compute(p, { today: T }), lq = liquidity(p, { today: T });
+  assert.equal(step(d, "starter").status, "done"); assert.equal(lq.status, "bad");
+  const later = cushionLater(d);
+  assert.deepEqual(later, { until: step(d, "high-debt").doneDate });
+  const al = alerts(p, { today: T }).alerts;
+  assert.ok(!al.some((a) => a.id === "emergency-bad" || a.id === "emergency-warn"), "no red 'thin' beside the plan's own order");
+  const it = al.find((a) => a.id === "emergency-later");
+  assert.equal(it.level, "info"); assert.equal(it.title, "Emergency fund: enough for now");
+  assert.match(it.detail, /^Usable cash covers 3 months of must-pay bills: enough for now\. Costly debt comes first; once it is paid off \(about \w+ \d{4}\), the plan builds this to 6 months\.$/);
+  assert.deepEqual(standing(p, { today: T }).cushionLater, later);
+  // a saved debt plan on the card: the date is Pay off debts' own
+  const q = familyPlan(T); q.accounts.find((a) => a.id === "a-sav").balance = 30000; q.debtPlan = { extra: 410, order: "avalanche", targets: ["a-visa"] };
+  const dq = compute(q, { today: T });
+  assert.equal(step(dq, "high-debt").status, "underway");
+  assert.deepEqual(cushionLater(dq), { until: dq.debtPlan.until });
+  // no costly debt: the full cushion is the next thing, so the usual verdict stands
+  const r = familyPlan(T); r.accounts.find((a) => a.id === "a-sav").balance = 30000; r.debts = r.debts.filter((x) => x.accountId !== "a-visa"); r.accounts = r.accounts.filter((a) => a.id !== "a-visa");
+  assert.equal(cushionLater(compute(r, { today: T })), null);
+});

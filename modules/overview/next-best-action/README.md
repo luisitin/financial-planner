@@ -113,5 +113,8 @@ Not ready without income and expenses. Spare money below zero: the bills are the
 ## Tests
 `module.test.mjs`: the spare money line by line, the family's order and next step, the gap dates in order, the IRA and 401(k) room, overspending, a household with no expensive debt, 401(k) or HSA.
 
+## One cushion verdict (round 4, 2026-11-02)
+`cushionLater(nba)` -> `{ until } | null`: the starter month of must-pay bills is done, costly debt (10%+) is not yet paid, and the full fund is not done. The order here pays costly debt before the full fund, so other pages must not call the cushion red "thin" at the same time. `until` is the date the spare money clears the costly debt (`high-debt.doneDate`), or Pay off debts' own date when a saved debt plan is on it (`debtPlan.until`). Used by Needs attention (`emergency-later`), Emergency fund ("enough for now") and the Dashboard's Safety cushion line (via setup `standing().cushionLater`). Test: "one cushion verdict".
+
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).

@@ -70,6 +70,9 @@ A step whose target page does not exist yet shows a "page not built yet" pill in
 ## Tests
 `module.test.mjs`: checklist counts; a finished setup folds the checklist while it still knows what is open.
 
+## Safety cushion while costly debt comes first (round 4, 2026-11-02)
+The "Where you stand" Safety cushion line uses setup `standing().cushionLater`: amber dot and "Enough for now; N months after the costly debt" instead of a red dot and "Aim for N months" when the plan pays costly debt before the full fund.
+
 ## Ideas / not yet
 - Headline cards for cash flow (this month), next bills, goal progress, plan health score.
 - Alerts feed (low balance, budget overrun, rebalance drift, stale snapshot).

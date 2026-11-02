@@ -2,6 +2,7 @@
 // covered, the target, and every asset account sorted by how fast it turns into cash.
 import { compute, TIERS } from "./compute.js";
 import { saveAll } from "../update/compute.js";
+import { cushionLater, monthWords } from "../../overview/next-best-action/compute.js";
 
 // The shell re-renders after store.update, so the confirmation waits here for the next render: { step } (the move saved for).
 let pending = null;
@@ -92,7 +93,9 @@ export function render(root, ctx) {
       form);
   }
 
-  const statusText = { ok: "covered", warn: "getting there", bad: "thin", unknown: "" }[d.status];
+  // the plan pays costly debt before the full cushion (Next best action's order): one month in cash is enough for now
+  const later = (d.status === "bad" || d.status === "warn") ? cushionLater(nba) : null;
+  const statusText = later ? "enough for now" : { ok: "covered", warn: "getting there", bad: "thin", unknown: "" }[d.status];
   // The fund card comes first with the months as the headline; the tiles follow.
   if (d.target) {
     const above = d.now - d.target;
@@ -101,8 +104,10 @@ export function render(root, ctx) {
         ui.h("div", {}, ui.h("div", { class: "stat-value" }, d.expenses ? `${monthsOf(d.runwayMonths)} covered` : fmt.money(d.now, cur)),
           ui.h("div", { class: "muted small" }, `target: ${d.targetMonths} months (${fmt.money(d.target, cur)})`)),
         ui.h("span", { class: `pill ${d.status === "ok" ? "ok" : "warn"}` }, statusText)),
-      ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: d.status === "ok" ? "var(--ok)" : d.status === "warn" ? "var(--warn)" : "var(--bad)" } })),
-      ui.h("p", { class: "small" },
+      ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: d.status === "ok" ? "var(--ok)" : d.status === "warn" || later ? "var(--warn)" : "var(--bad)" } })),
+      later ? ui.h("p", { class: "small" }, `Your usable cash covers ${monthsOf(d.runwayMonths)} of must-pay bills: enough for now. Your plan puts the money left over each month on costly debt first${later.until ? `; once it is paid off (about ${monthWords(later.until)})` : "; after that"} it builds this to ${d.targetMonths} months.`) : null,
+      later ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+      later ? null : ui.h("p", { class: "small" },
         d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of must-pay bills; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
         : `Your usable cash covers ${months(d.runwayMonths)} of the ${d.targetMonths} months the plan aims for. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
       ui.h("p", { class: "muted small" }, "The target is months x your must-pay expenses. Change the months on the Assumptions page; mark expenses as must-pay on the Expenses page."),

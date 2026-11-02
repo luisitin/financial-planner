@@ -49,6 +49,9 @@ action's `drawing`, 2026-11-02).
 ## Tests
 `module.test.mjs`: empty plan, healthy plan all clear, worst-first ordering and links, level assignment, no-today behaviour.
 
+## Emergency fund while costly debt comes first (round 4, 2026-11-02)
+When next-best-action's `cushionLater` is set (starter month in cash, costly debt paid before the full fund), the red "Emergency fund is thin" / amber "getting there" item is replaced by `emergency-later` (info): "Emergency fund: enough for now", the months covered (whole months, one decimal under 2, as on Emergency fund) and the month the debt is paid off. Before, the list said "fix" for a cushion the plan's own order deliberately builds later.
+
 ## Ideas / not yet
 - Dismiss or snooze an alert (store ids in the plan).
 - Budget overruns and bills due (phase 4), investment drift (phase 7), insurance gaps (phase 8) plug in here.

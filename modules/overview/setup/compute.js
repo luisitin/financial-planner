@@ -12,7 +12,7 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
-import { compute as computeNext, HIGH_RATE, MODERATE_RATE } from "../next-best-action/compute.js";
+import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
 import { compute as computeProjection, retirementKnown, ssOnIncome } from "../../retirement/projection/compute.js";
 import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
@@ -951,6 +951,8 @@ export function standing(plan, { today }) {
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
+    // the full cushion waits on purpose while costly debt is paid first (next-best-action cushionLater): "enough for now"
+    cushionLater: (runwayStatus === "warn" || runwayStatus === "bad") ? cushionLater(nba) : null,
     bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null,
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,

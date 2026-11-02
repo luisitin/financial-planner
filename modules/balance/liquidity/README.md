@@ -36,6 +36,9 @@ No accounts: empty state with links. Accounts but no expenses: tiers shown, a no
 ## Tests
 `module.test.mjs`: tier sums and ordering, liabilities excluded, runway and target arithmetic, status thresholds, no-must-pay case.
 
+## Enough for now (round 4, 2026-11-02)
+When next-best-action's `cushionLater` is set, the fund card's pill reads "enough for now" (amber), the bar is amber instead of red, the sentence says costly debt comes first and when the plan builds the full months, with an outlined "Open my payoff plan" button. The usual "thin" verdict is unchanged when there is no costly debt, or under one month in cash.
+
 ## Ideas / not yet
 - Count available credit (cards' limits minus balances) as a separate "backstop" line.
 - Daily cash forecast (phase 4 `cashflow/forecast`) to show the lowest balance in the next 90 days.

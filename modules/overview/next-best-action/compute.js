@@ -277,3 +277,18 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export const monthWords = (iso) => (iso ? `${MONTHS[Number(String(iso).slice(5, 7)) - 1]} ${String(iso).slice(0, 4)}` : "");
 const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 function pct(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }
+
+/**
+ * cushionLater(nba) -> { until ("YYYY-MM-DD" | null: when costly debt is paid off by the plan), targetMonths? } | null.
+ * The full cushion waits on purpose: the starter month of must-pay bills is in cash, and costly debt (10% or more) is being
+ * paid first, by the spare money (its step comes before the full fund's) or by a saved debt plan already on it. Needs attention, Emergency fund and the Dashboard
+ * then say "enough for now" (amber) instead of a red "thin", so no page contradicts the order here.
+ */
+export function cushionLater(nba) {
+  if (!nba?.ready) return null;
+  const by = (id) => (nba.steps ?? []).find((x) => x.id === id);
+  const starter = by("starter"), high = by("high-debt"), full = by("full-fund");
+  if (!starter || starter.status !== "done" || !high || !full || full.status === "done") return null;
+  if (high.status === "done" || high.status === "skip") return null;
+  return { until: high.status === "underway" ? (nba.debtPlan?.until ?? null) : (high.doneDate ?? null) };
+}

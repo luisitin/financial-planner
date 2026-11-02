@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] One cushion verdict: with the starter month in cash and costly debt paid first (Next best action's order), Needs attention, Emergency fund and the Dashboard say "enough for now" (amber) and when the full fund starts, instead of a red "thin" that contradicts the plan.
 - [builder:claude-b] - [builder:claude-b] The Federal estimate and the Tax report give the same federal tax as every other tax page, self-employment tax included: the headline, tile and walk end at it (new business rows), the screen adds up (total − taken out = still to pay), a freelancer sees what is still due after estimates, and the Tax report's "Paying it" uses the estimate from pay instead of "No withholding is on file".
 - [builder:claude-b] - [builder:claude-b] This year's required withdrawal is said where retirees look: Required withdrawals leads with "Take at least $13,080 from Ruth's IRA by December 31, 2026" and "I've taken it" (new optional `retirement.rmdTaken`), Needs attention lists it from October until it is marked, and the calendar row says the amount. IRS rules read 2026-11-02 (pages reviewed 2026-04-08 and 2026-01-29).
 - [builder:claude-b] - [builder:claude-b] The Annual review's year so far ends at today's net worth, like the Dashboard: "from $257,000 on January 1, 2026 to $287,100 today: up $30,100" instead of "from $257,000 to $257,000: up $0".

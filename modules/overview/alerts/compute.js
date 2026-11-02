@@ -10,7 +10,7 @@ import { compute as goals } from "../../goals/goals/compute.js";
 import { compute as liquidity } from "../../balance/liquidity/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
-import { compute as nextBest } from "../next-best-action/compute.js";
+import { compute as nextBest, cushionLater, monthWords } from "../next-best-action/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -109,7 +109,12 @@ export function compute(plan, params = {}) {
     const both = (plan.household?.people ?? []).filter((x) => x.role !== "dependent").length > 1;
     add("guardian", "info", `No one is named to raise ${list(docs.minors)} if ${both ? "you both" : "you"} died`, `A will names a guardian; without one a court chooses. Estate documents keeps track of the will and the guardian.`, ["estate", "documents"]);
   }
-  if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
+  // the plan pays costly debt before the full cushion (the starter month is in cash): say so, never a red "thin" beside it
+  const later = (liq.status === "bad" || liq.status === "warn") ? cushionLater(nba) : null;
+  // whole months, one decimal under 2 (the Emergency fund page's rule, design log 2026-09-15)
+  const wholeMonths = (m) => { const v = m < 2 ? Math.round(m * 10) / 10 : Math.round(m); return `${v} month${v === 1 ? "" : "s"}`; };
+  if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of must-pay bills: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"]);
+  else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);
   // a debt the saved debt plan already pays off (Next best action's step under way) is in hand: no alert for its rate
   const inHand = new Set(nba?.ready && nba.steps.some((x) => x.status === "underway") ? nba.debtPlan?.ids ?? [] : []);
