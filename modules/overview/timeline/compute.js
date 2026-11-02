@@ -171,8 +171,18 @@ export function compute(plan, params = {}) {
   }
 
   // money: independence, the savings milestones, the peak, whether it lasts
+  // independence on the path the chart draws: the first year the projected savings reach the independence number (yearly
+  // spending / withdrawal rate, the FIRE page's), before retirement; none when they never do. It used to take the FIRE page's
+  // own year, a path that invests every spare dollar, and put "$2.1 million at 50" beside a chart that peaks at $1.4 million.
   const fi = run ? computeFire(plan, { today }) : null;
-  if (fi?.ready && fi.fiYear && fi.fiYear > startYear && fi.fiYear < retireYear) add({ id: "fi", kind: "fi", year: fi.fiYear, title: "Financially independent", detail: `Savings of about ${money(fi.fiNumber)} could pay for your spending for good${fi.fiAge ? ` (${self.name || "you"} ${fi.fiAge})` : ""}. Work becomes a choice.`, tone: "ok", go: ["retirement", "fire"] });
+  // already past the number today: no moment to come. The event opens Will the money last?, the projection it is read from (the
+  // FIRE page's own year assumes every spare dollar is invested, so it is sooner)
+  const already = fi?.ready && fi.fiNumber > 0 && (rows[0]?.totalReal ?? 0) >= fi.fiNumber;
+  const fiRow = fi?.ready && fi.fiNumber > 0 && !already ? rows.find((r) => r.year > startYear && r.year < retireYear && r.totalReal >= fi.fiNumber) : null;
+  if (fiRow) {
+    const age = self?.birthDate ? fiRow.year - yearOf(self.birthDate) : null;
+    add({ id: "fi", kind: "fi", year: fiRow.year, title: "Financially independent", detail: `On this plan's path (what goes into savings now), savings pass about ${money(fi.fiNumber)}, enough to pay for your spending for good${age !== null ? ` (${self.name || "you"} ${age})` : ""}. Work becomes a choice.`, tone: "ok", go: ["retirement", "projection"] });
+  }
   if (rows.length) {
     let best = MILESTONES.filter((m) => m <= (rows[0]?.totalReal ?? 0)).pop() ?? 0;
     for (const r of rows) {

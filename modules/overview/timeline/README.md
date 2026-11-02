@@ -28,7 +28,7 @@ Reads (through the other pages' computes, so every date matches theirs): `househ
 | Child turns 17 / 18 / 26 | child tax credit stops (under 17), adulthood, the last year on a parent's health plan | IRC §24; ACA dependent coverage to 26 |
 | Debt paid off, mortgage paid off, debt-free | the payoff plan's dates in the order the Pay off debts page chose; debt-free with the last one (only when there are two or more) | `debt/payoff` |
 | Goals | each open goal's target date, amount then, behind or on track | `goals/goals` |
-| Financially independent | the FI year when it falls before retirement | `retirement/fire` |
+| Financially independent | the first year the projected savings (the chart's own path, `totalReal`) reach the independence number (yearly spending / withdrawal rate, `retirement/fire` `fiNumber`), when that is before retirement; none when they never do, or when today's savings already pass it (2026-11-01: it took the FIRE page's year, a path that invests every spare dollar, and showed "$2.1 million at 50" beside a chart that peaks at $1.4 million). The line says "On this plan's path (what goes into savings now)" and opens Will the money last?, the projection it is read from, not the FIRE page, whose own year assumes every spare dollar is invested | `retirement/fire` (the number), the projection |
 | Savings pass $X | the first year the projection's real savings pass 100k, 250k, 500k, 1M, 2M, 5M, 10M, counting only those above today's level | projection rows |
 | Savings peak | the highest year, when it is neither the first nor the last | projection rows |
 | The money lasts / runs out | at the last plan-end birthday with what is left, or the failure year in red | projection |

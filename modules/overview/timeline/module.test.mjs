@@ -69,7 +69,8 @@ test("money: milestones only upward and past today's level, independence, whethe
   const ms = d.events.filter((e) => e.kind === "milestone").map((e) => Number(e.id.split("-")[1]));
   assert.deepEqual(ms, [...ms].sort((a, b) => a - b));
   assert.ok(ms.every((m) => MILESTONES.includes(m) && m > 192700), "only milestones not yet reached today");
-  assert.ok(ev(d, "fi") && ev(d, "fi").year < d.headline.retireYear, "independence before retirement");
+  // independence sits on the chart's own path: the sample family's savings peak near $1.4 million, under the number, so no moment
+  assert.equal(ev(d, "fi"), undefined, "the projected savings never reach the independence number before retirement");
   assert.equal(ev(d, "lasts").tone, "ok"); assert.equal(d.headline.lastsTo, 2085); assert.equal(d.headline.shortYear, null);
   assert.equal(d.events.at(-1).id, "lasts", "the verdict is the last word");
   assert.equal(d.savings[0].year, 2026); assert.equal(d.savings.at(-1).year, 2085);
@@ -98,4 +99,21 @@ test("people already retired and a plan with no savings yet", () => {
 
 test("fmtAge", () => {
   assert.equal(fmtAge(67), "67"); assert.equal(fmtAge(66.5), "66 and 6 months"); assert.equal(fmtAge(62 + 1 / 12), "62 and 1 month");
+});
+
+test("independence: the first year the chart's savings reach the independence number, before retirement", async () => {
+  const { compute: fire } = await import("../../retirement/fire/compute.js");
+  const p = familyPlan(); p.retirement.spendingMonthly = 2500;
+  const d = compute(p, { today: TODAY });
+  const n = fire(p, { today: TODAY }).fiNumber;
+  const first = d.savings.find((s) => s.year > 2026 && s.real >= n);
+  const e = ev(d, "fi");
+  assert.ok(first && first.year < d.headline.retireYear, "this plan gets there before retirement");
+  assert.equal(e.year, first.year, "the moment is where the chart crosses the number");
+  assert.ok(e.detail.includes("savings pass about"));
+  assert.deepEqual(e.go, ["retirement", "projection"], "it opens the projection it is read from");
+  // already past the number today: no moment "next year"
+  const rich = familyPlan(); rich.retirement.spendingMonthly = 2500;
+  (rich.accounts.find((a) => a.type === "brokerage" || a.type === "taxable") ?? rich.accounts[0]).balance = 3000000;
+  assert.equal(ev(compute(rich, { today: TODAY }), "fi"), undefined);
 });
