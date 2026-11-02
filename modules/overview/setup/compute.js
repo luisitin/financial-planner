@@ -851,6 +851,11 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
       ? { title: "See how long your savings last", detail: `About ${money(-(step.spare ?? 0))} a month comes from savings. The retirement check shows how many years that covers.` }
       : { title: "Spend less than comes in", detail: step.detail };
     case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
+    case "protect": {
+      const ppl = step.people ?? [];
+      const names = ppl.map((x) => x.name).join(" and ");
+      return { title: ppl.length && ppl.every((x) => x.cover > 0) ? `Raise the life cover on ${names}` : `Get life insurance on ${names || "the earners"}`, detail: step.detail };
+    }
     case "match": {
       // a 401(k) with nothing going in: a question first (it may be from a job left, or the job may not match)
       const who = (step.ask ?? []).map((a) => (a.name === "Me" || !a.name ? "your" : `${a.name}'s`));
@@ -917,6 +922,7 @@ export function standing(plan, { today }) {
   const headline = drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
       : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
+        : first === "protect" ? "Life cover for the people who count on you comes first. The moves below start there."
         : runwayStatus === "warn" || runwayStatus === "bad" ? (first && first !== "starter" && first !== "full-fund"
           ? (spare !== null ? "Your month works. The move below comes first, then a bigger cushion for surprises." : "The move below comes first, then a cushion for surprises.")
           : spare !== null ? "Your month works. Building your cushion for surprises is next." : "A cushion for surprises is the thing to build first.")

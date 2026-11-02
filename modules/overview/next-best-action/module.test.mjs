@@ -26,8 +26,13 @@ test("the spare money: pay less federal and payroll tax, spending, retirement an
 
 test("the order for the family, the next step, and the dates the spare money reaches", () => {
   const d = compute(familyPlan(), { today: TODAY });
-  assert.deepEqual(d.steps.map((s) => s.id), ["bills", "starter", "match", "high-debt", "full-fund", "ira", "mid-debt", "max-401k", "goals", "rest"]);
+  assert.deepEqual(d.steps.map((s) => s.id), ["bills", "starter", "protect", "match", "high-debt", "full-fund", "ira", "mid-debt", "max-401k", "goals", "rest"]);
   assert.equal(d.next.id, "starter");
+  // Ana's death would leave Bo and Cy short (Life insurance needs' own answer); Bo's would not: the plan holds
+  const pr = step(d, "protect");
+  assert.deepEqual(pr.people.map((x) => [x.name, x.gap, x.cover, x.until, x.depends]), [["Ana", 212000, 0, 2042, ["Bo", "Cy"]]]);
+  assert.match(pr.detail, /^If Ana died this year, Bo and Cy would be about \$212,000 short\. Term life cover on Ana until about 2042 \(Cy turns 22\) closes it\./);
+  assert.equal(pr.gap, null, "an action, not a sum the spare money fills");
   assert.equal(step(d, "bills").status, "done");
   assert.equal(step(d, "match").status, "check", "Bo has a 401(k) and pay but no contribution");
   near(step(d, "high-debt").gap, 6400); assert.ok(step(d, "high-debt").detail.includes("23.9%"));
@@ -102,4 +107,17 @@ test("review: a gap under half a dollar is done; Open enrollment's match tiers a
   q.whatIfs.benefits["p-bo"].matchTiers = [{ rate: 0.5, upTo: 0.06 }];
   q.retirement.workPlans = { "p-bo": { match: false } };
   assert.equal(step(compute(q, { today: T }), "match").status, "check", "a match typed there wins over an older no");
+});
+
+test("protection: done once the cover on file reaches the need; no step for a household nobody depends on", () => {
+  const p = familyPlan();
+  p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 250000, premium: 25, period: "monthly", throughWork: false }] };
+  assert.equal(compute(p, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "Ana's $250,000 covers the $212,000");
+  p.insurance.policies[0].benefit = 100000;
+  const pr = compute(p, { today: TODAY }).steps.find((s) => s.id === "protect");
+  assert.equal(pr.people[0].gap, 112000); assert.match(pr.detail, /even with the \$100,000 of cover on file\. More cover on Ana/);
+  const single = familyPlan();
+  single.household.people = single.household.people.filter((x) => x.id === "p-ana");
+  single.income = single.income.filter((x) => x.personId === "p-ana");
+  assert.equal(compute(single, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "one adult, no children: nobody to protect");
 });

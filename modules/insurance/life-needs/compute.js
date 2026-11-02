@@ -195,3 +195,27 @@ function shareUnderYears(birthDate, age, today) {
   const [ty, tm, td] = String(today).split("-").map(Number);
   return (by + age - ty) + ((bm - tm) + ((bd || 1) - (td || 1)) / 31) / 12;
 }
+
+/** A gap smaller than this is not raised outside this page (Needs attention, Next best action). */
+export const MIN_GAP = 10000;
+
+/**
+ * protectionGaps(plan, { today }) -> [{ id, name, need, cover, gap, depends: [names], termUntil }]
+ * The earners whose death would leave the people who depend on them short by MIN_GAP or more (this page's own answer:
+ * the plan's lump sum, else the rule of thumb), for Needs attention and Next best action. Nothing is worked out unless
+ * someone has pay and there is a child or a second adult, so a household of one pays nothing for it.
+ */
+export function protectionGaps(plan, params = {}) {
+  const people = plan.household?.people ?? [];
+  const kids = people.filter((q) => q.role === "dependent");
+  const grown = people.filter((q) => q.role !== "dependent");
+  const paid = (plan.income ?? []).some((x) => ["salary", "bonus", "business"].includes(x?.type) && Number(x.amount) > 0);
+  if (!paid || !(kids.length || grown.length > 1)) return [];
+  let d = null;
+  try { d = compute(plan, params); } catch { d = null; }
+  if (!d?.ready) return [];
+  return d.people.filter((p) => p.dependants && p.pay > 0 && p.gap >= MIN_GAP).map((p) => ({
+    id: p.id, name: p.name, need: p.need, cover: p.cover, gap: p.gap,
+    depends: [p.survivorName, ...d.children.map((c) => c.name)].filter(Boolean), termUntil: p.termUntil,
+  }));
+}

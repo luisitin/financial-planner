@@ -171,3 +171,19 @@ test("no paycheck takes tax out: a past-due estimated payment is one alert, poin
   p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [5000, 0, 0, 0] };
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id === "estimates-behind"), "nothing once the year is paid ahead");
 });
+
+test("protection: no life cover on an earner others depend on, and no guardian for a child, each one item", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-02");
+  const a = compute(p, { today: "2026-11-02" }).alerts;
+  const life = a.find((x) => x.id === "life-cover-p-ana");
+  assert.equal(life.level, "warn"); assert.equal(life.title, "No life insurance on Ana: Bo and Cy would be about $212,000 short");
+  assert.deepEqual(life.go, ["insurance", "life-needs"]);
+  assert.ok(!a.some((x) => x.id === "life-cover-p-bo"), "the plan holds if Bo died");
+  const g = a.find((x) => x.id === "guardian");
+  assert.equal(g.level, "info"); assert.equal(g.title, "No one is named to raise Cy if you both died"); assert.deepEqual(g.go, ["estate", "documents"]);
+  p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 100000, premium: 20, period: "monthly" }] };
+  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $112,000 short");
+  p.insurance.policies[0].benefit = 300000;
+  assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id.startsWith("life-cover")), "covered: nothing");
+});

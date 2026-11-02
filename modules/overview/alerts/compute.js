@@ -13,6 +13,8 @@ import { compute as assumptions } from "../../system/assumptions/compute.js";
 import { compute as nextBest } from "../next-best-action/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
+import { protectionGaps } from "../../insurance/life-needs/compute.js";
+import { compute as estateDocs } from "../../estate/documents/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -83,6 +85,19 @@ export function compute(plan, params = {}) {
     let e = null;
     try { e = estimatedOf(plan, { today }); } catch { e = null; }
     if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
+  }
+  // the people who count on an earner (Life insurance needs' answer, the same as Next best action's protection step), and a
+  // guardian for the children: the two gaps that would hurt a family most, worked out on pages few people open
+  let prot = [];
+  try { prot = nba?.ready ? (nba.steps.find((x) => x.id === "protect")?.people ?? []) : protectionGaps(plan, { today }).map((g) => ({ personId: g.id, name: g.name, gap: g.gap, cover: g.cover, until: g.termUntil?.year ?? null, depends: g.depends })); } catch { prot = []; }
+  const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
+  for (const g of prot) add(`life-cover-${g.personId}`, "warn", g.cover > 0 ? `${g.name}'s life cover is about ${money(g.gap)} short` : `No life insurance on ${g.name}: ${list(g.depends ?? [])} would be about ${money(g.gap)} short`,
+    `If ${g.name} died this year, ${list(g.depends ?? [])} would need about ${money(g.gap)} more than the plan holds to stay on track${g.cover > 0 ? `, on top of the ${money(g.cover)} of cover on file` : ""}. Term cover${g.until ? ` until about ${g.until}` : ""} is the usual way. Cover you already have, through work too, goes on Policies.`, ["insurance", "life-needs"]);
+  let docs = null;
+  try { docs = estateDocs(plan, { today }); } catch { docs = null; }
+  if (docs?.minors?.length && docs.items?.find((x) => x.kind === "guardian")?.status !== "done") {
+    const both = (plan.household?.people ?? []).filter((x) => x.role !== "dependent").length > 1;
+    add("guardian", "info", `No one is named to raise ${list(docs.minors)} if ${both ? "you both" : "you"} died`, `A will names a guardian; without one a court chooses. Estate documents keeps track of the will and the guardian.`, ["estate", "documents"]);
   }
   if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);

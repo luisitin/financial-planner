@@ -11,6 +11,7 @@ import { compute as computeLiabilities } from "../../balance/liabilities/compute
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -78,6 +79,15 @@ export function compute(plan, params = {}) {
   const starterGap = essential - liq.now < 0.5 ? 0 : essential - liq.now;
   add({ id: "starter", title: "A starter emergency fund", why: "One month of must-pay bills in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
     detail: starterGap <= 0 ? `Usable cash ${money(liq.now)} covers a month of must-pay bills (${money(essential)}).` : `${money(starterGap)} more in usable cash reaches one month of must-pay bills (${money(essential)}).`, go: ["balance", "liquidity"] });
+
+  // 1b. the people who count on an earner: life cover for the gap Life insurance needs works out (its own answer: the
+  // survivor's plan kept whole), right after the starter cushion; an action, not a sum to save, so no gap is filled
+  const gaps = protectionGaps(plan, { today });
+  const who = (g) => g.depends.length > 1 ? `${g.depends.slice(0, -1).join(", ")} and ${g.depends.at(-1)}` : g.depends[0] ?? "the family";
+  if (gaps.length) add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term cover is the cheap way to buy it.", status: "now", gap: null,
+    people: gaps.map((g) => ({ personId: g.id, name: g.name, gap: g.gap, cover: g.cover, until: g.termUntil?.year ?? null, depends: g.depends })),
+    detail: gaps.map((g) => `If ${g.name} died this year, ${who(g)} would be about ${money(g.gap)} short${g.cover > 0 ? ` even with the ${money(g.cover)} of cover on file` : ""}. ${g.cover > 0 ? "More" : "Term life"} cover on ${g.name}${g.termUntil ? ` until about ${g.termUntil.year} (${g.termUntil.why})` : ""} closes it.`).join(" ") + " Cover you already have, through work too, goes on Policies.",
+    go: ["insurance", "life-needs"] });
 
   // 2. the employer match: a 401(k) marked as from a job left (`formerJob`) takes no new money, and a person who said their
   // job has no plan or no match (`retirement.workPlans[id].match === false`) has nothing to check

@@ -27,6 +27,18 @@ All in today's dollars.
 
 **Verdict.** `need` = the plan's answer when there is one, else DIME. `gap` = max(0, need - life cover in force on that person); `spare` the other way; `gapIfJobEnds` without the cover marked through work. `termUntil`: the youngest child's 22nd birthday year (`SCHOOL_DONE`), else the survivor's retirement.
 
+## One answer first, and the gap outside this page (2026-11-02)
+The page opens with one answer: "Ana needs about $212,000 more life cover", who would be short, and how long term cover
+should last, with "Add a policy you have" (filled when someone is short). Each person's card keeps the need against the
+cover and says how the plan's answer is worked out; when the plan holds on its own there is no "$0" tile, only the
+sentence. The two rules of thumb (debts, pay, mortgage and college added up; lifetime earnings) are folded under "Two
+rules of thumb, for comparison": shown at the same weight they read as rival answers up to seven times higher (they
+leave out the survivor's pay, Social Security and savings). "DIME" is no longer on screen.
+
+`protectionGaps(plan, { today })` -> `[{ id, name, need, cover, gap, depends, termUntil }]`: the earners whose gap is
+`MIN_GAP` ($10,000) or more. It works nothing out unless someone has pay and there is a child or a second adult. Next best
+action's protection step and Needs attention's `life-cover-<id>` item read it.
+
 ## Edge cases
 - One adult with no children: no one depends on the income; only the funeral and debts are shown.
 - One adult with children: no survivor plan can be built (the plan needs an adult); DIME and lifetime earnings only.

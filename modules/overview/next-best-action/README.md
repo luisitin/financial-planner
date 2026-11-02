@@ -13,6 +13,14 @@
 The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bogleheads wiki's "Prioritizing investments":
 0. Spend less than comes in (spare >= 0).
 1. A starter emergency fund: usable cash (Emergency fund page) of one month of must-pay bills.
+1b. Protect the people who count on you (2026-11-02): an earner whose death would leave a partner or children short by
+   `MIN_GAP` ($10,000) or more, by Life insurance needs' own answer (`protectionGaps` in insurance/life-needs: the lump sum
+   that keeps the survivor's plan whole, less the cover on Policies). Status "now" with no gap (buying a policy is an
+   action, not a sum the spare money fills); `people: [{ personId, name, gap, cover, until, depends }]`. Done (left out)
+   once the cover reaches the need. Placed right after the starter cushion: the round-3 walk-through found the family's
+   biggest risk (Bo and Cy $212,000 short if Ana died) worked out on a page nobody opened, and term cover is cheap next
+   to the loss it covers. Our own choice of place, noted per the builder instructions; the two wikis above put insurance
+   among the basics rather than at a numbered step.
 2. The whole employer match: anyone with pay and a 401(k) but no contribution on file is a "check".
 3. Expensive debt: `HIGH_RATE` 10% or more, mortgages aside, highest rate first.
 4. A full emergency fund: the plan's target months (Emergency fund page's gap).

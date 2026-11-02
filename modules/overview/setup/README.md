@@ -194,7 +194,9 @@ as "statement", so going through the ages screen again keeps it.
   (an IRA)" ("for each of you" only for two adults), no "backdoor", "Put more into your 401(k)". A match step that is
   a question (a 401(k) and pay with nothing going in, 2026-11-02) reads "Check if Bo's job matches retirement saving"
   ("your job" for Me, "your jobs" for two), since the 401(k) may be an old job's or the job may not match; its page,
-  Retirement contributions, answers it in one tap.
+  Retirement contributions, answers it in one tap. The protection step (2026-11-02) reads "Get life insurance on Ana"
+  ("Raise the life cover on Ana" when some is on file), and when it is the first move the headline says "Life cover for
+  the people who count on you comes first. The moves below start there."
 - **Not counted yet**: what no figure above already links to: state income tax; for an unmarried couple, federal tax
   as two returns (the federal estimate works one return for both today, so the left-over figure reads a little low);
   an estimated Social Security; each guessed rate and payment.

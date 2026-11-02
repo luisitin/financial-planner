@@ -35,6 +35,8 @@ function family() {
   S.markAt(p, "done", T);
   return p;
 }
+// life cover on both adults, more than any need, so the protection step is done
+const covered = (p) => { p.insurance = { ...(p.insurance ?? {}), policies: p.household.people.filter((x) => x.role !== "dependent").map((x, i) => ({ id: `pol-${i}`, kind: "term", personId: x.id, benefit: 3000000, premium: 30, period: "monthly" })) }; return p; };
 const acct = (p, id) => p.accounts.find((a) => a.id === id);
 const inc = (p, id) => p.income.find((a) => a.id === id);
 
@@ -337,9 +339,14 @@ test("where you are: the furthest screen reached, so going back never moves 'pic
 
 test("where you stand: read from the pages' own computes; the first move is Next best action's; no 'your choice' step", () => {
   const p = family();
+  // two earners and two children with no life cover on file: protecting them comes right after the starter cushion
+  const st0 = S.standing(p, { today: T });
+  assert.equal(st0.moves[0].id, "protect");
+  assert.match(st0.moves[0].title, /^Get life insurance on /);
+  covered(p);
   const st = S.standing(p, { today: T });
   assert.equal(st.netWorth, 3200 + 8500 + 41000 + 12000 + 14000 - 4200 - 9000 - 210000);
-  assert.equal(st.moves[0].id, "high-debt", "the 22% card");
+  assert.equal(st.moves[0].id, "high-debt", "the 22% card, once both are covered");
   assert.ok(st.moves.length === 3 && st.moves.every((m) => m.id !== "rest"));
   assert.ok(st.moves.some((m) => m.id === "guide-home"), "the home goal brings its guide");
   assert.deepEqual(st.guessed.map((g) => g.name), ["Credit cards", "Car loan"]);
@@ -497,7 +504,8 @@ test("the cushion's money follows the accounts while it is the setup's choice; n
 
 test("the headline never contradicts the cards under it", () => {
   const head = (p) => S.standing(p, { today: T }).headline;
-  assert.match(head(family()), /costly debt comes first/, "the 22% card is move 1");
+  assert.match(head(family()), /^Life cover for the people who count on you comes first/, "protection is move 1");
+  assert.match(head(covered(family())), /costly debt comes first/, "the 22% card is move 1 once both are covered");
   // no pay at all: never "your month works"
   const n = empty(); S.applyYou(n, { who: "me" }); S.applyMoney(n, { people: { "setup-self": { status: "none" } } });
   S.applyHavePicks(n, ["checking"]); S.applyHaveAmounts(n, { checking: 500 }, T); S.applySpend(n, { mode: "total", total: 3000 });
