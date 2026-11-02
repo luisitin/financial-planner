@@ -44,6 +44,9 @@ export function render(root, ctx) {
   if (pending) {
     const n = ui.notice(pending.kind, pending.text);
     if (pending.kind === "ok") n.append(" ", ui.h("a", { href: "#/balance/net-worth" }, "See net worth ›"));
+    // a history fix can be taken back (the plan as it was before the save)
+    const was = pending.undo;
+    if (was) n.append(" ", ui.button("Undo", () => { pending = { kind: "ok", text: "Put back as it was before that save." }; store.update((d) => { for (const k of Object.keys(d)) delete d[k]; Object.assign(d, structuredClone(was)); }); }, { class: "secondary small" }));
     head.append(n); pending = null;
     // a loan or card just saved at $0 whose payment is still on Expenses: say so, one tap from stopping it (round 4)
     const ended = ctx.computeOf?.("cashflow/expenses", { today })?.ended ?? [];
@@ -66,14 +69,16 @@ export function render(root, ctx) {
   const ask = ui.h("div", { class: "bu-ask" });
   const saveBtn = ui.h("button", { type: "submit" }, "Save all balances");   // hidden while the typing-slip question is open
   let asked = false;
+  const closeAsk = () => { ask.replaceChildren(); asked = false; saveBtn.style.display = ""; };
   const finish = (typed, corrections) => {
     let r = null;
+    const before = corrections.length ? structuredClone(plan) : null;
     store.update((draft) => { r = saveAll(draft, typed, today, { corrections }); });
     if (!r || !r.saved) { pending = { kind: "error", text: "Nothing was saved: every box was empty. Type at least one balance, then save." }; return; }
     const kept = r.saved - r.changed - r.corrected;
     const move = r.before && r.netWorth !== null ? (Math.abs(r.netWorth - r.before.netWorth) < 0.5 ? `, the same as on ${fmt.date(r.before.date)}` : `, ${r.netWorth >= r.before.netWorth ? "up" : "down"} ${fmt.money(Math.abs(r.netWorth - r.before.netWorth), cur)} since ${fmt.date(r.before.date)}`) : "";
     const parts = [r.changed || (!r.corrected && !kept) ? `${r.changed} changed` : null, r.corrected ? `${r.corrected} typing mistake${r.corrected === 1 ? "" : "s"} fixed in the history` : null, kept ? `${kept} still right` : null].filter(Boolean);
-    pending = { kind: "ok", text: `Balances saved for today: ${parts.join(", ")}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.` };
+    pending = { kind: "ok", text: `Balances saved for today: ${parts.join(", ")}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.`, undo: before };
   };
   const form = ui.h("form", { class: "card", novalidate: null, onSubmit: (e) => {
     e.preventDefault();
@@ -82,17 +87,34 @@ export function render(root, ctx) {
     // a new figure that looks like the one on file with a key slipped (11,500 against 115,000): ask before saving, so
     // fixing an old typo is not recorded as a fall in net worth
     const slips = slipsIn(plan, typed);
-    if (slips.length && !asked) {
+    if (asked) return;   // the question is open: only its own buttons save (Enter on the last box used to save as "it changed")
+    if (slips.length) {
       const one = slips.length === 1;
       const m = (n) => fmt.money(n, cur);
-      ask.replaceChildren(ui.notice("warn", one
-        ? `${slips[0].name}: ${m(slips[0].was)} on file, ${m(slips[0].now)} typed. One of them looks like a typing slip.`
-        : `These look like typing slips: ${slips.map((x) => `${x.name}, ${m(x.was)} on file and ${m(x.now)} typed`).join("; ")}.`),
+      const fixBtn = ui.button("Let me fix what I typed", () => { closeAsk(); const b = boxes.find((x) => x.id === slips[0].id); b?.input.focus(); b?.input.select?.(); }, { class: "secondary" });
+      // "it changed" is the default answer: a real change can look like a slip (a card paid from $6,400 to $640), and the
+      // other answer rewrites the history; with several, each account gets its own answer (review 2026-11-02)
+      if (one) ask.replaceChildren(ui.notice("warn", `${slips[0].name}: ${m(slips[0].was)} on file, ${m(slips[0].now)} typed. Did it change, or was ${m(slips[0].was)} a typing slip?`),
         ui.h("div", { class: "row" },
-          ui.button(one ? `${m(slips[0].was)} was a mistake` : "The ones on file were mistakes", () => finish(typed, slips.map((x) => x.id))),
-          ui.button(one ? "Both are right: it changed" : "Both are right: they changed", () => finish(typed, []), { class: "secondary" }),
-          ui.button("Let me fix what I typed", () => { ask.replaceChildren(); asked = false; saveBtn.style.display = ""; const b = boxes.find((x) => x.id === slips[0].id); b?.input.focus(); b?.input.select?.(); }, { class: "secondary" })),
-        ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
+          ui.button("It changed", () => finish(typed, [])),
+          ui.button(`${m(slips[0].was)} was a mistake`, () => finish(typed, [slips[0].id]), { class: "secondary" }),
+          fixBtn),
+        ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened. You can undo it."));
+      else {
+        const wrong = new Set();
+        const rowFor = (x) => {
+          const chips = ui.h("div", { class: "chips", role: "group", "aria-label": x.name });
+          const draw = () => chips.replaceChildren(
+            ui.h("button", { type: "button", class: `chip${wrong.has(x.id) ? "" : " on"}`, "aria-pressed": wrong.has(x.id) ? "false" : "true", onClick: () => { wrong.delete(x.id); draw(); } }, "It changed"),
+            ui.h("button", { type: "button", class: `chip${wrong.has(x.id) ? " on" : ""}`, "aria-pressed": wrong.has(x.id) ? "true" : "false", onClick: () => { wrong.add(x.id); draw(); } }, `${m(x.was)} was a mistake`));
+          draw();
+          return ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name)), ui.h("div", { class: "rec-sub" }, `${m(x.was)} on file, ${m(x.now)} typed`), chips);
+        };
+        ask.replaceChildren(ui.notice("warn", "Some new figures look like a typing slip next to the one on file. For each: did it change, or was the one on file a mistake?"),
+          ui.h("ul", { class: "records" }, slips.map(rowFor)),
+          ui.h("div", { class: "row" }, ui.button("Save all balances", () => finish(typed, [...wrong])), fixBtn),
+          ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened. You can undo it."));
+      }
       asked = true; saveBtn.style.display = "none";
       ask.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -112,5 +134,7 @@ export function render(root, ctx) {
     if (i >= 0 && i < boxes.length - 1) { e.preventDefault(); boxes[i + 1].input.focus(); boxes[i + 1].input.select?.(); }
   });
   boxes[boxes.length - 1]?.input.setAttribute("enterkeyhint", "done");
+  // a figure changed while the question is open: the question was about the old figures, so it closes (Save asks again)
+  form.addEventListener("input", () => { if (asked) closeAsk(); });
   wrap.append(form);
 }

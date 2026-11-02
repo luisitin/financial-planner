@@ -129,3 +129,22 @@ test("one adult left on a married filing status is a warning with the Change it 
   const w = compute(planWith([{ id: "a", name: "Ana", role: "self" }], { filingStatus: "married_joint" }), { today: TODAY }).warnings;
   assert.equal(w.length, 1); assert.match(w[0], /One adult but the tax filing status is Married, filing together\. Change it/);
 });
+
+test("review 2026-11-02: their own papers and Social Security go either way; the funds in removed accounts go with them", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { tiedTo: tied, removePerson: remove } = await import("./compute.js");
+  const p = familyPlan("2026-11-02");
+  p.estate = { ...(p.estate ?? {}), documents: [{ id: "w1", kind: "will", personId: "p-bo", status: "done" }, { id: "w2", kind: "will", personId: "p-ana", status: "none" }] };
+  const t = tied(p, "p-bo");
+  assert.ok(t.items.find((i) => i.kind === "estateDoc").always); assert.ok(t.items.find((i) => i.kind === "socialSecurity").always);
+  // keep as the household's: the will is not left with no owner (it was shown nowhere); Ana's will stays
+  const k = structuredClone(p); const rk = remove(k, "p-bo", { keep: true });
+  assert.deepEqual(k.estate.documents.map((x) => x.id), ["w2"]);
+  assert.ok(rk.removed.includes("Will")); assert.ok(!rk.kept.includes("Will"));
+  // remove with them: a holding and a bank line in Bo's Roth IRA go too
+  const r = structuredClone(p);
+  r.holdings = [{ id: "h1", accountId: "a-roth", symbol: "VTI", shares: 100, price: 310 }, { id: "h2", accountId: "a-401", symbol: "VXUS", shares: 10, price: 60 }];
+  r.transactions = [{ id: "t1", accountId: "a-roth", date: "2026-10-01", amount: 100 }];
+  remove(r, "p-bo", { keep: false });
+  assert.deepEqual(r.holdings.map((h) => h.id), ["h2"]); assert.deepEqual(r.transactions, []);
+});

@@ -50,18 +50,25 @@ export function keepOnFile(draft, a, today) {
 }
 
 /**
- * looksLikeSlip(was, now) -> true when `now` looks like `was` with a key slipped, or the other way round: a digit added
- * or dropped (about 10 or 100 times, or a tenth or a hundredth: 115,000 for 11,500) or two neighbouring digits swapped
- * (51,000 for 15,000, at least 15% apart). Both must be at least $100. Only then do the balance pages ask whether the
- * figure on file was a typing mistake: an ordinary big change (a card paid off, a bonus landing, a rollover) is not
- * asked about. Signs are ignored (a debt is typed as what is owed).
+ * looksLikeSlip(was, now) -> true when the two whole-dollar figures are one key slip apart: one digit added or dropped
+ * (115,000 for 11,500; 105,000 for 15,000), two zeros added or dropped (100,000 for 1,000), or two neighbouring digits
+ * swapped (51,000 for 15,000, at least 15% apart). Both must be at least $100. Signs are ignored (a debt is typed as what
+ * is owed). Decided on the digits, not the ratio (review 2026-11-02: a ratio of about 10 flagged ordinary months, a card
+ * paid from 2,500 to 250 beside checking from 600 to 5,400, and missed 15,000 for 105,000). Some real changes still look
+ * like a slip (6,400 to 640), so the pages ask with "it changed" as the default answer.
  */
 export function looksLikeSlip(was, now) {
   const a = Math.abs(Number(was)), b = Math.abs(Number(now));
   if (!Number.isFinite(a) || !Number.isFinite(b) || a < 100 || b < 100 || Math.abs(a - b) < 0.5) return false;
-  const r = Math.max(a, b) / Math.min(a, b);
-  if ((r >= 8 && r <= 12.5) || (r >= 80 && r <= 125)) return true;
   const x = String(Math.round(a)), y = String(Math.round(b));
+  if (x === y) return false;
+  const [long, short] = x.length >= y.length ? [x, y] : [y, x];
+  // one digit added or dropped
+  if (long.length === short.length + 1) for (let i = 0; i < long.length; i++) if (long.slice(0, i) + long.slice(i + 1) === short) return true;
+  // two zeros added or dropped
+  if (long.length === short.length + 2) for (let i = 0; i < long.length; i++) for (let j = i + 1; j < long.length; j++)
+    if (long[i] === "0" && long[j] === "0" && long.slice(0, i) + long.slice(i + 1, j) + long.slice(j + 1) === short) return true;
+  // two neighbours swapped
   if (x.length === y.length && Math.abs(a - b) / Math.max(a, b) >= 0.15) {
     const diff = [...x].map((c, i) => c !== y[i] ? i : -1).filter((i) => i >= 0);
     if (diff.length === 2 && diff[1] === diff[0] + 1 && x[diff[0]] === y[diff[1]] && x[diff[1]] === y[diff[0]]) return true;
@@ -93,14 +100,31 @@ export function correctSlip(draft, accountId, value) {
   const signed = (n) => debt ? (Number(a.balance) < 0 ? -Math.abs(n) : Math.abs(n)) : n;
   if (from) for (const h of a.history ?? []) if (isValidDate(h?.date) && h.date >= from && sameAs(h)) { h.balance = signed(right); fixed++; }
   const delta = right - wrong;
-  if (from && Math.abs(delta) > 0.004) for (const s of draft.netWorthHistory ?? []) {
-    if (!isValidDate(s?.date) || s.date < from) continue;
+  // saved totals move only from the day the wrong figure was typed (typedOn), not from a back-dated "as of": a total saved
+  // before it was typed never held it (review 2026-11-02: a fake dip and recovery). Today's total is refreshed whenever a
+  // balance is typed (markTyped), so a total on the typed day holds it.
+  const since = isValidDate(a.typedOn) && (!from || a.typedOn > from) ? a.typedOn : from;
+  if (since && Math.abs(delta) > 0.004) for (const s of draft.netWorthHistory ?? []) {
+    if (!isValidDate(s?.date) || s.date < since) continue;
     if (debt) { s.liabilities = (Number(s.liabilities) || 0) + delta; s.netWorth = (Number(s.netWorth) || 0) - delta; }
     else { s.assets = (Number(s.assets) || 0) + delta; s.netWorth = (Number(s.netWorth) || 0) + delta; }
     fixed++;
   }
   a.balance = signed(right);
   return { fixed, wrong, from };
+}
+
+/**
+ * markTyped(draft, accountId, today): the balance on file was typed today. Records `typedOn` (correctSlip then moves
+ * saved totals only from that day) and refreshes today's saved total if there is one, so a total never holds an older
+ * figure than the balances on file that day (Account detail and Net worth's edit form call it; saveAll does both itself).
+ */
+export function markTyped(draft, accountId, today) {
+  const a = (draft.accounts ?? []).find((x) => x.id === accountId);
+  if (!a || !isValidDate(today)) return;
+  a.typedOn = today;
+  const i = (draft.netWorthHistory ?? []).findIndex((h) => h?.date === today);
+  if (i >= 0) { const t = netWorthOf(draft, { today }); draft.netWorthHistory[i] = { ...draft.netWorthHistory[i], assets: t.assets, liabilities: t.liabilities, netWorth: t.netWorth }; }
 }
 
 /**
@@ -142,6 +166,7 @@ export function saveAll(draft, typed, today, { corrections = [] } = {}) {
     const r = saveBalance(draft, a.id, today, Number(v));
     if (!r.saved) continue;
     if (!r.onFile) { a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(Number(v)) : Math.abs(Number(v))) : Number(v); a.asOf = today; }
+    a.typedOn = today;
     saved++;
     if (Math.abs(Number(v) - was) > 0.004) changed++;
   }

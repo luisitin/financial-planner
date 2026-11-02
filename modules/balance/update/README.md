@@ -42,13 +42,20 @@ says it is paid off and links to Expenses to stop the payment (2026-11-02).
 ## Typing slips (2026-11-02)
 Fixing an old typo used to be recorded as a real change: 115,000 typed for 11,500 last month, corrected today, kept the
 wrong figure as a point and put "-$103,500 since 10/2/2026" on the Dashboard for good.
-- `looksLikeSlip(was, now)`: the new figure looks like the one on file with a key slipped. A digit added or dropped (the
-  ratio is 8 to 12.5, or 80 to 125) or two neighbouring digits swapped with at least 15% between them. Both at least $100.
-  An ordinary big change (a card paid off to $0, a 20% move) is not asked about. The thresholds are the builder's choice,
-  set so a stray or missing zero is always caught and normal months never are.
-- `slipsIn(plan, typed)`: the boxes that look like slips. The page asks before saving: "$115,000 was a mistake",
-  "Both are right: it changed", or "Let me fix what I typed" (the slip may be the new figure: it puts the cursor back in
-  that box). The Save button hides while the question is open.
+- `looksLikeSlip(was, now)`: the two whole-dollar figures are one key slip apart, decided on the digits: one digit
+  added or dropped anywhere (115,000 for 11,500; 105,000 for 15,000), two zeros added or dropped (100,000 for 1,000), or
+  two neighbouring digits swapped with at least 15% between them. Both at least $100. Review 2026-11-02: it used a ratio
+  of about 10, which flagged ordinary months (checking from 600 to 5,400) and missed a stray zero inside a figure. Some
+  real changes still look like a slip (a card from 6,400 to 640), so "it changed" is always the default answer.
+- `slipsIn(plan, typed)`: the boxes that look like slips. The page asks before saving. One box: "It changed" (filled),
+  "$115,000 was a mistake" and "Let me fix what I typed" (the slip may be the new figure: it puts the cursor back in that
+  box). Several boxes: one answer each ("It changed" chosen, "$X was a mistake" to pick), then one Save, so a real
+  paydown is not erased to fix a typo beside it. The Save button hides while the question is open; Enter cannot save past
+  it, and editing a box closes it (Save asks again). A save that fixed a mistake offers Undo.
+- `markTyped(draft, id, today)` and `accounts[].typedOn`: the day the balance on file was typed. `correctSlip` moves saved
+  totals only from that day (a back-dated "as of" no longer shifts totals saved before it was typed), and today's saved
+  total is refreshed whenever a balance is typed on Account detail or Net worth, so a total on that day holds it
+  (review 2026-11-02: a fake dip and recovery).
 - `correctSlip(draft, id, value)`: the account's points carrying the wrong figure, from the day it stood (the balance on
   file's date, or the earliest of the run of equal points that ends the history), take the right one; Net worth's saved
   totals from that day move by the difference (what is owed, for a debt). `saveAll(..., { corrections })` runs it first and

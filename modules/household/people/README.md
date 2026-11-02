@@ -42,6 +42,10 @@ No people: empty state. Missing birth date: age `null`, shown as "no birth date 
 ## Tests
 `module.test.mjs`: defaults, per-person overrides, dependents and horizon, every warning, no-today behaviour; what is tied to a person, removing with or without it, the filing switch.
 
+## Review fixes 2026-11-02 (removing a person)
+- Their Social Security and their own papers (a will, a power of attorney: `per: "adult"` kinds) go with them either way. `tiedTo` marks them `always`; the panel lists them apart ("These go with Bo either way"), the keep button counts only what can be kept, and the message names what went. A kept will used to lose its owner and show nowhere.
+- Removing their accounts also removes the holdings, bank lines and sorting rules in them, and clears a home or car loan link and debt-plan targets that pointed at them.
+
 ## Ideas / not yet
 - Spouse's Social Security and survivor rules will need `birthDate` of both adults (phase 5).
 - A "dependent until age" field for college and child-tax-credit pages (phase 6).

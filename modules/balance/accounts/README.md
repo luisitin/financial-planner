@@ -81,6 +81,9 @@ older than the check); the page data (picker, chosen account, owner, latest five
 removing points; saving a balance (an earlier day, the same day, a later day, a debt's sign, no dated balance); the
 chart's side (steps, an overdraft, float noise and flat lines, labels in thousands without repeats).
 
+## Review fixes 2026-11-02
+"Add this balance" that changes the balance on file calls update's `markTyped`: `typedOn` is recorded and today's saved total follows, so a later typo fix on Update my balances moves only the totals that held the wrong figure.
+
 ## Ideas / not yet
 - Mark the checked statements on the line.
 - Interest earned or paid, from the account's transactions in the interest category.

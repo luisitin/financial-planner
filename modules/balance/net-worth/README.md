@@ -44,6 +44,9 @@ removing an account each confirm at the top of the Accounts card. "Update all ba
 ## Tests
 `module.test.mjs`: totals, liability handling, tax buckets, change vs last snapshot.
 
+## Review fixes 2026-11-02
+The edit form's slip question has "It changed" as the filled default and "$X was a mistake" outlined. A changed balance records `typedOn` and refreshes today's saved total (update's `markTyped`).
+
 ## Ideas / not yet
 - Per-account balance history from imported statements (feed from transactions/import).
 - Chart of the snapshot history (uPlot).

@@ -1,6 +1,6 @@
 // modules/balance/net-worth/view.js -- DOM only.
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
-import { keepOnFile, looksLikeSlip, correctSlip } from "../update/compute.js";
+import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -70,10 +70,11 @@ export function render(root, ctx) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
             // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
-            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; return; }
+            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); return; }
             // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
+            if (moved) markTyped(p, old.id, fmt.today());
           }
         }
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });
@@ -84,10 +85,11 @@ export function render(root, ctx) {
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
       if (editing && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
-        ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. One of them looks like a typing slip.`),
+        // "it changed" is the default answer (a real change can look like a slip); the other rewrites the history (review 2026-11-02)
+        ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. Did it change, or was ${wrong} a typing slip?`),
           ui.h("div", { class: "row" },
-            ui.button(`${wrong} was a mistake`, () => save(v, true)),
-            ui.button("Both are right: it changed", () => save(v, false), { class: "secondary" }),
+            ui.button("It changed", () => save(v, false)),
+            ui.button(`${wrong} was a mistake`, () => save(v, true), { class: "secondary" }),
             ui.button("Let me fix what I typed", () => { ask.replaceChildren(); ask.style.marginBottom = ""; const box = formHost.querySelector('input[name="balance"]'); box?.focus(); box?.select?.(); }, { class: "secondary" })),
           ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
         ask.style.marginBottom = "16px";

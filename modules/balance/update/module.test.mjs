@@ -125,6 +125,9 @@ test("looksLikeSlip: a digit added or dropped, or two neighbours swapped; not an
   for (const [a, b] of [[115000, 11500], [11500, 115000], [6400, 640], [100000, 1000], [15000, 51000], [86000, 68000]]) assert.equal(looksLikeSlip(a, b), true, `${a} -> ${b}`);
   for (const [a, b] of [[12345, 12354], [6400, 0], [5000, 6000], [50, 500], [11500, 11500], [20000, 30000], [-6400, -640 * 2]]) assert.equal(looksLikeSlip(a, b), false, `${a} -> ${b}`);
   assert.equal(looksLikeSlip(-6400, 640), true);   // a debt typed as what is owed
+  // review 2026-11-02: decided on the digits: a stray zero inside the figure is caught; an ordinary month is not
+  for (const [a, b] of [[15000, 105000], [105000, 15000], [1500, 10500], [2500, 250]]) assert.equal(looksLikeSlip(a, b), true, `${a} -> ${b}`);
+  for (const [a, b] of [[600, 5400], [4200, 3900], [2500, 26000], [9000, 900 * 11]]) assert.equal(looksLikeSlip(a, b), false, `${a} -> ${b}`);
 });
 test("fixing a mistyped balance corrects its points and the saved totals from the day it was typed", () => {
   const p = famPlan("2026-10-02");
@@ -155,4 +158,28 @@ test("correctSlip on a debt moves what is owed in the saved totals and keeps the
   const s = p.netWorthHistory.find((x) => x.date === "2026-10-02");
   assert.equal(s.liabilities, 349200 - 57600); assert.equal(s.netWorth, 250800 + 57600);
   assert.deepEqual(correctSlip(p, "nope", 1), { fixed: 0, wrong: null, from: null });
+});
+
+test("review 2026-11-02: a typo fix moves only the totals saved after the wrong figure was typed", async () => {
+  const { markTyped, correctSlip: fix } = await import("./compute.js");
+  const { saveBalance } = await import("../accounts/compute.js");
+  const { compute: nwOf } = await import("../net-worth/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  // a total saved in the morning, then Account detail types 115,000 for the same day: today's total follows it
+  const p = familyPlan("2026-10-02");
+  const morning = nwOf(p, { today: "2026-10-02" });
+  p.netWorthHistory = [{ date: "2026-10-02", assets: morning.assets, liabilities: morning.liabilities, netWorth: morning.netWorth }];
+  saveBalance(p, "a-sav", "2026-10-02", 115000); markTyped(p, "a-sav", "2026-10-02");
+  assert.equal(p.netWorthHistory[0].netWorth, morning.netWorth + 103500, "today's total holds the figure typed today");
+  assert.equal(p.accounts.find((a) => a.id === "a-sav").typedOn, "2026-10-02");
+  // a month later the typo is fixed: the history goes back to the true figure, no dip and recovery
+  saveAll(p, { "a-sav": 11500 }, "2026-11-02", { corrections: ["a-sav"] });
+  assert.equal(p.netWorthHistory.find((h) => h.date === "2026-10-02").netWorth, morning.netWorth);
+  // a back-dated "as of": a total saved between that day and the day it was typed never held it, so it is left alone
+  const q = familyPlan("2026-10-02");
+  const t = nwOf(q, { today: "2026-10-20" });
+  q.netWorthHistory = [{ date: "2026-10-20", assets: t.assets, liabilities: t.liabilities, netWorth: t.netWorth }];
+  saveBalance(q, "a-sav", "2026-10-15", 115000); markTyped(q, "a-sav", "2026-11-02");
+  fix(q, "a-sav", 11500);
+  assert.equal(q.netWorthHistory[0].netWorth, t.netWorth, "the Oct 20 total held 11,500 all along");
 });

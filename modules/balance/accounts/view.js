@@ -4,6 +4,7 @@
 // The account itself (name, kind) is edited on Net worth; a balance added here for its latest day moves the balance
 // Net worth uses too.
 import { compute, saveBalance, removePoint, ticks, axisUnit, isDate } from "./compute.js";
+import { markTyped } from "../update/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -85,6 +86,7 @@ export function render(page, ctx) {
     if (v.date > today) { form.append(ui.notice("error", "That day is in the future. Pick today or an earlier day.")); return; }
     store.update((q) => {
       const r = saveBalance(q, a.id, v.date, v.balance);
+      if (r.onFile) markTyped(q, a.id, today);   // typed today: today's saved total follows, and a later typo fix starts here
       pending = `Saved ${money(shown(v.balance))} for ${fmt.date(v.date)}.${r.onFile ? " Net worth now uses this balance too." : ""}`;
     });
   }, { submitLabel: "Add this balance" });

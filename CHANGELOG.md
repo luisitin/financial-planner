@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Review fixes (round 4): typing slips are judged on the digits (a stray zero inside a figure is caught; checking from $600 to $5,400 is not asked about); "It changed" is the default answer; several flagged boxes get one answer each; Enter cannot save past the question; a history fix offers Undo and moves only the totals that held the wrong figure (`accounts[].typedOn`).
+- [builder:claude-b] - [builder:claude-b] Review fixes (round 4): removing a person lists their Social Security and own papers as going either way and counts only what is kept; their removed accounts take their holdings, bank lines and rules with them.
 - [builder:claude-b] - [builder:claude-b] Review fixes (round 4): a goal due before its turn stays behind (never "starts later" past its own date); the emergency fund never waits for the goals step; Monthly review counts goals like Goals and the Dashboard; the setup resume card no longer replaces a finished checklist and keeps the right question number.
 - [builder:claude-b] - [builder:claude-b] Review fixes (round 4): Timeline's top box waits for Social Security like its events; Plan health score and Timeline name what is missing (a birth date goes to People); the Social Security page gets the "won't get it" answer they point to; one-earner couples read one IRA everywhere.
 - [builder:claude-b] - [builder:claude-b] Review fixes (round 4): paying a card from savings ignores one-time income not yet in the bank, needs must-pay bills marked, pays the exact balance, and is offered even when a saved debt plan is aimed at the card.

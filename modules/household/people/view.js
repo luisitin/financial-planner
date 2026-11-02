@@ -84,10 +84,14 @@ export function render(root, ctx) {
   const removePanel = (person) => {
     const t = tiedTo(plan, person.id);
     const name = person.name;
+    // their Social Security and their own papers go either way (`always`): only the rest can be kept, and the message
+    // counts only what was kept (review 2026-11-02)
+    const keepable = t.items.filter((i) => !i.always), always = t.items.filter((i) => i.always);
+    const listed = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
     const finish = (keep) => {
-      const n = t.items.length;
+      const n = t.items.length, k = keepable.length;
       const what = n === 1 ? t.items[0].name : `${n} things that were ${name}'s`;
-      const text = !n ? `${name} removed.` : keep ? `${name} removed. ${n === 1 ? `${t.items[0].name} now counts` : `${n} things that were ${name}'s now count`} as the household's.` : `${name} removed, with ${what}.`;
+      const text = !n ? `${name} removed.` : keep ? `${name} removed. ${k === 1 ? `${keepable[0].name} now counts` : `${k} things that were ${name}'s now count`} as the household's.${always.length ? ` ${listed(always.map((i) => i.name))} went with ${name}.` : ""}` : `${name} removed, with ${what}.`;
       pending = { card: "people", text: text + (t.leavesOneAdult && t.married ? " Taxes are now Single." : ""), undo: structuredClone(plan) };
       removing = null;
       store.update((p) => { removePerson(p, person.id, { keep }); });
@@ -97,19 +101,23 @@ export function render(root, ctx) {
     return ui.h("div", { class: "remove-person", style: { marginTop: "20px" } },
       ui.h("h2", {}, `Remove ${name} from the plan?`),
       t.items.length ? [
-        ui.h("p", {}, `These are ${name}'s in the plan:`),
-        ui.h("ul", { class: "page-list" }, t.items.map((i) => ui.h("li", {},
-          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
-          amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null))),
-        ui.h("p", { class: "muted small" }, `If ${name} has left the household, take these out too. If they stay with you (a joint account, an inherited one), keep them as the household's.`),
+        keepable.length ? [ui.h("p", {}, `These are ${name}'s in the plan:`),
+          ui.h("ul", { class: "page-list" }, keepable.map((i) => ui.h("li", {},
+            ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
+            amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null))),
+          ui.h("p", { class: "muted small" }, `If ${name} has left the household, take these out too. If they stay with you (a joint account, an inherited one), keep them as the household's.`)] : null,
+        always.length ? [ui.h("p", {}, `These go with ${name} either way:`),
+          ui.h("ul", { class: "page-list" }, always.map((i) => ui.h("li", {},
+            ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
+            amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null)))] : null,
       ] : ui.h("p", { class: "muted" }, `Nothing else in the plan is tied to ${name}.`),
       t.leavesOneAdult && t.married ? ui.notice("warn", `Taxes are set to ${FILING_STATUSES[plan.household.filingStatus]}. With one adult left the plan will use Single.${kids.length ? ` With ${kids.join(" and ")} at home you may file as head of household, which costs less tax: pick it under Taxes below.` : " Change it under Taxes below if you still file together this year."}`) : null,
       t.named.length ? ui.h("div", { class: "notice warn" }, `${name} is still named as a beneficiary on ${t.named.map((x) => x.name).join(" and ")}. Removing ${name} here does not change that: only the bank or insurer can. `, ui.h("a", { href: t.named[0].href }, "Beneficiary audit")) : null,
       ui.h("div", { class: "row", style: { marginTop: "12px" } },
-        t.items.length
+        keepable.length
           ? [ui.button(`Remove ${name} and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}`, () => finish(false), { class: "danger" }),
-             ui.button(`Remove ${name}, keep ${t.items.length === 1 ? "it" : "these"} as the household's`, () => finish(true), { class: "secondary" })]
-          : ui.button(`Remove ${name}`, () => finish(false), { class: "danger" }),
+             ui.button(`Remove ${name}, keep ${keepable.length === 1 ? "it" : always.length ? `the ${keepable.length} above` : "these"} as the household's`, () => finish(true), { class: "secondary" })]
+          : ui.button(`Remove ${name}${t.items.length ? ` and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}` : ""}`, () => finish(false), { class: "danger" }),
         ui.button("Cancel", () => { removing = null; drawForm(); }, { class: "secondary" })),
     );
   };

@@ -97,11 +97,14 @@ export function tiedTo(plan, personId) {
   for (const a of accounts) { const owed = isLiability(a.type); items.push({ kind: "account", id: a.id, name: a.name, amount: Math.abs(Number(a.balance) || 0), every: owed ? "owed" : "balance", where: owed ? "Debts" : "Net worth", href: owed ? "#/balance/liabilities" : "#/balance/net-worth" }); }
   for (const c of plan.retirement?.contributions ?? []) if (c.personId === personId && !accIds.has(c.accountId)) items.push({ kind: "contribution", id: c.id, name: `Saving into ${nameOf(c.accountId)}`, amount: perMonth(c.amount, c.period), every: "a month", where: "Retirement contributions", href: "#/retirement/contributions" });
   const ss = plan.retirement?.socialSecurity?.[personId];
-  if (ss && (Number(ss.monthlyAtFRA) > 0 || (ss.record ?? []).length)) items.push({ kind: "socialSecurity", id: personId, name: `${person?.name || "Their"}'s Social Security`, amount: Number(ss.monthlyAtFRA) || null, every: Number(ss.monthlyAtFRA) > 0 ? "a month" : null, where: "Social Security", href: "#/retirement/social-security" });
+  if (ss && (Number(ss.monthlyAtFRA) > 0 || (ss.record ?? []).length)) items.push({ kind: "socialSecurity", id: personId, name: `${person?.name || "Their"}'s Social Security`, amount: Number(ss.monthlyAtFRA) || null, every: Number(ss.monthlyAtFRA) > 0 ? "a month" : null, where: "Social Security", href: "#/retirement/social-security", always: true });
   for (const x of plan.retirement?.pensions ?? []) if (x.personId === personId) items.push({ kind: "pension", id: x.id, name: x.name || "Pension", amount: Number(x.monthly) || 0, every: "a month", where: "Pensions", href: "#/retirement/pensions" });
   for (const x of plan.retirement?.annuities ?? []) if (x.personId === personId) items.push({ kind: "annuity", id: x.id, name: x.name || "Annuity quote", amount: Number(x.monthly) || 0, every: "a month", where: "Annuities", href: "#/retirement/annuities" });
   for (const x of plan.insurance?.policies ?? []) if (x.personId === personId) items.push({ kind: "policy", id: x.id, name: x.name || (POLICY_KINDS[x.kind] ?? POLICY_KINDS.other).label, amount: Number(x.benefit) || 0, every: "cover", where: "Policies", href: "#/insurance/policies" });
-  for (const x of plan.estate?.documents ?? []) if (x.personId === personId) items.push({ kind: "estateDoc", id: x.id, name: (DOC_KINDS[x.kind]?.label) ?? "Document", amount: null, every: null, where: "Documents checklist", href: "#/estate/documents" });
+  // a person's own papers (their will, their powers of attorney) and their Social Security go with them either way
+  // (`always`): only a household paper can be kept (review 2026-11-02: "kept as the household's" blanked a will's owner
+  // and it was shown nowhere)
+  for (const x of plan.estate?.documents ?? []) if (x.personId === personId) items.push({ kind: "estateDoc", id: x.id, name: (DOC_KINDS[x.kind]?.label) ?? "Document", amount: null, every: null, where: "Documents checklist", href: "#/estate/documents", always: DOC_KINDS[x.kind]?.per === "adult" });
   // still named on a beneficiary form: only the bank or insurer can change that, so it is listed, never edited
   const named = [];
   const who = String(person?.name ?? "").trim().toLowerCase();
@@ -152,13 +155,22 @@ export function removePerson(draft, personId, { keep = false } = {}) {
     for (const g of draft.goals ?? []) if (Array.isArray(g.fundedBy)) g.fundedBy = g.fundedBy.filter((id) => !accIds.has(id));
     if (draft.estate?.beneficiaries) draft.estate.beneficiaries = draft.estate.beneficiaries.filter((r) => !accIds.has(r.accountId));
     if (draft.retirement?.contributions) draft.retirement.contributions = draft.retirement.contributions.filter((c) => !accIds.has(c.accountId));
+    // what sat in those accounts goes with them: holdings, bank lines and sorting rules; a home or car loan link is cleared
+    // (review 2026-11-02: a removed Roth IRA's funds went on counting on the investment pages under "No account")
+    for (const k of ["holdings", "transactions", "rules"]) if (Array.isArray(draft[k])) draft[k] = draft[k].filter((x) => !accIds.has(x?.accountId));
+    for (const x of draft.property ?? []) { if (accIds.has(x.accountId)) delete x.accountId; if (accIds.has(x.loanAccountId)) delete x.loanAccountId; }
+    if (Array.isArray(draft.debtPlan?.targets)) draft.debtPlan.targets = draft.debtPlan.targets.filter((id) => !accIds.has(id));
   }
   const r = draft.retirement;
   if (r?.contributions) r.contributions = goes(r.contributions.map((c) => ({ ...c, name: `Saving into ${(draft.accounts ?? []).find((a) => a.id === c.accountId)?.name ?? "an account"}` })), (c) => c.personId === personId, (c) => { c.personId = ""; }).map(({ name, ...c }) => c);
   if (r?.pensions) r.pensions = goes(r.pensions, (x) => x.personId === personId, (x) => { x.personId = ""; });
   if (r?.annuities) r.annuities = goes(r.annuities, (x) => x.personId === personId, (x) => { x.personId = ""; });
   if (draft.insurance?.policies) draft.insurance.policies = goes(draft.insurance.policies, (x) => x.personId === personId, (x) => { x.personId = ""; });
-  if (draft.estate?.documents) draft.estate.documents = goes(draft.estate.documents.map((x) => ({ ...x, name: DOC_KINDS[x.kind]?.label ?? "Document" })), (x) => x.personId === personId, (x) => { x.personId = ""; }).map(({ name, ...x }) => x);
+  if (draft.estate?.documents) {
+    const own = (x) => x.personId === personId && DOC_KINDS[x.kind]?.per === "adult";
+    for (const x of draft.estate.documents) if (own(x)) removed.push(DOC_KINDS[x.kind]?.label ?? "Document");
+    draft.estate.documents = goes(draft.estate.documents.filter((x) => !own(x)).map((x) => ({ ...x, name: DOC_KINDS[x.kind]?.label ?? "Document" })), (x) => x.personId === personId, (x) => { x.personId = ""; }).map(({ name, ...x }) => x);
+  }
   // records that only mean something with the person
   if (r?.socialSecurity?.[personId]) { delete r.socialSecurity[personId]; removed.push(`${t.person.name}'s Social Security`); }
   for (const map of [r?.workPlans, r?.longevity, draft.whatIfs?.humanCapital, draft.whatIfs?.paycheck, draft.whatIfs?.benefits, draft.whatIfs?.college, draft.guide?.setup?.status, draft.guide?.setup?.ss, draft.guide?.setup?.ssWrote]) if (map && typeof map === "object") delete map[personId];
