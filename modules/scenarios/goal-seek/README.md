@@ -18,7 +18,7 @@ The goal is met when the projection (expected returns) lasts to the end and `end
 | What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most) |
 | The return it needs | stocks and bonds moved by the same amount until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement) |
 | Room today / short today | the most that could come out of savings now and still meet it, or the least that would have to go in (engine `events`) |
-| When to claim Social Security | everyone claiming at the same age, 62 to 70: the age where the most can be spent while meeting the goal |
+| When to claim Social Security | everyone who has not claimed yet claiming at the same age, from max(62, today's age rounded up) to 70: the age where the most can be spent while meeting the goal. Who already gets it (Income has their Social Security, or setup's answer is "getting") or is 70 or over is not moved, and the sentence says so (round 4, 2026-11-02: before, the lever moved a 76-year-old's claim back to 62) |
 `largestWhere` / `smallestWhere` are monotone bisections (tested).
 
 ## Edge cases

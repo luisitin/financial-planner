@@ -31,8 +31,12 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Medicare at 65"),
     ui.h("p", { class: "lede" }, `Medicare starts at 65 for nearly everyone. Hospital cover (Part A) is free for most people; doctors' cover (Part B) costs ${cents(d.partB)} a month in ${d.year}, and a drug plan (Part D) about ${cents(d.partD)}. With a higher income both cost more: the income surcharge, called IRMAA.`),
-    d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, `${p.name}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
-    ui.h("p", { class: "muted small" }, `Still working with cover from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`)));
+    // past 65 the sign-up is done: a fact, not a window that closed years ago (round 4, 2026-11-02); the window, the
+    // employer-cover note and the late penalty are for those who have not reached 65
+    d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, p.age !== null && p.age >= 65
+      ? `${p.name}: Medicare age since ${monthName(p.signup.month)}. This page works out what it costs each year.`
+      : `${p.name}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
+    d.people.some((p) => p.age === null || p.age < 65) ? ui.h("p", { class: "muted small" }, `Still working with cover from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`) : null));
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the costs year by year, the plan needs: ${d.missing.join("; ")}.`))); return; }
 
   root.append(ui.card("What it costs", ui.row(

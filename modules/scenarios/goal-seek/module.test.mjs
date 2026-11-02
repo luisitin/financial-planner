@@ -60,3 +60,22 @@ test("Social Security: the claiming age that leaves the most to spend, with the 
   const best = c.results.reduce((a, r) => (r.monthly > a.monthly ? r : a));
   assert.equal(c.value, best.age);
 });
+
+test("the claiming lever moves only who has not claimed, from the ages still possible (round 4)", async () => {
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const T = "2026-11-02";
+  const p = retirementPlan();
+  // Sam is 76 and gets it already (on Income); Lee is 69 and 5 months and has not claimed
+  p.household.people.find((x) => x.id === "sam").birthDate = "1950-03-10";
+  p.household.people.find((x) => x.id === "lee").birthDate = "1957-06-20";
+  for (const x of p.household.people) x.retirementAge = 62;
+  p.income = (p.income ?? []).filter((x) => !["salary", "bonus", "business"].includes(x.type));
+  p.income.push({ id: "ss-sam", name: "Sam's Social Security", type: "social", personId: "sam", amount: 2800, period: "monthly", growth: 0, taxable: true });
+  p.retirement.socialSecurity = { sam: { claimAge: 66, monthlyAtFRA: 2800 }, lee: { claimAge: 70, monthlyAtFRA: 2100 } };
+  const d = compute(p, { today: T });
+  const lever = d.levers?.find((l) => l.id === "claim");
+  if (!lever) return;   // the plan cannot be judged on this fixture: nothing to say
+  assert.deepEqual(lever.who, ["lee"]);
+  assert.ok(lever.results.every((r) => r.age >= 70), "69 and 5 months: only 70 is still a whole age to choose");
+  assert.match(lever.sentence, /^Lee claiming at 70/); assert.match(lever.sentence, /Sam already gets it/);
+});

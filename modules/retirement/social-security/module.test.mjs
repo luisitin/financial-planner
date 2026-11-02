@@ -57,8 +57,29 @@ test("compute: a record, a typed statement figure, and nothing", () => {
   assert.equal(d.people.length, 2);
   assert.equal(d.people[0].source, "record"); assert.ok(d.people[0].monthly > 0); assert.equal(d.people[0].claimAge, 70);
   assert.equal(d.people[1].source, "typed"); near(d.people[1].monthly, 1400, 0.11, "62 with an FRA of 67 on 2,000");
-  assert.equal(d.people[0].options.length, 5); assert.equal(d.people[0].options[0].claimAge, 62);
+  // Ana is 64 and 4 months (by month) and has not claimed: the ages still possible, from now (rounded up to the month) to 70 (round 4)
+  assert.deepEqual(d.people[0].options.map((o) => Math.round(o.claimAge * 12)), [64 * 12 + 4, 65 * 12, 66 * 12, 67 * 12, 68 * 12, 69 * 12, 70 * 12]);
   assert.equal(d.hasData, true);
   const e = compute(emptyPlan(), { today: "2026-09-16" });
   assert.equal(e.hasData, false); assert.equal(e.householdYearly, 0);
+});
+
+test("decisions already made (round 4): getting it is a fact; past 62 the choice is from now to 70, answered", async () => {
+  const p = emptyPlan();
+  p.household.people.push({ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10" }, { id: "s", name: "Sam", role: "partner", birthDate: "1957-06-20" });
+  p.income = [{ id: "i", name: "Ruth's Social Security", type: "social", personId: "r", amount: 2100, period: "monthly" }];
+  p.retirement = { socialSecurity: { r: { claimAge: 66, monthlyAtFRA: 2100 }, s: { claimAge: 70, monthlyAtFRA: 2400 } } };
+  const T = "2026-11-02";
+  const [ruth, sam] = compute(p, { today: T }).people;
+  assert.equal(ruth.claimed, true); assert.equal(ruth.claimedYear, 2016); assert.equal(ruth.wait, null);
+  assert.equal(sam.claimed, false);
+  assert.deepEqual(sam.options.map((o) => Math.round(o.claimAge * 12)), [69 * 12 + 5, 70 * 12], "now (69 and 5 months) or 70");
+  // claim now against 70 (SSA: 2/3 of 1% a month after full retirement age, FRA 66 and 6 months for 1957)
+  assert.equal(sam.wait.at70, "2027-06"); assert.equal(sam.wait.at70Monthly, sam.options[1].monthly); assert.equal(sam.wait.nowMonthly, sam.options[0].monthly);
+  const t = sam.wait.breakEven;
+  assert.ok(Math.abs(sam.wait.nowMonthly * (t - sam.wait.nowAge) - sam.wait.at70Monthly * (t - 70)) < sam.wait.at70Monthly * 0.1, "the sums are equal at the break-even age");
+  // setup's "I already get it" counts as claimed too; a claim age on file that has passed is flagged
+  const q = structuredClone(p); q.income = []; q.guide = { setup: { ss: { r: "getting" } } }; q.retirement.socialSecurity.s.claimAge = 67;
+  const [r2, s2] = compute(q, { today: T }).people;
+  assert.equal(r2.claimed, true); assert.equal(s2.pastClaimAge, true);
 });

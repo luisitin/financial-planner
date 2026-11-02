@@ -106,7 +106,10 @@ export function estimateBenefit(record, { birthYear, claimAge = null, futureEarn
 
 /**
  * compute(plan, { today }) -> {
- *   people: [{ id, name, birthYear, age, fra, claimAge, source: "record"|"typed"|"none", estimate, pia, monthly, options: [{ claimAge, monthly, factor }],
+ *   people: [{ id, name, birthYear, age, ageNow (exact, in years), fra, claimAge, source: "record"|"typed"|"none", estimate, pia, monthly,
+ *     options: [{ claimAge, monthly, factor }] (62 to 70; past 62 and not claimed, only from today's age to 70),
+ *     claimed (already gets it: setup's "getting" or Social Security on Income), claimedYear, pastClaimAge (not claimed and the
+ *     claim age on file has passed), wait: { nowAge, nowMonthly, at70Monthly, at70 ("YYYY-MM"), breakEven (age) } | null,
  *     spousalAtSameAge (a spouse with no benefit of their own, the same age, claiming at the same age, on this record),
  *     survivor (what a surviving spouse at their full retirement age would get on this record) }],
  *   couple: null | { spousal: { [personId]: monthly top-up on the partner's record at their own claim age }, survivorMonthly: { [personId who survives]: monthly },
@@ -137,7 +140,28 @@ export function compute(plan, params = {}) {
     const options = birthYear ? [62, 64, fra.asYears, 68, 70].filter((a, i, arr) => arr.indexOf(a) === i).sort((a, b) => a - b).map((a) => ({ claimAge: a, factor: claimFactor(birthYear, a), monthly: floorDime(baseAtFra * claimFactor(birthYear, a)) })) : [];
     const spousalAtSameAge = birthYear ? floorDime(baseAtFra * spousalFactor(birthYear, claimAge)) : 0;
     const survivor = birthYear ? survivorAmount(baseAtFra, monthly, Math.round(claimAge * 12) < Math.round(fra.asYears * 12)) : 0;
-    return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12, options, spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
+    // decisions already made (round 4, 2026-11-02): someone who already gets it (setup's "I already get it", or Social
+    // Security on the Income page) is shown a fact, not a choice of claiming ages; someone past 62 who has not claimed
+    // chooses only from today's age to 70, with "now or at 70" answered directly
+    const exact = p.birthDate && today ? ((Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7))) - (birthYear * 12 + Number(String(p.birthDate).slice(5, 7)))) / 12 : null;
+    const claimed = plan.guide?.setup?.ss?.[p.id] === "getting" || (plan.income ?? []).some((x) => x.type === "social" && x.personId === p.id);
+    const choose = !claimed && exact !== null && exact > 62 ? (() => {
+      const now = Math.min(70, Math.ceil(exact * 12) / 12);
+      const ages = [now, ...[63, 64, 65, 66, 67, 68, 69].filter((a) => a > now + 1 / 24), ...(fra && fra.asYears > now + 1 / 24 && !Number.isInteger(fra.asYears) ? [fra.asYears] : []), ...(now < 70 ? [70] : [])];
+      return [...new Set(ages)].sort((a, b) => a - b).map((a) => ({ claimAge: a, factor: claimFactor(birthYear, a), monthly: floorDime(baseAtFra * claimFactor(birthYear, a)) }));
+    })() : null;
+    // claiming now against waiting to 70, in today's dollars (both rise with inflation alike): waiting pays back at the age
+    // t where the sums are equal, nowMonthly x (t - now) = at70 x (t - 70)
+    const wait = choose && choose.length > 1 && eligible ? (() => {
+      const first = choose[0], last = choose[choose.length - 1];
+      if (last.monthly <= first.monthly) return null;
+      const breakEven = (last.monthly * last.claimAge - first.monthly * first.claimAge) / (last.monthly - first.monthly);
+      const at70 = `${birthYear + 70}-${String(p.birthDate).slice(5, 7)}`;
+      return { nowAge: first.claimAge, nowMonthly: first.monthly, at70Monthly: last.monthly, at70, breakEven: Math.round(breakEven * 10) / 10 };
+    })() : null;
+    return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
+      options: choose ?? options, claimed, claimedYear: claimed && birthYear ? birthYear + Math.floor(claimAge) : null, pastClaimAge: !claimed && exact !== null && claimAge < exact - 1 / 24, wait,
+      spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
   });
   return { people, couple: couple(people), householdYearly: people.reduce((s, p) => s + p.yearly, 0), hasData: people.some((p) => p.source !== "none") };
 }

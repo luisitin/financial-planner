@@ -74,7 +74,7 @@ export function render(page, ctx) {
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
         ui.h("li", {}, "Every lever runs your plan's own year-by-year engine (Will the money last?) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
-        ui.h("li", {}, "Spending: the most a month, steady after inflation. Retirement: the first person's earliest age from 45 to 75. Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone claiming at the same age, 62 to 70, and the one that leaves the most to spend."),
+        ui.h("li", {}, "Spending: the most a month, steady after inflation. Retirement: the first person's earliest age from 45 to 75. Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are."),
         ui.h("li", {}, "Real life is less smooth than expected returns: the Stress tests and Chance the money lasts pages show how much room to keep."),
       ))));
   };

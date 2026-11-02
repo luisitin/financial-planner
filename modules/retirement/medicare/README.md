@@ -17,6 +17,7 @@
 - Room = the first line - the income that sets the first Medicare year's premiums.
 
 ## Edge cases
+- Someone 65 or over: their line says "Medicare age since <month>" instead of a sign-up window; the employer-cover and late-penalty note shows only while someone is under 65 or has no birth date (round 4, 2026-11-02).
 - Part A premiums (for people without 40 quarters of work), the Part B deductible beyond its mention, and the SSA-44 appeal for a life-changing event are explained, not modelled.
 - A plan on the flat tax rate still gets its income through the brackets here (the page says so).
 

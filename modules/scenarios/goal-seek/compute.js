@@ -5,6 +5,7 @@
 // claiming age that lets you spend the most.
 import { project, copyInputs } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
+import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -97,22 +98,31 @@ export function compute(plan, params = {}) {
     }
   }
 
-  // 6. Social Security: the claiming age (everyone the same) that lets the plan spend the most while reaching the goal
+  // 6. Social Security: the claiming age that lets the plan spend the most while reaching the goal, for the people who have
+  // not claimed yet and only at ages still possible (round 4, 2026-11-02: it advised claiming at 70 to someone who has
+  // been getting it since 66); those still choosing all claim at the same age here
   const ss = plan.retirement?.socialSecurity ?? {};
-  if (I.incomes.some((x) => x.kind === "social") && Object.keys(ss).length) {
-    const claims = [...new Set(Object.values(ss).map((s) => Number(s.claimAge) || 67))];
+  let sp = null;
+  try { sp = computeSocialSecurity(plan, { today }); } catch { sp = null; }
+  const movable = (sp?.people ?? []).filter((x) => ss[x.id] && !x.claimed && !(x.ageNow !== null && x.ageNow >= 70 - 1 / 24));
+  if (I.incomes.some((x) => x.kind === "social") && movable.length) {
+    const claims = [...new Set(movable.map((x) => Number(ss[x.id].claimAge) || 67))];
+    const from = Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow - 1e-9) : 62)));
     let best = null;
     const results = [];
-    for (let a = 62; a <= 70; a++) {
-      const inp = withPlan((p) => { for (const id of Object.keys(p.retirement.socialSecurity)) p.retirement.socialSecurity[id].claimAge = a; });
+    for (let a = Math.min(70, from); a <= 70; a++) {
+      const inp = withPlan((p) => { for (const x of movable) p.retirement.socialSecurity[x.id].claimAge = a; });
       if (!inp) continue;
       const s = largestWhere((x) => meets({ ...copyInputs(inp), strategy: "fixed-real", spending: { yearly: x } }), 0, Math.max(12000, I.spending.yearly * 2), 5);
       results.push({ age: a, monthly: s === null ? 0 : s / 12 });
       if (s !== null && (!best || s / 12 > best.monthly + 0.5)) best = { age: a, monthly: s / 12 };
     }
     const nowAt = results.find((r) => r.age === Math.round(claims[0]));
-    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && best.age === Math.round(claims[0]) ? "same" : "room", results,
-      sentence: !best ? "No claiming age gets there on its own." : `Claiming at ${best.age} lets the plan spend the most, about ${fmt(best.monthly)} a month${nowAt && best.age !== nowAt.age ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${nowAt.age}` : ""}. Everyone claims at the same age here; the Social Security page shows each person's amounts.`, go: ["retirement", "social-security"] });
+    const names = movable.map((x) => x.name);
+    const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
+    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && best.age === Math.round(claims[0]) ? "same" : "room", results, who: movable.map((x) => x.id),
+      sentence: !best ? "No claiming age still open gets there on its own." : `${who} claiming at ${best.age} lets the plan spend the most, about ${fmt(best.monthly)} a month${nowAt && best.age !== nowAt.age ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${nowAt.age}` : ""}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
   return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, levers };
