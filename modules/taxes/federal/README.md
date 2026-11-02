@@ -31,6 +31,12 @@ Since 2026-10-31 a separate filing with two adults is two returns, one per spous
 - **The next dollar and the bracket** shown on the page are those of the return of the adult marked "Me" (`inputs.separateTo`): an amount another page adds to the household's figures (a raise, a gift, a sale) lands on that return, and an amount it takes off comes off that return. A page that changes one spouse's own pay or saving re-runs `taxInputs` on a changed plan instead (the HSA page does).
 - The hero and the stats show the two returns added; the "Two returns" card shows each one. The Social Security rule for a separate return (above) applies to each return.
 
+## Refund or owe (2026-11-02)
+The hero and the first figure say the April bill or refund from `taxAnswer` (taxes/withholding): the year's tax against
+what the paychecks take out by December (typed, else estimated from pay) and the estimated payments, the answer
+Withholding check, Estimated payments and Quick answers give, with a button to Withholding check. Before, only the "withheld
+so far" box counted, so the page said "owe about $7,072" while Withholding check said $5,835.
+
 ## Edge cases
 Not modelled: AMT, the qualified business income deduction, the earned income and education credits, self-employment tax (self-employment income is taxed as ordinary income with a note), state tax, the FICA wage base on the additional Medicare tax. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
 

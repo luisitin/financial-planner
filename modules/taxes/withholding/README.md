@@ -12,6 +12,19 @@
 ## Formulas
 Paychecks left = floor(days left in the year / 365.25 x paychecks a year); a whole year before the year starts, none once it is over (paychecks in the January after count for the next year: IRC 31(a)(2)). Safe harbour: no penalty when withholding plus instalments reach 90% of this year's tax or 100% of last year's (110% when last year's income was over 150,000; 75,000 filing separately), or when this year's tax less withholding (not estimated payments) is under 1,000 (IRC 6654(e)(1); Form 2210 line 6). `penaltyRisk` = withholding figures typed, tax less withholding 1,000 or more, and withholding plus estimated payments under the safe amount (year totals; the Estimated payments page also checks each due date). `tests/golden-estimated.test.mjs` checks this page and Estimated payments against 3,000 households worked from IRC 6654 and 7503 (`tools/golden_estimated`).
 
+## One answer to "refund or owe" (2026-11-02)
+`withholdingEstimate(plan, { today })` is the one figure for what the paychecks take out this year: the figures typed here
+and the year so far when there are any (`projectedWithholding`, unchanged); else the Paycheck page's federal withholding,
+worked out from pay the way payroll does (IRS Pub. 15-T percentage method), for the whole year; else none. `taxAnswer`
+puts it against the year's tax and the estimated payments made: Estimated payments, the Federal estimate, Quick answers
+and Needs attention (an alert at $1,000 or more short, where the underpayment rules start, IRC 6654(e)(1)) all read it,
+so the family plan says "about $5,602 in April" on every page (before, $15,072 on Quick answers, "owe $7,072" on the
+Federal estimate with only the year so far counted, nothing here until a stub was typed, and $9,470 withheld on Estimated
+payments). `compute()`'s `balance` and `verdict` still count the typed figures only (the estimated-payments answer key
+checks them); the page leads with `estimate` (that plus `balance`, `verdict`) and says when it is estimated, never
+"$0 withheld". Each "paid how often" box starts on that person's salary period on Income (it was always every two weeks,
+so a monthly earner's stub figure was counted 26 times).
+
 ## Edge cases
 "About right" is within 500 either way. Without a paycheck figure the verdict is unknown. The paychecks-left count is by calendar days, not the employer's actual pay dates.
 

@@ -8,7 +8,7 @@
 
 import { compute as projection } from "../../retirement/projection/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
-import { compute as federal } from "../../taxes/federal/compute.js";
+import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
@@ -63,15 +63,16 @@ export function answerFor(guide, plan, params = {}) {
     return { headline: `Debt-free ${monthYear(c.endDate) ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}`, line: `${monthsText(c.months)} at ${m(d.budget)} a month, ${m(c.totalInterest)} of interest.`, status: "ok" };
   }
   if (guide === "taxes") {
-    const d = federal(plan, params);
-    if (!d.hasIncome) return null;
-    const r = d.result;
-    const paid = (r.withheld ?? 0) + (r.paid ?? 0);
-    const owes = paid > 0 ? r.balance : null;
+    // "What will I owe in tax this year?": the refund or bill in April first (the same answer as Withholding check), then the year's tax
+    const a = taxAnswer(plan, params);
+    if (!a) return null;
+    const rate = `${(Math.round(a.effectiveRate * 1000) / 10).toFixed(1)}% of your income`;
+    const from = a.from === "paycheck" ? "estimated from your pay" : "from your pay stubs";
+    if (a.from === "none") return { headline: `About ${m(a.totalTax)} of federal tax for ${a.year}`, line: `${rate} overall. Type what a paycheck withholds to see the refund or bill.`, status: "ok" };
     return {
-      headline: `About ${m(r.totalTax)} of federal tax for ${d.year}`,
-      line: owes === null ? `${(Math.round(r.effectiveRate * 1000) / 10).toFixed(1)}% of your income overall.` : owes > 0 ? `With ${m(paid)} already paid, about ${m(owes)} still to pay at filing time.` : `With ${m(paid)} already paid, about ${m(-owes)} back.`,
-      status: owes !== null && owes > 0 ? "warn" : "ok",
+      headline: a.verdict === "owe" ? `Owe about ${m(a.balance)} in April` : a.verdict === "refund" ? `About ${m(-a.balance)} back in April` : "About right: no big bill or refund",
+      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${rate}); your paychecks take out about ${m(a.projected)}, ${from}.`,
+      status: a.verdict === "owe" ? "warn" : "ok",
     };
   }
   return null;

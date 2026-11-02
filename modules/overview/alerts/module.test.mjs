@@ -141,3 +141,18 @@ test("goalsBehind: the monthly need counts goals behind their pace, never a goal
   assert.ok(ids(d).includes("goal-late-s2"));
   assert.ok(!d.alerts.some((a) => a.id.startsWith("goals-") && a.id !== "goals-behind" && /Sofa/.test(a.detail)), "the late goal is said once");
 });
+
+test("a likely bill in April: paychecks short of the year's tax by $1,000 or more is one thing to check", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { taxAnswer } = await import("../../taxes/withholding/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const a = taxAnswer(p, { today: T });
+  const al = compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill");
+  assert.ok(a.balance >= 1000, "the two-earner family is under-withheld");
+  assert.equal(al.level, "warn"); assert.deepEqual(al.go, ["taxes", "withholding"]);
+  assert.match(al.title, /short of this year's tax/);
+  // enough withheld: no alert
+  p.taxes.withholding = { self: { perPaycheck: 600, period: "biweekly" }, partner: { perPaycheck: 700, period: "monthly" } };
+  assert.equal(compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill"), undefined);
+});

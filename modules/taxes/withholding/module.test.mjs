@@ -52,3 +52,30 @@ test("withholding: an amount so far with no paycheck figure says the figure is m
   assert.match(d.suggestion.text, /^No paycheck figure is typed yet/);
   assert.match(d.suggestion.text, /What a paycheck withholds/);
 });
+
+test("one answer to refund or owe: typed figures, else withholding estimated from pay; every page reads the same balance", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: estimated } = await import("../estimated/compute.js");
+  const { withholdingEstimate, taxAnswer } = await import("./compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const e = withholdingEstimate(p, { today: T });
+  assert.equal(e.from, "paycheck", "no pay stub figure typed: estimated from pay");
+  assert.ok(e.projected > 0); assert.equal(e.people.length, 2);
+  assert.ok(Math.abs(e.projected - e.people.reduce((t, x) => t + x.yearly, 0)) < 0.01);
+  const d = compute(p, { today: T });
+  assert.equal(d.verdict, "unknown", "the typed-only verdict is unchanged (the answer key checks it)");
+  assert.equal(d.estimate.verdict, d.estimate.balance >= 500 ? "owe" : d.estimate.balance <= -500 ? "refund" : "about right");
+  const a = taxAnswer(p, { today: T });
+  const est = estimated(p, { today: T });
+  assert.ok(Math.abs(a.balance - est.balanceAtFiling) < 0.01, "Estimated payments and the tax answer agree");
+  assert.ok(Math.abs(a.balance - d.estimate.balance) < 0.01, "Withholding check and the tax answer agree");
+  assert.equal(est.withholdingFrom, "paycheck");
+  // a typed paycheck figure wins
+  p.taxes.withholding = { self: { perPaycheck: 400, period: "biweekly" }, partner: { perPaycheck: 500, period: "monthly" } };
+  const t = withholdingEstimate(p, { today: T });
+  assert.equal(t.from, "typed"); assert.equal(t.projected, compute(p, { today: T }).withholding.projected);
+  assert.equal(taxAnswer(p, { today: T }).from, "typed");
+  // no income: no answer
+  assert.equal(taxAnswer(emptyPlan(), { today: T }), null);
+});

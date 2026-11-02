@@ -14,6 +14,13 @@
 - Withholding: what the Withholding check page projects (typed per paycheck, or the year so far); with nothing typed, the Paycheck page's yearly federal withholding (estimated from pay and the W-4 it assumes), with a note to type the pay stubs' figure.
 - Behind = the cumulative share of the last quarter already past due, less what is paid (at most what remains); the headline asks for it now. The next payment is the first quarter not yet past and not covered: its cumulative share less what is paid, less what is behind (never $0). The overdue date is the first quarter not covered.
 
+## Withholding, and the easier fix (2026-11-02)
+Withholding comes from `withholdingEstimate` in taxes/withholding (the same fallback to the Paycheck page's estimate as
+before, now shared, so every tax page has one answer). When pay has tax taken out and estimates are needed, the page
+leads with raising withholding: tax withheld counts as paid evenly through the year (IRC 6654(g)(1)), so more withheld
+before December covers the earlier quarters too, and it says the penalty-free amount (`remaining`) and the amount that
+clears the April bill (`balanceAtFiling`). "Behind: pay it now" stays for income with no withholding.
+
 ## Edge cases
 The annualised-income method (uneven income through the year) is not modelled; nor is the penalty itself (it runs like interest from each due date).
 

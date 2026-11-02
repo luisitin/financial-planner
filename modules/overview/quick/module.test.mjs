@@ -59,7 +59,9 @@ test("the plan's own answers: the sample family's three questions answer at once
   const by = Object.fromEntries(d.answers.map((a) => [a.guide, a]));
   assert.equal(by.retire.headline, projection(p, { today: T }).verdict === "on track" ? "The money lasts" : by.retire.headline, "the answer page's own heading");
   assert.match(by.debt.headline, /^Debt-free by [A-Z][a-z]+ \d{4}$/);
-  assert.match(by.taxes.headline, /^About \$[\d,]+ of federal tax for 2026$/);
+  // the question is "what will I owe": the April bill or refund first (withholding estimated from pay), the year's tax in the line
+  assert.match(by.taxes.headline, /^(Owe about \$[\d,]+ in April|About \$[\d,]+ back in April|About right: no big bill or refund)$/);
+  assert.match(by.taxes.line, /of federal tax for 2026 .*your paychecks take out about \$[\d,]+, estimated from your pay\.$/);
   assert.equal(by.retire.href, "#/retirement/projection?from=quick");
   assert.equal(questionFor("debt/payoff").title, "When will I be debt-free?", "the answer page shows the question on top");
   // a page switched off on this device: its question goes back to the guide

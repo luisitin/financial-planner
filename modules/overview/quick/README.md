@@ -44,6 +44,11 @@ Rows open `#/<key>?from=quick`, so the page shows a "‹ Quick answers" bar on t
   which is about 23 phone screens long.
 - No filled button: the page is a list of choices.
 
+## The tax answer (2026-11-02)
+"What will I owe in tax this year?" answers with the April bill or refund first ("Owe about $5,602 in April"), from
+`taxAnswer` in taxes/withholding, and the year's tax and what the paychecks take out in the line. It used to headline the
+year's whole tax ("About $15,072 of federal tax"), which read like a $15,072 bill.
+
 ## Sources
 GOV.UK start pages and NN/g on task-based navigation (pick by what you want done); NerdWallet's and Vanguard's
 calculator hubs (a question per row, not a tool name). Research notes: the build session's `competitors.md` and

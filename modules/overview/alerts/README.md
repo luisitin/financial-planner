@@ -22,6 +22,9 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
 - Warnings the other pages produce (people, income, expenses, assumptions) are repeated here as warn, so one list has everything.
 - Sort: bad, warn, info. Ids are stable so a future "dismiss" feature can key on them.
 
+- `tax-bill`: warn. The paychecks look $1,000 or more short of the year's federal tax (`taxAnswer` in taxes/withholding:
+  typed withholding, else estimated from pay, and the estimated payments), opening Withholding check (2026-11-02).
+
 ## Edge cases
 Empty plan: five setup alerts. Complete healthy plan: all clear. No `today`: no date checks.
 

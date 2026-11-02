@@ -2,6 +2,7 @@
 // refund or bill, the rates), then the walk from income to tax, what the plan already knows,
 // and folded forms for the figures only the owner knows.
 import { compute } from "./compute.js";
+import { taxAnswer } from "../withholding/compute.js";
 import { FILING_STATUSES } from "../../../core/math/tax.js";
 
 let pending = null;
@@ -13,12 +14,17 @@ export function render(root, ctx) {
   const r = d.result;
   const money = (n) => fmt.money(n, cur);
   const statusLabel = FILING_STATUSES.find((s) => s.id === d.filingStatus)?.label ?? "Single";
-  const owes = r.withheld + r.paid > 0 ? r.balance : null;
+  // refund or owe: the year's tax against what the paychecks take out by December (typed on Withholding check, else
+  // estimated from pay) and the estimated payments: the same answer as Withholding check, Estimated payments and Quick answers
+  const ans = d.hasIncome ? taxAnswer(plan, { today: fmt.today() }) : null;
+  const owes = ans && ans.from !== "none" ? ans.balance : null;
+  const paidBy = ans ? `${ans.from === "paycheck" ? "Your paychecks take out about" : "The paychecks take out"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is paid in estimates` : ""}` : "";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? `About ${money(r.totalTax)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(r.effectiveRate, 1)} of it overall; the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}).${owes !== null ? owes > 0 ? ` With ${money(r.withheld + r.paid)} already paid, you would owe about ${money(owes)} at filing time.` : ` With ${money(r.withheld + r.paid)} already paid, you would get about ${money(-owes)} back.` : ""}`
+      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(r.effectiveRate, 1)} of it overall; the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}).${owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
+    owes !== null ? ui.row(ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, owes >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
     ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice: no AMT, business deduction, education or earned-income credits, or state tax.`),
   ));
   const out = ui.h("div");
@@ -26,7 +32,7 @@ export function render(root, ctx) {
   root.append(out);
   for (const n of d.notes) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
-    ui.stat("Federal tax", money(r.totalTax), owes !== null ? owes > 0 ? `${money(owes)} still to pay` : `${money(-owes)} refund` : "before withholding"),
+    ui.stat("Federal tax", money(r.totalTax), owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
     ui.stat("Of your income", fmt.pct(r.effectiveRate, 1), "the effective rate"),
     ui.stat("On the next dollar", fmt.pct(d.marginal, 0), d.marginal > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount)} of deductions`),

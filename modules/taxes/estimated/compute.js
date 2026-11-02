@@ -2,9 +2,8 @@
 // tax comes to, how much of it withholding will cover, the safe-harbour amount that keeps you
 // clear of the underpayment penalty, what is due each quarter, and where you stand today.
 import { compute as computeFederal } from "../federal/compute.js";
-import { projectedWithholding, safeHarbour } from "../withholding/compute.js";
+import { withholdingEstimate, safeHarbour } from "../withholding/compute.js";
 import { dueDay } from "../../household/calendar/compute.js";
-import { compute as computePaycheck } from "../../cashflow/paycheck/compute.js";
 
 /**
  * The IRS quarters of a tax year: the income period each covers and the day the payment is due (IRC 6654(c)(2):
@@ -37,12 +36,9 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const fed = computeFederal(plan, params);
   // withholding: the figures typed on the Withholding check page; with none, the Paycheck page's estimate from pay
-  let wh = projectedWithholding(plan, params), withholdingFrom = wh.hasSetup ? "typed" : "none";
-  if (!wh.hasSetup) {
-    const pc = computePaycheck(plan, params);
-    const yearly = pc.ready ? pc.people.reduce((s, p) => s + (Number(p.yearly?.federal) || 0), 0) : 0;
-    if (yearly > 0) { wh = { ...wh, projected: yearly }; withholdingFrom = "paycheck"; }
-  }
+  // (withholdingEstimate, the one figure every tax page reads)
+  const est = withholdingEstimate(plan, params);
+  const wh = est.detail, withholdingFrom = est.from;
   const t = plan.taxes ?? {};
   const totalTax = Math.max(0, fed.result.totalTax);
   const harbour = safeHarbour(totalTax, t.priorYear?.tax, t.priorYear?.agi, fed.filingStatus);
