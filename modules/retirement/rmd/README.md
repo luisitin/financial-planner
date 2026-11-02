@@ -12,6 +12,25 @@
 ## Formulas
 `core/math/rmd.js`: IRS Publication 590-B Table III (Uniform Lifetime Table, in effect from 2022); start age 70½ for people born before July 1, 1949 (the year they reach it: their 70th for a birthday in January to June, their 71st from July), 72 for July 1949 to 1950, 73 for 1951-1959, 75 from 1960 (SECURE 2.0). Required amount = each owner's prior year-end balance in their own 401(k)s and IRAs / the factor for the age they reach that year; the projection keeps each owner's slice of the pre-tax bucket (`rmd.owners` in the engine), an account with no owner belongs to the first person, and life-insurance cash value (in the same bucket) has none.
 
+## This year's withdrawal (2026-11-02, round 4)
+For each owner whose withdrawals have started and who holds pre-tax money, the page leads with "Take at least $13,080
+from Ruth's IRA by December 31, 2026" and an outlined "I've taken it" (`thisYear`, `markTaken`; stored as the optional
+`retirement.rmdTaken[year][personId]` = the day tapped, DATA_MODEL). Needs attention lists an untaken one from October
+(a fix in December; "to do" for a first year), and the calendar's December 31 row says the amount.
+- Amount: each account's balance on December 31 of last year divided by the Uniform Lifetime factor for the age reached
+  this year (`rmdAmount`). The balance is the account's history point nearest that day (within 45 days), else today's
+  balance, which the page calls an estimate and asks for the year-end statement figure.
+- First year (the year the start age is reached): it may wait until April 1 next year, but then two fall in that year.
+- Each 401(k)'s share comes out of that 401(k); IRAs may be added together and taken from any one of them. A 401(k) at
+  a job still held can usually wait until retiring (the plan document decides); IRAs cannot.
+- Missing it: a 25% excise tax on what was not taken, 10% if it is taken within two years.
+- Sources (read 2026-11-02): IRS, "Retirement topics: Required minimum distributions (RMDs)", page last reviewed
+  2026-04-08 (the December 31 and April 1 dates, two withdrawals after waiting, the 25%/10% excise tax, prior December 31
+  balance over the Uniform Lifetime factor); IRS, "Retirement plan and IRA required minimum distributions FAQs", last
+  reviewed 2026-01-29 (Q1 the still-working delay, not for IRAs or 5% owners; Q5 IRAs totalled, 401(k)s separately).
+  Not handled: the Joint Life table (a sole spouse beneficiary more than 10 years younger lowers the amount) and
+  inherited accounts.
+
 ## Tests
 `tests/retirement.test.mjs` (table, start ages, amounts) and `tests/retirement-pages.test.mjs` (the page).
 

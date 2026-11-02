@@ -4,6 +4,8 @@
 // own reminders; and the same list as a calendar file for a phone.
 import { detectRecurring, nextAfter, addDays } from "../../cashflow/recurring/compute.js";
 import { rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
+import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
+import { money as fmtMoney } from "../../../core/format.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { MARKETPLACE, MEDICARE_OPEN } from "./data/dates.js";
 
@@ -135,7 +137,9 @@ export function compute(plan, params = {}) {
     add(w.closes, "health", `Marketplace open enrollment for ${year} ends`, { go: ["insurance", "health"] });
   }
 
-  // required withdrawals from 401(k)s and IRAs
+  // required withdrawals from 401(k)s and IRAs; this year's carries its amount and accounts (retirement/rmd thisYear)
+  const rmdNow = rmdThisYear(plan, { today });
+  const rmdLine = (p) => { const r = rmdNow.people.find((x) => x.id === p.id); return r ? { detail: r.taken ? "Marked taken on Required withdrawals." : `At least ${fmtMoney(r.amount, plan.meta?.currency ?? "USD")} from ${r.accounts.map((a) => a.name).join(" and ")}${r.estimated ? " (worked out from today's balance)" : ""}.` } : {}; };
   for (const p of people) {
     const owns = (plan.accounts ?? []).some((a) => RMD_ACCOUNT_TYPES.includes(a.type) && (a.ownerId === p.id || (!a.ownerId && people.filter((q) => q.role !== "dependent").length === 1)) && Number(a.balance) > 0);
     if (!owns || !p.birthDate) continue;
@@ -143,7 +147,7 @@ export function compute(plan, params = {}) {
     if (!first) continue;
     for (const y of years) {
       if (y === first + 1) add(ymd(y, 4, 1), "retire", `${p.name || "Your"}'s first required withdrawal deadline`, { detail: `For ${first}, from 401(k)s and traditional IRAs. Waiting until now means two withdrawals in ${y}.`, go: ["retirement", "rmd"] });
-      if (y >= first + 1) add(ymd(y, 12, 31), "retire", `${p.name || "Your"}'s required withdrawal for ${y} due`, { go: ["retirement", "rmd"] });
+      if (y >= first + 1 || (y === first && y === rmdNow.year)) add(ymd(y, 12, 31), "retire", `${p.name || "Your"}'s required withdrawal for ${y} due${y === first ? " (or by April 1 next year)" : ""}`, { go: ["retirement", "rmd"], ...(y === rmdNow.year ? rmdLine(p) : {}) });
     }
   }
 

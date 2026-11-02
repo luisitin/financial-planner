@@ -61,6 +61,10 @@ Also exported: `dueDay`, `taxHolidays`, `periodDates`, `toIcs`, `saveReminder`, 
 - **The calendar file** (`toIcs`): iCalendar (RFC 5545): one all-day event a date (DTSTART as a date, DTEND the day
   after), commas, semicolons, backslashes and line breaks escaped, lines folded at 75 characters with a leading space.
 
+## This year's required withdrawal (2026-11-02)
+The December 31 row for this year carries the amount and accounts from retirement/rmd `thisYear` ("At least $13,080 from
+Ruth's IRA"), or "Marked taken". A first year shows a December 31 row too ("or by April 1 next year").
+
 ## Edge cases
 - Nothing dated in the stretch: a card saying how to get dates (import bank files, add renewals, add a reminder).
 - The reminders form is open while there are none; with reminders it folds behind "+ Add another reminder".

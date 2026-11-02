@@ -205,3 +205,16 @@ test("goalsBehind: a goal with nothing going in waits its turn when Next best ac
   assert.deepEqual(now.queued, []); assert.deepEqual(now.behind.map((x) => x.id), ["h", "c"]);
   assert.deepEqual(goalsBehind(gl).queued, [], "without Next best action nothing waits");
 });
+
+test("this year's required withdrawal is on Needs attention from October until it is marked taken", () => {
+  const p = emptyPlan();
+  p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10" }];
+  p.accounts = [{ id: "ira", name: "Ruth's IRA", type: "ira", balance: 310000, ownerId: "r", asOf: "2026-09-15", history: [] }];
+  const ids = (today) => compute(p, { today }).alerts.filter((a) => a.id.startsWith("rmd-"));
+  assert.equal(ids("2026-09-20").length, 0, "not before October");
+  const nov = ids("2026-11-02"); assert.equal(nov.length, 1);
+  assert.match(nov[0].title, /Ruth's required withdrawal: at least \$13,080 by December 31/); assert.equal(nov[0].level, "warn");
+  assert.equal(ids("2026-12-05")[0].level, "bad", "in December it is a fix");
+  p.retirement.rmdTaken = { 2026: { r: "2026-11-02" } };
+  assert.equal(ids("2026-11-03").length, 0, "marked taken");
+});

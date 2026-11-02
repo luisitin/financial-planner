@@ -17,6 +17,7 @@ import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { compute as estateDocs } from "../../estate/documents/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
 export const LEVELS = { bad: { label: "fix", order: 0 }, warn: { label: "check", order: 1 }, info: { label: "to do", order: 2 } };
@@ -143,6 +144,15 @@ export function compute(plan, params = {}) {
   // a goal past its date already has its own alert above: its warning from the Goals page would say the same thing again
   const late = gl.goals.filter((g) => g.status === "past due").map((g) => g.name);
   for (const [i, w] of gl.warnings.entries()) if (!late.some((n) => n && w.startsWith(n) && /date has passed/.test(w))) add(`goals-${i}`, "warn", "Goals: something to check", w, ["goals", "goals"]);
+  // this year's required withdrawal, from October while it is not marked taken (December 31; the first year may wait to
+  // April 1): missing it costs 25% of what was not taken (IRS, Retirement topics: RMDs, reviewed 2026-04-08)
+  if (today && Number(today.slice(5, 7)) >= 10) for (const r of rmdThisYear(plan, { today }).due) {
+    const dec = Number(today.slice(5, 7)) === 12;
+    add(`rmd-${r.id}-${today.slice(0, 4)}`, r.first ? "info" : dec ? "bad" : "warn",
+      `${r.name === "You" ? "Your" : `${r.name}'s`} required withdrawal: at least ${money(r.amount)} by ${r.first ? `April 1, ${Number(today.slice(0, 4)) + 1}` : `December 31`}`,
+      `From ${r.accounts.map((a) => a.name).join(" and ")}${r.estimated ? ", worked out from today's balance" : ""}. ${r.first ? `The first year may wait until April 1, but then two fall in ${Number(today.slice(0, 4)) + 1}.` : "Missing it costs 25% of what was not taken."} Tap "I've taken it" there once it is done.`,
+      ["retirement", "rmd"]);
+  }
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
   for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${p.name} retires ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
 

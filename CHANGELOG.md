@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] This year's required withdrawal is said where retirees look: Required withdrawals leads with "Take at least $13,080 from Ruth's IRA by December 31, 2026" and "I've taken it" (new optional `retirement.rmdTaken`), Needs attention lists it from October until it is marked, and the calendar row says the amount. IRS rules read 2026-11-02 (pages reviewed 2026-04-08 and 2026-01-29).
 - [builder:claude-b] - [builder:claude-b] The Annual review's year so far ends at today's net worth, like the Dashboard: "from $257,000 on January 1, 2026 to $287,100 today: up $30,100" instead of "from $257,000 to $257,000: up $0".
 - [builder:claude-b] - [builder:claude-b] The first day no longer says a new plan is behind: no check-in for a month before the plan had anything in it, the Dashboard picks up Set up my plan at the question reached (one count, not "Seven easy questions" beside "2 of 6 done"), reads "done" after it, and a goal whose turn comes later says "starts later" instead of an orange "behind"; goal rows lead with the amount typed.
 - [builder:claude-b] - [builder:claude-b] Fixing a typo is no longer shown as a loss: when a new balance looks like the old one with a key slipped (115,000 for 11,500), Update my balances and Net worth ask which it was; "was a mistake" corrects the account's history and the saved totals, so the Dashboard says "No change" instead of "-$103,500". Saved totals under Over time can be removed.
