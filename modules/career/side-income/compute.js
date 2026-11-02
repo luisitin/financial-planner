@@ -3,7 +3,7 @@
 // months out of four (what the plan should count on), the average, the spread, the cushion that paying yourself the
 // average would have needed, the share of each payment to set aside for tax (self-employment tax, federal and state at
 // the margin), the next quarterly payment, and the forms and mileage rate that come with it.
-import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { compute as computeIncome, countedOn } from "../../cashflow/income/compute.js";
 import { compute as computeSelfEmployment } from "../../taxes/self-employment/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { compute as computeEstimated } from "../../taxes/estimated/compute.js";
@@ -73,7 +73,7 @@ export function compute(plan, params = {}) {
       id: x.id, name: x.name || "Side income", personName: x.personName, monthly: x.monthly, period: x.period, typedMonths, stats, enough,
       countOn: enough ? stats.reliable : null,
       // the careful figure already saved for cash flow (income[].countOn), or null: tax keeps the Income page's amount
-      counted: Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" ? Number(x.countOn) : null,
+      counted: countedOn(x),
       gap: enough ? x.monthly - stats.reliable : null,   // how far the Income page's figure is above the reliable one
       below: enough ? typedMonths.filter((v) => v !== null && v < x.monthly - 0.5).length : null,
     };

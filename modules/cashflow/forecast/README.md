@@ -48,3 +48,7 @@ Business or freelance income typed as a year (or a quarter) lands a month at a t
 ## Ideas / not yet
 - Let the person move a typed bill to the right day of month from this page.
 - Contributions paid from checking rather than from pay (an IRA, a brokerage account) are not events yet; Next best action takes them out of the left-over, so the Forecast can read a little higher than the Dashboard.
+
+## Side income counted carefully
+A business line with a careful figure (income's `countedOn`) lands that figure a month; at or above the line's amount, or on
+another kind of income, the amount lands as typed (review 2026-11-02).

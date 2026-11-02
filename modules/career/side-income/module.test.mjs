@@ -145,3 +145,42 @@ test("'count on' is kept apart: the month plans with it, every tax figure stays 
   const cs = cashStatement(after, { today: T });
   assert.ok(JSON.stringify(cs).includes("Uneven pay not counted on, after its tax (Side income)"));
 });
+
+test("count on: one rule everywhere; only repeating business pay, only below its amount (review 2026-11-02)", async () => {
+  const { countedOn, compute: income, changeFrom } = await import("../../cashflow/income/compute.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { compute: forecast } = await import("../../cashflow/forecast/compute.js");
+  const { compute: health } = await import("../../overview/health-score/compute.js");
+  const T = "2026-11-02";
+  const line = { type: "business", amount: 600, period: "monthly", countOn: 300 };
+  assert.equal(countedOn(line), 300);
+  assert.equal(countedOn({ ...line, countOn: 700 }), null, "above the amount: the amount counts");
+  assert.equal(countedOn({ ...line, countOn: 600 }), null, "at the amount: nothing held back");
+  assert.equal(countedOn({ ...line, type: "salary" }), null, "a line changed to another kind drops it");
+  assert.equal(countedOn({ ...line, period: "once" }), null);
+  assert.equal(countedOn({ ...line, countOn: "" }), null); assert.equal(countedOn({ ...line, countOn: 0 }), 0, "nothing to count on is a figure");
+  assert.equal(countedOn({ ...line, amount: 7200, period: "annual" }), 300, "a yearly figure is compared a month");
+  // a figure above the amount moves nothing: Income, Next best action and the Forecast all stay on the $600
+  const base = familyPlan(T), high = familyPlan(T);
+  high.income.find((x) => x.id === "i-side").countOn = 700;
+  assert.equal(income(high, { today: T }).heldMonthly, 0);
+  assert.ok(Math.abs(next(high, { today: T }).spare.monthly - next(base, { today: T }).spare.monthly) < 0.01);
+  const fh = forecast(high, { today: T }), fb = forecast(base, { today: T });
+  assert.ok(Math.abs(fh.income - fb.income) < 0.01 && Math.abs(fh.end - fb.end) < 0.01, "the forecast never lands more than the Income amount");
+  const low = familyPlan(T); low.income.find((x) => x.id === "i-side").countOn = 300;
+  assert.ok(forecast(low, { today: T }).income < fb.income - 100, "a figure below it does land less");
+  assert.equal(compute(high, { today: T }).items.find((x) => x.id === "i-side").counted, null);
+  // a raise from a later date: the new line starts without the old careful figure
+  const ch = changeFrom({ id: "i-side", name: "Weekend photography", type: "business", amount: 600, period: "monthly", countOn: 300 }, { amount: 900, period: "monthly", startDate: "2027-01-01" }, T);
+  assert.equal(ch.split, true); assert.equal(ch.old.countOn, 300); assert.equal("countOn" in ch.next, false);
+  // the saving share is on the careful month on both sides: counting on less never marks a saver down
+  const careful = familyPlan(T); careful.income.find((x) => x.id === "i-side").countOn = 300;
+  const nbC = next(careful, { today: T }).spare;
+  const part = health(careful, { today: T }).parts.find((x) => x.id === "saving");
+  const afterTax = nbC.gross - (nbC.businessCosts ?? 0) - nbC.federalTax - nbC.payrollTax - (nbC.stateTax ?? 0) - nbC.held;
+  const saved = nbC.retirementSaving + nbC.goalSaving + (nbC.debtExtra ?? 0) + nbC.monthly;
+  assert.match(part.detail, new RegExp(`About ${Math.round((saved / afterTax) * 100)}% of income after tax`));
+  // Next best action's lines add up to the spare (the part held back is a line of its own)
+  const sum = nbC.businessCosts + nbC.federalTax + nbC.payrollTax + nbC.stateTax + nbC.spending + nbC.retirementSaving + nbC.goalSaving + nbC.debtExtra + nbC.held + nbC.monthly;
+  assert.ok(Math.abs(sum - nbC.gross) < 0.01);
+});

@@ -12,7 +12,7 @@
   the State tax page's rate (`taxes/state`), and whether the whole return needs quarterly payments and the next one
   (`taxes/estimated`: `needsEstimates`, `nextDue`), each worked on a copy of the plan with every side income that has
   enough typed months at its months' average.
-- Writes `whatIfs.sideIncome`; "Count on ..." sets that income's amount on the Income page (monthly).
+- Writes `whatIfs.sideIncome`; "Count on ..." saves `income[].countOn` (the careful figure); the Income page's amount stays.
 
 ## Outputs
 `compute(plan, { today })` -> `{ ready, year, months, items: [{ id, name, personName, monthly, period, typedMonths, stats, enough, countOn, gap, below }], setAside: { rate, yearly, quarter, federal, state, stateKnown, stateAverage, onAverage } | null, estimates: { needed, nextDue }, rules, notes }`;
@@ -64,6 +64,11 @@ latest known) and mileage dates, not ready.
 
 ## Count on, kept apart (round 4, 2026-11-02)
 "Count on $X a month" saves `income[].countOn` and leaves the Income page's amount alone. Before, it overwrote the amount, so every tax page dropped with it (a freelancer's next quarterly payment went from $2,800 to $1,687 and the April bill from $9,453 to $2,807) while this page still said the tax was higher. Now the left-over figure, Forecast and the statements plan with the careful figure, tax stays on the amount, and the card says so, with "Count the full $X again" (deletes `countOn`) and "Count on $Y instead" when the months change. `items[].counted` is the figure on file.
+Review fixes 2026-11-02: `counted` is income's `countedOn(x)` (null at or above the amount, so the forecast never lands
+more than Income counts). The "counts on $X" sentence and "Count the full $X again" show whenever a figure is on file,
+also with too few months typed (it used to disappear while still lowering the left-over figure); "Count on $Y instead"
+only when $Y is below the amount. The sentence names the tax pages (Quarterly payments, the April bill) as what stays on
+the Income amount, since the set-aside card below works on the typed average.
 
 ## Ideas / not yet
 - The months read from the ledger: deposits from the same payer into the account it lands in.

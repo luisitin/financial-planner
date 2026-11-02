@@ -40,6 +40,11 @@ A salary typed as a yearly (or quarterly) figure, the setup's default, is paid i
 
 ## countOn (round 4, 2026-11-02)
 `income[].countOn` (a month, optional; set on Side income) is the careful figure for uneven pay. `monthly`/`yearly` keep the full amount, which every tax page uses. Each item gets `heldMonthly` (amount a month minus countOn, never below 0) and the result `heldMonthly` (active items). The Income list says "the plan counts on $X a month (Side income)".
+`countedOn(x)` is the one rule every page reads it through (Income, Next best action's careful taxes, Forecast, Side income;
+review 2026-11-02): a figure counts only on a "Self-employment / business" line that repeats, and only when it is below the
+line's amount a month; otherwise null (the amount counts). Saving a line as another kind or as one time deletes `countOn`;
+a raise saved from a later date (`changeFrom` split) keeps it on the old line only, so the new amount is counted in full
+until Side income offers a careful figure again.
 
 ## Ideas / not yet
 - Pay-stub detail (pre-tax deductions, 401(k) match) for the tax and retirement pages.

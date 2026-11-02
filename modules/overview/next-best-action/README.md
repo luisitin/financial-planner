@@ -140,3 +140,8 @@ When costly debt is first in line for the spare money (no earlier step still fil
 
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).
+
+## Side income counted carefully (review 2026-11-02)
+"Each month's money" lists `spare.held` (side income above what you count on, after its tax) as its own line, so the lines
+add up to "Spare each month"; the note under it says it is a bonus to save when it comes, and the left-over step's detail
+adds "counting uneven pay at what you can count on".

@@ -39,6 +39,8 @@ month less spending; now the biggest gain is adding Social Security.
 `module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
 
 ## Review fixes 2026-11-02
+Saving: the share is worked on the careful month on both sides (after-tax income less `spare.held`, the part of uneven pay
+not counted on), so counting side income carefully on Side income never marks a saver down.
 Goals: a goal waiting its turn on Next best action (alerts' `goalsBehind(...).queued`: nothing in yet, still reachable
 from the month the goals step starts) counts as on track, as Goals, the Timeline, Needs attention and the Dashboard say;
 the detail adds "counting one waiting its turn", and the fix for the others names when the waiting ones start.

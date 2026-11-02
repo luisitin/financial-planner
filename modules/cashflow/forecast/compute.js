@@ -12,6 +12,7 @@ import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { perYear, payRhythm } from "../../../core/math/periods.js";
+import { countedOn } from "../income/compute.js";
 
 /** Words in a bank line that mark a deposit as pay (a payroll deposit names the employer, not the person). */
 export const PAY_WORDS = /\b(payroll|salary|direct ?dep(osit)?|dir ?dep|directdep|paycheck|wages?|pay ?roll)\b/i;
@@ -83,7 +84,7 @@ export function compute(plan, params = {}) {
     ...(plan.income ?? []).filter((i) => i.period !== "once").map((i0) => {
       // a salary typed as a yearly figure lands as paychecks (the Paycheck page's count), not one deposit a year
       // uneven pay counted carefully (Side income's "count on"): the forecast plans with that figure, a month
-      const careful = Number.isFinite(Number(i0.countOn)) && i0.countOn !== null && i0.countOn !== "" ? { ...i0, amount: Number(i0.countOn), period: "monthly" } : null;
+      const careful = countedOn(i0) !== null ? { ...i0, amount: countedOn(i0), period: "monthly" } : null;
       // business or freelance income typed as a year (setup asks for "a typical year") comes in through the year, not in one
       // deposit on one day: it lands a month at a time (round 4, 2026-11-02)
       const spread = !careful && i0.type === "business" && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;

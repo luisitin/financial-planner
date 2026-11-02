@@ -39,7 +39,7 @@ export function compute(plan, params = {}) {
     const growth = Number(x.growth) || 0;
     // "count on" (Side income's careful figure, a month): cash-flow pages plan with it; tax keeps the amount, what comes in
     // on average. heldMonthly is the part of the amount the plan does not count on (round 4, 2026-11-02)
-    const careful = x.period !== "once" && Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" && Number(x.countOn) >= 0 ? Number(x.countOn) : null;
+    const careful = countedOn(x);
     const held = careful !== null ? Math.max(0, perMonth(x.amount, x.period) - careful) : 0;
     return {
       ...x, typeLabel: t.label, icon: t.icon, periodLabel: periodLabel(x.period), personName: nameOf(x.personId),
@@ -100,6 +100,19 @@ const dayBefore = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.
  * finding, 2026-11-02), the whole income moved to the later date and the plan showed no pay until then. The same rule as
  * Life events' new pay (household/life-events, updatePay).
  */
+/**
+ * countedOn(income line) -> the careful figure a month the cash-flow pages plan with (Side income's "count on",
+ * income[].countOn), or null. Only uneven pay that repeats (Self-employment / business, not one-time) has one, and only
+ * below what the line brings in a month: a figure at or above it, or one left on a line whose kind or schedule changed,
+ * counts for nothing (review 2026-11-02: it used to keep lowering the left-over figure, or raise the forecast above Income).
+ */
+export function countedOn(x) {
+  if (!x || x.type !== "business" || x.period === "once") return null;
+  const v = x.countOn;
+  if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) || Number(v) < 0) return null;
+  return Number(v) < perMonth(x.amount, x.period) - 0.005 ? Number(v) : null;
+}
+
 export function changeFrom(item, values, today) {
   const merged = { ...item, ...values };
   const going = !!today && activeOn(item, today);
@@ -107,6 +120,7 @@ export function changeFrom(item, values, today) {
   const changed = Number(values.amount) !== Number(item.amount) || values.period !== item.period;
   if (!going || !later || !changed || (item.startDate && item.startDate > today)) return { split: false, item: merged };
   const old = { ...item, endDate: item.endDate && item.endDate < values.startDate ? item.endDate : dayBefore(values.startDate) };
-  const { id, ...rest } = merged; void id;
+  // the careful figure (countOn) was for the old amount: it stays with the old line, Side income offers it again
+  const { id, countOn, ...rest } = merged; void id; void countOn;
   return { split: true, old, next: { ...rest, startDate: values.startDate }, change: perMonth(values.amount, values.period) - perMonth(item.amount, item.period) };
 }

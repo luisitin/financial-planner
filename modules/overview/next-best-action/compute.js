@@ -4,7 +4,7 @@
 // fund, the HSA, an IRA, middling debt, the 401(k) to the limit, then goals and the rest. Each step
 // says whether it is done, what is left, and, from the money left over each month after tax,
 // spending and what already goes to savings, about when the spare money gets it done.
-import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { compute as computeIncome, countedOn } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
@@ -104,7 +104,7 @@ export function compute(plan, params = {}) {
   spare.held = spare.heldGross;
   if (spare.held > 0.005 && T) {
     try {
-      const careful = { ...plan, income: (plan.income ?? []).map((x) => (Number.isFinite(Number(x.countOn)) && x.countOn !== null && x.countOn !== "" && x.period !== "once" ? { ...x, amount: Number(x.countOn), period: "monthly" } : x)) };
+      const careful = { ...plan, income: (plan.income ?? []).map((x) => (countedOn(x) !== null ? { ...x, amount: countedOn(x), period: "monthly" } : x)) };
       const TC = yearTaxes(careful, { today, inc: computeIncome(careful, { today }) });
       const taxOnHeld = ((T.federal + T.payroll + T.state) - (TC.federal + TC.payroll + TC.state)) / 12;
       spare.held = Math.max(0, spare.heldGross - Math.max(0, taxOnHeld));
@@ -126,7 +126,7 @@ export function compute(plan, params = {}) {
   if (drawing) add({ id: "bills", title: "Spend within what the plan can carry", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
     detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. The plan can carry about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
   else add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
-    detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}.`)
+    detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}${spare.held > 0.5 ? ", counting uneven pay at what you can count on" : ""}.`)
       : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}. Trim spending${spare.debtExtra ? ", lower that extra" : ""} or pause a goal first.`, go: ["cashflow", "expenses"] });
 
   // 0b. a household no paycheck takes tax from (a freelancer): this year's tax on what is already earned is the IRS's money,

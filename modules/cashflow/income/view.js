@@ -69,7 +69,11 @@ export function render(root, ctx) {
       if (was) {
         const i = p.income.findIndex((x) => x.id === was.id);
         if (i >= 0 && ch?.split) { p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: ui.uid(), ...ch.next }); }
-        else if (i >= 0) p.income[i] = { ...p.income[i], ...clean };
+        else if (i >= 0) {
+          p.income[i] = { ...p.income[i], ...clean };
+          // Side income's careful figure is for uneven pay that repeats: a line changed to another kind or to one time drops it
+          if (clean.type !== "business" || clean.period === "once") delete p.income[i].countOn;
+        }
       } else p.income.push({ id: ui.uid(), ...clean });
     });
   };
