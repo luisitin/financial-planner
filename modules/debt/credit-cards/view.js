@@ -8,6 +8,7 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
+  const monthYear = (iso) => { const t = new Date(`${String(iso).slice(0, 10)}T12:00:00`); return Number.isNaN(t.getTime()) ? String(iso) : t.toLocaleDateString(plan.meta.locale, { month: "long", year: "numeric" }); };
   const monthsText = (m) => !Number.isFinite(m) ? "never" : m < 12 ? `${m} month${m === 1 ? "" : "s"}` : `${Math.floor(m / 12)} year${Math.floor(m / 12) === 1 ? "" : "s"}${m % 12 ? ` ${m % 12} month${m % 12 === 1 ? "" : "s"}` : ""}`;
 
   if (!d.hasData) {
@@ -20,6 +21,9 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `${fmt.money(d.totalBalance, cur)} on ${d.count} card${d.count === 1 ? "" : "s"}`),
     ui.h("p", { class: "lede" }, `${d.interestMonthly ? `About ${fmt.money(d.interestMonthly, cur)} a month goes to interest. ` : ""}${d.utilisation !== null ? `You use ${fmt.pct(d.utilisation, 0)} of your combined limits; under 30% is what lenders like to see.` : "Add each card's credit limit on the Debts page to see how much of it you use."}`),
+    // how much less, and about when at what you pay now (round 4, 2026-11-02)
+    d.under && d.under.less30 > 0.5 ? ui.h("p", {}, `${fmt.money(d.under.less30, cur)} less on the cards gets you under 30%${d.under.date30 ? `: about ${monthYear(d.under.date30)} at what you pay now` : ""}${d.under.date10 && d.under.less10 > 0.5 ? `, and under 10% (best for your score) about ${monthYear(d.under.date10)}` : ""}.`) : d.under && d.under.less10 > 0.5 ? ui.h("p", {}, `Under 30% already. ${fmt.money(d.under.less10, cur)} less gets you under 10%, best for your score${d.under.date10 ? `: about ${monthYear(d.under.date10)} at what you pay now` : ""}.`) : null,
+    d.under && d.under.less30 > 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     d.missing.length ? ui.h("p", { class: "muted small" }, `No rate or payment yet: ${d.missing.join(", ")}.`) : null,
   ));
   root.append(ui.card("Each card",
@@ -29,8 +33,10 @@ export function render(root, ctx) {
         ui.h("div", { class: "t" }, c.name, " ", c.utilisation !== null ? ui.h("span", { class: `pill ${c.utilisation > 0.3 ? "warn" : "ok"}` }, `${fmt.pct(c.utilisation, 0)} of limit`) : null, c.rate !== null && c.rate >= 0.2 ? ui.h("span", { class: "pill warn" }, `${fmt.pct(c.rate, 1)}`) : null),
         c.utilisation !== null ? ui.h("div", { class: "progress", style: { margin: "6px 0 2px" } }, ui.h("span", { style: { width: `${Math.min(100, Math.round(c.utilisation * 100))}%`, background: c.utilisation > 0.3 ? "var(--warn)" : "var(--ok)" } })) : null,
         ui.h("div", { class: "d" }, c.hasDetail ? `${fmt.pct(c.rate, 1)} · ${fmt.money(c.minPayment, cur)} a month required${c.limit ? ` · limit ${fmt.money(c.limit, cur)}` : ""}` : "add the rate and payment on the Debts page"),
-        c.trap ? ui.h("div", { class: "d" }, `Paying only the ${c.minPayment > 0 ? "required amount" : "usual minimum (2%, at least 25)"}: ${Number.isFinite(c.trap.months) ? `${monthsText(c.trap.months)} and ${fmt.money(c.trap.interest, cur)} of interest` : "it never ends"}.`) : null,
-        c.transfer ? ui.h("div", { class: "d" }, `Balance transfer at 0% for ${c.transfer.promoMonths} months with a ${fmt.pct(c.transfer.feePct, 0)} fee (${fmt.money(c.transfer.fee, cur)}): ${c.transfer.saves > 0 ? `saves about ${fmt.money(c.transfer.saves, cur)} against ${fmt.money(c.transfer.interestNow, cur)} of interest, if you pay ${fmt.money(c.transfer.payToClear, cur)} a month to clear it in time.` : `does not pay: the fee is more than the ${fmt.money(c.transfer.interestNow, cur)} of interest.`}`) : null),
+        // what you really pay first (the Debts page's payment), then the minimum-payment trap beside it
+        c.paying ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, `You pay ${fmt.money(c.paying.payment, cur)} a month: ${c.paying.never ? "it never ends at that payment" : `paid off ${c.paying.endDate ? `about ${monthYear(c.paying.endDate)}` : `in ${monthsText(c.paying.months)}`}${c.paying.interest ? `, ${fmt.money(c.paying.interest, cur)} of interest to come` : ""}`}.`) : null,
+        c.trap ? ui.h("div", { class: "d" }, `Paying only the ${c.minPayment > 0 ? `${fmt.money(c.minPayment, cur)} required` : "usual minimum (2%, at least 25)"}: ${Number.isFinite(c.trap.months) ? `${monthsText(c.trap.months)} and ${fmt.money(c.trap.interest, cur)} of interest` : "it never ends"}.`) : null,
+        c.transfer ? ui.h("div", { class: "d" }, `Balance transfer at 0% for ${c.transfer.promoMonths} months with a ${fmt.pct(c.transfer.feePct, 0)} fee (${fmt.money(c.transfer.fee, cur)}): ${c.transfer.saves > 0 ? `saves about ${fmt.money(c.transfer.saves, cur)} against the ${fmt.money(c.transfer.interestNow, cur)} of interest the card would charge over those ${c.transfer.promoMonths} months, if you pay ${fmt.money(c.transfer.payToClear, cur)} a month to clear it in time.` : `does not pay: the fee is more than the ${fmt.money(c.transfer.interestNow, cur)} of interest.`}`) : null),
       ui.h("span", { class: "st", style: { fontWeight: "600" } }, fmt.money(c.balance, cur))))),
   ));
   const monthsIn = ui.input({ type: "number", value: d.promoMonths, min: 1, max: 36, step: "1", "aria-label": "Promo months" });

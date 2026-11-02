@@ -37,5 +37,5 @@ export function compute(plan, params = {}) {
     { key: "utilisation", label: "Card limits in use", value: utilisation, kind: "pct", grade: grades.utilisation, why: "card balances divided by card limits. Under 30% keeps your credit score healthy; under 10% is best." },
     { key: "months", label: "Months of income owed", value: monthsOfIncomeOwed, kind: "months", grade: null, why: "everything you owe divided by one month's income: how long it would take to pay it all with every dollar." },
   ];
-  return { incomeMonthly, payments: debts.payments, housingPayment, dti, housingRatio, utilisation, monthsOfIncomeOwed, grades, owed: debts.owed, hasIncome: !!incomeMonthly, hasDebts: debts.count > 0, rows };
+  return { incomeMonthly, payments: debts.payments, minimums: debts.minimums ?? null, under: cards.under ?? null, housingPayment, dti, housingRatio, utilisation, monthsOfIncomeOwed, grades, owed: debts.owed, hasIncome: !!incomeMonthly, hasDebts: debts.count > 0, rows };
 }

@@ -34,8 +34,31 @@ export function compute(plan, params = {}) {
       const fee = balance * feePct;
       transfer = { fee: Math.round(fee * 100) / 100, interestNow: Math.round(interestNow * 100) / 100, interestPromo: 0, saves: Math.round((interestNow - fee) * 100) / 100, promoMonths, feePct, payToClear: Math.round((balance * (1 + feePct)) / promoMonths * 100) / 100 };
     }
-    return { id: r.id, name: r.name, balance, limit, utilisation: limit ? balance / limit : null, rate, minPayment, interestMonthly: r.interestMonthly, trap, transfer, hasDetail: !!r.detail, dueLater: trap && Number.isFinite(trap.months) && today ? addMonths(today, trap.months) : null };
+    // what is really paid (the Debts page's payment: the required amount plus any extra typed there), when it is more
+    const paying = r.detail && rate !== null && balance > 0 && r.payment > minPayment + 0.5 ? { payment: r.payment, months: r.months, endDate: r.payoffDate ?? null, interest: r.totalInterest ?? null, never: !!r.neverPaysOff } : null;
+    return { id: r.id, name: r.name, balance, limit, utilisation: limit ? balance / limit : null, rate, minPayment, payment: r.payment ?? minPayment, paying, interestMonthly: r.interestMonthly, trap, transfer, hasDetail: !!r.detail, dueLater: trap && Number.isFinite(trap.months) && today ? addMonths(today, trap.months) : null };
   }).sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0) || b.balance - a.balance);
   const totalBalance = cards.reduce((s, c) => s + c.balance, 0), totalLimit = cards.reduce((s, c) => s + (c.limit ?? 0), 0);
-  return { cards, totalBalance, totalLimit, utilisation: totalLimit ? totalBalance / totalLimit : null, interestMonthly: cards.reduce((s, c) => s + (c.interestMonthly ?? 0), 0), count: cards.length, missing: cards.filter((c) => !c.hasDetail).map((c) => c.name), promoMonths, feePct, hasData: cards.length > 0 };
+  const under = totalLimit > 0 ? underLines(cards, totalLimit, today) : null;
+  return { cards, totalBalance, totalLimit, utilisation: totalLimit ? totalBalance / totalLimit : null, under, interestMonthly: cards.reduce((s, c) => s + (c.interestMonthly ?? 0), 0), count: cards.length, missing: cards.filter((c) => !c.hasDetail).map((c) => c.name), promoMonths, feePct, hasData: cards.length > 0 };
+}
+
+/**
+ * underLines(cards, totalLimit, today) -> { less30, less10, date30, date10 }: how much less on the cards gets the share of
+ * the limits in use under 30% (what lenders like to see) and under 10% (best for the credit score), and about when, at
+ * what is paid on each card now (its Debts payment, interest monthly at its rate; a card with no rate or payment stays
+ * as it is). A date is null when it is not reached within 50 years, today when already under. Round 4, 2026-11-02: the
+ * page said "under 30% is what lenders like to see" with no amount or date.
+ */
+export function underLines(cards, totalLimit, today) {
+  const balances = cards.map((c) => c.balance), sum = () => balances.reduce((t, b) => t + b, 0);
+  const less30 = Math.max(0, sum() - 0.3 * totalLimit), less10 = Math.max(0, sum() - 0.1 * totalLimit);
+  let date30 = less30 <= 0 ? today : null, date10 = less10 <= 0 ? today : null;
+  for (let m = 1; m <= 600 && (!date30 || !date10); m++) {
+    cards.forEach((c, i) => { if (c.rate === null || !(c.payment > 0) || balances[i] <= 0) return; balances[i] = Math.max(0, balances[i] * (1 + c.rate / 12) - c.payment); });
+    const share = sum() / totalLimit;
+    if (!date30 && share <= 0.3) date30 = today ? addMonths(today, m) : null;
+    if (!date10 && share <= 0.1) date10 = today ? addMonths(today, m) : null;
+  }
+  return { less30, less10, date30, date10 };
 }

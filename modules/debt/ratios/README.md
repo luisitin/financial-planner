@@ -18,5 +18,8 @@ Plan sections read (`needs`): `accounts`, `debts`, `income`, `expenses` (rent wh
 ## Tests
 `tests/debt-pages.test.mjs`, `module.test.mjs`.
 
+## Card use: how much less, and when (round 4, 2026-11-02)
+Under "Card limits in use", when it is over 30%: Credit cards' `under` answer ("$1,900 less on the cards gets you under 30%: about June 2027 at what you pay now") and a link to the payoff plan. "Debt payments a month" says when it is what you pay and how much of it is required ("what you pay, from the Debts page; $2,580 of it is required"); the ratio itself is unchanged.
+
 ## Ideas / not yet
 - A "what could I borrow" line from the 36% and 43% lines; credit-score notes.
