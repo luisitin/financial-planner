@@ -24,13 +24,15 @@ export function render(page, ctx) {
     const nw = d.netWorth, m = d.money;
     sheet.append(ui.h("h1", {}, `${d.year} in review`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}${d.partial ? "the year so far · " : ""}prepared ${longDate(d.today)}`),
       ui.h("p", { class: "rp-lead" }, [
-        nw ? `Net worth went from ${money(nw.first.netWorth)} to ${money(nw.last.netWorth)}: ${nw.change >= 0 ? "up" : "down"} ${money(Math.abs(nw.change))}.` : "No net-worth points were saved this year: save one each month on Net worth and next year's review will show the change.",
+        !nw ? "No net-worth points were saved this year: save one each month on Net worth and next year's review will show the change."
+          : nw.change === null ? `Net worth is ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}. Save it each month on Net worth and the review will show the change through the year.`
+          : `Net worth went from ${money(nw.first.netWorth)} on ${longDate(nw.first.date)} to ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}: ${Math.abs(nw.change) < 0.5 ? "no change" : `${nw.change >= 0 ? "up" : "down"} ${money(Math.abs(nw.change))}`}.${nw.lastSaved ? ` (The last total saved that year is from ${longDate(nw.lastSaved)}.)` : ""}`,
         m ? `${money(m.in)} came in and ${money(m.out)} went out${m.rate !== null ? `; ${fmt.pct(m.rate, 0)} of it was kept` : ""}.` : "",
         `${d.reviews.count} of ${d.partial ? Number(d.today.slice(5, 7)) : 12} months were reviewed.`,
         d.health ? `The plan's health today: ${d.health.score} out of 100 (${d.health.band.toLowerCase()}).` : "",
       ].filter(Boolean).join(" ")));
     if (nw) sheet.append(section(ui, "Net worth",
-      figs(ui, [["At the start", money(nw.first.netWorth)], ["At the end", money(nw.last.netWorth)], ["Change", `${nw.change >= 0 ? "+" : "-"}${money(Math.abs(nw.change))}`, nw.change >= 0 ? "good" : "bad"]]),
+      figs(ui, [nw.first ? [`On ${longDate(nw.first.date)}`, money(nw.first.netWorth)] : null, [nw.last.live ? "Today" : `On ${longDate(nw.last.date)}`, money(nw.last.netWorth)], nw.change === null ? null : ["Change", `${nw.change >= 0 ? "+" : "-"}${money(Math.abs(nw.change))}`, nw.change >= 0 ? "good" : "bad"]].filter(Boolean)),
       nw.points.length >= 3 ? lineChart({ years: nw.points.map((p) => new Date(Number(p.date.slice(0, 4)), Number(p.date.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short" })), series: [{ values: nw.points.map((p) => p.netWorth) }], height: 170, label: "Net worth through the year" }) : null));
     if (m) sheet.append(section(ui, "Money in and out (the bank files)",
       wideTable(ui, [{ label: "Month", get: (r) => r.label }, { label: "In", num: true, get: (r) => money(r.in) }, { label: "Out", num: true, get: (r) => money(r.out) }, { label: "Kept", num: true, get: (r) => money(r.net) }], m.months),

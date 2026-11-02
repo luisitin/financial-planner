@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { compute, defaultYear } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { samplePlan } from "../../../qa/fixtures/sample-plan.mjs";
+import { compute as netWorthOf } from "../../balance/net-worth/compute.js";
 
 const TODAY = "2026-10-30";
 
@@ -16,7 +17,11 @@ test("net worth over the year starts from the last point before it; reviews and 
   p.reviews = [{ month: "2026-02", at: "2026-02-28", note: "a" }, { month: "2025-12", at: "2025-12-30", note: "old" }, { month: "2026-09", at: "2026-09-30", note: "" }];
   const d = compute(p, { today: TODAY, year: 2026 });
   assert.equal(d.partial, true);
-  assert.equal(d.netWorth.first.netWorth, 240000, "December's point starts the year"); assert.equal(d.netWorth.change, 30000);
+  assert.equal(d.netWorth.first.netWorth, 240000, "December's point starts the year");
+  // the year so far ends at today's balances (the Dashboard's figure), not the last saved total (270,000)
+  const live = netWorthOf(p, { today: TODAY }).netWorth;
+  assert.equal(d.netWorth.last.live, true); assert.equal(d.netWorth.last.netWorth, live); assert.equal(d.netWorth.change, live - 240000);
+  assert.deepEqual(d.netWorth.points.map((x) => x.date), ["2025-12-01", "2026-03-01", "2026-10-01", TODAY]);
   assert.deepEqual(d.reviews.months.map((r) => r.month), ["2026-02", "2026-09"]);
   assert.equal(d.ahead.year, 2027); assert.ok(d.ahead.moments.every((m) => Number(String(m.date ?? "2027").slice(0, 4)) === 2027));
 });
@@ -26,4 +31,20 @@ test("the bank files: the year's months and where the money went", () => {
   assert.ok(d.money.months.length >= 2);
   assert.ok(Math.abs(d.money.in - d.money.out - d.money.net) < 0.01);
   assert.ok(d.categories.length > 0); assert.ok(Math.abs(d.categories.reduce((s, c) => s + c.share, 0) - 1) < 1e-9);
+});
+
+test("only a January 1 total saved: the change is today's net worth against it, never 'up $0' (round 4, 2026-11-02)", () => {
+  const p = familyPlan("2026-11-02");   // its one saved total is January 1
+  const d = compute(p, { today: "2026-11-02", year: 2026 });
+  const live = netWorthOf(p, { today: "2026-11-02" }).netWorth;
+  assert.equal(d.netWorth.first.date, "2026-01-01"); assert.equal(d.netWorth.change, live - d.netWorth.first.netWorth);
+  assert.ok(d.netWorth.change > 0); assert.equal(d.netWorth.lastSaved, null);
+  // nothing saved at all: today's figure with no change
+  p.netWorthHistory = [];
+  const e = compute(p, { today: "2026-11-02", year: 2026 });
+  assert.equal(e.netWorth.first, null); assert.equal(e.netWorth.change, null); assert.equal(e.netWorth.last.netWorth, live);
+  // a year that is over ends at its last saved total, and says when that was when it is not from December
+  p.netWorthHistory = [{ date: "2025-01-01", assets: 1, liabilities: 0, netWorth: 200000 }, { date: "2025-09-30", assets: 1, liabilities: 0, netWorth: 230000 }];
+  const f = compute(p, { today: "2026-11-02", year: 2025 });
+  assert.equal(f.netWorth.last.live, undefined); assert.equal(f.netWorth.change, 30000); assert.equal(f.netWorth.lastSaved, "2025-09-30");
 });

@@ -9,6 +9,7 @@ import { compute as computeHealth } from "../../overview/health-score/compute.js
 import { compute as computeTimeline } from "../../overview/timeline/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { monthLabel } from "../../overview/monthly-review/compute.js";
+import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 
 /** The year a review on `today` is about: last year in January and February, else this year so far. */
 export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(today.slice(0, 4)) - 1 : Number(today.slice(0, 4)));
@@ -17,7 +18,9 @@ export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(t
  * compute(plan, { today, year }) -> {
  *   ready, missing, year, today, partial (the year is not over),
  *   reviews: { count, months: [{ month, label, at, note }] },
- *   netWorth: { first, last, change, points: [{ date, netWorth }] } | null,
+ *   netWorth: { first (the last total saved before the year, else its first; null when there is none), last (the year so far: today's
+ *     balances, live: true; a year over: its last saved total), change (null without a first), points: [{ date, netWorth }],
+ *     lastSaved (a year over whose last total is not from December: its date) } | null,
  *   money: { months: [{ ym, label, in, out, net }], in, out, net, rate } | null, categories: [{ label, total, share }] (the year's spending, largest first),
  *   goals: { reached: [names], open: [{ name, status }] }, health: { score, band } | null,
  *   ahead: { year, moments: [{ date, title, icon }], steps: [{ title, detail }] }
@@ -33,8 +36,16 @@ export function compute(plan, params = {}) {
   const reviews = (plan.reviews ?? []).filter((r) => inYear(r.month)).sort((a, b) => a.month.localeCompare(b.month)).map((r) => ({ ...r, label: monthLabel(r.month) }));
   const pts = (plan.netWorthHistory ?? []).filter((h) => inYear(h.date)).sort((a, b) => a.date.localeCompare(b.date));
   const before = (plan.netWorthHistory ?? []).filter((h) => Number(h.date.slice(0, 4)) < year).sort((a, b) => a.date.localeCompare(b.date)).pop();
-  const first = before ?? pts[0] ?? null, last = pts[pts.length - 1] ?? null;
-  const netWorth = last && first ? { first, last, change: last.netWorth - first.netWorth, points: [...(before ? [before] : []), ...pts].map((h) => ({ date: h.date, netWorth: h.netWorth })) } : null;
+  // the year so far ends today, at today's balances (the Dashboard's figure), not at the last total someone saved: most
+  // people never press "Save today's totals", so the old end point was often the start point itself ("up $0")
+  const nwNow = (plan.accounts ?? []).length ? computeNetWorth(plan, { today }) : null;
+  const live = partial && Number(today.slice(0, 4)) === year && nwNow ? { date: today, assets: nwNow.assets, liabilities: nwNow.liabilities, netWorth: nwNow.netWorth, live: true } : null;
+  const saved = pts.filter((h) => !live || h.date < today);
+  const first = before ?? saved[0] ?? null;
+  const last = live ?? pts[pts.length - 1] ?? null;
+  const points = [...(before ? [before] : []), ...saved, ...(live ? [live] : [])].map((h) => ({ date: h.date, netWorth: h.netWorth }));
+  const netWorth = last ? { first: first && first !== last ? first : null, last, change: first && first !== last ? last.netWorth - first.netWorth : null, points,
+    lastSaved: !live && last && last.date.slice(5, 7) !== "12" ? last.date : null } : null;
 
   let money = null, categories = [];
   if ((plan.transactions ?? []).length) {
