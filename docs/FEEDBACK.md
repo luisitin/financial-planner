@@ -354,7 +354,7 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - for: designer
 - what happened: `compute()` now returns, per person, `spousalAtSameAge` and `survivor`, and for a couple `couple.spousal[personId]` (the top-up on the partner's record), `couple.survivorMonthly[personId]` (what that person keeps if the other dies first) and `couple.survivorYearly`. The page shows none of it yet.
 - suggestion: in each person's fold, a line "If Lee dies first, Sam keeps $2,475 a month" and, when a top-up is above 0, "On Lee's record, Sam gets $500 a month more once Lee has claimed". Plain words; no "PIA".
-- status: open
+- status: fixed (2026-11-02, builder claude-b, under the owner's request for experience improvements): the hero says what the one left keeps of the couple's total, each fold says what that person keeps if the other dies first and any spouse's top-up, the footnote gives the survivor's terms. Designer: restyle freely.
 
 ### F-034  Emergency fund: money saved for a goal called "Emergency fund" is taken out of the emergency fund (found by the builder)
 - when: 2026-10-30 14:00   page: balance/liquidity (and overview/next-best-action, which follows it)   severity: confusing

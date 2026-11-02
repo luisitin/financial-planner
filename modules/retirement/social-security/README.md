@@ -42,3 +42,11 @@ Each person with no figure, no record and no Social Security on Income gets an o
 
 ## Ideas / not yet
 - The earnings test before full retirement age; survivors claiming before their own full retirement age (71.5% at 60); the family maximum; taxation of benefits (in the tax pages); Medicare premiums.
+
+## What a couple keeps after the first death (F-033, 2026-11-02)
+The page now says what `couple` already worked out. The hero adds "If one of you dies, the one left keeps about $2,900 a
+month of the $5,550 you get together: the larger benefit stays, the smaller one stops" (a range when the two outcomes
+differ). Each person's fold says "If Bo dies first, Ana keeps about $2,900 a month: Bo's benefit in place of Ana's own
+$2,650" (or keeps their own, and the other's stops), and, when it is above 0, the spouse's top-up on the partner's record.
+Only when the partner has a figure; the footnote says a survivor's amount is for a widow or widower at full retirement
+age or later and at least 82.5% of the full-age amount when the one who died claimed early.

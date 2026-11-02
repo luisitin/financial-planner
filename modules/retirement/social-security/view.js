@@ -11,12 +11,20 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
+  // a couple: what is left after the first death, the question a widow(er) faces (F-033). The larger benefit stays and
+  // the smaller one stops; both figures in today's dollars, the survivor at full retirement age or later
+  const withFigure = d.people.filter((p) => p.source !== "none");
+  const partnerOf = (p) => d.people.find((x) => x.id !== p.id && x.birthYear) ?? null;
+  const left = d.couple && withFigure.length === 2 ? d.people.map((p) => d.couple.survivorMonthly[p.id]).filter((x) => x > 0) : [];
+  const lo = left.length ? Math.min(...left) : 0, hi = left.length ? Math.max(...left) : 0;
+  const together = left.length === 2 && d.couple.bothMonthly > hi + 0.5
+    ? `If one of you dies, the one left keeps about ${hi - lo < 1 ? fmt.money(hi, cur) : `${fmt.money(lo, cur)} to ${fmt.money(hi, cur)}`} a month of the ${fmt.money(d.couple.bothMonthly, cur)} you get together: the larger benefit stays, the smaller one stops.` : "";
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.householdYearly, cur)} a year from Social Security` : "Social Security"),
-    ui.h("p", { class: "lede" }, d.hasData ? "In today's dollars, at the claiming ages chosen below. The projection counts it from those ages, rising with inflation." : "Your benefit depends on your best 35 years of earnings and the age you claim. Paste the earnings table from your ssa.gov account, or type the monthly figure your Social Security statement shows at full retirement age."),
+    ui.h("p", { class: "lede" }, d.hasData ? `In today's dollars, at the claiming ages chosen below. The projection counts it from those ages, rising with inflation.${together ? ` ${together}` : ""}` : "Your benefit depends on your best 35 years of earnings and the age you claim. Paste the earnings table from your ssa.gov account, or type the monthly figure your Social Security statement shows at full retirement age."),
     ui.h("p", { class: "muted small" }, "ssa.gov > my Social Security > Earnings Record: copy the year and earnings columns and paste them below. Nothing is sent anywhere; the sums are done on this device with the SSA's own formula."),
   ));
   root.append(out);
@@ -75,16 +83,28 @@ export function render(root, ctx) {
           ui.row(ui.button(`Save ${p.name}'s Social Security`, save),
             none ? ui.button(`Undo: ${p.name} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${p.name} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
         ];
+        // a couple: what this person keeps if the other dies first, and any top-up on the other's record (F-033)
+        const partner = partnerOf(p);
+        const keeps = d.couple && partner && partner.source !== "none" ? d.couple.survivorMonthly[p.id] : null;
+        const topUp = d.couple && partner ? d.couple.spousal[p.id] : 0;
+        const couplePart = keeps === null ? [] : [
+          ui.h("p", {}, keeps > p.monthly + 0.5
+            ? `If ${partner.name} dies first, ${p.name} keeps about ${fmt.money(keeps, cur)} a month: ${partner.name}'s benefit in place of ${p.monthly > 0.5 ? `${p.name}'s own ${fmt.money(p.monthly, cur)}` : "none of their own"}.`
+            : `If ${partner.name} dies first, ${p.name} keeps their own ${fmt.money(p.monthly, cur)} a month, and ${partner.name}'s ${fmt.money(partner.monthly, cur)} stops.`),
+          topUp > 0.5 ? ui.h("p", {}, `On ${partner.name}'s record, ${p.name} also gets about ${fmt.money(topUp, cur)} a month more once ${partner.name} has claimed (a spouse's benefit).`) : null,
+        ];
         // already getting it: a fact, not a choice of claiming ages (round 4, 2026-11-02); the figures fold away for corrections
         if (p.claimed) return [
           ui.h("p", {}, p.source !== "none" ? `${p.name} gets about ${fmt.money(p.monthly, cur)} a month${p.claimedYear ? `, since ${p.claimedYear} (at ${ageWords(p.claimAge)})` : ""}. Nothing to decide here: the plan counts it, rising with the cost of living.`
             : p.paidLine ? `${p.name} gets about ${fmt.money(p.paidLine.amount, cur)} ${p.paidLine.period === "monthly" ? "a month" : "each time"} (${p.paidLine.name || "on the Income page"}). Nothing to decide here: the plan counts it.`
             : `${p.name} already gets Social Security. Add the amount below, or on the Income page, so the plan counts it.`),
+          ...couplePart,
           ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Correct these figures"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")), ...form),
         ];
         const w = p.wait;
         if (old70 && p.options.length && p.source !== "none") return [
           ui.h("p", {}, `${p.name} can claim now: about ${fmt.money(p.options[0].monthly, cur)} a month. Waiting adds nothing after 70.`),
+          ...couplePart,
           ...form,
         ];
         return [
@@ -93,11 +113,12 @@ export function render(root, ctx) {
           w ? ui.h("p", { class: "si-say" }, `Claim now (${ageWords(w.nowAge)}): about ${fmt.money(w.nowMonthly, cur)} a month. Wait until 70 (${new Date(`${w.at70}-15T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}): about ${fmt.money(w.at70Monthly, cur)} a month. Waiting pays back if ${p.name} lives past about ${Math.round(w.breakEven)}.`) : null,
           p.pastClaimAge ? ui.notice("warn", `The plan has ${p.name} claiming at ${ageWords(p.claimAge)}, which has passed. Pick an age from now to 70, or say ${p.name} already gets it on the Income page.`) : null,
           p.options.length && (p.source !== "none") ? ui.h("ul", { class: "records" }, p.options.map((o) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Claim at ${ageWords(o.claimAge)}${Math.abs(o.claimAge - p.claimAge) < 0.01 ? " (chosen)" : ""}`), ui.h("span", { class: "rec-value" }, `${fmt.money(o.monthly, cur)} a month`)), ui.h("div", { class: "rec-sub" }, `${Math.round(o.factor * 100)}% of the full-age amount`)))) : null,
+          ...couplePart,
           est ? ui.h("p", { class: "muted small" }, `From the record: ${est.yearsInRecord} years${est.projectedYears ? ` (${est.projectedYears} assumed)` : ""}, ${est.credits} of 40 credits${est.eligible ? "" : ": not yet eligible"}; average indexed monthly earnings ${fmt.money(est.aime, cur)}; full-age benefit ${fmt.money(est.pia, cur)} a month.`) : null,
           ...form,
         ];
       })(),
     )));
   });
-  root.append(ui.h("p", { class: "muted small" }, "The formula: earnings indexed to wages in the year you turn 60, the best 35 years averaged, bend points for the year you turn 62, cost-of-living increases from 62, then reduced or raised for the claiming age. Tables from the Social Security Administration via ssa.tools."));
+  root.append(ui.h("p", { class: "muted small" }, `The formula: earnings indexed to wages in the year you turn 60, the best 35 years averaged, bend points for the year you turn 62, cost-of-living increases from 62, then reduced or raised for the claiming age.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""} Tables from the Social Security Administration via ssa.tools.`));
 }
