@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Set up my plan asks who pays your work: an employer, or yourself (business or freelance). A freelancer is no longer saved as an employee, so the tax pages stop assuming a paycheck with tax withheld; business income typed as a year lands a month at a time on the Forecast.
 - [builder:claude-b] - [builder:claude-b] Side income's "Count on" no longer cuts every tax figure: it saves `income[].countOn` (new optional field) and leaves the amount alone; the left-over figure, Forecast and statements plan with the careful figure (after the tax it would carry), while quarterly payments and the April bill stay right.
 - [builder:claude-b] - [builder:claude-b] The printable income and cash-flow statements now show state tax, business costs, the saved debt extra and uneven pay held back, so their bottom line follows from the lines above it.
 - [builder:claude-b] - [builder:claude-b] Life timeline: a goal waiting its turn on Next best action says when it starts instead of "Behind", the same as Goals and the Dashboard (last open review finding).

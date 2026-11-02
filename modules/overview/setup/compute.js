@@ -143,6 +143,11 @@ export const PAY_PERIODS = [
   { value: "weekly", label: "Every week" },
 ];
 /** Other money coming in: the Income page type each kind is saved as. Child support is not taxed (IRS Pub. 504). */
+/** Who pays the work in "What comes in?": an employer (a salary) or the person's own business or freelance work. */
+export const WHO_PAYS = [
+  { value: "employer", label: "An employer" },
+  { value: "self", label: "Myself: my business or freelance" },
+];
 export const OTHER_KINDS = [
   { value: "business", label: "Side work", name: "Side work" },
   { value: "rental", label: "Rent I collect", name: "Rent coming in" },
@@ -377,7 +382,19 @@ export function applyMoney(draft, v) {
     if (status === "work" && (byId(draft.income, `setup-pay-${p.id}`) || !existingPay(draft, p.id).length)) {
       const amount = pos(x.amount);
       const period = PAY_PERIODS.some((o) => o.value === x.period) ? x.period : "annual";
-      if (amount) { const id = `setup-pay-${p.id}`; keep.add(id); put(draft.income, id, { amount, period }, { name: `${possessive(p)} pay`, type: "salary", ...base }); }
+      // who pays: an employer (a salary, tax held back from each paycheck) or their own business or freelance work (no
+      // paycheck: self-employment tax and quarterly payments). It used to be saved as a salary either way, so every tax
+      // page talked about a W-4 and withholding a freelancer does not have (round 4, 2026-11-02)
+      const self = x.by === "self";
+      if (amount) {
+        const id = `setup-pay-${p.id}`; keep.add(id);
+        const old = byId(draft.income, id), oldType = old?.type, oldName = old?.name;
+        const type = self ? "business" : "salary";
+        const nameFor = (t) => (t === "business" ? `${possessive(p)} business` : `${possessive(p)} pay`);
+        put(draft.income, id, { amount, period, type }, { name: nameFor(type), ...base });
+        // the name follows the answer while it is still the setup's own (one renamed on Income stays)
+        if (old && oldType !== type && oldName === nameFor(oldType)) byId(draft.income, id).name = nameFor(type);
+      }
     }
     if (status === "retired") {
       const pension = pos(x.pension);
@@ -746,7 +763,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
       people: Object.fromEntries(ad.map((p) => {
         const pay = inc(`setup-pay-${p.id}`), pension = inc(`setup-pension-${p.id}`);
         const status = s.status?.[p.id] ?? (pay || existingPay(plan, p.id).length ? "work" : pension ? "retired" : null);
-        return [p.id, { status, amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "" }];
+        return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "" }];
       })),
       other: { kind: OTHER_KINDS.some((k) => k.value === o?.type) ? o.type : "", amount: o?.amount ?? "" },
     };

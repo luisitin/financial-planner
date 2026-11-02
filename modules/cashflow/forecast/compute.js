@@ -84,7 +84,10 @@ export function compute(plan, params = {}) {
       // a salary typed as a yearly figure lands as paychecks (the Paycheck page's count), not one deposit a year
       // uneven pay counted carefully (Side income's "count on"): the forecast plans with that figure, a month
       const careful = Number.isFinite(Number(i0.countOn)) && i0.countOn !== null && i0.countOn !== "" ? { ...i0, amount: Number(i0.countOn), period: "monthly" } : null;
-      const rh = careful ? null : payRhythm(i0, plan), i = careful ?? (rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0);
+      // business or freelance income typed as a year (setup asks for "a typical year") comes in through the year, not in one
+      // deposit on one day: it lands a month at a time (round 4, 2026-11-02)
+      const spread = !careful && i0.type === "business" && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;
+      const rh = careful || spread ? null : payRhythm(i0, plan), i = careful ?? spread ?? (rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0);
       const typedAmount = Number(i.amount) || 0, r = th.ratio[i.id];
       return r !== undefined && r < 1 ? { ...i, kind: "income", signed: typedAmount * r, beforeTax: typedAmount } : { ...i, kind: "income", signed: typedAmount };
     }),

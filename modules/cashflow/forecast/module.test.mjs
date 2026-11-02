@@ -263,3 +263,13 @@ test("the saved debt plan's extra is paid on the 1st until its debts are gone, a
   p.debtPlan = { extra: 1000, order: "avalanche", targets: ["a-gone"] };
   assert.ok(!compute(p, { today: T, days: 90 }).days.some((x) => x.events.some((e) => /Pay off debts/.test(e.name))), "aimed at debts already paid off: the extra has stopped");
 });
+
+test("business income typed as a year lands a month at a time, not in one deposit (round 4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.income.push({ id: "i-biz", name: "My business", type: "business", personId: "p-ana", amount: 60000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true });
+  const d = compute(p, { today: T });
+  const hits = JSON.stringify(d).match(/"name":"My business","amount":([\d.]+)/g) ?? [];
+  assert.ok(hits.length >= 2, `${hits.length} deposits in the forecast`);
+  for (const h of hits) assert.equal(Number(h.split(":").pop()), 5000);
+});

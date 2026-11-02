@@ -266,6 +266,9 @@ this README with its source; the debt guide's rates step waiting for real rates 
 ## cushionLater in standing (round 4, 2026-11-02)
 `standing()` returns `cushionLater` (next-best-action's `{ until } | null`) when the runway is short, for the Dashboard's Safety cushion line.
 
+## Who pays you (round 4, 2026-11-02)
+"What comes in?" asks who pays the work: "An employer" (saved as a salary, as before) or "Myself: my business or freelance" (saved as business income, `setup-pay-<id>` with type "business", named "<name>'s business"). Before, a full-time freelancer was saved as an employee: Estimated payments led with a W-4 change and assumed thousands withheld from a paycheck that does not exist, and self-employment tax was counted only on side work. The help says to give a typical year when it changes month to month; business costs come later, on Small business. `WHO_PAYS` lists the answers; `valuesFor("money")` returns `by`. The record's name follows the answer while it is still the setup's own.
+
 ## Ideas / not yet
 - Bank file import as an alternative to typing balances ("I'd rather bring in my bank's file").
 - Ask the payoff date of a car loan (`termMonths`) for a cleaner debt-free date.

@@ -666,3 +666,22 @@ test("where you stand: a debt step the saved debt plan pays off is not a move, a
   assert.equal(st.debtExtra, 410); assert.equal(st.debtOn, "Visa card"); assert.match(st.debtUntil, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(Math.abs(st.spare - (before.spare - 410)) < 0.01);
 });
+
+test("who pays: working for yourself saves business income, not a salary, and the tax pages follow (round 4)", async () => {
+  const { taxAnswer } = await import("../../taxes/withholding/compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const q = empty(); S.applyYou(q, { who: "me" });
+  q.household.people.find((x) => x.id === "setup-self").birthDate = "1990-05-01";
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {} });
+  const r = inc(q, "setup-pay-setup-self");
+  assert.deepEqual([r.type, r.name, r.amount, r.period, r.personId], ["business", "My business", 78000, "annual", "setup-self"]);
+  assert.equal(S.valuesFor(q, "money").people["setup-self"].by, "self", "asked again, the answer stays");
+  // no paycheck: nothing is assumed withheld, and self-employment tax is in the total
+  const t = taxAnswer(q, { today: T });
+  assert.ok(!(t?.withheld > 0), "no withholding from a paycheck that does not exist");
+  assert.ok(estimated(q, { today: T }).needsEstimates, "quarterly payments are needed");
+  // changed to an employer: a salary, and the name follows while it is still the setup's own
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
+  assert.deepEqual([inc(q, "setup-pay-setup-self").type, inc(q, "setup-pay-setup-self").name], ["salary", "My pay"]);
+});

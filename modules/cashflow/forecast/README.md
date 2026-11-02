@@ -42,6 +42,9 @@ year's take-home on one day, then nothing for the rest of the window; 2026-11-02
 ## countOn (round 4, 2026-11-02)
 An income with `countOn` lands in the forecast as that figure a month (Side income's careful amount), not the typed amount.
 
+## Business income typed as a year (round 4, 2026-11-02)
+Business or freelance income typed as a year (or a quarter) lands a month at a time, not as one deposit on one day (setup asks for a typical year).
+
 ## Ideas / not yet
 - Let the person move a typed bill to the right day of month from this page.
 - Contributions paid from checking rather than from pay (an IRA, a brokerage account) are not events yet; Next best action takes them out of the left-over, so the Forecast can read a little higher than the Dashboard.

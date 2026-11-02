@@ -5,7 +5,7 @@
 // the Continue button moves on. What was typed and not saved is kept while you go Back and forth (drafts).
 // "?back=done" (from Change an answer): saving returns to where you stand.
 import {
-  SCREENS, QUESTIONS, HAVE, OWE, GOALS, PAY_PERIODS, OTHER_KINDS, RETIRE_KINDS, DATE_CHIPS, STATES, TYPICAL_RATES,
+  SCREENS, QUESTIONS, HAVE, OWE, GOALS, PAY_PERIODS, WHO_PAYS, OTHER_KINDS, RETIRE_KINDS, DATE_CHIPS, STATES, TYPICAL_RATES,
   adults, dependents, picks, nextScreen, prevScreen, resolveScreen, barShare, valuesFor, reflect, hasMortgage,
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
@@ -502,7 +502,7 @@ export function render(page, ctx) {
 
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
-      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax, as on a pay stub or offer letter. Pick how often it comes.");
+      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax: pay from a job, or what your own work brings in. Pick how often it comes.");
       const v = draft(() => valuesFor(plan, "money"));
       for (const p of ad) {
         const x = v.people[p.id];
@@ -515,7 +515,14 @@ export function render(page, ctx) {
           if (x.status === "work") {
             const live = ui.h("p", { class: "su-live", "aria-live": "polite" });
             const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
-            swap(body, field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax"), placeholder: "65,000" })),
+            // who pays: an employer (a paycheck with tax held back) or their own business or freelance work (no paycheck:
+            // the plan then works out self-employment tax and quarterly payments instead of a W-4)
+            const by = x.by === "self" ? "self" : "employer";
+            const amountField = by === "self"
+              ? field("What your work brings in, before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "what the work brings in"), placeholder: "65,000" }), "If it changes month to month, give a typical year. Business costs come later, on Small business.")
+              : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax"), placeholder: "65,000" }));
+            swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); }, named(p, "who pays") ?? "Who pays you")),
+              amountField,
               fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live);
             showMo();
             return;
