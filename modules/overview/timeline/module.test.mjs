@@ -117,3 +117,14 @@ test("independence: the first year the chart's savings reach the independence nu
   (rich.accounts.find((a) => a.type === "brokerage" || a.type === "taxable") ?? rich.accounts[0]).balance = 3000000;
   assert.equal(ev(compute(rich, { today: TODAY }), "fi"), undefined);
 });
+
+test("a goal waiting its turn on Next best action says when it starts, not 'Behind', as on Goals (review 2026-11-02)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.goals.find((g) => g.id === "g-col").monthly = 0;   // college, due 2038, nothing going in yet
+  const ev = compute(p, { today: T }).events.find((e) => e.id === "goal-g-col");
+  assert.match(ev.detail, /Starts in \w+ \d{4}, its turn on Next best action\.$/); assert.doesNotMatch(ev.detail, /Behind/); assert.notEqual(ev.tone, "warn");
+  // a goal due before that turn is still behind
+  const trip = compute(p, { today: T }).events.find((e) => e.id === "goal-g-trip");
+  assert.match(trip.detail, /Behind/); assert.equal(trip.tone, "warn");
+});

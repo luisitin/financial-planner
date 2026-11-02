@@ -14,6 +14,8 @@ import { compute as computeSocialSecurity, fullRetirementAge } from "../../retir
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { retirementGap } from "../setup/compute.js";
+import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
+import { goalsBehind } from "../alerts/compute.js";
 import { compute as computeFire } from "../../retirement/fire/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
 
@@ -167,10 +169,17 @@ export function compute(plan, params = {}) {
 
   // goals that are still open
   const gl = computeGoals(plan, { today });
+  // a goal waiting its turn on Next best action (nothing going in yet, dated after the goals step starts) says so, as
+  // Goals and the Dashboard do (alerts' goalsBehind), not "Behind" (review 2026-11-02)
+  let nba = null;
+  try { nba = gl.goals.some((g) => g.status === "behind") ? computeNext(plan, { today }) : null; } catch { nba = null; }
+  const gb = goalsBehind(gl, { nba, today });
+  const waiting = new Set(gb.queued.map((g) => g.id));
   for (const g of gl.goals) {
     if (!g.targetDate || g.status === "done" || g.status === "no amount") continue;
-    const behind = g.status === "behind" || g.status === "past due";
-    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${behind ? ` Behind: about ${money(g.neededMonthly)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : "ok", go: ["goals", "goals"] });
+    const wait = waiting.has(g.id);
+    const behind = !wait && (g.status === "behind" || g.status === "past due");
+    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${wait ? ` Starts in ${monthWords(gb.turn)}, its turn on Next best action.` : behind ? ` Behind: about ${money(g.neededMonthly)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : wait ? null : "ok", go: ["goals", "goals"] });
   }
 
   // money: independence, the savings milestones, the peak, whether it lasts

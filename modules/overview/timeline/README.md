@@ -44,6 +44,8 @@ one neutral end event, "Whether the money lasts: not worked out yet", links to S
 
 ## Review fixes 2026-11-02
 The top box says neither "Savings run out" nor "The money lasts" until Social Security and birth dates are in (`headline.needsSS`, `headline.needs`); it shows "Will it last? Not yet known: needs ...". The needs-ss event names what is missing (setup's `retirementGap`) and links to People for a birth date.
+A goal waiting its turn on Next best action (alerts' `goalsBehind`: nothing going in, dated after the goals step starts)
+reads "Starts in <Month YYYY>, its turn on Next best action" with no amber, as on Goals and the Dashboard.
 
 ## Ideas / not yet
 - A pension's start (once `retirement/pensions` exists), the partner's survivor years (Social Security's `couple.survivorMonthly`), long-term-care odds by age, estate-document reviews.
