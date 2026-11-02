@@ -52,7 +52,17 @@ export function render(root, ctx) {
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
-  if (of) {
+  // savings above a full cushion can pay the costly debt today (Next best action's `fromSavings`): say so first, with the
+  // cushion that is left, and where to record it once the money is moved
+  const nbAll = nba ?? ctx.computeOf?.("overview/next-best-action", { today: fmt.today() });
+  const fromSav = nbAll?.ready ? nbAll.steps.find((x) => x.id === "high-debt" && x.status !== "done" && x.fromSavings > 0) : null;
+  if (fromSav) root.append(ui.h("section", { class: "card" },
+    ui.h("h2", {}, `Pay ${fmt.money(fromSav.fromSavings, cur)} from savings`),
+    ui.h("p", {}, fromSav.detail),
+    ui.row(ui.h("a", { class: "btn", href: "#/balance/update" }, "I moved it: update my balances")),
+    ui.h("p", { class: "muted small" }, "Make the payment from your bank's app, then type the new balances of the savings account and the card.")));
+
+  if (of && !fromSav) {
     const names = namesOf(of.targets);
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Put ${fmt.money(of.amount, cur)} a month on ${of.targets.length === 1 ? "it" : "them"}`),

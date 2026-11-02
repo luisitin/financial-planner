@@ -863,7 +863,12 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
       if (step.status === "check" && who.length) return { title: `Check if ${who.length === 1 ? `${who[0]} job matches` : "your jobs match"} retirement saving`, detail: "Money an employer adds when you save for retirement. If there is a match, put in at least enough to get every dollar of it." };
       return { title: "Get all of your employer's match", detail: "Money your employer adds when you save for retirement. Put in at least enough to get every dollar of it." };
     }
-    case "high-debt": { const list = costly(HIGH_RATE, Infinity); return { title: list.length && list.every((d) => d.card) ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail }; }
+    case "high-debt": {
+      const list = costly(HIGH_RATE, Infinity), cards = list.length && list.every((d) => d.card);
+      // savings above the full cushion pay it today (Next best action's fromSavings): the move says so
+      if (step.fromSavings > 0) return { title: cards ? "Pay off the cards from your savings" : "Pay off costly debt from your savings", detail: `${step.detail}${list.some((d) => d.guess) ? " The rate is a typical one: type yours on What you owe." : ""}` };
+      return { title: cards ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail };
+    }
     case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
     case "hsa": return { title: "Fill your health savings account", detail: step.detail };
     case "ira": return { title: several ? "A retirement account of your own for each of you (an IRA)" : "A retirement account of your own (an IRA)", detail: `${step.optional ? "Optional: your plan already lasts. " : ""}${step.roomYearly > 0 ? `Up to ${money(step.roomYearly)} this year${several ? " between you" : ""}. It cuts this year's tax, or with a Roth IRA grows tax-free.` : step.detail}` };

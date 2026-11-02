@@ -197,3 +197,29 @@ test("one tax for the month: the state's income tax comes off, and Budget (50/30
   const dc = compute(ca, { today: TODAY });
   assert.equal(dc.spare.stateTax, 0); assert.equal(dc.spare.stateKnown, false);
 });
+
+test("costly debt is paid from savings above the full cushion, today; only the rest waits for the spare money (round 4)", async () => {
+  const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+  const { standing } = await import("../setup/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.accounts.find((a) => a.id === "a-sav").balance = 60000;
+  const lq = liquidity(p, { today: T });
+  const hd = step(compute(p, { today: T }), "high-debt");
+  assert.ok(lq.nowAfterOneOffs - lq.target >= 6400, "the cash above six months covers the Visa");
+  assert.equal(hd.fromSavings, 6400); assert.equal(hd.gap, 0); assert.equal(hd.doneDate, T);
+  assert.equal(hd.title, "Pay off expensive debt from savings");
+  assert.match(hd.detail, /^Pay the Visa card's \$6,400 from savings now: you would still have [\d.]+ months of must-pay bills in cash \(the plan aims for 6\)\. Paying it is a sure 23\.9% return\./);
+  // part of it: what is above the cushion now, the rest from the monthly left-over
+  p.accounts.find((a) => a.id === "a-sav").balance = 48000;
+  const l2 = liquidity(p, { today: T }), h2 = step(compute(p, { today: T }), "high-debt");
+  near(h2.fromSavings, Math.floor((l2.nowAfterOneOffs - l2.target) / 10) * 10); near(h2.gap, 6400 - h2.fromSavings);
+  assert.match(h2.detail, /^Pay \$[\d,]+ of the \$6,400 \(Visa card at 23\.9%\) from savings now: .* The other \$[\d,]+ comes from what is left each month\./);
+  // under a full cushion: nothing from savings, as before
+  p.accounts.find((a) => a.id === "a-sav").balance = 11500;
+  assert.equal(step(compute(p, { today: T }), "high-debt").fromSavings, 0);
+  // the Dashboard's move says it, once life cover is in
+  const q = familyPlan(T); q.accounts.find((a) => a.id === "a-sav").balance = 60000;
+  q.insurance = { ...(q.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 400000, premium: 25, period: "monthly", throughWork: false }] };
+  const mv = standing(q, { today: T }).moves.find((m) => m.id === "high-debt");
+  assert.equal(mv?.title, "Pay off the cards from your savings");
+});

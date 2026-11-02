@@ -45,6 +45,10 @@ years later than Next best action promised and a bare "0" box: the move came wit
   equal rows and the trophy. When only some orders tie for least interest, each gets "least interest" and there is no trophy.
 - The "$100 more a month" line stays (design log pass 2, round 10) except while the offer is shown, whose amount replaces it.
 
+Pay from savings first (2026-11-02): when Next best action's expensive-debt step has `fromSavings` (cash above the full
+cushion), a card at the top says how much and what cash stays, with "I moved it: update my balances"; the monthly offer
+waits until then.
+
 ## Edge cases
 Debts without a rate or payment are listed as missing and left out. A plan whose payments do not cover the interest reports "never" and the debts concerned. Dates need `today`.
 

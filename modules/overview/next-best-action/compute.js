@@ -37,6 +37,7 @@ export const HORIZON_MONTHS = 120;
  *   debtPlan: { extra, names, ids, until, months } | null (that saved extra: the debts it goes to, and when the last of them is gone),
  *   steps: [{ id, n, title, why, status: "done"|"now"|"later"|"check"|"skip"|"underway", detail, gap (one-off amount left) | null, roomYearly | null,
  *             underway: { extra, names, until } (a debt step the saved debt plan already pays off: no spare money goes to it),
+ *             fromSavings (the expensive-debt step: what usable cash above the full cushion pays off today; the gap is the rest),
  *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go,
  *             ask (the match step: [{ personId, name, accounts: [401(k) ids] }] with pay, a 401(k) and nothing going in) }],
  *   next: the first step that is not done (or null)
@@ -169,8 +170,23 @@ export function compute(plan, params = {}) {
   const highWords = (list) => `${list.map((d) => `${d.name} ${money(d.owed)} at ${pct(d.rate)}`).join(", ")}`;
   if (high.length && !hs.off.length && hs.until) add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: "underway", gap: 0,
     underway: { extra: debtPlan.extra, names: hs.names, until: hs.until }, detail: `Under way. ${hs.sentence}`, go: ["debt", "payoff"] });
-  else add({ id: "high-debt", title: "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 ? "now" : "done", gap: highGap,
-    detail: highGap > 0 ? `${highWords(hs.off)}: every extra dollar here earns the rate for sure.${hs.sentence ? ` ${hs.sentence}` : ""}` : `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`, go: ["debt", "payoff"] });
+  else {
+    // usable cash above the full cushion (after one-off costs coming up) pays costly debt today: the standard first move,
+    // a sure return at the debt's rate, and the cushion stays full (round 4, 2026-11-02; before, the card was scheduled from
+    // the monthly left-over even when savings could clear it now)
+    const above = Math.max(0, (liq.nowAfterOneOffs ?? liq.now) - (liq.target ?? 0));
+    const fromSavings = highGap > 0 && above >= 100 ? Math.floor(Math.min(above, highGap) / 10) * 10 : 0;
+    const leftMonths = fromSavings && essential > 0 ? ((liq.nowAfterOneOffs ?? liq.now) - fromSavings) / essential : null;
+    const full = fromSavings > 0 && fromSavings >= highGap - 5;
+    const keep = `you would still have ${leftMonths !== null ? `${Math.round(leftMonths * 10) / 10} months of must-pay bills` : "a full cushion"} in cash${liq.targetMonths ? ` (the plan aims for ${liq.targetMonths})` : ""}`;
+    const rates = [...new Set(hs.off.map((d) => pct(d.rate)))].join(" and ");
+    const detail = highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
+      : full ? `Pay ${hs.off.length === 1 ? `the ${hs.off[0].name}'s ${money(hs.off[0].owed)}` : `all ${money(highGap)} (${hs.off.map((d) => d.name).join(" and ")})`} from savings now: ${keep}. Paying it is a sure ${rates} return.${hs.sentence ? ` ${hs.sentence}` : ""}`
+      : fromSavings ? `Pay ${money(fromSavings)} of the ${money(highGap)} (${hs.off.map((d) => `${d.name} at ${pct(d.rate)}`).join(", ")}) from savings now: ${keep}. The other ${money(highGap - fromSavings)} comes from what is left each month.${hs.sentence ? ` ${hs.sentence}` : ""}`
+      : `${highWords(hs.off)}: every extra dollar here earns the rate for sure.${hs.sentence ? ` ${hs.sentence}` : ""}`;
+    add({ id: "high-debt", title: fromSavings ? "Pay off expensive debt from savings" : "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 ? "now" : "done",
+      gap: Math.max(0, highGap - fromSavings), fromSavings, doneDate: full ? today : null, detail, go: ["debt", "payoff"] });
+  }
 
   // 4. the full emergency fund
   const fullGap = (liq.gap ?? 0) < 0.5 ? 0 : liq.gap;

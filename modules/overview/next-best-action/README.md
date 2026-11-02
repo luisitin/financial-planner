@@ -67,6 +67,17 @@ tax was left out, so the left-over figure read about $405 a month high for this 
 the Cash-flow statement each showed a different month (round-4 finding). The simple reckoning is kept only for a plan
 the tax cannot be worked out for. Each month's money lists "State income tax" and "Business costs" when there are any.
 
+## Costly debt from savings (2026-11-02)
+When usable cash, after one-off costs coming up, is more than the full cushion (Emergency fund's `nowAfterOneOffs` -
+`target`), the expensive-debt step pays from it today: `fromSavings` = that surplus, up to the expensive debts' balance,
+down to $10; the step's gap is the rest (for the spare money, as before) and `doneDate` is today when it covers all. The
+title reads "Pay off expensive debt from savings" and the detail says what cash stays: "Pay the Visa card's $6,400 from
+savings now: you would still have 7.9 months of must-pay bills in cash (the plan aims for 6). Paying it is a sure 23.9%
+return." Paying a 20%-plus card from cash above a full cushion is the standard first move; before, the card was
+scheduled from the monthly left-over over months even when savings could clear it (round-4 challenge). Under $100 above
+the cushion, nothing is said. The Dashboard's move reads "Pay off the cards from your savings"; Pay off debts shows the
+same card first, with "I moved it: update my balances".
+
 ## A saved debt plan (2026-11-02)
 An extra a month saved on Pay off debts (`plan.debtPlan.extra`, its `extra` as that page's compute returns it: 0 once
 every debt it was aimed at is paid off) is money already spoken for, like what goes to retirement and goals:

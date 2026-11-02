@@ -550,8 +550,13 @@ test("the first moves are in plain words: no 'each of you' for one adult, no 'ba
   S.applySpend(p, { mode: "total", total: 2500 });
   const moves = S.standing(p, { today: T }).moves;
   const text = moves.map((m) => `${m.title} ${m.detail ?? ""}`).join(" | ");
-  assert.equal(moves[0].title, "Pay down the cards first");
-  assert.match(moves[0].detail, /22\.4% a year \(a typical rate: type yours on What you owe\)/);
+  // $20,000 in checking is more than six months of her $2,500 bills: the card is paid from savings today (2026-11-02)
+  assert.equal(moves[0].title, "Pay off the cards from your savings");
+  assert.match(moves[0].detail, /from savings now: you would still have [\d.]+ months of must-pay bills in cash.*The rate is a typical one: type yours on What you owe\./);
+  // with no cash above the cushion, the card is paid down from the monthly left-over, in the same plain words
+  const low = S.revealWords({ id: "high-debt", detail: "x" }, p);
+  assert.equal(low.title, "Pay down the cards first");
+  assert.match(low.detail, /22\.4% a year \(a typical rate: type yours on What you owe\)/);
   assert.doesNotMatch(text, /each of you|backdoor|for sure/);
   assert.ok(moves.some((m) => m.id === "ira" && m.title === "A retirement account of your own (an IRA)"));
   assert.equal(S.revealWords({ id: "full-fund", title: "A full emergency fund (4 months)", detail: "x" }, p).title, "Build your cushion to 4 months");
