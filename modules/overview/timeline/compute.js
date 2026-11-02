@@ -185,7 +185,7 @@ export function compute(plan, params = {}) {
     if (!g.targetDate || g.status === "done" || g.status === "no amount") continue;
     const wait = waiting.has(g.id);
     const behind = !wait && (g.status === "behind" || g.status === "past due");
-    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${wait ? ` Starts in ${monthWords(gb.turn)}, its turn on Next best action.` : behind ? ` Behind: about ${money(g.neededMonthly)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : wait ? null : "ok", go: ["goals", "goals"] });
+    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${wait ? ` Saving for it starts in ${monthWords(gb.turn)}, when its turn comes on Next best action.` : behind ? ` Behind: about ${money(g.neededMonthly)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : wait ? null : "ok", go: ["goals", "goals"] });
   }
 
   // money: independence, the savings milestones, the peak, whether it lasts

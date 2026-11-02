@@ -5,7 +5,8 @@
 // printable sheet.
 import { compute as computePeople } from "../../household/people/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
-import { compute as computeNext } from "../../overview/next-best-action/compute.js";
+import { compute as computeNext, monthWords } from "../../overview/next-best-action/compute.js";
+import { goalsBehind } from "../../overview/alerts/compute.js";
 import { compute as computeHealth } from "../../overview/health-score/compute.js";
 import { compute as computeProjection } from "../../retirement/projection/compute.js";
 import { compute as computeMonteCarlo } from "../../retirement/monte-carlo/compute.js";
@@ -43,6 +44,7 @@ export function compute(plan, params = {}) {
   const mc = pr.ready ? computeMonteCarlo(plan, { today, paths: Math.min(SUMMARY_PATHS, params.maxPaths ?? SUMMARY_PATHS), seed: 1 }) : null;
   const st = pr.ready ? computeStress(plan, { today }) : null;
   const gl = computeGoals(plan, { today });
+  const gb = goalsBehind(gl, { nba: nb, today });
   const li = computeLiabilities(plan, { today });
   const tl = computeTimeline(plan, { today });
   const ss = computeSocialSecurity(plan, { today });
@@ -69,7 +71,8 @@ export function compute(plan, params = {}) {
     health: health.ready ? { score: health.score, band: health.band, parts: health.parts.map((p) => ({ title: p.title, points: p.points, max: p.max, status: p.status })) } : null,
     retirement,
     protection: st?.ready ? { passed: st.passed, total: st.total, failing: st.scenarios.filter((s) => !s.success).map((s) => ({ title: s.title, failAge: s.failAge, failYear: s.failYear, roomMonthly: s.roomMonthly })) } : null,
-    goals: gl.goals.map((g) => ({ name: g.name, icon: g.icon, target: g.targetThen ?? g.target, targetDate: g.targetDate, status: g.status, progress: g.progress, monthly: g.monthly, neededMonthly: g.neededMonthly })),
+    // a goal waiting its turn on Next best action reads "starts later", as on Goals and the Timeline (review 2026-11-02)
+    goals: gl.goals.map((g) => ({ name: g.name, icon: g.icon, target: g.targetThen ?? g.target, targetDate: g.targetDate, status: gb.queued.some((q) => q.id === g.id) ? "starts later" : g.status, startsIn: gb.queued.some((q) => q.id === g.id) ? monthWords(gb.turn) : null, progress: g.progress, monthly: g.monthly, neededMonthly: g.neededMonthly })),
     // payoff dates from the payoff plan (freed payments roll onto the next debt), as on the timeline; a debt outside the plan keeps its own date
     debts: li.rows.filter((r) => r.owed > 0).map((r) => ({ name: r.name, owed: r.owed, rate: r.rate, payment: r.payment, payoffDate: payoffPlan?.debts.find((x) => x.id === r.id)?.endDate ?? r.payoffDate, ownPayoffDate: payoffPlan?.debts.find((x) => x.id === r.id)?.endDate && r.payoffDate && r.payoffDate.slice(0, 7) > payoffPlan.debts.find((x) => x.id === r.id).endDate.slice(0, 7) ? r.payoffDate : null })),
     milestones: tl.ready ? tl.events.filter((e) => e.kind !== "now" && e.year <= year + MILESTONE_YEARS).slice(0, 10).map((e) => ({ date: e.date, year: e.year, title: e.title, icon: e.icon })) : [],

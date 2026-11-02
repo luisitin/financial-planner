@@ -123,7 +123,7 @@ test("a goal waiting its turn on Next best action says when it starts, not 'Behi
   const T = "2026-11-02";
   const p = familyPlan(T); p.goals.find((g) => g.id === "g-col").monthly = 0;   // college, due 2038, nothing going in yet
   const ev = compute(p, { today: T }).events.find((e) => e.id === "goal-g-col");
-  assert.match(ev.detail, /Starts in \w+ \d{4}, its turn on Next best action\.$/); assert.doesNotMatch(ev.detail, /Behind/); assert.notEqual(ev.tone, "warn");
+  assert.match(ev.detail, /Saving for it starts in \w+ \d{4}, when its turn comes on Next best action\.$/); assert.doesNotMatch(ev.detail, /Behind/); assert.notEqual(ev.tone, "warn");
   // a goal due before that turn is still behind
   const trip = compute(p, { today: T }).events.find((e) => e.id === "goal-g-trip");
   assert.match(trip.detail, /Behind/); assert.equal(trip.tone, "warn");

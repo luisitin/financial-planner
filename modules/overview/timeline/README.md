@@ -45,7 +45,8 @@ one neutral end event, "Whether the money lasts: not worked out yet", links to S
 ## Review fixes 2026-11-02
 The top box says neither "Savings run out" nor "The money lasts" until Social Security and birth dates are in (`headline.needsSS`, `headline.needs`); it shows "Will it last? Not yet known: needs ...". The needs-ss event names what is missing (setup's `retirementGap`) and links to People for a birth date.
 A goal waiting its turn on Next best action (alerts' `goalsBehind`: nothing going in, dated after the goals step starts)
-reads "Starts in <Month YYYY>, its turn on Next best action" with no amber, as on Goals and the Dashboard.
+reads "Saving for it starts in <Month YYYY>, when its turn comes on Next best action" with no amber, as on Goals and the
+Dashboard (the subject is the saving, so "Cy's college ... starts in September 2027" is not read as college starting then).
 
 ## Both payoff dates (round 4, 2026-11-02)
 A debt event dated by the payoff plan sooner than its own payment (debt/payoff `twoDates`) adds: "This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046."

@@ -39,6 +39,9 @@ month less spending; now the biggest gain is adding Social Security.
 `module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
 
 ## Review fixes 2026-11-02
+Goals: a goal waiting its turn on Next best action (alerts' `goalsBehind(...).queued`: nothing in yet, still reachable
+from the month the goals step starts) counts as on track, as Goals, the Timeline, Needs attention and the Dashboard say;
+the detail adds "counting one waiting its turn", and the fix for the others names when the waiting ones start.
 The retirement and protection parts name what is missing with setup's `retirementGap`: a missing birth date says "Add Bo's birth date on People" and links to People; a missing Social Security figure names whose, and links to the Social Security page, which now has the "won't get it" answer.
 
 ## Ideas / not yet

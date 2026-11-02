@@ -85,3 +85,16 @@ test("no retirement verdict before Social Security is known: not scored, the top
   const w = revealWords(ira, oneEarner, { today: T });
   assert.equal(w.title, "A retirement account of your own (an IRA)"); assert.doesNotMatch(w.detail, /between you/);
 });
+
+test("Goals part: a goal waiting its turn on Next best action counts as on track, as on Goals and the Timeline (review 2026-11-02)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  p.goals = p.goals.filter((g) => g.id === "g-col" || g.id === "g-car");
+  p.goals.find((g) => g.id === "g-col").monthly = 0; p.goals.find((g) => g.id === "g-car").monthly = 900;
+  const part = compute(p, { today: T }).parts.find((x) => x.id === "goals");
+  assert.equal(part.share, 1);
+  assert.match(part.detail, /2 of 2 goals with a date are done or on track, counting one waiting its turn\./);
+  assert.equal(part.fix, null);
+  assert.doesNotMatch(JSON.stringify(compute(p, { today: T }).parts), /needs more each month/);
+});

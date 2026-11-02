@@ -9,7 +9,8 @@ import { compute as computeProjection, householdRetired, ssOnIncome, retirementK
 import { retirementGap } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
-import { compute as computeNext } from "../next-best-action/compute.js";
+import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
+import { goalsBehind } from "../alerts/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -100,8 +101,17 @@ export function compute(plan, params = {}) {
   const dated = gl.goals.filter((g) => g.targetDate && g.status !== "no amount");
   if (!dated.length) add("goals", "Goals", null, "No goals with a date yet.", "Add what you are saving for, with a date, on the Goals page.", ["goals", "goals"]);
   else {
-    const good = dated.filter((g) => g.status === "done" || g.status === "on track");
-    add("goals", "Goals", good.length / dated.length, `${good.length} of ${dated.length} goals with a date are done or on track.`, `${dated.filter((g) => !good.includes(g)).map((g) => g.name).join(", ")} ${dated.length - good.length === 1 ? "needs" : "need"} more each month (Goals).`, ["goals", "goals"]);
+    // a goal waiting its turn on Next best action (nothing in yet, still reachable from then) is not behind: Goals, Timeline,
+    // Needs attention and the Dashboard say "starts later", so it counts as on track here too (review 2026-11-02)
+    let nba = null;
+    try { nba = dated.some((g) => g.status === "behind") ? computeNext(plan, { today }) : null; } catch { nba = null; }
+    const gb = goalsBehind(gl, { nba, today });
+    const waiting = dated.filter((g) => gb.queued.some((q) => q.id === g.id));
+    const good = dated.filter((g) => g.status === "done" || g.status === "on track" || waiting.includes(g));
+    const short = dated.filter((g) => !good.includes(g));
+    const later = waiting.length ? `${waiting.map((g) => g.name).join(", ")}: saving for ${waiting.length === 1 ? "it" : "them"} starts in ${monthWords(gb.turn)}, when ${waiting.length === 1 ? "its" : "their"} turn comes on Next best action.` : "";
+    add("goals", "Goals", good.length / dated.length, `${good.length} of ${dated.length} goals with a date are done or on track${waiting.length ? `, counting ${waiting.length === 1 ? "one" : waiting.length} waiting ${waiting.length === 1 ? "its" : "their"} turn` : ""}.`,
+      short.length ? `${short.map((g) => g.name).join(", ")} ${short.length === 1 ? "needs" : "need"} more each month (Goals).${later ? ` ${later}` : ""}` : later, ["goals", "goals"]);
   }
 
   // 7. the plan knows enough, and it is current

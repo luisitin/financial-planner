@@ -21,5 +21,10 @@ No people: not ready. No plan basics: the retirement, protection and health sect
 ## Both payoff dates (round 4, 2026-11-02)
 `debts[].ownPayoffDate`: the Debts page's date (its own payment) when it is later than the payoff plan's `payoffDate`, else null. The sheet notes under the table that the dates are the payoff plan's and gives the own-payment date for those debts.
 
+## Goals waiting their turn (review 2026-11-02)
+A goal alerts' `goalsBehind` queues (nothing in yet, its turn on Next best action comes later and it can still be reached
+from then) has status `"starts later"` and `startsIn` ("September 2027"); the table shows "starts September 2027" without
+amber, as Goals and the Timeline say.
+
 ## Ideas / not yet
 - The advisor's plan side by side (`scenarios/advisor-plan`), a net-worth chart, a cover page with the household's name; a monthly or yearly copy saved with the date.

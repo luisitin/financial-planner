@@ -39,6 +39,11 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
 getting money in a later month (`startDate`, after the cards and the cushion), is `queued`, not behind: no "is behind"
 alert, not in the monthly need, and the Dashboard's Goals tile says "starts in April 2028". `turn` is that start date.
 A goal with some money going in that is short stays behind (its own choice of amount is short).
+Only a goal that can still be reached from its turn waits (review 2026-11-02): from `turn` to its date, `n` months,
+it would need `pmtToReach(rate / 12, n, targetThen, funded)` a month (core/math/finance.js). Waiting goals are taken in
+date order while those amounts add up to no more than the goals step's `capacity` (the spare money that reaches it once
+it starts; `roomYearly / 12` when there is none). A trip due a month after the turn ($6,800 in one month) is behind now,
+in amber, everywhere; college due years later still waits. Health score, Plan summary and the Timeline read the same set.
 
 ## Edge cases
 Empty plan: five setup alerts. Complete healthy plan: all clear. No `today`: no date checks.

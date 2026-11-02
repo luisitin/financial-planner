@@ -16,7 +16,8 @@ import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { compute as estateDocs } from "../../estate/documents/compute.js";
-import { daysBetween } from "../../../core/math/dates.js";
+import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
+import { pmtToReach } from "../../../core/math/finance.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -33,7 +34,7 @@ export const STALE_HISTORY_DAYS = 35;
  */
 /**
  * goalsBehind(goalsResult, { nba, today }) -> { behind: [goals behind, nothing-going-in first], need (a month, more than now, in all), idle: [...],
- *   pastDue: [...], queued: [goals with nothing going in whose turn comes later], turn (the day Next best action's goals step starts, or null) }
+ *   pastDue: [...], queued: [goals with nothing going in whose turn comes later and that can still be reached from then], turn (the day Next best action's goals step starts, or null) }
  * Only goals behind their pace count toward the monthly need; a goal past its date is counted apart (its whole remaining
  * amount is not a monthly figure). Needs attention and the Dashboard's Goals tile both use it, so they say the same.
  */
@@ -46,7 +47,19 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   const all = goals.filter((g) => g.status === "behind");
   // only a goal dated after its turn can wait for it (one due sooner stays behind, review 2026-11-02), and never the
   // emergency fund: Next best action fills the cushion in its own earlier steps, not with the goals step
-  const queued = turn ? all.filter((g) => !(g.monthly > 0) && g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund") : [];
+  // and only while it can still be reached from then: what it would need a month from its turn on, added up in date order,
+  // fits in the spare money that reaches the goals step once it starts (a trip due a month after the turn cannot wait
+  // for it, review 2026-11-02)
+  const room = Number(step?.capacity ?? (Number(step?.roomYearly) || 0) / 12) || 0;
+  let used = 0;
+  const queued = turn ? all.filter((g) => !(g.monthly > 0) && g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund")
+    .sort((a, b) => String(a.targetDate).localeCompare(String(b.targetDate)))
+    .filter((g) => {
+      const n = monthsBetween(turn, g.targetDate);
+      const later = n > 0 ? Math.max(0, pmtToReach((Number(g.rate) || 0) / 12, n, Number(g.targetThen ?? g.target) || 0, Number(g.funded) || 0)) : Infinity;
+      if (!(later <= room - used + 0.5)) return false;
+      used += later; return true;
+    }) : [];
   const behind = all.filter((g) => !queued.includes(g)).sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
   const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
   return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn };

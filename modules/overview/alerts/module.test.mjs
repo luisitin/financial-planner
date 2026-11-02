@@ -228,3 +228,35 @@ test("this year's required withdrawal is on Needs attention from October until i
   p.retirement.rmdTaken = { 2026: { r: "2026-11-02" } };
   assert.equal(ids("2026-11-03").length, 0, "marked taken");
 });
+
+test("goalsBehind: a goal waits its turn only while it can still be reached from then (review 2026-11-02)", () => {
+  // the goals step starts in November 2027 with up to $2,000 a month reaching it
+  const nba = { ready: true, steps: [{ id: "goals", startDate: "2027-11-02", roomYearly: 2400 * 12, capacity: 2000 }] };
+  const trip = (targetDate) => ({ goals: [{ id: "trip", name: "Japan trip", status: "behind", monthly: 0, neededMonthly: 600, targetDate, targetThen: 8000, funded: 1200, rate: 0 }] });
+  // due a month after its turn: $6,800 in one month is more than reaches the step, so it is behind now
+  assert.deepEqual(goalsBehind(trip("2027-12-15"), { nba, today: "2026-11-02" }).queued, []);
+  assert.deepEqual(goalsBehind(trip("2027-12-15"), { nba, today: "2026-11-02" }).behind.map((g) => g.id), ["trip"]);
+  // due 19 months after it: about $358 a month from then, which fits
+  assert.deepEqual(goalsBehind(trip("2029-06-15"), { nba, today: "2026-11-02" }).queued.map((g) => g.id), ["trip"]);
+  // two waiting goals share the step: the sooner one first, the later one only if both fit ($6,800/19 + $60,000/55 > $1,000)
+  const two = { goals: [trip("2029-06-15").goals[0], { id: "col", name: "College", status: "behind", monthly: 0, neededMonthly: 400, targetDate: "2032-06-15", targetThen: 60000, funded: 0, rate: 0 }] };
+  const small = { ready: true, steps: [{ id: "goals", startDate: "2027-11-02", capacity: 1000 }] };
+  const g = goalsBehind(two, { nba: small, today: "2026-11-02" });
+  assert.deepEqual(g.queued.map((x) => x.id), ["trip"]); assert.deepEqual(g.behind.map((x) => x.id), ["col"]);
+  assert.deepEqual(goalsBehind(two, { nba, today: "2026-11-02" }).queued.map((x) => x.id), ["trip", "col"]);
+});
+
+test("goalsBehind follows Next best action's goals step: its capacity is the spare money that reaches it once it starts", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: nbaOf } = await import("../next-best-action/compute.js");
+  const { compute: goalsOf } = await import("../../goals/goals/compute.js");
+  const T = "2026-11-02";
+  const plan = (due) => { const p = familyPlan(T); p.goals.find((x) => x.id === "g-col").monthly = 0; p.goals.find((x) => x.id === "g-trip").targetDate = due; return p; };
+  const run = (p) => { const nba = nbaOf(p, { today: T }); return { nba, gb: goalsBehind(goalsOf(p, { today: T }), { nba, today: T }) }; };
+  const near = run(plan("2027-12-01"));
+  const step = near.nba.steps.find((s) => s.id === "goals");
+  assert.ok(step.capacity >= step.monthly && step.capacity > 0, "capacity is at least what the step gets in its first month");
+  assert.ok(!near.gb.queued.some((g) => g.id === "g-trip"), "a trip due a month after the turn is behind");
+  assert.ok(near.gb.queued.some((g) => g.id === "g-col"), "college due years later still waits its turn");
+  assert.ok(run(plan("2029-06-01")).gb.queued.some((g) => g.id === "g-trip"), "the same trip due later waits its turn");
+});

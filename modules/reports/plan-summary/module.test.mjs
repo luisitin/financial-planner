@@ -39,3 +39,15 @@ test("debts: the payoff plan's date, and the own-payment date where it is later 
   assert.equal(m.payoffDate.slice(0, 7), "2039-03"); assert.equal(m.ownPayoffDate.slice(0, 7), "2046-01");
   assert.equal(d.debts.find((x) => x.name === "Visa card").ownPayoffDate, null);
 });
+
+test("a goal waiting its turn on Next best action reads 'starts later' with its month, not 'behind' (review 2026-11-02)", () => {
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  p.goals = p.goals.filter((g) => g.id === "g-col" || g.id === "g-car");
+  p.goals.find((g) => g.id === "g-col").monthly = 0; p.goals.find((g) => g.id === "g-car").monthly = 900;
+  const d = compute(p, { today: T, maxPaths: 100 });
+  const col = d.goals.find((g) => g.name === "Cy's college");
+  assert.equal(col.status, "starts later"); assert.match(col.startsIn, /^\w+ \d{4}$/);
+  assert.equal(d.goals.find((g) => g.name === "Replace Bo's car").status, "on track");
+  assert.doesNotMatch(JSON.stringify(d.nextSteps), /college needs more each month/);
+});

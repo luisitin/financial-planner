@@ -41,6 +41,7 @@ export const HORIZON_MONTHS = 120;
  *             underway: { extra, names, until } (a debt step the saved debt plan already pays off: no spare money goes to it),
  *             fromSavings (the expensive-debt step: what usable cash above the full cushion pays off today; the gap is the rest),
  *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go,
+ *             capacity | null (an ongoing step: the spare money a month that reaches it once it has started, before its own cap),
  *             ask (the match step: [{ personId, name, accounts: [401(k) ids] }] with pay, a 401(k) and nothing going in) }],
  *   next: the first step that is not done (or null)
  *   drawing: a retired household drawing from savings as planned ({ verdict, spendingMonthly, affordableMonthly }) or null
@@ -117,7 +118,7 @@ export function compute(plan, params = {}) {
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const L = con.limits.kinds;
   const steps = [];
-  const add = (s) => steps.push({ gap: null, roomYearly: null, doneDate: null, startDate: null, monthly: null, ...s });
+  const add = (s) => steps.push({ gap: null, roomYearly: null, doneDate: null, startDate: null, monthly: null, capacity: null, ...s });
 
   // 0. the bills. A retired household living on its savings as the plan intends is not overspending: it is done
   let drawing = null;
@@ -319,6 +320,7 @@ export function compute(plan, params = {}) {
   }
   // once the saved debt plan's debts are gone, its extra is free again and joins the spare money
   const freed = debtPlan && debtPlan.months !== null ? debtPlan.months : Infinity;
+  const startM = steps.map(() => null);
   for (let m = 0; m < HORIZON_MONTHS && (avail0 > 0 || freed < HORIZON_MONTHS); m++) {
     let avail = Math.max(0, spare.monthly + (m >= freed ? debtPlan.extra : 0));
     steps.forEach((s, i) => {
@@ -328,8 +330,11 @@ export function compute(plan, params = {}) {
         const put = Math.min(left[i], avail); left[i] -= put; avail -= put;
         if (left[i] <= 0.5 && !s.doneDate) s.doneDate = addMonths(today, m + 1);
       } else if (s.roomYearly) {
-        const put = Math.min(s.roomYearly / 12, avail); avail -= put;
-        if (put > 0 && !s.startDate) { s.startDate = addMonths(today, m); s.monthly = put; }
+        // what reaches it: its first month can be the crumbs of a step finishing, so the month after counts too
+        if (startM[i] === m - 1) s.capacity = Math.max(s.capacity, avail);
+        const put = Math.min(s.roomYearly / 12, avail);
+        if (put > 0 && !s.startDate) { s.startDate = addMonths(today, m); s.monthly = put; s.capacity = avail; startM[i] = m; }
+        avail -= put;
       }
     });
   }
