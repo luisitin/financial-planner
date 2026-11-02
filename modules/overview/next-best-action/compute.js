@@ -14,7 +14,7 @@ import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
 import { compute as computeLimits } from "../../investments/limits/compute.js";
-import { compute as computePayoff } from "../../debt/payoff/compute.js";
+import { compute as computePayoff, offer as payoffOffer } from "../../debt/payoff/compute.js";
 import { yearTaxes } from "../../cashflow/budget-percent/compute.js";
 import { compute as computeBusiness } from "../../career/business/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
@@ -303,6 +303,20 @@ export function compute(plan, params = {}) {
   // the spare money, month by month: one-off gaps in order, then this year's room, ongoing
   const avail0 = Math.max(0, spare.monthly);
   const left = steps.map((s) => (s.status === "now" && s.gap ? s.gap : 0));
+  // costly debt first in line for the spare money: its date is Pay off debts' own (offer: the spare a month aimed at those
+  // debts, required payments and interest included), so both pages give one date; the schedule then frees the spare money
+  // that month (round 4, 2026-11-02: the same $410 read May 2028 here and January 2028 on Pay off debts, because this
+  // reckoning paid the balance from the spare money alone)
+  {
+    const i = steps.findIndex((s) => s.id === "high-debt");
+    const first = i >= 0 && steps.slice(0, i).every((s) => !(s.status === "now" && s.gap > 0.5));
+    if (first && steps[i].status === "now" && steps[i].gap > 0.5 && !(steps[i].fromSavings > 0) && avail0 >= 25) {
+      let o = null;
+      try { o = payoffOffer(plan, { today, amount: avail0, stepId: "high-debt" }); } catch { o = null; }
+      const months = o?.soon ? Math.max(1, Math.round((Date.parse(`${o.soon.slice(0, 7)}-15`) - Date.parse(`${today.slice(0, 7)}-15`)) / (30.44 * 864e5))) : null;
+      if (months) left[i] = avail0 * months - 0.01;   // the spare money it takes until that month, whatever the balance today
+    }
+  }
   // once the saved debt plan's debts are gone, its extra is free again and joins the spare money
   const freed = debtPlan && debtPlan.months !== null ? debtPlan.months : Infinity;
   for (let m = 0; m < HORIZON_MONTHS && (avail0 > 0 || freed < HORIZON_MONTHS); m++) {

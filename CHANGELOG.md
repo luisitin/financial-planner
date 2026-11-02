@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] - [builder:claude-b] Next best action and Pay off debts give one date for paying off costly debt: when the cards are first in line, the date is Pay off debts' own for the same money (it counts the required payments too), not a later one worked from the spare money alone (a renter: March 2028 on both pages, not September 2028 on one).
 - [builder:claude-b] - [builder:claude-b] Next best action offers a freelancer a retirement plan through the business (Small business's best: a solo 401(k) of up to $37,930 for the example, saving about $5,280 of tax if filled), after the IRA, when it allows more than an IRA and nothing goes into a 401(k) yet.
 - [builder:claude-b] - [builder:claude-b] Search finds the pages for everyday questions it missed: "how much should I set aside for taxes" (Estimated payments, Side income), "how much to take out" (How much to take out), "required withdrawal" (Required withdrawals) and "credit score" (Credit cards).
 - [builder:claude-b] - [builder:claude-b] Credit cards leads each card with what you really pay ("You pay $400 a month: paid off about July 2028, $1,384 of interest to come") before the minimum-payment trap, and says how much less gets you under 30% of your limits and about when ("$1,900 less... about June 2027 at what you pay now"); What lenders see says the same under card use and how much of the payments is required. underLines in debt/credit-cards.

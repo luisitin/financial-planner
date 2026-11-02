@@ -331,3 +331,25 @@ assert.ok(st.detail.startsWith(`${best.label}: up to $`), st.detail);
   // the family's weekend photography allows less than an IRA ($6,690 against $7,500): no such step, the IRA step is the answer
   assert.equal(compute(familyPlan(today), { today }).steps.some((s) => s.id === "business-plan"), false);
 });
+
+test("costly debt first in line: the same date as Pay off debts' offer for the same money (required payments and interest included)", async () => {
+  const { offer } = await import("../../debt/payoff/compute.js");
+  const today = "2026-11-02";
+  // a renter (invented): two cards, a month of bills in cash, about $350 a month spare
+  const p = emptyPlan();
+  p.household = { people: [{ id: "me", name: "Riley", role: "self", birthDate: "1996-05-01", retirementAge: 67 }], filingStatus: "single", state: "" };
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 3200 }, { id: "store", name: "Store card", type: "credit", balance: 900 }, { id: "visa", name: "Visa", type: "credit", balance: 6400 }];
+  p.debts = [{ id: "d1", accountId: "store", rate: 0.269, minPayment: 40, extra: 0 }, { id: "d2", accountId: "visa", rate: 0.239, minPayment: 160, extra: 0 }];
+  p.income = [{ id: "pay", name: "Pay", type: "salary", personId: "me", amount: 4200, period: "monthly", taxable: true }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1500, period: "monthly", essential: true }, { id: "food", name: "Food", category: "groceries", amount: 500, period: "monthly", essential: true }, { id: "fun", name: "Fun", category: "fun", amount: 600, period: "monthly", essential: false }];
+  const d = compute(p, { today });
+  const hd = d.steps.find((s) => s.id === "high-debt");
+  assert.equal(d.next.id, "high-debt", "the cushion's first month is there, so the cards come first");
+  const o = offer(p, { today, amount: d.spare.monthly, stepId: "high-debt" });
+  assert.ok(o?.soon);
+  assert.equal(hd.doneDate.slice(0, 7), o.soon.slice(0, 7));
+  // paying from the spare money alone (the old reckoning) would have read later
+  const naive = Math.ceil(hd.gap / d.spare.monthly);
+  const offerMonths = Math.round((Date.parse(`${o.soon.slice(0, 7)}-15`) - Date.parse("2026-11-15")) / (30.44 * 864e5));
+  assert.ok(offerMonths < naive);
+});
