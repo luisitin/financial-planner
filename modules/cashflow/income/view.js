@@ -37,8 +37,11 @@ export function render(root, ctx) {
     // typed pay is before tax; say so, and what reaches the bank (the Paycheck page's take-home), so nobody types take-home over it
     const th = takeHome(plan, { today });
     const net = th.ready && th.monthly < d.monthly - 0.5 ? th.monthly : null;
+    // business income has no tax held back: it reaches the bank before its tax, which goes in four estimated payments
+    // (review 2026-11-02: the sentence called the whole figure after tax, above what the Dashboard plans with)
+    const biz = d.items.filter((x) => x.active && x.type === "business" && x.period !== "once" && x.taxable !== false).reduce((t, x) => t + x.monthly, 0);
     root.append(ui.card(null, ui.row(
-      ui.stat("A month, before tax", fmt.money(d.monthly, cur), net !== null ? `${fmt.money(d.yearly, cur)} a year. About ${fmt.money(net, cur)} a month reaches the bank after tax` : `${fmt.money(d.yearly, cur)} a year`),
+      ui.stat("A month, before tax", fmt.money(d.monthly, cur), net !== null ? `${fmt.money(d.yearly, cur)} a year. About ${fmt.money(net, cur)} a month reaches the bank${biz > 0.5 ? `: pay after its tax, the ${fmt.money(biz, cur)} of business income before its tax, which is paid four times a year` : " after tax"}` : `${fmt.money(d.yearly, cur)} a year`),
       ui.stat("Next year", fmt.money(d.nextYear, cur), d.nextYear > d.yearly ? "after the raises you entered" : "no raises entered"),
       d.untaxedYearly ? ui.stat("Not taxed", fmt.money(d.untaxedYearly, cur), "a year") : null,
       d.oneTime ? ui.stat("One-time amounts", fmt.money(d.oneTime, cur), "not in the monthly total") : null,

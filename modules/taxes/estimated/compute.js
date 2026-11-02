@@ -29,7 +29,9 @@ export const QUARTERS = (year) => [
  *   paid (total so far), remaining (still to pay for the year), behind (the share of quarters already past due that is not paid),
  *   overdue: { due (the first quarter not covered), amount: behind } | null, nextDue: { due, label, amount (that quarter's share on top of what is behind) } | null
  *   (the next quarter not yet past), balanceAtFiling (total tax - withholding - paid), lateQuarter: the first late quarter | null,
- *   penaltyRisk: bool, needsEstimates: bool, hasPrior, priorTax, priorAgi, notes
+ *   penaltyRisk: bool, needsEstimates: bool, hasPrior, priorTax, priorAgi, notes,
+ *   paidTyped: the payments were saved on this page (taxes.estimated.typedAt) or some are on file; else `paid` is 0 because
+ *   nothing was typed, not because nothing was paid, and the pages ask instead of saying "$0 paid"
  * }
  */
 export function compute(plan, params = {}) {
@@ -75,7 +77,7 @@ export function compute(plan, params = {}) {
   if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
   // the penalty is figured for each due date on its own (Form 2210 instructions): a quarter paid late counts even once caught up
   const lateQuarter = quarters.find((q) => q.late) ?? null;
-  return { year: fed.year, totalTax, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
+  return { year: fed.year, totalTax, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, paidTyped: !!t.estimated?.typedAt || paid > 0, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
 }
 
 /**
@@ -105,5 +107,5 @@ export function taxOwedNow(plan, params = {}) {
   const earnedShare = (m - 1) / 12;
   const unwithheld = e.totalTax - e.withholding;
   const owedNow = Math.max(0, unwithheld * earnedShare - e.paid);
-  return { year: e.year, owedNow, earnedShare, monthly: unwithheld / 12, totalTax: e.totalTax, withholding: e.withholding, paid: e.paid, overdue: e.overdue, nextDue: e.nextDue, atFiling: Math.max(0, e.balanceAtFiling) };
+  return { year: e.year, owedNow, earnedShare, monthly: unwithheld / 12, totalTax: e.totalTax, withholding: e.withholding, paid: e.paid, paidTyped: e.paidTyped, overdue: e.overdue, nextDue: e.nextDue, atFiling: Math.max(0, e.balanceAtFiling) };
 }

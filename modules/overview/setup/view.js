@@ -645,12 +645,14 @@ export function render(page, ctx) {
           }
           const p = ad.find((x) => x.id === pid);
           const extra = ui.h("div", {});
+          // paid by their own business: no employer, so no pay stub (review 2026-11-02)
+          const ownBiz = (plan.income ?? []).some((x) => x.id === `setup-pay-${pid}` && x.type === "business");
           const drawExtra = () => swap(extra,
             field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: named(p, "put in a month") }), "From pay, if you save. Leave it blank if not."),
-            v[`kind-${pid}`] === "work" ? field("Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, "employer adds a month") }), "The match, if there is one. It's on your pay stub.") : null);
+            v[`kind-${pid}`] === "work" ? field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub.") : null);
           drawExtra();
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
-            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), "Through work: a 401(k) or 403(b). On your own: an IRA."),
+            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA."),
             field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far") }), "Add up every account of that kind."),
             extra));
         }

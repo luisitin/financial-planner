@@ -60,6 +60,10 @@ When next-best-action's `cushionLater` is set (starter month in cash, costly deb
 ## Review fixes 2026-11-02 (goals waiting their turn)
 `goalsBehind` queues a goal ("starts later") only when it is dated after the turn Next best action gives the goals step, and never an emergency-fund goal (Next best action fills the cushion in its own earlier steps). A goal due sooner stays behind and counts in the monthly need, so a December gift goal can no longer pass its date with no alert.
 
+## Estimated tax with nothing typed (review 2026-11-02)
+`estimates-behind` asks first when no payments were ever typed (taxes/estimated `paidTyped` false): "Estimated tax: type
+what you have paid this year", with what was due if none were made; typed (even all zero), it says what is past due.
+
 ## Ideas / not yet
 - Dismiss or snooze an alert (store ids in the plan).
 - Budget overruns and bills due (phase 4), investment drift (phase 7), insurance gaps (phase 8) plug in here.

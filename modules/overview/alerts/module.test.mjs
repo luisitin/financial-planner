@@ -165,8 +165,11 @@ test("no paycheck takes tax out: a past-due estimated payment is one alert, poin
   const a = compute(p, { today: "2026-11-02" }).alerts;
   const e = a.find((x) => x.id === "estimates-behind");
   assert.ok(e, "the alert is there");
-  assert.match(e.title, /^About \$[\d,]+ of estimated tax is past due$/);
+  // nothing typed on Estimated payments yet: it asks (review 2026-11-02); typed, it says what is past due
+  assert.match(e.title, /^Estimated tax: type what you have paid this year$/);
   assert.deepEqual(e.go, ["taxes", "estimated"]);
+  p.taxes.estimated = { ...(p.taxes.estimated ?? {}), typedAt: "2026-10-01" };
+  assert.match(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "estimates-behind").title, /^About \$[\d,]+ of estimated tax is past due$/);
   assert.ok(!a.some((x) => x.id === "tax-bill"), "no April-bill alert without withholding");
   p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [5000, 0, 0, 0] };
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id === "estimates-behind"), "nothing once the year is paid ahead");
@@ -259,4 +262,24 @@ test("goalsBehind follows Next best action's goals step: its capacity is the spa
   assert.ok(!near.gb.queued.some((g) => g.id === "g-trip"), "a trip due a month after the turn is behind");
   assert.ok(near.gb.queued.some((g) => g.id === "g-col"), "college due years later still waits its turn");
   assert.ok(run(plan("2029-06-01")).gb.queued.some((g) => g.id === "g-trip"), "the same trip due later waits its turn");
+});
+
+test("estimated tax: nothing ever typed asks what was paid instead of saying '$0 is paid so far' (review 2026-11-02)", async () => {
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const { compute: nbaOf } = await import("../next-best-action/compute.js");
+  const T = "2026-11-02";
+  const p = emptyPlan();
+  p.household = { ...(p.household ?? {}), people: [{ id: "dee", name: "Dee", role: "self", birthDate: "1990-04-01" }], state: "TX", filingStatus: "single" };
+  p.income = [{ id: "setup-pay-dee", name: "Dee's business", type: "business", personId: "dee", amount: 78000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true }];
+  p.expenses = [{ id: "e1", name: "Rent", category: "housing", amount: 1800, period: "monthly", essential: true }];
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 30000 }];
+  const a = compute(p, { today: T }).alerts.find((x) => x.id === "estimates-behind");
+  assert.match(a.title, /type what you have paid/); assert.match(a.detail, /none are typed yet\. If none were made, about \$[\d,]+ was due by now/);
+  assert.doesNotMatch(a.detail, /\$0 is paid so far/);
+  const step = nbaOf(p, { today: T }).steps.find((s) => s.id === "tax");
+  assert.equal(step.title, "Type or pay this year's estimated tax"); assert.match(step.detail, /^No estimated payments are typed for 2026 yet\. If none were made/);
+  // once typed (even all zero), the plain past-due wording returns
+  p.taxes.estimated = { paid: [0, 0, 0, 0], typedAt: "2026-10-01" };
+  assert.match(compute(p, { today: T }).alerts.find((x) => x.id === "estimates-behind").title, /^About \$[\d,]+ of estimated tax is past due$/);
+  assert.equal(nbaOf(p, { today: T }).steps.find((s) => s.id === "tax").title, "Pay the estimated tax that is past due");
 });

@@ -13,6 +13,7 @@ import { compute as computeLiabilities } from "../../balance/liabilities/compute
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { perYear, payRhythm } from "../../../core/math/periods.js";
 import { countedOn } from "../income/compute.js";
+import { compute as computeEstimated } from "../../taxes/estimated/compute.js";
 
 /** Words in a bank line that mark a deposit as pay (a payroll deposit names the employer, not the person). */
 export const PAY_WORDS = /\b(payroll|salary|direct ?dep(osit)?|dir ?dep|directdep|paycheck|wages?|pay ?roll)\b/i;
@@ -22,6 +23,10 @@ export const PAY_BAND = 0.25;
 export const TYPED_BAND = [0.5, 1.05];
 /** Words in a debt's name that every loan shares; they never tie a bank payment to one debt ("loan" in "student loan pmt" is not the car loan). */
 const DEBT_WORDS = new Set(["loan", "loans", "card", "cards", "credit", "payment", "payments", "pmt", "auto", "student", "mortgage", "line", "account", "personal", "the", "and"]);
+/** Words in a typed income's name that many bank lines share ("Dee's business" is not covered by a "Comcast Business" bill). */
+const INCOME_WORDS = new Set(["business", "income", "work", "freelance", "consulting", "side", "self", "salary", "wages", "from", "with", "monthly", "weekly", "yearly"]);
+/** A bank line that is a federal or state tax payment (IRS Direct Pay, EFTPS, a state's estimated payment). */
+export const TAX_WORDS = /\b(irs|usataxpymt|usa ?tax|eftps|treas(ury)? tax|estimated tax|est tax|1040 ?es|dept of revenue|franchise tax)\b/i;
 
 const EVERYDAY = new Set(["checking", "savings", "cash"]);
 const periodToCadence = { weekly: "weekly", biweekly: "biweekly", semimonthly: "semimonthly", monthly: "monthly", quarterly: "quarterly", annual: "annual" };
@@ -58,11 +63,11 @@ export function compute(plan, params = {}) {
   const rec = computeRecurring(plan, { today });
   const events = [];
   // 1. payments found in the transactions, on their next dates (skipping the everyday-account filter when one account is chosen)
-  const foundKeys = new Set(), found = [];
+  const found = [];
   const keyOf = (r) => normalizePayee(r.rawPayee ?? r.payee);
   for (const r of rec.detected) {
     if (!ids.has(r.accountId)) continue;
-    foundKeys.add(keyOf(r)); found.push(r);
+    found.push(r);
     // the first date after the last line, when that is today or later (recurring's next date is after today, so a payday due today was lost)
     const first = nextAfter(r.last, r.cadence, r.last);
     let d = !r.missed && first && String(first) >= today ? first : r.next;
@@ -87,7 +92,9 @@ export function compute(plan, params = {}) {
       const careful = countedOn(i0) !== null ? { ...i0, amount: countedOn(i0), period: "monthly" } : null;
       // business or freelance income typed as a year (setup asks for "a typical year") comes in through the year, not in one
       // deposit on one day: it lands a month at a time (round 4, 2026-11-02)
-      const spread = !careful && i0.type === "business" && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;
+      // only setup's own record ("a typical year", asked of someone paid by their own business): a once-a-year payment typed
+      // on Income (a retainer, a royalty) still lands on its date (review 2026-11-02)
+      const spread = !careful && i0.type === "business" && String(i0.id ?? "").startsWith("setup-pay-") && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;
       const rh = careful || spread ? null : payRhythm(i0, plan), i = careful ?? spread ?? (rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0);
       const typedAmount = Number(i.amount) || 0, r = th.ratio[i.id];
       return r !== undefined && r < 1 ? { ...i, kind: "income", signed: typedAmount * r, beforeTax: typedAmount } : { ...i, kind: "income", signed: typedAmount };
@@ -108,15 +115,16 @@ export function compute(plan, params = {}) {
   };
   pairUp((item, y) => { if (item.beforeTax === undefined) return null; const want = perYear(item.signed, item.period), off = Math.abs(y - want) / want; return off <= PAY_BAND ? off : null; });
   pairUp((item, y) => { const asTyped = perYear(item.beforeTax ?? item.signed, item.period), share = y / asTyped; return share >= TYPED_BAND[0] && share <= TYPED_BAND[1] ? Math.abs(share - 0.75) : null; });
-  // pay deposits are matched only by the pairing above; their words ("salary", "payroll") would otherwise cover every typed salary
-  const otherKeys = [...new Set(found.filter((r) => !payFound.includes(r)).map(keyOf))];
+  // pay deposits are matched only by the pairing above; their words ("salary", "payroll") would otherwise cover every typed
+  // salary, so a salary's pool leaves them out
   for (const item of typed) {
     // covered when a found payment shares a word with it, or has the same amount and rhythm (typed "Pay" vs found payroll)
     const isPay = salaries.includes(item);
-    const words = item.words ?? normalizePayee(item.name).split(" ").filter((w) => w.length > 3);
+    const words = item.words ?? normalizePayee(item.name).split(" ").filter((w) => w.length > 3 && !(item.kind === "income" && INCOME_WORDS.has(w)));
     const pool = isPay ? found.filter((r) => !payFound.includes(r)) : found;
     const sameMoney = pool.some((r) => r.cadence === periodToCadence[item.period] && Math.sign(r.amount) === Math.sign(item.signed) && Math.abs(Math.abs(r.amount) - Math.abs(item.signed)) <= 0.02 * Math.abs(item.signed));
-    const keys = isPay ? otherKeys : [...foundKeys];
+    // only a bank line going the same way can cover it: an outgoing bill never covers an income, nor the reverse (review 2026-11-02)
+    const keys = [...new Set(pool.filter((r) => Math.sign(r.amount) === Math.sign(item.signed)).map(keyOf))];
     const covered = (words.length && keys.some((k) => words.some((w) => k.includes(w)))) || sameMoney || payCovered.has(item);
     if (covered) { skipped++; continue; }
     const dates = plannedDates(item, today, to);
@@ -129,6 +137,9 @@ export function compute(plan, params = {}) {
   // 3. one-time items with a date inside the horizon
   for (const e of plan.expenses ?? []) if (e.period === "once" && e.startDate && e.startDate >= today && e.startDate <= to) events.push({ date: e.startDate, name: e.name, amount: -(Number(e.amount) || 0), source: "planned" });
   for (const i of plan.income ?? []) if (i.period === "once" && i.startDate && i.startDate >= today && i.startDate <= to) events.push({ date: i.startDate, name: i.name, amount: Number(i.amount) || 0, source: "planned" });
+  // 4. a freelancer's estimated tax (Quarterly payments): business income lands before its tax, so the tax goes out on the
+  // quarters' due dates (review 2026-11-02: it was left out, and the forecast ran thousands high)
+  for (const ev of estimatedLines(plan, today, to, found)) events.push(ev);
 
   const byDate = new Map();
   for (const ev of events) (byDate.get(ev.date) ?? byDate.set(ev.date, []).get(ev.date)).push(ev);
@@ -146,6 +157,33 @@ export function compute(plan, params = {}) {
   const evAll = events.filter((e) => e.source === "planned");
   return { accounts: everyday, start, days, lowest, end: balance, shortfallDate, income, spending, events: events.length, sources: { found: rec.detected.filter((r) => ids.has(r.accountId)).length, planned: plannedN, fromDebts: plannedFromDebts, skipped }, hasData: true,
     takeHome: evAll.some((e) => e.beforeTax !== undefined), payBeforeTax: evAll.some((e) => e.payBeforeTax), payUnlinked: evAll.some((e) => e.payUnlinked), debtFromDebts: exp?.debtFromDebts ?? 0 };
+}
+
+/**
+ * estimatedLines(plan, today, to, found) -> planned events for the estimated tax payments between today and `to`: what is
+ * past due, today (named "if not paid yet" when no payment was ever typed), then each quarter on its due date, the part of
+ * it not paid yet (taxes/estimated: cumulative share less what is paid and what is counted before it). None when the
+ * return needs no quarterly payments, nobody has business income, or the bank already shows tax payments (found lines
+ * matching TAX_WORDS). Only this tax year's quarters: the next year's April payment is past a 90-day horizon.
+ */
+export function estimatedLines(plan, today, to, found = []) {
+  if (!(plan.income ?? []).some((x) => x.type === "business" && Number(x.amount) > 0)) return [];
+  if (found.some((r) => r.amount < 0 && TAX_WORDS.test(`${r.rawPayee ?? ""} ${r.payee ?? ""}`))) return [];
+  let e = null;
+  try { e = computeEstimated(plan, { today }); } catch { e = null; }
+  if (!e?.needsEstimates) return [];
+  const out = [];
+  let counted = 0;
+  if (e.overdue && e.overdue.amount > 0.5) {
+    out.push({ date: today, name: e.paidTyped ? "Estimated tax past due (Quarterly payments)" : "Estimated tax due so far, if not paid yet (Quarterly payments)", amount: -Math.round(e.overdue.amount * 100) / 100, source: "planned", tax: true });
+    counted = e.overdue.amount;
+  }
+  for (const q of e.quarters ?? []) {
+    if (!(String(q.due) >= today && String(q.due) <= to)) continue;
+    const owe = Math.max(0, Math.min(e.remaining, q.cumulative - e.paid) - counted);
+    if (owe > 0.5) { out.push({ date: q.due, name: `Estimated tax, ${q.label} (Quarterly payments)`, amount: -Math.round(owe * 100) / 100, source: "planned", tax: true }); counted += owe; }
+  }
+  return out;
 }
 
 /**

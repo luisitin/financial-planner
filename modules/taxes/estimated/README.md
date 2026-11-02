@@ -43,3 +43,9 @@ The annualised-income method (uneven income through the year) is not modelled; n
 
 ## Ideas / not yet
 - A reminder on the Needs attention page in the week before each due date.
+
+## Nothing typed is not "$0 paid" (review 2026-11-02)
+`paidTyped` (also on `taxOwedNow`) is true once the payments are saved on this page (`taxes.estimated.typedAt`, written on
+save) or any payment is on file. Until then Needs attention ("Estimated tax: type what you have paid this year"), Next best
+action ("Type or pay this year's estimated tax"), Emergency fund's liquidity line and the Forecast say what was due *if none
+were made*, instead of "$0 is paid so far" for someone who may have paid every quarter.

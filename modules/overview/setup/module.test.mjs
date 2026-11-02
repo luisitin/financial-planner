@@ -685,3 +685,22 @@ test("who pays: working for yourself saves business income, not a salary, and th
   S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
   assert.deepEqual([inc(q, "setup-pay-setup-self").type, inc(q, "setup-pay-setup-self").name], ["salary", "My pay"]);
 });
+
+test("someone paid by their own business: the name follows after they are named, and retirement starts 'On my own' (review 2026-11-02)", () => {
+  const q = empty(); S.applyYou(q, { who: "me" });
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
+  assert.equal(inc(q, "setup-pay-setup-self").name, "My pay");
+  // named in between, then the answer changes to "Myself"
+  q.household.people.find((x) => x.id === "setup-self").name = "Dee";
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {} });
+  assert.deepEqual([inc(q, "setup-pay-setup-self").type, inc(q, "setup-pay-setup-self").name], ["business", "Dee's business"]);
+  // a name typed on Income that is not the setup's shape stays
+  inc(q, "setup-pay-setup-self").name = "Dee Design Studio";
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
+  assert.equal(inc(q, "setup-pay-setup-self").name, "Dee Design Studio");
+  // retirement savings: no employer plan for a business owner, so "On my own" comes first
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, other: {} });
+  assert.equal(S.valuesFor(q, "have-amounts")["kind-setup-self"], "own");
+  S.applyMoney(q, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {} });
+  assert.equal(S.valuesFor(q, "have-amounts")["kind-setup-self"], "work");
+});

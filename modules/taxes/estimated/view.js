@@ -41,7 +41,7 @@ export function render(root, ctx) {
   const values = Object.fromEntries(d.quarters.map((q, i) => [`q${i}`, paidNow[i] || null]));
   const form = ui.form(FIELDS, values, (v) => {
     pending = "Payments saved.";
-    store.update((p) => { p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [0, 1, 2, 3].map((i) => v[`q${i}`] ?? 0) }; });
+    store.update((p) => { p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [0, 1, 2, 3].map((i) => v[`q${i}`] ?? 0), typedAt: fmt.today() }; });
   }, { submitLabel: "Save payments" });
   // paying through withholding instead, a past quarter is not "behind": it is covered once the withholding is raised
   const badge = (s) => s === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : s === "short" ? (viaPay ? ui.h("span", { class: "pill" }, "not paid") : ui.h("span", { class: "pill warn" }, "behind")) : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;

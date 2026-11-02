@@ -267,9 +267,58 @@ test("the saved debt plan's extra is paid on the 1st until its debts are gone, a
 test("business income typed as a year lands a month at a time, not in one deposit (round 4)", async () => {
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const T = "2026-11-02";
-  const p = familyPlan(T); p.income.push({ id: "i-biz", name: "My business", type: "business", personId: "p-ana", amount: 60000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true });
+  // setup's own record ("a typical year", asked of someone paid by their own business)
+  const p = familyPlan(T); p.income.push({ id: "setup-pay-p-ana", name: "My business", type: "business", personId: "p-ana", amount: 60000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true });
   const d = compute(p, { today: T });
   const hits = JSON.stringify(d).match(/"name":"My business","amount":([\d.]+)/g) ?? [];
   assert.ok(hits.length >= 2, `${hits.length} deposits in the forecast`);
   for (const h of hits) assert.equal(Number(h.split(":").pop()), 5000);
+  // a once-a-year payment typed on Income (a retainer) still lands once, on its date (review 2026-11-02)
+  const q = familyPlan(T); q.income.push({ id: "i-ret", name: "Year-end retainer", type: "business", personId: "p-ana", amount: 12000, period: "annual", growth: 0, startDate: "2025-12-20", endDate: "", taxable: true });
+  const once = JSON.stringify(compute(q, { today: T })).match(/"name":"Year-end retainer","amount":([\d.]+)/g) ?? [];
+  assert.equal(once.length, 1); assert.equal(Number(once[0].split(":").pop()), 12000);
+});
+
+test("estimated tax goes out on the quarters' due dates; 'if not paid yet' when nothing is typed (review 2026-11-02)", async () => {
+  const { estimatedLines } = await import("./compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const plan = () => {
+    const p = emptyPlan();
+    p.household = { ...(p.household ?? {}), people: [{ id: "dee", name: "Dee", role: "self", birthDate: "1990-04-01" }], state: "TX", filingStatus: "single" };
+    p.income = [{ id: "setup-pay-dee", name: "Dee's business", type: "business", personId: "dee", amount: 78000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true }];
+    p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 8000 }];
+    return p;
+  };
+  const p = plan(); const e = estimated(p, { today: T });
+  assert.ok(e.needsEstimates && e.overdue && e.nextDue, "a freelancer with nothing paid needs quarterly payments");
+  const lines = estimatedLines(p, T, "2027-01-31");
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0].date, T); assert.match(lines[0].name, /if not paid yet/); assert.ok(Math.abs(-lines[0].amount - e.overdue.amount) < 0.01);
+  assert.equal(lines[1].date, e.nextDue.due); assert.ok(Math.abs(-lines[1].amount - e.nextDue.amount) < 0.01);
+  // the forecast carries them, so it no longer runs the whole business income in untaxed
+  const d = compute(p, { today: T, days: 90 });
+  const taxOut = d.days.flatMap((x) => x.events).filter((x) => x.tax).reduce((t, x) => t - x.amount, 0);
+  assert.ok(Math.abs(taxOut - e.overdue.amount - e.nextDue.amount) < 0.02);
+  // typed payments: the past-due part is named as such; all paid: nothing past due
+  const typed = plan(); typed.taxes = { ...(typed.taxes ?? {}), estimated: { paid: [1000, 0, 0, 0] } };
+  assert.match(estimatedLines(typed, T, "2027-01-31")[0].name, /^Estimated tax past due/);
+  // the bank already shows tax payments: they are the forecast's, not counted twice
+  assert.deepEqual(estimatedLines(p, T, "2027-01-31", [{ amount: -2500, rawPayee: "IRS USATAXPYMT", payee: "IRS" }]), []);
+  // no business income: nothing
+  const w = plan(); w.income[0].type = "salary"; assert.deepEqual(estimatedLines(w, T, "2027-01-31"), []);
+});
+
+test("a bank line covers a typed item only going the same way, and not by a word every bank line shares (review 2026-11-02)", () => {
+  const T = "2026-11-02";
+  const p = emptyPlan();
+  p.household = { ...(p.household ?? {}), people: [{ id: "dee", name: "Dee", role: "self", birthDate: "1990-04-01" }], state: "TX", filingStatus: "single" };
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 8000 }];
+  p.income = [{ id: "i-biz", name: "Dee's business", type: "business", personId: "dee", amount: 6500, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true }];
+  p.transactions = [];
+  let n = 0;
+  for (const m of ["2026-07", "2026-08", "2026-09", "2026-10"]) p.transactions.push({ id: `t${++n}`, date: `${m}-05`, amount: -89.99, payee: "Comcast Business", rawPayee: "COMCAST BUSINESS", accountId: "chk", category: "utilities", tags: [], note: "" });
+  const d = compute(p, { today: T, days: 90 });
+  const biz = d.days.flatMap((x) => x.events).filter((x) => x.name === "Dee's business");
+  assert.ok(biz.length >= 2, "the business income still lands though a bill says 'business'");
 });

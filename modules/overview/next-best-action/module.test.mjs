@@ -307,7 +307,12 @@ test("a freelancer: this year's tax is kept apart before the cushion, and a past
   const starter = d.steps.find((s) => s.id === "starter");
   assert.doesNotMatch(starter.detail, /16,900/, "the cushion is the cash less the tax");
   // nothing paid since April: paying it is the next move, from the cash kept apart
-  const u = compute(freelancer([0, 0, 0, 0]), { today });
+  // nothing typed on Estimated payments yet: it asks first, with what is due if none were made (review 2026-11-02)
+  const asked = compute(freelancer([0, 0, 0, 0]), { today });
+  assert.equal(asked.next.id, "tax"); assert.equal(asked.next.title, "Type or pay this year's estimated tax");
+  assert.match(asked.next.detail, /^No estimated payments are typed for 2026 yet\. If none were made, .* was due by now \(the first part on April 15, 2026\)/);
+  const typedZero = freelancer([0, 0, 0, 0]); typedZero.taxes.estimated.typedAt = "2026-10-01";
+  const u = compute(typedZero, { today });
   assert.equal(u.next.id, "tax"); assert.equal(u.next.title, "Pay the estimated tax that is past due");
   assert.match(u.next.detail, /past due \(the first part since April 15, 2026\)/);
   assert.match(u.next.detail, /from the cash kept apart for tax/);

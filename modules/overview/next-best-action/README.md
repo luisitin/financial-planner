@@ -145,3 +145,8 @@ When costly debt is first in line for the spare money (no earlier step still fil
 "Each month's money" lists `spare.held` (side income above what you count on, after its tax) as its own line, so the lines
 add up to "Spare each month"; the note under it says it is a bonus to save when it comes, and the left-over step's detail
 adds "counting uneven pay at what you can count on".
+
+## The tax step when nothing is typed (review 2026-11-02)
+With estimated tax past due and no payments ever typed (taxes/estimated `paidTyped` false), the step is "Type or pay this
+year's estimated tax": what was due if none were made, and to type what was paid. Paid from the cash already kept apart for
+tax, its line reads "From the cash kept apart for tax, today." instead of a month at the spare money's pace.

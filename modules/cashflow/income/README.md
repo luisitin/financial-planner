@@ -49,3 +49,7 @@ until Side income offers a careful figure again.
 ## Ideas / not yet
 - Pay-stub detail (pre-tax deductions, 401(k) match) for the tax and retirement pages.
 - Irregular income smoothing (average of the last 12 months of transactions) once phase 3 lands.
+
+## Business income and "reaches the bank" (review 2026-11-02)
+The totals card's take-home sentence names business income apart: pay reaches the bank after its tax, business income
+before its tax (paid in four estimated payments), so the figure is not read as after tax when it is not.

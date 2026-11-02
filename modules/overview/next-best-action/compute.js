@@ -136,7 +136,11 @@ export function compute(plan, params = {}) {
   const owed = liq.tax;
   if (owed && (owed.overdue || liq.taxOwed > 0.5)) {
     const nextWords = owed.nextDue && owed.nextDue.amount > 0.5 ? `${exact(owed.nextDue.amount)} by ${dayWords(owed.nextDue.due)}` : null;
-    if (owed.overdue) add({ id: "tax", title: "Pay the estimated tax that is past due", why: "A late payment is charged interest for every day it is late; it comes before any saving or extra on debt.", status: "now",
+    // no payments ever typed: the first thing is to say what was paid, not to be told it is all past due (review 2026-11-02)
+    if (owed.overdue && !owed.paidTyped) add({ id: "tax", title: "Type or pay this year's estimated tax", why: "No paycheck takes your tax out, so it is paid four times a year; a late payment is charged interest for every day it is late.", status: "now",
+      gap: Math.max(0, owed.overdue.amount - liq.taxOwed), doneDate: owed.overdue.amount - liq.taxOwed < 0.5 ? today : null,
+      detail: `No estimated payments are typed for ${owed.year} yet. If none were made, ${exact(owed.overdue.amount)} of this year's federal tax was due by now (the first part on ${dayWords(owed.overdue.due)}): pay it at irs.gov/payments${owed.overdue.amount - liq.taxOwed < 0.5 ? " from the cash kept apart for tax" : ""}. Either way, type what you paid on Estimated payments.${nextWords ? ` The next payment is ${nextWords}.` : ""}`, go: ["taxes", "estimated"] });
+    else if (owed.overdue) add({ id: "tax", title: "Pay the estimated tax that is past due", why: "A late payment is charged interest for every day it is late; it comes before any saving or extra on debt.", status: "now",
       // the cash already set apart for tax pays it today; only what the cash cannot cover waits for the money left each month
       gap: Math.max(0, owed.overdue.amount - liq.taxOwed), doneDate: owed.overdue.amount - liq.taxOwed < 0.5 ? today : null,
       detail: `${exact(owed.overdue.amount)} of this year's federal tax is past due (the first part since ${dayWords(owed.overdue.due)}). Pay it at irs.gov/payments${owed.overdue.amount - liq.taxOwed < 0.5 ? " from the cash kept apart for tax" : ""}, then type it on Estimated payments.${nextWords ? ` The next payment is ${nextWords}.` : ""}`, go: ["taxes", "estimated"] });

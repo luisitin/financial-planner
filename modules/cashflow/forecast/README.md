@@ -52,3 +52,14 @@ Business or freelance income typed as a year (or a quarter) lands a month at a t
 ## Side income counted carefully
 A business line with a careful figure (income's `countedOn`) lands that figure a month; at or above the line's amount, or on
 another kind of income, the amount lands as typed (review 2026-11-02).
+
+## Review fixes 2026-11-02 (freelancers)
+- **Estimated tax** (`estimatedLines`): business income lands before its tax, so when taxes/estimated says the return needs
+  quarterly payments, the forecast takes them out: what is past due on today (named "if not paid yet" when no payment was
+  ever typed, `paidTyped`), then each quarter due inside the horizon, the part of its cumulative share not paid and not
+  counted before it. Skipped when the bank already shows tax payments (found lines matching `TAX_WORDS`: IRS, USATAXPYMT,
+  EFTPS, a state's revenue department), so they are never counted twice. Only this tax year's quarters.
+- **Bank lines cover typed items only going the same way** (an outgoing "Comcast Business" bill never covers "Dee's
+  business"), and an income's generic words (business, income, work, freelance, consulting, side, salary...) never match.
+- **A year's business income is spread a month at a time only for setup's own record** (`setup-pay-<person>`, where setup
+  asks for "a typical year"); a once-a-year payment typed on Income (a retainer, a royalty) lands once, on its date.

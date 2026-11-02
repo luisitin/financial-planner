@@ -274,3 +274,10 @@ this README with its source; the debt guide's rates step waiting for real rates 
 - Ask the payoff date of a car loan (`termMonths`) for a cleaner debt-free date.
 - The federal estimate for an unmarried couple as two single returns (taxes/federal, see WORKBOARD).
 - Split a mortgage's escrow (tax and insurance) out of its payment for the payoff math.
+
+## Paid by their own business (review 2026-11-02)
+- Retirement savings start "On my own" for someone whose setup pay is business income (no employer plan); the hint names an
+  IRA, SEP-IRA or solo 401(k), and the extra box asks what the business adds instead of an employer match "on your pay stub".
+- The pay's name follows the answer also when the person was named or renamed in between ("My pay" becomes "Dee's
+  business"): any name of the setup's shape (`My|<name>'s pay|business`) follows when the kind changes, and "My ..." follows
+  a new name; a name typed on Income of another shape stays.

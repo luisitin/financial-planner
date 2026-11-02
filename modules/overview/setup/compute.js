@@ -393,7 +393,10 @@ export function applyMoney(draft, v) {
         const nameFor = (t) => (t === "business" ? `${possessive(p)} business` : `${possessive(p)} pay`);
         put(draft.income, id, { amount, period, type }, { name: nameFor(type), ...base });
         // the name follows the answer while it is still the setup's own (one renamed on Income stays)
-        if (old && oldType !== type && oldName === nameFor(oldType)) byId(draft.income, id).name = nameFor(type);
+        // the setup's own name also when the person was named (or renamed) in between: "My pay" becomes "Dee's business"
+        // (review 2026-11-02); a name typed on Income that is not of that shape stays
+        const setupShape = /^(My|.+'s) (pay|business)$/.test(String(oldName ?? ""));
+        if (old && oldName !== nameFor(type) && (oldName === nameFor(oldType) || (setupShape && (oldType !== type || /^My /.test(oldName))))) byId(draft.income, id).name = nameFor(type);
       }
     }
     if (status === "retired") {
@@ -791,7 +794,9 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)); o[h.perAdult ? `${h.key}-${pid}` : h.key] = a ? a.balance : ""; }
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
-      o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a ? "work" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
+      // someone paid by their own business has no employer plan: "On my own" first (review 2026-11-02)
+      const ownBusiness = byId(plan?.income ?? [], `setup-pay-${p.id}`)?.type === "business";
+      o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a ? "work" : ownBusiness ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
       o[`contrib-${p.id}`] = c?.amount ? Math.round(c.amount) : ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
     }
     return o;

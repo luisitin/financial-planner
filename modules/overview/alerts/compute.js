@@ -109,7 +109,9 @@ export function compute(plan, params = {}) {
   if (tax && tax.from === "none" && !(inc.active ?? []).some((x) => x.type === "salary" || x.type === "bonus")) {
     let e = null;
     try { e = estimatedOf(plan, { today }); } catch { e = null; }
-    if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
+    // nothing ever typed on Estimated payments is not "$0 paid": ask first, say what is due if none were made (review 2026-11-02)
+    if (e?.needsEstimates && e.behind > 0 && !e.paidTyped) add("estimates-behind", "warn", `Estimated tax: type what you have paid this year`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments, and none are typed yet. If none were made, about ${money(e.behind)} was due by now: type what you paid on Estimated payments, or pay the past-due part to keep the underpayment penalty small.`, ["taxes", "estimated"]);
+    else if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
   }
   // the people who count on an earner (Life insurance needs' answer, the same as Next best action's protection step), and a
   // guardian for the children: the two gaps that would hurt a family most, worked out on pages few people open
