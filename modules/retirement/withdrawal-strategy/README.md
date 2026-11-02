@@ -19,6 +19,15 @@ Security is not counted yet, so this page looks worse than it is", a filled "Add
 Social Security", which saves the setup's own `guide.setup.ss[personId] = "none"` so it is never asked again. Before, only a
 grey sentence at the end of a paragraph said why the plan looked short.
 
+## The answer first: how much to take out (round 4, 2026-11-02)
+The hero answers "how much do we take out, and from where?" for the first year of retirement (this year, for a household already retired), from Will the money last?'s own engine with the chosen way of spending (`firstYear`, today's dollars):
+- need = spending + one-off costs + the year's tax - guaranteed income (Social Security, pensions, other income), floor 0.
+- from savings = everything the engine takes out that year, the required withdrawal included; extra = from savings - need.
+- where from: cash first, then the plan's withdrawal order, each named by its accounts.
+Three sentences: nothing needs to come out; or income covers the spending but the law still requires a withdrawal (how much, from which account, the tax on it, and where the rest can go, with a link to Required withdrawals); or take about $X, starting with these accounts, which with the guaranteed income pays for the spending and its tax. Then the most the plan can carry (Will the money last?'s `affordable`, to the $100), or where it runs out.
+Before, the page showed four "first year" spending figures and no amount to take out. A range whose two ends are equal now reads "spending stays at $X".
+Not changed (my choice): the share-of-savings, years-left and guardrail rules still set total spending from the savings alone, as the frozen answer keys in tools/golden_retirement define them, so for a couple with large guaranteed income they can quote spending below it; the hero's figure is the one to act on.
+
 ## Tests
 `tests/retirement-pages.test.mjs`: four rows, percent never fails, fixed-real first year equals the planned spending.
 
