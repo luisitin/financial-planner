@@ -4,7 +4,7 @@
 // the tax the retirement plan pays year by year.
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { compute as computeBrackets } from "../../taxes/brackets/compute.js";
-import { compute as computeWithholding } from "../../taxes/withholding/compute.js";
+import { compute as computeWithholding, fullSteps } from "../../taxes/withholding/compute.js";
 import { compute as computeEstimated } from "../../taxes/estimated/compute.js";
 import { compute as computeGains } from "../../taxes/capital-gains/compute.js";
 import { compute as computeHsa } from "../../taxes/hsa-fsa/compute.js";
@@ -32,11 +32,18 @@ export function compute(plan, params = {}) {
   const hs = computeHsa(plan, { today });
   const tp = computeTaxProjection(plan, { today });
   const r = fed.result;
+  // the whole year's federal tax (self-employment tax included) and its walk, as the Federal estimate shows them
+  const full = fullSteps(plan, fed, { today });
+  // paying it: the same answer as Withholding check (typed figures, else withholding estimated from pay; a household
+  // with no pay has nothing withheld), not "not known" for everyone without a typed pay stub
+  const est = wh.estimate ?? {};
+  const noPay = !(r.income.wages > 0);
+  const known = est.from && (est.from !== "none" || noPay);
   return {
     ready: true, missing: [], today, year: fed.year, filing: fed.filingStatus, isIndexed: fed.isIndexed,
-    thisYear: { steps: fed.steps, totalTax: r.totalTax, agi: r.agi, taxableIncome: r.taxableIncome, effectiveRate: r.effectiveRate, marginal: fed.marginal, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate },
+    thisYear: { steps: full.steps, totalTax: full.total, seTax: full.se?.tax ?? 0, incomeTax: r.totalTax, agi: r.agi, taxableIncome: r.taxableIncome, effectiveRate: full.rate, marginal: fed.marginal, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate },
     ladder: br.ladder.map((l) => ({ rate: l.rate, from: l.from, to: l.to, filled: l.filled, tax: l.tax, current: l.current })),
-    paying: { verdict: wh.verdict, balance: wh.balance, withheld: wh.withholding?.projected ?? 0, estimatesPaid: wh.estimatedPaid ?? 0, needsEstimates: es.needsEstimates, nextDue: es.nextDue, overdue: es.overdue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk },
+    paying: { verdict: known ? (Math.abs(est.balance) < 500 ? "about right" : est.balance > 0 ? "owe" : "refund") : "unknown", balance: known ? est.balance : wh.balance, withheld: known ? est.projected : (wh.withholding?.projected ?? 0), from: est.from ?? "none", noPay, estimatesPaid: (wh.estimatedPaid ?? 0) + (est.otherPaid ?? 0), totalTax: wh.totalTax, needsEstimates: es.needsEstimates, nextDue: es.nextDue, overdue: es.overdue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk },
     gains: { hasSales: cg.hasSales, taxOnGains: cg.taxOnGains, zeroRoom: cg.zeroRoom, netLoss: cg.gains?.netLoss ?? 0, carryForward: cg.gains?.carryForward ?? 0 },
     hsa: hs.hasHsa ? { taxSaved: hs.hsa.savedTotal, room: hs.hsa.room, limit: hs.hsa.limit } : null,
     retirement: tp.ready ? { ready: true, years: tp.rows.length, total: tp.totals.taxes, average: tp.average, peak: tp.peak, byBracket: tp.byBracket, firstZero: tp.firstZero, flatTaxes: tp.flatTaxes, bracketsOn: tp.bracketsOn } : { ready: false },

@@ -2,7 +2,7 @@
 // refund or bill, the rates), then the walk from income to tax, what the plan already knows,
 // and folded forms for the figures only the owner knows.
 import { compute } from "./compute.js";
-import { taxAnswer } from "../withholding/compute.js";
+import { taxAnswer, fullSteps } from "../withholding/compute.js";
 import { FILING_STATUSES } from "../../../core/math/tax.js";
 
 let pending = null;
@@ -17,26 +17,33 @@ export function render(root, ctx) {
   // refund or owe: the year's tax against what the paychecks take out by December (typed on Withholding check, else
   // estimated from pay) and the estimated payments: the same answer as Withholding check, Estimated payments and Quick answers
   const ans = d.hasIncome ? taxAnswer(plan, { today: fmt.today() }) : null;
-  const owes = ans && ans.from !== "none" ? ans.balance : null;
-  // the answer counts self-employment tax (taxes/withholding yearTax); this page's own total does not yet, so it is said
-  const seNote = ans?.seTax >= 1 && owes !== null ? ` That counts ${money(ans.seTax)} of self-employment tax on business income, which the total below leaves out.` : "";
-  const paidBy = ans ? `${ans.from === "typed" ? "The paychecks take out" : "Your paychecks take out about"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ans.from === "mixed" ? " (partly estimated from pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is already paid` : ""}` : "";
+  // the whole year's federal tax, self-employment tax included (the same total as Withholding check, Quick answers and
+  // Needs attention), and the walk that ends at it; d.result stays the income tax the answer keys check
+  const full = fullSteps(plan, d, { today: fmt.today() });
+  const total = full.total;
+  // no pay at all (a freelancer): nothing is withheld, so what is still to pay is known from the estimates paid alone
+  const noPay = !(r.income.wages > 0);
+  const owes = ans && (ans.from !== "none" || noPay) ? ans.balance : null;
+  const paidBy = !ans ? "" : ans.from === "none" ? (ans.paid > 0 ? `Nothing is taken out of pay; ${money(ans.paid)} is paid in estimates so far` : "Nothing is taken out of pay and no estimated payments are typed yet")
+    : `${ans.from === "typed" ? "The paychecks take out" : "Your paychecks take out about"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ans.from === "mixed" ? " (partly estimated from pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is already paid` : ""}`;
+  const seNote = full.se ? ` It includes ${money(full.se.tax)} of self-employment tax on the business.` : "";
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.hasIncome ? `About ${money(r.totalTax)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
+    ui.h("h1", {}, d.hasIncome ? `About ${money(total)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(r.effectiveRate, 1)} of it overall; the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}).${owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
+      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(full.rate, 1)} of it overall; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""})`}.${owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
-    owes !== null ? ui.row(ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, owes >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
-    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice: no AMT, business deduction, education or earned-income credits, or state tax.`),
+    owes !== null ? ui.row(noPay ? ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, owes >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, owes >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
+    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice: no AMT, ${full.se ? "" : "business deduction, "}education or earned-income credits, or state tax.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
-  for (const n of d.notes) root.append(ui.notice("info", n));
+  // the engine's note that self-employment tax is left out is answered by the walk's business rows
+  for (const n of d.notes) if (!(full.se && /self-employment tax/i.test(n))) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
-    ui.stat("Federal tax", money(r.totalTax), owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
-    ui.stat("Of your income", fmt.pct(r.effectiveRate, 1), "the effective rate"),
-    ui.stat("On the next dollar", fmt.pct(d.marginal, 0), d.marginal > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
+    ui.stat("Federal tax", money(total), owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
+    ui.stat("Of your income", fmt.pct(full.rate, 1), "the effective rate"),
+    noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax`) : ui.stat("On the next dollar", fmt.pct(d.marginal, 0), d.marginal > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount)} of deductions`),
   )));
   if (r.separate) root.append(ui.card("Two returns",
@@ -46,7 +53,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub" }, `${money(x.income.gross)} of income, ${money(x.taxableIncome)} taxed after ${money(x.deduction.amount)} of deductions${x.deduction.used === "itemized" ? " (itemized)" : ""}; the ${fmt.pct(x.bracketRate, 0)} bracket`)))),
   ));
   root.append(ui.card("From income to tax",
-    ui.h("ul", { class: "records" }, d.steps.map((s) => ui.h("li", {},
+    ui.h("ul", { class: "records" }, full.steps.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < 0 ? `−${money(-s.amount)}` : money(s.amount))),
       s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null))),
   ));
@@ -54,7 +61,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, "Yearly figures from your Income, Contributions and People pages. Blank fields below keep these; a typed figure replaces the plan's."),
     ui.h("ul", { class: "records" }, d.sources.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label, " ", ui.h("span", { class: s.from === "typed" ? "pill accent" : "pill" }, s.from === "typed" ? "typed" : "from the plan")), ui.h("span", { class: "rec-value" }, s.amount < 0 ? `−${money(-s.amount)}` : money(s.amount))),
-      s.detail ? ui.h("div", { class: "rec-sub" }, s.detail) : null))),
+      s.detail ? ui.h("div", { class: "rec-sub" }, s.key === "business" && full.se ? "Income page; its self-employment tax and business deduction are in the walk above" : s.detail) : null))),
     ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
   ));
   root.append(figuresFold(ctx, d), deductionsFold(ctx, d), yearFold(ctx, d));

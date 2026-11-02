@@ -23,7 +23,7 @@ export function render(page, ctx) {
     host.append(wrap);
     const t = d.thisYear, pay = d.paying;
     sheet.append(ui.h("h1", {}, `Tax report, ${d.year}`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}federal income tax${d.isIndexed ? " (this year's tables are estimated from the latest published)" : ""} · prepared ${longDate(d.today)}`),
-      ui.h("p", { class: "rp-lead" }, `Federal income tax for ${d.year} comes to about ${money(t.totalTax)}: ${pct(t.effectiveRate)} of income. The next dollar of ordinary income pays ${pct(t.marginal, 0)}; ${Number.isFinite(t.roomInBracket) ? `${money(t.roomInBracket)} more taxable income fits in the ${pct(t.bracketRate, 0)} bracket before ${pct(t.nextRate, 0)} starts` : `that is the top bracket`}.`));
+      ui.h("p", { class: "rp-lead" }, `Federal tax for ${d.year} comes to about ${money(t.totalTax)}${t.seTax >= 1 ? ` (${money(t.seTax)} of it self-employment tax)` : ""}: ${pct(t.effectiveRate)} of income. The next dollar of ordinary income pays ${pct(t.marginal, 0)}; ${Number.isFinite(t.roomInBracket) ? `${money(t.roomInBracket)} more taxable income fits in the ${pct(t.bracketRate, 0)} bracket before ${pct(t.nextRate, 0)} starts` : `that is the top bracket`}.`));
     sheet.append(section(ui, `${d.year}, step by step`,
       rtable(ui, [{ label: "", get: (s) => ui.h("span", {}, ui.h("b", {}, s.label), s.sub ? ui.h("span", { class: "rp-sub" }, ` · ${s.sub}`) : null) }, { label: "Amount", num: true, get: (s) => money(s.amount) }], d.thisYear.steps)));
     sheet.append(section(ui, "The rates",
@@ -31,10 +31,13 @@ export function render(page, ctx) {
     sheet.append(section(ui, "The brackets",
       rtable(ui, [{ label: "Rate", get: (l) => ui.h("span", { class: l.current ? "rp-ok" : null }, pct(l.rate, 0)) }, { label: "Taxable income", get: (l) => (Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`) }, { label: "Yours in it", num: true, get: (l) => (l.filled > 0 ? money(l.filled) : "-") }, { label: "Tax", num: true, get: (l) => (l.tax > 0 ? money(l.tax) : "-") }], d.ladder)));
     const payLines = [];
-    if (pay.verdict === "unknown") payLines.push("No withholding is on file, so whether paychecks take enough out is not known: the Withholding check page works it out from a pay stub.");
-    else if (pay.verdict === "refund") payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: a refund of about ${money(-pay.balance)} next spring.`);
-    else if (pay.verdict === "owe") payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: about ${money(pay.balance)} left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
-    else payLines.push(`Withholding and estimated payments come to about ${money(pay.withheld + pay.estimatesPaid)}: about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
+    // the same answer as Withholding check: typed figures, else withholding estimated from pay
+    const took = pay.noPay && pay.from === "none" ? `Nothing is taken out of pay${pay.estimatesPaid > 0 ? `; estimated payments so far come to ${money(pay.estimatesPaid)}` : ""}`
+      : `${pay.from === "typed" ? "Paychecks take out" : "Paychecks take out about"} ${money(pay.withheld)} by December${pay.from === "paycheck" ? " (estimated from pay)" : pay.from === "mixed" ? " (partly estimated from pay)" : ""}${pay.estimatesPaid > 0 ? ` and ${money(pay.estimatesPaid)} is paid in estimates` : ""}`;
+    if (pay.verdict === "unknown") payLines.push("Whether paychecks take enough out is not known yet: the Withholding check page works it out from a pay stub.");
+    else if (pay.verdict === "refund") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: a refund of about ${money(-pay.balance)} next spring.`);
+    else if (pay.verdict === "owe") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about ${money(pay.balance)} left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
+    else payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
     if (pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} due from ${longDate(pay.overdue.due)} on is not marked as paid.`);
     if (pay.verdict !== "unknown" && pay.needsEstimates && pay.nextDue) payLines.push(`Estimated payments: the ${pay.nextDue.label} payment of ${money(pay.nextDue.amount)} is due ${longDate(pay.nextDue.due)}.`);
     sheet.append(section(ui, "Paying it", list(ui, payLines)));

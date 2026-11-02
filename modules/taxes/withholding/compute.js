@@ -150,6 +150,35 @@ export function compute(plan, params = {}) {
 }
 
 /**
+ * fullSteps(plan, fed, params) -> { steps, total, rate (total / income), se: { tax (self-employment tax, Additional Medicare
+ * on it included), half, qbi, expenses, nextDollar (what the next dollar of business profit costs in all, a fraction) } | null }. The Federal estimate's walk from income to tax (`fed.steps`), and with
+ * self-employment income the business rows before its "Federal tax" line, so the walk ends at the year's whole federal
+ * tax (yearTax: what Withholding check, Quick answers and Needs attention say): the business counted at its profit with
+ * half the self-employment tax and the 20% business deduction off income, then the self-employment tax itself.
+ * fed.result is not touched (the answer keys check it).
+ */
+export function fullSteps(plan, fed, params = {}) {
+  const steps = (fed?.steps ?? []).map((x) => ({ ...x }));
+  const r = fed?.result ?? {};
+  const gross = Number(r.income?.gross) || 0;
+  const s = computeSelfEmployment(plan, params);
+  const at = steps.findIndex((x) => x.label === "Federal tax");
+  if (!s.ready || at < 0) return { steps, total: Math.max(0, Number(r.totalTax) || 0), rate: Number(r.effectiveRate) || 0, se: null };
+  const total = Math.max(0, s.taxWith);
+  const seAll = s.seTotal + s.addlMedicare;
+  const incomeAfter = total - seAll;
+  const n = (x) => Math.round(x).toLocaleString("en-US");
+  const rows = [];
+  const change = incomeAfter - (Number(r.totalTax) || 0);
+  const offs = [s.half >= 1 ? `half the self-employment tax (${n(s.half)})` : null, s.qbi >= 1 ? `the 20% business deduction (${n(s.qbi)})` : null].filter(Boolean);
+  if (Math.abs(change) >= 1) rows.push({ label: change < 0 ? `Tax saved by business ${s.expenses > 0 ? "costs and " : ""}deductions` : "Business taxed on its profit", amount: change, sub: [s.expenses > 0 ? `the business taxed on its profit, after ${n(s.expenses)} of costs` : null, offs.length ? `${offs.join(" and ")} come${offs.length === 1 ? "s" : ""} off income` : null].filter(Boolean).join("; ") || "the business counted at its profit" });
+  rows.push({ label: "Self-employment tax", amount: seAll, sub: `Social Security and Medicare for the self-employed: 15.3% of 92.35% of the profit${s.addlMedicare >= 1 ? `, plus ${n(s.addlMedicare)} of Additional Medicare tax` : ""}` });
+  const rate = gross > 0 ? total / gross : 0;
+  steps.splice(at, 1, ...rows, { ...steps[at], amount: total, sub: `income tax and self-employment tax: ${(rate * 100).toFixed(1)}% of income` });
+  return { steps, total, rate, se: { tax: seAll, half: s.half, qbi: s.qbi, expenses: s.expenses, nextDollar: Math.max(0, 100 - s.keepPer100) / 100 } };
+}
+
+/**
  * taxAnswer(plan, { today }) -> { year, totalTax, seTax, projected, from, paid (estimated and other payments), balance (+ owe, - back), verdict, effectiveRate, people } | null
  * "Will we owe or get a refund?" in one place for the Federal estimate, Quick answers and Needs attention: the year's tax
  * against what the paychecks take out by December (withholdingEstimate) and the estimated payments made. null without income.

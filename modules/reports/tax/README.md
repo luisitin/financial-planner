@@ -12,6 +12,12 @@ Through the tax pages' computes: Federal estimate (the steps and totals), Bracke
 ## The document
 An opening paragraph (the year's tax, the effective rate, the next dollar's rate and the room left in the bracket), the year step by step (the Federal estimate's walk), the rates, the bracket ladder with the household's income in each, paying it (withholding's verdict; with no withholding on file the report says so and points to the Withholding check instead of asking for estimated payments; the next estimated payment only when the verdict is known and payments are needed), gains and the HSA, and the tax in retirement (total, average, the peak year and why, the years in each bracket, and what the flat setting would charge). Prints through `../report-kit.js`.
 
+## The same answer as the tax pages (2026-11-02, round 4)
+"This year" is the whole federal tax with self-employment tax (withholding `fullSteps`), and its walk has the business
+rows. "Paying it" uses the same estimate as Withholding check (typed figures, else withholding estimated from pay; no
+pay at all means nothing withheld): "About $15,683 of tax. Paychecks take out about $9,470 by December (estimated from
+pay): about $6,213 left to pay at filing", where it used to say "No withholding is on file" to anyone without a typed stub.
+
 ## Tests
 `module.test.mjs`: not ready without income; the figures and ladder match the pages; the tax fixture's withholding, sales and HSA.
 

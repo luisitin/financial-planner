@@ -41,6 +41,17 @@ own total and walk still leave out (their note says so); the hero then adds "Tha
 business income, which the total below leaves out." Folding it into the walk itself is left for later: it moves every page
 that reads this total (take-home, Forecast), which needs its own check against the answer keys.
 
+## One total, self-employment tax included (2026-11-02, round 4)
+The page's headline, its "Federal tax" tile and the effective rate use the whole year's federal tax (withholding
+`fullSteps` → `yearTax`): the same figure as Withholding check, Quick answers and Needs attention. The walk gains the
+business rows before its "Federal tax" line ("Tax saved by business deductions": the business taxed on its profit, half
+the self-employment tax and the 20% deduction off income; then "Self-employment tax"), so it ends at that total and
+"total − taken out = still to pay" adds up on screen. The engine's note "the 15.3% self-employment tax is not included
+yet" and "business deduction" in the disclaimer no longer show when the business rows do. With no pay at all (a
+freelancer) nothing is withheld, so what is still to pay is said from the estimates paid, the button goes to Estimated
+payments, and "the next dollar" is the business's (bracket and self-employment tax, less its deductions: 100 −
+`keepPer100` from taxes/self-employment). `compute().result` and `steps` are unchanged (the answer keys check them).
+
 ## Edge cases
 Not modelled: AMT, the qualified business income deduction, the earned income and education credits, self-employment tax (self-employment income is taxed as ordinary income with a note), state tax, the FICA wage base on the additional Medicare tax. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
 

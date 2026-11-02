@@ -128,3 +128,23 @@ test("review: the year's tax counts self-employment tax on business income, as t
   const n = compute(p, T);
   assert.equal(n.seTax, 0); assert.equal(n.totalTax, fedOf(p, T).result.totalTax, "no business: the Federal estimate's total");
 });
+
+// ---- the walk ends at the whole tax (round 4, 2026-11-02)
+import { fullSteps, taxAnswer } from "./compute.js";
+import { compute as fedOf } from "../federal/compute.js";
+import { familyPlan as famOf } from "../../../qa/fixtures/family-plan.mjs";
+test("fullSteps: the business rows go in before Federal tax, which ends at yearTax's total; no business, no change", () => {
+  const p = famOf("2026-11-02"), fed = fedOf(p, { today: "2026-11-02" });
+  const f = fullSteps(p, fed, { today: "2026-11-02" });
+  const labels = f.steps.map((x) => x.label);
+  assert.deepEqual(labels.slice(-3), ["Tax saved by business deductions", "Self-employment tax", "Federal tax"]);
+  const ft = f.steps[f.steps.length - 1];
+  assert.equal(ft.amount, taxAnswer(p, { today: "2026-11-02" }).totalTax); assert.equal(f.total, ft.amount);
+  // the rows add up: the engine's income tax, plus the business change, plus the self-employment tax
+  const biz = f.steps[f.steps.length - 3].amount, se = f.steps[f.steps.length - 2].amount;
+  assert.ok(Math.abs(fed.result.totalTax + biz + se - f.total) < 0.01);
+  assert.equal(fed.steps.find((x) => x.label === "Federal tax").amount, fed.result.totalTax, "the engine's own walk is untouched");
+  p.income = p.income.filter((x) => x.type !== "business");
+  const g = fullSteps(p, fedOf(p, { today: "2026-11-02" }), { today: "2026-11-02" });
+  assert.equal(g.se, null); assert.ok(!g.steps.some((x) => x.label === "Self-employment tax"));
+});

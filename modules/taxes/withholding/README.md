@@ -39,6 +39,13 @@ estimate's answer, Quick answers and Needs attention all use `total`: the safe-h
 self-employment tax as part of the year's tax (the Form 1040-ES estimated tax worksheet adds it to income tax; Schedule 2 carries it to the 1040's total tax). Before, the April bill left it out
 ($5,602 instead of $6,213 for the family). A plan with no business income is unchanged (the answer key has none).
 
+## The walk that ends at the whole tax (2026-11-02)
+`fullSteps(plan, fed, params)` returns the Federal estimate's walk with the business rows inserted before "Federal tax"
+when there is self-employment income: the change in income tax from counting the business at its profit with half the
+self-employment tax and the 20% deduction off income (taxes/self-employment `taxWith − seTotal − addlMedicare` against
+the engine's `totalTax`), then the self-employment tax; "Federal tax" becomes `yearTax`'s total. The Federal estimate and
+the Tax report both show it.
+
 ## Edge cases
 "About right" is within 500 either way. Without a paycheck figure the verdict is unknown. The paychecks-left count is by calendar days, not the employer's actual pay dates.
 
