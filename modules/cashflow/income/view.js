@@ -1,6 +1,6 @@
 // modules/cashflow/income/view.js -- DOM only. Totals up top, a tappable list of income
 // sources, one form to add or edit.
-import { compute, INCOME_TYPES, looksYearly } from "./compute.js";
+import { compute, INCOME_TYPES, looksYearly, changeFrom } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel, payRhythm } from "../../../core/math/periods.js";
 import { takeHome } from "../paycheck/compute.js";
 
@@ -14,7 +14,7 @@ const FIELDS = (people) => [
   { key: "amount", label: "Amount", type: "money", required: true, min: 0, help: "what arrives each time, before taxes if you know it" },
   { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS },
   { key: "growth", label: "Yearly raise", type: "percent", min: 0, max: 100, help: "type 3 for 3% a year; blank for none" },
-  { key: "startDate", label: "Starts", type: "date", help: "blank if it already has" },
+  { key: "startDate", label: "Starts", type: "date", help: "blank if it already has; for a raise from a later date, that date: the old amount runs until then" },
   { key: "endDate", label: "Ends", type: "date", help: "blank if it does not end" },
   { key: "taxable", label: "Income tax applies to it", type: "checkbox" },
 ];
@@ -56,12 +56,21 @@ export function render(root, ctx) {
   let showForm = d.count === 0;
   const ask = ui.h("div");   // the "did you mean a year?" question, above the form
   const save = (clean) => {
-    pending = editing ? "Changes saved." : `${clean.name} added.`;
     const was = editing; editing = null;
+    // a new amount from a date still to come (a raise from January) keeps today's pay until then: say both, and the change a month
+    const ch = was ? changeFrom(was, clean, today) : null;
+    const each = (x) => `${fmt.money(x.amount, cur)} ${periodLabel(x.period).toLowerCase()}`;
+    if (ch?.split) {
+      const diff = ch.change;
+      pending = `From ${fmt.date(clean.startDate)} ${clean.name} is ${each(clean)}${Math.abs(diff) >= 1 ? ` (${diff > 0 ? "+" : "-"}${fmt.money(Math.abs(diff), cur)} a month before tax)` : ""}. Until then it stays ${each(was)}. Both are on this page.`;
+    } else pending = was ? `Changes saved: ${clean.name}, ${each(clean)}.` : `${clean.name} added.`;
     store.update((p) => {
       p.income = p.income ?? [];
-      if (was) { const i = p.income.findIndex((x) => x.id === was.id); if (i >= 0) p.income[i] = { ...p.income[i], ...clean }; }
-      else p.income.push({ id: ui.uid(), ...clean });
+      if (was) {
+        const i = p.income.findIndex((x) => x.id === was.id);
+        if (i >= 0 && ch?.split) { p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: ui.uid(), ...ch.next }); }
+        else if (i >= 0) p.income[i] = { ...p.income[i], ...clean };
+      } else p.income.push({ id: ui.uid(), ...clean });
     });
   };
   const drawForm = () => {

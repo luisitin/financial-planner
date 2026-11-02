@@ -64,3 +64,25 @@ test("looksYearly: a salary over $480,000 a year not typed as yearly is asked ab
   assert.deepEqual(looksYearly({ type: "salary", amount: 20000, period: "biweekly" }), { yearly: 520000, asIf: 20000 });
   assert.equal(looksYearly({ type: "salary", amount: 72000, period: "once" }), null);
 });
+
+test("a raise from a later date keeps today's pay until then (round 4, 2026-11-02): changeFrom splits it; next year counts the raise", async () => {
+  const { changeFrom } = await import("./compute.js");
+  const T = "2026-11-02";
+  const ana = { id: "i1", name: "Ana's salary", type: "salary", personId: "p-ana", amount: 3900, period: "biweekly", growth: 0.03, startDate: "", endDate: "", taxable: true };
+  const ch = changeFrom(ana, { ...ana, amount: 4200, startDate: "2027-01-01" }, T);
+  assert.equal(ch.split, true);
+  assert.deepEqual(ch.old, { ...ana, endDate: "2026-12-31" }, "the pay on file runs until the day before, unchanged");
+  assert.deepEqual(ch.next, { name: "Ana's salary", type: "salary", personId: "p-ana", amount: 4200, period: "biweekly", growth: 0.03, startDate: "2027-01-01", endDate: "", taxable: true });
+  near(ch.change, (4200 - 3900) * 26 / 12);
+  // the plan keeps today's pay now, and the raise a year from now
+  const plan = { ...emptyPlan(), income: [ch.old, { id: "i2", ...ch.next }] };
+  const d = compute(plan, { today: T });
+  near(d.monthly, 3900 * 26 / 12); near(d.nextYear, 4200 * 26, 0.01);
+  // not split: no date, a date already past, only the name changed, or an income that has not started yet
+  assert.equal(changeFrom(ana, { ...ana, amount: 4200 }, T).split, false);
+  assert.equal(changeFrom(ana, { ...ana, amount: 4200, startDate: "2026-10-01" }, T).split, false);
+  assert.equal(changeFrom(ana, { ...ana, name: "Pay", startDate: "2027-01-01" }, T).split, false);
+  assert.equal(changeFrom({ ...ana, startDate: "2026-12-01" }, { ...ana, amount: 4200, startDate: "2027-01-01" }, T).split, false);
+  // an end date already before the new start is kept
+  assert.equal(changeFrom({ ...ana, endDate: "2026-12-15" }, { ...ana, endDate: "", amount: 4200, startDate: "2027-01-01" }, T).old.endDate, "2026-12-15");
+});

@@ -2,6 +2,7 @@
 // same footing (per month, per year) whatever its pay period, with who earns it and how it
 // grows. Expenses, liquidity, retirement and taxes read these totals.
 import { perMonth, perYear, activeOn, periodLabel } from "../../../core/math/periods.js";
+import { addMonths, isValidDate } from "../../../core/math/dates.js";
 
 export const INCOME_TYPES = {
   salary:     { label: "Pay from a job",           icon: "💼" },
@@ -55,9 +56,13 @@ export function compute(plan, params = {}) {
     if (x.startDate && x.endDate && String(x.endDate) < String(x.startDate)) warnings.push(`${x.name || "An income"} ends before it starts.`);
     if (Number(x.growth) > 0.25) warnings.push(`${x.name || "An income"} grows ${Math.round(Number(x.growth) * 100)}% a year. Raises are usually typed as 3, not 0.03 or 300.`);
   }
+  // next year: what is coming in a year from today, so a raise or a new job that starts in between counts and pay that has
+  // ended by then does not (2026-11-02); what is going today gets its yearly raise, what starts in between does not yet
+  const ahead = today ? addMonths(today, 12) : null;
+  const nextYear = ahead ? items.filter((x) => x.period !== "once" && activeOn(x, ahead)).reduce((t, x) => t + (x.active ? x.nextYear : x.yearly), 0) : sum(active, "nextYear");
   return {
     items, active, count: items.length,
-    monthly: sum(active, "monthly"), yearly: sum(active, "yearly"), nextYear: sum(active, "nextYear"),
+    monthly: sum(active, "monthly"), yearly: sum(active, "yearly"), nextYear,
     taxableYearly: sum(active.filter((x) => x.taxable !== false), "yearly"),
     untaxedYearly: sum(active.filter((x) => x.taxable === false), "yearly"),
     oneTime: sum(active, "oneTime"),
@@ -76,4 +81,24 @@ export function looksYearly(item) {
   if (!item || item.type !== "salary" || item.period === "annual" || item.period === "once") return null;
   const yearly = perYear(item.amount, item.period);
   return yearly > ASK_YEARLY_ABOVE ? { yearly, asIf: Number(item.amount) || 0 } : null;
+}
+
+const dayBefore = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+/**
+ * changeFrom(item, values, today) -> { split: true, old, next, change (a month, before tax) } | { split: false, item }: how an edit to an income is kept.
+ * An income going today whose amount or how-often changes with a start date still to come (a raise from January) is split:
+ * the pay on file runs until the day before (`old`, its own amount, name and dates kept) and the new pay starts that day
+ * (`next`, the edit, with no id: the caller gives it one). Anything else changes the income in place. Before (round-4
+ * finding, 2026-11-02), the whole income moved to the later date and the plan showed no pay until then. The same rule as
+ * Life events' new pay (household/life-events, updatePay).
+ */
+export function changeFrom(item, values, today) {
+  const merged = { ...item, ...values };
+  const going = !!today && activeOn(item, today);
+  const later = !!today && isValidDate(values.startDate) && values.startDate > today;
+  const changed = Number(values.amount) !== Number(item.amount) || values.period !== item.period;
+  if (!going || !later || !changed || (item.startDate && item.startDate > today)) return { split: false, item: merged };
+  const old = { ...item, endDate: item.endDate && item.endDate < values.startDate ? item.endDate : dayBefore(values.startDate) };
+  const { id, ...rest } = merged; void id;
+  return { split: true, old, next: { ...rest, startDate: values.startDate }, change: perMonth(values.amount, values.period) - perMonth(item.amount, item.period) };
 }

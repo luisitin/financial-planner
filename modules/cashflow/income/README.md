@@ -20,6 +20,15 @@ Plan sections read (`needs`): `income`, `household` (names for `personId`).
 - Did you mean a year? (2026-11-01): a salary not typed as yearly that comes to more than $480,000 a year (more than $40,000 a month) is asked about before it is saved: "That's $864,000 a year. Did you mean $72,000 a year?" with [Yes, $72,000 a year] and [Keep $72,000 every month]. "How often" starts on "Every month", so a yearly salary typed into it was saved twelve times too big and every page after it (tax, spare money, retirement) was wrong without a word. The $480,000 line is my choice: well above most salaries, so a real monthly figure is rarely asked about, and the question has a one-tap "keep" answer.
 - Under every money box followed by a "How often" box, the form shows "That's $864,000 a year ($72,000 a month)." as you type (`core/ui/dom.js`), so the unit mistake is visible before saving.
 
+A raise from a later date (round 4, 2026-11-02, `changeFrom`): editing an income that is going today with a new amount
+or how-often and a "Starts" date still to come splits it, as Life events does for a new job's pay: the pay on file runs
+until the day before (its own amount and name kept) and the new pay starts that day. Before, the whole income moved to
+the later date: the plan showed no pay until then, the Dashboard turned red and the next move became "Spend less than
+comes in". The confirmation says both and the change a month before tax: "From 1/1/2027 Ana's salary is $4,200 every
+two weeks (+$650 a month before tax). Until then it stays $3,900 every two weeks."
+Next year (2026-11-02): what is coming in a year from today. Income going today gets its yearly raise; income that
+starts in between counts at its amount; income that has ended by then does not count.
+
 ## Edge cases
 No people: items are "Household". Unknown `type`: treated as other. Amount 0 or missing: warning. End before start: warning. Growth above 25%: warning (usually a unit mistake). Unknown period: treated as monthly.
 
