@@ -30,6 +30,8 @@ export function allocateNewMoney(rows, amount) {
 export function compute(plan, params = {}) {
   const a = computeAllocation(plan, params);
   if (!a.ready) return { ready: false, needed: false, rows: [], trades: [], newMoneyBuys: [], notes: a.notes };
+  // no trades against a mix nobody chose (the Projection's default), nor on a guess of the mix: say what is needed first
+  if (a.verdict === "pick" || a.verdict === "partial") return { ready: true, waiting: a.verdict, needed: false, rows: a.rows, band: a.band, total: a.total, known: a.known, coverage: a.coverage, newMoney: 0, newMoneyBuys: [], afterNewMoney: [], trades: [], sells: [], buys: [], leftover: [], blended: [], overOnlyBlended: [], taxableSells: 0, gainRealised: 0, notes: a.notes, flaggedCount: 0, worst: null };
   const newMoney = Math.max(0, Number(plan.investments?.newMoney) || 0);
   const newMoneyBuys = allocateNewMoney(a.rows, newMoney);
   const totalAfter = a.total + newMoney;
@@ -39,7 +41,10 @@ export function compute(plan, params = {}) {
   const trades = [];
   const cashByAccount = new Map();
   let taxableSells = 0, gainRealised = 0;
-  const holdings = a.holdings.items.filter((h) => h.cls !== "unknown");
+  // a balanced or target-date fund is never sold as one class: it holds several and keeps its own mix
+  const holdings = a.holdings.items.filter((h) => h.cls !== "unknown" && h.cls !== "balanced");
+  const blended = a.holdings.items.filter((h) => h.cls === "balanced" && h.value > 0).map((h) => ({ symbol: h.symbol, name: h.name, account: h.accountName, value: h.value, targetYear: h.targetYear ?? null }));
+  const overOnlyBlended = [];
   for (const r of a.rows.filter((x) => x.move < -1)) {
     let toSell = -r.move;
     const candidates = holdings.filter((h) => (h.mix[r.cls] ?? 0) > 0.5).sort((x, y) => (BUCKET_RANK[x.bucket] - BUCKET_RANK[y.bucket]) || ((x.gainPct ?? 0) - (y.gainPct ?? 0)));
@@ -54,6 +59,7 @@ export function compute(plan, params = {}) {
       cashByAccount.set(h.accountId, (cashByAccount.get(h.accountId) ?? 0) + amount);
       toSell -= amount;
     }
+    if (toSell >= 1 && blended.length) overOnlyBlended.push({ cls: r.cls, label: r.label, amount: toSell });
   }
   // buys: the underweight classes, from the cash freed in each account (the account with the most cash first)
   const buysNeeded = a.rows.filter((x) => x.move > 1).map((x) => ({ cls: x.cls, label: x.label, amount: x.move }));
@@ -72,7 +78,8 @@ export function compute(plan, params = {}) {
     if (need >= 1) leftover.push({ cls: b.cls, label: b.label, amount: need });
   }
   const notes = [...a.notes];
+  if (overOnlyBlended.length) notes.push(`${overOnlyBlended.map((o) => o.label).join(" and ")} ${overOnlyBlended.length > 1 ? "are" : "is"} over mostly inside ${blended.length > 1 ? "your balanced or target-date funds" : `${blended[0].symbol || blended[0].name || "your target-date fund"}`}, which ${blended.length > 1 ? "keep" : "keeps"} ${blended.length > 1 ? "their" : "its"} own mix and ${blended.length > 1 ? "are" : "is"} not sold here. To shift the mix, send new money to the other funds, or pick a target that matches the fund.`);
   if (leftover.length) notes.push("Part of the buying could not be placed inside an account where something was sold; use new money for it, or sell in another account.");
   if (gainRealised > 0) notes.push(`The full rebalance sells ${round(taxableSells).toLocaleString("en-US")} in taxable accounts and realises about ${round(gainRealised).toLocaleString("en-US")} of gain; the Capital gains page shows what that costs this year.`);
-  return { ready: true, needed: a.flaggedCount > 0, rows: a.rows, band: a.band, total: a.total, newMoney, newMoneyBuys, afterNewMoney, newMoneyEnough: newMoney > 0 && stillOff.length === 0, trades, sells: trades.filter((t) => t.kind === "sell"), buys: trades.filter((t) => t.kind === "buy"), taxableSells, gainRealised, leftover, notes, flaggedCount: a.flaggedCount, worst: a.worst };
+  return { ready: true, waiting: null, blended, overOnlyBlended, needed: a.flaggedCount > 0, rows: a.rows, band: a.band, total: a.total, newMoney, newMoneyBuys, afterNewMoney, newMoneyEnough: newMoney > 0 && stillOff.length === 0, trades, sells: trades.filter((t) => t.kind === "sell"), buys: trades.filter((t) => t.kind === "buy"), taxableSells, gainRealised, leftover, notes, flaggedCount: a.flaggedCount, worst: a.worst };
 }

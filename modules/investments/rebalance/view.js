@@ -1,5 +1,6 @@
 // modules/investments/rebalance/view.js -- DOM only. Whether a rebalance is due, what new money
-// alone would fix, then the full list of sells and buys with the tax note on each.
+// alone would fix, then the full list of sells and buys with the tax note on each. Without a mix of your own (or with
+// most of the money unclassified) only what to do first.
 import { compute } from "./compute.js";
 
 let pending = null;
@@ -11,6 +12,16 @@ export function render(root, ctx) {
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Rebalance"), ui.h("p", { class: "lede" }, "The trades that bring your mix back to its target, selling where it costs no tax and buying with the cash that frees. It needs your holdings and a target first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Allocation"))));
+    return;
+  }
+  // no mix of your own chosen, or most of the money not classified: nothing to trade yet, and what to do first
+  if (d.waiting) {
+    root.append(ui.h("section", { class: "card accent hero" },
+      ui.h("h1", {}, d.waiting === "pick" ? "Pick your mix first" : "Add what's in your other accounts first"),
+      ui.h("p", { class: "lede" }, d.waiting === "pick"
+        ? "Rebalancing means trading back to a mix you chose. None is chosen yet, so there is nothing to trade. Allocation shows what you hold and offers a few mixes to pick in one tap."
+        : `The funds typed so far cover ${Math.round((d.known ?? 0) * 100)}% of the money in your investment accounts. Trades worked out from part of it could point the wrong way.`),
+      ui.row(ui.h("a", { class: "btn", href: d.waiting === "pick" ? "#/investments/allocation" : "#/investments/holdings" }, d.waiting === "pick" ? "Pick a mix on Allocation" : "Open Holdings"))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },
@@ -30,7 +41,8 @@ export function render(root, ctx) {
     nm,
     d.newMoneyBuys.length ? ui.h("ul", { class: "records" }, d.newMoneyBuys.map((b) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Buy ${b.label}`), ui.h("span", { class: "rec-value" }, money(b.amount)))))) : d.newMoney > 0 ? ui.h("p", { class: "small" }, "Nothing is underweight; spread it by the target.") : null,
   ));
-  if (d.needed || d.trades.length) root.append(ui.card("The full rebalance",
+  // the trades only when a rebalance is due: inside the band, small sells read as advice to trade anyway
+  if (d.needed) root.append(ui.card("The full rebalance",
     d.trades.length ? ui.h("ul", { class: "records" }, [...d.sells, ...d.buys].map((t) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t.kind === "sell" ? `Sell ${t.symbol}` : `Buy ${t.label}`, " ", ui.h("span", { class: t.kind === "sell" ? "pill warn" : "pill ok" }, t.kind)), ui.h("span", { class: "rec-value" }, money(t.amount))),
       ui.h("div", { class: "rec-sub" }, `${t.account}${t.kind === "sell" ? ` · ${t.label}` : " · a fund in that class"}${t.taxNote ? ` · ${t.taxNote}` : ""}`)))) : ui.h("p", { class: "small" }, "Nothing to trade."),

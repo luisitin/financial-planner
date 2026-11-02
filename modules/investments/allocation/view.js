@@ -1,6 +1,6 @@
 // modules/investments/allocation/view.js -- DOM only. The drift verdict first, the actual and
 // target mixes as two bars, each class with its drift, the mix per account (folded) and the
-// target form (folded).
+// target form (folded). With no target of your own: what you hold and a few mixes to pick in one tap.
 import { compute, TARGET_CLASSES } from "./compute.js";
 import { ASSET_CLASSES } from "../holdings/compute.js";
 
@@ -19,23 +19,51 @@ export function render(root, ctx) {
     return;
   }
   const w = d.worst;
-  root.append(ui.h("section", { class: "card accent hero" },
+  const own = d.targetSource === "own";
+  const out = ui.h("div");
+  if (pending) {
+    const n = ui.notice("ok", pending.text ?? pending), share = pending.stocks;
+    // a target that differs from the Projection's stock share: one tap makes the plan's projection use it too
+    if (share !== undefined) n.append(" ", ui.button(`Use ${pts(share)} stocks on the Projection too`, () => { pending = `The Projection now assumes ${pts(share)} stocks.`; store.update((q) => { q.retirement.stocksNow = Math.round(share * 100) / 100; }); }, { class: "secondary small" }));
+    out.append(n); if (share === undefined) setTimeout(() => n.remove(), 4000); pending = null;
+  }
+  // no target of your own: what you hold, and a few mixes to pick in one tap; no drift is called against a default
+  if (d.verdict === "pick" || d.verdict === "partial") {
+    const fund = d.choices.find((c) => c.key === "fund"), planC = d.choices.find((c) => c.key === "plan");
+    root.append(ui.h("section", { class: "card accent hero" },
+      ui.h("h1", {}, d.verdict === "partial" ? "Add what's in your other accounts first" : `You hold ${pts(d.stockShareActual)} stocks and ${pts(1 - d.stockShareActual)} bonds and cash`),
+      ui.h("p", { class: "lede" }, d.verdict === "partial"
+        ? `The funds typed so far cover ${pts(d.known)} of the money in your investment accounts, so the mix below is a guess. Add each account's funds on Holdings, and pick a class for any marked unknown.`
+        : `Pick the mix you want and this page will tell you when you drift away from it.${fund ? ` A ${fund.year} target-date fund holds about ${pts(fund.stocks)} stocks;` : ""} your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.`),
+      d.verdict === "partial" ? ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Open Holdings")) : null));
+    root.append(out);
+    if (d.verdict === "pick") {
+      const save = (c) => {
+        const sharePlan = Number(plan.retirement?.stocksNow ?? 0.7);
+        pending = Math.abs(c.stocks - sharePlan) >= 0.05 ? { text: `Target saved: ${pts(c.stocks)} stocks.`, stocks: c.stocks } : `Target saved: ${pts(c.stocks)} stocks.`;
+        store.update((q) => { q.investments.target = { ...c.mix }; });
+      };
+      root.append(ui.card("Pick the mix you want",
+        ui.h("p", { class: "muted small" }, "Stocks grow more and swing more; bonds and cash steady the ride. You can change it any time."),
+        ui.h("div", { style: { display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" } },
+          d.choices.map((c, i) => ui.button(`${c.label}: ${pts(c.stocks)} stocks`, () => save(c), { class: i === 0 ? null : "secondary" })),
+          ui.button("Type my own", () => { const f = root.querySelector("details.alloc-target"); if (f) { f.open = true; f.scrollIntoView({ behavior: "smooth", block: "start" }); } }, { class: "secondary" }))));
+    }
+  } else root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.flaggedCount ? `${d.flaggedCount === 1 ? "One class has" : `${d.flaggedCount} classes have`} drifted past the band` : "Your mix is close to the target"),
     ui.h("p", { class: "lede" }, `${pts(d.stockShareActual)} in stocks against a target of ${pts(d.stockShareTarget)}, across ${money(d.total)} of classified holdings. ${w && d.flaggedCount ? `The biggest gap is ${w.label}: ${pts(w.actual)} held, ${pts(w.target)} wanted (${w.drift > 0 ? "over" : "under"} by ${money(Math.abs(w.move))}).` : "Nothing is more than the band away from its target."}${d.flaggedCount ? " The Rebalance page turns that into trades." : ""}`),
     ui.h("p", { class: "muted small" }, `A class is flagged when it is more than ${Math.round(d.band * 100)} points off, or more than a quarter of its own target off (the 5/25 rule). Balanced and target-date funds are split into their parts.`),
   ));
-  const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
-  root.append(out);
+  if (d.verdict === "drift" || d.verdict === "ok") root.append(out);
   for (const n of d.notes) root.append(ui.notice("info", n));
   const bar = (mixRows, key) => ui.h("div", { class: "alloc-bar", style: { display: "flex", height: "28px", borderRadius: "8px", overflow: "hidden", background: "var(--line)" } }, mixRows.filter((r) => r[key] > 0.001).map((r) => ui.h("span", { title: `${r.label} ${pts(r[key])}`, style: { width: `${r[key] * 100}%`, background: COLORS[r.cls] ?? "var(--muted)", display: "inline-block" } })));
-  root.append(ui.card("Actual and target",
-    ui.h("div", { class: "muted small", style: { marginBottom: "4px" } }, "What you hold"), bar(d.rows, "actual"),
-    ui.h("div", { class: "muted small", style: { margin: "10px 0 4px" } }, "What you aim for"), bar(d.rows, "target"),
+  root.append(ui.card(own ? "Actual and target" : "What you hold",
+    own ? ui.h("div", { class: "muted small", style: { marginBottom: "4px" } }, "What you hold") : null, bar(d.rows, "actual"),
+    own ? ui.h("div", { class: "muted small", style: { margin: "10px 0 4px" } }, "What you aim for") : null, own ? bar(d.rows, "target") : null,
     ui.h("div", { class: "chips", style: { marginTop: "10px" } }, d.rows.map((r) => ui.h("span", { class: "chip", style: { cursor: "default", minHeight: "32px", padding: "2px 10px" } }, ui.h("span", { style: { display: "inline-block", width: "10px", height: "10px", borderRadius: "3px", background: COLORS[r.cls], marginRight: "6px", verticalAlign: "middle" } }), `${r.label} ${pts(r.actual)}`))),
     ui.h("ul", { class: "records" }, d.rows.map((r) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.icon ? `${r.icon} ` : "", r.label, r.flagged ? ui.h("span", { class: "pill warn" }, "off target") : null), ui.h("span", { class: "rec-value" }, `${pts(r.actual)} of ${pts(r.target)}`)),
-      ui.h("div", { class: "rec-sub" }, `${money(r.value)} held; ${Math.abs(r.move) < 1 ? "on target" : `${r.move > 0 ? "add" : "trim"} ${money(Math.abs(r.move))} to match`}${r.flagged ? ` · ${r.reason}` : ""}`)))),
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.icon ? `${r.icon} ` : "", r.label, own && d.verdict === "drift" && r.flagged ? ui.h("span", { class: "pill warn" }, "off target") : null), ui.h("span", { class: "rec-value" }, own ? `${pts(r.actual)} of ${pts(r.target)}` : pts(r.actual))),
+      ui.h("div", { class: "rec-sub" }, own ? `${money(r.value)} held; ${Math.abs(r.move) < 1 ? "on target" : `${r.move > 0 ? "add" : "trim"} ${money(Math.abs(r.move))} to match`}${r.flagged ? ` · ${r.reason}` : ""}` : `${money(r.value)} held`)))),
   ));
   if (d.byAccountClass.length > 1) root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Mix by account"), ui.h("span", { class: "fold-status" }, `${d.byAccountClass.length} accounts`), ui.h("span", { class: "fold-chev" }, "›")),
@@ -59,7 +87,7 @@ function targetFold(ctx, d) {
     pending = sum > 0 && Math.abs(sum - 100) > 0.5 ? `Target saved (the ${sum}% you typed was scaled to 100%).` : "Target saved.";
     store.update((p) => { p.investments.target = sum > 0 ? Object.fromEntries(TARGET_CLASSES.map((c) => [c, (v[c] ?? 0) / sum])) : null; p.investments.band = Math.min(0.25, Math.max(0.01, (v.band ?? 5) / 100)); });
   }, { submitLabel: "Save target" });
-  return ui.h("details", { class: "card fold fold-card", open: d.ready ? null : true },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Your target mix"), ui.h("span", { class: "fold-status" }, d.targetSource === "own" ? `${Math.round((t.us_stocks + t.intl_stocks + (t.real_estate ?? 0)) * 100)}% stocks` : "from the Projection page"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Leave everything blank to follow the Projection page's stock share (60/40 US/international, the rest bonds). Typical: 60% stocks / 40% bonds for a near retiree, 90/10 for a long horizon; a third of stocks abroad is the world's weight."), form));
+  return ui.h("details", { class: "card fold fold-card alloc-target", open: d.ready ? null : true },
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Your target mix"), ui.h("span", { class: "fold-status" }, d.targetSource === "own" ? `${Math.round((t.us_stocks + t.intl_stocks + (t.real_estate ?? 0)) * 100)}% stocks` : "not chosen yet"), ui.h("span", { class: "fold-chev" }, "›")),
+    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Percent of the whole portfolio in each; leave everything blank for no target (the page then shows what you hold without calling anything off target). Typical: 60% stocks / 40% bonds for a near retiree, 90/10 for a long horizon; a third of stocks abroad is the world's weight."), form));
 }
