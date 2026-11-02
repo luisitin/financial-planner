@@ -19,6 +19,9 @@
 //   alt        { page, label, ask, opens }: another page that does the same step
 //   opens      the title of a fold (<details>) on the page that the ask names; the guide opens it while the step is to do
 //   needs      keys of earlier steps this page needs first (it shows "This step needs step 1 first")
+//
+// A guide may also have variant(plan, { today }) -> null | { line?, haveReady?, more?, finish?, steps: { [key]: fields | null } }:
+// other words for this plan, a step's fields replaced, or a step left out (null). guide/compute.js forPlan applies it.
 import { compute as setupSteps } from "../dashboard/compute.js";
 import { rateIsGuess, paymentIsGuess } from "../setup/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
@@ -26,6 +29,8 @@ import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
 import { isHouseGoal } from "../../goals/house/compute.js";
 import { compute as consolidation } from "../../debt/consolidation/compute.js";
+import { householdRetired } from "../../retirement/projection/compute.js";
+import { ageOn } from "../../../core/math/dates.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 const RETIRE = ["401k", "ira", "roth", "hsa"];
@@ -42,6 +47,44 @@ export const emergencyGoal = (p) => L(p, "goals").some((g) => g.isEmergencyFund 
 export const houseGoal = (p) => L(p, "goals").some(isHouseGoal);
 // Social Security already paid and typed on the Income page counts as saved too
 const socialSecurity = (p) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0) || (p?.income ?? []).some((x) => x.type === "social" && x.period !== "once" && Number(x.amount) > 0);
+/** A pension saved on Pensions, or one already paid and typed on the Income page. */
+const pension = (p) => L(p?.retirement, "pensions").length > 0 || L(p, "income").some((x) => x.type === "pension" && x.period !== "once" && Number(x.amount) > 0);
+/** Every adult is 65 or over today (Medicare age): the guide stops offering pages about the years before it. */
+const all65 = (p, today) => !!today && adults(p).length > 0 && adults(p).every((x) => x.birthDate && ageOn(x.birthDate, today) >= 65);
+/**
+ * The retirement guide for a household already retired (Will the money last?'s own test: setup said retired, or no pay and
+ * past the retirement age): what you spend now, not "once you stop working"; no "what you save from each paycheck"; a
+ * benefit already paid typed on Income; the pages a retiree uses next (round 4, 2026-11-02: the guide asked a retired
+ * couple of 76 and 69 for their paycheck contributions and when they want to stop working).
+ */
+const retiredVariant = (p, { today }) => {
+  if (!householdRetired(p, { today })) return null;
+  const old = all65(p, today);
+  const more = [
+    { page: "retirement/withdrawal-strategy", title: "How much can I take out each year?" },
+    { page: "scenarios/goal-seek", title: "How much more could I spend?" },
+    { page: "retirement/rmd", title: "This year's required withdrawal" },
+    old ? null : { page: "retirement/healthcare", title: "What will health care cost before 65?" },
+    { page: "retirement/medicare", title: old ? "What Medicare costs each year" : "What will Medicare cost me?" },
+    { page: "retirement/roth-conversions", title: "Should I move money to a Roth?" },
+    { page: "retirement/longevity", title: "How long must the money last?" },
+    { page: "scenarios/stress-tests", title: "What if markets fall?" },
+    { page: "reports/retirement", title: "A summary to print" },
+  ].filter(Boolean);
+  return {
+    line: "Whether your money lasts for the rest of your life, what to take out each year, and what Social Security and pensions add.",
+    haveReady: "Your latest account statements, and what Social Security and any pension pay you a month.",
+    more,
+    finish: { page: "retirement/projection", label: "Open your retirement forecast", text: "Your ages, savings, spending, Social Security and pensions are in your plan." },
+    steps: {
+      people: { ask: "Give each adult a birth date, then tap Add person or Save changes." },
+      spend: { title: "Say what you spend", short: "Say what you spend", ask: "Open Retirement settings near the bottom, type what you spend a month now, then tap Save settings.", alt: { page: "cashflow/expenses", label: "Rather list your bills? Enter them on Expenses instead", ask: "List your regular bills and spending, then tap Add expense; the plan uses them as what you spend in retirement." } },
+      ss: { ask: "If you get it already, add what arrives each month on the Income page (the link below); if not yet, type the amount your statement shows at full retirement age, then tap Save.", alt: { page: "cashflow/income", label: "Already getting it? Add what arrives each month on Income", ask: "Tap + Add another income, choose Social Security under Kind of income, type what arrives each month, then tap Add income." } },
+      saving: null,
+      pension: { ask: "If you get a pension, say what it pays a month, then tap Add pension; one already on the Income page counts." },
+    },
+  };
+};
 /** A paycheck figure for either earner on Withholding check (it has a line for each adult). */
 const paycheckTax = (p) => ["self", "partner"].some((k) => Number(p?.taxes?.withholding?.[k]?.perPaycheck) > 0);
 /** Consolidation has something to compare: two or more cards or loans it can roll together (not a mortgage or student loan), one at 10% or more (its own default pick). */
@@ -146,7 +189,7 @@ export const JOURNEYS = [
       { key: "spend", page: "retirement/projection", title: "Say what you will spend", short: "Say what you'll spend", ask: "Open Retirement settings near the bottom, type what you expect to spend a month once you stop working at today's prices, then tap Save settings.", doneWhen: "it is done once a monthly amount is saved here, or your bills are on the Expenses page.", check: (p) => Number(p?.retirement?.spendingMonthly) > 0 || L(p, "expenses").length > 0, alt: { page: "cashflow/expenses", label: "Not sure what you'll spend? Enter what you spend now instead", ask: "List your regular bills and spending, then tap Add expense; the plan uses what you spend now for retirement." }, needs: ["people", "savings"] },
       { key: "ss", page: "retirement/social-security", title: "Add your Social Security", short: "Add Social Security", ask: "Type the monthly amount your Social Security statement shows at full retirement age, or paste your earnings from ssa.gov, then tap Save.", doneWhen: "it is done once one person's Social Security is saved.", check: socialSecurity, none: "I won't get Social Security", noneSaid: "You said you won't get Social Security.", needs: ["people"] },
       { key: "saving", page: "retirement/contributions", title: "Add what you save now", short: "Add what you save", ask: "If your 401(k), IRA or Roth is not on Net worth yet, add it there first (this page links to it); then say what goes into each one from each paycheck, and what an employer adds, and tap Add contribution.", doneWhen: "it is done once one contribution is saved.", check: (p) => (p?.retirement?.contributions ?? []).length > 0, none: "I'm not saving for retirement now", noneSaid: "You said you are not saving for retirement now.", needs: ["savings"] },
-      { key: "pension", page: "retirement/pensions", title: "Add a pension", short: "Add a pension", ask: "If you have a pension, say what it pays a month and from what age, then tap Add pension.", doneWhen: "it is done once a pension is saved, or you say you have none.", check: (p) => (p?.retirement?.pensions ?? []).length > 0, none: "I don't have a pension", noneSaid: "You said you don't have a pension." },
+      { key: "pension", page: "retirement/pensions", title: "Add a pension", short: "Add a pension", ask: "If you have a pension, say what it pays a month and from what age, then tap Add pension.", doneWhen: "it is done once a pension is saved, or you say you have none.", check: pension, none: "I don't have a pension", noneSaid: "You said you don't have a pension." },
       { key: "chance", page: "retirement/monte-carlo", title: "See if the money lasts", short: "See if money lasts", ask: "See how often the money lasts to the end of the plan when markets go up and down.", doneWhen: "it is done once you tap the button below after looking.", looked: true, needs: ["people", "savings", "spend"] },
     ],
     more: [
@@ -160,6 +203,7 @@ export const JOURNEYS = [
       { page: "reports/retirement", title: "A summary to print" },
     ],
     finish: { page: "retirement/projection", label: "Open your retirement forecast", text: "Your ages, savings, spending and Social Security are in your plan." },
+    variant: retiredVariant,
   },
   {
     id: "taxes", icon: "🧮", title: "Sort out my taxes", minutes: 15,

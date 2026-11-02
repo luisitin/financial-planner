@@ -392,3 +392,36 @@ test("review: 'I won't get Social Security' in the retirement guide counts as th
   assert.deepEqual(p.guide.setup.ss, { "p-ana": "none", "p-bo": "none" });
   assert.equal(retirementKnown(p), true);
 });
+
+test("round 4: the retirement guide for a household already retired (no paycheck saving, today's spending, Income pension counts)", () => {
+  const today = "2026-11-02";
+  const q = empty();
+  q.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10", retirementAge: 66 }, { id: "s", name: "Sam", role: "partner", birthDate: "1957-06-20", retirementAge: 65 }];
+  q.accounts = [{ id: "ira", name: "IRA", type: "ira", balance: 400000 }];
+  q.income = [{ id: "pen", name: "Ruth's pension", type: "pension", personId: "r", amount: 1200, period: "monthly", taxable: true }];
+  const r = journeyStatus(J("retire"), q, { today });
+  assert.equal(st(r, "saving"), undefined, "no 'what you save from each paycheck' step");
+  assert.equal(r.total, 6);
+  assert.equal(st(r, "spend").title, "Say what you spend");
+  assert.match(st(r, "spend").ask, /what you spend a month now/);
+  assert.equal(st(r, "ss").alt.page, "cashflow/income");
+  assert.equal(st(r, "pension").state, "done", "a pension already on Income counts");
+  assert.match(r.line, /rest of your life/);
+  const pages = r.more.map((m) => m.page);
+  assert.ok(pages.includes("retirement/rmd") && pages.includes("retirement/withdrawal-strategy"));
+  assert.ok(!pages.includes("retirement/healthcare") && !pages.includes("retirement/fire"), "both 65 or over: nothing about the years before 65 or stopping early");
+  // one of them under 65: health care before 65 stays
+  const young = structuredClone(q); young.household.people[1].birthDate = "1963-01-05"; young.household.people[1].retirementAge = 62;
+  assert.ok(journeyStatus(J("retire"), young, { today }).more.some((m) => m.page === "retirement/healthcare"));
+  // the same people still working: the guide as before
+  const working = structuredClone(q); working.income.push({ id: "pay", name: "Sam's pay", type: "salary", personId: "s", amount: 4000, period: "monthly", taxable: true });
+  const w = journeyStatus(J("retire"), working, { today });
+  assert.equal(w.total, 7); assert.equal(st(w, "spend").title, "Say what you will spend");
+  // without a date nothing changes (the shell always passes one)
+  assert.equal(journeyStatus(J("retire"), q).total, 7);
+  // compute and the bar carry the same steps
+  assert.equal(compute(q, { id: "retire", today }).detail.total, 6);
+  q.guide = { active: "retire", activeAt: today };
+  const bar = barFor(q, { page: "retirement/projection", query: { guide: "retire", step: "spend" }, today });
+  assert.equal(bar.step.title, "Say what you spend"); assert.equal(bar.total, 6);
+});

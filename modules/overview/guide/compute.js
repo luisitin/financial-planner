@@ -16,8 +16,23 @@ export const guideHref = (id) => `#/overview/guide/${id}`;
 /** href for a step: "#/<page>?guide=<id>&step=<key>" (ids and keys are kebab-case: nothing to escape). */
 export const stepHref = (journeyId, step, viaAlt = false) => `#/${viaAlt && step.alt ? step.alt.page : step.page}?guide=${journeyId}&step=${step.key}`;
 const progressOf = (plan, id) => plan?.guide?.journeys?.[id] ?? {};
-const plain = (step) => { if (!step) return null; const { check, show, ...rest } = step; return { ...rest, hasCheck: !!check }; };
+const plain = (step) => { if (!step) return null; const { check, show, variant, ...rest } = step; return { ...rest, hasCheck: !!check }; };
 const safe = (fn, plan) => { try { return !!fn(plan); } catch { return false; } };
+
+/**
+ * The guide as it reads for this plan: a journey's `variant(plan, { today })` may return other words for the guide
+ * (line, haveReady, more, moreTitle, finish) and, under `steps`, for each step by key: an object of fields that replace
+ * the step's own, or null to leave the step out (the retirement guide for a household already retired: no "what you
+ * save from each paycheck", today's spending instead of "once you stop working"; round 4, 2026-11-02).
+ */
+export function forPlan(journey, plan, today = null) {
+  let v = null;
+  try { v = journey?.variant ? journey.variant(plan, { today }) : null; } catch { v = null; }
+  if (!v) return journey;
+  const { steps: per = {}, ...top } = v;
+  const steps = journey.steps.flatMap((s) => (!(s.key in per) ? [s] : per[s.key] === null ? [] : [{ ...s, ...per[s.key] }]));
+  return { ...journey, ...top, steps };
+}
 
 /** Steps that count for this plan: an extra step whose show() is false is hidden, and so is an extra whose page is off on this device. Numbered (required) steps always count. */
 export function visibleSteps(journey, plan, off = []) {
@@ -35,7 +50,8 @@ export function stepState(step, plan, progress = {}) {
 const finishedState = (st) => st === "done" || st === "none";
 
 /** Everything a view needs about one guide. Counts and "finished" are about the numbered steps only; extras have their own count. */
-export function journeyStatus(journey, plan, { off = [] } = {}) {
+export function journeyStatus(base, plan, { off = [], today = null } = {}) {
+  const journey = forPlan(base, plan, today);
   const prog = progressOf(plan, journey.id);
   let n = 0;
   const steps = visibleSteps(journey, plan, off).map((s) => {
@@ -114,7 +130,7 @@ export function barFor(plan, { page, query = {}, off = [], today = null } = {}) 
   const review = query.from === "review" && page !== "overview/monthly-review" ? { mode: "review", month: /^\d{4}-\d{2}$/.test(query.review ?? "") ? query.review : null } : null;
   const j = activeJourney(plan, today);
   if (j) {
-    const status = journeyStatus(j, plan, { off });
+    const status = journeyStatus(j, plan, { off, today });
     const full = query.guide === j.id;
     // opened from a Monthly review step, the way back to the check-in wins over the followed guide's one-line reminder
     // (the guide's own address, ?guide=, still shows the full bar)
@@ -144,7 +160,7 @@ export function barFor(plan, { page, query = {}, off = [], today = null } = {}) 
 export function activeSummary(plan, { off = [], today = null } = {}) {
   const j = activeJourney(plan, today);
   if (!j) return null;
-  const s = journeyStatus(j, plan, { off });
+  const s = journeyStatus(j, plan, { off, today });
   return { id: s.id, title: s.title, icon: s.icon, doneCount: s.doneCount, total: s.total, complete: s.complete, next: s.next, guideHref: s.guideHref };
 }
 
@@ -234,7 +250,7 @@ export function restartGuide(draft, id, today) {
 /** compute(plan, { id?, off?, today? }) -> { journeys: journeyStatus[], active: activeSummary | null, detail: journeyStatus | null } */
 export function compute(plan, params = {}) {
   const off = params.off ?? [], today = params.today ?? null;
-  const journeys = JOURNEYS.map((j) => journeyStatus(j, plan, { off }));
+  const journeys = JOURNEYS.map((j) => journeyStatus(j, plan, { off, today }));
   const j = params.id ? journeyById(params.id) : null;
   return { journeys, active: activeSummary(plan, { off, today }), detail: j ? journeys.find((s) => s.id === j.id) : null };
 }

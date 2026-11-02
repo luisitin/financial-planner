@@ -85,8 +85,8 @@ export function compute(plan, params = {}) {
   const off = params.off ?? [], today = params.today ?? null;
   const rows = ROWS.map((id) => {
     if (id === "quick") return { ...QUICK, status: null };
-    const j = journeyById(id), s = journeyStatus(j, plan, { off });
-    return { id, icon: j.icon, title: j.title, line: j.line, href: guideHref(id), status: s.finished ? "Done" : s.started ? `In progress: ${s.doneCount} of ${s.total} steps done` : null };
+    const j = journeyById(id), s = journeyStatus(j, plan, { off, today });
+    return { id, icon: j.icon, title: j.title, line: s.line, href: guideHref(id), status: s.finished ? "Done" : s.started ? `In progress: ${s.doneCount} of ${s.total} steps done` : null };
   });
   const active = activeSummary(plan, { off, today });
   return {
@@ -95,7 +95,7 @@ export function compute(plan, params = {}) {
     setup: setupCard(plan, { off, today }),
     tiles: TILES.map((t) => {
       const j = t.href ? null : journeyById(t.id);
-      const s = j ? journeyStatus(j, plan, { off }) : null;
+      const s = j ? journeyStatus(j, plan, { off, today }) : null;
       return { id: t.id, icon: t.icon ?? j.icon, title: t.title, line: t.line, href: t.href ?? guideHref(t.id), page: t.page ?? "overview/guide", status: !s ? null : s.finished ? "Done" : s.started ? `${s.doneCount} of ${s.total}` : null };
     }),
     // the whole plan's own progress is the featured panel, so it gets no second card
