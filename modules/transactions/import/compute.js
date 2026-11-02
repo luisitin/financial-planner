@@ -138,7 +138,7 @@ export const headerKey = (headers) => headers.map(H).join("|");
 /**
  * prepareImport(plan, text, { accountId, mapping?, flipSign?, importId }) -> {
  *   parsed, mapping, headerKey, txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
- *   own first and last day), inTotal, outTotal, ruled
+ *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null
  * }
  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
  */
@@ -163,7 +163,24 @@ function finish(plan, rawTxs) {
   const all = ruled.txs.map((t) => t.date).filter(Boolean).sort();   // the file's own first and last day, duplicates included
   let inTotal = 0, outTotal = 0;
   for (const t of add) { if (t.amount >= 0) inTotal += t.amount; else outTotal += -t.amount; }
-  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom: all[0] ?? null, fileTo: all[all.length - 1] ?? null, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits };
+  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom: all[0] ?? null, fileTo: all[all.length - 1] ?? null, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add) };
+}
+/**
+ * alsoOn(plan, add) -> { accountId, count, of } | null: the other account that already has most of these lines (the same day,
+ * amount and bank description), when it has at least 80% of them and at least 3: the same file imported on the wrong
+ * account first (dedupe() only looks within one account, so importing it again on the right one would count it twice).
+ * Only a warning: two real lines can match by chance. (2026-11-02)
+ */
+export function alsoOn(plan, add) {
+  if (!add?.length) return null;
+  const target = add[0].accountId;
+  const norm = (t) => `${t.date}|${Math.round((Number(t.amount) || 0) * 100)}|${String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase()}`;
+  const by = new Map();
+  for (const t of plan.transactions ?? []) { if (t.accountId === target) continue; const k = norm(t); if (!by.has(k)) by.set(k, new Set()); by.get(k).add(t.accountId); }
+  const count = new Map();
+  for (const t of add) for (const a of by.get(norm(t)) ?? []) count.set(a, (count.get(a) ?? 0) + 1);
+  const [accountId, n] = [...count.entries()].sort((x, y) => y[1] - x[1])[0] ?? [null, 0];
+  return accountId && n >= 3 && n >= 0.8 * add.length ? { accountId, count: n, of: add.length } : null;
 }
 /**
  * prepareRows(plan, rows, { accountId, importId, flipSign }) -> same shape as prepareImport (minus parsed/mapping).

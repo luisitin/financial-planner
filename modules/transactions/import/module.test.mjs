@@ -106,3 +106,22 @@ test("compute lists imports newest first with per-account counts", () => {
   const d = compute(p);
   assert.equal(d.imports[0].fileName, "new.csv"); assert.equal(d.accounts[0].count, 1); assert.equal(d.total, 1);
 });
+
+test("the same lines already on another account are flagged (80% and at least 3), never on the same account or by chance", async () => {
+  const { alsoOn, prepareImport } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 0 }, { id: "visa", name: "Visa card", type: "credit", balance: 0 });
+  const csv = "Date,Description,Amount\n10/02/2026,KROGER #0388,-86.40\n10/04/2026,SHELL OIL 57442,-41.00\n10/05/2026,NETFLIX.COM,-15.49\n10/09/2026,KROGER #0421,-54.10\n";
+  const first = prepareImport(p, csv, { accountId: "chk", importId: "a" });
+  assert.equal(first.elsewhere, null, "nothing on file yet");
+  for (const t of first.add) p.transactions.push({ ...t, id: `x${p.transactions.length}` });
+  const again = prepareImport(p, csv, { accountId: "visa", importId: "b" });
+  assert.equal(again.add.length, 4, "duplicates are only looked for within one account");
+  assert.deepEqual(again.elsewhere, { accountId: "chk", count: 4, of: 4 });
+  assert.equal(prepareImport(p, csv, { accountId: "chk", importId: "c" }).add.length, 0, "the same account: all skipped as duplicates");
+  // two lines matching by chance out of five: no warning
+  const mixed = "Date,Description,Amount\n10/02/2026,KROGER #0388,-86.40\n10/04/2026,SHELL OIL 57442,-41.00\n11/01/2026,TARGET,-20.00\n11/02/2026,TARGET,-21.00\n11/03/2026,TARGET,-22.00\n";
+  assert.equal(prepareImport(p, mixed, { accountId: "visa", importId: "d" }).elsewhere, null);
+  assert.equal(alsoOn(p, []), null);
+});

@@ -8,6 +8,7 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan);
   let accountId = d.accounts[0]?.id ?? "";
+  let picked = false;   // the account box was changed by hand: a saved file layout no longer picks the account
   let text = "", fileName = "", prep = null, mapping = null, flipSign = null;   // null = decide from the file and the account type
 
   root.append(ui.h("section", { class: "card accent hero" },
@@ -18,7 +19,7 @@ export function render(root, ctx) {
   if (!d.accounts.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the account first (the checking account or card the file belongs to): ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth")))); return; }
 
   // ---- step 1: account + file
-  const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; if (text) prepare(); } });
+  const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
   // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3).
   const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,text/csv,text/plain", "aria-label": "Bank file", style: { display: "none" } });
   const chosen = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "No file chosen yet");
@@ -47,8 +48,16 @@ export function render(root, ctx) {
     if (!text.trim()) { previewHost.append(ui.muted("Pick a file or paste text first.")); return; }
     try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
     catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
+    // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
+    const was = plan.importProfiles?.[prep.headerKey]?.accountId;
+    const wasName = d.accounts.find((a) => a.id === was)?.name ?? null;
+    if (wasName && !picked && was !== accountId) { accountId = was; acctSel.value = was; mapping = null; return prepare(); }
     mapping = prep.mapping;
     const H = prep.parsed.headers;
+    const acctName = d.accounts.find((a) => a.id === accountId)?.name ?? "this account";
+    if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
+    else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
+    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
     const sel = (key, allowNone) => ui.select(colOptions(H, allowNone), mapping[key] === null || mapping[key] === undefined ? "" : String(mapping[key]), { onChange: (e) => { mapping = { ...mapping, [key]: idx(e.target.value) }; if (key === "amount" && mapping.amount !== null) { mapping.debit = null; mapping.credit = null; } prepare(); } });
     const orderSel = ui.select([{ value: "MDY", label: "month/day/year (US)" }, { value: "DMY", label: "day/month/year" }], mapping.dateOrder ?? "MDY", { onChange: (e) => { mapping = { ...mapping, dateOrder: e.target.value }; prepare(); } });
     const flip = ui.h("input", { type: "checkbox", checked: prep.flipSign ? true : null, onChange: (e) => { flipSign = e.target.checked; prepare(); } });

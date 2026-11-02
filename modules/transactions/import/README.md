@@ -20,6 +20,14 @@ Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfil
 
 - The preview says what the file covers (2026-11-01): "This file covers 8/12/2026 to 9/2/2026. Aug 2026 and Sep 2026 are only partly in it; the spending and budget pages say so." (`fileFrom`/`fileTo`: the first and last day of every row, duplicates included; a month counts as cut when the file starts after the 4th or ends before the 28th). Each import record keeps `from` and `to`.
 
+## The account a file goes to (2026-11-02)
+A file laid out like one imported before (`importProfiles[headerKey]`, saved on each import) goes to the account it went
+to then, with a line saying so; before, the box always started on the first account, so next month's card file
+previewed onto checking. Once the account is picked by hand it stays, and a different account than last time gets an
+amber "check the account" notice. `alsoOn` flags a file whose lines (same day, amount and bank description) are already
+on another account, 80% of them and at least 3: the same file imported on the wrong account first, which `dedupe()`
+(within one account) would let in twice. It only warns: two real lines can match by chance.
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 
