@@ -247,3 +247,19 @@ test("round 4: a salary typed as a yearly figure (the setup's default) lands as 
   assert.equal(recurring(p, { today: "2026-11-02" }).planned.find((x) => x.id === "pay").periodLabel, "A year, paid twice a month");
   assert.equal(payRhythm({ ...p.income[0], type: "bonus" }, p), null, "a bonus is once a year");
 });
+
+test("the saved debt plan's extra is paid on the 1st until its debts are gone, as Next best action counts it (round 4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: payoff } = await import("../../debt/payoff/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const base = compute(p, { today: T, days: 365 });
+  p.debtPlan = { extra: 1000, order: "avalanche", targets: ["a-visa"] };
+  const d = compute(p, { today: T, days: 365 });
+  const ev = d.days.flatMap((x) => x.events.map((e) => ({ ...e, date: x.date }))).filter((e) => e.name === "Extra on Visa card (Pay off debts)");
+  const end = payoff(p, { today: T }).chosen.debts.find((x) => x.id === "a-visa").endDate;
+  assert.ok(ev.length >= 2 && ev.every((e) => e.amount === -1000 && e.date.endsWith("-01") && e.date <= end), JSON.stringify(ev.map((e) => e.date)));
+  assert.ok(Math.abs(base.end - d.end - 1000 * ev.length) < 0.01);
+  p.debtPlan = { extra: 1000, order: "avalanche", targets: ["a-gone"] };
+  assert.ok(!compute(p, { today: T, days: 90 }).days.some((x) => x.events.some((e) => /Pay off debts/.test(e.name))), "aimed at debts already paid off: the extra has stopped");
+});

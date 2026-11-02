@@ -66,7 +66,8 @@ export function render(root, ctx) {
 
   const sub = (r) => {
     if (!r.detail) return "add the rate and payment";
-    const bits = [`${fmt.pct(r.rate, 1)}`, `${fmt.money(r.payment, cur)} a month`];
+    // paid off: nothing is due any more, so no payment is said (it counts as $0 a month)
+    const bits = r.paidOff ? [`${fmt.pct(r.rate, 1)}`] : [`${fmt.pct(r.rate, 1)}`, `${fmt.money(r.payment, cur)} a month`];
     if (r.neverPaysOff) bits.push("never pays off at this payment");
     else if (r.months === 0) bits.push("paid off");
     else if (r.payoffDate) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)}`);

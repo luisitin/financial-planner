@@ -10,6 +10,7 @@ import { countedBalance } from "../../balance/net-worth/compute.js";
 import { takeHome } from "../paycheck/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { perYear, payRhythm } from "../../../core/math/periods.js";
 
 /** Words in a bank line that mark a deposit as pay (a payroll deposit names the employer, not the person). */
@@ -74,9 +75,11 @@ export function compute(plan, params = {}) {
   const th = (plan.income ?? []).length ? takeHome(plan, { today }) : { ready: false, ratio: {} };
   const exp = (plan.expenses ?? []).length || (plan.debts ?? []).length ? computeExpenses(plan, { today }) : null;
   const debtRows = exp?.debtFromDebts > 0 ? debtLines(plan, today, exp) : [];
+  const planRow = (plan.debts ?? []).length ? debtPlanLine(plan, today) : null;
   const typed = [
     ...(plan.expenses ?? []).filter((e) => e.period !== "once").map((e) => ({ ...e, kind: "expense", signed: -(Number(e.amount) || 0) })),
     ...debtRows,
+    ...(planRow ? [planRow] : []),
     ...(plan.income ?? []).filter((i) => i.period !== "once").map((i0) => {
       // a salary typed as a yearly figure lands as paychecks (the Paycheck page's count), not one deposit a year
       const rh = payRhythm(i0, plan), i = rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0;
@@ -144,6 +147,22 @@ export function compute(plan, params = {}) {
  * payoff month (the Debts page's own date), the mortgage left out when it is filed under housing. Each line carries the words that
  * tie it to a bank payment: its account's name and lender, without the words every loan shares (DEBT_WORDS).
  */
+/**
+ * The saved debt plan's extra (Pay off debts' `extra`, on top of the required payments): paid on the 1st each month until the
+ * last debt it goes to is gone (its targets, or every debt when it is aimed at none), as Next best action counts it
+ * (round 4, 2026-11-02: before, the Forecast left it out and showed the money as still in the bank).
+ */
+function debtPlanLine(plan, today) {
+  let pay = null;
+  try { pay = computePayoff(plan, { today }); } catch { pay = null; }
+  if (!pay?.hasData || !(pay.extra > 0)) return null;
+  const ids = pay.targets.length ? pay.targets : pay.debts.map((x) => x.id);
+  const ends = ids.map((id) => pay.chosen.debts.find((x) => x.id === id)).filter(Boolean);
+  const last = ends.length === ids.length && ends.every((x) => Number.isFinite(x.months)) ? ends.reduce((a, b) => (b.months > a.months ? b : a)) : null;
+  const names = ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean);
+  return { id: "debt-plan-extra", name: `Extra on ${names.length && names.length <= 2 ? names.join(" and ") : "debts"} (Pay off debts)`, period: "monthly", kind: "expense", signed: -pay.extra, fromDebts: true, words: [], ...(last?.endDate ? { endDate: last.endDate } : {}) };
+}
+
 function debtLines(plan, today, exp) {
   const specific = (r) => [...new Set(normalizePayee(`${r.name ?? ""} ${r.institution ?? ""}`).split(" ").filter((w) => w.length > 2 && !DEBT_WORDS.has(w)))];
   const line = (r) => ({ id: `debt-${r.id}`, name: `${r.name || r.typeLabel} payment`, period: "monthly", kind: "expense", signed: -r.payment, fromDebts: true, words: specific(r), ...(r.payoffDate ? { endDate: r.payoffDate } : {}) });

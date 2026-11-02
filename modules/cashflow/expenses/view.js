@@ -91,6 +91,17 @@ export function render(root, ctx) {
     ));
     const gc = gapCard();
     if (gc) root.append(gc);
+    // a debt paid off whose payment is still listed: one tap stops it from today, and the left-over figure grows by it
+    for (const x of d.ended ?? []) {
+      root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, `${x.debtName} is paid off`),
+        ui.h("p", {}, `Its payment, ${x.name} (${fmt.money(x.monthly, cur)} a month), is still counted here. Stop it, and that money is free for your next step.`),
+        ui.row(ui.button(`Stop ${x.name} from today`, () => {
+          pending = `${x.name} stopped: ${fmt.money(x.monthly, cur)} a month is free from today.`;
+          const y = new Date(`${fmt.today()}T12:00:00`); y.setDate(y.getDate() - 1);
+          const before = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+          store.update((p) => { const e = (p.expenses ?? []).find((z) => z.id === x.id); if (e) e.endDate = before; });
+        }), ui.button("It is something else", () => { const e = plan.expenses.find((z) => z.id === x.id); if (!e) return; editing = e; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" }))));
+    }
     if (d.byCategory.length) root.append(ui.card("Where it goes",
       ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", {},
         ui.h("span", { class: "ic" }, c.icon),

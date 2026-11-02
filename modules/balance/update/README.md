@@ -36,6 +36,9 @@ Parameters: `today` ("YYYY-MM-DD", the shell passes the local day).
 
 No outside code or figures.
 
+A loan or card saved at $0 whose payment is still on Expenses (Expenses' `ended`): a green line under the saved notice
+says it is paid off and links to Expenses to stop the payment (2026-11-02).
+
 ## Edge cases
 No accounts: a hero with Set up my plan and Net worth. Every box empty: nothing saved, a red notice says to type at least
 one. A box that is not an amount holds the form (the money box's own message). Debts can't be typed negative (min 0).

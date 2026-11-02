@@ -13,7 +13,8 @@ export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
 
 /**
  * compute(plan, { today }) -> {
- *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment,
+ *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment (0 once paid off),
+ *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
  *            interestMonthly, months (to payoff at `payment`; null without a payment; Infinity if it never pays off),
  *            payoffDate, totalInterest, expensive, neverPaysOff }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
@@ -27,8 +28,13 @@ export function compute(plan, params = {}) {
     const detail = debts.find((x) => x.accountId === a.id) ?? null;
     const owed = Math.abs(Number(a.balance) || 0);
     const rate = detail ? Number(detail.rate) || 0 : null;
-    const minPayment = detail ? Number(detail.minPayment) || 0 : 0;
-    const extra = detail ? Number(detail.extra) || 0 : 0;
+    // a debt with nothing owed is paid off: no payment is due, so it adds nothing to what is paid each month, the
+    // debt-to-income share or what lenders see (round 4, 2026-11-02); `typedPayment` keeps what was typed, so Expenses
+    // can still tell which expense was its payment
+    const paidOff = !!detail && owed === 0;
+    const typedPayment = detail ? (Number(detail.minPayment) || 0) + (Number(detail.extra) || 0) : 0;
+    const minPayment = detail && !paidOff ? Number(detail.minPayment) || 0 : 0;
+    const extra = detail && !paidOff ? Number(detail.extra) || 0 : 0;
     const payment = minPayment + extra;
     const interestMonthly = rate !== null ? owed * rate / 12 : null;
     let months = null, totalInterest = null;
@@ -41,7 +47,7 @@ export function compute(plan, params = {}) {
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
     return {
-      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, interestMonthly, months,
+      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, paidOff, typedPayment, interestMonthly, months,
       payoffDate: today && Number.isFinite(months) && months !== null ? addMonths(today, months) : null,
       totalInterest, expensive: rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
     };

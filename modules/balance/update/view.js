@@ -44,6 +44,9 @@ export function render(root, ctx) {
     const n = ui.notice(pending.kind, pending.text);
     if (pending.kind === "ok") n.append(" ", ui.h("a", { href: "#/balance/net-worth" }, "See net worth ›"));
     head.append(n); pending = null;
+    // a loan or card just saved at $0 whose payment is still on Expenses: say so, one tap from stopping it (round 4)
+    const ended = ctx.computeOf?.("cashflow/expenses", { today })?.ended ?? [];
+    for (const x of ended) head.append(ui.notice("ok", `${x.debtName} is paid off. Its payment, ${x.name} (${fmt.money(x.monthly, cur)} a month), is still on Expenses. `, ui.h("a", { href: "#/cashflow/expenses" }, "Stop it there ›")));
   }
   wrap.append(head);
 

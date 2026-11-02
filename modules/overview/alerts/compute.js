@@ -108,6 +108,8 @@ export function compute(plan, params = {}) {
     if (r.neverPaysOff) add(`debt-never-${r.id}`, "bad", `${r.name} never pays off at its payment`, "The payment does not cover the interest. Raise it, even a little.", ["balance", "liabilities"]);
     else if (r.expensive && !inHand.has(r.id)) add(`debt-expensive-${r.id}`, "warn", `${r.name} is expensive debt`, `About ${money(r.interestMonthly)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. Extra payments here save the most.`, ["balance", "liabilities"]);
   }
+  // a loan paid off whose payment is still on Expenses: the money is free once it is stopped there
+  for (const x of exp.ended ?? []) add(`debt-paid-${x.debtId}`, "warn", `${x.debtName} is paid off`, `Its payment, ${x.name} (${money(x.monthly)} a month), is still counted on Expenses. Stop it there and that money is free.`, ["cashflow", "expenses"]);
   if (debt.count && debt.withDetail < debt.count) add("debt-details", "info", `${debt.count - debt.withDetail} ${debt.count - debt.withDetail === 1 ? "debt has" : "debts have"} no rate or payment`, "Add them to see payoff dates and what interest costs.", ["balance", "liabilities"]);
   if (debt.dti !== null && debt.dti > 0.43) add("dti", "warn", "Debt payments take a big share of income", `${Math.round(debt.dti * 100)}% of monthly income goes to debt payments; lenders start worrying above 43%.`, ["balance", "liabilities"]);
 

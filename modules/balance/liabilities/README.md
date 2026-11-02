@@ -20,6 +20,10 @@ Plan sections read (`needs`): `accounts` (liability types from `balance/net-wort
 - "Expensive" = rate at or above `HIGH_RATE` (15%) with a balance.
 - Sort: highest rate first (the avalanche order), then largest balance.
 
+Paid off (round 4, 2026-11-02): a debt with its details and nothing owed (`paidOff`) has payment and minPayment 0, so
+"Paying each month", debt-to-income, What lenders see and Expenses' check drop it; the row says "paid off" with no
+payment. `typedPayment` keeps the payment typed, so Expenses can still find the expense that was its payment.
+
 ## Edge cases
 No liability accounts: empty state pointing to Net worth. Debt without detail: listed with "needs details", excluded from average rate and payoff. Payment below interest: warning. Balance 0: paid off. Detail whose account was deleted: ignored.
 

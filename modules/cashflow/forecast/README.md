@@ -26,6 +26,9 @@ Plan sections read (`needs`): `accounts` (checking, savings, cash), `transaction
 Debts paid from the Debts page (2026-11-02): the debts in Expenses' `fromDebts` each get a payment line of their own,
 including when other loan payments are listed on Expenses (before, any listed loan payment stopped them all).
 
+The saved debt plan (2026-11-02): Pay off debts' extra is paid on the 1st each month ("Extra on Visa card (Pay off
+debts)") until the last debt it goes to is gone, as Next best action counts it; before, the Forecast left it out.
+
 ## Edge cases
 No everyday account or no today: no data. A chosen account only counts found payments on that account and all typed items. Horizon at least 7 days.
 

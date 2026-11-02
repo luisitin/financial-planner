@@ -170,3 +170,28 @@ test("each debt is matched to its own expense: the car payment listed does not d
   const m = matchDebts([{ id: "x1", name: "Toyota", monthly: 300 }, { id: "x2", name: "Card payment", monthly: 395 }], [{ id: "v", name: "Visa card", payment: 400, minPayment: 190 }, { id: "c", name: "Car loan (Toyota Financial)", payment: 410 }]);
   assert.equal(m.matched.get("c").id, "x1"); assert.equal(m.matched.get("v").id, "x2"); assert.equal(m.spare, 0);
 });
+
+test("a loan paid off costs nothing: no payment on Debts, its listed payment is said to have ended, and it never stands in for another debt (round 4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: liabilities } = await import("../../balance/liabilities/compute.js");
+  const { compute: alerts } = await import("../../overview/alerts/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const before = liabilities(p, { today: T });
+  p.accounts.find((a) => a.id === "a-car").balance = 0;
+  const li = liabilities(p, { today: T });
+  const car = li.rows.find((r) => r.id === "a-car");
+  assert.equal(car.paidOff, true); assert.equal(car.payment, 0); assert.equal(car.minPayment, 0); assert.equal(car.typedPayment, 410);
+  assert.ok(Math.abs(li.payments - (before.payments - 410)) < 0.01, "Paying each month and debt-to-income drop the paid-off loan");
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.ended, [{ debtId: "a-car", debtName: "Car loan", id: "e-car", name: "Car payment", monthly: 410 }]);
+  // the Visa's $400 is still counted from Debts: the ended car payment does not cover it
+  assert.equal(d.debtFromDebts, 400); assert.deepEqual(d.fromDebts.map((x) => x.name), ["Visa card"]);
+  assert.deepEqual(d.warnings, []);
+  const al = alerts(p, { today: T }).alerts.find((a) => a.id === "debt-paid-a-car");
+  assert.ok(al && al.title === "Car loan is paid off" && /Car payment \(\$410 a month\), is still counted on Expenses/.test(al.detail ?? al.text ?? JSON.stringify(al)));
+  // stopped from yesterday, it no longer counts and nothing is said
+  p.expenses.find((x) => x.id === "e-car").endDate = "2026-11-01";
+  const s = compute(p, { today: T });
+  assert.deepEqual(s.ended, []); assert.ok(Math.abs(s.monthly - (d.monthly - 410)) < 0.01);
+});

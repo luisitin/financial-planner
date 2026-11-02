@@ -70,7 +70,14 @@ export function compute(plan, params = {}) {
   const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);
   const filedDebt = sum(active.filter((x) => x.category === "debt"), "monthly");
   const rows = (debts?.rows ?? []).filter((r) => (Number(r.payment) || 0) > 0 && !(mortgageFiled && r.type === "mortgage"));
-  const m = matchDebts(active.filter((x) => x.category === "debt"), rows);
+  // a paid-off debt's payment still listed here is matched first (by name, or its typed payment), so it is said to have
+  // ended and never stands in for another debt's missing payment
+  const paidRows = (debts?.rows ?? []).filter((r) => r.paidOff && r.typedPayment > 0).map((r) => ({ ...r, payment: r.typedPayment, minPayment: r.typedPayment }));
+  const debtItems = active.filter((x) => x.category === "debt");
+  const pm = paidRows.length ? matchDebts(debtItems, paidRows) : { matched: new Map() };
+  const endedIds = new Set([...pm.matched.values()].map((e) => e.id));
+  const ended = [...pm.matched].map(([id, e]) => ({ debtId: id, debtName: paidRows.find((r) => r.id === id)?.name ?? "", id: e.id, name: e.name, monthly: e.monthly }));
+  const m = matchDebts(debtItems.filter((x) => !endedIds.has(x.id)), rows);
   // what is filed but matches no debt (one line for all of them, or an amount out of date) covers the unmatched debts up to its amount
   const unmatchedRows = rows.filter((r) => !m.matched.has(r.id));
   const missingTotal = unmatchedRows.reduce((t, r) => t + r.payment, 0);
@@ -111,7 +118,7 @@ export function compute(plan, params = {}) {
     // an extra paid on a debt kept on Debts alone could be cut in a pinch: it is a nice-to-have, so the two add up to the total
     optionalMonthly: sum(active.filter((x) => !x.essential), "monthly") + (debtFromDebts - debtRequired),
     inflatingMonthly, nextYear, leftOverNextYear,
-    debtPayments, debtFromDebts, debtRequired, fromDebts, debtMatches: Object.fromEntries([...m.matched].map(([id, e]) => [id, e.id])),
+    debtPayments, debtFromDebts, debtRequired, fromDebts, ended, debtMatches: Object.fromEntries([...m.matched].map(([id, e]) => [id, e.id])),
     oneTime: sum(active, "oneTime"),
     byCategory, income, leftOver, savingsRate: income && income.monthly > 0 ? leftOver / income.monthly : null,
     warnings, overspend,
