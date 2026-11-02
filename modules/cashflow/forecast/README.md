@@ -26,6 +26,10 @@ Plan sections read (`needs`): `accounts` (checking, savings, cash), `transaction
 ## Edge cases
 No everyday account or no today: no data. A chosen account only counts found payments on that account and all typed items. Horizon at least 7 days.
 
+A salary typed as a yearly (or quarterly) figure, the setup's default, is paid in paychecks, not once a year
+(`payRhythm` in core/math/periods.js: the Paycheck page's count for that person, else 26, every two weeks). The Forecast puts each payday in at the take-home share of one paycheck (a $55,000 salary typed "a year" put the whole
+year's take-home on one day, then nothing for the rest of the window; 2026-11-02, experience round 4).
+
 ## Tests
 `module.test.mjs`: planned dates (1st/15th/start/end dates), no data, the 90-day run on the shared fixture (found vs typed, coverage, lowest), a dated shortfall; salaries at take-home and side income as typed; `takeHome` (shares from the Paycheck page, the monthly total, no earner); a payroll deposit covering only the salary it is closest to; a deposit outside the band covering nothing; an ended job not taking the new job's deposit; a payday due today; a later first job at take-home; Debts payments added only when nothing is filed under loan and card payments.
 

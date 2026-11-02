@@ -6,7 +6,7 @@ import { normalizePayee } from "../../transactions/rules/compute.js";
 import { isTransfer } from "../../transactions/ledger/compute.js";
 import { categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { daysBetween, addMonths } from "../../../core/math/dates.js";
-import { PERIODS, periodLabel } from "../../../core/math/periods.js";
+import { PERIODS, periodLabel, payRhythm } from "../../../core/math/periods.js";
 
 // cadence: typical days between two occurrences and the band that counts as "steady"
 export const CADENCES = {
@@ -84,7 +84,7 @@ export function compute(plan, params = {}) {
   const state = (x) => !today ? "active" : x.startDate && String(x.startDate) > today ? "upcoming" : x.endDate && String(x.endDate) < today ? "ended" : "active";
   const planned = [
     ...(plan.expenses ?? []).filter((e) => e.period !== "once").map((e) => ({ id: e.id, kind: "expense", name: e.name, category: e.category, amount: -(Number(e.amount) || 0), period: e.period, periodLabel: periodLabel(e.period), monthly: (Number(e.amount) || 0) * (PERIODS[e.period]?.perYear ?? 12) / 12, state: state(e), startDate: e.startDate || "", endDate: e.endDate || "" })),
-    ...(plan.income ?? []).filter((i) => i.period !== "once").map((i) => ({ id: i.id, kind: "income", name: i.name, category: "", amount: Number(i.amount) || 0, period: i.period, periodLabel: periodLabel(i.period), monthly: (Number(i.amount) || 0) * (PERIODS[i.period]?.perYear ?? 12) / 12, state: state(i), startDate: i.startDate || "", endDate: i.endDate || "" })),
+    ...(plan.income ?? []).filter((i) => i.period !== "once").map((i) => ({ id: i.id, kind: "income", name: i.name, category: "", amount: Number(i.amount) || 0, period: i.period, periodLabel: payRhythm(i, plan) ? `${i.period === "annual" ? "A year" : "Every three months"}, ${payRhythm(i, plan).words}` : periodLabel(i.period), monthly: (Number(i.amount) || 0) * (PERIODS[i.period]?.perYear ?? 12) / 12, state: state(i), startDate: i.startDate || "", endDate: i.endDate || "" })),
   ];
   const dueSoon = today ? detected.filter((r) => r.next && !r.missed && daysBetween(today, r.next) <= 14).map((r) => ({ ...r, days: daysBetween(today, r.next) })) : [];
   const missed = detected.filter((r) => r.missed);

@@ -221,3 +221,23 @@ test("review: an adult whose only job starts later lands at take-home, not befor
   assert.ok(nj.amount < 6000 && nj.beforeTax === 6000, `take-home: ${nj.amount}`);
   assert.equal(d.payBeforeTax, false);
 });
+
+test("round 4: a salary typed as a yearly figure (the setup's default) lands as paychecks, not one deposit a year", async () => {
+  const { payRhythm } = await import("../../../core/math/periods.js");
+  const { compute: recurring } = await import("../recurring/compute.js");
+  const p = emptyPlan();
+  p.household.people.push({ id: "me", name: "Jordan", role: "self", birthDate: "1994-05-01" });
+  p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 8000 });
+  p.income.push({ id: "pay", name: "Jordan's pay", type: "salary", personId: "me", amount: 55000, period: "annual" });
+  p.expenses.push({ id: "rent", name: "Rent", category: "housing", amount: 1600, period: "monthly", essential: true });
+  for (const today of ["2026-11-02", "2026-11-20"]) {
+    const pays = compute(p, { today }).days.flatMap((x) => x.events).filter((e) => e.name === "Jordan's pay");
+    assert.ok(pays.length >= 6 && pays.length <= 7, `${today}: ${pays.length} paydays in 90 days`);
+    assert.ok(pays.every((e) => e.amount > 1000 && e.amount < 55000 / 26), "each at the take-home share of one paycheck");
+  }
+  assert.deepEqual(payRhythm(p.income[0], p), { period: "biweekly", count: 26, perPay: 55000 / 26, words: "paid every two weeks" });
+  p.whatIfs = { ...(p.whatIfs ?? {}), paycheck: { me: { paychecks: 24 } } };
+  assert.equal(payRhythm(p.income[0], p).words, "paid twice a month", "the Paycheck page's count wins");
+  assert.equal(recurring(p, { today: "2026-11-02" }).planned.find((x) => x.id === "pay").periodLabel, "A year, paid twice a month");
+  assert.equal(payRhythm({ ...p.income[0], type: "bonus" }, p), null, "a bonus is once a year");
+});

@@ -33,3 +33,20 @@ export function activeOn(item, today) {
   if (item?.endDate && String(item.endDate) < t) return false;
   return true;
 }
+
+/** Paychecks a year assumed for pay typed as a yearly or quarterly figure (the Paycheck page's default: every two weeks). */
+export const ASSUMED_PAYCHECKS = 26;
+const PAY_PERIOD = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
+/**
+ * payRhythm(item, plan) -> { period, perPay, count, words } | null. A salary typed as a yearly (or quarterly) figure is
+ * paid in paychecks, not once a year: the count the Paycheck page has for that person (`whatIfs.paycheck[personId]
+ * .paychecks`), else ASSUMED_PAYCHECKS. Forecast puts the paydays in, Income and Bills say "a year, paid every two weeks".
+ * Anything else (a bonus, rent, a weekly salary) is null: it lands as typed.
+ */
+export function payRhythm(item, plan) {
+  if (!item || item.type !== "salary" || (item.period !== "annual" && item.period !== "quarterly")) return null;
+  const typed = Number(plan?.whatIfs?.paycheck?.[item.personId]?.paychecks);
+  const count = PAY_PERIOD[typed] ? typed : ASSUMED_PAYCHECKS;
+  const period = PAY_PERIOD[count];
+  return { period, count, perPay: perYear(item.amount, item.period) / count, words: `paid ${PERIODS[period].label.toLowerCase()}` };
+}

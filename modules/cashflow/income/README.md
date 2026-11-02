@@ -23,6 +23,9 @@ Plan sections read (`needs`): `income`, `household` (names for `personId`).
 ## Edge cases
 No people: items are "Household". Unknown `type`: treated as other. Amount 0 or missing: warning. End before start: warning. Growth above 25%: warning (usually a unit mistake). Unknown period: treated as monthly.
 
+A salary typed as a yearly (or quarterly) figure, the setup's default, is paid in paychecks, not once a year
+(`payRhythm` in core/math/periods.js: the Paycheck page's count for that person, else 26, every two weeks). Income lists it as "$55,000 a year, paid every two weeks" instead of "once a year" (2026-11-02).
+
 ## Tests
 `module.test.mjs`: empty plan, bi-weekly normalisation, next-year raise, start/end/one-off handling, warnings, byType.
 

@@ -1,7 +1,7 @@
 // modules/cashflow/income/view.js -- DOM only. Totals up top, a tappable list of income
 // sources, one form to add or edit.
 import { compute, INCOME_TYPES, looksYearly } from "./compute.js";
-import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
+import { PERIOD_OPTIONS, periodLabel, payRhythm } from "../../../core/math/periods.js";
 import { takeHome } from "../paycheck/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
@@ -104,7 +104,9 @@ export function render(root, ctx) {
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   if (d.count > 0) {
     const sub = (x) => {
-      const bits = [`${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.personName];
+      // a salary typed as a yearly figure is paid in paychecks: say how often (set on Paycheck), not "once a year"
+      const rh = payRhythm(x, plan);
+      const bits = [rh ? `${fmt.money(x.amount, cur)} ${x.period === "annual" ? "a year" : "every three months"}, ${rh.words}` : `${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.personName];
       if (Number(x.growth) > 0) bits.push(`+${fmt.pct(x.growth, 1)} a year`);
       if (x.upcoming) bits.push(`starts ${fmt.date(x.startDate)}`);
       if (x.ended) bits.push(`ended ${fmt.date(x.endDate)}`);

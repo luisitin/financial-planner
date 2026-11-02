@@ -10,7 +10,7 @@ import { countedBalance } from "../../balance/net-worth/compute.js";
 import { takeHome } from "../paycheck/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
-import { perYear } from "../../../core/math/periods.js";
+import { perYear, payRhythm } from "../../../core/math/periods.js";
 
 /** Words in a bank line that mark a deposit as pay (a payroll deposit names the employer, not the person). */
 export const PAY_WORDS = /\b(payroll|salary|direct ?dep(osit)?|dir ?dep|directdep|paycheck|wages?|pay ?roll)\b/i;
@@ -77,7 +77,9 @@ export function compute(plan, params = {}) {
   const typed = [
     ...(plan.expenses ?? []).filter((e) => e.period !== "once").map((e) => ({ ...e, kind: "expense", signed: -(Number(e.amount) || 0) })),
     ...debtRows,
-    ...(plan.income ?? []).filter((i) => i.period !== "once").map((i) => {
+    ...(plan.income ?? []).filter((i) => i.period !== "once").map((i0) => {
+      // a salary typed as a yearly figure lands as paychecks (the Paycheck page's count), not one deposit a year
+      const rh = payRhythm(i0, plan), i = rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0;
       const typedAmount = Number(i.amount) || 0, r = th.ratio[i.id];
       return r !== undefined && r < 1 ? { ...i, kind: "income", signed: typedAmount * r, beforeTax: typedAmount } : { ...i, kind: "income", signed: typedAmount };
     }),

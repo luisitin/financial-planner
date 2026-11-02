@@ -20,6 +20,9 @@ Plan sections read (`needs`): `transactions`, `expenses`, `income`, `recurringIg
 ## Edge cases
 No transactions: the typed items still list. A dismissed key stays out until `recurringIgnored` is edited (Settings > export shows it). A payee whose gaps change cadence (weekly then monthly) is dropped rather than guessed.
 
+A salary typed as a yearly (or quarterly) figure, the setup's default, is paid in paychecks, not once a year
+(`payRhythm` in core/math/periods.js: the Paycheck page's count for that person, else 26, every two weeks). Bills and regular payments labels it "A year, paid every two weeks" instead of "once a year" (2026-11-02).
+
 ## Tests
 `module.test.mjs`: date helpers, monthly/biweekly/yearly detection, a shop and transfers excluded, a missed gym, totals, dismissals, empty plan. The fixture `recurringPlan()` is shared with Forecast, Irregular expenses and Subscriptions.
 
