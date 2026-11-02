@@ -13,7 +13,7 @@ import { router } from "./router.js";
 import { features } from "./features.js";
 import * as ui from "./ui/dom.js";
 import * as fmt from "./format.js";
-import { matchRank } from "./search.js";
+import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -59,7 +59,9 @@ function buildNav(filter = "") {
   // Search ranking (design log 2026-09-15): page name hit = 0, topic name hit = 1,
   // description-only hit = 2. Topics are ordered by their best hit, pages inside a topic too.
   // core/search.js also understands the owner's own words ("what I owe" -> Net worth) and manifest aliases.
-  const rank = (m, g) => matchRank(m, g.title, q);
+  // the household's first names are left out of the query ("college for Cy" finds the college page)
+  const ignore = (store.get()?.household?.people ?? []).map((p) => p.name).filter((n) => n && n !== "Me");
+  const rank = (m, g) => matchRank(m, g.title, q, { ignore });
 
   if (!q) {
     const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
@@ -97,8 +99,17 @@ function buildNav(filter = "") {
     grp.append(head, ui.h("div", { class: "nav-group-body" }, pages.map((m) => link(m))));
     side.append(grp);
   }
+  let closest = false;
   if (q && !groups.length) {
-    side.append(ui.h("div", { class: "nav-empty" }, ui.h("div", {}, `No page matches “${filter.trim()}”.`),
+    // no page has every word: the closest few (two or more meaningful words, at least half of them found), ready pages first
+    if (queryWords(cleanQuery(q, ignore)).length >= 2) {
+      const close = [...modules.values()].filter((m) => features.enabled(m) && isReady(m))
+        .map((m) => ({ m, s: closeShare(m, GROUPS.find((g) => g.id === m.group)?.title ?? "", q, { ignore }) })).filter((x) => x.s >= 0.5)
+        .sort((a, b) => b.s - a.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 5);
+      if (close.length) { side.append(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) side.append(link(m, " ready-link")); }
+      closest = close.length > 0;
+    }
+    side.append(ui.h("div", { class: "nav-empty" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
       ui.h("div", {}, "Try another word, or ", ui.h("a", { href: "#/overview/pages" }, "browse All pages"), ".")));
   }
   side.append(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));

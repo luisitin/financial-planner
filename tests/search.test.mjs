@@ -1,7 +1,7 @@
 // tests/search.test.mjs -- core/search.js: finding pages in the owner's own words (FEEDBACK F-007).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalize, words, matchRank, matches, stem } from "../core/search.js";
+import { normalize, words, matchRank, matches, stem, cleanQuery, closeShare } from "../core/search.js";
 
 const netWorth = { title: "Net worth", purpose: "Every account and balance in one list: what you own, what you owe, and the difference over time.", aliases: ["what I owe", "what I own", "how much am I worth", "assets and debts"] };
 const debts = { title: "Debts", purpose: "Every loan and card with its rate and payment: what interest costs you and when each one is gone." };
@@ -59,4 +59,33 @@ test("stems and synonyms: saving, savings and save are one word; house finds hom
   assert.equal(stem("savings"), stem("save")); assert.equal(stem("saving"), stem("save"));
   assert.equal(stem("house"), stem("home")); assert.equal(stem("kids"), stem("child"));
   assert.equal(matchRank({ title: "Home", purpose: "what it is worth" }, "Property", "my house worth"), 3);
+});
+
+// the third phone walk-through (2026-11-02): whole questions as people type them, with names and amounts in them
+test("whole questions: names and amounts are left out, everyday phrases find the page first, the rest find the closest pages", async () => {
+  const { default: registry } = await import("../modules/registry.js");
+  const { GROUPS } = await import("../core/groups.js");
+  const pages = [];
+  for (const e of registry) { const m = (await e.load()).default; if (!m.placeholder) pages.push(m); }
+  const title = (g) => GROUPS.find((x) => x.id === g)?.title ?? g;
+  const ignore = ["Ana", "Bo", "Cy"];
+  const top = (q) => pages.map((m) => ({ k: `${m.group}/${m.id}`, r: matchRank(m, title(m.group), q, { ignore }) })).filter((x) => x.r >= 0).sort((a, b) => a.r - b.r);
+  const among = (q, key) => { const t = top(q); return t.filter((x) => x.r === t[0]?.r).map((x) => x.k).includes(key); };
+  for (const [q, key] of [
+    ["How much do we have?", "balance/net-worth"], ["When will the credit card be paid off?", "debt/payoff"],
+    ["Are we spending more than last month?", "cashflow/spending"], ["How much will college cost for Cy?", "goals/education"],
+    ["Is our will up to date?", "estate/documents"], ["What do we pay for subscriptions?", "cashflow/subscriptions"],
+    ["Can we afford a $30,000 car?", "goals/vehicle"], ["bigger house", "goals/house"], ["second child", "household/life-events"],
+    ["take a pay cut", "career/offer-compare"], ["How do I make a budget?", "cashflow/budget"], ["What do I do first?", "overview/next-best-action"],
+    ["Should I pay off my mortgage early?", "debt/mortgage"], ["Do we have enough insurance?", "insurance/life-needs"],
+  ]) assert.ok(among(q, key), `"${q}" finds ${key} first (got ${top(q).slice(0, 3).map((x) => `${x.k}:${x.r}`).join(", ") || "nothing"})`);
+  assert.equal(cleanQuery("Can we afford a $30,000 car?"), "can you afford a car");
+  assert.equal(cleanQuery("Bo's 401k and the 529", ["Bo"]), "401k and the 529", "401k and 529 are words, not amounts");
+  assert.equal(cleanQuery("save 72k or 1,500", []), "save or");
+  assert.ok(top("Cy").length < pages.length, "only a name: searched as typed, not every page");
+  // no page has every word: the closest pages, never for a single word
+  const share = (q, key) => { const m = pages.find((x) => `${x.group}/${x.id}` === key); return closeShare(m, title(m.group), q, { ignore }); };
+  assert.ok(share("lower my grocery spending", "cashflow/expenses") >= 0.5, "spending and groceries are in Expenses words");
+  assert.ok(share("how do we cut grocery spending", "career/offer-compare") < 0.5, "one word of a phrase (pay cut) is not enough");
+  assert.equal(share("Cy", "goals/education"), 0, "only a name: nothing meaningful left");
 });

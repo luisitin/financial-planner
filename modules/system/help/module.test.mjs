@@ -57,7 +57,7 @@ test("directory: sections in sidebar order, pages in their order, ready counted,
 test("directory with a query: matches only, best first", () => {
   const d = directory(manifests, GROUPS, "debt");
   assert.deepEqual(d.results.map((p) => p.id), ["payoff", "consolidation"], "the section's name matches both");
-  assert.deepEqual(directory(manifests, GROUPS, "cards").results.map((p) => p.id), ["consolidation"]);
+  assert.deepEqual(directory(manifests, GROUPS, "cards").results.map((p) => p.id), ["consolidation", "payoff"], "Pay off debts says \"pay off the card\" (core/search.js PLAIN, 2026-11-02)");
   assert.equal(directory(manifests, GROUPS, "zzz").results.length, 0);
   assert.equal(directory(manifests, GROUPS, "turned off").results.length, 0);
 });
