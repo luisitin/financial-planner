@@ -66,6 +66,11 @@ export const PLAIN = {
   "scenarios/stress-tests": ["what if the market crashes", "market crash", "recession", "lose my job", "job loss"],
   "scenarios/compare": ["what if", "what happens if", "try a change"],
   "taxes/federal": ["how much tax", "tax bill", "what will I owe", "tax refund"],
+  // a freelancer's question (round 4, 2026-11-02: "how much should I set aside for taxes" found only Irregular expenses)
+  "taxes/estimated": ["set aside for taxes", "set aside for tax", "tax savings", "save for taxes", "how much tax to save", "put aside for taxes", "taxes self employed", "pay my taxes myself"],
+  "career/side-income": ["set aside for taxes", "uneven income", "income goes up and down", "count on"],
+  "retirement/withdrawal-strategy": ["how much to take out", "how much can we spend in retirement", "safe withdrawal", "4% rule", "withdraw from savings"],
+  "retirement/rmd": ["required withdrawal", "required minimum distribution", "rmd", "must take out"],
   "overview/monthly-review": ["monthly check in", "check in", "once a month", "review the month", "monthly routine"],
   "overview/alerts": ["what is wrong", "needs attention", "anything to fix", "what needs fixing"],
   "overview/health-score": ["how healthy", "financial health", "grade my finances", "score"],
@@ -81,7 +86,7 @@ export const PLAIN = {
   "investments/fees": ["am I paying too much", "hidden fees"],
   // 2026-11-02, from the third phone walk-through: whole questions as people type them
   "balance/net-worth": ["how much do we have", "how much money do we have", "what are we worth", "how much we have"],
-  "debt/credit-cards": ["card paid off", "credit card paid off", "pay off the card", "pay off my card"],
+  "debt/credit-cards": ["card paid off", "credit card paid off", "pay off the card", "pay off my card", "credit score", "card utilization", "credit utilization", "under 30%", "card limits"],
   "cashflow/spending": ["more than last month", "spending more", "overspending", "where does the money go", "where the money goes"],
   "cashflow/subscriptions": ["pay for subscriptions", "streaming", "memberships"],
   "debt/mortgage": ["pay off the mortgage early", "pay off my mortgage early", "mortgage early", "extra on the mortgage"],

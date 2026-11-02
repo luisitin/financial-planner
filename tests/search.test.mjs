@@ -52,6 +52,9 @@ test("plain questions find the page that answers them, first", async () => {
     ["stock from work", "career/equity"], ["left over", "cashflow/expenses"], ["update balances", "balance/update"],
     ["how much tax", "taxes/federal"], ["debt free", "debt/payoff"], ["monthly check-in", "overview/monthly-review"],
     ["buy a home", "goals/house"], ["what I owe", "balance/net-worth"],
+    // round 4, 2026-11-02: a freelancer's and a retiree's questions
+    ["how much should I set aside for taxes", "taxes/estimated"], ["how much to take out", "retirement/withdrawal-strategy"],
+    ["required withdrawal", "retirement/rmd"], ["credit score", "debt/credit-cards"],
   ]) assert.ok(among(q, key), `"${q}" finds ${key} first (got ${top(q).slice(0, 3).map((x) => `${x.k}:${x.r}`).join(", ") || "nothing"})`);
   assert.notEqual(top("buy a home")[0].k, "overview/dashboard", "a one-word alias (home) does not match inside a longer question");
 });
