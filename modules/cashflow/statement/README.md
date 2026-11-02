@@ -35,6 +35,10 @@ payments are under financing; a plan whose loan payments are only on Debts (as S
 twice before. A debt-category expense Expenses tied to its debt (`debtMatches`, by name or a near amount) is that debt's
 payment here as well. The cash left less what goes to goals is then Next best action's money left, a year.
 
+One tax for the month (2026-11-02): federal, Social Security and Medicare, and the state's income tax are Next best
+action's (`spare`, from Budget's `yearTaxes`), and business costs from the Self-employment page are a line of their own,
+so the cash left less goal saving is Next best action's money left, a year, in every state.
+
 ## Edge cases
 - Nothing entered: a hero. Only bank files: just that part. Only the plan: just the year.
 - A debt with no payment adds nothing; a payment that does not cover the interest pays only interest.

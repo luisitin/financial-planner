@@ -49,10 +49,10 @@ export function compute(plan, params = {}) {
   }).filter((p) => p.pay > 0);
   if (!people.length) return { ready: false, people: [] };
 
-  // after tax: the household's federal and payroll tax as a share of its pay
+  // after tax: the household's federal, payroll and state income tax as a share of its pay (Next best action's month)
   const nb = computeNext(plan, { today });
   const gross = nb.ready ? nb.spare.gross : 0;
-  const takeHome = gross > 0 ? Math.max(0, 1 - (nb.spare.federalTax + nb.spare.payrollTax) / gross) : 0.75;
+  const takeHome = gross > 0 ? Math.max(0, 1 - (nb.spare.federalTax + nb.spare.payrollTax + (nb.spare.stateTax ?? 0)) / gross) : 0.75;
   // the life cover on each earner (term and permanent policies naming them)
   const policies = (plan.insurance?.policies ?? []).filter((x) => ["term", "whole", "universal", "life"].includes(x.kind));
   for (const p of people) {

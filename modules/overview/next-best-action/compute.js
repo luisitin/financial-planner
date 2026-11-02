@@ -15,6 +15,7 @@ import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
 import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
+import { yearTaxes } from "../../cashflow/budget-percent/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -30,7 +31,8 @@ export const HORIZON_MONTHS = 120;
 /**
  * compute(plan, { today }) -> {
  *   ready, missing,
- *   spare: { monthly, gross, federalTax, payrollTax, spending, retirementSaving, goalSaving, debtExtra } (all a month; spare may be negative;
+ *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, stateKnown, state, spending, retirementSaving, goalSaving, debtExtra }
+ *            (all a month; spare may be negative; stateKnown: the state's income tax could be worked out, or the state has none;
  *            debtExtra: the extra a month the saved debt plan pays on top of the required payments, Pay off debts' `extra`),
  *   debtPlan: { extra, names, ids, until, months } | null (that saved extra: the debts it goes to, and when the last of them is gone),
  *   steps: [{ id, n, title, why, status: "done"|"now"|"later"|"check"|"skip"|"underway", detail, gap (one-off amount left) | null, roomYearly | null,
@@ -53,19 +55,31 @@ export function compute(plan, params = {}) {
   if (!exp.count) missing.push("what goes out, on the Expenses page");
   if (missing.length) return { ready: false, missing };
 
-  // the money left each month: pay after federal and payroll tax, less spending, less what already goes to retirement and goals
-  const fed = computeFederal(plan, { today });
-  const base = fed.params.ssWageBase ?? Infinity;
-  let payroll = 0;
-  for (const p of new Set(inc.active.map((x) => x.personId))) {
-    const wages = inc.active.filter((x) => x.personId === p && (x.type === "salary" || x.type === "bonus")).reduce((s, x) => s + x.yearly, 0);
-    const business = inc.active.filter((x) => x.personId === p && x.type === "business").reduce((s, x) => s + x.yearly, 0);
-    payroll += Math.min(wages, base) * FICA.ss + wages * FICA.medicare + Math.max(0, business) * FICA.seBase * FICA.selfEmployed;
+  // the money left each month: pay after tax, less spending, less what already goes to retirement and goals. The tax is
+  // the month's one tax figure (Budget's yearTaxes, round 4, 2026-11-02): federal income tax with half the self-employment
+  // tax and the business deduction off, Social Security and Medicare (self-employment tax and the extra 0.9% included),
+  // and the state's income tax at the State page's rate, so every page that shows the month says the same; the simple
+  // reckoning below is kept only for a plan that tax cannot be worked out for
+  let T = null;
+  try { T = yearTaxes(plan, { today, inc }); } catch { T = null; }
+  let federalYear, payroll, stateYear = 0, stateKnown = false, businessCosts = 0;
+  if (T) { federalYear = T.federal; payroll = T.payroll; stateYear = T.state; stateKnown = T.stateKnown; businessCosts = T.business?.expenses ?? 0; }
+  else {
+    const fed = computeFederal(plan, { today });
+    const base = fed.params.ssWageBase ?? Infinity;
+    payroll = 0;
+    for (const p of new Set(inc.active.map((x) => x.personId))) {
+      const wages = inc.active.filter((x) => x.personId === p && (x.type === "salary" || x.type === "bonus")).reduce((s, x) => s + x.yearly, 0);
+      const business = inc.active.filter((x) => x.personId === p && x.type === "business").reduce((s, x) => s + x.yearly, 0);
+      payroll += Math.min(wages, base) * FICA.ss + wages * FICA.medicare + Math.max(0, business) * FICA.seBase * FICA.selfEmployed;
+    }
+    federalYear = fed.result.totalTax;
   }
   const con = computeContributions(plan, { today });
   const gl = computeGoals(plan, { today });
   const goalSaving = gl.goals.filter((g) => g.status !== "done").reduce((s, g) => s + (Number(g.monthly) || 0), 0);
-  const spare = { gross: inc.monthly, federalTax: fed.result.totalTax / 12, payrollTax: payroll / 12, spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
+  const spare = { gross: inc.monthly, businessCosts: businessCosts / 12, federalTax: federalYear / 12, payrollTax: payroll / 12, stateTax: stateYear / 12, stateKnown, state: plan.household?.state ?? "",
+    spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
   // the saved debt plan (Pay off debts): an extra a month on top of the required payments is money already spoken for, until
   // the debts it is aimed at are gone (all of them, when it is aimed at none: it rolls from one to the next)
   let pay = null;
@@ -77,7 +91,7 @@ export function compute(plan, params = {}) {
     return { extra: pay.extra, ids, names: ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean), until: last?.endDate ?? null, months: last ? last.months : null };
   })() : null;
   spare.debtExtra = debtPlan ? debtPlan.extra : 0;
-  spare.monthly = spare.gross - spare.federalTax - spare.payrollTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra;
+  spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra;
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);

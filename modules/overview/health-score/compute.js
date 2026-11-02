@@ -52,7 +52,7 @@ export function compute(plan, params = {}) {
   // retired and drawing from savings as the plan intends: the saving rule is for working years, so full marks
   else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can carry (${money(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
   else {
-    const s = nb.spare, afterTax = s.gross - s.federalTax - s.payrollTax;
+    const s = nb.spare, afterTax = s.gross - (s.businessCosts ?? 0) - s.federalTax - s.payrollTax - (s.stateTax ?? 0);
     // the saved debt plan's extra pays down what is owed: it adds to what you are worth as surely as saving does
     const saved = s.retirementSaving + s.goalSaving + (s.debtExtra ?? 0) + s.monthly;
     const rate = afterTax > 0 ? saved / afterTax : 0;

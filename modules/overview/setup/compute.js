@@ -911,7 +911,10 @@ export function standing(plan, { today }) {
   if (!L(plan, "expenses").length && !L(plan, "transactions").length) later.push({ label: "What you spend", href: "#/cashflow/expenses", key: "spend" });
   if (!L(plan, "accounts").length) later.push({ label: "Your accounts", href: "#/balance/net-worth", key: "accounts" });
   if (missing && adults(plan).length) later.push({ label: `${cap(missing)}, for the retirement check`, href: missing === "Social Security" ? "#/retirement/social-security" : "#/household/people", key: "retire" });
-  if (L(plan, "income").length && !NO_WAGE_TAX[plan?.household?.state]) later.push({ label: "Your state's income tax: the left-over figure counts federal tax only", href: "#/taxes/state", key: "state" });
+  // the state's income tax comes off the left-over figure once it can be worked out (a flat-rate state, or a rate typed on
+  // the State page); until then, say so: a missing state is asked for, a graduated state's rate is asked for
+  const st0 = plan?.household?.state;
+  if (L(plan, "income").length && !NO_WAGE_TAX[st0] && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State page, and the left-over figure takes it off` : "Your state: pick it on the State page, so its income tax comes off the left-over figure", href: "#/taxes/state", key: "state" });
   const couple = adults(plan).length >= 2 && (plan?.household?.filingStatus ?? "single") === "single" && adults(plan).some((p) => p.relation === "partner");
   if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the left-over figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
@@ -936,7 +939,7 @@ export function standing(plan, { today }) {
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
-    debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
+    stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
   };

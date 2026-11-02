@@ -21,6 +21,8 @@ Through other pages' computes: Emergency fund (`balance/liquidity`), Next best a
 | The plan knows enough | 10 | seven things filled in and current: adults' birth dates, accounts, balances within 90 days, income and expenses, Social Security for every adult, retirement spending, assumptions looked over in the last year | share present |
 Bands (`BANDS`): Strong from 85, Good from 70, Fair from 50, Needs work below. A part the plan cannot judge yet scores 0 ("unknown") and says what to add.
 
+Income after tax (2026-11-02) takes off the state's income tax and business costs too, as Next best action's month does.
+
 A saved debt plan (2026-11-02): the extra a month on Pay off debts counts as saved (saved = retirement + goals + extra on
 debts + spare), since Next best action no longer counts it as spare: saving the plan never lowers the score.
 

@@ -176,3 +176,24 @@ test("a saved extra larger than the money left: the bills step says it counts, a
   assert.ok(d.spare.monthly < 0); assert.equal(d.next.id, "bills");
   assert.match(step(d, "bills").detail, /counting the \$9,000 a month extra on debts \(Pay off debts\)\. Trim spending, lower that extra or pause a goal first\./);
 });
+
+test("one tax for the month: the state's income tax comes off, and Budget (50/30/20) and the Cash-flow statement leave the same money", async () => {
+  const { compute: budget, yearTaxes } = await import("../../cashflow/budget-percent/compute.js");
+  const { compute: statement } = await import("../../cashflow/statement/compute.js");
+  for (const state of ["TX", "PA"]) {
+    const p = familyPlan(); p.household.state = state;
+    const d = compute(p, { today: TODAY }), T = yearTaxes(p, { today: TODAY });
+    near(d.spare.federalTax, T.federal / 12, 0.01); near(d.spare.payrollTax, T.payroll / 12, 0.01); near(d.spare.stateTax, T.state / 12, 0.01);
+    assert.equal(d.spare.stateKnown, true);
+    near(d.spare.monthly, d.spare.gross - d.spare.businessCosts - d.spare.federalTax - d.spare.payrollTax - d.spare.stateTax - d.spare.spending - d.spare.retirementSaving - d.spare.goalSaving - d.spare.debtExtra, 0.01);
+    near(budget(p, { today: TODAY }).saving.leftover, d.spare.monthly, 0.5);
+    const y = statement(p, { today: TODAY }).year;
+    near((y.net - y.goals) / 12, d.spare.monthly, 0.5);
+    if (state === "TX") assert.equal(d.spare.stateTax, 0, "no state income tax in Texas");
+    else assert.ok(d.spare.stateTax > 300, `Pennsylvania's flat 3.07% on about $171,000: ${d.spare.stateTax}`);
+  }
+  // a graduated state with no rate typed: nothing taken off, and stateKnown says so (the page asks for the rate)
+  const ca = familyPlan(); ca.household.state = "CA";
+  const dc = compute(ca, { today: TODAY });
+  assert.equal(dc.spare.stateTax, 0); assert.equal(dc.spare.stateKnown, false);
+});

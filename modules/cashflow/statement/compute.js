@@ -68,12 +68,14 @@ export function compute(plan, params = {}) {
     // living costs leave out every loan payment: the ones filed as expenses and the ones Expenses counts from Debts (its
     // `debtFromDebts`); all of them are under financing below, so none is counted twice (2026-11-02)
     const living = exp.monthly * 12 - (Number(exp.debtFromDebts) || 0) * 12 - [...matched.values(), ...otherDebt].reduce((s, e) => s + e.monthly * 12, 0);
-    const s = nb.ready ? nb.spare : { federalTax: 0, payrollTax: 0 };
+    const s = nb.ready ? nb.spare : { federalTax: 0, payrollTax: 0, stateTax: 0, businessCosts: 0 };
     const opLines = [
       ...Object.entries(inc.byType ?? {}).filter(([, y]) => y > 0).map(([t, y]) => ({ label: INCOME_TYPES[t]?.label ?? t, amount: y })).sort((a, b) => b.amount - a.amount),
+      (s.businessCosts ?? 0) > 0 ? { label: "Business costs (Self-employment page)", amount: -s.businessCosts * 12 } : null,
       { label: "Federal income tax", amount: -s.federalTax * 12 },
       { label: "Social Security and Medicare tax", amount: -s.payrollTax * 12 },
-      st.tax > 0 ? { label: `${st.name} income tax`, amount: -st.tax } : null,
+      // the state's tax as Next best action takes it off the month (the State page's rate on this income), so the cash left matches
+      (nb.ready ? s.stateTax * 12 : st.tax) > 0 ? { label: `${st.name} income tax`, amount: -(nb.ready ? s.stateTax * 12 : st.tax) } : null,
       { label: "Living costs", amount: -living },
     ].filter((l) => l && Math.abs(l.amount) >= 0.5);
     const taxable = (con.items ?? []).filter((c) => ["brokerage", "crypto"].includes(c.accountType)).reduce((t, c) => t + c.yearly, 0);

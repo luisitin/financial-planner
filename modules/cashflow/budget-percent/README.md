@@ -67,6 +67,9 @@ required payment; the extra set on Debts pays the debt down faster, so it is sav
 as the 50/30/20 rule counts extra debt payments. `saving.debts`; left over = after tax - needs - wants - retirement -
 goals - extra on debts.
 
+`yearTaxes` is also Next best action's tax for the month (2026-11-02), so the left over here and the app's left-over
+figure are the same number.
+
 ## Edge cases
 - No income, or no regular spending (one-off and ended expenses, and taxes, do not count): an empty state naming what
   is missing, with buttons to the pages.

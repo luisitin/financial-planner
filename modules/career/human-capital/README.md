@@ -32,6 +32,8 @@
 - Survival to retirement is assumed (no mortality weighting).
 
 ## Tests
+After tax (2026-11-02): the household's federal, payroll and state income tax as a share of pay, from Next best action's month.
+
 `module.test.mjs`: the present value by hand, not ready, the family by hand (rate, after tax, share), steadiness, the
 path falling to zero against the projection with a cross year, life cover and the raise gain.
 

@@ -350,7 +350,13 @@ test("where you stand: read from the pages' own computes; the first move is Next
   assert.ok(st.moves.length === 3 && st.moves.every((m) => m.id !== "rest"));
   assert.ok(st.moves.some((m) => m.id === "guide-home"), "the home goal brings its guide");
   assert.deepEqual(st.guessed.map((g) => g.name), ["Credit cards", "Car loan"]);
-  assert.ok(st.later.some((l) => l.key === "state" && /state.s income tax/.test(l.label)), "Ohio taxes wages");
+  // Ohio's flat rate is known, so its income tax comes off the left-over figure and nothing is said to be missing
+  // (2026-11-02); a state whose rate must be typed is still asked for
+  assert.ok(!st.later.some((l) => l.key === "state"), "Ohio's tax is counted"); assert.equal(st.stateTaxCounted, true);
+  const ca = family(); covered(ca); ca.household.state = "CA";
+  const sc = S.standing(ca, { today: T });
+  assert.ok(sc.later.some((l) => l.key === "state" && /^California's income tax: type its rate on the State page/.test(l.label)), "California's graduated rate is typed there");
+  assert.equal(sc.stateTaxCounted, false);
   assert.equal(dashboard(p).doneCount, dashboard(p).total, "the dashboard's setup steps are all done");
 });
 

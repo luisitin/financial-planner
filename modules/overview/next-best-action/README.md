@@ -55,6 +55,18 @@ they have now may have a plan. Their ask entry is `{ personId, name, accounts: [
 and Retirement contributions asks "Does Bo's job now have a retirement plan with a match?" (2026-11-02: before, marking the
 only 401(k) as old dropped the question for good).
 
+## One tax for the month (2026-11-02)
+`spare` takes its tax from Budget (50/30/20)'s `yearTaxes`, the app's one tax for the month: federal income tax with half
+the self-employment tax and the 20% business deduction off (as the return does), Social Security and Medicare
+(self-employment tax and the extra 0.9% included, the Paycheck page's pre-tax benefits off first), and the state's income
+tax at the State page's rate on federal AGI (a flat-rate state's own rate, a no-tax state 0, a graduated state once its
+rate is typed there: `stateKnown`). Business costs typed on the Self-employment page come off too.
+`spare.monthly` = gross - business costs - federal - payroll - state - spending - retirement saving - goal saving - the
+saved debt plan's extra. Before, the federal estimate's total and a simple payroll reckoning were used and the state's
+tax was left out, so the left-over figure read about $405 a month high for this family in Pennsylvania, and Budget and
+the Cash-flow statement each showed a different month (round-4 finding). The simple reckoning is kept only for a plan
+the tax cannot be worked out for. Each month's money lists "State income tax" and "Business costs" when there are any.
+
 ## A saved debt plan (2026-11-02)
 An extra a month saved on Pay off debts (`plan.debtPlan.extra`, its `extra` as that page's compute returns it: 0 once
 every debt it was aimed at is paid off) is money already spoken for, like what goes to retirement and goals:

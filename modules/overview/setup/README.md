@@ -208,6 +208,9 @@ spendMode, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, 
 `docs/DATA_MODEL.md` under `guide`.
 
 ## Choices made (the owner said: decide and note it here)
+- The left-over figure takes off the state's income tax once it can be worked out (Next best action's `spare.stateKnown`:
+  a no-tax or flat-rate state, or a rate typed on the State page); the "not counted yet" line under the figures then goes,
+  and the figure says "After tax". A graduated state with no rate typed is asked for by name (2026-11-02).
 - A debt step a saved debt plan already pays off ("under way" on Next best action) is not a move: the moves skip it, and
   `standing` returns `debtExtra`, `debtOn` (the debt's name, two names, or "your debts") and `debtUntil`, so "Left over each
   month" says what the extra goes to (2026-11-02).
