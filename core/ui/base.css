@@ -161,7 +161,7 @@ p:last-child { margin-bottom: 0; }
 .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px 14px; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); }
 .field-label { color: var(--text-2); font-weight: 500; }
-.help { color: var(--muted); }
+.help { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }   /* 13 px: a <small> inside a 13 px field shrank to 10.8 px, under the 12 px floor of the pills */
 input, select, textarea { font: inherit; font-size: max(16px, var(--fs)); min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); width: 100%; }
 input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; }
 /* money boxes: the currency sign inside the box (core/ui/dom.js moneyBox). Boxes are 16px because an iPhone zooms

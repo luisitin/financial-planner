@@ -65,3 +65,15 @@ export function compute(plan, params = {}) {
     warnings,
   };
 }
+
+/** Pay above this a year, typed as anything but yearly, is asked about ("Did you mean a year?"): $40,000 a month. My choice. */
+export const ASK_YEARLY_ABOVE = 480000;
+/**
+ * looksYearly(item) -> { yearly, asIf } | null: a salary not typed as yearly that comes to more than ASK_YEARLY_ABOVE a year, which
+ * is usually a yearly salary typed under the default "Every month" ($72,000 a month = $864,000 a year). asIf: the amount read as a year.
+ */
+export function looksYearly(item) {
+  if (!item || item.type !== "salary" || item.period === "annual" || item.period === "once") return null;
+  const yearly = perYear(item.amount, item.period);
+  return yearly > ASK_YEARLY_ABOVE ? { yearly, asIf: Number(item.amount) || 0 } : null;
+}

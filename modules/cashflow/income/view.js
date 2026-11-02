@@ -1,7 +1,7 @@
 // modules/cashflow/income/view.js -- DOM only. Totals up top, a tappable list of income
 // sources, one form to add or edit.
-import { compute, INCOME_TYPES } from "./compute.js";
-import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
+import { compute, INCOME_TYPES, looksYearly } from "./compute.js";
+import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
 import { takeHome } from "../paycheck/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
@@ -54,8 +54,18 @@ export function render(root, ctx) {
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   let showForm = d.count === 0;
+  const ask = ui.h("div");   // the "did you mean a year?" question, above the form
+  const save = (clean) => {
+    pending = editing ? "Changes saved." : `${clean.name} added.`;
+    const was = editing; editing = null;
+    store.update((p) => {
+      p.income = p.income ?? [];
+      if (was) { const i = p.income.findIndex((x) => x.id === was.id); if (i >= 0) p.income[i] = { ...p.income[i], ...clean }; }
+      else p.income.push({ id: ui.uid(), ...clean });
+    });
+  };
   const drawForm = () => {
-    formHost.innerHTML = "";
+    formHost.innerHTML = ""; ask.replaceChildren();
     if (!showForm && !editing) {
       formHost.append(ui.button("+ Add another income", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
@@ -63,16 +73,22 @@ export function render(root, ctx) {
     const values = editing ? { ...editing, taxable: editing.taxable !== false } : { type: "salary", period: "monthly", taxable: true, personId: people.find((p) => p.role === "self")?.id ?? "" };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an income"),
+      ask,
       ui.form(FIELDS(people), values, (v) => {
         const clean = { name: v.name.trim(), type: v.type, personId: v.personId || "", amount: v.amount ?? 0, period: v.period, growth: v.growth ?? 0, startDate: v.startDate || "", endDate: v.endDate || "", taxable: !!v.taxable };
         if (!clean.name) return;
-        pending = editing ? "Changes saved." : `${clean.name} added.`;
-        store.update((p) => {
-          p.income = p.income ?? [];
-          if (editing) { const i = p.income.findIndex((x) => x.id === editing.id); if (i >= 0) p.income[i] = { ...p.income[i], ...clean }; }
-          else p.income.push({ id: ui.uid(), ...clean });
-        });
-        editing = null;
+        // pay of more than $40,000 a month not typed as yearly is usually a yearly figure under the default "Every month":
+        // ask once, with both answers one tap away, before saving it
+        const odd = looksYearly(clean);
+        if (odd) {
+          ask.replaceChildren(ui.notice("warn", `That's ${fmt.money(odd.yearly, cur)} a year. Did you mean ${fmt.money(odd.asIf, cur)} a year?`),
+            ui.row(ui.button(`Yes, ${fmt.money(odd.asIf, cur)} a year`, () => save({ ...clean, period: "annual" })),
+              ui.button(`Keep ${fmt.money(clean.amount, cur)} ${periodLabel(clean.period).toLowerCase()}`, () => save(clean), { class: "secondary" })));
+          ask.style.marginBottom = "16px";
+          ask.scrollIntoView({ behavior: "smooth", block: "center" });
+          return false;   // keep the form as typed behind the question
+        }
+        save(clean);
       }, { submitLabel: editing ? "Save changes" : "Add income", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
         if (!ui.confirm(`Remove ${editing.name}?`)) return;

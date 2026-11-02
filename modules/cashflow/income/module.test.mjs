@@ -53,3 +53,14 @@ test("byType sums yearly amounts per kind", () => {
   p.income.push({ id: "1", name: "a", type: "salary", amount: 100, period: "monthly" }, { id: "2", name: "b", type: "salary", amount: 100, period: "monthly" }, { id: "3", name: "c", type: "rental", amount: 1200, period: "annual" });
   assert.deepEqual(compute(p).byType, { salary: 2400, rental: 1200 });
 });
+test("looksYearly: a salary over $480,000 a year not typed as yearly is asked about; others are not", async () => {
+  const { looksYearly, ASK_YEARLY_ABOVE } = await import("./compute.js");
+  assert.equal(ASK_YEARLY_ABOVE, 480000);
+  assert.deepEqual(looksYearly({ type: "salary", amount: 72000, period: "monthly" }), { yearly: 864000, asIf: 72000 });
+  assert.equal(looksYearly({ type: "salary", amount: 40000, period: "monthly" }), null, "exactly $480,000 a year: not asked");
+  assert.ok(looksYearly({ type: "salary", amount: 40001, period: "monthly" }));
+  assert.equal(looksYearly({ type: "business", amount: 72000, period: "monthly" }), null, "only pay");
+  assert.equal(looksYearly({ type: "salary", amount: 900000, period: "annual" }), null, "typed as a year: believed");
+  assert.deepEqual(looksYearly({ type: "salary", amount: 20000, period: "biweekly" }), { yearly: 520000, asIf: 20000 });
+  assert.equal(looksYearly({ type: "salary", amount: 72000, period: "once" }), null);
+});

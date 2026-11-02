@@ -1,6 +1,7 @@
 // core/ui/dom.js -- the tiny UI kit every module uses. No framework, no build step.
 // Keep it small; a module that needs something fancier adds it to its own view.js.
 import { readAmount, amountText } from "../format.js";
+import { PERIODS } from "../math/periods.js";
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -90,7 +91,8 @@ export function table(columns, rows, opts = {}) {
  */
 export function form(fields, values = {}, onSubmit, opts = {}) {
   const controls = {};
-  const f = h("form", { class: "form", onSubmit: (e) => { e.preventDefault(); onSubmit(readForm(fields, controls)); if (opts.resetAfter) f.reset(); } });
+  // a handler that returns false keeps what was typed (it is asking a question first, "Did you mean a year?")
+  const f = h("form", { class: "form", onSubmit: (e) => { e.preventDefault(); const kept = onSubmit(readForm(fields, controls)) === false; if (opts.resetAfter && !kept) f.reset(); } });
   for (const fd of fields) {
     let c;
     const v = values[fd.key];
@@ -108,6 +110,20 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
     controls[fd.key] = c;
     f.append(field(fd.label, c, fd.help));
   }
+  // A money box followed by a "how often" choice says what that comes to, live: "That's $864,000 a year ($72,000 a month)."
+  // (a yearly salary typed under the default "Every month" was saved as $864,000 a year with a green "added")
+  fields.forEach((fd, i) => {
+    const next = fields[i + 1];
+    if (fd.type !== "money" || next?.type !== "select" || !(next.options ?? []).some((o) => o?.value === "biweekly")) return;
+    const line = h("small", { class: "help", "aria-live": "polite" });
+    controls[next.key].closest("label")?.append(line);
+    const say = () => {
+      const n = moneyValue(controls[fd.key]), per = PERIODS[controls[next.key].value]?.perYear;
+      line.textContent = n && per ? `That's ${moneySign}${amountText(Math.round(n * per))} a year (${moneySign}${amountText(Math.round(n * per / 12))} a month).` : n && controls[next.key].value === "once" ? "Once, not every month or year." : "";
+    };
+    controls[fd.key].addEventListener("input", say); controls[next.key].addEventListener("change", say); say();
+    f.addEventListener("reset", () => setTimeout(say, 0));   // a reset clears the boxes without an input event: clear the line too
+  });
   f.append(h("div", { class: "form-actions" }, h("button", { type: "submit" }, opts.submitLabel ?? "Save"), opts.onCancel ? button("Cancel", opts.onCancel, { class: "secondary" }) : null));
   return f;
 }
