@@ -15,7 +15,7 @@ const CAR = /car|vehicle|truck|suv|van/i;
 
 /**
  * compute(plan, { today }) -> {
- *   inputs, goal, net (price + sales tax - trade-in), monthsToDate, cashRate, saved, monthly, savedByDate,
+ *   inputs, goal, priceFromGoal (no price typed here: the goal's amount stands in), net (price + sales tax - trade-in), monthsToDate, cashRate, saved, monthly, savedByDate,
  *   cash: { neededMonthly, interestEarned }, finance: { down, loan, payment, totalInterest, totalPaid, months },
  *   rule: { downShare, downOk, termOk, carCostsMonthly, share, shareOk }, verdict ("cash"|"finance"), warnings
  * }
@@ -51,5 +51,5 @@ export function compute(plan, params = {}) {
   const rule = { downShare, downOk: downShare >= RULE.down - 1e-9, termOk: loan <= 0 || x.termMonths <= RULE.months, carCostsMonthly, share, shareOk: share === null ? null : share <= RULE.share };
   const warnings = [];
   if (loan > 0 && x.termMonths > 72) warnings.push("A loan over six years usually means owing more than the car is worth for most of it.");
-  return { inputs: x, goal: g ? { id: g.id, name: g.name } : null, net, monthsToDate: months, cashRate, saved, monthly, savedByDate, cash: { neededMonthly, interestEarned }, finance: { down, loan, payment, totalInterest, totalPaid, months: x.termMonths }, rule, verdict: loan <= 0.5 ? "cash" : "finance", warnings };
+  return { inputs: x, goal: g ? { id: g.id, name: g.name } : null, priceFromGoal: !s.price && !!g, net, monthsToDate: months, cashRate, saved, monthly, savedByDate, cash: { neededMonthly, interestEarned }, finance: { down, loan, payment, totalInterest, totalPaid, months: x.termMonths }, rule, verdict: loan <= 0.5 ? "cash" : "finance", warnings };
 }

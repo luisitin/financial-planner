@@ -4,6 +4,7 @@
 import { pmtToReach, fv, inflate } from "../../../core/math/finance.js";
 import { monthsBetween } from "../../../core/math/dates.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
+import { isHouseGoal } from "../house/compute.js";
 
 export const PRIORITIES = { 1: "Must have", 2: "Want", 3: "Nice to have" };
 export const GOAL_ICONS = ["🎯", "🛟", "🏠", "🚗", "✈️", "🎓", "💍", "👶", "💻", "🛋️", "🐶", "🎁", "🏖️", "💼"];
@@ -89,31 +90,64 @@ export function compute(plan, params = {}) {
 }
 
 // Each kind of goal has a page that works out what it costs; a goal leads to it, and says when that page's figure differs.
+// Travel is tested before House ("Trip home" is a trip); House uses the House page's own test, which turns away a roof,
+// repairs or an office; a car loan, its insurance or repairs are not a car to buy.
+const NOT_A_CAR = /\bloans?\b|pay ?-?off|payoff|insur|repair|registration|mainten|\btires?\b|\bgas\b/i;
 const PLANNERS = [
   { page: "goals/education", label: "Education", test: (g) => g.icon === "🎓" || /college|education|school|tuition|529/i.test(g.name ?? "") },
-  { page: "goals/vehicle", label: "Vehicle", test: (g) => g.icon === "🚗" || /\b(car|vehicle|truck|suv)\b/i.test(g.name ?? "") },
-  { page: "goals/house", label: "House down payment", test: (g) => g.icon === "🏠" || /\b(house|home|down payment)\b/i.test(g.name ?? "") },
+  { page: "goals/vehicle", label: "Vehicle", test: (g) => !NOT_A_CAR.test(g.name ?? "") && (g.icon === "🚗" || /\b(car|vehicle|truck|suv)\b/i.test(g.name ?? "")) },
   { page: "goals/emergency-fund", label: "Emergency fund", test: (g) => g.icon === "🛟" || g.isEmergencyFund || /emergency|rainy day|cushion/i.test(g.name ?? "") },
   { page: "goals/travel", label: "Travel", test: (g) => g.icon === "✈️" || /trip|travel|vacation|holiday/i.test(g.name ?? "") },
+  { page: "goals/house", label: "House down payment", test: (g) => isHouseGoal(g) },
 ];
 export const plannerFor = (g) => PLANNERS.find((x) => x.test(g)) ?? null;
 
 /**
- * plannerFigure(goal, goalRow, page, result) -> { amount, shown?, words, monthly } | null: what the goal's own page (its
- * compute `result`) works out for this goal, as `amount` in today's dollars like the goal's "Amount needed". Education:
- * the child's `totalToday`. Vehicle: price + sales tax - trade-in is in the dollars of the day it is bought, like the
- * goal's amount then (`targetThen`), so amount = target x net / targetThen, and `shown` is the net. Emergency fund: its
- * target (months x must-pay bills). House: the cash to close (down payment, closing costs, reserves). null when the page
- * works out nothing for this goal (another goal, or nothing typed there).
+ * plannerFigure(goal, goalRow, page, result, plan?) -> { amount, shown?, words, monthly } | { amount: null, note } | null:
+ * what the goal's own page (its compute `result`) works out for this goal, in the goal's own dollars (today's when it
+ * grows with inflation, else the dollars of its date). null when the page works out nothing for this goal, or its figure
+ * would not settle: review fixes 2026-11-02 (README "Each goal leads to its page").
+ * - Education: the child's cost for the share chosen there (`totalToday x share`, rounded to $1,000 as Education's own
+ *   Update button rounds it), or the dollars of those years (`total x share`) for a goal that does not grow. Only for a
+ *   goal naming the child, or the 🎓 goal naming no adult (a grown-up's degree is not the child's college).
+ * - Vehicle: only once the Vehicle page has a price of its own; with none it takes the goal's amount and would add sales
+ *   tax to it on every tap. Price + sales tax - trade-in is in the dollars of the day it is bought, so amount = target x
+ *   net / targetThen for a growing goal, the net itself for one that does not grow; `shown` is the net.
+ * - Emergency fund: only for the goal ticked as the emergency fund (otherwise its money never counts there, and a `note`
+ *   says to tick it); the cushion's target less the other cash that counts (`target - (now - funded)`).
+ * - House: the cash to close (down payment, closing costs, reserves).
  */
-export function plannerFigure(g, gr, page, r) {
+export function plannerFigure(g, gr, page, r, plan = null) {
   if (!g || !r) return null;
-  if (page === "goals/education") { const c = (r.children ?? []).find((x) => (x.goal?.id ?? x.goal) === g.id); return c && c.totalToday > 0 ? { amount: c.totalToday, words: "in today's money", monthly: c.neededMonthly ?? null } : null; }
-  if (page === "goals/vehicle") return r.goal?.id === g.id && r.net > 0 && gr?.targetThen > 0 ? { amount: (Number(g.target) || 0) * r.net / gr.targetThen, shown: r.net, words: "with sales tax", monthly: r.cash?.neededMonthly ?? null } : null;
-  if (page === "goals/emergency-fund") return r.goal?.id === g.id && r.target > 0 ? { amount: r.target, words: `for ${r.months} months of must-pay bills`, monthly: null } : null;
+  const grows = g.inflates !== false;
+  if (page === "goals/education") {
+    const c = (r.children ?? []).find((x) => (x.goal?.id ?? x.goal) === g.id);
+    if (!c || !(c.totalToday > 0)) return null;
+    const name = String(g.name ?? "").toLowerCase();
+    const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent" && p.name).map((p) => p.name.toLowerCase());
+    const namesChild = name.includes(String(c.name ?? "").toLowerCase());
+    if (!namesChild && (g.icon !== "🎓" || adults.some((a) => name.includes(a)))) return null;
+    const share = Math.min(1, Math.max(0, Number(c.share ?? 1)));
+    const part = share < 1 ? ` for ${Math.round(share * 100)}% of it` : "";
+    return grows
+      ? { amount: Math.round((c.totalToday * share) / 1000) * 1000, words: `in today's money${part}`, monthly: c.neededMonthly ?? null }
+      : { amount: Math.round(((c.total ?? 0) * share) / 1000) * 1000, words: `in the dollars of those years${part}`, monthly: c.neededMonthly ?? null };
+  }
+  if (page === "goals/vehicle") {
+    if (r.goal?.id !== g.id || !(r.net > 0) || r.priceFromGoal) return null;
+    if (!grows) return { amount: r.net, shown: r.net, words: "with sales tax", monthly: r.cash?.neededMonthly ?? null };
+    return gr?.targetThen > 0 ? { amount: (Number(g.target) || 0) * r.net / gr.targetThen, shown: r.net, words: "with sales tax", monthly: r.cash?.neededMonthly ?? null } : null;
+  }
+  if (page === "goals/emergency-fund") {
+    if (r.goal?.id !== g.id || !(r.target > 0)) return null;
+    if (!r.goal.isEmergencyFund) return { amount: null, note: "Its money counts toward the cushion only once it is ticked as your emergency fund on that page." };
+    const other = Math.max(0, (Number(r.now) || 0) - (Number(gr?.funded) || 0));
+    const amount = Math.max(0, r.target - other);
+    return amount > 0 ? { amount, words: `for ${r.months} months of must-pay bills${other > 0 ? `, less the $${Math.round(other).toLocaleString("en-US")} of other cash that counts` : ""}`, monthly: null } : null;
+  }
   if (page === "goals/house") return r.goal?.id === g.id && r.cash?.total > 0 ? { amount: r.cash.total, words: "down payment, closing and reserves", monthly: r.neededMonthly ?? null } : null;
   return null;
 }
 
 /** The page's figure is worth mentioning when it is 5% or more away from the goal's amount. */
-export const plannerDiffers = (g, f) => !!f && Math.abs(f.amount - (Number(g.target) || 0)) >= 0.05 * Math.max(1, Number(g.target) || 0);
+export const plannerDiffers = (g, f) => !!f && f.amount !== null && f.amount !== undefined && Math.abs(f.amount - (Number(g.target) || 0)) >= 0.05 * Math.max(1, Number(g.target) || 0);

@@ -32,6 +32,20 @@ confirms it. `plannerFigure(goal, row, page, result)` turns the page's result in
 `totalToday`; Vehicle's net (price + sales tax - trade-in, in purchase-day dollars) x target / targetThen; Emergency
 fund's target; House down payment's cash to close. Vehicle and Which goal first? print dates as 3/1/2029, not 2029-03-01.
 
+Review fixes (2026-11-02, 7 of 8 confirmed): a figure is offered only when it settles and fits the goal.
+- Vehicle: only once the Vehicle page has a price of its own (`priceFromGoal`); with none it took the goal's amount and added
+  6% sales tax on every tap ($25,000 became $33,740 after four taps).
+- Emergency fund: only for the goal ticked as the emergency fund (otherwise its money never counts there; a note says to tick
+  it), and the amount is the cushion's target less the other cash that counts, so nothing is saved twice.
+- Education: the share chosen there (`totalToday x share`, rounded to $1,000 like Education's own Update button, so the two
+  buttons no longer undo each other); for a goal that does not grow, the dollars of those years; only for the goal naming
+  the child, or the 🎓 goal naming no adult (Bo's grad school no longer gets Cy's college cost).
+- Names: Travel is tested before House, House uses the House page's own `isHouseGoal` (a roof, repairs or an office are not
+  a home to buy), and a car loan, insurance or repairs are not a car to buy.
+- "Use $X from ..." puts the figure in the form's Amount needed box: Save changes keeps it with anything else typed (it used
+  to save the amount alone and drop the rest). The notice says "in the dollars of its date" for a goal that does not grow.
+- Refuted, not changed: the link's 32 px height and Enter on it (a phone tap opens the page; a near miss opens the form).
+
 ## Edge cases
 No date: needed/projected are null, status "no date". Date in the past and not done: "past due" plus a warning. Linked account deleted: ignored in the sum, warning. Negative target: warning. Rate 0: straight-line saving.
 
