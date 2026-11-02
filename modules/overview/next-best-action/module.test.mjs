@@ -283,3 +283,35 @@ test("paying from savings, review 2026-11-02: one-off income is not cash yet, th
   const dd = compute(d, { today: T });
   assert.ok(dd.ready); const hd = step(dd, "high-debt"); assert.equal(hd.fromSavings ?? 0, 0); assert.doesNotMatch(hd.detail, /full cushion/);
 });
+
+// a freelancer of one: design work $78,000 a year, no paycheck, $16,900 in cash, a $1,800 card (invented)
+const freelancer = (paid) => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-rae", name: "Rae", role: "self", birthDate: "1986-06-15", retirementAge: 65 }], filingStatus: "single", state: "CO" };
+  p.accounts = [{ id: "a-chk", name: "Business checking", type: "checking", balance: 7400, asOf: "2026-11-02", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 9500, asOf: "2026-11-02", history: [] }, { id: "a-card", name: "Card", type: "credit", balance: 1800, asOf: "2026-11-02", history: [] }];
+  p.debts = [{ id: "d-card", accountId: "a-card", rate: 0.229, minPayment: 60, extra: 0 }];
+  p.income = [{ id: "i-fl", name: "Freelance design", type: "business", personId: "p-rae", amount: 6500, period: "monthly", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1900, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 600, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 700, period: "monthly", essential: false }];
+  p.taxes = { ...(p.taxes ?? {}), estimated: { paid }, priorYear: { tax: 11200, agi: 70000 } };   // last year's tax sets the safe amount: $2,800 a quarter
+  return p;
+};
+
+test("a freelancer: this year's tax is kept apart before the cushion, and a past-due estimated payment comes first", () => {
+  const today = "2026-11-02";
+  const d = compute(freelancer([2800, 2800, 2800, 0]), { today });
+  const tax = d.steps.find((s) => s.id === "tax");
+  assert.equal(tax.status, "done"); assert.equal(tax.title, "This year's tax, kept apart");
+  assert.match(tax.detail, /of your cash is federal tax on what you have earned this year/);
+  assert.match(tax.detail, /the next payment is \$2,800 by January 15, 2027/);
+  assert.ok(d.steps.findIndex((s) => s.id === "tax") < d.steps.findIndex((s) => s.id === "starter"));
+  const starter = d.steps.find((s) => s.id === "starter");
+  assert.doesNotMatch(starter.detail, /16,900/, "the cushion is the cash less the tax");
+  // nothing paid since April: paying it is the next move, from the cash kept apart
+  const u = compute(freelancer([0, 0, 0, 0]), { today });
+  assert.equal(u.next.id, "tax"); assert.equal(u.next.title, "Pay the estimated tax that is past due");
+  assert.match(u.next.detail, /past due \(the first part since April 15, 2026\)/);
+  assert.match(u.next.detail, /from the cash kept apart for tax/);
+  assert.equal(u.next.gap, 0); assert.equal(u.next.doneDate, today);
+  // the family (paychecks withhold most of it) gets no tax step
+  assert.equal(compute(familyPlan(today), { today }).steps.some((s) => s.id === "tax"), false);
+});

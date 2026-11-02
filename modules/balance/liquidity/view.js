@@ -110,12 +110,13 @@ export function render(root, ctx) {
       later ? null : ui.h("p", { class: "small" },
         d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of must-pay bills; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
         : `Your usable cash covers ${months(d.runwayMonths)} of the ${d.targetMonths} months the plan aims for. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
+      d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of the cushion. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
       ui.h("p", { class: "muted small" }, "The target is months x your must-pay expenses. Change the months on the Assumptions page; mark expenses as must-pay on the Expenses page."),
     ));
   }
   if (moveCard) root.append(moveCard);
   root.append(ui.card(null, ui.row(
-    ui.stat("Usable today", fmt.money(d.now, cur), d.earmarked ? `${TIERS.now.desc}; ${fmt.money(d.earmarked, cur)} more is set aside for goals` : TIERS.now.desc),
+    ui.stat("Usable today", fmt.money(d.now, cur), [TIERS.now.desc, d.earmarked ? `${fmt.money(d.earmarked, cur)} more is set aside for goals` : null, d.taxOwed > 0.5 ? `${fmt.money(d.taxOwed, cur)} more is this year's tax, not paid yet` : null].filter(Boolean).join("; ")),
     d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of must-pay bills after them` : ""}`) : null,
     d.expenses ? ui.stat("Months of must-pay bills", months(d.runwayMonths), d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
     d.target ? ui.stat("Emergency fund target", fmt.money(d.target, cur), `${d.targetMonths} months of must-pay bills; ${d.gap ? `${fmt.money(d.gap, cur)} to go` : "you have it"}`) : null,

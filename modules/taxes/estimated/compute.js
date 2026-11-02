@@ -77,3 +77,33 @@ export function compute(plan, params = {}) {
   const lateQuarter = quarters.find((q) => q.late) ?? null;
   return { year: fed.year, totalTax, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding };
 }
+
+/**
+ * taxOwedNow(plan, { today }) -> null | { year, owedNow, earnedShare, monthly, totalTax, withholding, paid, overdue, nextDue, atFiling }:
+ * this year's federal tax (self-employment tax included) on what has already been earned and is not yet paid: cash in the
+ * bank that belongs to the IRS, so the cushion and the next move leave it out (round 4, 2026-11-02: a freelancer's $16,900
+ * was counted as five months of cushion while about $6,500 of it was tax on the year's earnings so far).
+ *   earnedShare = whole months gone this year / 12 (November 2 -> 10/12); owedNow = (year's tax - withholding) x earnedShare
+ *   - estimated payments made, floor 0. The months still to come carry their own tax, which every monthly figure already
+ *   takes off (Next best action, Budget, Income statement), so only the part already earned is spoken for.
+ *   monthly = (year's tax - withholding) / 12: what to put aside a month.
+ * Only for a household whose tax is mostly not taken from pay (my choice, noted in the README): there is income from its own
+ * business or freelance work, and withholding covers under half of the year's tax. Someone with a paycheck that withholds
+ * most of it is left alone: their withholding is often estimated from pay, and the Withholding check page is the place for it.
+ * State tax is not in it (the State page has a rate, not payments). Null when estimates are not needed.
+ */
+export function taxOwedNow(plan, params = {}) {
+  const today = params.today ?? null;
+  if (!today || !/^\d{4}-\d{2}/.test(today)) return null;
+  const business = (plan.income ?? []).some((x) => x.type === "business" && Number(x.amount) > 0 && (!x.endDate || String(x.endDate) >= today) && (!x.startDate || String(x.startDate) <= today));
+  if (!business) return null;
+  let e;
+  try { e = compute(plan, params); } catch { return null; }
+  if (!e.needsEstimates || !(e.totalTax > 0) || e.withholding >= e.totalTax / 2) return null;
+  const [y, m] = today.split("-").map(Number);
+  if (y !== e.year) return null;
+  const earnedShare = (m - 1) / 12;
+  const unwithheld = e.totalTax - e.withholding;
+  const owedNow = Math.max(0, unwithheld * earnedShare - e.paid);
+  return { year: e.year, owedNow, earnedShare, monthly: unwithheld / 12, totalTax: e.totalTax, withholding: e.withholding, paid: e.paid, overdue: e.overdue, nextDue: e.nextDue, atFiling: Math.max(0, e.balanceAtFiling) };
+}

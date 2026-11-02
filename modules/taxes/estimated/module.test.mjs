@@ -72,3 +72,43 @@ test("estimated: a quarter's status counts everything paid; a payment made late 
   // the whole year paid: nothing left to warn about
   assert.equal(compute(plan([0, 1278, 0, 0]), { today: "2026-07-20" }).penaltyRisk, false);
 });
+
+// a freelancer of one: design work $78,000 a year, no paycheck, $16,900 in cash, a $1,800 card (invented)
+const freelancer = (paid) => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-rae", name: "Rae", role: "self", birthDate: "1986-06-15", retirementAge: 65 }], filingStatus: "single", state: "CO" };
+  p.accounts = [{ id: "a-chk", name: "Business checking", type: "checking", balance: 7400, asOf: "2026-11-02", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 9500, asOf: "2026-11-02", history: [] }, { id: "a-card", name: "Card", type: "credit", balance: 1800, asOf: "2026-11-02", history: [] }];
+  p.debts = [{ id: "d-card", accountId: "a-card", rate: 0.229, minPayment: 60, extra: 0 }];
+  p.income = [{ id: "i-fl", name: "Freelance design", type: "business", personId: "p-rae", amount: 6500, period: "monthly", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1900, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 600, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 700, period: "monthly", essential: false }];
+  p.taxes = { ...(p.taxes ?? {}), estimated: { paid }, priorYear: { tax: 11200, agi: 70000 } };   // last year's tax sets the safe amount: $2,800 a quarter
+  return p;
+};
+
+test("taxOwedNow: a freelancer's tax on the year's earnings so far, less what is paid; nobody whose pay withholds most of it", async () => {
+  const { taxOwedNow } = await import("./compute.js");
+  const today = "2026-11-02";
+  const plan = freelancer([2800, 2800, 2800, 0]);
+  const e = compute(plan, { today });
+  const t = taxOwedNow(plan, { today });
+  assert.ok(t && e.needsEstimates && e.withholding === 0);
+  assert.equal(t.earnedShare, 10 / 12, "January to October are gone on November 2");
+  assert.ok(Math.abs(t.owedNow - ((e.totalTax - e.withholding) * 10 / 12 - 8400)) < 0.01);
+  assert.ok(Math.abs(t.monthly - (e.totalTax - e.withholding) / 12) < 0.01);
+  assert.equal(t.overdue, null); assert.equal(t.nextDue.due, "2027-01-15");
+  // nothing paid: everything earned so far is owed, and the past quarters are past due
+  const u = taxOwedNow(freelancer([0, 0, 0, 0]), { today });
+  assert.ok(Math.abs(u.owedNow - (e.totalTax - e.withholding) * 10 / 12) < 0.01); assert.ok(u.overdue.amount > 0);
+  // paid ahead of what is earned: nothing owed now, never below zero
+  assert.equal(taxOwedNow(freelancer([9000, 9000, 0, 0]), { today }).owedNow, 0);
+  // a paycheck that withholds most of the tax: left alone (the Withholding check page is the place for it)
+  const w = freelancer([0, 0, 0, 0]); w.income.push({ id: "i-job", name: "Job", type: "salary", personId: "p-rae", amount: 120000, period: "annual", taxable: true });
+  w.taxes.withholding = { self: { perPaycheck: 1100, paychecksPerYear: 26 } };
+  const we = compute(w, { today });
+  if (we.withholding >= we.totalTax / 2) assert.equal(taxOwedNow(w, { today }), null);
+  // no business income, no date, another year: null
+  const nb = freelancer([0, 0, 0, 0]); nb.income[0].type = "salary";
+  assert.equal(taxOwedNow(nb, { today }), null);
+  assert.equal(taxOwedNow(plan, {}), null);
+  const jan = taxOwedNow(plan, { today: "2027-02-01" }); assert.ok(jan === null || (jan.year === 2027 && jan.earnedShare === 1 / 12));
+});

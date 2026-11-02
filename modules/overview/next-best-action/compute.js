@@ -127,6 +127,21 @@ export function compute(plan, params = {}) {
     detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}.`)
       : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}. Trim spending${spare.debtExtra ? ", lower that extra" : ""} or pause a goal first.`, go: ["cashflow", "expenses"] });
 
+  // 0b. a household no paycheck takes tax from (a freelancer): this year's tax on what is already earned is the IRS's money,
+  // so the cushion steps below leave it out (Liquidity's taxOwed, from Estimated payments' taxOwedNow); an estimated payment
+  // past due comes first, before any cushion or debt (round 4, 2026-11-02: the Dashboard said "Pay down the cards first"
+  // while $8,400 of estimated tax was past due)
+  const owed = liq.tax;
+  if (owed && (owed.overdue || liq.taxOwed > 0.5)) {
+    const nextWords = owed.nextDue && owed.nextDue.amount > 0.5 ? `${exact(owed.nextDue.amount)} by ${dayWords(owed.nextDue.due)}` : null;
+    if (owed.overdue) add({ id: "tax", title: "Pay the estimated tax that is past due", why: "A late payment is charged interest for every day it is late; it comes before any saving or extra on debt.", status: "now",
+      // the cash already set apart for tax pays it today; only what the cash cannot cover waits for the money left each month
+      gap: Math.max(0, owed.overdue.amount - liq.taxOwed), doneDate: owed.overdue.amount - liq.taxOwed < 0.5 ? today : null,
+      detail: `${exact(owed.overdue.amount)} of this year's federal tax is past due (the first part since ${dayWords(owed.overdue.due)}). Pay it at irs.gov/payments${owed.overdue.amount - liq.taxOwed < 0.5 ? " from the cash kept apart for tax" : ""}, then type it on Estimated payments.${nextWords ? ` The next payment is ${nextWords}.` : ""}`, go: ["taxes", "estimated"] });
+    else add({ id: "tax", title: "This year's tax, kept apart", why: "No paycheck takes your tax out, so part of what comes in belongs to the IRS.", status: "done", gap: 0,
+      detail: `About ${money(liq.taxOwed)} of your cash is federal tax on what you have earned this year, so the steps below leave it out. Put about ${money(owed.monthly)} a month aside for this tax${nextWords ? `; the next payment is ${nextWords}` : ""}.`, go: ["taxes", "estimated"] });
+  }
+
   // 1. a starter emergency fund: one month of must-pay bills in cash you can use
   const essential = liq.expenses?.essentialMonthly ?? exp.essentialMonthly;
   // under half a dollar short is done: the page shows whole dollars, so typing the amount it asks for must finish the step
@@ -299,6 +314,8 @@ export function compute(plan, params = {}) {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 /** "2028-01-15" -> "January 2028" (pure: no locale). */
+/** "January 15, 2027" from "2027-01-15". */
+export const dayWords = (iso) => (iso ? `${MONTHS[Number(String(iso).slice(5, 7)) - 1]} ${Number(String(iso).slice(8, 10))}, ${String(iso).slice(0, 4)}` : "");
 export const monthWords = (iso) => (iso ? `${MONTHS[Number(String(iso).slice(5, 7)) - 1]} ${String(iso).slice(0, 4)}` : "");
 const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 function pct(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }

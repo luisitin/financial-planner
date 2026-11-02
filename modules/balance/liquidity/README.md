@@ -39,6 +39,9 @@ No accounts: empty state with links. Accounts but no expenses: tiers shown, a no
 ## Enough for now (round 4, 2026-11-02)
 When next-best-action's `cushionLater` is set, the fund card's pill reads "enough for now" (amber), the bar is amber instead of red, the sentence says costly debt comes first and when the plan builds the full months, with an outlined "Open my payoff plan" button. The usual "thin" verdict is unchanged when there is no costly debt, or under one month in cash.
 
+## Tax not yet paid (round 4, 2026-11-02)
+Usable today = cash, checking and savings - what goals claim (`earmarked`) - `taxOwed`, this year's federal tax on what is already earned and not yet paid (Estimated payments' `taxOwedNow`; 0 unless the household pays its tax itself), never more than the cash left. The tile says "$X more is this year's tax, not paid yet" and the fund card says the amount is left out of the cushion, with the next payment linked to Estimated payments. Before, a freelancer with $16,900 in the bank read "5 months covered" while about $6,500 of it was owed in tax.
+
 ## Ideas / not yet
 - Count available credit (cards' limits minus balances) as a separate "backstop" line.
 - Daily cash forecast (phase 4 `cashflow/forecast`) to show the lowest balance in the next 90 days.

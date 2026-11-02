@@ -5,6 +5,7 @@ import { ACCOUNT_TYPES, countedBalance } from "../net-worth/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
+import { taxOwedNow } from "../../taxes/estimated/compute.js";
 
 // How fast each account type turns into spendable cash.
 export const TIERS = {
@@ -16,7 +17,9 @@ const tierOf = (type) => TIERS.now.types.includes(type) ? "now" : TIERS.week.typ
 
 /**
  * compute(plan, { today }) -> {
- *   now, week, later (asset totals per tier), accounts: [{ ...account, tier, tierLabel, typeLabel }] (assets only, largest first),
+ *   now (usable today: cash less what goals claim and less taxOwed), nowAll (all cash), earmarked (what goals claim),
+ *   taxOwed (this year's federal tax on what is earned so far and not paid: taxes/estimated taxOwedNow, 0 unless the household
+ *   pays its tax itself), tax (that answer, or null), week, later (asset totals per tier), accounts: [{ ...account, tier, tierLabel, typeLabel }] (assets only, largest first),
  *   expenses: { monthly, essentialMonthly } | null,
  *   runwayMonths (now / essential monthly), fullRunwayMonths (now / total monthly), targetMonths, target (money),
  *   gap (target - now, 0 when covered), fundedShare (now / target, capped at 1), status: "ok"|"warn"|"bad"|"unknown",
@@ -36,7 +39,12 @@ export function compute(plan, params = {}) {
   // F-034: a goal the owner marked as the emergency fund itself (goals/emergency-fund) is the cushion, not money set aside from it
   for (const g of goals?.goals ?? []) if (!g.isEmergencyFund && (g.fundedBy ?? []).some((id) => nowIds.has(id)) && g.status !== "no amount") earmarked += Math.max(0, Math.min(g.funded - (Number(g.saved) || 0), g.targetThen));
   earmarked = Math.min(earmarked, nowAll);
-  const now = nowAll - earmarked;
+  // this year's federal tax on what has already been earned, not yet paid (Estimated payments' taxOwedNow: a freelancer's
+  // tax, not taken from pay): the IRS's money, so it is not cushion either (round 4, 2026-11-02)
+  let tax = null;
+  try { tax = taxOwedNow(plan, params); } catch { tax = null; }
+  const taxOwed = tax ? Math.min(tax.owedNow, Math.max(0, nowAll - earmarked)) : 0;
+  const now = nowAll - earmarked - taxOwed;
   const ex = (plan.expenses ?? []).length ? computeExpenses(plan, params) : null;
   const expenses = ex ? { monthly: ex.monthly, essentialMonthly: ex.essentialMonthly } : null;
   // F-017: one-time costs and one-time income that are on the books but not in the monthly figures
@@ -55,5 +63,5 @@ export function compute(plan, params = {}) {
   const warnings = [];
   if (accounts.length && !expenses) warnings.push("Add your expenses to see how many months your cash covers.");
   if (expenses && essential === 0) warnings.push("None of your expenses is marked as must-pay, so the emergency-fund target is zero. Mark the bills you cannot skip.");
-  return { now, nowAll, earmarked, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings };
+  return { now, nowAll, earmarked, taxOwed, tax, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings };
 }

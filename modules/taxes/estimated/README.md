@@ -26,6 +26,15 @@ the estimate is "mixed" (the typed figure for one, the Paycheck page's estimate 
 The year's tax includes self-employment tax on business income (`yearTax` in taxes/withholding; Form 2210 counts it), so the
 safe-harbour amount and the quarters do too (2026-11-02).
 
+## Tax owed on what is already earned (`taxOwedNow`, round 4, 2026-11-02)
+For a household that pays its tax itself, part of the cash in the bank is this year's tax on money already earned. `taxOwedNow(plan, { today })` says how much, so Emergency fund and Next best action leave it out of the cushion:
+- earnedShare = whole months gone this year / 12 (on November 2: 10/12).
+- owedNow = (the year's tax, self-employment tax included, - projected withholding) x earnedShare - estimated payments made, never below 0. The months still to come carry their own tax, which every monthly figure (Next best action's left-over month, Budget, Income statement) already takes off.
+- monthly = (the year's tax - withholding) / 12: what to put aside a month.
+- With it: the year, the year's tax, withholding, payments made, `overdue` and `nextDue` (this page's own), and what is left at filing.
+
+My choices (no owner input): it applies only when the plan has income from the household's own business or freelance work that is going today, estimates are needed (this page's `needsEstimates`), and withholding covers under half of the year's tax. A household whose paychecks withhold most of the tax is left to Withholding check, because its withholding is often estimated from pay. Only federal tax counts: the State page has a rate, not payments. In January to April last year's balance is not in it (the plan holds one tax year).
+
 ## Edge cases
 The annualised-income method (uneven income through the year) is not modelled; nor is the penalty itself (it runs like interest from each due date).
 

@@ -126,5 +126,11 @@ Not ready without income and expenses. Spare money below zero: the bills are the
 ## Uneven pay counted carefully (round 4, 2026-11-02)
 `spare.heldGross` is income's `heldMonthly`; `spare.held` is that less the tax set aside from it, worked as the difference between `yearTaxes` on the plan and on the plan with each `countOn` as the amount. `spare.monthly` takes off `held`, so the month equals typing the careful figure as the income, while `federalTax`, `payrollTax` and `stateTax` stay the whole year's, as every tax page says them.
 
+## A household that pays its own tax (round 4, 2026-11-02)
+After the bills, a step `tax` when Liquidity keeps tax out of the cushion (`liq.tax`, Estimated payments' `taxOwedNow`):
+- An estimated payment past due: "Pay the estimated tax that is past due", status now, before any cushion or debt. Its gap is the past-due amount less the cash already kept apart for tax (usually 0: paid today from that cash, `doneDate` today); any rest waits for the money left each month.
+- Otherwise: "This year's tax, kept apart", done, saying how much of the cash is tax, what to put aside a month ((the year's tax - withholding) / 12) and the next payment.
+The cushion steps then use the cash less the tax. Before, the Dashboard said "Pay down the cards first" to a freelancer with $8,400 of estimated tax past due, and the full cushion looked $6,480 closer than it was. `dayWords("2027-01-15")` = "January 15, 2027".
+
 ## Ideas / not yet
 - Per-person match details (the formula, so the step can say "raise to 6%"); state tax; Roth versus traditional by bracket; interest in the debt dates (the payoff engine).

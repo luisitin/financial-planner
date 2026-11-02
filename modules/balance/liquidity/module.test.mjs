@@ -56,3 +56,34 @@ test("no must-pay expenses: target zero, a warning explains", () => {
   assert.equal(d.target, 0); assert.equal(d.runwayMonths, null); assert.equal(d.status, "unknown");
   assert.ok(d.warnings.some((w) => w.includes("must-pay")));
 });
+
+// a freelancer of one: design work $78,000 a year, no paycheck, $16,900 in cash, a $1,800 card (invented)
+const freelancer = (paid) => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-rae", name: "Rae", role: "self", birthDate: "1986-06-15", retirementAge: 65 }], filingStatus: "single", state: "CO" };
+  p.accounts = [{ id: "a-chk", name: "Business checking", type: "checking", balance: 7400, asOf: "2026-11-02", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 9500, asOf: "2026-11-02", history: [] }, { id: "a-card", name: "Card", type: "credit", balance: 1800, asOf: "2026-11-02", history: [] }];
+  p.debts = [{ id: "d-card", accountId: "a-card", rate: 0.229, minPayment: 60, extra: 0 }];
+  p.income = [{ id: "i-fl", name: "Freelance design", type: "business", personId: "p-rae", amount: 6500, period: "monthly", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1900, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 600, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 700, period: "monthly", essential: false }];
+  p.taxes = { ...(p.taxes ?? {}), estimated: { paid }, priorYear: { tax: 11200, agi: 70000 } };   // last year's tax sets the safe amount: $2,800 a quarter
+  return p;
+};
+
+test("usable cash leaves out a freelancer's unpaid tax on the year's earnings (taxOwed)", async () => {
+  const { taxOwedNow } = await import("../../taxes/estimated/compute.js");
+  const today = "2026-11-02";
+  const plan = freelancer([2800, 2800, 2800, 0]);
+  const d = compute(plan, { today });
+  const t = taxOwedNow(plan, { today });
+  assert.equal(d.nowAll, 16900);
+  assert.ok(t.owedNow > 1000);
+  assert.ok(Math.abs(d.taxOwed - t.owedNow) < 0.01);
+  assert.ok(Math.abs(d.now - (16900 - t.owedNow)) < 0.01);
+  assert.ok(Math.abs(d.runwayMonths - d.now / d.expenses.essentialMonthly) < 1e-9, "months of bills from the cash less the tax");
+  // never more than the cash
+  const poor = freelancer([0, 0, 0, 0]); poor.accounts[1].balance = 100;
+  const dp = compute(poor, { today });
+  assert.equal(dp.now, 0); assert.equal(dp.taxOwed, 7500);
+  // without a date (or for a salaried household) nothing changes
+  assert.equal(compute(plan, {}).taxOwed, 0);
+});
