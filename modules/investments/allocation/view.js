@@ -34,7 +34,7 @@ export function render(root, ctx) {
       ui.h("h1", {}, d.verdict === "partial" ? "Add what's in your other accounts first" : `You hold ${pts(d.stockShareActual)} stocks and ${pts(1 - d.stockShareActual)} bonds and cash`),
       ui.h("p", { class: "lede" }, d.verdict === "partial"
         ? `The funds typed so far cover ${pts(d.known)} of the money in your investment accounts, so the mix below is a guess. Add each account's funds on Holdings, and pick a class for any marked unknown.`
-        : `Pick the mix you want and this page will tell you when you drift away from it.${fund ? ` A ${fund.year} target-date fund holds about ${pts(fund.stocks)} stocks;` : ""} your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.`),
+        : `Pick the mix you want and this page will tell you when you drift away from it.${fund ? ` A ${fund.year} target-date fund holds about ${pts(fund.stocks)} stocks; your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.` : ` Your plan's projection assumes ${pts(planC?.stocks ?? 0.7)}.`}`),
       d.verdict === "partial" ? ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Open Holdings")) : null));
     root.append(out);
     if (d.verdict === "pick") {

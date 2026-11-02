@@ -80,7 +80,7 @@ export function compute(plan, params = {}) {
   const known = total > 0 ? total / Math.max(total + unknownValue, investedBalance, total) : 0;
   const verdict = source !== "own" ? "pick" : known < KNOWN_ENOUGH ? "partial" : rows.some((r) => r.flagged) ? "drift" : "ok";
   const notes = [];
-  if (unknownValue > 0) notes.push(`${Math.round(unknownValue).toLocaleString("en-US")} of holdings have no asset class yet and are left out; pick classes on the Holdings page.`);
+  if (unknownValue > 0) notes.push(`$${Math.round(unknownValue).toLocaleString("en-US")} of holdings have no asset class yet and are left out; pick classes on the Holdings page.`);
   if (investedBalance > h.total * 1.05 && h.total > 0) notes.push(`The holdings cover ${Math.round(h.total / investedBalance * 100)}% of the ${Math.round(investedBalance).toLocaleString("en-US")} in your investment accounts (Net worth); the rest is not broken down yet.`);
   return {
     ready: h.hasData && total > 0, total, rows, band, flaggedCount: rows.filter((r) => r.flagged).length, worst,

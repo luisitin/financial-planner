@@ -12,7 +12,7 @@ test("rebalance: runs on the investments fixture and on an empty plan", () => {
 });
 
 test("no trades against a mix nobody chose, and a target-date fund is never sold as one class", async () => {
-  const { held } = await import("../allocation/module.test.mjs");
+  const held = async () => (await import("../../../qa/fixtures/held-plan.mjs")).heldPlan();
   const { compute: allocation } = await import("../allocation/compute.js");
   const p = await held(), T = { today: "2026-11-02" };
   const w = compute(p, T);

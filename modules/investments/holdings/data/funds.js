@@ -113,6 +113,22 @@ export const FUNDS = {
   ARKK:  { name: "ARK Innovation ETF", cls: "us_stocks", er: 0.0075, yield: 0 },
   AOR:   { name: "iShares Core 60/40 Balanced Allocation ETF", cls: "balanced", er: 0.0015, yield: 0.023, mix: { us_stocks: 0.36, intl_stocks: 0.24, bonds: 0.40 } },
   AOA:   { name: "iShares Core 80/20 Aggressive Allocation ETF", cls: "balanced", er: 0.0015, yield: 0.020, mix: { us_stocks: 0.48, intl_stocks: 0.32, bonds: 0.20 } },
+  // Vanguard Target Retirement funds (Investor shares): tickers and years from Vanguard's Target Retirement page,
+  // investor.vanguard.com/investment-products/mutual-funds/target-retirement-funds, checked 2026-11-02. The page gives no
+  // fee or yield, so both are left unknown (null) rather than guessed. The year in the name gives the mix (targetDateMix, the standard
+  // glide); the Income fund, which no longer shifts, gets the glide's end: 30% stocks.
+  VTWNX: { name: "Vanguard Target Retirement 2020 Fund", cls: "balanced", er: null, yield: null },
+  VTTVX: { name: "Vanguard Target Retirement 2025 Fund", cls: "balanced", er: null, yield: null },
+  VTHRX: { name: "Vanguard Target Retirement 2030 Fund", cls: "balanced", er: null, yield: null },
+  VTTHX: { name: "Vanguard Target Retirement 2035 Fund", cls: "balanced", er: null, yield: null },
+  VFORX: { name: "Vanguard Target Retirement 2040 Fund", cls: "balanced", er: null, yield: null },
+  VTIVX: { name: "Vanguard Target Retirement 2045 Fund", cls: "balanced", er: null, yield: null },
+  VFIFX: { name: "Vanguard Target Retirement 2050 Fund", cls: "balanced", er: null, yield: null },
+  VFFVX: { name: "Vanguard Target Retirement 2055 Fund", cls: "balanced", er: null, yield: null },
+  VTTSX: { name: "Vanguard Target Retirement 2060 Fund", cls: "balanced", er: null, yield: null },
+  VLXVX: { name: "Vanguard Target Retirement 2065 Fund", cls: "balanced", er: null, yield: null },
+  VSVNX: { name: "Vanguard Target Retirement 2070 Fund", cls: "balanced", er: null, yield: null },
+  VTINX: { name: "Vanguard Target Retirement Income Fund", cls: "balanced", er: null, yield: null, mix: { us_stocks: 0.18, intl_stocks: 0.12, bonds: 0.70 } },
 };
 
 /** Target-date and lifecycle fund families: the name carries the year; the mix comes from a standard glide. */
