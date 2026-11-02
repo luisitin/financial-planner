@@ -12,7 +12,7 @@ import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-wor
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE } from "../next-best-action/compute.js";
-import { compute as computeProjection, retirementKnown } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, retirementKnown, ssOnIncome } from "../../retirement/projection/compute.js";
 import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
@@ -808,17 +808,18 @@ export const FOCUS_GUIDE = { debt: { title: "Make a plan to pay off what you owe
 /** Is retirement checkable: every adult has a birth date and Social Security (estimated, typed, a record) or said they get
  * none. One rule for every page: it lives in retirement/projection (`retirementKnown`), re-exported here. */
 export { retirementKnown };
-const ssKnown = (ss, said, pid) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none";
+// Social Security already paid and typed on the Income page counts too (retirement/projection `ssOnIncome`)
+const ssKnown = (ss, said, pid, plan = null) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none" || (!!plan && ssOnIncome(plan, pid, null));
 /** The adults with no Social Security figure in the plan who have not said they get none (the retirement pages' notice). */
 export function ssMissingFor(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
-  return adults(plan).filter((p) => !ssKnown(ss, said, p.id));
+  return adults(plan).filter((p) => !ssKnown(ss, said, p.id, plan));
 }
 /** What the retirement check still needs, in plain words: only what is missing (README "Where you stand"). */
 export function retirementMissing(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   const ad = adults(plan);
-  const dates = ad.some((p) => !p.birthDate), soc = ad.some((p) => !ssKnown(ss, said, p.id));
+  const dates = ad.some((p) => !p.birthDate), soc = ad.some((p) => !ssKnown(ss, said, p.id, plan));
   return dates && soc ? "Social Security and birth dates" : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? "Social Security" : null;
 }
 /** Money saved: what is in accounts that are not a home, a car or a debt (for the retiree's "drawn from savings" line). */
@@ -885,7 +886,7 @@ export function standing(plan, { today }) {
   let nba = null, liq = null, proj = null;
   try { nba = computeNext(plan, { today }); } catch { nba = null; }
   try { liq = computeLiquidity(plan, { today }); } catch { liq = null; }
-  const known = retirementKnown(plan);
+  const known = retirementKnown(plan, today);
   if (known) { try { proj = computeProjection(plan, { today }); } catch { proj = null; } }
   const spare = nba?.ready ? nba.spare.monthly : null;
   const runway = liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;

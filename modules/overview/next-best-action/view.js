@@ -45,8 +45,9 @@ export function render(page, ctx) {
   const when = (s) => s.doneDate ? `Done by about ${month(s.doneDate)} at ${money(Math.max(0, d.spare.monthly))} a month.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
-    ui.h("h1", {}, n ? n.title : "Your choice from here"),
-    ui.h("p", { class: "lede" }, n ? n.detail : "Bills covered, cushion full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
+    ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),
+    // retired and drawing as planned: say that, not "the tax-sheltered accounts full"
+    ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${money(-d.spare.monthly)} a month comes from savings, and the plan can carry about ${money(d.drawing.affordableMonthly)} a month of spending: the money lasts. Check it once a year, or after a big fall in the markets.` : "Bills covered, cushion full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
     n && when(n) ? ui.h("p", {}, when(n)) : null,
     n ? ui.row(ui.h("a", { class: "btn", href: `#/${n.go[0]}/${n.go[1]}` }, "Open the page")) : null));
 
@@ -57,10 +58,10 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
     ui.h("ul", { class: "nb-key" },
-      ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, "Pay and other income, before tax"), ui.h("span", {}, money(s.gross))),
+      ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, d.drawing ? "Income before tax" : "Pay and other income, before tax"), ui.h("span", {}, money(s.gross))),
       // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
       parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`))),
-      ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : "Short each month"), ui.h("span", { class: s.monthly < 0 ? "bad" : null }, money(s.monthly)))),
+      ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
     ui.h("p", { class: "muted small" }, "State and local income tax is not counted yet. Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away.")));
 
   // the order

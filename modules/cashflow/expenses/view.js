@@ -28,7 +28,7 @@ export function render(root, ctx) {
   const nba = d.income ? ctx.computeOf("overview/next-best-action", { today: fmt.today() }) : null;
   const leftTile = () => {
     if (!d.income) return null;
-    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? "each month, after tax, bills and saving" : "more goes out than comes in, after tax and saving"); }
+    if (nba?.ready) { const v = nba.spare.monthly; return ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? "each month, after tax, bills and saving" : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving"); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;
@@ -36,6 +36,10 @@ export function render(root, ctx) {
   // must-pays when that is not enough, and the goal saving that could pause; Next best action's first step lands here
   const gapCard = () => {
     if (!(nba?.ready && nba.spare.monthly < 0)) return null;
+    // retired and living on savings as the plan intends: a calm line, not a list of things to cut
+    if (nba.drawing) return ui.h("section", { class: "card" }, ui.h("h2", {}, "Drawn from savings"),
+      ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. That is inside the ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending your plan can carry, and the money lasts.`),
+      ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last? ›")));
     const g = closeGap(d.items, -nba.spare.monthly, { goalSaving: nba.spare.goalSaving });
     const m = (v) => fmt.money(v, cur);
     const open = (id) => { const x = plan.expenses.find((y) => y.id === id); if (!x) return; editing = x; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };

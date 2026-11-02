@@ -12,7 +12,7 @@ import { compute as computeContributions } from "../../retirement/contributions/
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
-import { savingVerdict } from "../../retirement/projection/compute.js";
+import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
 import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -34,6 +34,7 @@ export const HORIZON_MONTHS = 120;
  *             doneDate | null (a gap filled by the spare money), startDate | null (when an ongoing step starts getting money), monthly | null, go,
  *             ask (the match step: [{ personId, name, accounts: [401(k) ids] }] with pay, a 401(k) and nothing going in) }],
  *   next: the first step that is not done (or null)
+ *   drawing: a retired household drawing from savings as planned ({ verdict, spendingMonthly, affordableMonthly }) or null
  * }
  * Steps that do not apply to this household (no 401(k), no HSA) are left out.
  */
@@ -71,8 +72,12 @@ export function compute(plan, params = {}) {
   const steps = [];
   const add = (s) => steps.push({ gap: null, roomYearly: null, doneDate: null, startDate: null, monthly: null, ...s });
 
-  // 0. the bills
-  add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
+  // 0. the bills. A retired household living on its savings as the plan intends is not overspending: it is done
+  let drawing = null;
+  if (spare.monthly < 0) { try { drawing = drawingAsPlanned(plan, { today }); } catch { drawing = null; } }
+  if (drawing) add({ id: "bills", title: "Spend within what the plan can carry", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
+    detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. The plan can carry about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
+  else add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
     detail: spare.monthly >= 0 ? `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings.` : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving. Trim spending or pause a goal first.`, go: ["cashflow", "expenses"] });
 
   // 1. a starter emergency fund: one month of must-pay bills in cash you can use
@@ -159,7 +164,8 @@ export function compute(plan, params = {}) {
 
   // 8. the 401(k) to the limit
   if (k401.length) {
-    const k = (con.byPerson ?? []).map((p) => { const l = p.limits.find((x) => x.kind === "401k"); return l ? { name: p.name, room: Math.max(0, l.limit - l.used), limit: l.limit } : null; }).filter(Boolean);
+    // only someone with pay can put money into a 401(k): a retired household gets no "fill the 401(k)" step
+    const k = (con.byPerson ?? []).filter((p) => earners.some((e) => e.id === p.personId)).map((p) => { const l = p.limits.find((x) => x.kind === "401k"); return l ? { name: p.name, room: Math.max(0, l.limit - l.used), limit: l.limit } : null; }).filter(Boolean);
     const room = k.reduce((s, x) => s + x.room, 0);
     if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: `${optional}Tax-sheltered growth on every dollar the law allows.`, optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
       detail: room > 0 ? `${k.filter((x) => x.room > 0).map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
@@ -197,7 +203,7 @@ export function compute(plan, params = {}) {
   steps.forEach((s, i) => { s.n = i; });
   const next = steps.find((s) => s.status === "now" || s.status === "check") ?? null;
   if (next) for (const s of steps) if (s !== next && s.status === "now") s.status = "later";
-  return { ready: true, missing: [], spare, steps, next };
+  return { ready: true, missing: [], spare, steps, next, drawing };
 }
 
 function pct(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }

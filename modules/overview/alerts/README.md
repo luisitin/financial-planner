@@ -37,6 +37,9 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
 ## Edge cases
 Empty plan: five setup alerts. Complete healthy plan: all clear. No `today`: no date checks.
 
+No "You spend more than comes in" item for a retired household drawing from savings as its plan intends (Next best
+action's `drawing`, 2026-11-02).
+
 ## Tests
 `module.test.mjs`: empty plan, healthy plan all clear, worst-first ordering and links, level assignment, no-today behaviour.
 

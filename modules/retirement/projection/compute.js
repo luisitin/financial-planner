@@ -64,6 +64,32 @@ export function incomePensions(plan, people, pensions, today) {
 }
 
 /**
+ * Social Security already being paid, typed on the Income page (type "social"), for an adult with no figure or record
+ * on the Social Security page: counted from now (or its start date), rising with inflation, so a retiree who typed it
+ * there is not told "Social Security is not counted yet". A Social Security page figure wins, so nothing counts twice.
+ * incomeSocial(plan, people, ssPeople, today) -> [{ name, yearly, personId, startAge, cola, taxable, kind: "social", source: "income" }]
+ */
+export function incomeSocial(plan, people, ssPeople, today) {
+  const out = [];
+  if (!people.length) return out;
+  const nowYear = Number(String(today).slice(0, 4));
+  for (const x of plan.income ?? []) {
+    if (x.type !== "social" || x.period === "once") continue;
+    const yearly = perYear(x.amount, x.period);
+    if (!(yearly > 0)) continue;
+    if (x.endDate && String(x.endDate) < String(today)) continue;
+    const who = people.find((p) => p.id === x.personId) ?? people[0];
+    if ((ssPeople ?? []).some((q) => q.id === who.id && q.yearly > 0)) continue;
+    const startYear = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : nowYear;
+    out.push({ name: String(x.name || `${who.name}'s Social Security`).trim(), yearly, personId: who.id, startAge: startYear - who.birthYear, cola: true, taxable: x.taxable !== false, kind: "social", source: "income" });
+  }
+  return out;
+}
+
+/** An adult whose Social Security is on the Income page (type "social", recurring, not ended). */
+export const ssOnIncome = (plan, id, today) => (plan?.income ?? []).some((x) => x.type === "social" && x.personId === id && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
+
+/**
  * Each adult's share of the pre-tax bucket that has required withdrawals, with their own start age: their own
  * 401(k)s and IRAs (an account with no owner belongs to the first person). Life-insurance cash value sits in
  * the same bucket but belongs to no owner, so it has none.
@@ -109,6 +135,7 @@ export function buildInputs(plan, params = {}) {
   for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: Math.floor(p.claimAge), cola: true, taxable: true, kind: "social" });
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
+  for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
   const retireYear = Math.max(year, people[0].birthYear + people[0].retireAge);
   // a partner who keeps working after the household retires brings their pay in as income
   const inc = (plan.income ?? []).length ? computeIncome(plan, { today }) : null;
@@ -132,7 +159,9 @@ export function buildInputs(plan, params = {}) {
     rothConversion: rt.taxMode === "brackets" && rt.rothConversion?.on ? { fillRate: Number(rt.rothConversion.fillRate ?? 0.22), untilAge: rt.rothConversion.untilAge ? Number(rt.rothConversion.untilAge) : null } : null,
   };
   if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (Contributions page), so nothing is added until retirement.");
-  if (!ss.hasData) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
+  const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
+  if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
+  if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
   return { inputs, missing: [], people, notes, spendingSource, spendingYearly, ssYearly: ss.householdYearly, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
 }
 
@@ -167,17 +196,43 @@ export function compute(plan, params = {}) {
 
 /** Is retirement checkable: every adult has a birth date and Social Security (a figure or a record on Social Security)
  * or said in Get started that they get none. Until then no page calls retirement short or on track. */
-export function retirementKnown(plan) {
+export function retirementKnown(plan, today = null) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = plan?.guide?.setup?.ss ?? {};
   const ad = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent");
-  return ad.length > 0 && ad.every((p) => p.birthDate && (Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0 || said[p.id] === "none"));
+  return ad.length > 0 && ad.every((p) => p.birthDate && (Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0 || said[p.id] === "none" || ssOnIncome(plan, p.id, today)));
 }
 
 /** The plan's own answer to "are we saving enough?" for other pages: this page's verdict once retirement is checkable,
  * else null (Retirement contributions, How am I doing?, Next best action read it, so they never contradict it). */
 export function savingVerdict(plan, params = {}) {
-  if (!retirementKnown(plan)) return null;
+  if (!retirementKnown(plan, params.today ?? null)) return null;
   let d = null;
   try { d = compute(plan, params); } catch { d = null; }
   return d?.ready ? { verdict: d.verdict, shortAge: d.shortAge ?? null, affordable: d.affordable, spendingYearly: d.spendingYearly } : null;
+}
+
+/** Every adult has stopped working: the setup said "retired", or each is past their retirement age with no pay coming in
+ * (salary, bonus or business on the Income page). The working-age rules (spend less than comes in, save 20%) do not apply. */
+export function householdRetired(plan, params = {}) {
+  const today = params.today ?? null;
+  const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent");
+  if (!adults.length || !today) return false;
+  const said = plan?.guide?.setup?.status ?? {};
+  let inc = null;
+  try { inc = computeIncome(plan, { today }); } catch { inc = null; }
+  const paid = (id) => (inc?.active ?? []).some((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type) && (Number(x.yearly) || 0) > 0);
+  const ageNow = (p) => { if (!p.birthDate) return null; const [by, bm, bd] = p.birthDate.split("-").map(Number); const [ty, tm, td] = today.split("-").map(Number); return ty - by - (tm < bm || (tm === bm && td < (bd || 1)) ? 1 : 0); };
+  return adults.every((p) => said[p.id] === "retired" || (!paid(p.id) && ageNow(p) !== null && Number(p.retirementAge) > 0 && ageNow(p) >= Number(p.retirementAge)));
+}
+
+/**
+ * drawingAsPlanned(plan, { today }) -> { verdict, spendingMonthly, affordableMonthly } | null: a retired household living on
+ * its savings as the plan intends (Will the money last? says it lasts: on track or tight). Then drawing from savings each
+ * month is the plan working, not overspending: Next best action, Needs attention and Expenses say so instead of "cut".
+ */
+export function drawingAsPlanned(plan, params = {}) {
+  if (!householdRetired(plan, params)) return null;
+  const v = savingVerdict(plan, params);
+  if (!v || v.verdict === "short") return null;
+  return { verdict: v.verdict, spendingMonthly: v.spendingYearly / 12, affordableMonthly: v.affordable / 12 };
 }

@@ -93,3 +93,54 @@ test("required withdrawals are worked per owner, at each owner's age; cash value
   near(r2043.rmd, r2043.rmdBy[0] + r2043.rmdBy[1], 0.01);
   assert.ok(lee2031 < r2031.balances.deferred / 26.5, "Lee's is worked on her own IRA, not the whole pre-tax bucket");
 });
+
+// a retired couple: pay stopped, a pension, Social Security on the Social Security page, spending above what comes in
+const retired = () => {
+  const p = retirementPlan();
+  for (const x of p.household.people) x.retirementAge = 55;
+  p.income = p.income.filter((x) => !["salary", "bonus", "business"].includes(x.type));
+  p.income.push({ id: "pen", name: "Sam's pension", type: "pension", personId: "sam", amount: 3000, period: "monthly" });
+  p.retirement.contributions = [];
+  return p;
+};
+
+test("round 4: Social Security already paid and typed on the Income page counts, once", async () => {
+  const { incomeSocial, retirementKnown, ssOnIncome } = await import("./compute.js");
+  const T = "2026-11-02";
+  const p = retired(); p.retirement.socialSecurity = {};
+  assert.equal(retirementKnown(p, T), false);
+  p.income.push({ id: "ss1", name: "Sam's Social Security", type: "social", personId: "sam", amount: 2600, period: "monthly" }, { id: "ss2", name: "Lee's Social Security", type: "social", personId: "lee", amount: 1900, period: "monthly" });
+  assert.equal(ssOnIncome(p, "sam", T), true); assert.equal(retirementKnown(p, T), true);
+  const b = buildInputs(p, { today: T });
+  const soc = b.inputs.incomes.filter((x) => x.kind === "social");
+  assert.deepEqual(soc.map((x) => [x.name, x.yearly, x.startAge]), [["Sam's Social Security", 31200, 58], ["Lee's Social Security", 22800, 56]]);
+  // a figure on the Social Security page wins: nothing counts twice
+  p.retirement.socialSecurity = { sam: { claimAge: 67, monthlyAtFRA: 2800 } };
+  const again = buildInputs(p, { today: T }).inputs.incomes.filter((x) => x.kind === "social");
+  assert.equal(again.filter((x) => x.name.startsWith("Sam")).length, 1);
+  assert.equal(incomeSocial(p, b.people, [{ id: "sam", yearly: 33600 }], T).map((x) => x.personId).join(), "lee");
+});
+
+test("round 4: a retired household drawing from savings as the plan intends is told so, not to cut", async () => {
+  const { householdRetired, drawingAsPlanned } = await import("./compute.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { compute: alerts } = await import("../../overview/alerts/compute.js");
+  const { compute: health } = await import("../../overview/health-score/compute.js");
+  const T = { today: "2026-11-02" };
+  const p = retired();
+  assert.equal(householdRetired(p, T), true);
+  const dr = drawingAsPlanned(p, T);
+  assert.ok(dr && dr.affordableMonthly > dr.spendingMonthly, JSON.stringify(dr));
+  const n = next(p, T);
+  assert.ok(n.spare.monthly < 0); assert.ok(n.drawing);
+  const bills = n.steps.find((s) => s.id === "bills");
+  assert.equal(bills.status, "done"); assert.equal(bills.title, "Spend within what the plan can carry");
+  assert.ok(!n.steps.some((s) => s.id === "max-401k"), "nobody has pay to put in a 401(k)");
+  assert.ok(!alerts(p, T).alerts.some((a) => a.id === "overspend"));
+  const sv = health(p, T).parts.find((x) => x.id === "saving");
+  assert.equal(sv.points, sv.max);
+  // still working: the usual rule
+  const w = retirementPlan(); w.expenses.push({ id: "boat", name: "Boat", category: "fun", amount: 9000, period: "monthly", essential: false });
+  assert.equal(householdRetired(w, T), false); assert.equal(next(w, T).drawing, null);
+  assert.ok(alerts(w, T).alerts.some((a) => a.id === "overspend"));
+});

@@ -25,6 +25,9 @@ Plan sections read (`needs`): `expenses`, `income` (for "left over"), `household
 ## Edge cases
 No income entered: the income comparison is hidden (null), never shown as 100% savings. Spending above income: a warning sentence. Unknown category: "Other". Amount 0 or missing: warning. End before start: warning.
 
+Retired and drawing from savings as the plan intends (Next best action's `drawing`): the stat reads "From savings ... as your
+retirement plan intends" and a calm "Drawn from savings" card replaces Close the gap (2026-11-02).
+
 ## Tests
 `module.test.mjs`: totals and split, category shares and override of the essential default, income comparison and shortfall warning, upcoming/ended/one-off handling.
 

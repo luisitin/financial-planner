@@ -21,6 +21,10 @@ Through other pages' computes: Emergency fund (`balance/liquidity`), Next best a
 | The plan knows enough | 10 | seven things filled in and current: adults' birth dates, accounts, balances within 90 days, income and expenses, Social Security for every adult, retirement spending, assumptions looked over in the last year | share present |
 Bands (`BANDS`): Strong from 85, Good from 70, Fair from 50, Needs work below. A part the plan cannot judge yet scores 0 ("unknown") and says what to add.
 
+Retired households (2026-11-02): the saving part gets full marks when Next best action says the household draws from
+savings as its plan intends (the 20% rule is for working years), "what you will spend in retirement" counts as known for a
+retired household, and Social Security typed on the Income page counts as a figure.
+
 ## Tests
 `module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
 

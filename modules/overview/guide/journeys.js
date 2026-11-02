@@ -40,7 +40,8 @@ const setup = (key) => (p) => setupSteps(p).steps.find((s) => s.key === key)?.do
 export const emergencyGoal = (p) => L(p, "goals").some((g) => g.isEmergencyFund || g.icon === "🛟" || /emergency|rainy ?day|cushion/i.test(g.name ?? ""));
 /** A goal saving to buy a home, by the same test Home affordability uses to find it (goals/house isHouseGoal: a down payment, the 🏠 icon or a home to buy; never repairs, paying it off or a trip home), so the page and the step always agree. */
 export const houseGoal = (p) => L(p, "goals").some(isHouseGoal);
-const socialSecurity = (p) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0);
+// Social Security already paid and typed on the Income page counts as saved too
+const socialSecurity = (p) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0) || (p?.income ?? []).some((x) => x.type === "social" && x.period !== "once" && Number(x.amount) > 0);
 /** A paycheck figure for either earner on Withholding check (it has a line for each adult). */
 const paycheckTax = (p) => ["self", "partner"].some((k) => Number(p?.taxes?.withholding?.[k]?.perPaycheck) > 0);
 /** Consolidation has something to compare: two or more cards or loans it can roll together (not a mortgage or student loan), one at 10% or more (its own default pick). */

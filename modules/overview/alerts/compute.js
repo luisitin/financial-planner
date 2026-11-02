@@ -73,7 +73,8 @@ export function compute(plan, params = {}) {
   // tax cannot be worked out yet
   const nba = exp.leftOver !== null ? nextBest(plan, p) : null;
   const short = nba?.ready ? -nba.spare.monthly : exp.leftOver !== null ? -exp.leftOver : 0;
-  if (short > 0) add("overspend", "bad", "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
+  // a retired household drawing from savings as the plan intends is not overspending (Next best action's `drawing`)
+  if (short > 0 && !nba?.drawing) add("overspend", "bad", "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
   // a likely bill in April: the year's federal tax against what the paychecks take out by December (typed, else estimated
   // from pay) and what is already paid, the same answer as Withholding check; flagged from $1,000 left to pay
   let tax = null;

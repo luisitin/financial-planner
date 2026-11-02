@@ -48,6 +48,18 @@ best action "max out the IRA and the 401(k)". Now Retirement contributions says 
 I doing? reads its two rules of thumb against it, and Next best action marks the IRA and 401(k) steps optional when the
 plan already lasts.
 
+## Retired households (2026-11-02, experience round 4)
+- `incomeSocial(plan, people, ssPeople, today)`: Social Security already paid and typed on the Income page (type
+  "social", recurring, not ended) counts as Social Security, from now (or its start date), rising with inflation, for an
+  adult with no figure or record on the Social Security page (a figure there wins: nothing counts twice). A note names it.
+  `ssOnIncome(plan, id, today)` makes `retirementKnown` (and the setup's `ssKnown`, the health score, the retirement guide)
+  count it, so a retiree who typed it there is not told "Social Security is not counted yet" and the Dashboard stops
+  asking for it.
+- `householdRetired(plan, { today })`: every adult said "retired" in the setup, or is past their retirement age with no
+  salary, bonus or business income. `drawingAsPlanned(plan, { today })` -> `{ verdict, spendingMonthly, affordableMonthly }`
+  when such a household's plan lasts (on track or tight): drawing from savings each month is the plan working. Next best
+  action, Needs attention, Expenses and the health score read it instead of "spend less than comes in".
+
 ## Edge cases
 No adult with a birth date, no accounts, or no spending figure: the page lists what is missing and still shows the settings. Already retired: retirement year = this year. A partner retiring after the primary: their pay counts as income until then.
 

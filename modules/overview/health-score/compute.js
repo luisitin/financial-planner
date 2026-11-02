@@ -5,7 +5,7 @@
 // what it would take to earn the points it is missing.
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
-import { compute as computeProjection } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, householdRetired, ssOnIncome } from "../../retirement/projection/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
@@ -49,6 +49,8 @@ export function compute(plan, params = {}) {
   // 2. saving: retirement, goals and what is left over, as a share of income after tax
   const nb = computeNext(plan, { today });
   if (!nb.ready) add("saving", "Saving each month", null, "Income and expenses are needed to see how much of each month is saved.", "Fill in the Income and Expenses pages.", ["cashflow", "income"]);
+  // retired and drawing from savings as the plan intends: the saving rule is for working years, so full marks
+  else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can carry (${money(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
   else {
     const s = nb.spare, afterTax = s.gross - s.federalTax - s.payrollTax;
     const saved = s.retirementSaving + s.goalSaving + s.monthly;
@@ -100,8 +102,9 @@ export function compute(plan, params = {}) {
     ["accounts", (plan.accounts ?? []).length > 0],
     ["balances updated in the last 90 days", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
     ["income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
-    ["a Social Security figure for every adult", people.length > 0 && people.every((p) => ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length))],
-    ["what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0],
+    ["a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
+    // retired: what they spend now is what they spend in retirement (the setup does not ask it)
+    ["what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
     ["assumptions looked over in the last year", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
   ];
   const have = checks.filter((c) => c[1]);

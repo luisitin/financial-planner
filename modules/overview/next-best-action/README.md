@@ -37,6 +37,11 @@ The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bog
 
 Payroll tax (`FICA`): Social Security 6.2% of pay up to the year's wage base and Medicare 1.45% (IRC §3101), self-employment 15.3% of 92.35% of profit (§1401-1402). State and local income tax is not counted yet.
 
+   Retired households (2026-11-02): when `drawingAsPlanned` (retirement/projection) says a retired household lives on its
+   savings as the plan intends, step 0 is done, "Spend within what the plan can carry" ("About $4,180 a month comes from
+   savings, as planned..."), the result carries `drawing`, and the money card says "From savings each month, as planned"
+   (not a red "Short"). The 401(k) step counts only adults with pay: a retired household gets no "fill the 401(k)".
+
 ## The match step's question (2026-11-02)
 A 401(k) marked `formerJob` (from a job left) takes no new money, and a person whose job has no plan or no match
 (`retirement.workPlans[id].match === false`) has nothing to check, so neither makes the match step "check". The step lists
