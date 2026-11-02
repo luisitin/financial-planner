@@ -36,6 +36,9 @@ Reads (through the other pages' computes, so every date matches theirs): `househ
 ## Edge cases
 No adult with a birth date, or no `today`: not ready, says what is missing. No accounts or spending: the people moments still show; a note says what unlocks the money moments. Already retired, on Medicare, claiming: those moments are in the past and left out. Debts without a rate or payment: named in a note. One debt: no separate "debt-free". A person's accounts are theirs by `ownerId`; an account with no owner belongs to the first person (as everywhere in the retirement pages).
 
+Before Social Security is known (`retirementKnown`, 2026-11-02): no red "The savings run out" and no "The money lasts";
+one neutral end event, "Whether the money lasts: not worked out yet", links to Social Security.
+
 ## Tests
 `module.test.mjs` on `qa/fixtures/family-plan.mjs` (Ana, Bo and Cy, made whole for Phase 9) and `retirement-plan.mjs`: every dated moment, the order of debts and goals, sorting, quiet years and ages, milestones, independence, a plan that runs short, people already retired, a plan with no savings.
 

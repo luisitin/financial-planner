@@ -9,7 +9,7 @@ import { project } from "../../../core/math/retirement.js";
 import { rmdStartAge, rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { compute as computePeople } from "../../household/people/compute.js";
-import { buildInputs } from "../../retirement/projection/compute.js";
+import { buildInputs, retirementKnown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -191,7 +191,10 @@ export function compute(plan, params = {}) {
     }
     const peak = rows.reduce((a, r) => (r.totalReal > a.totalReal ? r : a), rows[0]);
     if (peak.year > startYear && peak.year < rows[rows.length - 1].year) add({ id: "peak", kind: "peak", year: peak.year, title: "Savings peak", detail: `About ${money(peak.totalReal)} in today's dollars. From here the plan spends more than it earns, as it should in retirement.`, go: ["retirement", "cash-flow"] });
-    if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${self.name || "you"} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
+    // the money running out or lasting is said only once Social Security is known (projection's retirementKnown, the
+    // Dashboard's rule): without it the path leaves Social Security out and ran short (round 4, 2026-11-02)
+    if (!retirementKnown(plan, today)) add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: "Not worked out yet: it needs Social Security for each adult (an estimate from ssa.gov/myaccount is enough), or word that you will not get it.", go: ["retirement", "social-security"] });
+    else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${self.name || "you"} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
   }
 

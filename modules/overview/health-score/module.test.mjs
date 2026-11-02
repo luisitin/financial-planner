@@ -39,3 +39,30 @@ test("improving the plan raises the score: a full cushion and reviewed assumptio
   assert.equal(part(d, "cushion").points, 15); assert.equal(part(d, "knows").points, 10);
   assert.ok(d.score > before + 10, `${before} -> ${d.score}`);
 });
+
+test("no retirement verdict before Social Security is known: not scored, the top fix is to add it; Quick answers and the Timeline say nothing either way (round 4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { answerFor } = await import("../quick/compute.js");
+  const { compute: timeline } = await import("../timeline/compute.js");
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  p.retirement.socialSecurity = {};
+  const d = compute(p, { today: T });
+  const r = d.parts.find((x) => x.id === "retirement"), pr = d.parts.find((x) => x.id === "protection");
+  assert.equal(r.status, "unknown"); assert.equal(r.points, 0); assert.match(r.detail, /^Not scored yet/); assert.doesNotMatch(r.detail, /runs out/);
+  assert.match(r.fix, /Add Social Security for each adult/); assert.deepEqual(r.go, ["retirement", "social-security"]);
+  assert.equal(pr.status, "unknown");
+  assert.equal(d.gains[0].id, "retirement", "the biggest gain is adding Social Security, not spending less");
+  assert.equal(answerFor("retire", p, { today: T }), null);
+  const tl = timeline(p, { today: T });
+  assert.ok(!tl.events.some((e) => e.id === "short" || e.id === "lasts")); assert.ok(tl.events.some((e) => e.id === "needs-ss"));
+  // said as "none" for both, it is judged again
+  p.guide = { setup: { ss: { "p-ana": "none", "p-bo": "none" } } };
+  assert.notEqual(compute(p, { today: T }).parts.find((x) => x.id === "retirement").status, "unknown");
+  // one adult: "An IRA of your own", not "for each of you"
+  const one = familyPlan(T);
+  one.household.people = one.household.people.filter((x) => x.id !== "p-bo");
+  one.income = one.income.filter((x) => x.personId !== "p-bo");
+  assert.equal(next(one, { today: T }).steps.find((s) => s.id === "ira")?.title, "An IRA of your own");
+});

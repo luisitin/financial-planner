@@ -55,6 +55,9 @@ GOV.UK start pages and NN/g on task-based navigation (pick by what you want done
 calculator hubs (a question per row, not a tool name). Research notes: the build session's `competitors.md` and
 `guidance.md` (not in the repo).
 
+No retirement answer before Social Security is known (`retirementKnown`, 2026-11-02): `answerFor("retire")` is null
+and the guide's own line shows, as the Dashboard says "Needs Social Security".
+
 ## Tests
 `module.test.mjs`: at most 8 rows to start with, no page twice, titles are questions; every row is a usable page that
 answers on an empty plan and writes only `ALLOWED_WRITES`; the guide rows name real guides; `quickHref`, `questionFor`,

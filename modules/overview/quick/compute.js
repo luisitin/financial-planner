@@ -6,7 +6,7 @@
 //   line     one sentence: what the answer holds
 //   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
-import { compute as projection } from "../../retirement/projection/compute.js";
+import { compute as projection, retirementKnown } from "../../retirement/projection/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -48,6 +48,8 @@ export function answerFor(guide, plan, params = {}) {
   const cur = plan.meta?.currency ?? "USD";
   const m = (n) => fmtMoney(n, cur);
   if (guide === "retire") {
+    // no verdict before Social Security is known for each adult (the Dashboard's rule): the guide's own line shows instead
+    if (!retirementKnown(plan, params.today ?? null)) return null;
     const d = projection(plan, params);
     if (!d.ready || !d.verdict) return null;
     return {

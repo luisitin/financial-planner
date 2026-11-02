@@ -30,6 +30,11 @@ Retired households (2026-11-02): the saving part gets full marks when Next best 
 savings as its plan intends (the 20% rule is for working years), "what you will spend in retirement" counts as known for a
 retired household, and Social Security typed on the Income page counts as a figure.
 
+Not scored before Social Security (round 4, 2026-11-02): the retirement and protection parts are "unknown" (0 points,
+fix "Add Social Security for each adult...") until projection's `retirementKnown` holds, the Dashboard's rule. Before,
+the plan ran without Social Security and the score said "runs out in 2067" and that full marks needed about $3,040 a
+month less spending; now the biggest gain is adding Social Security.
+
 ## Tests
 `module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
 

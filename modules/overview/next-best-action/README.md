@@ -88,6 +88,8 @@ changed nothing and the step asked for the same money again (round-4 finding).
   counts the extra as saving (paying down debt adds to what you are worth as surely), so saving the plan never lowers the
   score; Expenses' Close-the-gap card says lowering the extra is a way out when it tips the month over.
 
+The IRA step reads "An IRA of your own" for a household with one earner ("for each of you" only with two or more), 2026-11-02.
+
 ## The dates
 The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money. A saved debt plan's extra joins the spare money from the month its last debt is gone (`debtPlan.months`), and a date reached with it says "with the $410 a month that frees up after July 2027". Interest on the debts and next year's new limits are left out, so the dates are about right.
 
