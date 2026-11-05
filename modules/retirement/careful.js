@@ -5,7 +5,10 @@
 // it is connected (the page stays free), else on this device a slice at a time between frames, so taps and scrolling never
 // wait for it (round 5, 2026-11-02: the page froze for about a second).
 import { buildInputs } from "./projection/compute.js";
-import { carefulSteps } from "./monte-carlo/compute.js";
+import { api } from "../../core/api.js";
+import { carefulSteps, CAREFUL_CHANCE } from "./monte-carlo/compute.js";
+
+export { CAREFUL_CHANCE };
 
 /** fn() once the page has been painted: after the next frame, not before it. */
 export function afterPaint(fn) {
@@ -24,9 +27,14 @@ export function whenWorked(ctx, el, { remote, pick = (x) => x, steps }, done) {
   afterPaint(() => {
     if (!alive()) return;
     if (remote && ctx.store.backend?.() === "server") {
-      ctx.computeRemote(remote[0], remote[1]).then((out) => { if (alive()) done(pick(out) ?? null); }, () => { if (alive()) done(null); });
+      // ask the PC directly: computeRemote's own fallback works it out here in one block, which froze the page when the PC
+      // did not answer (review 2026-11-05); on a failure the slices below run instead
+      api.compute(remote[0], remote[1], ctx.store.get()).then((out) => { if (alive()) done(pick(out) ?? null); }, () => { if (alive()) local(); });
       return;
     }
+    local();
+  });
+  function local() {
     let it;
     try { it = steps(); if (!it) { done(null); return; } } catch (e) { console.warn("[planner] careful answer", e); done(null); return; }
     const slice = () => {
@@ -37,7 +45,7 @@ export function whenWorked(ctx, el, { remote, pick = (x) => x, steps }, done) {
       if (r.done) done(r.value ?? null); else setTimeout(slice, 0);
     };
     slice();
-  });
+  }
 }
 
 /**
@@ -58,4 +66,7 @@ export function whenCareful(ctx, el, done, { legacy = 0 } = {}) {
 export const monthlyOf = (yearly) => Math.floor(yearly / 1200) * 100;
 
 /** A soft grey bar as wide as the text that will take its place (`like`, its expected length), for an answer still being worked out. */
+/** Words a screen reader says while an answer is being worked out (the grey bars are hidden from it). */
+export const busyWords = (ui, text) => ui.h("span", { style: { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } }, text);
+
 export const slot = (ui, like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });

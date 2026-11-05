@@ -67,10 +67,11 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less."),
       ui.h("div", { class: "grid" }, d.levers.map((l) => {
         const [tone, label] = PILL[l.status];
+        let pillEl = null;
         return ui.h("div", { class: "card flat gs-lever", style: { margin: "0" } },
-          ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), ui.h("span", { class: `pill ${tone}` }, label)),
+          ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), pillEl = ui.h("span", { class: `pill ${tone}` }, label)),
           l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
-          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money) : null,
+          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, d.spendingMonthly, pillEl) : null,
           ui.h("div", { class: "gs-s" }, l.sentence),
           l.id === "claim" && l.results?.length ? claimBars(ui, l, money) : null,
           ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, "Open the page")));
@@ -87,12 +88,20 @@ export function render(page, ctx) {
 }
 
 /** "In 9 of 10 markets: about $7,500 a month": drawn with "..." first (the same line, so nothing moves), filled after the first
- * paint with Monte Carlo's careful figure for the same goal (careful.js); gone when nothing lasts in 9 of 10 markets. */
-function carefulLine(ctx, legacy, money) {
+ * paint with Monte Carlo's careful figure for the same goal (careful.js); gone when nothing lasts in 9 of 10 markets. Below the
+ * plan's own spending it says by how much, and a green "room to spare" over it turns amber (review 2026-11-05: the pill read
+ * "room to spare" right above a careful figure lower than the plan spends). */
+function carefulLine(ctx, legacy, money, planned, pill) {
   const { ui } = ctx;
-  const words = (v) => [ui.h("strong", {}, "In 9 of 10 markets:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}`];
+  const words = (v, less = 0) => [ui.h("strong", {}, "In 9 of 10 markets:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `: ${money(less)} less than the ${money(planned)} the plan spends` : ""}`];
   const el = ui.h("div", { class: "gs-s", "aria-live": "polite" }, ...words("..."));
-  whenCareful(ctx, el, (c) => { if (!c || !(c.yearly >= 1200)) el.remove(); else el.replaceChildren(...words(money(monthlyOf(c.yearly)))); }, { legacy });
+  whenCareful(ctx, el, (c) => {
+    if (!c || !(c.yearly >= 1200)) { el.remove(); return; }
+    const m = monthlyOf(c.yearly);
+    const less = Math.round((planned - m) / 10) * 10;
+    el.replaceChildren(...words(money(m), less));
+    if (less > 0 && pill?.classList.contains("ok")) { pill.className = "pill warn"; pill.textContent = "tight"; }
+  }, { legacy });
   return el;
 }
 

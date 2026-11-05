@@ -47,3 +47,8 @@ The retire lever's age is the average-market one too and says so ("If markets do
 before the plan's 65"); Financial independence leads with the age that lasts in 9 of 10 markets. "Years before" is counted by
 the year they stop (`yearsSooner`): someone 64 today who turns the planned 65 in December stops in 2026 either way, so the
 lever reads "This year, as planned." at the planned age instead of "1 year before" (review 2026-11-02).
+
+## The spending lever and the careful figure (review 2026-11-05)
+When the spending that lasts in 9 of 10 markets is below what the plan spends, the careful line says by how much ("$500 less
+than the $8,000 the plan spends") and a green "room to spare" pill turns amber "tight": the average-market figure above it
+alone read as room the plan does not have in a bad run of years.

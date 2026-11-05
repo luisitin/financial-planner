@@ -48,7 +48,8 @@ export function render(root, ctx) {
       bits.push(`The law still requires about ${money(fy.required)} out of ${dfr ? from(dfr) : KIND.deferred}${fy.taxes >= 0.5 ? `; after about ${money(fy.taxes)} of tax on it` : ""}, what you do not spend can go into ${back.length ? list(back) : "a savings or investment account"}.`);
     } else {
       const [a, b2] = fy.buckets;
-      bits.push(`${when}, take about ${money(fy.fromSavings)} from savings, starting with ${from(a)}${b2 ? `, then ${from(b2)}` : ""}.`);
+      // no account has anything left to take from (the money is already gone): say so instead of naming none (review 2026-11-05: crashed)
+      bits.push(a ? `${when}, take about ${money(fy.fromSavings)} from savings, starting with ${from(a)}${b2 ? `, then ${from(b2)}` : ""}.` : `${when}, about ${money(fy.fromSavings)} would have to come from savings, and there is none left to take it from.`);
       bits.push(`${fy.income >= 0.5 ? `With about ${money(fy.income)} of ${src}, that` : "That"} pays for the ${money(fy.spending)} you plan to spend${fy.taxes >= 0.5 ? ` and about ${money(fy.taxes)} of tax` : ""}.`);
     }
     // the careful figure (lasts in 9 of 10 markets) fills in below once worked out; the average-market one is the fallback

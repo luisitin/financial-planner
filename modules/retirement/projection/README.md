@@ -119,3 +119,12 @@ only (`PAY_TYPES`). They start at retirement because before it the plan's saving
 those years changes nothing but, in the brackets setting, a tax taken from savings: see monte-carlo's README, "Zero").
 No frozen answer key has rent or dividends (`tests/golden` plans hold salaries only), so every key passes as it was.
 Not yet: dividends from an account already in the plan are also inside that account's growth (counted twice).
+
+## One verdict word (review 2026-11-05)
+The headline stays the average-market verdict ("The money lasts" / "It lasts, just" / "Runs out in ...") that the Dashboard,
+Quick answers, Timeline and Goal seek also show; it no longer changes to "It lasts, just" after the careful figure arrives
+(that fired for withdrawal rules that never run out, and made this page disagree with every other one). When the planned
+spending lasts in fewer than 9 of 10 markets, the careful line says so with an amber "fewer than 9 in 10" pill, its share
+rounded down (89.8% never reads "90%"). With nothing lasting even at $0 there is no careful search and no placeholder; the
+average figure is named as such from the start. When the PC does not answer, the search runs here in slices (careful.js),
+never in one block; a screen reader hears "Working out ..." while the grey bars stand in for the figures.

@@ -4,7 +4,7 @@ import { compute } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, monthlyOf } from "../careful.js";
+import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords } from "../careful.js";
 
 /** The withdrawal rules other than steady spending, in plain words, for the careful line. */
 const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "steady spending cut by a tenth after a bad stretch and raised by a tenth after a good one", vpw: "spending what the years left can afford" };
@@ -39,24 +39,29 @@ export function render(root, ctx) {
   // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
   // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
   const steady = d.strategy === "fixed-real";
-  const careWords = (y, mo, share) => steady
-    ? ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month). At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of them (", ui.h("a", { href: "#/retirement/monte-carlo" }, "Chance the money lasts"), ")."]
+  // under 9 in 10 at the planned spending: said here, in amber, next to the figure (one verdict word on every page: the headline
+  // above stays the average-market verdict that the Dashboard, Quick answers, Timeline and Goal seek also show; review 2026-11-05)
+  const fewer = (share) => (share !== null && share < CAREFUL_CHANCE ? ui.h("span", { class: "pill warn" }, "fewer than 9 in 10") : null);
+  const careWords = (y, mo, share, shareN = null) => steady
+    ? ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month). At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of them (", ui.h("a", { href: "#/retirement/monte-carlo" }, "Chance the money lasts"), ").", fewer(shareN)]
     : ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month), spent the same every year. Your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."];
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
-  const careLine = ui.h("p", { "aria-live": "polite", style: { color: "var(--muted)" } }, ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
+  // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
+  const noCare = !(d.affordable >= 1);
+  const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts in 9 of 10 markets. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
   const careSub = `a year, today's dollars; ${money(d.affordable)} if markets do as well as average`;
-  const careStat = ui.h("div", { style: { display: "contents" } }, ui.stat("Spending that lasts in 9 of 10 markets", "...", careSub));
+  const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can carry", money(d.affordable), "a year, today's dollars, if markets do as well as average") : ui.stat("Spending that lasts in 9 of 10 markets", "...", careSub));
   const headline = ui.h("h1", {}, d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`);
-  whenCareful(ctx, careLine, (c) => {
+  if (!noCare) whenCareful(ctx, careLine, (c) => {
     // nothing worked out, or nothing lasts in 9 of 10 markets even at $0: no careful line, the average figure named as such
     if (!c || !(c.yearly > 0)) { careLine.remove(); careStat.replaceChildren(ui.stat("Spending it can carry", money(d.affordable), "a year, today's dollars, if markets do as well as average")); return; }
     careLine.style.minHeight = `${careLine.offsetHeight}px`;   // never shorter than the placeholder it replaces
     careLine.style.color = "";
-    careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly)), `${Math.round(c.planned * 100)}%`));
+    careLine.removeAttribute("aria-busy");
+    // the share rounded down, so a figure just under 9 in 10 never reads "90%" (review 2026-11-05)
+    careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly)), `${Math.floor(c.planned * 100)}%`, c.planned).filter((x) => x !== null));   // replaceChildren writes a null as the text "null"
     careStat.replaceChildren(ui.stat("Spending that lasts in 9 of 10 markets", money(c.yearly), careSub));
-    // "The money lasts" over a line saying the planned spending lasts in fewer than 9 of 10 markets read as a contradiction
-    if (d.verdict === "on track" && c.yearly < d.spendingYearly) headline.textContent = "It lasts, just";
   });
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
