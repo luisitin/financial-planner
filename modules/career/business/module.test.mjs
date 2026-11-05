@@ -209,3 +209,23 @@ test("not ready without a business, but expenses typed first are kept; the Incom
   const s = compute(p, { today: TODAY });
   near(s.profit, 4200); assert.equal(s.expenses[0].fromSelfEmployment, true); assert.equal(s.seExpenses, 3000);
 });
+
+test("the business chosen stays chosen after a raise from a later date starts the line that carries it on (review 2026-11-02, round 5)", async () => {
+  const { changeFrom } = await import("../../cashflow/income/compute.js");
+  const T = "2026-11-02";
+  // two businesses; the smaller one is picked on this page, then raised on Income from January (still the smaller)
+  const p = withBiz({ incomeId: "i-wk" }, (q) => { q.income.push({ id: "i-wk", name: "Weekend workshops", type: "business", personId: "p-bo", amount: 300, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true }); });
+  const was = p.income.find((x) => x.id === "i-wk");
+  const ch = changeFrom(was, { ...was, amount: 400, startDate: "2027-01-01" }, T);
+  const i = p.income.indexOf(was);
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: "i-wk-2027", ...ch.next });
+  assert.deepEqual([compute(p, { today: T }).incomeId, compute(p, { today: T }).name], ["i-wk", "Weekend workshops"]);
+  const later = compute(p, { today: "2027-02-01" });
+  assert.deepEqual([later.incomeId, later.name, later.revenue], ["i-wk-2027", "Weekend workshops", 4800], "not the larger photography business");
+  // still once the half that ended is removed on Income
+  p.income = p.income.filter((x) => x.id !== "i-wk");
+  assert.equal(compute(p, { today: "2027-02-01" }).incomeId, "i-wk-2027");
+  // a choice with nothing carrying it on still falls back to the largest business
+  p.whatIfs.business.incomeId = "gone";
+  assert.equal(compute(p, { today: "2027-02-01" }).incomeId, "i-side");
+});

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, CATEGORIES, closeGap } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
+import * as fmt from "../../../core/format.js";
 
 const TODAY = "2026-09-15";
 const near = (a, b) => assert.ok(Math.abs(a - b) < 0.005, `${a} != ${b}`);
@@ -194,4 +195,62 @@ test("a loan paid off costs nothing: no payment on Debts, its listed payment is 
   p.expenses.find((x) => x.id === "e-car").endDate = "2026-11-01";
   const s = compute(p, { today: T });
   assert.deepEqual(s.ended, []); assert.ok(Math.abs(s.monthly - (d.monthly - 410)) < 0.01);
+});
+
+// The page drawn with a stand-in for the UI kit: every element keeps its children, so the words on screen can be read
+// back as text without a browser (review 2026-11-02, round 5).
+function drawText(render, plan, computeOf, today) {
+  const node = (tag, kids = []) => {
+    const n = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
+      replaceChildren(...k) { n.kids = []; n.append(...k); }, remove() {}, scrollIntoView() {}, set innerHTML(v) { n.kids = []; void v; },
+      get textContent() { return n.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } };
+    n.append(...kids); return n;
+  };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]),
+    row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), field: (l, c) => node("field", [l, c]), select: () => node("select"), uid: () => "u", confirm: () => false };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => today }, plan, store: { update() {} }, computeOf, route: { query: {} } });
+  return root.textContent.replace(/\s+/g, " ");
+}
+
+test("short only in a lean month: the tile and Close the gap give the full month to the nearest $10, the one figure (review 2026-11-02, round 5)", async () => {
+  const { render } = await import("./view.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const D = "2026-11-02";
+  const at = (left) => {
+    const p = familyPlan(D); p.income.find((y) => y.id === "i-side").countOn = 0;
+    const s = next(p, { today: D }).spare;
+    p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false });
+    return p;
+  };
+  const text = (p) => drawText(render, p, (key, params) => (key === "overview/next-best-action" ? next(p, params) : null), D);
+  const lean = text(at(297));
+  assert.match(lean, /in a lean month; when all your uneven pay comes in, about \$300 is left/);
+  assert.match(lean, /A month that brings the Income page's amount leaves about \$300, so this is about the lean months\./);
+  assert.doesNotMatch(lean, /The rest has to come from a must-pay|The biggest must-pays/, "no must-pay to cut when good months make up for lean ones");
+  const short = text(at(-123));
+  assert.match(short, /when all your uneven pay comes in, it is still about \$120 short/);
+  assert.match(short, /Even a month that brings the Income page's amount is about \$120 short\. This is the first thing to fix\./);
+});
+
+test("a full month within $5 of $0: the tile and Close the gap say 'only just about breaks even', never 'about $0' (review 2026-11-02, round 5)", async () => {
+  const { render } = await import("./view.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const D = "2026-11-02";
+  const at = (left) => {
+    const p = familyPlan(D); p.income.find((y) => y.id === "i-side").countOn = 0;
+    const s = next(p, { today: D }).spare;
+    p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false });
+    return p;
+  };
+  for (const left of [3, -2]) {
+    const p = at(left);
+    const text = drawText(render, p, (key, params) => (key === "overview/next-best-action" ? next(p, params) : null), D);
+    assert.match(text, /in a lean month; when all your uneven pay comes in, it only just about breaks even/);
+    assert.match(text, /Even a month that brings the Income page's amount only just about breaks even\. This is the first thing to fix\./);
+    assert.doesNotMatch(text, /about \$0\b/);
+  }
 });

@@ -10,8 +10,9 @@ import {
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
-  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing,
+  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow,
 } from "./compute.js";
+import { dayWords } from "../next-best-action/compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -441,11 +442,14 @@ export function render(page, ctx) {
     ui.h("span", { class: "body" }, ui.h("span", { class: "t" }, title), sub ? ui.h("span", { class: "d" }, sub) : null),
     ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
 
+  /** The money answer in words (reflect): today's pay; pay that starts later, from its first day; or pay that has ended. */
+  const moneyWords = (r) => (!r ? null : r.ended ? "Nothing comes in now: the pay on Income has ended"
+    : r.from ? `About ${money(r.monthly)} a month before tax from ${dayWords(r.from)}` : `About ${money(r.monthly)} a month before tax`);
   /** One line per question for "Change an answer": what the plan holds now. */
   const answerOf = (id) => {
     const none = "Not answered yet";
     if (id === "you") { const kids = dependents(plan).length, st = STATES.find((s) => s.value === plan.household?.state)?.label; const names = ad.map((p) => (p.name === "Me" ? "You" : p.name)); return [names.length ? and(names) : null, kids ? `${kids} ${kids === 1 ? "child" : "children"}` : null, st].filter(Boolean).join(", ") || none; }
-    if (id === "money") { const r = reflect(plan, "money"); return r ? `About ${money(r.monthly)} a month before tax` : none; }
+    if (id === "money") { const r = reflect(plan, "money", { today }); return moneyWords(r) ?? none; }
     if (id === "ages") { const a = ad.filter((p) => p.birthDate).map((p) => `${ad.length > 1 ? `${p.name} ` : ""}${ageOn(p.birthDate, today)}`); return a.length ? `${and(a)}${ad.length > 1 ? "" : " years old"}` : none; }
     if (id === "have") { const r = reflect(plan, "have-amounts"); const ks = picks(plan, "have"); return r ? `${money(r.total)} saved and invested` : ks.length ? and(ks.map((k) => HAVE.find((h) => h.key === k)?.label ?? k)) : none; }
     if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
@@ -503,7 +507,7 @@ export function render(page, ctx) {
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
       head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax: pay from a job, or what your own work brings in. Pick how often it comes.");
-      const v = draft(() => valuesFor(plan, "money"));
+      const v = draft(() => valuesFor(plan, "money", { today }));
       // someone paid by their own business: what they already sent the IRS this year, so no page starts from "$0 paid"
       const taxHost = ui.h("div");
       const drawTax = () => swap(taxHost, ad.some((q) => v.people[q.id]?.status === "work" && v.people[q.id]?.by === "self" && !existingPay(plan, q.id).filter((i) => i.id !== `setup-pay-${q.id}`).length)
@@ -555,7 +559,7 @@ export function render(page, ctx) {
         }
         return null;
       };
-      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const r = reflect(p2, "money"); return r ? `Got it: about ${money(r.monthly)} a month before tax.` : null; } };
+      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.` : null; } };
       actions();
     },
 
@@ -652,7 +656,7 @@ export function render(page, ctx) {
           const p = ad.find((x) => x.id === pid);
           const extra = ui.h("div", {});
           // paid by their own business: no employer, so no pay stub (review 2026-11-02)
-          const ownBiz = (plan.income ?? []).some((x) => x.id === `setup-pay-${pid}` && x.type === "business");
+          const ownBiz = payLineNow(plan.income ?? [], pid, today)?.type === "business";
           const drawExtra = () => swap(extra,
             field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: named(p, "put in a month") }), "From pay, if you save. Leave it blank if not."),
             v[`kind-${pid}`] === "work" ? field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub.") : null);
@@ -848,7 +852,9 @@ export function render(page, ctx) {
     const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", "Needs your pay and spending.", "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
         : st.bank ? fig("warn", "Left over each month", st.spare, `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, "Check Expenses ›", "#/cashflow/expenses")
-        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.`, st.spare >= 0 ? "● Money to put to work" : "● More goes out than comes in");
+        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.${st.lean ? ` That is a lean month: when all your uneven pay comes in, ${st.lean.kind === "ahead" ? `about ${money(st.lean.about)} is left` : st.lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-st.lean.about)} short`}.` : ""}`,
+          // short only in a lean month (Side income's "count on"; review 2026-11-02, round 5)
+          st.spare >= 0 ? "● Money to put to work" : st.lean?.kind === "ahead" ? "● Short in a lean month" : "● More goes out than comes in");
     const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up");
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))

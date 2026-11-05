@@ -170,9 +170,26 @@ test("count on: one rule everywhere; only repeating business pay, only below its
   const low = familyPlan(T); low.income.find((x) => x.id === "i-side").countOn = 300;
   assert.ok(forecast(low, { today: T }).income < fb.income - 100, "a figure below it does land less");
   assert.equal(compute(high, { today: T }).items.find((x) => x.id === "i-side").counted, null);
-  // a raise from a later date: the new line starts without the old careful figure
+  // a raise from a later date (review 2026-11-02, round 5): the pay that ends keeps the line's id, the new pay continues it
+  // and carries the careful figure; the split itself is tested on Income (cashflow/income module.test.mjs)
   const ch = changeFrom({ id: "i-side", name: "Weekend photography", type: "business", amount: 600, period: "monthly", countOn: 300 }, { amount: 900, period: "monthly", startDate: "2027-01-01" }, T);
-  assert.equal(ch.split, true); assert.equal(ch.old.countOn, 300); assert.equal("countOn" in ch.next, false);
+  assert.equal(ch.split, true); assert.equal(ch.old.id, "i-side"); assert.equal(ch.old.countOn, 300);
+  assert.equal(ch.next.continues, "i-side"); assert.equal(ch.next.countOn, 300); assert.equal(countedOn(ch.next), 300, "still below the new $900");
+  // on the start date Side income still has the months typed and the careful figure (the split as the Income page saves it)
+  const split = familyPlan(T);
+  const months = compute(split, { today: T }).months;
+  split.whatIfs = { ...(split.whatIfs ?? {}), sideIncome: { "i-side": { months: Object.fromEntries(months.map((m) => [m, 500])) } } };
+  const was = { ...split.income.find((x) => x.id === "i-side"), countOn: 300 };
+  const s2 = changeFrom(was, { ...was, amount: 900, startDate: "2027-01-01" }, T);
+  const i = split.income.findIndex((x) => x.id === "i-side");
+  split.income[i] = s2.old; split.income.splice(i + 1, 0, { id: "new-pay", ...s2.next });
+  for (const [day, id, monthly] of [[T, "i-side", 600], ["2027-01-15", "new-pay", 900]]) {
+    const it = compute(split, { today: day }).items;
+    assert.equal(it.length, 1); assert.equal(it[0].id, id); assert.equal(it[0].key, "i-side"); assert.equal(it[0].monthly, monthly);
+    assert.equal(it[0].counted, 300); assert.ok(it[0].enough, `${day}: the typed months are there`);
+    assert.ok(next(split, { today: day }).spare.held > 0, `${day}: the careful month goes on`);
+  }
+  assert.deepEqual(Object.keys(split.whatIfs.sideIncome), ["i-side"], "one record for both halves: nothing copied");
   // the saving share is on the careful month on both sides: counting on less never marks a saver down
   const careful = familyPlan(T); careful.income.find((x) => x.id === "i-side").countOn = 300;
   const nbC = next(careful, { today: T }).spare;
@@ -183,4 +200,53 @@ test("count on: one rule everywhere; only repeating business pay, only below its
   // Next best action's lines add up to the spare (the part held back is a line of its own)
   const sum = nbC.businessCosts + nbC.federalTax + nbC.payrollTax + nbC.stateTax + nbC.spending + nbC.retirementSaving + nbC.goalSaving + nbC.debtExtra + nbC.held + nbC.monthly;
   assert.ok(Math.abs(sum - nbC.gross) < 0.01);
+});
+
+test("a raise from a later date: count on and the months are one record for both halves (review 2026-11-02, round 5)", async () => {
+  const { setCountOn, saveMonths } = await import("./compute.js");
+  const { changeFrom } = await import("../../cashflow/income/compute.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const T = "2026-11-02";
+  // the family's photography with twelve months typed, "Count on $X" tapped, then a raise to $900 from April saved on Income
+  const p = familyPlan(T);
+  const ms = compute(p, { today: T }).months;
+  p.whatIfs = { ...(p.whatIfs ?? {}), sideIncome: { "i-side": { months: Object.fromEntries(ms.map((m) => [m, 500])) } } };
+  setCountOn(p, compute(p, { today: T }).items[0], 400);
+  const was = p.income.find((x) => x.id === "i-side");
+  const ch = changeFrom(was, { ...was, amount: 900, startDate: "2027-04-01" }, T);
+  const i = p.income.findIndex((x) => x.id === "i-side");
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: "new-pay", ...ch.next });
+  const lines = () => p.income.filter((x) => x.id === "i-side" || x.continues === "i-side");
+  assert.deepEqual(lines().map((x) => x.countOn), [400, 400]);
+  // months typed as they come, before the start date, under the line on screen: still there after it
+  for (const [day, m] of [["2026-12-02", "2026-11"], ["2027-01-02", "2026-12"], ["2027-02-02", "2027-01"], ["2027-03-02", "2027-02"], ["2027-03-31", "2027-03"]]) {
+    const it = compute(p, { today: day }).items;
+    assert.equal(it.length, 1); assert.equal(it[0].id, "i-side");
+    saveMonths(p, it[0], { [m]: 700 });
+  }
+  const after = compute(p, { today: "2027-04-15" }).items[0];
+  assert.equal(after.id, "new-pay");
+  assert.deepEqual(after.typedMonths, [500, 500, 500, 500, 500, 500, 500, 700, 700, 700, 700, 700], "the months typed before the start date stay");
+  // "Count the full $600 again" before the start date: off on both halves, so it does not come back on the start date
+  setCountOn(p, compute(p, { today: T }).items[0], null);
+  assert.deepEqual(lines().map((x) => "countOn" in x), [false, false]);
+  assert.equal(compute(p, { today: "2027-04-15" }).items[0].counted, null);
+  assert.ok(next(p, { today: "2027-04-15" }).spare.held < 0.005, "the left-over figure counts the full amount after the start date too");
+  // "Count on $300 instead": both halves; after the start date the new pay says it too
+  setCountOn(p, compute(p, { today: T }).items[0], 300);
+  assert.deepEqual(lines().map((x) => x.countOn), [300, 300]);
+  assert.equal(compute(p, { today: "2027-04-15" }).items[0].counted, 300);
+  // changed after the start date, on the new pay: the same record
+  setCountOn(p, compute(p, { today: "2027-04-15" }).items[0], 350);
+  assert.deepEqual(lines().map((x) => x.countOn), [350, 350]);
+  // a line of the chain that is not repeating business pay keeps none; another income is never touched
+  p.income.find((x) => x.id === "new-pay").type = "other";
+  p.income.push({ id: "i-other", name: "Tutoring", type: "business", amount: 400, period: "monthly", countOn: 100 });
+  setCountOn(p, { key: "i-side" }, 250);
+  assert.equal("countOn" in p.income.find((x) => x.id === "new-pay"), false);
+  assert.equal(p.income.find((x) => x.id === "i-side").countOn, 250);
+  assert.equal(p.income.find((x) => x.id === "i-other").countOn, 100);
+  // saveMonths keeps what was there and adds what is typed
+  saveMonths(p, { key: "i-side" }, { "2027-04": 800 });
+  assert.equal(p.whatIfs.sideIncome["i-side"].months["2027-04"], 800); assert.equal(p.whatIfs.sideIncome["i-side"].months["2026-11"], 700);
 });

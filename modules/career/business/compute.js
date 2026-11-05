@@ -3,7 +3,7 @@
 // (self-employment tax, income tax with half of it off and the 20% business deduction after it, the extra Medicare tax,
 // the state's rate) against an S corporation paying the owner a reasonable salary; what the owner can safely take out
 // each month; and the self-employed retirement plans (SEP-IRA, solo 401(k), SIMPLE IRA) with the tax each would save.
-import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { compute as computeIncome, chainId } from "../../cashflow/income/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { compute as computeSelfEmployment, seTax, SE, QBI, TOTAL_ADDITIONS } from "../../taxes/self-employment/compute.js";
@@ -137,7 +137,11 @@ export function compute(plan, params = {}) {
   const s = plan.whatIfs?.business ?? {};
   const inc = computeIncome(plan, { today });
   const biz = inc.active.filter((x) => x.type === "business" && x.period !== "once");
-  const item = biz.find((x) => x.id === s.incomeId) ?? [...biz].sort((a, b) => b.yearly - a.yearly)[0] ?? null;
+  // the business chosen, or the line that carries it on today: a raise from a later date saved on Income ends the chosen
+  // line and starts one that `continues` it (cashflow/income chainId), so the page stays on the same business after the
+  // start date (review 2026-11-02, round 5: it went to the largest other business). The key is the chosen line's chain.
+  const chosen = (plan.income ?? []).find((x) => x.id === s.incomeId), key = chosen ? chainId(chosen) : s.incomeId;
+  const item = biz.find((x) => x.id === s.incomeId) ?? biz.find((x) => key && chainId(x) === key) ?? [...biz].sort((a, b) => b.yearly - a.yearly)[0] ?? null;
   const typedRevenue = num(s.revenue);
   // expenses typed here, else the one figure typed on the Self-employment page (so the two pages agree)
   const seExpenses = pos(plan.whatIfs?.selfEmployment?.expenses);

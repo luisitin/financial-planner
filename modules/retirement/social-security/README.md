@@ -4,10 +4,10 @@
 **Purpose:** Your benefit from your ssa.gov earnings record or your statement, and what claiming at each age pays.
 
 ## Inputs
-`household` (adults, birth dates, retirement ages), `retirement.socialSecurity[personId]` = `{ claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings: "same"|"none" }`. Writes the same.
+`household` (adults, birth dates, retirement ages), `retirement.socialSecurity[personId]` = `{ claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings: "same"|"none", paidUnreduced? }` (`paidUnreduced`: written by Get started, read here; see the third pass below). Writes the same.
 
 ## Outputs
-`people[]` (`fra`, `claimAge`, `source` record/typed/none, `estimate`, `pia`, `monthly`, `yearly`, `options[]` at 62/64/FRA/68/70, `spousalAtSameAge`, `survivor`), `couple` (two adults: `spousal` top-ups, `survivorMonthly` per survivor, `bothMonthly`, `survivorYearly`), `householdYearly`, `hasData`.
+`people[]` (`fra`, `claimAge`, `claimAgeOnFile`, `source` record/typed/none, `estimate`, `pia` (the full-age amount, from the record or the statement), `monthly`, `yearly`, `startedEarly`, `reducedEarly`, `paidLine`, `options[]` at 62/64/FRA/68/70, `spousalAtSameAge`, `survivor`), `couple` (two adults: `spousal` top-ups, `survivorMonthly` per survivor, `bothMonthly`, `survivorYearly`), `householdYearly`, `hasData`.
 
 ## Formulas (the SSA's, tables lifted from ssa.tools via `data/ssa.js`)
 - Earnings capped at each year's taxable maximum (a year past the table keeps the last published maximum, as the wage index is frozen at the last published one too); indexed by the average wage index of the year you turn 60 over the index of the earnings year (years after that count as is; future years use the latest index).
@@ -29,7 +29,7 @@
 No birth date: nothing computed. A record with under 40 credits: shown as not yet eligible, benefit 0 in the projection. A typed statement figure is taken as the full-age amount.
 
 ## Tests
-`module.test.mjs`: FRA table, claim factors (62, 65, 67, 70, born 1955), record parsing, credits, the formula on a synthetic record, future earnings, compute on a couple. `tests/golden-social-security.test.mjs`: all 2,000 invented histories x 33 claiming ages (66,000 rows) against an independent key worked from SSA's rules: AIME, PIA, the monthly benefit, the spouse amount and the survivor amount (the key's survivor column is the worker's benefit; the test applies the widow(er)'s limit to it) agree to the dime. One history (`w12-h04-steady-y1957`) is a dime low in the key itself (its generator floored 2,984.80 to 2,984.70); the test allows it.
+`module.test.mjs`: FRA table, claim factors (62, 65, 67, 70, born 1955), record parsing, credits, the formula on a synthetic record, future earnings, compute on a couple; early claims and disability benefits past 62 (full-age amount, survivor, top-up, the stress test, the projection); `saveFigures` (nothing changed, a new amount on the Income line, a line added, a record set aside and pasted back, a record pasted with a new amount, not claimed); a benefit already paid with no Income line (no delayed credits, a claim made today, the `paidUnreduced` mark, before 62, past full retirement age); Get started's mark and a second pass through its ages screen; `survivorWords`. `tests/golden-social-security.test.mjs`: all 2,000 invented histories x 33 claiming ages (66,000 rows) against an independent key worked from SSA's rules: AIME, PIA, the monthly benefit, the spouse amount and the survivor amount (the key's survivor column is the worker's benefit; the test applies the widow(er)'s limit to it) agree to the dime. One history (`w12-h04-steady-y1957`) is a dime low in the key itself (its generator floored 2,984.80 to 2,984.70); the test allows it.
 
 ## Won't get it (review 2026-11-02)
 Each person with no figure, no record and no Social Security on Income gets an outlined "<name> won't get Social Security" button, saved as the setup's own `guide.setup.ss[id] = "none"` (what the retirement pages' notice saves), with an Undo. Saving a figure clears an earlier "none". Plan health score and the Timeline send people here, so the answer they name is on this page.
@@ -39,6 +39,91 @@ Each person with no figure, no record and no Social Security on Income gets an o
 - `startedEarly`: claimed while the claim age on file is still to come (disability or survivor benefits before 62). The page says "now", not "since <year>", and the projection counts it from today's age.
 - `pastClaimAge` only with figures to claim with, never after "won't get it", and from 70 on a saved 70 is up to date. Someone 70 or over who never claimed reads "can claim now: about $X a month. Waiting adds nothing after 70", with no age picker.
 - For someone already paid, the amount box is "What <name> gets a month now" (prefilled); it is stored as the full-age amount that pays it at the claim age (`fraFromMonthly`, as setup does), and setup's own Income line for it follows.
+
+## Review 2026-11-02 (round 5)
+- `startedEarly` (paid before the claim age on file) is unreduced only before 62, where it is a disability or survivor
+  benefit. From 62 it is an early claim, reduced for life: `claimAge` becomes today's age (rounded up to the month, as
+  setup's "I already get it" values an unknown start), and when a Social Security line on Income is being paid,
+  `monthly` is what it pays (per year / 12) and `pia` the full-age amount that pays it (monthly / claim factor). Before,
+  Ruth at 64 and 6 months with $1,500 on Income and an old $2,100 statement figure was counted at $2,100 from 64. The page
+  still says "now", and the projection still counts it from today's age. `claimAgeOnFile` is the saved (or default) age.
+- 70 or over and not claimed, with no claim age saved: 70 is the default (the only age still open), not the full
+  retirement age. `monthly`, the status ("$2,772 a month if claimed now"), the couple figures and the projection all use
+  what claiming now pays. A saved claim age is kept as it is, as it is under 70: the SSA answer key
+  (`tests/golden-social-security.test.mjs`, every history at every saved claiming age, valued in October 2026) checks
+  exactly that, so re-valuing a saved 66 at 70 would break its 1950-1956 rows. Once a saved age has passed, the
+  70-or-over view now says so too, which it did not before: "The plan has Sam claiming at 66, which has passed, so it
+  counts $2,100 a month. Tap Save below to plan on claiming now instead, or if Sam already gets it, add what arrives each
+  month on the Income page." Save stores 70, the only age offered. Before, the page showed "$2,100 a month at 66" and
+  "can claim now: about $2,772" side by side, with no word why.
+- Already paid with an earnings record: a different amount typed in "What <name> gets a month now" wins. Save sets the
+  record aside (`record: []`) and says "saved: $1,700 a month, in place of the figure worked out from the earnings
+  record". Before, the record kept deciding, so the corrected figure was saved and ignored.
+
+## Review 2026-11-02, round 5 (second pass)
+- **The full-age amount comes from its source.** `pia` is always the record's primary insurance amount or the
+  statement's figure (`monthlyAtFRA`); it is no longer worked back from the Income line (first pass: `paid / claim
+  factor at today's age`). For someone paid before the claim age on file, the Social Security line on Income says only
+  what arrives now (`monthly`), at any age. So the survivor amount (at least 82.5% of the full-age amount after an early
+  claim), the spouse's top-up (half the partner's full-age amount less their own), the stress test "if X died this
+  year", Life insurance needs, Disability and the retirement report all read the figure from the source. Ruth (64 and 6
+  months, $1,500 paid, $2,100 statement): survivor $1,732.50 and Sam's $150 top-up, not $1,500 and $0.
+- **Reduced only when it clearly is** (`reducedEarly`). From 62, a benefit paid before the claim age on file is a
+  reduced early claim, valued at today's age, only when the Income line pays more than 0.5% below the full-age amount
+  (`EARLY_TOLERANCE`; one month early already takes 5/9 of 1% off). Paid about the full amount (or more, after a
+  cost-of-living rise), it is a disability benefit: unreduced, at the claim age on file. Ana (62 and 8 months, disability
+  set up at 61: claim age 67 and $1,800 saved, $1,800 on Income) keeps $1,800, a survivor amount of $1,800 and no top-up
+  for Sam, not $2,455, $2,025 and $327. With no Income line, a claim age saved on purpose is kept (setup's before-62
+  answer writes it), so Ana stays at $1,800, not $1,320; with no claim age saved it is valued at today's age, as before.
+  (Replaced in the third pass, below: a saved claim age is not a sign of a disability benefit.)
+  A record short of 40 credits that is being paid anyway is the one case where the full-age amount is worked back from
+  what arrives.
+- **Save is decided in `saveFigures`** (pure, tested). For someone already paid, the claim age on file is kept, and an
+  amount equal to the one shown changes nothing: the plan is not written and the page says "Nothing to save: these are
+  the figures already in the plan". Before, Save stored today's age and the worked-back figure, so an early claim read as
+  one made today ("$3,032 a month since 64 and 6 months" over an earnings record; "since 2026" for a benefit paid since
+  55). A different amount goes on the Income line that pays it ("Saved: Ruth gets $1,550 a month, on the Income page
+  too"). Paid before the claim age on file with no Income line, setup's own line (`setup-ss-<id>`, as "I already get it"
+  writes it) is added; the full-age amount stays, and is only worked out from what arrives when there was no figure at
+  all. Paid since the claim age on file, the amount also becomes the full-age amount that pays it at that age.
+- **A record set aside says so.** When that correction sets an earnings record aside (`record: []`), the notice says it
+  and how to bring it back: "The earnings record was removed, so this amount is the one the plan counts. To use the
+  record again, paste it back under "Earnings record from ssa.gov" and tap Save." Pasting it back with the amount left as
+  it was saves the record, which decides again.
+- Not claimed, Save stores what the form holds, as before, but only the fields that changed (no `record: []` or
+  `futureEarnings: "same"` added where nothing was).
+
+## Review 2026-11-02, round 5 (third pass)
+- **The rule for a benefit already being paid** (`compute`, `startedEarly`, `reducedEarly`, `claimAge`). A benefit paid
+  before the claim age on file is never valued with delayed credits: that claim age, which is later than today and may be
+  past full retirement age, is not used for it. It is valued:
+  - **unreduced, at the full-age amount** (claim age = full retirement age), only when Get started marked it
+    `paidUnreduced` (its before-62 "I get it now", a disability or survivor benefit; docs/DATA_MODEL.md), when it is paid
+    before 62 (nothing else can be), or when the Social Security line on Income pays about the full-age amount (no more
+    than 0.5% less, `EARLY_TOLERANCE`);
+  - otherwise **as a reduced claim made at min(today's age, full retirement age)**, to the month, counted from today.
+  A marked benefit is paid "now" even once the claim age on file has passed. Ruth (64 and 6 months, $2,400 statement and
+  70 saved here before she claimed, then "I already get it" in Get started with the amount left blank): $2,000 a month
+  from 64, as at dc6e73c (second pass: $2,976, the saved 70's amount, from today). With 67 and $2,100: $1,750 (second
+  pass: $2,100). Sam at 68 and 8 months with 70 saved: his full-age $2,000, not $2,533.30. Ana (disability, 62 and 8
+  months) with her $1,800 Income line, or marked, stays at $1,800; with neither, she now reads as a claim at 62 and 8
+  months ($1,320): only the mark or the Income line says it is a disability benefit, and Get started now writes the mark.
+  Decision (not in the review): before 62 the benefit counts unreduced with or without the mark, as it always did, since
+  no retirement benefit is paid before 62.
+- **Get started keeps a disability benefit on a second pass** (overview/setup `applyAges`): the ages screen given back as
+  it shows the plan (the age on file, which its stepper holds to 62..today's age, and the Income line's amount) keeps the
+  entry; going through it again turned Ana's $1,800 at 67 into a claim at 62 worth $2,571.40 at full age ($2,121 survivor
+  figure, $386 top-up for Sam). See that README.
+- **A record pasted with a new amount** (`saveFigures`, `recordPasted`). For someone paid since their claim age, a
+  different amount typed in the same Save as a pasted record wins: the pasted record is set aside (`record: []`), the
+  amount goes on Income and becomes the full-age amount, and the notice says "The earnings record you pasted was not
+  kept, so this amount is the one the plan counts. To use the record instead, paste it again, leave the amount as it is,
+  and tap Save." Before, the record decided (about $2,527) while Income said $1,700.
+- **A survivor's figure above what the other gets says why** (`survivorWords`, pure and tested; the page shows it).
+  After an early claim the widow(er)'s benefit is at least 82.5% of the full-age amount, so it can be more than what the
+  one who died got: "If Ruth dies first, Sam would get a widow's or widower's benefit on Ruth's record: about $1,733 a
+  month in place of Sam's own $900. That is more than the $1,500 Ruth gets now, because it is worked out from Ruth's
+  full-age amount." (Not claimed yet: "... the $1,470 Ruth would get at 62 ..."). Otherwise the two plain sentences stay.
 
 ## Ideas / not yet
 - The earnings test before full retirement age; survivors claiming before their own full retirement age (71.5% at 60); the family maximum; taxation of benefits (in the tax pages); Medicare premiums.

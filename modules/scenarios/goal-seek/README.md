@@ -52,3 +52,11 @@ lever reads "This year, as planned." at the planned age instead of "1 year befor
 When the spending that lasts in 9 of 10 markets is below what the plan spends, the careful line says by how much ("$500 less
 than the $8,000 the plan spends") and a green "room to spare" pill turns amber "tight": the average-market figure above it
 alone read as room the plan does not have in a bad run of years.
+
+## Review 2026-11-02 (round 5): "now" only when it is now for everyone
+Everyone still choosing is moved to the same ages, the first one being the oldest one's age today. The claiming lever
+now carries `nowAge` (that first age) and `nowForAll`: true when every person moved is within a month of `nowAge` today.
+Only then do the sentence ("claiming now (64 and 6 months)"), the big figure ("now") and the bar ("now") say now.
+Otherwise they say "at 64 and 6 months", "age 64 and 6 months", and "64" over "6 mo" under the bar (it fits a 390 px phone). Before,
+a couple of 64 and 6 months and 60 and 5 months were both told to claim "now", which is 19 months away for the younger one.
+Moving both to the same age is still the design: the younger one's 62 to 64 are not tried, as before.

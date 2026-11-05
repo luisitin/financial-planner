@@ -1,7 +1,7 @@
 // modules/cashflow/budget-percent/compute.js -- PURE. The 50/30/20 rule (or the household's own split) on income after
 // tax: what goes to needs (the bills you must pay), wants (the rest of the spending) and savings (retirement, goals and
 // what is left over), each against its target share, with the largest items in each and how far each is off.
-import { compute as computeIncome } from "../income/compute.js";
+import { compute as computeIncome, countedOn } from "../income/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computePaycheck, PAYROLL } from "../paycheck/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
@@ -11,6 +11,7 @@ import { compute as computeContributions } from "../../retirement/contributions/
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { QBI_MINIMUM, forYear } from "../../career/business/data/business.js";
+import { savedPlan } from "../../debt/payoff/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 
 /** The rule's split of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All Your Worth", 2005): needs 50%, wants 30%, savings 20%. */
@@ -112,12 +113,52 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
 }
 
 /**
+ * A figure said with "about", to the nearest $10: what a month that brings the Income page's amount leaves (here
+ * `saving.fullAbout`, Next best action's `spare.fullAbout`), so every page says the one number (review 2026-11-02, round 5:
+ * some said "$1,197", others "about $1,200").
+ */
+export const aboutTen = (n) => Math.round((Number(n) || 0) / 10) * 10 || 0;
+/** Within this many dollars of $0, a full month "just about breaks even" (no page says "about $0"). My choice. */
+export const EVEN_WITHIN = 5;
+/**
+ * fullKind(full) -> "ahead" | "even" | "short": what a month that brings the Income page's amount does, as every page says
+ * it (`saving.fullKind` here, Next best action's `spare.fullKind`). "ahead": it leaves $5 or more, so the month is short
+ * only in a lean month and good months make up for it; "even": within $5 of $0, said "just about breaks even" instead of
+ * "leaves about $0" or "about $0 short", and, as good months then do not make up for lean ones, counted with "short"; "short":
+ * it is still about $X short (review 2026-11-02, round 5).
+ */
+export const fullKind = (full) => { const n = Number(full) || 0; return Math.abs(n) < EVEN_WITHIN ? "even" : n > 0 ? "ahead" : "short"; };
+
+/**
+ * The careful month's part held back (Side income's "count on", income[].countOn): uneven pay the plan does not count on,
+ * a month, and that less the tax on it. The tax on it is the year's taxes (yearTaxes) less the same taxes worked again
+ * with each counted-on line at its careful figure a month, over 12. Next best action's spare and this page both take
+ * `held` off the month, so they leave the same money (review 2026-11-02). -> { gross (income's heldMonthly), tax, held }
+ * (all a month); without the year's taxes `T`, or when they cannot be worked again, nothing is taken off for tax.
+ */
+export function heldAfterTax(plan, { today, inc = computeIncome(plan, { today }), T = null } = {}) {
+  const gross = inc.heldMonthly ?? 0;
+  if (!(gross > 0.005) || !T) return { gross, tax: 0, held: gross };
+  try {
+    const careful = { ...plan, income: (plan.income ?? []).map((x) => (countedOn(x) !== null ? { ...x, amount: countedOn(x), period: "monthly" } : x)) };
+    const TC = yearTaxes(careful, { today, inc: computeIncome(careful, { today }) });
+    const tax = Math.max(0, ((T.federal + T.payroll + T.state) - (TC.federal + TC.payroll + TC.state)) / 12);
+    return { gross, tax, held: Math.max(0, gross - tax) };
+  } catch { return { gross, tax: 0, held: gross }; }
+}
+
+/**
  * compute(plan, { today }) -> {
- *   ready, missing, year, month: { gross, federal (negative: a credit), payroll, state, stateKnown, afterTax, bizExpenses },
+ *   ready, missing, year, month: { gross, federal (negative: a credit), payroll, state, stateKnown, afterTax (the careful month: less `held`), bizExpenses,
+ *     held, heldGross (heldAfterTax: side income above what you count on, after its tax, and before it) },
  *   targets: { needs, wants, savings, from, scaled },
  *   buckets: [{ key, label, monthly, share, target, targetMonthly, gap (monthly - target amount), status: "over"|"under"|"on"|null }],
  *   needs: [{ id (null for the Debts page's payments), name, category, monthly }], wants: [...],
- *   saving: { retirement, goals, leftover, short (spending above income), unlisted (left over above 10% of income after tax) },
+ *   saving: { retirement, goals, debts (extra on debts: set on each debt, and the saved debt plan's extra), debtPlan (that
+ *     saved extra: Pay off debts' savedPlan, the one Next best action takes), leftover, short (spending above income),
+ *     unlisted (left over above 10% of income after tax),
+ *     full (leftover - short + month.held: what a month that brings the Income page's amount leaves), fullAbout (to the nearest $10),
+ *     fullKind ("ahead" | "even" | "short", fullKind) },
  *   taxesListed (a month, on Expenses, left out), notes
  * }
  */
@@ -141,7 +182,11 @@ export function compute(plan, params = {}) {
   if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State page under Taxes.");
   if (T.otherIncomeOnFederal) notes.push("The Federal tax page also counts income that is not on the Income page (investments sold, amounts typed there). Its tax is left out here, as that money is not part of the month.");
   const month = { gross: T.gross / 12, federal: T.federal / 12, payroll: T.payroll / 12, state: T.state / 12, stateKnown: T.stateKnown, bizExpenses: T.business.expenses / 12 };
-  month.afterTax = T.afterTax / 12;
+  // the careful month, as the app's left-over figure (Next best action) has it: side income above what you count on is
+  // not planned with, and neither is the tax on it; the taxes stay the whole year's (review 2026-11-02)
+  const H = heldAfterTax(plan, { today, inc, T });
+  month.held = H.held; month.heldGross = H.gross;
+  month.afterTax = T.afterTax / 12 - month.held;
 
   // needs: the bills marked "I must pay this" on Expenses (and the Debts page's payments); wants: the rest; savings: what
   // goes to retirement accounts (your own money, not the employer's), to goals each month, and what is left over
@@ -154,7 +199,11 @@ export function compute(plan, params = {}) {
     if ((exp.fromDebts ?? []).length) for (const x of exp.fromDebts) needs.push({ id: null, name: `${x.name} payment (from Debts)`, category: "Loan and card payments", monthly: x.required ?? x.monthly });
     else if (debtRequired > 0) needs.push({ id: null, name: "Loan and card payments (from Debts)", category: "Loan and card payments", monthly: debtRequired });
   }
-  const debts = Math.max(0, fromDebts - debtRequired);
+  // the saved debt plan's extra a month (Pay off debts, `debtPlan.extra`) pays debts down faster too: saving, and money
+  // already spoken for, read with the helper Next best action uses, so the left over and the full month here are the
+  // app's figures (review 2026-11-02, round 5: with a $150 extra this page said "about $1,200", every other "about $1,050")
+  const debtPlan = savedPlan(plan, { today })?.extra ?? 0;
+  const debts = Math.max(0, fromDebts - debtRequired) + debtPlan;
   needs.sort((a, b) => b.monthly - a.monthly);
   const wants = items.filter((x) => !x.essential).map(row).sort((a, b) => b.monthly - a.monthly);
   const needsMonthly = needs.reduce((t, x) => t + x.monthly, 0), wantsMonthly = wants.reduce((t, x) => t + x.monthly, 0);
@@ -163,7 +212,7 @@ export function compute(plan, params = {}) {
   const retirement = con.yearly / 12;
   const goals = (gl.goals ?? []).filter((g) => g.status !== "done").reduce((t, g) => t + pos(g.monthly), 0);
   const rest = month.afterTax - needsMonthly - wantsMonthly - retirement - goals - debts;
-  const saving = { retirement, goals, debts, leftover: Math.max(0, rest), short: Math.max(0, -rest) };
+  const saving = { retirement, goals, debts, debtPlan, leftover: Math.max(0, rest), short: Math.max(0, -rest), full: rest + month.held, fullAbout: aboutTen(rest + month.held), fullKind: fullKind(rest + month.held) };
   const savingsMonthly = retirement + goals + debts + saving.leftover;
   // money neither listed as spending nor sent to savings is counted as saved; much of it usually means spending is missing
   const unlisted = month.afterTax > 0 && saving.leftover > 0.1 * month.afterTax;

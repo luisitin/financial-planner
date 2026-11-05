@@ -2,7 +2,7 @@
 // page's figure (and a button to use it), the last twelve months as bars, the cushion that smooths them; the share of
 // each payment to set aside for tax and the next quarterly payment; the forms and the mileage rate; the months typed in
 // a fold per side income.
-import { compute, MIN_MONTHS } from "./compute.js";
+import { compute, MIN_MONTHS, setCountOn, saveMonths } from "./compute.js";
 import { THRESHOLDS } from "./data/rules.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -71,7 +71,8 @@ export function render(page, ctx) {
 
   function setCount(it, value) {
     pending = value === null ? `${it.name}: the plan counts the full ${money(it.monthly)} a month again.` : `${it.name}: your left-over figure and forecast now count on ${money(value)} a month. The tax pages stay on ${money(it.monthly)}.`;
-    store.update((p) => { const x = (p.income ?? []).find((y) => y.id === it.id); if (!x) return; if (value === null) delete x.countOn; else x.countOn = value; });
+    // on both halves of a raise from a later date (the chain), so the figure set here holds after the start date too (round 5)
+    store.update((p) => { setCountOn(p, it, value); });
   }
   // the careful figure on file, said wherever it is (with too few months typed too), with the way back: it used to vanish
   // from this page once the months ran out while it kept lowering the left-over figure (review 2026-11-02)
@@ -111,7 +112,8 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, "What came in each month, before tax and before expenses; leave a month empty if you do not know it, type 0 if nothing came."),
       ui.form(fields, values, (v) => {
         openId = it.id; pending = "Months saved.";
-        store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.sideIncome = p.whatIfs.sideIncome ?? {}; const old = p.whatIfs.sideIncome[it.id]?.months ?? {}; p.whatIfs.sideIncome[it.id] = { months: { ...old, ...Object.fromEntries(d.months.map((m) => [m, v[m]])) } }; });
+        // kept by the chain (it.key), so months typed before a raise's start date are still there after it (round 5)
+        store.update((p) => { saveMonths(p, it, Object.fromEntries(d.months.map((m) => [m, v[m]]))); });
       }, { submitLabel: "Save the months" })));
     return card;
   }

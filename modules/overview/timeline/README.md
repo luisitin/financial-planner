@@ -51,6 +51,19 @@ Dashboard (the subject is the saving, so "Cy's college ... starts in September 2
 ## Both payoff dates (round 4, 2026-11-02)
 A debt event dated by the payoff plan sooner than its own payment (debt/payoff `twoDates`) adds: "This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046."
 
+## Review 2026-11-02 (round 5): no start for a benefit already paid
+Someone the Social Security page counts as already getting it (`claimed`: setup's "I already get it", or a Social
+Security line on Income being paid now) has no `social-<id>` event. A claim date already gone was dropped anyway; the
+case that slipped through was a benefit paid before the claim age on file (`startedEarly`, a disability benefit at 55
+read "starts in 2038, claimed at 67: at full retirement age"). Nor does a benefit paid and typed only on Income get "can
+claim at 62: there is no estimate in the plan yet".
+
+## Review 2026-11-02 (round 5, third pass): never "about $0 a month is needed"
+A goal that is behind says its monthly need with `needWords`: to the nearest $100 from $95 up ("about $1,200"), to the
+nearest $10 below that ("about $50"), and "under $10" below $5. Before, every amount was rounded to $100, so the Boat
+(about $49 to $58 a month) read "Behind: about $0 a month is needed." on the family plan. Tested on the words and on the
+family plan with a $36,000 Wedding and a $6,000 Boat.
+
 ## Ideas / not yet
 - A pension's start (once `retirement/pensions` exists), the partner's survivor years (Social Security's `couple.survivorMonthly`), long-term-care odds by age, estate-document reviews.
 - Drag along the line to see the balance sheet in that year.

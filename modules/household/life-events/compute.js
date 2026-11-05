@@ -134,6 +134,11 @@ export function applyChange(draft, eventId, change, values = {}, today = null) {
       if (later) {
         if (!inc.endDate || inc.endDate >= values.startDate) inc.endDate = addDays(values.startDate, -1);
         const next = { ...inc, id: values.id, name: name || `${inc.name || "Pay"} (new job)`, amount, period, startDate: values.startDate, endDate: "" };
+        // a new job is its own pay, not the old one carried on: it does not join the old job's record (`continues`, kept by
+        // cashflow/income changeFrom for a raise: Salary's raises, Side income's months, Get started's pay), nor take the
+        // careful figure worked out from the old job's months (review 2026-11-02, round 5)
+        delete next.continues;
+        delete next.countOn;
         draft.income.push(next);
         tick("pay"); return { ok: true, text: `From ${usDate(values.startDate)} ${who && who !== "Me" ? `${who}'s` : "your"} pay is ${yearly(amount)}; until then the pay on file stays. Both are on Income.` };
       }

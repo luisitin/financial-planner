@@ -69,11 +69,15 @@ export function render(root, ctx) {
       const money = (n) => fmt.money(Math.round(Number(n) || 0), cur);
       const back = (id) => `#/overview/setup/${id}?back=done`;
       const rows = [];
+      // short on the careful month (Side income's "count on": uneven pay counted at what you can count on): the row says so,
+      // with what a month that brings the Income page's amount leaves (setup's standing().lean, which also words the sentence
+      // above the rows; review 2026-11-02, round 5: the Dashboard had its own sentence, the setup's done screen the plain one)
+      const lean = st.lean ?? null;
       if (st.spare === null) rows.push({ dot: "", k: "Left over each month", s: "Needs your pay and spending", v: "Add ›", open: true, href: back((plan.income ?? []).length ? "spend" : "money") });
       else if (st.drawing) rows.push({ dot: "", k: "Drawn from savings each month", s: "What a pension and Social Security don't cover", v: money(-st.spare), href: "#/retirement/projection" });
       // the bank files show more going out than Expenses lists: the figure is from Expenses, so it is amber and says so
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
-      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? (st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving") : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
+      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? (st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving") : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
       if (st.runway === null) rows.push({ dot: "", k: "Safety cushion", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
       if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });

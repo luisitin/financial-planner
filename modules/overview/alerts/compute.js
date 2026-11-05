@@ -17,7 +17,7 @@ import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { compute as estateDocs } from "../../estate/documents/compute.js";
 import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
-import { pmtToReach } from "../../../core/math/finance.js";
+import { pmtToReach, fv } from "../../../core/math/finance.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -47,19 +47,44 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   const all = goals.filter((g) => g.status === "behind");
   // only a goal dated after its turn can wait for it (one due sooner stays behind, review 2026-11-02), and never the
   // emergency fund: Next best action fills the cushion in its own earlier steps, not with the goals step
-  // and only while it can still be reached from then: what it would need a month from its turn on, added up in date order,
-  // fits in the spare money that reaches the goals step once it starts (a trip due a month after the turn cannot wait
-  // for it, review 2026-11-02)
+  // and only while it can still be reached from then, out of the spare money that reaches the goals step once it starts
+  // (a trip due a month after the turn cannot wait for it, review 2026-11-02)
   const room = Number(step?.capacity ?? (Number(step?.roomYearly) || 0) / 12) || 0;
-  let used = 0;
-  const queued = turn ? all.filter((g) => !(g.monthly > 0) && g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund")
-    .sort((a, b) => String(a.targetDate).localeCompare(String(b.targetDate)))
-    .filter((g) => {
-      const n = monthsBetween(turn, g.targetDate);
-      const later = n > 0 ? Math.max(0, pmtToReach((Number(g.rate) || 0) / 12, n, Number(g.targetThen ?? g.target) || 0, Number(g.funded) || 0)) : Infinity;
-      if (!(later <= room - used + 0.5)) return false;
-      used += later; return true;
-    }) : [];
+  const afterTurn = (g) => g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund";
+  // checked month by month from the turn (review 2026-11-02, round 5, third pass: one level figure counted a short-dated
+  // goal's catch-up as if it lasted until every waiting goal's date, so goals that can be reached read "behind")
+  const monthsLeft = (g) => Math.max(0, monthsBetween(turn, g.targetDate) ?? 0);   // whole months the step can work on it
+  const rateOf = (g) => (Number(g.rate) || 0) / 12, targetOf = (g) => Number(g.targetThen ?? g.target) || 0;
+  // what a goal will have at the turn: what it has, grown with what goes in each month until then
+  const atTurn = (g) => fv(rateOf(g), Math.max(0, monthsBetween(today, turn)), Number(g.monthly) || 0, Number(g.funded) || 0);
+  // the same step's money first catches up the goals already getting something and still behind, dated after the turn:
+  // each takes its extra a month (what it needs from the turn to its date, less what already goes in) only until its own
+  // date; one due within the turn's first month draws nothing (review 2026-11-02, round 5: a wedding read "starts later"
+  // on money the car and college goals need). A goal without its target and funded figures keeps today's measure
+  const extraFromTurn = (g) => {
+    const n = monthsLeft(g);
+    if (!(n > 0)) return 0;
+    const needs = (g.targetThen ?? g.target) != null && g.funded != null ? Math.max(0, pmtToReach(rateOf(g), n, targetOf(g), atTurn(g))) : Number(g.neededMonthly) || 0;
+    return Math.max(0, needs - (Number(g.monthly) || 0));
+  };
+  const waiting = turn ? all.filter((g) => !(g.monthly > 0) && afterTurn(g)).sort((a, b) => String(a.targetDate).localeCompare(String(b.targetDate))) : [];
+  // what is left of the step in each month from the turn, once those goals have their extra
+  const left = Array.from({ length: Math.max(0, ...waiting.map(monthsLeft)) }, () => room);
+  if (turn) for (const g of all.filter((x) => x.monthly > 0 && afterTurn(x))) { const e = extraFromTurn(g); for (let k = 0; k < Math.min(left.length, monthsLeft(g)); k++) left[k] -= e; }
+  // waiting goals in date order, the sooner first: each takes what is left each month until it is reached; it waits its
+  // turn when it is reached by its date (to 50 cents a month). One that is not stays short past its date, so it holds the
+  // step and no later goal is said to start on that money; one due within the turn's first month gets nothing and holds nothing
+  let held = false;
+  const queued = waiting.filter((g) => {
+    const n = monthsLeft(g);
+    if (held || !(n > 0)) return false;
+    const r = rateOf(g), target = targetOf(g), draw = [];
+    let have = atTurn(g);
+    for (let k = 0; k < n; k++) { const d = Math.min(Math.max(0, left[k]), Math.max(0, target - have * (1 + r))); have = have * (1 + r) + d; draw.push(d); }
+    if (have + fv(r, n, 0.5) < target) { held = true; return false; }
+    draw.forEach((d, k) => { left[k] -= d; });
+    return true;
+  });
   const behind = all.filter((g) => !queued.includes(g)).sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
   const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
   return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn };
@@ -98,7 +123,15 @@ export function compute(plan, params = {}) {
   const nba = exp.leftOver !== null ? nextBest(plan, p) : null;
   const short = nba?.ready ? -nba.spare.monthly : exp.leftOver !== null ? -exp.leftOver : 0;
   // a retired household drawing from savings as the plan intends is not overspending (Next best action's `drawing`)
-  if (short > 0 && !nba?.drawing) add("overspend", "bad", "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}. Check the amounts, then find what to cut.`, ["cashflow", "expenses"]);
+  // short on the careful month (Side income's "count on"): said so, with what a month that brings the Income page's amount
+  // leaves (Next best action's spare.full, said to the nearest $10 as every page says it), review 2026-11-02. When a full
+  // month leaves money it is a lean month to plan for, not a plain overspend: amber ("warn"), not red (round 5)
+  if (short > 0 && !nba?.drawing) {
+    // a full month within $5 of $0 "only just about breaks even" (spare.fullKind "even"): no "about $0", and red, as good
+    // months do not make up for lean ones then (round 5)
+    const held = nba?.ready && nba.spare.held > 0.5, kind = held ? nba.spare.fullKind : null, about = held ? nba.spare.fullAbout : null, lean = held && kind === "ahead";
+    add("overspend", lean ? "warn" : "bad", lean ? "Lean months run short" : "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}${held ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${lean ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}. ${lean ? "Good months make up for lean ones; keep a cash cushion for the months in between, or spend less." : "Check the amounts, then find what to cut."}`, ["cashflow", "expenses"]);
+  }
   // a likely bill in April: the year's federal tax against what the paychecks take out by December (typed, else estimated
   // from pay) and what is already paid, the same answer as Withholding check; flagged from $1,000 left to pay
   let tax = null;

@@ -4,7 +4,7 @@
 // fund, the HSA, an IRA, middling debt, the 401(k) to the limit, then goals and the rest. Each step
 // says whether it is done, what is left, and, from the money left over each month after tax,
 // spending and what already goes to savings, about when the spare money gets it done.
-import { compute as computeIncome, countedOn } from "../../cashflow/income/compute.js";
+import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
@@ -14,8 +14,8 @@ import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
 import { compute as computeLimits } from "../../investments/limits/compute.js";
-import { compute as computePayoff, offer as payoffOffer } from "../../debt/payoff/compute.js";
-import { yearTaxes } from "../../cashflow/budget-percent/compute.js";
+import { offer as payoffOffer, savedPlan } from "../../debt/payoff/compute.js";
+import { yearTaxes, heldAfterTax, aboutTen, fullKind } from "../../cashflow/budget-percent/compute.js";
 import { compute as computeBusiness } from "../../career/business/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -33,7 +33,9 @@ export const HORIZON_MONTHS = 120;
  * compute(plan, { today }) -> {
  *   ready, missing,
  *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
- *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses) }
+ *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses),
+ *     full (monthly + held: what a month that brings the Income page's amount leaves), fullAbout (full to the nearest $10),
+ *     fullKind ("ahead" | "even" | "short": Budget (50/30/20)'s fullKind, how every page words the full month) }
  *            (all a month; spare may be negative; stateKnown: the state's income tax could be worked out, or the state has none;
  *            debtExtra: the extra a month the saved debt plan pays on top of the required payments, Pay off debts' `extra`),
  *   debtPlan: { extra, names, ids, until, months } | null (that saved extra: the debts it goes to, and when the last of them is gone),
@@ -87,30 +89,25 @@ export function compute(plan, params = {}) {
     spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
   // the saved debt plan (Pay off debts): an extra a month on top of the required payments is money already spoken for, until
   // the debts it is aimed at are gone (all of them, when it is aimed at none: it rolls from one to the next)
-  let pay = null;
-  try { pay = computePayoff(plan, { today }); } catch { pay = null; }
-  const debtPlan = pay?.hasData && pay.extra > 0 ? (() => {
-    const ids = pay.targets.length ? pay.targets : pay.debts.map((x) => x.id);
-    const ends = ids.map((id) => pay.chosen.debts.find((x) => x.id === id)).filter(Boolean);
-    const last = ends.length === ids.length && ends.every((x) => Number.isFinite(x.months)) ? ends.reduce((a, b) => (b.months > a.months ? b : a)) : null;
-    return { extra: pay.extra, ids, names: ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean), until: last?.endDate ?? null, months: last ? last.months : null };
-  })() : null;
+  // (Pay off debts' savedPlan: the one reading Budget (50/30/20) takes too, review 2026-11-02, round 5)
+  const saved = savedPlan(plan, { today });
+  const { ends: planEnds = [], ...debtPlanRest } = saved ?? {};
+  const debtPlan = saved ? debtPlanRest : null;
   spare.debtExtra = debtPlan ? debtPlan.extra : 0;
   // uneven pay counted carefully (Side income's "count on"): the rest of it is not planned with, and neither is the tax
   // set aside from it (a lean month sets aside less), so the month is the careful income less the tax on the careful
   // income. The tax lines stay the whole year's, as every tax page says them; `held` is the part not counted on after its
-  // tax: the year's taxes worked again with the careful figures, the difference taken off it
-  spare.heldGross = inc.heldMonthly ?? 0;
-  spare.held = spare.heldGross;
-  if (spare.held > 0.005 && T) {
-    try {
-      const careful = { ...plan, income: (plan.income ?? []).map((x) => (countedOn(x) !== null ? { ...x, amount: countedOn(x), period: "monthly" } : x)) };
-      const TC = yearTaxes(careful, { today, inc: computeIncome(careful, { today }) });
-      const taxOnHeld = ((T.federal + T.payroll + T.state) - (TC.federal + TC.payroll + TC.state)) / 12;
-      spare.held = Math.max(0, spare.heldGross - Math.max(0, taxOnHeld));
-    } catch { spare.held = spare.heldGross; }
-  }
+  // tax: the year's taxes worked again with the careful figures, the difference taken off it (Budget's heldAfterTax, beside
+  // yearTaxes, so Budget (50/30/20) takes the same careful month; review 2026-11-02)
+  { const H = heldAfterTax(plan, { today, inc, T }); spare.heldGross = H.gross; spare.held = H.held; }
   spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra - spare.held;
+  // what a month that brings the Income page's amount leaves (the careful month plus what it holds back), and that figure
+  // to the nearest $10 (fullAbout), the one every page that says it shows (review 2026-11-02, round 5: Next best action
+  // and Health score said "about $1,200", the Dashboard, Expenses, Budget and Needs attention "$1,197")
+  spare.full = spare.monthly + spare.held;
+  spare.fullAbout = aboutTen(spare.full);
+  // ahead / even (within $5 of $0: "just about breaks even", never "about $0") / short, the one reading every page words
+  spare.fullKind = fullKind(spare.full);
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);
@@ -120,14 +117,23 @@ export function compute(plan, params = {}) {
   const steps = [];
   const add = (s) => steps.push({ gap: null, roomYearly: null, doneDate: null, startDate: null, monthly: null, capacity: null, ...s });
 
-  // 0. the bills. A retired household living on its savings as the plan intends is not overspending: it is done
+  // 0. the bills. A retired household living on its savings as the plan intends is not overspending: it is done.
+  // Short on the careful month (uneven pay counted at what you can count on): said so, with what a month that brings the
+  // Income page's amount leaves (spare + held), and the way out without a goal to pause when there is none (review 2026-11-02)
+  const careful = spare.held > 0.5, fullMonth = spare.full, fullIs = spare.fullKind;
+  const ways = ["Trim spending", ...(spare.debtExtra ? ["lower that extra"] : []), ...(spare.goalSaving > 0.5 ? ["pause a goal"] : [])];
+  const waysWords = ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}` : ways[0];
+  const shortWords = `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}`;
+  const shortDetail = !careful ? `${shortWords}. ${waysWords} first.`
+    : fullIs === "ahead" ? `${shortWords}, with uneven pay counted at what you can count on (Side income). A month that brings the Income page's amount leaves about ${money(fullMonth)}, so good months make up for lean ones; to be safe in a lean month, ${waysWords.charAt(0).toLowerCase()}${waysWords.slice(1)}.`
+      : `${shortWords}, with uneven pay counted at what you can count on (Side income); even a month that brings the Income page's amount ${fullIs === "even" ? "only just about breaks even" : `is about ${money(-fullMonth)} short`}. ${waysWords} first.`;
   let drawing = null;
   if (spare.monthly < 0) { try { drawing = drawingAsPlanned(plan, { today }); } catch { drawing = null; } }
   if (drawing) add({ id: "bills", title: "Spend within what the plan can carry", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
     detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can carry about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
   else add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
     detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}${spare.held > 0.5 ? ", counting uneven pay at what you can count on" : ""}.`)
-      : `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}. Trim spending${spare.debtExtra ? ", lower that extra" : ""} or pause a goal first.`, go: ["cashflow", "expenses"] });
+      : shortDetail, go: ["cashflow", "expenses"] });
 
   // 0b. a household no paycheck takes tax from (a freelancer): this year's tax on what is already earned is the IRS's money,
   // so the cushion steps below leave it out (Liquidity's taxOwed, from Estimated payments' taxOwedNow); an estimated payment
@@ -192,10 +198,11 @@ export function compute(plan, params = {}) {
   // 3. expensive debt, most expensive first (mortgages left out)
   // a debt the saved debt plan's extra reaches is being paid off already: the step is under way, with the month the last
   // of them is gone (Pay off debts' own date), and no spare money is counted for it twice; one it does not reach stays to do
-  const reached = (d) => !!debtPlan && debtPlan.ids.includes(d.id) && Number.isFinite(pay.chosen.debts.find((x) => x.id === d.id)?.months);
+  const endOf = (id) => planEnds.find((x) => x.id === id);
+  const reached = (d) => !!debtPlan && debtPlan.ids.includes(d.id) && Number.isFinite(endOf(d.id)?.months);
   const debtStep = (list) => {
     const on = list.filter(reached), off = list.filter((d) => !reached(d));
-    const ends = on.map((d) => pay.chosen.debts.find((x) => x.id === d.id)).sort((a, b) => a.months - b.months);
+    const ends = on.map((d) => endOf(d.id)).sort((a, b) => a.months - b.months);
     const until = ends.length ? ends[ends.length - 1].endDate : null;
     const names = on.map((d) => d.name);
     const sentence = on.length && until ? `${money(debtPlan.extra)} a month extra already goes to ${listWords(names)} (Pay off debts), on top of the required payments: ${on.length === 1 ? "it is" : "they are"} gone by about ${monthWords(until)}.` : "";

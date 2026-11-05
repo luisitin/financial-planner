@@ -249,6 +249,113 @@ test("goalsBehind: a goal waits its turn only while it can still be reached from
   assert.deepEqual(goalsBehind(two, { nba, today: "2026-11-02" }).queued.map((x) => x.id), ["trip", "col"]);
 });
 
+test("goalsBehind: a waiting goal fits only in what the behind goals already getting money leave of the step (review 2026-11-02, round 5)", () => {
+  // the goals step starts in December 2027 with $1,831 a month reaching it
+  const nba = { ready: true, steps: [{ id: "goals", startDate: "2027-12-02", capacity: 1831 }] };
+  const wedding = { id: "wed", name: "Wedding", status: "behind", monthly: 0, neededMonthly: 943, targetDate: "2029-12-01", targetThen: 36000, funded: 0, rate: 0 };
+  const car = { id: "car", name: "Car", status: "behind", monthly: 300, neededMonthly: 836, targetDate: "2029-03-01" };
+  const col = { id: "col", name: "College", status: "behind", monthly: 250, neededMonthly: 585, targetDate: "2038-08-15" };
+  const ef = { id: "ef", name: "Emergency fund", icon: "🛟", isEmergencyFund: true, status: "behind", monthly: 400, neededMonthly: 1189, targetDate: "2029-06-30" };
+  const soon = { id: "gift", name: "Gifts", status: "behind", monthly: 100, neededMonthly: 900, targetDate: "2027-06-01" };
+  // alone, the wedding's $1,500 a month from the turn ($36,000 over 24 months) fits in $1,831: it waits its turn
+  assert.deepEqual(goalsBehind({ goals: [wedding] }, { nba, today: "2026-11-02" }).queued.map((g) => g.id), ["wed"]);
+  // the car ($536 more) and college ($335 more) draw on the same step first: $1,831 - $871 = $960 is short of $1,500
+  const g = goalsBehind({ goals: [ef, car, col, wedding] }, { nba, today: "2026-11-02" });
+  assert.deepEqual(g.queued, []); assert.ok(g.behind.some((x) => x.id === "wed"));
+  // the emergency fund (filled in its own steps) and a goal due before the turn do not count against the step
+  const h = goalsBehind({ goals: [ef, soon, wedding] }, { nba, today: "2026-11-02" });
+  assert.deepEqual(h.queued.map((x) => x.id), ["wed"]);
+});
+
+test("goalsBehind (round 5, second pass): the other goals' extra is measured from the turn; a waiting goal that does not fit keeps the room", () => {
+  // the goals step starts in December 2027 (13 months away) with $800 a month reaching it
+  const T = "2026-11-02";
+  const nba = { ready: true, steps: [{ id: "goals", startDate: "2027-12-02", capacity: 800 }] };
+  const goal = (id, extra) => ({ id, name: id, status: "behind", rate: 0, funded: 0, targetDate: "2029-12-02", ...extra });
+  // the car gets $100 a month toward $12,000: $1,300 by the turn, so from then (24 months) $445.83 a month, $345.83 more
+  // (today's measure, $12,000 / 37 months less $100, is only $224.32 more)
+  const car = goal("car", { monthly: 100, targetThen: 12000, neededMonthly: 12000 / 37 });
+  // the wedding waits: $12,000 over the 24 months from the turn is $500 a month; $500 + $345.83 is more than $800
+  const wedding = goal("wedding", { monthly: 0, targetThen: 12000, neededMonthly: 12000 / 37 });
+  const g = goalsBehind({ goals: [car, wedding] }, { nba, today: T });
+  assert.deepEqual(g.queued, [], "before: $500 + $224.32 fit in $800, so it read 'starts later'");
+  assert.deepEqual(g.behind.map((x) => x.id).sort(), ["car", "wedding"]);
+  // with $900 reaching the step it fits, and waits its turn
+  const roomy = { ready: true, steps: [{ id: "goals", startDate: "2027-12-02", capacity: 900 }] };
+  assert.deepEqual(goalsBehind({ goals: [car, wedding] }, { nba: roomy, today: T }).queued.map((x) => x.id), ["wedding"]);
+  // a $36,000 wedding ($1,500 a month from the turn) does not fit; it is still short at its date and holds the step, so a
+  // $6,000 boat due in 2035 is not said to start on that money (before: the boat read "saving for it starts in December 2027")
+  const big = goal("wedding", { monthly: 0, targetThen: 36000, neededMonthly: 36000 / 37 });
+  const boat = goal("boat", { monthly: 0, targetThen: 6000, targetDate: "2035-06-02", neededMonthly: 6000 / 103 });
+  const b = goalsBehind({ goals: [big, boat] }, { nba, today: T });
+  assert.deepEqual(b.queued, []); assert.deepEqual(b.behind.map((x) => x.id).sort(), ["boat", "wedding"]);
+  assert.deepEqual(goalsBehind({ goals: [boat] }, { nba, today: T }).queued.map((x) => x.id), ["boat"], "alone, the boat waits its turn");
+  // a waiting goal due within the turn's first month is behind now and leaves the step to the others
+  const trip = goal("trip", { monthly: 0, targetThen: 5000, targetDate: "2027-12-20", neededMonthly: 400 });
+  assert.deepEqual(goalsBehind({ goals: [trip, boat] }, { nba, today: T }).queued.map((x) => x.id), ["boat"]);
+});
+
+test("goalsBehind (round 5, third pass): on the family plan a $12,000 wedding can be reached, so it waits; a $36,000 one cannot", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: nbaOf } = await import("../next-best-action/compute.js");
+  const { compute: goalsOf } = await import("../../goals/goals/compute.js");
+  const T = "2026-11-02";
+  const run = (...extra) => { const p = familyPlan(T); p.goals = p.goals.filter((x) => x.id !== "g-trip"); p.goals.push(...extra); const nba = nbaOf(p, { today: T }); return goalsBehind(goalsOf(p, { today: T }), { nba, today: T }); };
+  const g = (id, target, targetDate, more = {}) => ({ id, name: id, icon: "", target, targetDate, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false, ...more });
+  // second pass said "behind": it took the car's extra as lasting until December 2029, but the car is due in March 2029.
+  // Month by month from December 2027 the wedding gets about $405 for 15 months, then about $1,449 for 9: about $19,100
+  const w = run(g("g-wed", 12000, "2029-12-01"));
+  assert.deepEqual(w.queued.map((x) => x.id), ["g-wed"]); assert.ok(!w.behind.some((x) => x.id === "g-wed"));
+  assert.deepEqual(run(g("g-wed", 20000, "2029-12-01")).queued, [], "about $19,100 is the most it can be");
+  // a $36,000 wedding is behind (round 5's first finding stays fixed), and it holds the step: the 2035 boat is not said to
+  // start on that money; the boat alone waits
+  const big = run(g("g-wed", 36000, "2029-12-01"), g("g-boat", 6000, "2035-06-01"));
+  assert.deepEqual(big.queued.map((x) => x.id), []); assert.ok(big.behind.some((x) => x.id === "g-wed")); assert.ok(big.behind.some((x) => x.id === "g-boat"));
+  assert.deepEqual(run(g("g-boat", 6000, "2035-06-01")).queued.map((x) => x.id), ["g-boat"]);
+  // a $3,000 holiday getting $100 a month, due 3 days after the turn (January 2, 2028): it draws nothing from the step, so
+  // the boat still waits (second pass: its catch-up came out infinite and every later goal read behind)
+  const hol = run(g("g-boat", 6000, "2035-06-01"), g("g-hol", 3000, "2028-01-05", { monthly: 100 }));
+  assert.equal(hol.turn, "2028-01-02"); assert.deepEqual(hol.queued.map((x) => x.id), ["g-boat"]); assert.ok(hol.behind.some((x) => x.id === "g-hol"));
+});
+
+test("goalsBehind (round 5, third pass): month by month from the turn, a goal's catch-up lasts only until its own date", () => {
+  const T = "2026-11-02";
+  // the goals step starts in January 2027 with $2,328 a month reaching it (the retired household H-0777, in round figures)
+  const nba = { ready: true, steps: [{ id: "goals", startDate: "2027-01-02", capacity: 2328 }] };
+  // the trip gets $500 a month toward $12,000 ($3,000 put by): $4,000 at the turn, so $2,000 a month for the 4 months to
+  // its date, $1,500 more; Share B, $15,000 to go in 11 months, gets $828 for 4 months, then $2,328: $19,608
+  const trip = { id: "trip", name: "Trip", status: "behind", monthly: 500, targetThen: 12000, funded: 3000, rate: 0, targetDate: "2027-06-01", neededMonthly: 1489 };
+  const share = { id: "share", name: "Share B", status: "behind", monthly: 0, targetThen: 30000, funded: 15000, rate: 0, targetDate: "2028-01-01", neededMonthly: 1117 };
+  const g = goalsBehind({ goals: [trip, share] }, { nba, today: T });
+  assert.deepEqual(g.queued.map((x) => x.id), ["share"], "second pass: $1,500 + $1,364 a month is more than $2,328, so behind");
+  assert.deepEqual(g.behind.map((x) => x.id), ["trip"]); assert.equal(g.need, 989);
+  // at $1,700 a month: $200 x 4 + $1,700 x 7 = $12,700, short of $15,000: behind
+  assert.deepEqual(goalsBehind({ goals: [trip, share] }, { nba: { ready: true, steps: [{ id: "goals", startDate: "2027-01-02", capacity: 1700 }] }, today: T }).queued, []);
+  // two waiting goals: the sooner one takes what is left each month until it is reached, the later one has the rest
+  const a = { ...share, id: "a", funded: 22000 }, b = { ...share, id: "b", funded: 25000, targetDate: "2028-06-01" };
+  assert.deepEqual(goalsBehind({ goals: [trip, a, b] }, { nba, today: T }).queued.map((x) => x.id), ["a", "b"]);
+  // a goal getting money that is due within the turn's first month draws nothing (second pass: its need was infinite)
+  const soon = { ...trip, id: "soon", targetDate: "2027-01-20" };
+  assert.deepEqual(goalsBehind({ goals: [soon, share] }, { nba, today: T }).queued.map((x) => x.id), ["share"]);
+});
+
+test("goalsBehind (round 5, third pass): the two qa households whose shared-account goal can wait", async () => {
+  const fs = await import("node:fs");
+  const { compute: nbaOf } = await import("../next-best-action/compute.js");
+  const { compute: goalsOf } = await import("../../goals/goals/compute.js");
+  const T = "2026-11-02";
+  const run = (file) => {
+    const plan = JSON.parse(fs.readFileSync(new URL(`../../../qa/households/${file}`, import.meta.url), "utf8").match(/## Plan JSON\s*```json\s*([\s\S]*?)```/)[1]);
+    return goalsBehind(goalsOf(plan, { today: T }), { nba: nbaOf(plan, { today: T }), today: T });
+  };
+  // retired: the trip's catch-up ends in June 2027, so Share B ($15,000 to go by January 2028) can wait (second pass: behind)
+  const h777 = run("08-retired/goals/H-0777-two-goals-one-account.md");
+  assert.deepEqual(h777.queued.map((x) => x.id), ["g-share2"]); assert.deepEqual(h777.behind.map((x) => x.id), ["g-trip"]);
+  // a couple: the baby fund's catch-up ends in September 2027, so Share A can wait; Share B ($30,000 from nothing) cannot
+  const h177 = run("02-couple-no-kids/goals/H-0177-two-goals-one-account.md");
+  assert.deepEqual(h177.queued.map((x) => x.id), ["g-share1"]); assert.ok(h177.behind.some((x) => x.id === "g-share2"));
+});
+
 test("goalsBehind follows Next best action's goals step: its capacity is the spare money that reaches it once it starts", async () => {
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const { compute: nbaOf } = await import("../next-best-action/compute.js");
@@ -282,4 +389,40 @@ test("estimated tax: nothing ever typed asks what was paid instead of saying '$0
   p.taxes.estimated = { paid: [0, 0, 0, 0], typedAt: "2026-10-01" };
   assert.match(compute(p, { today: T }).alerts.find((x) => x.id === "estimates-behind").title, /^About \$[\d,]+ of estimated tax is past due$/);
   assert.equal(nbaOf(p, { today: T }).steps.find((s) => s.id === "tax").title, "Pay the estimated tax that is past due");
+});
+
+test("short only in a lean month is amber, not red (review 2026-11-02, round 5); short even in a full month stays red", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const D = "2026-11-02";
+  // the family's $600 of photography counted at $0; spending set so a full month leaves `left`
+  const base = () => { const p = familyPlan(D); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = base(); const s = next(p, { today: D }).spare; p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false }); return p; };
+  const lean = compute(at(297), { today: D }), o = lean.alerts.find((a) => a.id === "overspend");
+  assert.equal(o.level, "warn"); assert.equal(o.title, "Lean months run short");
+  // the full-month figure as every page says it: to the nearest $10
+  assert.match(o.detail, /counting uneven pay at what you can count on \(Side income\); a month that brings the Income page's amount leaves about \$300\. Good months make up for lean ones/);
+  assert.ok(lean.counts.warn >= 1);
+  const short = compute(at(-120), { today: D }).alerts.find((a) => a.id === "overspend");
+  assert.equal(short.level, "bad"); assert.equal(short.title, "You spend more than comes in");
+  assert.match(short.detail, /a month that brings the Income page's amount is still about \$120 short\. Check the amounts, then find what to cut\.$/);
+  // nothing held back: red, the plain sentence
+  const p = familyPlan(D); const s0 = next(p, { today: D }).spare;
+  p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s0.monthly + 100, period: "monthly", essential: false });
+  const plain = compute(p, { today: D }).alerts.find((a) => a.id === "overspend");
+  assert.equal(plain.level, "bad"); assert.doesNotMatch(plain.detail, /uneven pay/);
+});
+
+test("a full month within $5 of $0 'only just about breaks even' (no 'about $0'), and stays red (review 2026-11-02, round 5)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const D = "2026-11-02";
+  const base = () => { const p = familyPlan(D); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = base(); const s = next(p, { today: D }).spare; p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false }); return p; };
+  for (const left of [3, -2]) {
+    const o = compute(at(left), { today: D }).alerts.find((a) => a.id === "overspend");
+    assert.equal(o.level, "bad"); assert.equal(o.title, "You spend more than comes in");
+    assert.match(o.detail, /a month that brings the Income page's amount only just about breaks even\. Check the amounts, then find what to cut\.$/);
+    assert.doesNotMatch(o.detail, /about \$0\b/);
+  }
 });

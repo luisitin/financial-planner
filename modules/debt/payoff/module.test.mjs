@@ -105,3 +105,21 @@ test("twoDates: a debt the payoff plan finishes sooner than its own payment, wit
   for (const d of P.chosen.debts) if (d.id !== own.id) assert.equal(t[d.id], undefined);
   assert.deepEqual(twoDates(emptyPlan(), { today }), {});
 });
+
+test("savedPlan: the saved extra, the debts it goes to and when the last is gone; null without one or once they are paid (review 2026-11-02, round 5)", async () => {
+  const { savedPlan } = await import("./compute.js");
+  const T = "2026-09-15";
+  const none = debtPlan(); none.debtPlan = { ...none.debtPlan, extra: 0 };
+  assert.equal(savedPlan(none, { today: T }), null, "no extra saved");
+  const p = debtPlan(); p.debtPlan = { ...p.debtPlan, extra: 200, order: "avalanche" };
+  const s = savedPlan(p, { today: T }), d = compute(p, { today: T });
+  assert.equal(s.extra, 200);
+  assert.deepEqual(s.ids, d.debts.map((x) => x.id), "aimed at none: every debt, as it rolls from one to the next");
+  assert.deepEqual(s.ends.map((x) => x.id), s.ids);
+  const last = s.ends.reduce((a, b) => (b.months > a.months ? b : a));
+  assert.deepEqual([s.until, s.months], [last.endDate, last.months]);
+  // aimed at one debt that is paid off: the extra has stopped
+  const q = debtPlan(); q.debtPlan = { ...(q.debtPlan ?? {}), extra: 200, targets: ["gone-debt"] };
+  assert.equal(savedPlan(q, { today: T }), null);
+  assert.equal(savedPlan(emptyPlan(), { today: T }), null);
+});

@@ -26,6 +26,14 @@ A goal alerts' `goalsBehind` queues (nothing in yet, its turn on Next best actio
 from then) has status `"starts later"` and `startsIn` ("September 2027"); the table shows "starts September 2027" without
 amber, as Goals and the Timeline say.
 
+## Each month adds up (review 2026-11-02)
+The "Each month" table lists every line of Next best action's spare: income before tax, business costs, federal income
+tax (a credit reads "+"), Social Security and Medicare, the state's income tax, spending, retirement saving, saving for
+goals, the extra on debts (Pay off debts) and side income above what you count on, after its tax (Side income's "count
+on"), each optional line only above $0.50, so the rows add up to "Spare" or "Short". The note under it says how the state
+tax is counted (local taxes are not) instead of "State and local income tax is not included", which was wrong once the
+state's tax came off the month.
+
 ## Ideas / not yet
 - The advisor's plan side by side (`scenarios/advisor-plan`), a net-worth chart, a cover page with the household's name; a monthly or yearly copy saved with the date.
 

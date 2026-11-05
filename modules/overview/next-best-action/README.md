@@ -146,6 +146,22 @@ When costly debt is first in line for the spare money (no earlier step still fil
 add up to "Spare each month"; the note under it says it is a bonus to save when it comes, and the left-over step's detail
 adds "counting uneven pay at what you can count on".
 
+Review 2026-11-02 (round 5):
+- `held` is worked by Budget's `heldAfterTax` (cashflow/budget-percent, beside `yearTaxes`), which Budget (50/30/20)
+  calls too, so both pages take the same careful month (Budget used to split the full amount: $1,197 left over against
+  this page's $770 short). The formula is unchanged: held = heldGross − max(0, (the year's federal, payroll and state tax −
+  the same with each counted-on line as its careful figure) ÷ 12).
+- Short on the careful month (`spare.monthly < 0`, `held` > $0.50), the bills step says so: "..., with uneven pay counted
+  at what you can count on (Side income). A month that brings the Income page's amount leaves about $X (= monthly +
+  held), so good months make up for lean ones; to be safe in a lean month, trim spending ..." or, when even that month is
+  short, "even a month that brings the Income page's amount is about $X short". "Pause a goal" is offered only when money
+  goes to goals. Before, a freelancer whose full month leaves $1,197 read a plain overspend and was sent to cut a must-pay.
+  The pages that read this spare say the same: Expenses (tile and Close the gap card, no must-pays when the full month
+  leaves money), the Dashboard row and the setup's done screen (both from setup's `standing().lean`), Health score's saving
+  part, Needs attention's overspend alert (overview/alerts: "Lean months run short", amber, when the full month leaves
+  money, the detail naming both figures), Budget's "Start from your expenses" card, and the
+  Income statement and Plan summary month lines (every line of the spare, so they add up).
+
 ## The tax step when nothing is typed (review 2026-11-02)
 With estimated tax past due and no payments ever typed (taxes/estimated `paidTyped` false), the step is "Type or pay this
 year's estimated tax": what was due if none were made, and to type what was paid. Paid from the cash already kept apart for
@@ -154,3 +170,16 @@ tax, its line reads "From the cash kept apart for tax, today." instead of a mont
 ## Average markets, said so (round 5, 2026-11-02)
 Retired and drawing as planned: "If markets do as well as average, the plan can carry about $X a month of spending and the money
 lasts; less in a bad run of years (Will the money last? shows how much less)". The figure is the projection's average-market one.
+
+## One full-month figure (review 2026-11-02, round 5)
+`spare.full` = `spare.monthly + spare.held`: what a month that brings the Income page's amount leaves. `spare.fullAbout` =
+`aboutTen(full)` (cashflow/budget-percent: to the nearest $10, never -0) is how every page says it, with "about": this page's
+bills step, Health score, the Dashboard and the setup's done screen, Expenses, Budget, Budget (50/30/20) and Needs attention.
+Before, this page and Health score said "about $1,200" and the others "$1,197" for the same month. Test: `module.test.mjs`
+("one full-month figure").
+
+`spare.fullKind` = `fullKind(spare.full)` (review 2026-11-02, round 5, second review): "ahead" ($5 or more), "even" (within
+$5 of $0) or "short", the one reading every page words the full month by. "even" reads "even a month that brings the
+Income page's amount only just about breaks even" (no "about $0"), with the usual way out. The saved debt plan's extra is
+read with Pay off debts' `savedPlan` (this page's own code, moved there), so Budget (50/30/20) takes the same extra. Tests:
+`module.test.mjs`.

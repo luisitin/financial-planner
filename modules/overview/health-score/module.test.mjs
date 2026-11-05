@@ -40,6 +40,20 @@ test("improving the plan raises the score: a full cushion and reviewed assumptio
   assert.ok(d.score > before + 10, `${before} -> ${d.score}`);
 });
 
+test("short on the careful month (review 2026-11-02): the saving part says it counts uneven pay at what you can count on, and what a full month leaves", async () => {
+  const { compute: next } = await import("../next-best-action/compute.js");
+  // nothing saved yet, so the saving part reads the month itself; the side income ($600) counted at $0
+  const plan = () => { const p = familyPlan(); p.retirement.contributions = []; p.goals = []; return p; };
+  const at = (leftInFull) => { const p = plan(); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: next(plan(), { today: TODAY }).spare.monthly - leftInFull, period: "monthly", essential: false }); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const good = at(150), s = next(good, { today: TODAY }).spare;
+  assert.ok(s.monthly < 0 && s.held > 0.5);
+  assert.match(part(compute(good, { today: TODAY }), "saving").detail, /a month more goes out than comes in after tax, counting uneven pay at what you can count on \(Side income\); a month that brings the Income page's amount leaves about \$150\.$/);
+  assert.match(part(compute(at(-120), { today: TODAY }), "saving").detail, /a month that brings the Income page's amount is still about \$120 short\.$/);
+  // nothing held back: the plain sentence
+  const p = plan(); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: next(plan(), { today: TODAY }).spare.monthly + 100, period: "monthly", essential: false });
+  assert.match(part(compute(p, { today: TODAY }), "saving").detail, /^About \$100 a month more goes out than comes in after tax\.$/);
+});
+
 test("no retirement verdict before Social Security is known: not scored, the top fix is to add it; Quick answers and the Timeline say nothing either way (round 4)", async () => {
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const { answerFor } = await import("../quick/compute.js");
@@ -97,4 +111,24 @@ test("Goals part: a goal waiting its turn on Next best action counts as on track
   assert.match(part.detail, /2 of 2 goals with a date are done or on track, counting one waiting its turn\./);
   assert.equal(part.fix, null);
   assert.doesNotMatch(JSON.stringify(compute(p, { today: T }).parts), /needs more each month/);
+});
+
+test("the full-month figure is Next best action's own, to the nearest $10, as every page says it (review 2026-11-02, round 5)", async () => {
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const plan = () => { const p = familyPlan(); p.retirement.contributions = []; p.goals = []; p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const p = plan(); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: next(plan(), { today: TODAY }).spare.full - 297, period: "monthly", essential: false });
+  const s = next(p, { today: TODAY }).spare;
+  assert.ok(s.monthly < 0); assert.equal(s.fullAbout, 300);
+  assert.match(part(compute(p, { today: TODAY }), "saving").detail, /a month that brings the Income page's amount leaves about \$300\.$/);
+});
+
+test("a full month within $5 of $0 'only just about breaks even' in the saving part, never 'about $0' (review 2026-11-02, round 5)", async () => {
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const plan = () => { const p = familyPlan(); p.retirement.contributions = []; p.goals = []; p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = plan(); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: next(plan(), { today: TODAY }).spare.full - left, period: "monthly", essential: false }); return p; };
+  for (const left of [3, -2]) {
+    const detail = part(compute(at(left), { today: TODAY }), "saving").detail;
+    assert.match(detail, /a month that brings the Income page's amount only just about breaks even\.$/);
+    assert.doesNotMatch(detail, /about \$0\b/);
+  }
 });

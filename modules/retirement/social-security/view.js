@@ -1,8 +1,8 @@
 // modules/retirement/social-security/view.js -- DOM only. Per adult: paste the ssa.gov earnings
 // record (or type the statement's figure), pick a claiming age, see the monthly benefit at
 // each age. Saved with a green line; the projection picks it up.
-import { compute, parseRecord, fraFromMonthly } from "./compute.js";
-import { ssMissingFor } from "../../overview/setup/compute.js";
+import { compute, parseRecord, saveFigures, survivorWords } from "./compute.js";
+import { ssMissingFor, possessive } from "../../overview/setup/compute.js";
 
 let pending = null;
 let openFor = null;   // the person whose fold stays open after a save
@@ -41,7 +41,9 @@ export function render(root, ctx) {
     // an age in years and months, for a claim age that is not whole ("69 and 5 months")
     const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
     const paidMonthly = p.paidLine ? (p.paidLine.period === "monthly" ? p.paidLine.amount : null) : null;
-    const status = p.claimed && p.source !== "none" ? `${fmt.money(p.monthly, cur)} a month ${p.startedEarly ? "now" : `since ${ageWords(p.claimAge)}`}` : p.claimed && paidMonthly ? `${fmt.money(paidMonthly, cur)} a month now` : p.source === "record" || p.source === "typed" ? `${fmt.money(p.monthly, cur)} a month at ${ageWords(p.claimAge)}` : p.claimed ? "already getting it" : none ? "won't get it" : "nothing yet";
+    // 70 or over and not claimed: at 70 (compute's default from 70 on) that is what claiming now pays
+    const old70 = !p.claimed && p.ageNow !== null && p.ageNow >= 70;
+    const status = p.claimed && p.source !== "none" ? `${fmt.money(p.monthly, cur)} a month ${p.startedEarly ? "now" : `since ${ageWords(p.claimAge)}`}` : p.claimed && paidMonthly ? `${fmt.money(paidMonthly, cur)} a month now` : p.source === "record" || p.source === "typed" ? `${fmt.money(p.monthly, cur)} a month ${old70 && p.claimAge >= 70 ? "if claimed now" : `at ${ageWords(p.claimAge)}`}` : p.claimed ? "already getting it" : none ? "won't get it" : "nothing yet";
     const setNone = (on) => {
       pending = on ? `Saved: no Social Security for ${p.name}. The retirement pages plan without it.` : `${p.name}'s Social Security is open again: add a figure below.`; openFor = p.id;
       store.update((pl) => { pl.guide = pl.guide ?? {}; pl.guide.setup = pl.guide.setup ?? {}; pl.guide.setup.ss = pl.guide.setup.ss ?? {}; if (on) pl.guide.setup.ss[p.id] = "none"; else delete pl.guide.setup.ss[p.id]; });
@@ -53,23 +55,41 @@ export function render(root, ctx) {
     const recordBox = ui.h("textarea", { rows: 5, placeholder: "2024\t$69,000\n2023\t$66,500\n...", "aria-label": "Earnings record" }, (p.record ?? []).map((r) => `${r.year}\t${r.earnings}`).join("\n"));
     const typedIn = ui.input({ type: "number", value: p.claimed && p.source !== "none" ? Math.round(p.monthly * 100) / 100 : p.monthlyAtFRA ?? "", min: 0, step: "10", inputmode: "decimal", placeholder: "e.g. 2800", "aria-label": p.claimed ? `What ${p.name} gets a month now` : "Monthly benefit at full retirement age" });
     const futureSel = ui.select([{ value: "same", label: "keep earning about the same until I retire" }, { value: "none", label: "no more earnings from now" }], p.futureEarnings, { "aria-label": "Future earnings" });
+    const saidHere = ui.h("div");   // a word under the Save button when there was nothing to save
     const save = () => {
-      const record = parseRecord(recordBox.value);
-      // someone already paid types what arrives now: stored as the full-age amount that pays it at their claim age (as setup does)
-      const typedNow = Number(typedIn.value) || null;
-      const monthlyAtFRA = typedNow && p.claimed && p.birthYear ? fraFromMonthly(p.birthYear, Number(claimSel.value), typedNow) : typedNow;
-      pending = `${p.name}'s Social Security saved.`; openFor = p.id;
+      // what to store is decided in compute.js (saveFigures, tested there): for someone already paid, an unchanged amount
+      // changes nothing and the claim age on file stays; a different amount goes on the Income line that pays it when it
+      // started before the claim age on file, or becomes the full-age amount (setting an earnings record aside) when not
+      // (review 2026-11-02, round 5: Save with nothing changed turned an early claim into one made today)
+      const own = `setup-ss-${p.id}`;
+      const r = saveFigures(p, s, { claimAge: Number(claimSel.value), record: parseRecord(recordBox.value), typed: Number(typedIn.value) || null, futureEarnings: futureSel.value });
+      openFor = p.id;
+      // nothing changed: nothing is written, so the page does not redraw; the word goes under the button that was tapped
+      if (!r.changed) { const n = ui.notice("ok", `Nothing to save: these are the figures already in the plan for ${p.name}.`); saidHere.replaceChildren(n); setTimeout(() => n.remove(), 4000); return; }
+      const amount = fmt.money(Number(typedIn.value) || 0, cur);
+      // a corrected amount says where it went, and a record set aside says so and how to bring it back
+      const onIncome = r.addLine !== null ? `, added to the Income page as "${possessive(p)} Social Security"` : r.line ? ", on the Income page too" : "";
+      pending = r.recordRemoved || r.recordPasted || r.line || r.addLine !== null
+        ? `Saved: ${p.name} gets ${amount} a month${onIncome}.${r.recordRemoved ? ` The earnings record was removed, so this amount is the one the plan counts. To use the record again, paste it back under "Earnings record from ssa.gov" and tap Save.`
+          : r.recordPasted ? ` The earnings record you pasted was not kept, so this amount is the one the plan counts. To use the record instead, paste it again, leave the amount as it is, and tap Save.` : ""}`
+        : `${p.name}'s Social Security saved.`;
       store.update((pl) => {
-        pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = { claimAge: Number(claimSel.value), record, monthlyAtFRA, futureEarnings: futureSel.value };
+        pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = r.entry;
         // a figure replaces an earlier "won't get it"
-        if ((record.length || monthlyAtFRA) && pl.guide?.setup?.ss?.[p.id] === "none") delete pl.guide.setup.ss[p.id];
-        // the setup's own Income line for a benefit already paid follows the corrected amount
-        const line = p.claimed && typedNow ? (pl.income ?? []).find((x) => x.id === `setup-ss-${p.id}`) : null;
-        if (line) { line.amount = typedNow; line.period = "monthly"; }
+        if (((r.entry.record ?? []).length || Number(r.entry.monthlyAtFRA) > 0) && pl.guide?.setup?.ss?.[p.id] === "none") delete pl.guide.setup.ss[p.id];
+        // the Income line that pays it follows the corrected amount
+        const line = r.line ? (pl.income ?? []).find((x) => x.id === r.line.id) : null;
+        if (line) { line.amount = r.line.amount; line.period = "monthly"; }
+        // paid now with no Income line: setup's own one, as setup's "I already get it" writes it
+        if (r.addLine !== null) {
+          pl.income = pl.income ?? [];
+          const mine = pl.income.find((x) => x.id === own);
+          if (mine) Object.assign(mine, { amount: r.addLine, period: "monthly", startDate: "", endDate: "" });
+          else pl.income.push({ id: own, name: `${possessive(p)} Social Security`, type: "social", personId: p.id, amount: r.addLine, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+        }
       });
     };
     const est = p.estimate;
-    const old70 = !p.claimed && p.ageNow !== null && p.ageNow >= 70;
     root.append(ui.h("details", { class: "card fold fold-card", open: (openFor ? openFor === p.id : idx === 0) ? true : null },
       ui.h("summary", {}, ui.h("h2", {}, `${p.name}${p.age !== null ? `, ${p.age}` : ""}`), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" },
@@ -82,15 +102,14 @@ export function render(root, ctx) {
             p.claimed || (p.ageNow !== null && p.ageNow >= 70) ? null : ui.field("Future earnings", futureSel)),
           ui.row(ui.button(`Save ${p.name}'s Social Security`, save),
             none ? ui.button(`Undo: ${p.name} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${p.name} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
+          saidHere,
         ];
         // a couple: what this person keeps if the other dies first, and any top-up on the other's record (F-033)
         const partner = partnerOf(p);
         const keeps = d.couple && partner && partner.source !== "none" ? d.couple.survivorMonthly[p.id] : null;
         const topUp = d.couple && partner ? d.couple.spousal[p.id] : 0;
         const couplePart = keeps === null ? [] : [
-          ui.h("p", {}, keeps > p.monthly + 0.5
-            ? `If ${partner.name} dies first, ${p.name} keeps about ${fmt.money(keeps, cur)} a month: ${partner.name}'s benefit in place of ${p.monthly > 0.5 ? `${p.name}'s own ${fmt.money(p.monthly, cur)}` : "none of their own"}.`
-            : `If ${partner.name} dies first, ${p.name} keeps their own ${fmt.money(p.monthly, cur)} a month, and ${partner.name}'s ${fmt.money(partner.monthly, cur)} stops.`),
+          ui.h("p", {}, survivorWords(p, partner, keeps, (n) => fmt.money(n, cur))),
           topUp > 0.5 ? ui.h("p", {}, `On ${partner.name}'s record, ${p.name} also gets about ${fmt.money(topUp, cur)} a month more once ${partner.name} has claimed (a spouse's benefit).`) : null,
         ];
         // already getting it: a fact, not a choice of claiming ages (round 4, 2026-11-02); the figures fold away for corrections
@@ -104,6 +123,9 @@ export function render(root, ctx) {
         const w = p.wait;
         if (old70 && p.options.length && p.source !== "none") return [
           ui.h("p", {}, `${p.name} can claim now: about ${fmt.money(p.options[0].monthly, cur)} a month. Waiting adds nothing after 70.`),
+          // a saved claim age gone by: said here too, with the two ways to settle it (review 2026-11-02, round 5: the warning was
+          // hidden here, so the page showed the amount at 66 and "can claim now" side by side with no word why)
+          p.pastClaimAge ? ui.notice("warn", ui.h("span", {}, `The plan has ${p.name} claiming at ${ageWords(p.claimAge)}, which has passed, so it counts ${fmt.money(p.monthly, cur)} a month. Tap Save below to plan on claiming now instead, or if ${p.name} already gets it, add what arrives each month on the `, ui.h("a", { href: "#/cashflow/income" }, "Income page"), ".")) : null,
           ...couplePart,
           ...form,
         ];

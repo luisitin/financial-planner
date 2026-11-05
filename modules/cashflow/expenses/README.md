@@ -34,6 +34,15 @@ retirement plan intends" and a calm "Drawn from savings" card replaces Close the
 ## Tests
 `module.test.mjs`: totals and split, category shares and override of the essential default, income comparison and shortfall warning, upcoming/ended/one-off handling.
 
+## Short on the careful month (review 2026-11-02)
+With Side income's "count on" (Next best action's `spare.held` above $0.50), a short month comes from counting uneven pay
+at what you can count on. The left-over tile then reads "Short ... in a lean month; when all your uneven pay comes in, $X
+is left" (X = `spare.monthly + spare.held`, or "it is still $X short"). The Close the gap card's notice says it counts
+uneven pay at what you can count on (Side income) and what a month that brings the Income page's amount leaves; when that full month leaves money (monthly + held ≥ 0) it still lists the
+nice-to-haves that make a lean month safe but no longer says "The rest has to come from a must-pay" or lists must-pays:
+good months make up for lean ones, with the cash cushion in between. Before, a freelancer whose full month leaves $1,197
+was told to cut her rent.
+
 ## Ideas / not yet
 - Fill amounts from imported transactions (phase 3): average of the last 3 months per category.
 - Per-person expenses for the survivor scenario (phase 8).
@@ -41,3 +50,12 @@ retirement plan intends" and a calm "Drawn from savings" card replaces Close the
 ## Average markets, said so (round 5, 2026-11-02)
 "Drawn from savings": "If markets do as well as average, your plan can carry $X a month of spending and the money lasts; less in
 a bad run of years (Will the money last? shows how much less)". The figure is the projection's average-market one.
+
+## Review 2026-11-02, round 5
+The full-month figure on the left-over tile ("when all your uneven pay comes in, about $X is left") and in Close the gap is
+Next best action's `spare.fullAbout` (to the nearest $10), the one number every page says; the tile used to say "$1,197"
+where Next best action said "about $1,200". Test: `module.test.mjs` (the page drawn with a stand-in UI kit, read back as text).
+
+A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". The tile reads "when all your uneven pay comes in, it only just about breaks even", Close the gap "Even a
+month that brings the Income page's amount only just about breaks even. This is the first thing to fix.", and the must-pays
+are offered, as for a short month. Test: `module.test.mjs`.

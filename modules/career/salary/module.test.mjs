@@ -192,3 +192,33 @@ test("no salary: not ready; one-off and ended pay are left out", () => {
   p.income = [{ id: "x", name: "Signing bonus", type: "salary", personId: "p-ana", amount: 5000, period: "once" }, { id: "y", name: "Old job", type: "salary", personId: "p-ana", amount: 4000, period: "monthly", endDate: "2025-01-01" }];
   assert.equal(compute(p, { today: TODAY }).ready, false);
 });
+
+test("a raise from a later date: the job's settings are one record for both halves (review 2026-11-02, round 5)", async () => {
+  const { changeFrom } = await import("../../cashflow/income/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  // promotions set on this page, then a raise to $4,200 every two weeks from January saved on Income
+  p.whatIfs = { salary: { "i-ana": { raise: 0.04, promoEvery: 3, promoBump: 0.1, levelAge: null } } };
+  const was = p.income.find((x) => x.id === "i-ana");
+  const ch = changeFrom(was, { ...was, amount: 4200, startDate: "2027-01-01" }, T);
+  const i = p.income.findIndex((x) => x.id === "i-ana");
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: "ana-2027", ...ch.next });
+  const jobOn = (day) => compute(p, { today: day }).jobs.find((j) => j.personId === "p-ana");
+  const now = jobOn(T), later = jobOn("2027-02-01");
+  assert.equal(now.incomeId, "i-ana"); assert.equal(later.incomeId, "ana-2027");
+  assert.equal(now.key, "i-ana"); assert.equal(later.key, "i-ana");
+  // after the start date the settings typed before it still count: the raise and the promotions, not the Income page's 3%
+  assert.equal(later.raiseFrom, "typed"); near(later.settings.raise, 0.04); assert.equal(later.settings.promoEvery, 3);
+  near(later.pay, 4200 * 26, 1e-6);
+  // "Use it on the Income page" before the start date: today's pay and the pay still to come rise at the average; the
+  // settings stay under the one key
+  assert.equal(useAverage(p, now), true);
+  const g = Math.round(now.avgGrowth * 1000) / 1000;
+  assert.deepEqual(p.income.filter((x) => x.id === "i-ana" || x.continues === "i-ana").map((x) => x.growth), [g, g]);
+  assert.deepEqual(Object.keys(p.whatIfs.salary), ["i-ana"]);
+  // pressed after the start date, on the new pay: the pay that ended keeps its raise
+  p.income.find((x) => x.id === "i-ana").growth = 0.03;
+  assert.equal(useAverage(p, jobOn("2027-02-01")), true);
+  assert.equal(p.income.find((x) => x.id === "i-ana").growth, 0.03);
+  assert.deepEqual(Object.keys(p.whatIfs.salary), ["i-ana"]);
+});

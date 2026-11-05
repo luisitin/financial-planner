@@ -73,3 +73,12 @@ the Income amount, since the set-aside card below works on the typed average.
 ## Ideas / not yet
 - The months read from the ledger: deposits from the same payer into the account it lands in.
 - Expenses per side income (mileage logged here feeding the Self-employment page's expenses).
+
+## A raise from a later date: one record (review 2026-11-02, round 5)
+When the Income page splits a line for a raise from a later date, the new pay `continues` the old one (cashflow/income
+`chainId`). Each item has `key` = `chainId(line)`: the months are read from and saved to `whatIfs.sideIncome[key]`
+(`saveMonths(draft, item, months)`), and "Count on $X a month" / "Count the full ... again" set or remove `countOn` on every
+line of the chain (`setCountOn(draft, item, value)`; a line of the chain that is not repeating business pay keeps none).
+Before, the figure was changed only on the line on screen and the months were copied to the ending line, so turning the
+figure off before the start date brought it back on the start date, and months typed in between disappeared then.
+Test: `module.test.mjs` ("one record for both halves").

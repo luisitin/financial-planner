@@ -85,6 +85,25 @@ export function compute(plan, params = {}) {
 }
 
 /**
+ * savedPlan(plan, { today }) -> { extra, ids, names, until, months, ends } | null: the saved debt plan's extra a month on top of the
+ * required payments (money already spoken for until the debts it is aimed at are gone: all of them when it is aimed at
+ * none, as it rolls from one to the next), the debts it goes to, and when the last of them is gone (`until`, `months`; null
+ * when one never ends; `ends`: the chosen order's row for each of them, { id, name, months, endDate, ... }). null without a
+ * saved extra, or once the debts it was aimed at are paid off. The one reading of it
+ * that Next best action's left-over figure and Budget (50/30/20) both take, so they leave the same money (review
+ * 2026-11-02, round 5: Budget left the extra out and said "about $1,200" where every other page said "about $1,050").
+ */
+export function savedPlan(plan, params = {}) {
+  let pay = null;
+  try { pay = compute(plan, { today: params.today ?? null }); } catch { pay = null; }
+  if (!pay?.hasData || !(pay.extra > 0)) return null;
+  const ids = pay.targets.length ? pay.targets : pay.debts.map((x) => x.id);
+  const ends = ids.map((id) => pay.chosen.debts.find((x) => x.id === id)).filter(Boolean);
+  const last = ends.length === ids.length && ends.every((x) => Number.isFinite(x.months)) ? ends.reduce((a, b) => (b.months > a.months ? b : a)) : null;
+  return { extra: pay.extra, ids, names: ids.map((id) => pay.debts.find((x) => x.id === id)?.name).filter(Boolean), until: last?.endDate ?? null, months: last ? last.months : null, ends };
+}
+
+/**
  * twoDates(plan, { today }) -> { [debtId]: { own, plan, from: [names], extra } }: for each debt that the payoff plan finishes
  * at least a month sooner than its own payment does, both dates and why. `own` is the Debts page's date (its own payment
  * alone); `plan` is this page's (each finished debt's payment moves onto the next, plus any extra a month); `from` names the

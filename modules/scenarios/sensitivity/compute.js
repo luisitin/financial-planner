@@ -21,7 +21,8 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
  *   ready, missing, base: { affordableMonthly, spendingMonthly, endReal, success },
  *   rows: [{ id, label, help, baseLabel, low: { label, affordableMonthly, endReal, success }, high: {...}, swing (monthly), worse: "low"|"high" }]
  *     sorted by swing, largest first,
- *   biggest: row | null
+ *   biggest: row | null,
+ *   ssMethod: the method note's Social Security sentence for the rows built (ssMethodNote), or null
  * }
  * "low" and "high" are the input's own low and high settings; `worse` names the one that leaves less to spend.
  */
@@ -83,10 +84,23 @@ export function compute(plan, params = {}) {
     const claimAll = (age) => fromPlan((p) => { for (const x of movable) p.retirement.socialSecurity[x.id].claimAge = age; });
     const claims = [...new Set(movable.map((x) => Number(ss[x.id].claimAge) || 67))];
     const low = Math.min(70, Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow * 12 - 1e-9) / 12 : 62))));
+    // "now" only when it is now for everyone moved: within a month of each one's age today (review 2026-11-02, round 5: a
+    // couple of 64 and 60 read "now (64 and 6 months)", which is 19 months away for the younger one)
+    const nowForAll = movable.every((x) => x.ageNow !== null && Math.abs(low - x.ageNow) <= 1 / 12 + 1e-9);
     const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
+    const and = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
     const names = movable.map((x) => x.name);
-    add("claim", "When Social Security starts", movable.length < (sp?.people ?? []).filter((x) => ss[x.id]).length ? `${names.join(" and ")} only: the others already get it` : "everyone claims at the same age", claims.length === 1 ? `at ${ageWords(claims[0])}` : "as on the page",
-      { label: low > 62 ? `now (${ageWords(low)})` : "at 62", inputs: claimAll(low) }, { label: "at 70", inputs: claimAll(70) });
+    // who is left out, and why: already paid, or 70 or over (waiting adds nothing then); not "the others already get it" for
+    // someone who never claimed (review 2026-11-02, round 5)
+    const out = (sp?.people ?? []).filter((x) => ss[x.id] && !movable.includes(x));
+    const paid = out.filter((x) => x.claimed).map((x) => x.name), over = out.filter((x) => !x.claimed).map((x) => x.name);
+    const why = [paid.length ? `${and(paid)} already ${paid.length === 1 ? "gets" : "get"} it` : null, over.length ? `${and(over)} ${over.length === 1 ? "is" : "are"} 70 or over, when waiting adds nothing` : null].filter(Boolean).join("; ");
+    add("claim", "When Social Security starts", out.length ? `${and(names)} only: ${why}` : "everyone claims at the same age", claims.length === 1 ? `at ${ageWords(claims[0])}` : "as on the page",
+      { label: low > 62 && nowForAll ? `now (${ageWords(low)})` : `at ${ageWords(low)}`, inputs: claimAll(low) }, { label: "at 70", inputs: claimAll(70) });
+  }
+  // the trust-fund row stands on its own: it applies to benefits already paid as much as to claims still to come (review
+  // 2026-11-02, round 5: a retired couple who both get it lost the row, and with it their biggest risk)
+  if (I.incomes.some((x) => x.kind === "social")) {
     add("ss-cut", "Social Security paid in full", `if the trust fund runs dry in 2033, about ${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}% of benefits can be paid (2025 Trustees Report)`, "in full",
       { label: `${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}%`, inputs: fromInputs((c) => { for (const x of c.incomes) if (x.kind === "social") x.yearly *= SS_PAYABLE_IF_DEPLETED; }) },
       { label: "in full", inputs: copyInputs(I) });
@@ -99,5 +113,20 @@ export function compute(plan, params = {}) {
     { label: pct1(I.rates.taxRate + NUDGE.tax), inputs: fromInputs((c) => { c.rates.taxRate += NUDGE.tax; }) });
 
   rows.sort((a, c) => c.swing - a.swing);
-  return { ready: true, missing: [], base, rows, biggest: rows[0] ?? null };
+  const claimNames = rows.some((r) => r.id === "claim") ? movable.map((x) => x.name) : [];
+  return { ready: true, missing: [], base, rows, biggest: rows[0] ?? null, ssMethod: ssMethodNote(claimNames, rows.some((r) => r.id === "ss-cut")) };
+}
+
+/**
+ * The "How it is worked out" sentence for the Social Security rows, as they were built: who is moved and to which ages,
+ * and the trust-fund cut. Everyone moved claims at the same age, the oldest one's age today (never before 62), or at 70
+ * (review 2026-11-02, round 5: the note said "62, or their age today", but a couple of 64 and 60 both move to 64 and 6 months).
+ */
+export function ssMethodNote(names = [], cut = false) {
+  const and = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  const two = names.length === 2;
+  const claim = !names.length ? null : names.length === 1 ? `${names[0]} claiming at today's age (62 at the earliest) or at 70`
+    : `${and(names)} claiming at the same age, the ${two ? "older" : "oldest"} one's age today (62 at the earliest), or ${two ? "both" : "all"} at 70`;
+  const parts = [claim, cut ? `the ${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}% that would be payable if the retirement trust fund runs dry in 2033 (2025 Trustees Report)` : null].filter(Boolean);
+  return parts.length ? `Social Security: ${parts.join("; and ")}.` : null;
 }

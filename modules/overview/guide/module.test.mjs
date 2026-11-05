@@ -445,3 +445,19 @@ test("review 2026-11-02: the retiree guide with the retirement age blank, an end
   const young = structuredClone(q); young.household.people[0].birthDate = "1960-02-01"; young.household.people[1].birthDate = "1960-05-01";
   assert.ok(journeyStatus(J("retire"), young, { today }).more.some((m) => m.page === "retirement/rmd" && m.title === "When must I start taking money out?"));
 });
+
+test("review 2026-11-02 (round 5): an ended Social Security line on Income is not Social Security added; one that starts later is", () => {
+  const today = "2026-11-02";
+  const q = empty();
+  q.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1950-03-10" }, { id: "s", name: "Sam", role: "partner", birthDate: "1957-06-20" }];
+  q.accounts = [{ id: "ira", name: "Ruth's IRA", type: "ira", balance: 300000 }];
+  q.income = [{ id: "sv", name: "Survivor benefit", type: "social", personId: "r", amount: 900, period: "monthly", endDate: "2025-12-31" }];
+  const r = journeyStatus(J("retire"), q, { today });
+  assert.equal(st(r, "ss").state, "todo", "no other page counts an ended benefit");
+  assert.equal(r.finish.text, "Your ages, savings and spending are in your plan.");
+  // starting in 2030: the projection counts it from then, so it is in the plan
+  delete q.income[0].endDate; q.income[0].startDate = "2030-01-01";
+  const later = journeyStatus(J("retire"), q, { today });
+  assert.equal(st(later, "ss").state, "done");
+  assert.equal(later.finish.text, "Your ages, savings, spending and Social Security are in your plan.");
+});

@@ -55,7 +55,7 @@ export function render(root, ctx) {
     months.map((m, k) => ui.h("details", { class: "fold", open: k === 0 ? true : null },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, m.label), ui.h("span", { class: "fold-status" }, `ends at ${fmt.money(m.days[m.days.length - 1].balance, cur)}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")),
       ui.h("div", { class: "fold-body" }, dayRows(m.days)))),
-    ui.h("p", { class: "muted small" }, "Right column: the balance after that day. Typed items land on the 1st (bills) or the 15th (pay) unless they have a start date."),
+    ui.h("p", { class: "muted small" }, "Right column: the balance after that day. Typed items land on the 1st (bills) or the 15th (pay) unless they have a start date; a quarterly bill for your estimated tax lands on the IRS due dates (January 15, April 15, June 15, September 15)."),
   ));
 }
 

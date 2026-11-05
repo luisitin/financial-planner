@@ -99,10 +99,15 @@ export function render(root, ctx) {
   if (d.fromExpenses.length) {
     const nba = ctx.computeOf?.("overview/next-best-action", { today });
     const spare = nba?.ready ? nba.spare.monthly : null;
+    // short only in a lean month (Side income's "count on" holds part of uneven pay back): said as the other pages say it,
+    // with what a month that brings the Income page's amount leaves, to the nearest $10 (review 2026-11-02, round 5)
+    const lean = nba?.ready && nba.spare.held > 0.5 ? nba.spare : null;
     const n = d.fromExpenses.length;
     root.append(ui.card("Start from your expenses",
       ui.h("p", {}, `Your Expenses page has ${n} kind${n === 1 ? "" : "s"} of spending, ${fmt.money(d.fromExpensesTotal, cur)} a month in all. Use them as your envelopes, then change any of them.`),
-      spare !== null ? ui.h("p", { class: "muted small" }, spare >= 0 ? `After these, tax and your saving, about ${fmt.money(spare, cur)} is left each month: the same figure as the Dashboard.` : `These, tax and your saving come to about ${fmt.money(-spare, cur)} a month more than comes in: the same gap as the Dashboard.`) : null,
+      spare !== null ? ui.h("p", { class: "muted small" }, spare >= 0 ? `After these, tax and your saving, about ${fmt.money(spare, cur)} is left each month${lean ? ", counting uneven pay at what you can count on" : ""}: the same figure as the Dashboard.`
+        : lean ? `In a lean month, these, tax and your saving come to about ${fmt.money(-spare, cur)} more than comes in, counting uneven pay at what you can count on: the same gap as the Dashboard. ${lean.fullKind === "ahead" ? `A month that brings the Income page's amount leaves about ${fmt.money(lean.fullAbout, cur)}.` : lean.fullKind === "even" ? "Even a month that brings the Income page's amount only just about breaks even." : `Even a month that brings the Income page's amount is about ${fmt.money(-lean.fullAbout, cur)} short.`}`
+        : `These, tax and your saving come to about ${fmt.money(-spare, cur)} a month more than comes in: the same gap as the Dashboard.`) : null,
       ui.h("div", { class: "row" },
         ui.button("Use these as my budget", () => {
           pending = `${n} envelope${n === 1 ? "" : "s"} added from your expenses. Spending against them shows once a bank file is in; tap one to change it.`;

@@ -705,6 +705,25 @@ test("someone paid by their own business: the name follows after they are named,
   assert.equal(S.valuesFor(q, "have-amounts")["kind-setup-self"], "work");
 });
 
+test("a pay's name typed on Income stays when the money answers are saved again unchanged; setup's own unnamed names follow (round 5)", () => {
+  const q = empty(); S.applyYou(q, { who: "spouse", name: "Sam", partnerName: "Lena", kids: 0, state: "CO" });
+  const money = { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" }, "setup-partner": { status: "work", by: "self", amount: 40000, period: "annual" } }, other: {} };
+  S.applyMoney(q, money);
+  assert.deepEqual([inc(q, "setup-pay-setup-self").name, inc(q, "setup-pay-setup-partner").name], ["Sam's pay", "Lena's business"]);
+  inc(q, "setup-pay-setup-self").name = "My day job's pay";
+  inc(q, "setup-pay-setup-partner").name = "My wife's business";
+  S.applyMoney(q, S.valuesFor(q, "money"));
+  assert.deepEqual([inc(q, "setup-pay-setup-self").name, inc(q, "setup-pay-setup-partner").name], ["My day job's pay", "My wife's business"], "names typed on Income stay");
+  // the setup's own names for someone not named yet follow once they are named
+  const r = empty(); S.applyYou(r, { who: "spouse", kids: 0, state: "CO" });
+  S.applyMoney(r, money);
+  assert.deepEqual([inc(r, "setup-pay-setup-self").name, inc(r, "setup-pay-setup-partner").name], ["My pay", "My spouse's business"]);
+  r.household.people.find((x) => x.id === "setup-self").name = "Sam";
+  r.household.people.find((x) => x.id === "setup-partner").name = "Lena";
+  S.applyMoney(r, S.valuesFor(r, "money"));
+  assert.deepEqual([inc(r, "setup-pay-setup-self").name, inc(r, "setup-pay-setup-partner").name], ["Sam's pay", "Lena's business"]);
+});
+
 test("someone paid by their own business is asked what estimated tax is paid so far; it is spread over the quarters due (review 2026-11-02)", async () => {
   const { compute: estimated } = await import("../../taxes/estimated/compute.js");
   const T = "2026-11-02";
@@ -727,4 +746,254 @@ test("someone paid by their own business is asked what estimated tax is paid so 
   S.applyMoney(w, { people: { "setup-self": { status: "work", by: "employer", amount: 78000, period: "annual" } }, other: {}, taxPaid: "500", today: T });
   assert.equal(w.taxes?.estimated?.typedAt, undefined);
   assert.equal(S.valuesFor(w, "money").taxPaid, "");
+});
+
+test("Get started's pay question after a raise from a later date saved on Income: today's pay, before and after the start date (round 5)", async () => {
+  const { changeFrom, compute: income } = await import("../../cashflow/income/compute.js");
+  const D = "2026-11-02";
+  const near = (a, b, tol = 0.01, msg) => assert.ok(Math.abs(a - b) <= tol, msg ?? `${a} vs ${b}`);
+  const p = empty(); S.applyYou(p, { name: "Ana", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, other: {} });
+  // a raise to $66,000 from January, saved on Income (its split: the pay that ends keeps the setup's id)
+  const was = inc(p, "setup-pay-setup-self");
+  const ch = changeFrom(was, { ...was, amount: 66000, startDate: "2027-01-01" }, D);
+  const i = p.income.indexOf(was);
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: "raise-2027", ...ch.next });
+  const pays = (q, day) => income(q, { today: day }).active.filter((x) => x.personId === "setup-self").map((x) => [x.id, x.amount]);
+  // before the start date: today's pay is shown, and a new answer changes it and keeps the raise
+  const v = S.valuesFor(p, "money", { today: D });
+  assert.deepEqual([v.people["setup-self"].amount, v.people["setup-self"].period], [60000, "annual"]);
+  const q = structuredClone(p); v.people["setup-self"].amount = 62000; S.applyMoney(q, { ...v, today: D });
+  assert.deepEqual(pays(q, D), [["setup-pay-setup-self", 62000]]);
+  assert.deepEqual(pays(q, "2027-02-01"), [["raise-2027", 66000]]);
+  // the summary line counts today's pay once, not both halves
+  near(S.reflect(p, "money", { today: D }).monthly, 5000);
+  near(S.reflect(p, "money").monthly, 5000 + 5500, 1e-6, "without a day, every line (as before)");
+  // after the start date: the new pay is today's pay, shown and changed; the pay that ended stays as it was
+  const L8 = "2027-02-01";
+  const w = S.valuesFor(p, "money", { today: L8 });
+  assert.equal(w.people["setup-self"].amount, 66000);
+  const r = structuredClone(p); w.people["setup-self"].amount = 70000; S.applyMoney(r, { ...w, today: L8 });
+  assert.deepEqual(pays(r, L8), [["raise-2027", 70000]]);
+  assert.deepEqual([inc(r, "setup-pay-setup-self").amount, inc(r, "setup-pay-setup-self").endDate], [60000, "2026-12-31"]);
+  // its name follows the answer as the setup's own names do (an employer, then their own business)
+  w.people["setup-self"].by = "self"; S.applyMoney(r, { ...w, today: L8 });
+  assert.deepEqual([inc(r, "raise-2027").type, inc(r, "raise-2027").name, inc(r, "setup-pay-setup-self").type], ["business", "Ana's business", "salary"]);
+  // the raise is the setup's own pay carried on, not pay "already in your plan": the question still asks for it
+  assert.deepEqual(S.existingPay(p, "setup-self"), []);
+  // a box cleared, or "Not working now", removes the setup's pay and the raise that carries it on; other pay stays
+  const c = structuredClone(p); c.income.push({ id: "gig", name: "Gig", type: "business", personId: "setup-self", amount: 300, period: "monthly" });
+  S.applyMoney(c, { people: { "setup-self": { status: "none" } }, other: {}, today: D });
+  assert.deepEqual(c.income.map((x) => x.id), ["gig"]);
+  // payLineNow: the setup's line without a day, or before the start; the line carrying it on after
+  assert.equal(S.payLineNow(p.income, "setup-self").id, "setup-pay-setup-self");
+  assert.equal(S.payLineNow(p.income, "setup-self", D).id, "setup-pay-setup-self");
+  assert.equal(S.payLineNow(p.income, "setup-self", L8).id, "raise-2027");
+  assert.equal(S.payLineNow(p.income, "nobody", L8), null);
+});
+
+test("short only in a lean month (Side income's count on): the done screen's sentence and figure say so (review 2026-11-02, round 5)", async () => {
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const D = "2026-11-02";
+  const near = (a, b, tol = 0.01, msg) => assert.ok(Math.abs(a - b) <= tol, msg ?? `${a} vs ${b}`);
+  // the family's $600 of photography counted at $0; spending set so a full month leaves `left`
+  const base = () => { const p = familyPlan(D); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = base(); const s = next(p, { today: D }).spare; p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false }); return p; };
+  const good = at(150), s = next(good, { today: D }).spare, st = S.standing(good, { today: D });
+  assert.ok(st.spare < 0 && s.held > 0.5);
+  assert.deepEqual(st.lean, { full: s.full, about: s.fullAbout, kind: "ahead" });
+  near(st.lean.full, 150, 0.01); assert.equal(st.lean.about, 150);
+  assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months.");
+  const bad = S.standing(at(-120), { today: D });
+  assert.ok(bad.lean && bad.lean.full < 0);
+  assert.equal(bad.headline, "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix, and the moves below start there.");
+  // nothing held back: the plain sentence, no lean figure
+  const p = familyPlan(D); const s0 = next(p, { today: D }).spare;
+  p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s0.monthly + 100, period: "monthly", essential: false });
+  const plain = S.standing(p, { today: D });
+  assert.equal(plain.lean, null); assert.match(plain.headline, /^More goes out than comes in each month\. That's the first thing to fix/);
+  // the done screen shows the lean figure on the left-over tile; the Dashboard reads the same sentence and figure
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("● Short in a lean month") && view.includes("st.lean.about"));
+  const dash = fs.readFileSync(`${HERE}../dashboard/view.js`, "utf8");
+  assert.ok(dash.includes("st.lean") && dash.includes("st.headline") && !dash.includes("Counting your uneven pay"), "the Dashboard has no sentence of its own");
+});
+
+// A raise from a later date saved on Income, as the Income page saves it: the line that ends keeps its id, the new pay
+// gets one and `continues` the line it carries on (cashflow/income changeFrom; review 2026-11-02, round 5)
+async function raiseOnIncome(p, id, values, today, newId) {
+  const { changeFrom } = await import("../../cashflow/income/compute.js");
+  const was = inc(p, id);
+  const ch = changeFrom(was, { ...was, ...values }, today);
+  assert.equal(ch.split, true);
+  const i = p.income.indexOf(was);
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: newId, ...ch.next });
+  return p;
+}
+
+test("Get started after the ended half of a raise is removed on Income: it shows the pay coming in, never deletes or doubles it (round 5)", async () => {
+  const { compute: income } = await import("../../cashflow/income/compute.js");
+  const D = "2026-11-02", L8 = "2027-02-01";
+  const p = empty(); S.applyYou(p, { name: "Ana", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, other: {}, today: D });
+  await raiseOnIncome(p, "setup-pay-setup-self", { amount: 66000, startDate: "2027-01-01" }, D, "raise-2027");
+  // February: the pay that ended is tidied away on Income ("Remove"); only the raise is left
+  p.income = p.income.filter((x) => x.id !== "setup-pay-setup-self");
+  const ids = (q) => q.income.map((x) => [x.id, x.amount]);
+  const now = (q) => income(q, { today: L8 }).monthly;
+  assert.equal(now(p), 5500);
+  // the question shows the pay coming in, and still asks for it (it is the setup's pay carried on)
+  const v = S.valuesFor(p, "money", { today: L8 });
+  assert.deepEqual([v.people["setup-self"].status, v.people["setup-self"].amount, v.people["setup-self"].period], ["work", 66000, "annual"]);
+  assert.deepEqual(S.existingPay(p, "setup-self"), []);
+  assert.equal(S.payLineNow(p.income, "setup-self", L8).id, "raise-2027");
+  // Continue as shown keeps the pay (it used to delete it: income 0)
+  const a = structuredClone(p); S.applyMoney(a, { ...structuredClone(v), today: L8 });
+  assert.deepEqual(ids(a), [["raise-2027", 66000]]); assert.equal(now(a), 5500);
+  // and a Continue that changes nothing saves nothing
+  assert.equal(S.wouldChange(p, (d) => S.applyMoney(d, { ...structuredClone(v), today: L8 })), false);
+  // a new figure changes that line in place: no second setup line beside it (it used to double: $11,000 a month)
+  const b = structuredClone(p); const vb = structuredClone(v); vb.people["setup-self"].amount = 70000; S.applyMoney(b, { ...vb, today: L8 });
+  assert.deepEqual(ids(b), [["raise-2027", 70000]]); assert.equal(Math.round(now(b)), Math.round(70000 / 12));
+  // "who pays you" changed there too, with the name the setup gave it
+  const c = structuredClone(p); const vc = structuredClone(v); vc.people["setup-self"].by = "self"; S.applyMoney(c, { ...vc, today: L8 });
+  assert.deepEqual([inc(c, "raise-2027").type, inc(c, "raise-2027").name, c.income.length], ["business", "Ana's business", 1]);
+  // a cleared box or "Not working now" still removes it, as before
+  const e = structuredClone(p); S.applyMoney(e, { people: { "setup-self": { status: "none" } }, other: {}, today: L8 });
+  assert.deepEqual(e.income, []);
+  // before the start date with the setup's own line removed instead: the raise to come is shown and changed, not doubled
+  const f = empty(); S.applyYou(f, { name: "Ana", who: "me" });
+  S.applyMoney(f, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, other: {}, today: D });
+  await raiseOnIncome(f, "setup-pay-setup-self", { amount: 66000, startDate: "2027-01-01" }, D, "raise-2027");
+  f.income = f.income.filter((x) => x.id !== "setup-pay-setup-self");
+  const vf = S.valuesFor(f, "money", { today: D });
+  assert.equal(vf.people["setup-self"].amount, 66000);
+  S.applyMoney(f, { ...vf, today: D });
+  assert.deepEqual(ids(f), [["raise-2027", 66000]]);
+  // the tax paid so far is still asked of someone whose pay carried on is their own business
+  const g = structuredClone(c); S.applyMoney(g, { ...structuredClone(S.valuesFor(g, "money", { today: L8 })), taxPaid: 900, today: L8 });
+  assert.equal(g.taxes.estimated.typedAt, L8);
+  // and the retirement screen starts "On my own" for them, as for the setup's own business line
+  assert.equal(S.valuesFor(g, "have-amounts", { today: L8 })["kind-setup-self"], "own");
+});
+
+test("Get started's pension and other money after a raise from a later date: the line in force today is read and changed (round 5)", async () => {
+  const { compute: income } = await import("../../cashflow/income/compute.js");
+  const D = "2026-11-02", L8 = "2027-02-01";
+  const p = empty(); S.applyYou(p, { name: "Lee", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired", pension: 2000 } }, other: { kind: "rental", amount: 900 }, today: D });
+  await raiseOnIncome(p, "setup-pension-setup-self", { amount: 2100, startDate: "2027-01-01" }, D, "pension-2027");
+  await raiseOnIncome(p, "setup-other", { amount: 1000, startDate: "2027-01-01" }, D, "other-2027");
+  const now = (q, day = L8) => income(q, { today: day }).monthly;
+  // before the start date: today's amounts; after it: the new ones (it showed 2000 and 900 while 2100 and 1000 came in)
+  const v0 = S.valuesFor(p, "money", { today: D });
+  assert.deepEqual([v0.people["setup-self"].pension, v0.other.amount], [2000, 900]);
+  const v = S.valuesFor(p, "money", { today: L8 });
+  assert.deepEqual([v.people["setup-self"].status, v.people["setup-self"].pension, v.other.kind, v.other.amount], ["retired", 2100, "rental", 1000]);
+  // re-answered after the start date: the line coming in changes, the one that ended stays as it was
+  const q = structuredClone(p); const vq = structuredClone(v); vq.people["setup-self"].pension = 2200; vq.other.amount = 1100; S.applyMoney(q, { ...vq, today: L8 });
+  assert.deepEqual([inc(q, "pension-2027").amount, inc(q, "setup-pension-setup-self").amount, inc(q, "other-2027").amount, inc(q, "setup-other").amount], [2200, 2000, 1100, 900]);
+  assert.equal(now(q), 3300);
+  // re-answered before it: today's line changes and the raise stays
+  const r = structuredClone(p); const vr = structuredClone(v0); vr.people["setup-self"].pension = 1950; S.applyMoney(r, { ...vr, today: D });
+  assert.deepEqual([now(r, D), now(r, L8)], [1950 + 900, 2100 + 1000]);
+  // the ended halves removed on Income: Continue as shown keeps both (it used to leave nothing), a new figure is no double
+  const t = structuredClone(p); t.income = t.income.filter((x) => x.endDate !== "2026-12-31");
+  const vt = S.valuesFor(t, "money", { today: L8 });
+  assert.deepEqual([vt.people["setup-self"].pension, vt.other.kind, vt.other.amount], [2100, "rental", 1000]);
+  const a = structuredClone(t); S.applyMoney(a, { ...structuredClone(vt), today: L8 });
+  assert.deepEqual(a.income.map((x) => [x.id, x.amount]), [["pension-2027", 2100], ["other-2027", 1000]]);
+  const b = structuredClone(t); const vb = structuredClone(vt); vb.other.amount = 1200; vb.other.kind = "support"; S.applyMoney(b, { ...vb, today: L8 });
+  assert.deepEqual(b.income.map((x) => [x.id, x.amount, x.type]), [["pension-2027", 2100, "pension"], ["other-2027", 1200, "support"]]);
+  assert.equal(inc(b, "other-2027").name, "Child support");
+});
+
+test("Social Security already coming in, after a raise from a later date: the ages screen reads and changes the line in force (round 5)", async () => {
+  const D = "2026-11-02", L8 = "2027-02-01";
+  const p = empty(); S.applyYou(p, { name: "Lee", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired" } }, other: {}, today: D });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1956, retired: true, ss: { mode: "getting", amount: 2400, started: 67 } } } }, D);
+  await raiseOnIncome(p, "setup-ss-setup-self", { amount: 2470, startDate: "2027-01-01" }, D, "ss-2027");
+  p.income = p.income.filter((x) => x.id !== "setup-ss-setup-self");
+  const v = S.valuesFor(p, "ages", { today: L8 });
+  assert.equal(v.people["setup-self"].ss.amount, 2470);
+  S.applyAges(p, v, L8);
+  assert.deepEqual(p.income.map((x) => [x.id, x.amount]), [["ss-2027", 2470]], "kept, and not doubled");
+  // the money screen keeps it too (Social Security is the ages screen's)
+  S.applyMoney(p, { ...S.valuesFor(p, "money", { today: L8 }), today: L8 });
+  assert.deepEqual(p.income.map((x) => x.id), ["ss-2027"]);
+});
+
+test("removing the partner removes their setup pay and the raise that carries it on, as the README says (round 5)", async () => {
+  const D = "2026-11-02";
+  const p = empty(); S.applyYou(p, { name: "Ana", who: "partner", partnerName: "Bo" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" }, "setup-partner": { status: "work", by: "self", amount: 40000, period: "annual" } }, other: {}, today: D });
+  await raiseOnIncome(p, "setup-pay-setup-partner", { amount: 48000, startDate: "2027-01-01" }, D, "bo-2027");
+  assert.equal(S.personReferenced(p, "setup-partner"), null, "the raise is the setup's own pay carried on");
+  const kept = S.applyYou(p, { name: "Ana", who: "me" });
+  assert.deepEqual(kept, []);
+  assert.deepEqual(p.household.people.map((x) => x.id), ["setup-self"]);
+  assert.deepEqual(p.income.map((x) => x.id), ["setup-pay-setup-self"]);
+  // pay typed on Income for them still keeps them
+  const q = empty(); S.applyYou(q, { name: "Ana", who: "partner", partnerName: "Bo" });
+  q.income.push({ id: "gig", name: "Bo's gig", type: "business", personId: "setup-partner", amount: 300, period: "monthly" });
+  assert.equal(S.personReferenced(q, "setup-partner"), "Income lists their pay");
+});
+
+test("'who pays you' changed before a raise's start date goes on to the raise (round 5: it stayed a salary)", async () => {
+  const D = "2026-11-02";
+  const p = empty(); S.applyYou(p, { name: "Ana", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, other: {}, today: D });
+  await raiseOnIncome(p, "setup-pay-setup-self", { amount: 66000, startDate: "2027-01-01" }, D, "raise-2027");
+  const v = S.valuesFor(p, "money", { today: D }); v.people["setup-self"].by = "self";
+  S.applyMoney(p, { ...v, today: D });
+  const line = (id) => [inc(p, id).type, inc(p, id).name, inc(p, id).amount];
+  assert.deepEqual(line("setup-pay-setup-self"), ["business", "Ana's business", 60000]);
+  assert.deepEqual(line("raise-2027"), ["business", "Ana's business", 66000], "the raise is paid the same way, its amount kept");
+  // and back to an employer: both again, and a careful figure for business pay goes from both
+  inc(p, "raise-2027").countOn = 3000; inc(p, "setup-pay-setup-self").countOn = 3000;
+  const w = S.valuesFor(p, "money", { today: D }); w.people["setup-self"].by = "employer";
+  S.applyMoney(p, { ...w, today: D });
+  assert.deepEqual([line("setup-pay-setup-self"), line("raise-2027")], [["salary", "Ana's pay", 60000], ["salary", "Ana's pay", 66000]]);
+  assert.equal(p.income.some((x) => "countOn" in x), false);
+  // a raise typed on Income as another kind on purpose stays as it is when "who pays you" is not changed
+  inc(p, "raise-2027").type = "bonus";
+  S.applyMoney(p, { ...S.valuesFor(p, "money", { today: D }), today: D });
+  assert.equal(inc(p, "raise-2027").type, "bonus");
+});
+
+test("the money answer is reported when all pay has ended or starts later: it was answered (round 5)", async () => {
+  const D = "2026-11-02";
+  const p = empty(); S.applyYou(p, { name: "Ana", who: "me" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, other: {}, today: D });
+  // a new job from January, nothing before it
+  inc(p, "setup-pay-setup-self").startDate = "2027-01-04";
+  assert.deepEqual(S.reflect(p, "money", { today: D }), { kind: "money", monthly: 5000, from: "2027-01-04" });
+  // pay that has ended, nothing after it
+  inc(p, "setup-pay-setup-self").startDate = ""; inc(p, "setup-pay-setup-self").endDate = "2026-10-31";
+  assert.deepEqual(S.reflect(p, "money", { today: D }), { kind: "money", monthly: 0, ended: true });
+  // pay coming in today: as before
+  inc(p, "setup-pay-setup-self").endDate = "";
+  assert.deepEqual(S.reflect(p, "money", { today: D }), { kind: "money", monthly: 5000 });
+  // nothing on Income: not answered
+  assert.equal(S.reflect(empty(), "money", { today: D }), null);
+  // the view words both ("from January 4, 2027"; "Nothing comes in now")
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("Nothing comes in now: the pay on Income has ended") && view.includes("a month before tax from ${dayWords(r.from)}"));
+});
+
+test("the done screen's lean month within $5 of $0: 'only just about breaks even', never 'about $0' (round 5)", async () => {
+  const { compute: next } = await import("../next-best-action/compute.js");
+  const D = "2026-11-02";
+  const base = () => { const p = familyPlan(D); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = base(); const s = next(p, { today: D }).spare; p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s.full - left, period: "monthly", essential: false }); return p; };
+  for (const left of [3, -2]) {
+    const st = S.standing(at(left), { today: D });
+    assert.equal(st.lean.kind, "even");
+    assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there.");
+  }
+  assert.equal(S.standing(at(8), { today: D }).lean.kind, "ahead");
+  assert.equal(S.standing(at(-8), { today: D }).lean.kind, "short");
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8"), dash = fs.readFileSync(`${HERE}../dashboard/view.js`, "utf8");
+  assert.ok(view.includes('st.lean.kind === "even" ? "it only just about breaks even"') && dash.includes('lean.kind === "even" ? "it only just about breaks even"'));
 });

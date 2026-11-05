@@ -18,7 +18,7 @@ import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
 import { QUARTERS } from "../../taxes/estimated/compute.js";
-import { perYear } from "../../../core/math/periods.js";
+import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { pmt, nper } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -200,8 +200,43 @@ const carName = (a) => /car|auto|vehicle|truck/i.test(a.name ?? "");
 export const existingOwe = (p, key) => { const o = OWE.find((x) => x.key === key); return o ? L(p, "accounts").filter((a) => !isSetupId(a.id) && a.type === o.type && (key !== "car-loan" || carName(a)) && (key !== "loan" || !carName(a))) : []; };
 /** A debt kind is not asked when the plan already has one made elsewhere, unless the setup made its own first (it stays the setup's). */
 export const oweTaken = (p, key) => existingOwe(p, key).length > 0 && !byId(L(p, "accounts"), oweId(key));
+/**
+ * The setup's own record and what carries it on: a line made here, or the new pay a raise from a later date saved on Income
+ * started from one (`continues`, review 2026-11-02, round 5), so the money question still asks for it, a cleared box
+ * clears both, and removing the person removes both.
+ */
+export const setupRoot = (x) => (isSetupId(x?.id) ? x.id : isSetupId(x?.continues) ? x.continues : null);
+const startOf = (x) => String(x?.startDate ?? "");
+/**
+ * lineNow(income, setupId, today) -> the line of a setup record's chain (the line with that id and every line that
+ * `continues` it: the new pay a raise from a later date saved on Income started, cashflow/income changeFrom) that Get
+ * started shows and changes: the one going today (the setup's own first, else the latest to start); none going, the next
+ * to start; nothing to come either, the setup's own line, else the last to start. Without `today`, the setup's own line,
+ * else the last to start. null when the chain is gone. Review 2026-11-02, round 5: the money screen read the setup's own
+ * id only, so once the ended half was removed on Income it showed an empty box, and Continue deleted the pay still coming
+ * in (typing it again doubled it); pension and other money read and wrote the half that had ended.
+ */
+export function lineNow(list, id, today = null) {
+  const chain = (list ?? []).filter((x) => x && (x.id === id || x.continues === id));
+  if (!chain.length) return null;
+  const own = chain.find((x) => x.id === id) ?? null;
+  const latest = (xs) => xs.reduce((a, b) => (startOf(b) >= startOf(a) ? b : a));
+  if (!today) return own ?? latest(chain);
+  const going = chain.filter((x) => activeOn(x, today));
+  if (going.length) return going.includes(own) ? own : latest(going);
+  const later = chain.filter((x) => startOf(x) > today);
+  if (later.length) return later.reduce((a, b) => (startOf(b) < startOf(a) ? b : a));
+  return own ?? latest(chain);
+}
+/** The pay Get started's money question shows and changes for a person: `lineNow` of their `setup-pay-<id>`. */
+export const payLineNow = (list, pid, today = null) => lineNow(list, `setup-pay-${pid}`, today);
+/**
+ * A line of a setup record's chain that starts after `rec` (the raise still to come, when `rec` is today's pay): "who pays
+ * you" changed before the start date goes on to it, as Salary's useAverage does for growth (review 2026-11-02, round 5).
+ */
+const laterInChain = (list, id, rec) => (list ?? []).filter((x) => x !== rec && (x.id === id || x.continues === id) && startOf(x) > startOf(rec));
 /** A pay already on Income for this person (not made here): the money question shows it instead of asking again. */
-export const existingPay = (p, pid) => L(p, "income").filter((x) => !isSetupId(x.id) && x.personId === pid && (x.type === "salary" || x.type === "business"));
+export const existingPay = (p, pid) => L(p, "income").filter((x) => !setupRoot(x) && x.personId === pid && (x.type === "salary" || x.type === "business"));
 export const existingSpend = (p) => L(p, "expenses").filter((x) => !isSetupId(x.id));
 /** The spending rows to ask: childcare only with children; a row whose categories the plan already has is not asked. */
 export const spendRows = (p) => { const have = new Set(existingSpend(p).map((x) => x.category)); return SPEND.filter((s) => (!s.kids || dependents(p).length > 0) && (byId(L(p, "expenses"), `setup-x-${s.key}`) || !s.covers.some((c) => have.has(c)))); };
@@ -235,7 +270,9 @@ export function referenced(plan, id) {
 }
 /** Why a person must stay: a record made on another page names them. null = nothing does. */
 export function personReferenced(plan, pid) {
-  if (L(plan, "income").some((x) => !isSetupId(x.id) && x.personId === pid)) return "Income lists their pay";
+  // the setup's own pay and the raise that carries it on (setupRoot) are the setup's: removing the person removes both
+  // (review 2026-11-02, round 5: the raise kept the person, "Kept Bo: Income lists their pay")
+  if (L(plan, "income").some((x) => !setupRoot(x) && x.personId === pid)) return "Income lists their pay";
   if (L(plan, "accounts").some((x) => !isSetupId(x.id) && x.ownerId === pid)) return "accounts are in their name";
   if ((plan?.retirement?.contributions ?? []).some((c) => !isSetupId(c.id) && c.personId === pid)) return "retirement saving is in their name";
   if ((plan?.retirement?.pensions ?? []).some((x) => x.personId === pid)) return "a pension is in their name";
@@ -319,8 +356,8 @@ function dropAccounts(draft, ids) {
 function dropPersonRecords(draft, pid) {
   const kept = dropAccounts(draft, [haveId("retire", pid)]);
   for (const k of kept) { const a = byId(draft.accounts, k.id); if (a) a.ownerId = ""; }   // kept, but its owner is gone
-  draft.income = draft.income.filter((x) => ![`setup-pay-${pid}`, `setup-pension-${pid}`, `setup-ss-${pid}`].includes(x.id));
-  for (const x of draft.income) if (x.id === "setup-other" && x.personId === pid) x.personId = "";
+  draft.income = draft.income.filter((x) => ![`setup-pay-${pid}`, `setup-pension-${pid}`, `setup-ss-${pid}`].includes(setupRoot(x)));
+  for (const x of draft.income) if (setupRoot(x) === "setup-other" && x.personId === pid) x.personId = "";
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => c.id !== `setup-contrib-${pid}`);
   if (!(draft.retirement.socialSecurity[pid]?.record ?? []).length) delete draft.retirement.socialSecurity[pid];
   for (const k of ["status", "ss", "ssWrote"]) if (draft.guide.setup[k]) delete draft.guide.setup[k][pid];
@@ -380,7 +417,10 @@ export function applyMoney(draft, v) {
     const status = ["work", "retired", "none"].includes(x.status) ? x.status : draft.guide.setup.status[p.id] ?? null;
     if (status) draft.guide.setup.status[p.id] = status;
     const base = { personId: p.id, growth: 0, startDate: "", endDate: "", taxable: true };
-    if (status === "work" && (byId(draft.income, `setup-pay-${p.id}`) || !existingPay(draft, p.id).length)) {
+    // today's pay: the setup's line, or the line of its chain in force today (lineNow: a raise from a later date started, even
+    // once the half that ended was removed on Income; review 2026-11-02, round 5)
+    const payId = `setup-pay-${p.id}`, mine = lineNow(draft.income, payId, v.today);
+    if (status === "work" && (mine || !existingPay(draft, p.id).length)) {
       const amount = pos(x.amount);
       const period = PAY_PERIODS.some((o) => o.value === x.period) ? x.period : "annual";
       // who pays: an employer (a salary, tax held back from each paycheck) or their own business or freelance work (no
@@ -388,39 +428,54 @@ export function applyMoney(draft, v) {
       // page talked about a W-4 and withholding a freelancer does not have (round 4, 2026-11-02)
       const self = x.by === "self";
       if (amount) {
-        const id = `setup-pay-${p.id}`; keep.add(id);
-        const old = byId(draft.income, id), oldType = old?.type, oldName = old?.name;
+        keep.add(payId);
         const type = self ? "business" : "salary";
         const nameFor = (t) => (t === "business" ? `${possessive(p)} business` : `${possessive(p)} pay`);
-        put(draft.income, id, { amount, period, type }, { name: nameFor(type), ...base });
+        // the line in force today is changed in place, never a second setup line beside it (round 5)
+        const old = mine, oldType = old?.type;
+        const rec = old ? Object.assign(old, { amount, period, type }) : put(draft.income, payId, { amount, period, type }, { name: nameFor(type), ...base });
         // the name follows the answer while it is still the setup's own (one renamed on Income stays)
         // the setup's own name also when the person was named (or renamed) in between: "My pay" becomes "Dee's business"
-        // (review 2026-11-02); a name typed on Income that is not of that shape stays
-        const setupShape = /^(My|.+'s) (pay|business)$/.test(String(oldName ?? ""));
-        if (old && oldName !== nameFor(type) && (oldName === nameFor(oldType) || (setupShape && (oldType !== type || /^My /.test(oldName))))) byId(draft.income, id).name = nameFor(type);
+        // (review 2026-11-02); a name typed on Income that is not of that shape stays. Only the setup's own names for someone
+        // not yet named ("My pay", "My spouse's business") follow a new name: one typed on Income ("My wife's business") stays
+        // when the answer is saved again unchanged (review 2026-11-02, round 5)
+        const follow = (r, wasType) => {
+          const name = r.name;
+          const setupShape = /^(My|.+'s) (pay|business)$/.test(String(name ?? ""));
+          const unnamed = /^My( (spouse|partner)'s)? (pay|business)$/.test(String(name ?? ""));
+          if (name !== nameFor(type) && (name === nameFor(wasType) || (setupShape && (wasType !== type || unnamed)))) r.name = nameFor(type);
+          if (wasType !== type && type !== "business") delete r.countOn;   // the careful figure is for uneven business pay only
+        };
+        if (old) follow(rec, oldType);
+        // "who pays you" changed: the raise still to come is paid the same way (round 5: it stayed a salary)
+        if (old && oldType !== type) for (const y of laterInChain(draft.income, payId, rec)) { const was = y.type; y.type = type; follow(y, was); }
       }
     }
     if (status === "retired") {
       const pension = pos(x.pension);
-      if (pension) { const id = `setup-pension-${p.id}`; keep.add(id); put(draft.income, id, { amount: pension }, { name: `${possessive(p)} pension`, type: "pension", period: "monthly", ...base }); }
+      // the line in force today (lineNow), changed in place: after a raise from a later date, the pension coming in now
+      if (pension) { const id = `setup-pension-${p.id}`; keep.add(id); const now = lineNow(draft.income, id, v.today); if (now) now.amount = pension; else put(draft.income, id, { amount: pension }, { name: `${possessive(p)} pension`, type: "pension", period: "monthly", ...base }); }
     }
   }
   // other money: the kind is written only when one is picked and it differs (a type set on Income, like investment, stays)
   const other = pos(v.other?.amount), picked = OTHER_KINDS.find((k) => k.value === v.other?.kind) ?? null;
   if (other) {
     keep.add("setup-other");
-    const self = adults(draft)[0], old = byId(draft.income, "setup-other");
+    // the line in force today (lineNow), changed in place; a kind picked anew goes on to what starts after it (round 5)
+    const self = adults(draft)[0], old = lineNow(draft.income, "setup-other", v.today);
     const kind = picked ?? (old ? null : OTHER_KINDS[3]);
     const kindFields = kind && (!old || old.type !== kind.value) ? { type: kind.value, taxable: kind.taxable !== false, personId: kind.value === "business" ? self?.id ?? "" : "" } : {};
-    put(draft.income, "setup-other", { amount: other, ...kindFields }, { name: (kind ?? OTHER_KINDS[3]).name, period: "monthly", growth: 0, startDate: "", endDate: "" });
-    const r = byId(draft.income, "setup-other");
-    if (kind && OTHER_KINDS.some((k) => k.name === r.name) && r.name !== kind.name) r.name = kind.name;   // follow the kind unless renamed on Income
+    const r = old ? Object.assign(old, { amount: other, ...kindFields }) : put(draft.income, "setup-other", { amount: other, ...kindFields }, { name: (kind ?? OTHER_KINDS[3]).name, period: "monthly", growth: 0, startDate: "", endDate: "" });
+    const named = (y) => { if (kind && OTHER_KINDS.some((k) => k.name === y.name) && y.name !== kind.name) y.name = kind.name; };   // follow the kind unless renamed on Income
+    named(r);
+    if (old && kindFields.type) for (const y of laterInChain(draft.income, "setup-other", r)) { Object.assign(y, kindFields); named(y); }
+    if (kindFields.type && kindFields.type !== "business") for (const y of [r, ...laterInChain(draft.income, "setup-other", r)]) delete y.countOn;   // the careful figure is for business pay only
   }
-  draft.income = draft.income.filter((x) => !isSetupId(x.id) || x.id.startsWith("setup-ss-") || keep.has(x.id));
+  draft.income = draft.income.filter((x) => { const root = setupRoot(x); return !root || root.startsWith("setup-ss-") || keep.has(root); });
   // estimated tax already paid this year, asked of someone paid by their own business (review 2026-11-02): spread over the
   // quarters already due, so Estimated payments, Needs attention and Next best action start from what was paid, not "$0"
   const taxPaid = v.taxPaid === "" || v.taxPaid === null || v.taxPaid === undefined ? null : nonneg(v.taxPaid);
-  if (taxPaid !== null && v.today && adults(draft).some((p) => byId(draft.income, `setup-pay-${p.id}`)?.type === "business")) {
+  if (taxPaid !== null && v.today && adults(draft).some((p) => payLineNow(draft.income, p.id, v.today)?.type === "business")) {
     const due = Math.max(1, QUARTERS(Number(v.today.slice(0, 4))).filter((q) => q.due <= v.today).length);
     const per = Math.floor((taxPaid / due) * 100) / 100;
     const paid = [0, 1, 2, 3].map((k) => (k < due ? per : 0));
@@ -462,7 +517,8 @@ export function applyAges(draft, v, today) {
   ensure(draft);
   draft.guide.setup.ss = draft.guide.setup.ss ?? {};
   const planAge = Number(draft.assumptions?.retirementAge ?? 65);
-  const keepIncome = new Set(L(draft, "income").filter((x) => x.id?.startsWith?.("setup-ss-")).map((x) => x.id));
+  // kept by the chain (setupRoot): a raise from a later date saved on Income carries the setup's line on (round 5)
+  const keepIncome = new Set(L(draft, "income").map(setupRoot).filter((r) => r?.startsWith("setup-ss-")));
   for (const p of people(draft)) {
     const x = (p.role === "dependent" ? { year: v.kids?.[p.id] } : v.people?.[p.id]) ?? {};
     const year = Math.round(Number(x.year) || 0);
@@ -480,11 +536,20 @@ export function applyAges(draft, v, today) {
     const prev = draft.guide.setup.ss[p.id] ?? null;
     if (mode && prev !== mode) draft.guide.setup.ss[p.id] = mode;
     const wrote = draft.guide.setup.ssWrote ?? {};
-    const rec = draft.retirement.socialSecurity[p.id] ?? {};
+    let rec = draft.retirement.socialSecurity[p.id] ?? {};
     const hasRecord = Array.isArray(rec.record) && rec.record.length > 0;
     const birthYear = p.birthDate ? Number(p.birthDate.slice(0, 4)) : null;
     const sid = `setup-ss-${p.id}`;
     if (mode !== "getting") keepIncome.delete(sid);
+    // "I get it now" before 62 is a disability or survivor benefit, paid unreduced: the entry is marked `paidUnreduced`
+    // (a pasted record or not, an amount or not) so the Social Security page never values it as an early claim; any other
+    // answer takes the mark off; from 62 the answer below decides (review 2026-11-02, round 5, third pass)
+    const young = mode === "getting" && now !== null && now < 62;
+    if ((young && !rec.paidUnreduced) || (mode && mode !== "getting" && rec.paidUnreduced)) {
+      const { paidUnreduced, ...rest } = rec;
+      rec = young ? { ...rec, paidUnreduced: true } : rest;
+      draft.retirement.socialSecurity[p.id] = rec;
+    }
     if (hasRecord || !mode) continue;
     const without = (o, ...ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
     const set = (next) => { if (JSON.stringify(next) !== JSON.stringify(rec)) draft.retirement.socialSecurity[p.id] = next; };
@@ -509,18 +574,32 @@ export function applyAges(draft, v, today) {
         } else {
           const top = Math.min(70, Math.max(62, now ?? 70));
           const started = Math.min(top, Math.max(62, Math.round(Number(ss.started) || 0) || (now !== null && now >= fra ? Math.round(fra) : top)));
-          set({ ...rec, claimAge: started, monthlyAtFRA: Math.round((amount / claimFactor(birthYear, started)) * 10) / 10 });
+          // the screen shows the claim age on file (its stepper held to 62..today's age) and the Income line's amount; given
+          // back as shown, the entry already there is kept (third pass: going through it again turned a disability benefit,
+          // $1,800 with 67 on file, into a claim at 62 worth $2,571.40 at full age). One marked `paidUnreduced` takes a new
+          // amount as its full-age amount while the age is left as shown; a different age is a claim from that age
+          const onFile = Number(rec.claimAge) || 0, given = Number(ss.started) || 0;
+          const asShown = onFile > 0 && (Math.abs(given - onFile) < 1 / 24 || Math.abs(given - Math.max(62, Math.min(top, onFile))) < 1 / 24);
+          const paid = L(draft, "income").find((i) => i.id === sid);
+          if (asShown && rec.paidUnreduced) set({ ...rec, monthlyAtFRA: amount });
+          else if (!(asShown && Number(rec.monthlyAtFRA) > 0 && paid && Math.abs(Number(paid.amount) - amount) < 0.5)) {
+            const { paidUnreduced, ...rest } = rec;
+            set({ ...rest, claimAge: started, monthlyAtFRA: Math.round((amount / claimFactor(birthYear, started)) * 10) / 10 });
+          }
         }
         noteWrote(null);
         keepIncome.add(sid);
-        put(draft.income, sid, { amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+        // the line in force today (lineNow), changed in place, never a second one beside it (round 5)
+        const line = lineNow(draft.income, sid, today);
+        if (line) line.amount = amount;
+        else put(draft.income, sid, { amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
       }
     } else if (mode === "none") {
       set(without(rec, "monthlyAtFRA", "claimAge"));
       noteWrote(null);
     }
   }
-  draft.income = draft.income.filter((x) => !x.id?.startsWith?.("setup-ss-") || keepIncome.has(x.id));
+  draft.income = draft.income.filter((x) => { const root = setupRoot(x); return !root?.startsWith("setup-ss-") || keepIncome.has(root); });
 }
 /** Q4. Which kinds of account to add (keys of HAVE; a kind the plan already has is not asked). Returns what had to be kept. */
 export function applyHavePicks(draft, keys) {
@@ -773,10 +852,13 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     return { name: self && self.name !== "Me" ? self.name : "", who: s.who ?? (partner ? partner.relation ?? "partner" : "me"), partnerName: partner && !/^My (spouse|partner)$/.test(partner.name) ? partner.name : "", kids: dependents(plan).filter((k) => k.id.startsWith("setup-kid-")).length, state: plan?.household?.state ?? "", own: ownPeople(plan).map((p) => p.name) };
   }
   if (screen === "money") {
-    const o = inc("setup-other");
+    // each answer read from the line in force today (lineNow): after a raise from a later date saved on Income, the new
+    // amount, and still once the half that ended was removed there (review 2026-11-02, round 5)
+    const now = (id) => lineNow(L(plan, "income"), id, today);
+    const o = now("setup-other");
     return {
       people: Object.fromEntries(ad.map((p) => {
-        const pay = inc(`setup-pay-${p.id}`), pension = inc(`setup-pension-${p.id}`);
+        const pay = payLineNow(L(plan, "income"), p.id, today), pension = now(`setup-pension-${p.id}`);
         const status = s.status?.[p.id] ?? (pay || existingPay(plan, p.id).length ? "work" : pension ? "retired" : null);
         return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "" }];
       })),
@@ -791,11 +873,11 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     return {
       people: Object.fromEntries(ad.map((p) => {
         const [y, m] = (p.birthDate || "").split("-");
-        const working = s.status?.[p.id] === "work" || existingPay(plan, p.id).length > 0 || !!inc(`setup-pay-${p.id}`);
+        const working = s.status?.[p.id] === "work" || existingPay(plan, p.id).length > 0 || !!payLineNow(L(plan, "income"), p.id, today);
         const typed = Number(ss[p.id]?.monthlyAtFRA) > 0 || (ss[p.id]?.record ?? []).length > 0;
         // a figure typed later wins over an earlier "none" (the retirement pages' notice can set it), so going through this screen never erases it
         const mode = typed && s.ss?.[p.id] === "none" ? "statement" : s.ss?.[p.id] ?? (typed ? "statement" : s.status?.[p.id] === "retired" ? "getting" : working ? "estimate" : "unsure");
-        const getting = inc(`setup-ss-${p.id}`);
+        const getting = lineNow(L(plan, "income"), `setup-ss-${p.id}`, today);
         const now = p.birthDate && today ? ageOn(p.birthDate, today) : null;
         return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: getting?.amount ?? (mode === "statement" ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), startedKnown: Number(ss[p.id]?.claimAge) > 0, record: (ss[p.id]?.record ?? []).length > 0 } }];
       })),
@@ -809,7 +891,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
       // someone paid by their own business has no employer plan: "On my own" first (review 2026-11-02)
-      const ownBusiness = byId(plan?.income ?? [], `setup-pay-${p.id}`)?.type === "business";
+      const ownBusiness = payLineNow(L(plan, "income"), p.id, today)?.type === "business";
       o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a ? "work" : ownBusiness ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
       o[`contrib-${p.id}`] = c?.amount ? Math.round(c.amount) : ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
     }
@@ -832,8 +914,20 @@ export function valuesFor(plan, screen, { today = null } = {}) {
 }
 
 /** One line back after a screen, as figures: the view words it ("Got it: about $7,400 a month before tax"). */
-export function reflect(plan, screen) {
-  if (screen === "money") { const m = L(plan, "income").length ? computeIncome(plan, {}).monthly : 0; return m > 0 ? { kind: "money", monthly: m } : null; }
+export function reflect(plan, screen, { today = null } = {}) {
+  // with today, only the pay coming in today: both halves of a raise from a later date used to be added up (round 5).
+  // Nothing coming in today, though the question was answered: what comes in from the first day pay starts (`from`), or,
+  // when every line has ended, `ended` (review 2026-11-02, round 5: the list said "Not answered yet")
+  if (screen === "money") {
+    if (!L(plan, "income").length) return null;
+    const m = computeIncome(plan, today ? { today } : {}).monthly;
+    if (m > 0 || !today) return m > 0 ? { kind: "money", monthly: m } : null;
+    const lines = L(plan, "income").filter((x) => x.period !== "once" && Number(x.amount) > 0);
+    const from = lines.map(startOf).filter((d) => d > today).sort()[0] ?? null;
+    const then = from ? computeIncome(plan, { today: from }).monthly : 0;
+    if (then > 0) return { kind: "money", monthly: then, from };
+    return lines.some((x) => x.endDate && String(x.endDate) < today) ? { kind: "money", monthly: 0, ended: true } : null;
+  }
   if (screen === "have-amounts") { const t = L(plan, "accounts").filter((a) => isHave(a.id) && a.type !== "property" && a.type !== "vehicle").reduce((s, a) => s + (Number(a.balance) || 0), 0); return t > 0 ? { kind: "have", total: t } : null; }
   if (screen === "owe" && picks(plan, "owe").includes("none")) return { kind: "debt-free" };
   if (screen === "owe-amounts") { const t = L(plan, "accounts").filter((a) => isOwe(a.id)).reduce((s, a) => s + Math.abs(Number(a.balance) || 0), 0); return t > 0 ? { kind: "owe", total: t } : setupOf(plan).paidInFull ? { kind: "paid-in-full" } : null; }
@@ -958,6 +1052,11 @@ export function standing(plan, { today }) {
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
   const retired = allRetired(plan);
   const drawing = retired && spare !== null && spare < 0;
+  // short only on the careful month (Side income's "count on" holds part of uneven pay back): what a month that brings the
+  // Income page's amount leaves, so the sentence and the left-over line say a lean month, not a plain overspend (review
+  // 2026-11-02, round 5: the done screen said "More goes out than comes in" above a move card saying good months make up)
+  // kind: Next best action's spare.fullKind ("ahead", "even" within $5 of $0, "short"), so no line says "about $0" (round 5)
+  const lean = !drawing && spare !== null && spare < 0 && (Number(nba?.spare?.held) || 0) > 0.5 ? { full: nba.spare.full, about: nba.spare.fullAbout, kind: nba.spare.fullKind } : null;
   // a debt step the saved debt plan already pays off is under way, not a move to make
   const steps = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.status !== "underway" && s.id !== "rest");
   const debtExtra = nba?.ready ? nba.spare.debtExtra ?? 0 : 0;
@@ -996,6 +1095,9 @@ export function standing(plan, { today }) {
   const cur = plan?.meta?.currency ?? "USD";
   const headline = bank ? `Your bank shows about ${fmtMoney(Math.round(bank.gap / 10) * 10, cur)} a month more going out than your plan lists, so the figures below may be too rosy. The first move fixes that.`
     : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
+    : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months."
+    : lean?.kind === "even" ? "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there."
+    : lean ? "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix, and the moves below start there."
     : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
       : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
         : first === "protect" ? "Life cover for the people who count on you comes first. The moves below start there."
@@ -1008,7 +1110,7 @@ export function standing(plan, { today }) {
   const empty = !L(plan, "accounts").length || (nw.assets === 0 && nw.liabilities === 0);
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
-    spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved,
+    spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved, lean,
     // the full cushion waits on purpose while costly debt is paid first (next-best-action cushionLater): "enough for now"
     cushionLater: (runwayStatus === "warn" || runwayStatus === "bad") ? cushionLater(nba) : null,
     bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null,

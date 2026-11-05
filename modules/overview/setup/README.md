@@ -115,6 +115,14 @@ as "statement", so going through the ages screen again keeps it.
   to the person's age today (at most 70); it starts at full retirement age for someone past it, else at today's age.
   Before 62 the payment can only be disability or survivor benefits (SSA, "Disability Benefits" and "Survivors
   Benefits": paid unreduced), so it is saved as the full-retirement amount, from full retirement age.
+  Review 2026-11-02 (round 5, third pass): that before-62 answer also marks the entry `paidUnreduced: true` (with an
+  amount or not, a pasted record or not; docs/DATA_MODEL.md), the only sign besides an Income line near the full-age
+  figure that tells the Social Security page a benefit paid from 62 on is not a reduced early claim. Any other answer
+  takes the mark off. From 62, the ages screen given back as it shows the plan (its "It started at age" stepper holds
+  the age on file to 62..today's age, and the amount is setup's Income line) keeps the entry as it is: going through it
+  again no longer turns Ana's disability benefit ($1,800, 67 on file) into a claim at 62 worth $2,571.40 at full age. A
+  marked entry takes a new amount as its full-age amount while the age is left as shown; another age is a retirement
+  claim from that age and the mark comes off.
 - **Birth date** saved as the 15th of the month (only the month and year are asked): a mid-month day, so no rule that
   turns on the exact day fires by accident (Social Security, for one, reads a birthday on January 1 as the year before:
   the note on ssa.gov's "Benefit reduction for early retirement" table). People keeps the exact day editable.
@@ -279,9 +287,66 @@ this README with its source; the debt guide's rates step waiting for real rates 
 - Retirement savings start "On my own" for someone whose setup pay is business income (no employer plan); the hint names an
   IRA, SEP-IRA or solo 401(k), and the extra box asks what the business adds instead of an employer match "on your pay stub".
 - The pay's name follows the answer also when the person was named or renamed in between ("My pay" becomes "Dee's
-  business"): any name of the setup's shape (`My|<name>'s pay|business`) follows when the kind changes, and "My ..." follows
-  a new name; a name typed on Income of another shape stays.
+  business"): any name of the setup's shape (`My|<name>'s pay|business`) follows when the kind changes, and the setup's own
+  names for someone not named yet ("My pay", "My business", "My spouse's pay", "My partner's business") follow a new name;
+  a name typed on Income of another shape stays. Review 2026-11-02, round 5: "My ..." used to mean any name starting with
+  "My", so "My wife's business" typed on Income became "Lena's business" when the money screen was saved again unchanged.
 - When someone's setup pay is their own business, the money screen also asks "Estimated tax paid so far this year" (once
   for the household: the return is one). A typed amount is spread evenly over the quarters already due (taxes/estimated
   `QUARTERS`; the cents on the last one) and saved with `taxes.estimated.typedAt`, so Estimated payments, Needs attention
   and Next best action start from it. Blank writes nothing, and the pages ask later ("if none were made").
+
+## Review 2026-11-02, round 5: a raise from a later date, and a lean month on the done screen
+- **The pay question** (`valuesFor(plan, "money", { today })`, `applyMoney`) shows and changes today's pay:
+  `payLineNow(income, personId, today)` is the setup's line (`setup-pay-<id>`, which keeps its id when Income splits it for
+  a raise), or once the raise has started, the line that `continues` it. Before the start date a new answer changes today's
+  pay and keeps the raise; after it, it changes the new pay and the pay that ended stays. `reflect(plan, "money", { today })`
+  counts only the pay coming in today (it added both halves). Before (the first pass of this review), the setup's id moved
+  to the raise: the question showed $66,000 for someone earning $60,000 and an answer overwrote the raise.
+  The raise is the setup's own pay carried on (`setupRoot`: a `setup-` id, or `continues` one), so `existingPay` leaves it
+  out: the screen still asks for the pay instead of "Already in your plan: Ana's pay $66,000 a year" (what the phone showed,
+  with no box), and a cleared box or "Not working now" removes the setup's pay and the raise together, as does removing
+  the person.
+- **The done screen in a lean month**: `standing()` returns `lean: { full, about }` when the month is short only because
+  Side income's "count on" holds part of uneven pay back (Next best action's `spare.held` above $0.50, not drawing in
+  retirement): `full` = `spare.full`, `about` = `spare.fullAbout` (to the nearest $10). The headline then reads "Counting your
+  uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with
+  the lean months." (a full month still short: "... even when uneven pay brings its full amount. That's the first thing to
+  fix ..."), and the left-over tile adds "That is a lean month: when all your uneven pay comes in, about $X is left" with
+  "● Short in a lean month". The Dashboard shows the same sentence and figure (it had its own). Tests: `module.test.mjs`.
+
+## Review 2026-11-02, round 5, second review: the line in force today, for every answer kept by a chain
+- **The line Get started reads and writes** is `lineNow(income, setupId, today)`: of the setup record's chain (the line with
+  that id and every line that `continues` it), the one going today (the setup's own first, else the one that started
+  last); none going, the next to start; nothing to come either, the setup's own line, else the last to start; without
+  `today`, the setup's own line, else the last to start. `payLineNow(income, personId, today)` is `lineNow` of
+  `setup-pay-<id>`. The money screen (pay, pension, other money), the ages screen (Social Security already coming in),
+  the estimated-tax question, the retirement screen's "On my own" start and "Your business adds" all use it. Before (the
+  second review's data-loss finding): once the ended half of a split line was removed on Income, `payLineNow` found
+  nothing, the box showed empty, and Continue deleted the pay still coming in (the chain is the setup's, so the clean-up
+  removed it); typing the pay again made a second `setup-pay-` line beside it and doubled income ($11,000 a month for
+  $5,500). Pension and other money read and wrote the half that had ended ($2,000 and $900 shown while $2,100 and $1,000
+  came in, and an answer changed nothing that counts).
+- **Writing never makes a second line** beside a chain: the answer goes on `lineNow`'s line in place (`amount`, how often,
+  who pays; the name rule as before); a new `setup-` line is made only when the chain is gone. Clean-up keeps or removes
+  whole chains by `setupRoot` (the `setup-` id a line is or continues), Social Security's included.
+- **"Who pays you" changed** goes on to the chain's lines that start after the one changed (the raise still to come is paid
+  the same way, its amount kept), with the setup's own names following as on the line itself, as Salary's `useAverage`
+  does for growth. Changed to an employer, the careful figure (`countOn`) is dropped from those lines, as Income does
+  when a line stops being business pay. A raise typed on Income as another kind on purpose is left alone while "who pays
+  you" is not changed. Other money's kind picked anew goes on the same way. My choice: lines that ended stay as they were
+  (they are what was paid).
+- **Removing a person** (`personReferenced`): the setup's own pay and the raise that carries it on (`setupRoot`) do not keep
+  them, so removing the partner removes both halves, as the first note above says; pay typed on Income for them still
+  keeps them.
+- **The money answer** (`reflect(plan, "money", { today })`): pay coming in today, as before; nothing today but pay that
+  starts later, `{ monthly, from }` (what comes in from its first day; "About $5,000 a month before tax from January 4,
+  2027"); every line ended, `{ monthly: 0, ended: true }` ("Nothing comes in now: the pay on Income has ended"). It used to
+  return nothing, so "Change an answer" said "Not answered yet" for a question that was answered.
+- **A full month within $5 of $0** (`lean.kind`, Next best action's `spare.fullKind`, Budget (50/30/20)'s `fullKind`):
+  "ahead" reads as before, "even" says "only just about breaks even" (no "about $0"), and the headline is "Counting your
+  uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about
+  breaks even. That's the first thing to fix ...". `lean` is `{ full, about, kind }`.
+Tests: `module.test.mjs` (the ended half removed, then Get started walked again; pension and other money after a start
+date; Social Security; removing a partner with a raise; who pays you before a start date; the money answer when pay has
+ended or starts later; a lean month that just about breaks even).

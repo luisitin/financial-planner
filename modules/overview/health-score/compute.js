@@ -59,7 +59,12 @@ export function compute(plan, params = {}) {
     // the saved debt plan's extra pays down what is owed: it adds to what you are worth as surely as saving does
     const saved = s.retirementSaving + s.goalSaving + (s.debtExtra ?? 0) + s.monthly;
     const rate = afterTax > 0 ? saved / afterTax : 0;
-    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, spare ${money(Math.max(0, s.monthly))} a month).` : `About ${money(-s.monthly)} a month more goes out than comes in after tax.`, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(Math.max(0, SAVING_TARGET * afterTax - saved))} a month more.`, ["overview", "next-best-action"]);
+    // short on the careful month: said so, with what a month that brings the Income page's amount leaves (review 2026-11-02;
+    // Next best action's spare.full, said as its fullAbout, the one figure every page shows, round 5)
+    // within $5 of $0 it "only just about breaks even" (fullKind), never "about $0" (round 5)
+    const full = s.full ?? s.monthly + (s.held ?? 0), about = s.fullAbout ?? full, kind = s.fullKind ?? (full >= 0 ? "ahead" : "short");
+    const shortWords = `About ${money(-s.monthly)} a month more goes out than comes in after tax${(s.held ?? 0) > 0.5 ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${kind === "ahead" ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}.`;
+    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, spare ${money(Math.max(0, s.monthly))} a month).` : shortWords, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(Math.max(0, SAVING_TARGET * afterTax - saved))} a month more.`, ["overview", "next-best-action"]);
   }
 
   // 3. debt: expensive balances against a year's income, and the share of income that goes to payments

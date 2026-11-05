@@ -13,7 +13,7 @@ import { compute as computeLiabilities } from "../../balance/liabilities/compute
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { perYear, payRhythm } from "../../../core/math/periods.js";
 import { countedOn } from "../income/compute.js";
-import { compute as computeEstimated } from "../../taxes/estimated/compute.js";
+import { compute as computeEstimated, QUARTERS } from "../../taxes/estimated/compute.js";
 
 /** Words in a bank line that mark a deposit as pay (a payroll deposit names the employer, not the person). */
 export const PAY_WORDS = /\b(payroll|salary|direct ?dep(osit)?|dir ?dep|directdep|paycheck|wages?|pay ?roll)\b/i;
@@ -25,11 +25,60 @@ export const TYPED_BAND = [0.5, 1.05];
 const DEBT_WORDS = new Set(["loan", "loans", "card", "cards", "credit", "payment", "payments", "pmt", "auto", "student", "mortgage", "line", "account", "personal", "the", "and"]);
 /** Words in a typed income's name that many bank lines share ("Dee's business" is not covered by a "Comcast Business" bill). */
 const INCOME_WORDS = new Set(["business", "income", "work", "freelance", "consulting", "side", "self", "salary", "wages", "from", "with", "monthly", "weekly", "yearly"]);
-/** A bank line that is a federal or state tax payment (IRS Direct Pay, EFTPS, a state's estimated payment). */
-export const TAX_WORDS = /\b(irs|usataxpymt|usa ?tax|eftps|treas(ury)? tax|estimated tax|est tax|1040 ?es|dept of revenue|franchise tax)\b/i;
+/**
+ * A bank line that pays federal income tax (IRS Direct Pay and EFTPS show as "IRS USATAXPYMT"; a 1040-ES payment). A state's
+ * payment (a revenue department, California's Franchise Tax Board) never pays the federal quarters, so it is not one
+ * (review 2026-11-02: an $800 franchise-tax fee took $11,200 of federal estimates out of the forecast).
+ */
+export const FEDERAL_TAX_WORDS = /\b(irs|usataxpymt|usa ?tax|eftps|treas(ury)? tax|1040 ?es)\b/i;
+/**
+ * A typed bill's name for a tax that is not the income tax: the word just before "tax" ("Property tax", "Car tax",
+ * "Quarterly payroll tax", "Sales tax"), so "Auto-pay estimated tax" and "Federal estimated tax (home business)" are not it
+ * (review 2026-11-02, round 5: the words alone took those as property or car tax), or a fee for filing ("Tax preparer").
+ */
+const OTHER_TAX_NAME = /\b(property|real estate|estate|home|house|council|school|vehicle|car|auto|road|sales|use|excise|payroll|franchise|hotel|occupancy|lodging|tourism|gift|inheritance|wealth)\s+tax/i;
+const TAX_FEE_NAME = /\b(prep|preparation|preparer|preparing|accountant|cpa|bookkeep\w*|software|filing|registration|licen[cs]e|permit)\b/i;
+/** A typed bill's name for a debt to the tax office that no other word turns into this year's estimates: an agreement, back taxes, a penalty, interest, a lien or levy, last year's. */
+const TAX_DEBT_NAME = /\b(agreement|back\s+tax(es)?|penalty|penalties|interest|levy|lien|debt|arrears|last year'?s?|prior year'?s?)\b/i;
+/**
+ * Softer debt words (a payment plan, what is owed, a balance): a debt to the tax office unless the name also says estimated,
+ * estimate or 1040-ES (SAYS_ESTIMATE): "Estimated tax installments" is this year's (installment is the IRS's own word for
+ * the 1040-ES payments), "IRS payment plan" is not (review 2026-11-02, round 5, third pass).
+ */
+const TAX_SOFT_DEBT_NAME = /\b(plan|installments?|instalments?|owed?|owing|balance)\b/i;
+/** A name that says estimated or estimate anywhere ("Quarterly installment - estimated tax", "Est. tax"), or 1040-ES. */
+const SAYS_ESTIMATE = /\bestimat(e|es|ed)\b|\best\.?\s+tax|\b1040.?es\b/i;
+/** A state's or a city's tax office or name: its estimated tax never pays the federal quarters ("NY" and "CA" only in capitals: "in", "or", "me" are words). */
+const STATE_NAMES = "alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|district of columbia";
+/** A department of revenue is always a state's (the federal one is the Internal Revenue Service); "revenue" alone is a state's only when the name does not say estimated ("Estimated tax on revenue" is the business's). */
+const STATE_NAME = new RegExp(`\\b(state|states|${STATE_NAMES}|ftb|franchise|(dept|department)\\.?\\s+of\\s+revenue|revenue\\s+(dept|department|agency|office)|taxation|comptroller|dor|city|local|county|municipal|borough|township|nyc|nys|school\\s+district)\\b`, "i");
+const REVENUE_WORD = /\brevenue\b/i;
+const STATE_CODE = /\b(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/;
+/** A typed bill's name that pays the federal tax office ("Internal Revenue" wins over the state word "revenue"). */
+const FEDERAL_NAME = /\b(federal|fed|irs|internal revenue|usataxpymt|eftps|treas(ury)?|us ?tax|1040(.?es)?)\b/i;
+/** A name that says estimated or quarterly tax ("Quarterly estimated taxes", "Est. tax", "1040-ES"). */
+const ESTIMATES_NAME = /(\b(estimated|estimates?|quarterly)|\best\.?)\s+((federal|fed|us|income)\s+)*tax|\b1040.?es\b/i;
 
 const EVERYDAY = new Set(["checking", "savings", "cash"]);
 const periodToCadence = { weekly: "weekly", biweekly: "biweekly", semimonthly: "semimonthly", monthly: "monthly", quarterly: "quarterly", annual: "annual" };
+
+/** A date that is one of the 1040-ES due dates (April 15, June 15, September 15, January 15, or the day taxes/estimated moves one to off a weekend or holiday); `later`: not April 15, which may be last year's balance. */
+export function irsDueDay(date, later = false) {
+  const d = String(date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  if ((later ? /-(01|06|09)-15$/ : /-(01|04|06|09)-15$/).test(d)) return true;
+  const y = Number(d.slice(0, 4));
+  return [...QUARTERS(y).slice(later ? 1 : 0, 3), QUARTERS(y - 1)[3]].some((q) => q.due === d);
+}
+
+/** The 1040-ES due dates (taxes/estimated's QUARTERS) between `from` and `to`, none before `start` or after `end`. */
+export function irsDates(from, to, start = "", end = "") {
+  const out = new Set();
+  for (let y = Number(String(from).slice(0, 4)) - 1; y <= Number(String(to).slice(0, 4)); y++) for (const q of QUARTERS(y)) {
+    if (q.due >= from && q.due <= to && (!start || q.due >= start) && (!end || q.due <= end)) out.add(q.due);
+  }
+  return [...out].sort();
+}
 
 /** Dates on which an item typed on Income/Expenses falls between `from` and `to`: from its start date's day, else the 1st (bills) or the 15th (pay). */
 export function plannedDates(item, from, to) {
@@ -63,7 +112,9 @@ export function compute(plan, params = {}) {
   const rec = computeRecurring(plan, { today });
   const events = [];
   // 1. payments found in the transactions, on their next dates (skipping the everyday-account filter when one account is chosen)
-  const found = [];
+  // `ahead`: the tax payments this forecast already has in the days ahead (the bank's own, found on their rhythm, and
+  // the tax bills typed on Expenses), so the estimated tax lines are not taken a second time
+  const found = [], ahead = [];
   const keyOf = (r) => normalizePayee(r.rawPayee ?? r.payee);
   for (const r of rec.detected) {
     if (!ids.has(r.accountId)) continue;
@@ -71,7 +122,7 @@ export function compute(plan, params = {}) {
     // the first date after the last line, when that is today or later (recurring's next date is after today, so a payday due today was lost)
     const first = nextAfter(r.last, r.cadence, r.last);
     let d = !r.missed && first && String(first) >= today ? first : r.next;
-    for (let i = 0; i < 60 && d && String(d) <= to; i++) { if (String(d) >= today) events.push({ date: d, name: r.payee, amount: r.amount, source: "found" }); d = nextAfter(d, r.cadence, d); }
+    for (let i = 0; i < 60 && d && String(d) <= to; i++) { if (String(d) >= today) { events.push({ date: d, name: r.payee, amount: r.amount, source: "found" }); ahead.push({ date: d, amount: r.amount, payee: r.payee, rawPayee: r.rawPayee }); } d = nextAfter(d, r.cadence, d); }
   }
   // 2. bills and pay typed on the pages, unless a found payment already covers them (same words). Pay is typed before
   // tax; the bank sees take-home, so each salary lands at its earner's take-home share (Paycheck page). Loan and card
@@ -93,8 +144,10 @@ export function compute(plan, params = {}) {
       // business or freelance income typed as a year (setup asks for "a typical year") comes in through the year, not in one
       // deposit on one day: it lands a month at a time (round 4, 2026-11-02)
       // only setup's own record ("a typical year", asked of someone paid by their own business): a once-a-year payment typed
-      // on Income (a retainer, a royalty) still lands on its date (review 2026-11-02)
-      const spread = !careful && i0.type === "business" && String(i0.id ?? "").startsWith("setup-pay-") && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;
+      // on Income (a retainer, a royalty) still lands on its date (review 2026-11-02). The record keeps it after an edit on
+      // Income that starts a new amount later (its new part carries `typicalYear: true`; review 2026-11-02, round 5)
+      const typicalYear = i0.typicalYear === true || String(i0.id ?? "").startsWith("setup-pay-");
+      const spread = !careful && i0.type === "business" && typicalYear && (i0.period === "annual" || i0.period === "quarterly") ? { ...i0, amount: perYear(i0.amount, i0.period) / 12, period: "monthly" } : null;
       const rh = careful || spread ? null : payRhythm(i0, plan), i = careful ?? spread ?? (rh ? { ...i0, period: rh.period, amount: rh.perPay } : i0);
       const typedAmount = Number(i.amount) || 0, r = th.ratio[i.id];
       return r !== undefined && r < 1 ? { ...i, kind: "income", signed: typedAmount * r, beforeTax: typedAmount } : { ...i, kind: "income", signed: typedAmount };
@@ -127,19 +180,28 @@ export function compute(plan, params = {}) {
     const keys = [...new Set(pool.filter((r) => Math.sign(r.amount) === Math.sign(item.signed)).map(keyOf))];
     const covered = (words.length && keys.some((k) => words.some((w) => k.includes(w)))) || sameMoney || payCovered.has(item);
     if (covered) { skipped++; continue; }
-    const dates = plannedDates(item, today, to);
+    // the person's own quarterly bill for the federal estimates, with no date or dated on a due date, is paid on the IRS's
+    // dates (January 15, April 15, June 15, September 15), not on the 1st or every three months: its payments then meet
+    // the quarter lines they pay (review 2026-11-02, round 5, third pass: an undated one fell on February 1, moving with today)
+    const taxBill = item.kind === "expense" && !item.fromDebts && typedIncomeTax(item);
+    const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(item.startDate ?? ""));
+    const dates = taxBill && item.period === "quarterly" && (!dated || irsDueDay(item.startDate)) ? irsDates(today, to, dated ? item.startDate : "", item.endDate || "") : plannedDates(item, today, to);
     if (dates.length) { if (item.fromDebts) plannedFromDebts++; else plannedN++; }
     // a salary that lands as typed (no take-home share: tied to nobody and no earner to borrow a share from) is marked, so the page can say so
     const asTyped = isPay && item.beforeTax === undefined && th.ratio[item.id] === undefined;
     const unlinked = asTyped && !(plan.household?.people ?? []).some((q) => q.id === item.personId && q.role !== "dependent");
     for (const d of dates) events.push({ date: d, name: item.name, amount: item.signed, source: "planned", ...(item.beforeTax !== undefined ? { beforeTax: item.beforeTax } : {}), ...(item.fromDebts ? { fromDebts: true } : {}), ...(asTyped ? { payBeforeTax: true } : {}), ...(unlinked ? { payUnlinked: true } : {}) });
+    if (taxBill) for (const d of dates) ahead.push({ date: d, amount: item.signed, payee: item.name, typedTax: true });
   }
   // 3. one-time items with a date inside the horizon
-  for (const e of plan.expenses ?? []) if (e.period === "once" && e.startDate && e.startDate >= today && e.startDate <= to) events.push({ date: e.startDate, name: e.name, amount: -(Number(e.amount) || 0), source: "planned" });
+  for (const e of plan.expenses ?? []) if (e.period === "once" && e.startDate && e.startDate >= today && e.startDate <= to) {
+    events.push({ date: e.startDate, name: e.name, amount: -(Number(e.amount) || 0), source: "planned" });
+    if (typedIncomeTax(e)) ahead.push({ date: e.startDate, amount: -(Number(e.amount) || 0), payee: e.name, typedTax: true });
+  }
   for (const i of plan.income ?? []) if (i.period === "once" && i.startDate && i.startDate >= today && i.startDate <= to) events.push({ date: i.startDate, name: i.name, amount: Number(i.amount) || 0, source: "planned" });
   // 4. a freelancer's estimated tax (Quarterly payments): business income lands before its tax, so the tax goes out on the
   // quarters' due dates (review 2026-11-02: it was left out, and the forecast ran thousands high)
-  for (const ev of estimatedLines(plan, today, to, found)) events.push(ev);
+  for (const ev of estimatedLines(plan, today, to, ahead)) events.push(ev);
 
   const byDate = new Map();
   for (const ev of events) (byDate.get(ev.date) ?? byDate.set(ev.date, []).get(ev.date)).push(ev);
@@ -160,30 +222,144 @@ export function compute(plan, params = {}) {
 }
 
 /**
- * estimatedLines(plan, today, to, found) -> planned events for the estimated tax payments between today and `to`: what is
- * past due, today (named "if not paid yet" when no payment was ever typed), then each quarter on its due date, the part of
- * it not paid yet (taxes/estimated: cumulative share less what is paid and what is counted before it). None when the
- * return needs no quarterly payments, nobody has business income, or the bank already shows tax payments (found lines
- * matching TAX_WORDS). Only this tax year's quarters: the next year's April payment is past a 90-day horizon.
+ * estimatedLines(plan, today, to, ahead = []) -> planned events for the estimated tax payments between today and `to`: what
+ * is past due, today (named "if not paid yet" when no payment was ever typed), then each quarter on its due date, the part
+ * of it not paid yet (taxes/estimated: cumulative share less what is paid and what is counted before it). `ahead` is the
+ * payments the forecast already has in the days ahead ([{ date, amount, payee, rawPayee, typedTax? }]): the bank's federal
+ * ones (FEDERAL_TAX_WORDS) and the person's own tax bills typed on Expenses (`typedTax`, typedIncomeTax) pay these lines,
+ * each only the lines due on or after its own date, the latest first, so nothing is taken twice and nothing leaves later
+ * than its due date; a typed bill that lands after the days ahead takes nothing off (review 2026-11-02, round 5: any typed
+ * tax bill dropped every line, an IRS payment plan or a state's tax too; third pass: a February 1 bill paid January 15's).
+ * None when (review 2026-11-02, round 5):
+ *   - no business or freelance income comes in today (taxOwedNow's test: one that starts next year does not count), and
+ *     for last year's lines none came in during last year;
+ *   - the return needs no quarterly payments, or pay withholds at least half of the year's tax (taxOwedNow's gate: the
+ *     Withholding check page and the April bill are the answer there, and that withholding is often estimated from pay).
+ * Paid: what was typed on Estimated payments; with nothing typed, the bank's federal tax payments in that tax year
+ * (taxPaidInBank: January 16 to April 15 counted up to the 1st quarter, later lines in full). Only this tax year's quarters,
+ * and on January 1 to 15 also last year's 4th quarter, due January 15 (when the Federal estimate's year is not set): the
+ * next year's April payment is past a 90-day horizon.
  */
-export function estimatedLines(plan, today, to, found = []) {
-  if (!(plan.income ?? []).some((x) => x.type === "business" && Number(x.amount) > 0)) return [];
-  if (found.some((r) => r.amount < 0 && TAX_WORDS.test(`${r.rawPayee ?? ""} ${r.payee ?? ""}`))) return [];
-  let e = null;
-  try { e = computeEstimated(plan, { today }); } catch { e = null; }
-  if (!e?.needsEstimates) return [];
+export function estimatedLines(plan, today, to, ahead = []) {
+  if (!today) return [];
+  // business or freelance income at some point between `a` and `b` (started by `b`, not ended before `a`)
+  const business = (a, b) => (plan.income ?? []).some((x) => x.type === "business" && Number(x.amount) > 0 && (!x.startDate || String(x.startDate) <= b) && (!x.endDate || String(x.endDate) >= a));
+  const est = (p) => { try { return computeEstimated(p, { today }); } catch { return null; } };
+  const y = Number(String(today).slice(0, 4));
+  // this year's quarters: business income coming in today. Last year's 4th quarter (January 1 to 15): business income in
+  // that tax year, so one that starts on January 1 brings no quarters of the year before (review 2026-11-02, round 5,
+  // third pass: retirees' consulting from January 1, 2027 brought $4,031.95 of 2026 lines on January 5)
+  const now = business(today, today);
+  const lastYear = !Number(plan.taxes?.year) && String(today) <= QUARTERS(y - 1)[3].due && business(`${y - 1}-01-01`, `${y - 1}-12-31`);
+  if (!now && !lastYear) return [];
+  const years = [];
+  const e = est(plan);
+  if (e && now) years.push({ e, prior: false });
+  if (e && lastYear && e.year === y) {
+    const last = est({ ...plan, taxes: { ...(plan.taxes ?? {}), year: y - 1 } });
+    if (last) years.unshift({ e: last, prior: true });
+  }
+  const out = years.flatMap(({ e: ey, prior }) => yearLines(plan, ey, today, to, prior)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  // each payment ahead pays only lines due on or after its own date, the latest first: a payment on February 1 never pays
+  // the quarter due January 15, so no money leaves later than the IRS wants it (review 2026-11-02, round 5, third pass).
+  // The latest payment goes first: it has the fewest lines it may pay.
+  const pays = (r) => r.typedTax === true || FEDERAL_TAX_WORDS.test(`${r.rawPayee ?? ""} ${r.payee ?? ""}`);
+  const payments = ahead.filter((r) => Number(r.amount) < 0 && String(r.date) >= today && String(r.date) <= to && pays(r))
+    .map((r) => ({ date: String(r.date), left: -Number(r.amount) })).sort((a, b) => b.date.localeCompare(a.date));
+  // each payment pays the earliest quarter it may (on or after its own date), and what is past due last
+  const order = [...out.filter((x) => !x.past), ...out.filter((x) => x.past)];
+  for (const p of payments) for (const line of order) {
+    if (p.left <= 0) break;
+    if (String(line.date) < p.date) continue;
+    const cut = Math.min(p.left, -line.amount); line.amount += cut; p.left -= cut;
+  }
+  return out.filter((x) => -x.amount > 0.5).map(({ past, ...x }) => ({ ...x, amount: Math.round(x.amount * 100) / 100 }));
+}
+
+/** One tax year's lines: the past-due part on today, then each quarter due in the days ahead (see estimatedLines). */
+function yearLines(plan, e, today, to, prior) {
+  if (!e?.needsEstimates || !(e.totalTax > 0) || e.withholding >= e.totalTax / 2) return [];
+  const paid = e.paidTyped ? e.paid : taxPaidInBank(plan, e.year, today, e.quarters);
+  const remaining = Math.max(0, e.toPayByEstimates - paid);
+  const past = (e.quarters ?? []).filter((q) => String(today) > String(q.due));
+  const behind = past.length ? Math.max(0, Math.min(remaining, past[past.length - 1].cumulative - paid)) : 0;
+  const of = prior ? ` for ${e.year}` : "";
   const out = [];
   let counted = 0;
-  if (e.overdue && e.overdue.amount > 0.5) {
-    out.push({ date: today, name: e.paidTyped ? "Estimated tax past due (Quarterly payments)" : "Estimated tax due so far, if not paid yet (Quarterly payments)", amount: -Math.round(e.overdue.amount * 100) / 100, source: "planned", tax: true });
-    counted = e.overdue.amount;
+  if (behind > 0.5) {
+    out.push({ date: today, name: e.paidTyped ? `Estimated tax${of} past due (Quarterly payments)` : `Estimated tax${of} due so far, if not paid yet (Quarterly payments)`, amount: -behind, source: "planned", tax: true, past: true });
+    counted = behind;
   }
   for (const q of e.quarters ?? []) {
     if (!(String(q.due) >= today && String(q.due) <= to)) continue;
-    const owe = Math.max(0, Math.min(e.remaining, q.cumulative - e.paid) - counted);
-    if (owe > 0.5) { out.push({ date: q.due, name: `Estimated tax, ${q.label} (Quarterly payments)`, amount: -Math.round(owe * 100) / 100, source: "planned", tax: true }); counted += owe; }
+    const owe = Math.max(0, Math.min(remaining, q.cumulative - paid) - counted);
+    if (owe > 0.5) { out.push({ date: q.due, name: `Estimated tax, ${q.label}${prior ? ` of ${e.year}` : ""} (Quarterly payments)`, amount: -owe, source: "planned", tax: true }); counted += owe; }
   }
   return out;
+}
+
+/**
+ * taxPaidInBank(plan, year, today, quarters = null) -> the federal tax the bank shows paid toward `year`'s estimates: outgoing
+ * lines to the IRS (FEDERAL_TAX_WORDS, not a transfer) after the 4th-quarter due date of the year before (January 15: that
+ * one pays last year) and on or before today and that year's own 4th-quarter due date. A 1040-ES schedule (April, June,
+ * September) is no regular rhythm, so the Bills list never finds it; the lines themselves are the record (review
+ * 2026-11-02, round 5). With `quarters` (taxes/estimated's, each with `due` and `cumulative`): the lines from January 16
+ * to the 1st quarter's due date (April 15), when last year's balance is paid with the return, count together up to the 1st
+ * quarter's share, or up to the person's own quarterly payment when every later quarter already closed shows at least that
+ * much paid (the smallest of those quarters' totals); the rest is last year's tax. Lines after April 15 count in full
+ * (review 2026-11-02, round 5: a $6,000 April payment of last year's balance took $6,000 off this year's quarters; third
+ * pass: capping every quarter threw away real overpayments, three $3,500 payments counted as $8,400, not $10,500).
+ */
+export function taxPaidInBank(plan, year, today, quarters = null) {
+  const from = QUARTERS(year - 1)[3].due, until = [String(today), QUARTERS(year)[3].due].sort()[0];
+  const lines = (plan.transactions ?? []).filter((t) => Number(t.amount) < 0 && !t.transferId && String(t.date) > from && String(t.date) <= until && FEDERAL_TAX_WORDS.test(`${t.rawPayee ?? ""} ${t.payee ?? ""}`));
+  const sum = (list) => list.reduce((s, t) => s - Number(t.amount), 0);
+  const qs = Array.isArray(quarters) && quarters.length ? quarters : null;
+  if (!qs) return sum(lines);
+  const q1 = String(qs[0].due);
+  // the person's own quarterly payment: the smallest total paid in a later quarter (after the due date before it, up to
+  // its own) among those already past today; none past, or one with nothing paid, leaves the 1st quarter's share
+  const closed = qs.slice(1).map((q, i) => ({ after: String(qs[i].due), due: String(q.due) })).filter((w) => String(today) > w.due);
+  const own = closed.length ? Math.min(...closed.map((w) => sum(lines.filter((t) => String(t.date) > w.after && String(t.date) <= w.due)))) : 0;
+  const early = sum(lines.filter((t) => String(t.date) <= q1)), later = sum(lines.filter((t) => String(t.date) > q1));
+  return Math.min(early, Math.max(Number(qs[0].cumulative) || 0, own)) + later;
+}
+
+/**
+ * typedIncomeTax(expense) -> true when a bill typed on Expenses is the person's own plan for paying this year's federal
+ * estimated tax, so what it pays in the days ahead comes off the quarter lines (review 2026-11-02, round 5):
+ *   - a name that says estimated or quarterly tax ("Quarterly estimated taxes", "Auto-pay estimated tax", "1040-ES");
+ *   - a quarterly bill (the 1040-ES rhythm) to the IRS or for federal, income or self-employment tax, or just "Taxes";
+ *   - a yearly or one-time bill to the IRS or for federal, income or self-employment tax dated on the 2nd, 3rd or 4th
+ *     quarter's due date (June 15, September 15, January 15): that quarter. On April 15 it may be last year's balance;
+ *   - filed under "Taxes not withheld": one that says estimate, quarter or Q1 to Q4, or one to the IRS or for federal,
+ *     income or self-employment tax or just "Taxes" paid on any rhythm but yearly or once ("IRS" $300 a month counts there;
+ *     filed elsewhere, a monthly IRS bill is more often a payment plan). Otherwise a yearly or one-time one is the April bill.
+ * Never: a debt to the tax office (an installment agreement, back taxes, a penalty, interest, a lien or levy, last year's;
+ * a payment plan, what is owed or a balance unless the name says estimated, estimate or 1040-ES: "Estimated tax
+ * installments" counts), a state's or a city's tax (a state's name or two-letter code in capitals, the Franchise Tax Board,
+ * a department of revenue; "revenue" alone only when the name does not say estimated) unless the name also says federal or
+ * IRS, another tax ("Property tax", "Car tax", "Payroll tax", "Sales tax") or a fee for filing ("Tax preparer", "Tax
+ * software"). Before, an IRS payment plan, a state's estimated tax or an IRS penalty dropped every federal quarter, "auto" or
+ * "home" anywhere ("Auto-pay estimated tax") made it not count, and (second pass) "Estimated tax installments", "Estimated
+ * taxes owed", "Estimated tax on revenue" or a one-time "IRS payment" on January 15 did not count, so January's quarter went
+ * out twice.
+ */
+export function typedIncomeTax(x) {
+  const name = String(x?.name ?? "").trim();
+  if (!(Number(x?.amount) > 0) || !name) return false;
+  if (TAX_DEBT_NAME.test(name) || OTHER_TAX_NAME.test(name) || TAX_FEE_NAME.test(name)) return false;
+  const says = SAYS_ESTIMATE.test(name);
+  if (!says && !/\bquarter(ly|s)?\b|\bq[1-4]\b/i.test(name) && TAX_SOFT_DEBT_NAME.test(name)) return false;
+  const federal = FEDERAL_NAME.test(name);
+  if (!federal && (STATE_NAME.test(name) || STATE_CODE.test(name) || (!says && REVENUE_WORD.test(name)))) return false;
+  if (ESTIMATES_NAME.test(name)) return true;
+  const incomeTax = /\bincome\s+tax|self.?employ|\bse\s+tax/i.test(name);
+  const generic = federal || incomeTax || /^tax(es)?$/i.test(name);
+  if (x.period === "quarterly" && generic) return true;
+  if ((x.period === "once" || x.period === "annual") && (federal || incomeTax) && irsDueDay(x.startDate, true)) return true;
+  if (x.category !== "taxes") return false;
+  return /estimat|quarter|\bq[1-4]\b/i.test(name) || (generic && x.period !== "annual" && x.period !== "once");
 }
 
 /**

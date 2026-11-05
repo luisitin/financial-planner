@@ -58,5 +58,12 @@ Debts without a rate or payment are listed as missing and left out. A plan whose
 ## Both dates (`twoDates`, round 4, 2026-11-02)
 `twoDates(plan, { today })` lists each debt the plan finishes at least a month sooner than its own payment does: `own` (the Debts page's date, its payment alone), `plan` (this page's: finished debts' payments move onto it, plus any extra), and `from` (the debts finished first, whose payments move onto it). Debts, Mortgage, the Timeline and the Plan summary use it to show both dates and why, so the family's mortgage reads "January 2046 on its own payment, March 2039 on your payoff plan" instead of one date on some pages and the other elsewhere.
 
+## The saved extra, read once (`savedPlan`, review 2026-11-02, round 5)
+`savedPlan(plan, { today })` -> `{ extra, ids, names, until, months, ends }` | null: the saved extra a month (`extra`, 0 once
+the debts it was aimed at are paid off, then null), the debts it goes to (`ids`: its targets, or every debt when it is
+aimed at none, as it rolls from one to the next), when the last of them is gone (`until`, `months`; null when one never
+ends) and the chosen order's row for each (`ends`). Next best action's left-over figure and Budget (50/30/20) both take
+the extra from it (it was Next best action's own code), so the two pages leave the same money. Test: `module.test.mjs`.
+
 ## Ideas / not yet
 - A payoff timeline drawing (designer), one-off lump sums, pausing a debt (0% promo).

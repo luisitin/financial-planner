@@ -31,7 +31,11 @@ export function render(root, ctx) {
     if (!d.income) return null;
     // the tile opens Next best action's "Each month's money", which shows how the figure is reached
     const linked = (t) => { t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href: "#/overview/next-best-action", class: "stat-link", "aria-label": `${t.textContent.replace("\u203a", "").trim()}. See how it is worked out` }, t); };
-    if (nba?.ready) { const v = nba.spare.monthly; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}${nba.spare.held > 0.5 ? `, counting uneven pay at what you can count on` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : "more goes out than comes in, after tax and saving", { link: true })); }
+    // short on the careful month (uneven pay counted at what you can count on): said so, with what a month that brings the
+    // Income page's amount leaves (review 2026-11-02)
+    // (the full-month figure to the nearest $10, as every page says it: Next best action's spare.fullAbout; round 5)
+    // within $5 of $0 the full month "only just about breaks even" (spare.fullKind), never "about $0" (round 5)
+    if (nba?.ready) { const v = nba.spare.monthly, held = nba.spare.held > 0.5, kind = nba.spare.fullKind, about = nba.spare.fullAbout; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}${held ? `, counting uneven pay at what you can count on` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : held ? `in a lean month; when all your uneven pay comes in, ${kind === "ahead" ? `about ${fmt.money(about, cur)} is left` : kind === "even" ? "it only just about breaks even" : `it is still about ${fmt.money(-about, cur)} short`}` : "more goes out than comes in, after tax and saving", { link: true })); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
   let editing = null;
@@ -45,6 +49,9 @@ export function render(root, ctx) {
       ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last? ›")));
     const g = closeGap(d.items, -nba.spare.monthly, { goalSaving: nba.spare.goalSaving });
     const m = (v) => fmt.money(v, cur);
+    // short only on the careful month (Side income's "count on"): a month that brings the Income page's amount leaves money,
+    // so good months make up for lean ones and no must-pay has to go (review 2026-11-02)
+    const held = nba.spare.held > 0.5, kind = nba.spare.fullKind, lean = held && kind === "ahead";
     const open = (id) => { const x = plan.expenses.find((y) => y.id === id); if (!x) return; editing = x; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
     const row = (x, detail) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => open(x.id),
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
@@ -52,16 +59,18 @@ export function render(root, ctx) {
       ui.h("span", { class: "st amount" }, ui.h("div", {}, m(x.monthly)), ui.h("div", { class: "muted small" }, "a month"), ui.h("div", { class: "muted small" }, "Change \u203a")));
     // a trim in the expense's own terms, the amount its form asks for: "$360 once a year instead of $3,000"
     const trimText = (x) => x.period === "monthly" ? `trimming it by ${m(x.trimBy)} a month is enough` : `${m(x.trimTo)} ${periodWords(x.period)} instead of ${m(x.amount)} is enough`;
-    const lead = !g.picks.length ? "There are no nice-to-have expenses to cut, so the gap has to come from the must-pays below or from what goes to saving."
+    const lead = !g.picks.length ? (lean ? "There are no nice-to-have expenses to cut. Good months make up for lean ones; keep your cash cushion for the months in between." : "There are no nice-to-have expenses to cut, so the gap has to come from the must-pays below or from what goes to saving.")
       : g.enough ? (g.picks.length === 1 ? (g.picks[0].trimBy ? `${g.picks[0].name}: ${trimText(g.picks[0])}.` : `Cutting ${g.picks[0].name} closes it.`) : `Cutting ${g.picks.length === 2 ? "these two" : `these ${g.picks.length}`} nice-to-haves closes it:`)
-      : `Cutting every nice-to-have (${m(g.niceTotal)} a month) still leaves ${m(g.gap - g.covered)} short.`;
+      : `Cutting every nice-to-have (${m(g.niceTotal)} a month) still leaves ${m(g.gap - g.covered)} short${lean ? " in a lean month. Good months make up for the rest; keep your cash cushion for the months in between." : "."}`;
+    const must = g.bigMustPays.length && !lean;
     return ui.h("section", { class: "card gap-card" },
       ui.h("h2", {}, "Close the gap"),
-      ui.notice("warn", `About ${m(g.gap)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix.`),
+      ui.notice("warn", held ? `About ${m(g.gap)} a month more goes out than comes in, after tax and saving, counting uneven pay at what you can count on (Side income). ${lean ? `A month that brings the Income page's amount leaves about ${m(nba.spare.fullAbout)}, so this is about the lean months.` : kind === "even" ? "Even a month that brings the Income page's amount only just about breaks even. This is the first thing to fix." : `Even a month that brings the Income page's amount is about ${m(-nba.spare.fullAbout)} short. This is the first thing to fix.`}`
+        : `About ${m(g.gap)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix.`),
       ui.h("p", {}, lead),
       g.picks.length ? ui.h("ul", { class: "page-list" }, g.picks.map((x) => row(x, x.trimBy ? `nice to have \u00b7 ${trimText(x)}` : "nice to have"))) : null,
-      g.bigMustPays.length ? ui.h("p", { class: "small", style: { margin: "12px 0 0" } }, g.picks.length ? "The rest has to come from a must-pay. The biggest:" : "The biggest must-pays:") : null,
-      g.bigMustPays.length ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "must pay \u00b7 a cheaper version closes part of it"))) : null,
+      must ? ui.h("p", { class: "small", style: { margin: "12px 0 0" } }, g.picks.length ? "The rest has to come from a must-pay. The biggest:" : "The biggest must-pays:") : null,
+      must ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "must pay \u00b7 a cheaper version closes part of it"))) : null,
       g.goalSaving > 0 ? ui.h("p", { class: "muted small" }, `Or for now: ${m(g.goalSaving)} a month goes to your goals, and pausing some of it closes ${g.goalSaving >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/goals/goals" }, "Goals \u203a")) : null,
       // the saved debt plan's extra counts as spoken for; when it is what tips the month over, lowering it is a way out too
       nba.spare.debtExtra > 0 ? ui.h("p", { class: "muted small" }, `Or: ${m(nba.spare.debtExtra)} a month extra goes to debts on top of the required payments, and lowering it closes ${nba.spare.debtExtra >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/debt/payoff" }, "Pay off debts ›")) : null,

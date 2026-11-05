@@ -43,3 +43,15 @@ every bill. With envelopes but no bank file yet, the page says spending shows on
 
 ## Ideas / not yet
 - Yearly envelopes and per-envelope notes; "money to assign" against income.
+
+## Start from your expenses in a lean month (review 2026-11-02, round 5)
+The card's last line reads Next best action's spare, as the Dashboard does. When Side income's "count on" holds part of
+uneven pay back (`spare.held` above $0.50) and the month is short, it says so: "In a lean month, these, tax and your saving
+come to about $X more than comes in, counting uneven pay at what you can count on: the same gap as the Dashboard. A month
+that brings the Income page's amount leaves about $Y." (Y = `spare.fullAbout`; "Even a month that brings the Income page's
+amount is about $Y short." when below 0). A month with money left adds "counting uneven pay at what you can count on".
+Before, a freelancer whose full month leaves money read only "... $770 a month more than comes in". Test: `module.test.mjs`
+(the page drawn with a stand-in UI kit, read back as text).
+
+A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". The card reads "Even a month that brings the Income page's amount only just about breaks even." Test:
+`module.test.mjs`.

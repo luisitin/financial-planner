@@ -136,3 +136,33 @@ test("the mortgage paid off: the payoff plan's date, and its own payment's date 
   assert.equal(e.date.slice(0, 7), "2039-03");
   assert.match(e.detail, /This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046\./);
 });
+
+test("someone already getting Social Security has no 'starts' event, however early it began (review 2026-11-02, round 5)", () => {
+  const today = "2026-11-02";
+  // Ana is 55 and on disability benefits (setup's "I already get it": the full-age figure, at 67, and the Income line)
+  const p = familyPlan(today);
+  p.household.people.find((x) => x.id === "p-ana").birthDate = "1971-03-15";
+  p.guide = { ...(p.guide ?? {}), setup: { ...(p.guide?.setup ?? {}), ss: { "p-ana": "getting" } } };
+  p.retirement.socialSecurity["p-ana"] = { claimAge: 67, monthlyAtFRA: 1800 };
+  p.income.push({ id: "setup-ss-p-ana", name: "Ana's Social Security", type: "social", personId: "p-ana", amount: 1800, period: "monthly" });
+  const d = compute(p, { today });
+  assert.equal(ev(d, "social-p-ana"), undefined, "not 'starts in 2038, at full retirement age'");
+  assert.match(ev(d, "social-p-bo").title, /Bo's Social Security starts/, "the partner's start is still ahead");
+  // paid and only on Income (no figure on the Social Security page): not "can claim at 62, no estimate yet" either
+  delete p.retirement.socialSecurity["p-ana"]; delete p.guide.setup.ss["p-ana"];
+  assert.equal(ev(compute(p, { today }), "social-p-ana"), undefined);
+});
+
+test("a goal behind by less than $100 a month says its need to the $10, never 'about $0' (review 2026-11-02, round 5, third pass)", async () => {
+  const { needWords } = await import("./compute.js");
+  assert.equal(needWords(1234), "about $1,200"); assert.equal(needWords(95), "about $100");
+  assert.equal(needWords(49), "about $50"); assert.equal(needWords(94), "about $90"); assert.equal(needWords(5), "about $10");
+  assert.equal(needWords(3), "under $10"); assert.equal(needWords(0), "under $10");
+  // the family plan with a $36,000 wedding and a $6,000 boat for 2035, both behind: the boat needs about $60 a month
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.goals = p.goals.filter((x) => x.id !== "g-trip");
+  const g = (id, name, target, targetDate) => ({ id, name, icon: "", target, targetDate, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false });
+  p.goals.push(g("g-wed", "Wedding", 36000, "2029-12-01"), g("g-boat", "Boat", 6000, "2035-06-01"));
+  const boat = ev(compute(p, { today: T }), "goal-g-boat");
+  assert.match(boat.detail, /^\$6,000 due\. Behind: about \$\d0 a month is needed\.$/); assert.doesNotMatch(boat.detail, /about \$0 a month/);
+});

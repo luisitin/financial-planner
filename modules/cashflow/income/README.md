@@ -42,9 +42,26 @@ A salary typed as a yearly (or quarterly) figure, the setup's default, is paid i
 `income[].countOn` (a month, optional; set on Side income) is the careful figure for uneven pay. `monthly`/`yearly` keep the full amount, which every tax page uses. Each item gets `heldMonthly` (amount a month minus countOn, never below 0) and the result `heldMonthly` (active items). The Income list says "the plan counts on $X a month (Side income)".
 `countedOn(x)` is the one rule every page reads it through (Income, Next best action's careful taxes, Forecast, Side income;
 review 2026-11-02): a figure counts only on a "Self-employment / business" line that repeats, and only when it is below the
-line's amount a month; otherwise null (the amount counts). Saving a line as another kind or as one time deletes `countOn`;
-a raise saved from a later date (`changeFrom` split) keeps it on the old line only, so the new amount is counted in full
-until Side income offers a careful figure again.
+line's amount a month; otherwise null (the amount counts). Saving a line as another kind or as one time deletes `countOn`.
+
+A raise saved from a later date (`changeFrom` split), review 2026-11-02, round 5 (replaces the first pass, which moved
+the id to the new pay and copied what was filed under it):
+- The pay that ends keeps its **id** (so the setup's own pay line, `setup-pay-<person>`, stays today's pay for Get
+  started's pay question until the start date) and everything on it.
+- The new pay gets a new id from the page and **`continues: <id>`**: the first line of the chain (`chainId(x)` =
+  `x.continues ?? x.id`), so a second raise on the new pay still points at the first line.
+- It carries the careful figure (`countOn`; dropped when the new pay is not repeating business pay, and `countedOn` ignores
+  it at or above a lower new amount) and `typicalYear: true` when the line is a setup pay line or already has it, so the
+  Forecast still spreads "a typical year" without the setup's id.
+- Every page that keeps something by income reads and writes it by `chainId`: Side income's typed months and careful figure
+  (`whatIfs.sideIncome[key]`; "Count on" and "Count the full ... again" change `countOn` on every line of the chain) and
+  Salary's raises (`whatIfs.salary[key]`). Nothing is copied, so a figure turned off before the start date stays off after
+  it, and months typed before it are still there (the first pass kept two copies, which went apart).
+Tests: `module.test.mjs` ("one chain"), `career/side-income` and `career/salary` module tests (both sides of the start date),
+`overview/setup` (the pay question before and after it).
+Second review of round 5 (2026-11-02): Small business finds the business chosen by its chain (`career/business`), and Get
+started reads and writes the chain's line in force today (`overview/setup` `lineNow`), also once the half that ended is
+removed here; Life events' new job does not carry `continues` (it is a pay of its own, `household/life-events`).
 
 ## Ideas / not yet
 - Pay-stub detail (pre-tax deductions, 401(k) match) for the tax and retirement pages.

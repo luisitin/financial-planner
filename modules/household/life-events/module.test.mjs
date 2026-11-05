@@ -122,3 +122,34 @@ test("a new job whose first payday is still to come keeps today's pay until the 
   assert.ok(Math.abs(incomeOf(p, { today: T }).monthly - before) < 0.01, "this month's income is unchanged");
   assert.ok(Math.abs(incomeOf(p, { today: "2027-02-01" }).monthly - (before - ana.amount * 26 / 12 + 88000 / 12)) < 1, "from February: the new pay");
 });
+
+test("a new job from a pay that is itself a raise from a later date is its own pay: no `continues`, no careful figure (review 2026-11-02, round 5)", async () => {
+  const { changeFrom, chainId } = await import("../../cashflow/income/compute.js");
+  const { compute: salary } = await import("../../career/salary/compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  // Bo's photography gets a raise from January on Income (the split: the old line ends, the new one continues it)
+  const was = p.income.find((x) => x.id === "i-side");
+  was.countOn = 300;
+  const ch = changeFrom(was, { ...was, amount: 800, startDate: "2027-01-01" }, T);
+  const i = p.income.indexOf(was);
+  p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: "i-side-raise", ...ch.next });
+  assert.equal(chainId(p.income.find((x) => x.id === "i-side-raise")), "i-side");
+  p.whatIfs = { ...(p.whatIfs ?? {}), salary: { "i-ana": { raise: 0.04, promoEvery: 3 } } };
+  // a new job from February, started from the raise: it is a pay of its own
+  startEvent(p, { id: "j", kind: "job", date: "2027-03-01" }, "2027-02-01");
+  assert.equal(applyChange(p, "j", "updatePay", { id: "n3", incomeId: "i-side-raise", amount: 1500, period: "monthly", startDate: "2027-03-01" }, "2027-02-01").ok, true);
+  const next = p.income.find((x) => x.id === "n3");
+  assert.equal("continues" in next, false);
+  assert.equal("countOn" in next, false);
+  assert.equal(chainId(next), "n3");
+  // and the same for a salary that continues another: Salary keeps the new job's raises apart from the old job's
+  const ana = p.income.find((x) => x.id === "i-ana");
+  const ch2 = changeFrom(ana, { ...ana, amount: 4100, startDate: "2027-01-01" }, T);
+  const k = p.income.indexOf(ana);
+  p.income[k] = ch2.old; p.income.splice(k + 1, 0, { id: "i-ana-raise", ...ch2.next });
+  startEvent(p, { id: "j2", kind: "job", date: "2027-06-01" }, "2027-02-01");
+  applyChange(p, "j2", "updatePay", { id: "n4", incomeId: "i-ana-raise", amount: 95000, period: "annual", startDate: "2027-06-01" }, "2027-02-01");
+  const job = salary(p, { today: "2027-07-01" }).jobs.find((x) => x.incomeId === "n4");
+  assert.deepEqual([job.key, job.raiseFrom, job.settings.promoEvery], ["n4", "income", 0]);
+});

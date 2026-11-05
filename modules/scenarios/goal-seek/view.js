@@ -20,6 +20,7 @@ const STYLE = `
 .gs-root .gs-claims span { background: var(--accent-soft); border-radius: 4px 4px 0 0; position: relative; }
 .gs-root .gs-claims span.best { background: var(--accent); }
 .gs-root .gs-ages { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; font-size: var(--fs-xs); color: var(--muted); text-align: center; }
+.gs-root .gs-ages small { display: block; white-space: nowrap; font-size: inherit; }
 `;
 const PILL = { room: ["ok", "room to spare"], same: ["", "just right"], needs: ["warn", "needs a change"], cannot: ["bad", "not on its own"] };
 
@@ -61,7 +62,8 @@ export function render(page, ctx) {
       ui.h("form", { class: "gs-goal", onSubmit: (e) => { e.preventDefault(); legacy = Math.max(0, Number(box.value) || 0); load(); } }, ui.field("Or leave at least", box), ui.h("button", { type: "submit", class: "secondary" }, "Use this"))));
 
     // the levers
-    const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : "now";
+    // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
+    const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : l.nowForAll && l.value === l.nowAge ? "now" : `age ${ageWords(l.value)}`;
     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each lever could move" : "What each lever would have to be"),
       ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less."),
@@ -108,7 +110,13 @@ function carefulLine(ctx, legacy, money, planned, pill) {
 function claimBars(ui, l, money) {
   const max = Math.max(...l.results.map((r) => r.monthly), 1);
   return ui.h("div", { "aria-label": "What the plan can spend a month by claiming age" },
-    // today's age is claimable in years and months (69 and 5 months): "now" on the bar, never 69.4166... (review 2026-11-02)
+    // today's age is claimable in years and months (69 and 5 months): "now" on the bar, never 69.4166... (review 2026-11-02);
+    // "now" only when it is now for everyone moved, else the age and its months on two short lines (review 2026-11-02, round 5)
     ui.h("div", { class: "gs-claims" }, l.results.map((r) => ui.h("span", { class: r.age === l.value ? "best" : null, title: `${ageWords(r.age)}: ${money(r.monthly)} a month`, style: { height: `${Math.max(4, Math.round((r.monthly / max) * 100))}%` } }))),
-    ui.h("div", { class: "gs-ages" }, l.results.map((r) => ui.h("span", {}, Number.isInteger(r.age) ? String(r.age) : "now"))));
+    ui.h("div", { class: "gs-ages" }, l.results.map((r) => {
+      if (Number.isInteger(r.age)) return ui.h("span", {}, String(r.age));
+      if (l.nowForAll && r.age === l.nowAge) return ui.h("span", {}, "now");
+      const y = Math.floor(r.age + 1e-9), m = Math.round((r.age - y) * 12);
+      return ui.h("span", { "aria-label": ageWords(r.age) }, String(y), ui.h("small", {}, `${m} mo`));
+    })));
 }

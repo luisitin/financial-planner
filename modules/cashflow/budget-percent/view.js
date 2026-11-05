@@ -33,7 +33,13 @@ export function render(page, ctx) {
     return;
   }
   const short = d.saving.short > 0.5;
-  if (short) root.append(ui.notice("warn", `${money(d.saving.short)} a month more goes out than comes in after tax, so the savings and goals below cannot all happen. Spend less, or put less toward goals for now.`));
+  // the careful month (Side income's "count on"): uneven pay above what you count on is left out, so a short month says so
+  // and what a month that brings the Income page's amount leaves (review 2026-11-02), to the nearest $10 as every page says it
+  // within $5 of $0 the full month "only just about breaks even" (saving.fullKind), never "about $0" (round 5)
+  const held = d.month.held > 0.5, kind = d.saving.fullKind, about = d.saving.fullAbout;
+  if (short) root.append(ui.notice("warn", held
+    ? `Counting uneven pay at what you can count on, ${money(d.saving.short)} a month more goes out than comes in after tax. ${kind === "ahead" ? `A month that brings the Income page's amount leaves about ${money(about)}, so good months make up for lean ones; spending less makes a lean month safe.` : kind === "even" ? "Even a month that brings the Income page's amount only just about breaks even. Spend less, or put less toward goals for now." : `Even a month that brings the Income page's amount is about ${money(-about)} short. Spend less, or put less toward goals for now.`}`
+    : `${money(d.saving.short)} a month more goes out than comes in after tax, so the savings and goals below cannot all happen. Spend less, or put less toward goals for now.`));
   for (const n of d.notes) root.append(ui.notice("info", n));
   if (d.month.bizExpenses > 0.5) root.append(ui.notice("info", `Business income is counted after the ${money(d.month.bizExpenses * 12)} a year of business expenses on the Self-employment page.`));
   if (d.taxesListed > 0.5) root.append(ui.notice("info", `Taxes listed on Expenses (${money(d.taxesListed)} a month) are left out of needs: this page takes taxes off income already.`));
@@ -42,9 +48,9 @@ export function render(page, ctx) {
   const m = d.month;
   const T = d.targets;
   const head = ui.card("Your month after tax", ui.row(
-    ui.stat("After tax", money(m.afterTax), "a month, to split three ways"),
+    ui.stat("After tax", money(m.afterTax), held ? "a month you can count on, to split three ways" : "a month, to split three ways"),
     ui.stat("Taxes", money(m.federal + m.payroll + m.state), `a month off ${money(m.gross)} of income`),
-  ), ui.h("p", { class: "muted small" }, `${m.federal < -0.5 ? `Federal income tax: a credit of ${money(-m.federal)} (the refundable child tax credit)` : `Federal income tax ${money(m.federal)}`}, Social Security and Medicare ${money(m.payroll)}${m.state > 0.5 ? `, state ${money(m.state)}` : m.stateKnown ? ", no state income tax" : ", state not counted"}, a month. Aiming for ${pct(T.needs)} needs, ${pct(T.wants)} wants, ${pct(T.savings)} savings${T.from === "50-30-20" ? ", the 50/30/20 rule" : ""}.`));
+  ), ui.h("p", { class: "muted small" }, `${m.federal < -0.5 ? `Federal income tax: a credit of ${money(-m.federal)} (the refundable child tax credit)` : `Federal income tax ${money(m.federal)}`}, Social Security and Medicare ${money(m.payroll)}${m.state > 0.5 ? `, state ${money(m.state)}` : m.stateKnown ? ", no state income tax" : ", state not counted"}, a month.${held ? ` Side income above what you count on, after its tax, ${money(m.held)} a month, is left out (Side income): a bonus to save when it comes.` : ""} Aiming for ${pct(T.needs)} needs, ${pct(T.wants)} wants, ${pct(T.savings)} savings${T.from === "50-30-20" ? ", the 50/30/20 rule" : ""}.`));
   root.append(head);
 
   const split = m.afterTax > 0;   // nothing to split when taxes take everything: amounts only
@@ -58,7 +64,7 @@ export function render(page, ctx) {
   }));
   const say = [];
   const by = Object.fromEntries(d.buckets.map((b) => [b.key, b]));
-  if (short) say.push(`You spend ${money(d.saving.short)} a month more than you take home${split ? `: needs ${pct(by.needs.share)} and wants ${pct(by.wants.share)} leave too little for ${pct(T.savings)} saved` : ""}.`);
+  if (short) say.push(`${held ? `In a lean month you spend ${money(d.saving.short)} more` : `You spend ${money(d.saving.short)} a month more`} than you take home${split ? `: needs ${pct(by.needs.share)} and wants ${pct(by.wants.share)} leave too little for ${pct(T.savings)} saved` : ""}.`);
   if (split && by.needs.status === "over") say.push(`Must-pay bills take ${pct(by.needs.share)}, ${money(by.needs.gap)} a month above ${pct(T.needs)}. Your largest: ${d.needs.slice(0, 2).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}. Housing and car costs are usually the ones worth looking at.`);
   if (split && by.wants.status === "over") say.push(`Everything else takes ${pct(by.wants.share)}: trimming ${money(by.wants.gap)} a month reaches ${pct(T.wants)}. The largest: ${d.wants.slice(0, 3).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}.`);
   if (split && !short && by.savings.status === "under") say.push(`Savings reach ${pct(Math.max(0, by.savings.share))}: ${money(-by.savings.gap)} a month more would reach ${pct(T.savings)}.`);

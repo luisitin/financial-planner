@@ -35,5 +35,13 @@ No transactions: empty state, plus the planned figures if entered. Months with o
 ## Tests
 `module.test.mjs`: empty and planned, month rows and completeness, uncategorised money in as income, totals/averages, category lists, the `months` cap; money in compared at take-home (exact, 8% below, 20% below).
 
+## The planned sentence adds up (review 2026-11-02)
+Before a bank file is imported, the sentence from the Income and Expenses pages names every line Next best action takes
+off the month: business costs, tax (federal, Social Security and Medicare, and the state's), spending, saving, the extra on
+debts, and side income above what you count on (after its tax) "kept as a bonus to save when it comes", each only when it
+is $1 or more, so pay before tax minus the lines is the "left" or "short" figure. Before, state tax and the part held back
+were missing: a freelancer read "$7,100 comes in; $1,488 to tax and $4,180 to spending, so $770 is short" (those lines
+leave +$1,432).
+
 ## Ideas / not yet
 - Yearly view and year-over-year; export to CSV; budget lines next to actuals (phase 4).

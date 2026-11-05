@@ -52,13 +52,62 @@ No "You spend more than comes in" item for a retired household drawing from savi
 action's `drawing`, 2026-11-02).
 
 ## Tests
-`module.test.mjs`: empty plan, healthy plan all clear, worst-first ordering and links, level assignment, no-today behaviour.
+`module.test.mjs`: empty plan, healthy plan all clear, worst-first ordering and links, level assignment, no-today behaviour; `goalsBehind` month by month (a catch-up only until its own date, a goal due in the turn's first month, two waiting goals in date order, the family Wedding and Boat, the qa households H-0777 and H-0177).
 
 ## Emergency fund while costly debt comes first (round 4, 2026-11-02)
 When next-best-action's `cushionLater` is set (starter month in cash, costly debt paid before the full fund), the red "Emergency fund is thin" / amber "getting there" item is replaced by `emergency-later` (info): "Emergency fund: enough for now", the months covered (whole months, one decimal under 2, as on Emergency fund) and the month the debt is paid off. Before, the list said "fix" for a cushion the plan's own order deliberately builds later.
 
 ## Review fixes 2026-11-02 (goals waiting their turn)
 `goalsBehind` queues a goal ("starts later") only when it is dated after the turn Next best action gives the goals step, and never an emergency-fund goal (Next best action fills the cushion in its own earlier steps). A goal due sooner stays behind and counts in the monthly need, so a December gift goal can no longer pass its date with no alert.
+
+## Review 2026-11-02 (round 5): the other behind goals share the same step
+The goals step's money after the turn also catches up the goals that already get something and are still behind. Before
+any waiting goal is tested, `used` starts at their extra a month: the sum of `max(0, neededMonthly - monthly)` over the
+behind goals with `monthly > 0` dated after the turn, never the emergency fund (the same measure as Next best action's
+`goalExtra`). Only what is left can carry a waiting goal. Before, a $36,000 Wedding (about $1,500 a month from December
+2027) read "starts later" against $1,831 a month, while the car ($536 more) and college ($335 more) needed $871 of it.
+
+## Review 2026-11-02, round 5 (second pass): one measure, from the turn
+- The other behind goals' extra is now measured from the turn, as the waiting goal is: what they will have by then,
+  `fv(rate / 12, months from today to the turn, monthly, funded)` (core/math/finance.js), carried to the target over
+  the months left after the turn, `pmtToReach(rate / 12, monthsBetween(turn, date), targetThen, that)`, less what
+  already goes in. Waiting goals use the same start (their funded grown by interest to the turn). A goal given without
+  `targetThen`/`funded` keeps today's `neededMonthly - monthly`. On the family plan without the trip, the car needs
+  $1,044 more and college $382 more from December 2027, $1,426 of the $1,831; a Wedding of $12,000 to $20,000 due
+  December 2029 ($503 to $838 a month from then) no longer reads "Saving for it starts in December 2027": it is behind,
+  on Needs attention, Health and the Timeline. Before, today's $536 + $335 left room for it.
+- A waiting goal the step could work on (due a month or more after the turn) that does not fit keeps all that is left
+  of the step (`used = room`), so a later one is not queued on room it will use: with a $36,000 Wedding and a $6,000
+  Boat due 2035, the Boat is behind too, not "starts in December 2027". A goal due within the turn's first month can
+  take nothing from the step, so it leaves the room to the others (college still waits behind a trip due that month).
+- (Replaced by the third pass, below: one level figure per goal made the $12,000 Wedding, and two qa households' shared
+  goals, read "behind" although they can be reached.)
+
+## Review 2026-11-02, round 5 (third pass): month by month from the turn
+`goalsBehind` now checks each waiting goal month by month from the turn, the goals step's money (`capacity`, a month)
+in each month:
+- **Goals already getting something** (behind, dated after the turn, never the emergency fund) take their extra first,
+  `pmtToReach(rate / 12, n, targetThen, fv(rate / 12, months to the turn, monthly, funded)) - monthly` with `n` =
+  `monthsBetween(turn, date)`, **only in their own `n` months**; one due within the turn's first month (`n` = 0) draws
+  nothing (second pass: its need was infinite, so every later waiting goal read behind). Without `targetThen`/`funded`
+  the extra is today's `neededMonthly - monthly`, still only until its date.
+- **Waiting goals**, sooner date first, start from what they hold at the turn (`fv` of `funded`) and each month take
+  what is left of the step until they are reached (`have = have x (1 + rate / 12) + draw`); a goal waits its turn when
+  it is reached by its date (to 50 cents a month, `fv(rate / 12, n, 0.5)`). Filling the sooner goal first is the order
+  that lets the most goals be reached (earliest date first). Its draws come off what later goals see.
+- **Decision (the review left it open): a waiting goal that cannot be reached holds the step.** It is still short at its
+  date, and whether it moves, shrinks or gets more money is the household's choice, so no later goal is said to "start
+  in December 2027" on that money: the later waiting goals count as behind until it is fixed (the $36,000 Wedding and the
+  2035 Boat both read behind, as the brief asked). A waiting goal due within the turn's first month gets nothing and holds
+  nothing.
+- Results: H-0777 (retired): the trip's $1,500 extra lasts 4 months, so Share B ($15,000 to go in 11 months) gets
+  $828 x 4 + $2,328 x 7 = $19,608 and waits its turn (second pass: "2 goals are behind", $2,106 needed; now the trip
+  alone, $989, as at dc6e73c). H-0177 (couple): the baby fund's extra ends after 5 months, so Share A waits and Share B
+  ($30,000 from nothing) is behind. Family plan without the trip: a Wedding due December 2029 gets about $405 a month
+  for 15 months (until the car's date) and $1,449 for 9, about $19,100: a $12,000 Wedding waits its turn again (the
+  second pass's test said "behind" because it counted the car's extra until December 2029, which the review showed was
+  wrong), a $20,000 one is behind. A $3,000 Holiday getting $100 a month, due three days after the turn, leaves the Boat
+  waiting.
 
 ## Estimated tax with nothing typed (review 2026-11-02)
 `estimates-behind` asks first when no payments were ever typed (taxes/estimated `paidTyped` false): "Estimated tax: type
@@ -68,3 +117,15 @@ what you have paid this year", with what was due if none were made; typed (even 
 - Dismiss or snooze an alert (store ids in the plan).
 - Budget overruns and bills due (phase 4), investment drift (phase 7), insurance gaps (phase 8) plug in here.
 - A count on the dashboard (designer's call; the compute is ready).
+
+## Overspend in a lean month (review 2026-11-02, round 5)
+`overspend` reads Next best action's careful month. With Side income's "count on" holding part of uneven pay back
+(`spare.held` above $0.50), the detail adds "counting uneven pay at what you can count on (Side income); a month that brings
+the Income page's amount leaves about $X" (X = `spare.fullAbout`, to the nearest $10, the figure every page says) or "is
+still about $X short". When that full month leaves money (`spare.full` >= 0) the alert is **amber** (`warn`), titled "Lean
+months run short", with "Good months make up for lean ones; keep a cash cushion for the months in between, or spend
+less."; otherwise it stays red (`bad`), "You spend more than comes in". Before, a lean month was red, sorted with real
+overspending, while its own text said good months make up for it. Test: `module.test.mjs` ("amber, not red").
+
+A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". Such a month is red ("You spend more than comes in"), not amber: good months do not make up for lean
+ones then. Amber needs `fullKind` "ahead". Test: `module.test.mjs`.

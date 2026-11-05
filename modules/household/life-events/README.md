@@ -63,6 +63,12 @@ holds `EVENTS` (the steps).
 pay from that day (same person, growth and tax flag, named "<pay> (new job)"), so the months in between keep their income.
 It used to overwrite today's pay with a future start date, and the Dashboard said more goes out than comes in until then.
 A first payday today or earlier still changes the pay in place. "Whose pay" is asked only for new pay.
+Review 2026-11-02, round 5: the new job is its own pay, not the old one carried on. Copied from a pay that is itself a
+raise from a later date (`income[].continues`, set by Income's split, cashflow/income `changeFrom`), it used to join the
+old job's record: Salary showed the old job's raises, Side income its months and careful figure, and clearing Get
+started's pay deleted it. `updatePay` now drops `continues` and `countOn` (the careful figure, worked out from the old
+job's months) from the new pay; growth, tax flag and `typicalYear` (how the amount was typed) are still copied. My choice:
+the careful figure goes, as the new job has no months of its own yet; Side income offers one once months are typed.
 
 ## Edge cases
 - No events: a hero with the six events to pick from; afterwards they sit under "Something else happening?".

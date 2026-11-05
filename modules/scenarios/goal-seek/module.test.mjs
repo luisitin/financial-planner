@@ -87,3 +87,22 @@ test("the spending lever says its figure is the average-market one (round 5, 202
   const big = compute(familyPlan(), { today: TODAY, legacy: 2500000 });
   assert.ok(lever(big, "spending").status === "cannot" || /^If markets do as well as average/.test(lever(big, "spending").sentence));
 });
+
+test("the claiming lever says 'now' only when it is now for everyone it moves (review 2026-11-02, round 5)", async () => {
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const T = "2026-11-02";
+  // Sam is 64 and 6 months, Lee 60 and 5 months; a short plan, so claiming as soon as possible spends the most
+  const p = retirementPlan();
+  p.household.people[0].birthDate = "1962-05-10"; p.household.people[1].birthDate = "1966-06-20";
+  for (const x of p.household.people) { x.retirementAge = 60; x.lifeExpectancy = 74; }
+  p.income = []; p.retirement.contributions = [];
+  const c = lever(compute(p, { today: T }), "claim");
+  assert.equal(Math.round(c.nowAge * 12), 64 * 12 + 6); assert.equal(c.nowForAll, false, "19 months away for Lee");
+  assert.equal(c.value, c.nowAge);
+  assert.match(c.sentence, /^Sam and Lee claiming at 64 and 6 months lets the plan spend the most/); assert.doesNotMatch(c.sentence, /\bnow\b/);
+  // Sam alone: today's age is now
+  delete p.retirement.socialSecurity.lee;
+  const s = lever(compute(p, { today: T }), "claim");
+  assert.equal(s.nowForAll, true); assert.equal(s.value, s.nowAge);
+  assert.match(s.sentence, /^Sam claiming now \(64 and 6 months\)/);
+});

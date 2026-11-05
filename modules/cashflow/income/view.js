@@ -71,6 +71,8 @@ export function render(root, ctx) {
       p.income = p.income ?? [];
       if (was) {
         const i = p.income.findIndex((x) => x.id === was.id);
+        // the pay that ends keeps its id; the new pay gets a new one and says which line it carries on (`continues`), so
+        // Side income and Salary keep one record for both (review 2026-11-02, round 5)
         if (i >= 0 && ch?.split) { p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: ui.uid(), ...ch.next }); }
         else if (i >= 0) {
           p.income[i] = { ...p.income[i], ...clean };

@@ -118,6 +118,36 @@ test("over and under: needs and wants above their share by more than the slack, 
   assert.equal(SLACK, 0.02); near(at(0.51).share, 0.51, 1e-9); assert.equal(at(0.51).status, "on"); assert.equal(at(0.53).status, "over");
 });
 
+test("the careful month (review 2026-11-02): side income above what you count on, after its tax, is off the month, as on Next best action", async () => {
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { compute: income } = await import("../income/compute.js");
+  const { heldAfterTax } = await import("./compute.js");
+  const plain = compute(fam(), { today: TODAY });
+  assert.equal(plain.month.held, 0); assert.equal(plain.month.heldGross, 0);
+  for (const countOn of [300, 0]) {
+    const p = fam((q) => { q.income.find((x) => x.id === "i-side").countOn = countOn; });
+    const d = compute(p, { today: TODAY }), T = yearTaxes(p, { today: TODAY });
+    // by hand: the year's taxes less the same taxes with $countOn a month typed as the side income, over 12
+    const typed = fam((q) => { q.income.find((x) => x.id === "i-side").amount = countOn; });
+    const TC = yearTaxes(typed, { today: TODAY });
+    const tax = ((T.federal + T.payroll + T.state) - (TC.federal + TC.payroll + TC.state)) / 12;
+    assert.ok(tax > 0, "the part held back carries tax");
+    near(d.month.heldGross, 600 - countOn); near(d.month.held, 600 - countOn - tax, 1e-6);
+    near(heldAfterTax(p, { today: TODAY, inc: income(p, { today: TODAY }), T }).held, d.month.held, 1e-9);
+    // the taxes stay the whole year's; the month after tax is the careful one
+    near(d.month.federal, T.federal / 12); near(d.month.afterTax, T.afterTax / 12 - d.month.held, 1e-6);
+    near(d.month.afterTax, plain.month.afterTax - d.month.held, 1e-6);
+    // the same money left over as the app's left-over figure (Next best action), and the shares on the careful month
+    const nb = next(p, { today: TODAY }).spare;
+    near(nb.held, d.month.held, 1e-6);
+    near(d.saving.leftover - d.saving.short, nb.monthly, 0.01);
+    near(by(d).needs.share, by(d).needs.monthly / d.month.afterTax, 1e-9);
+  }
+  // no year's taxes to work it again from: the whole part held back comes off (Next best action's fallback)
+  const p = fam((q) => { q.income.find((x) => x.id === "i-side").countOn = 300; });
+  assert.deepEqual(heldAfterTax(p, { today: TODAY, inc: income(p, { today: TODAY }), T: null }), { gross: 300, tax: 0, held: 300 });
+});
+
 test("spending above income after tax: nothing left over, the shortfall, a note", () => {
   const p = fam((q) => { q.expenses.push({ id: "x-big", name: "Too much", category: "fun", amount: 20000, period: "monthly", essential: false }); });
   const d = compute(p, { today: TODAY });
@@ -145,4 +175,104 @@ test("not ready without income or regular spending (one-offs and taxes do not co
   assert.deepEqual(compute(p, { today: TODAY }).missing, ["expenses"]);
   const once = fam((q) => { q.expenses = [{ id: "x1", name: "New tyres", category: "transport", amount: 900, period: "once" }]; q.debts = []; });
   assert.deepEqual(compute(once, { today: TODAY }).missing, ["expenses"]);
+});
+
+test("the full month and where this page's left over is not the app's left-over figure (review 2026-11-02, round 5)", async () => {
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { aboutTen } = await import("./compute.js");
+  // what a month that brings the Income page's amount leaves: left over (or short) plus the part held back; said to $10
+  const p = fam((q) => { q.income.find((x) => x.id === "i-side").countOn = 0; });
+  const d = compute(p, { today: TODAY }), nb = next(p, { today: TODAY }).spare;
+  near(d.saving.full, d.saving.leftover - d.saving.short + d.month.held, 1e-9);
+  assert.equal(d.saving.fullAbout, aboutTen(d.saving.full));
+  near(d.saving.full, nb.full, 0.01); assert.equal(d.saving.fullAbout, nb.fullAbout);
+  // the same number as the app's left-over figure only while Expenses lists no tax and no debt plan pays an extra:
+  // a tax on Expenses (a property tax filed under taxes) is left out of needs here, and counted as spending there
+  const taxed = fam((q) => { q.expenses.push({ id: "x-ptax", name: "Property tax", category: "taxes", amount: 4800, period: "annual", essential: true }); });
+  const dt = compute(taxed, { today: TODAY }), nt = next(taxed, { today: TODAY }).spare;
+  near(dt.taxesListed, 400, 1e-9);
+  near((dt.saving.leftover - dt.saving.short) - nt.monthly, 400, 0.01);
+  // the saved debt plan's extra (Pay off debts) is spoken for on both, read by the one helper (savedPlan): saving here,
+  // under "extra on debts", and the left over is the app's figure again (round 5; it used to be $150 more here)
+  const extra = fam((q) => { q.debtPlan = { ...(q.debtPlan ?? {}), extra: 150, order: "avalanche" }; });
+  const de = compute(extra, { today: TODAY }), ne = next(extra, { today: TODAY }), d0 = compute(fam(), { today: TODAY });
+  assert.equal(ne.spare.debtExtra, 150);
+  assert.equal(de.saving.debtPlan, 150);
+  near(de.saving.debts - d0.saving.debts, 150, 1e-9);
+  near((de.saving.leftover - de.saving.short) - ne.spare.monthly, 0, 0.01);
+  near((de.saving.leftover - de.saving.short) - (d0.saving.leftover - d0.saving.short), -150, 1e-9);
+  near(de.buckets.find((b) => b.key === "savings").monthly, d0.buckets.find((b) => b.key === "savings").monthly, 1e-9, "moved from left over to extra on debts");
+});
+
+// A freelancer of one, invented: design work and weekend workshops, both counted at what can be counted on (Side
+// income's "count on"), a card with a saved debt plan extra (review 2026-11-02, round 5)
+function freelancer(extra = 150) {
+  const p = emptyPlan();
+  const D = "2026-11-02";
+  p.household = { people: [{ id: "p-rae", name: "Rae", role: "self", birthDate: "1986-06-15", retirementAge: 65 }], filingStatus: "single", state: "CO" };
+  p.accounts = [
+    { id: "a-chk", name: "Checking", type: "checking", balance: 7400, asOf: D, ownerId: "p-rae", history: [] },
+    { id: "a-sav", name: "Savings", type: "savings", balance: 9500, asOf: D, ownerId: "p-rae", history: [] },
+    { id: "a-card", name: "Credit card", type: "credit", balance: 1800, asOf: D, ownerId: "p-rae", history: [] },
+  ];
+  p.income = [
+    { id: "i-free", name: "Freelance design", type: "business", personId: "p-rae", amount: 6500, period: "monthly", growth: 0.02, taxable: true, countOn: 4100 },
+    { id: "i-wk", name: "Weekend workshops", type: "business", personId: "p-rae", amount: 600, period: "monthly", growth: 0, taxable: true, countOn: 300 },
+  ];
+  const e = (id, name, category, amount, essential, period = "monthly") => ({ id, name, category, amount, period, essential, inflates: true });
+  p.expenses = [e("e-rent", "Rent", "housing", 1850, true), e("e-util", "Utilities", "utilities", 170, true), e("e-groc", "Groceries", "groceries", 480, true),
+    e("e-health", "Health insurance", "health", 540, true), e("e-car", "Car", "transport", 260, true), e("e-phone", "Phone", "phone", 120, true),
+    e("e-eat", "Eating out", "dining", 300, false), e("e-fun", "Fun", "fun", 200, false), e("e-trip", "Trip", "travel", 2400, false, "annual")];
+  p.debts = [{ id: "d-card", accountId: "a-card", rate: 0.229, minPayment: 60, extra: 0 }];
+  p.goals = [];
+  if (extra) p.debtPlan = { extra, order: "avalanche" };
+  return p;
+}
+
+test("the freelancer with a $150 saved debt plan extra: Budget (50/30/20) and every page say the same full month and gap (round 5)", async () => {
+  const D = "2026-11-02";
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { compute: alerts } = await import("../../overview/alerts/compute.js");
+  const { compute: health } = await import("../../overview/health-score/compute.js");
+  const { standing } = await import("../../overview/setup/compute.js");
+  const { savedPlan } = await import("../../debt/payoff/compute.js");
+  const { money } = await import("../../../core/format.js");
+  const p = freelancer(150);
+  const n = next(p, { today: D }), d = compute(p, { today: D });
+  assert.equal(savedPlan(p, { today: D }).extra, 150);
+  assert.equal(n.spare.debtExtra, 150); assert.equal(d.saving.debtPlan, 150);
+  // short in a lean month, a full month leaves money: the case every page words
+  assert.ok(n.spare.monthly < 0 && n.spare.held > 0.5 && n.spare.full > 5);
+  // Budget's left over and full month are the app's: the same gap, the same "about $X"
+  near(d.saving.leftover - d.saving.short, n.spare.monthly, 0.01);
+  near(d.saving.full, n.spare.full, 0.01);
+  assert.equal(d.saving.fullAbout, n.spare.fullAbout);
+  assert.equal(d.saving.fullKind, "ahead");
+  // without the extra the full month is $150 more on both
+  const p0 = freelancer(0), n0 = next(p0, { today: D }), d0 = compute(p0, { today: D });
+  near(d0.saving.full - d.saving.full, 150, 0.01); near(n0.spare.full - n.spare.full, 150, 0.01);
+  // every page says it: Next best action, the done screen and Dashboard (standing), Needs attention, Health score
+  const about = money(n.spare.fullAbout, "USD");
+  assert.ok(n.steps.find((s) => s.id === "bills").detail.includes(`leaves about ${about}`));
+  assert.equal(standing(p, { today: D }).lean.about, n.spare.fullAbout);
+  assert.ok(alerts(p, { today: D }).alerts.find((a) => a.id === "overspend").detail.includes(`leaves about ${about}`));
+  assert.ok(health(p, { today: D }).parts.find((x) => x.id === "saving").detail.includes(`leaves about ${about}`));
+  // and Budget (50/30/20)'s own notice, drawn with a stand-in for the UI kit
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = []) => { const x = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, querySelector() { return null; }, scrollIntoView() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form") };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => D }, plan: p, store: { update() {} } });
+  const text = root.textContent.replace(/\s+/g, " ");
+  assert.ok(text.includes(`Counting uneven pay at what you can count on, ${money(Math.round(-n.spare.monthly), "USD")} a month more goes out than comes in after tax. A month that brings the Income page's amount leaves about ${about}`), text.slice(0, 400));
+  assert.ok(text.includes(`extra on debts ${money(150, "USD")}`));
+});
+
+test("fullKind: a full month within $5 of $0 just about breaks even (no 'about $0'), counted with short (round 5)", async () => {
+  const { fullKind, EVEN_WITHIN } = await import("./compute.js");
+  assert.equal(EVEN_WITHIN, 5);
+  assert.deepEqual([4.99, 0, -4.99, 5, 1200, -5, -770].map(fullKind), ["even", "even", "even", "ahead", "ahead", "short", "short"]);
+  assert.equal(fullKind(null), "even");
 });

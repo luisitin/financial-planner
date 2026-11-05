@@ -18,11 +18,12 @@ split.
 - Writes `whatIfs.budgetPercent`, and `expenses[].essential` ("Count as a need" / "Count as a want").
 
 ## Outputs
-`compute(plan, { today })` -> `{ ready, missing, year, month: { gross, federal, payroll, state, stateKnown, afterTax,
-bizExpenses }, targets: { needs, wants, savings, from, scaled }, buckets: [{ key, label, monthly, share, target,
+`compute(plan, { today })` -> `{ ready, missing, year, month: { gross, federal, payroll, state, stateKnown, afterTax (the
+careful month), bizExpenses, held, heldGross }, targets: { needs, wants, savings, from, scaled }, buckets: [{ key, label, monthly, share, target,
 targetMonthly, gap, status }], needs: [{ id, name, category, monthly }], wants, saving: { retirement, goals, leftover,
 short, unlisted }, taxesListed, notes }`. `yearTaxes(plan, { today })` -> the year's `{ gross, federal, ss, medicare, se,
 extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses, profit }, agi, otherIncomeOnFederal }`.
+`heldAfterTax(plan, { today, inc, T })` -> `{ gross, tax, held }` a month (the careful month's part held back; below).
 
 ## Formulas
 - **The rule**: needs 50%, wants 30%, savings 20% of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All
@@ -65,10 +66,35 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
 Debts kept only on the Debts page (2026-11-02): each is a need line by name ("Visa card payment (from Debts)") at its
 required payment; the extra set on Debts pays the debt down faster, so it is saving ("extra on debts" under Savings),
 as the 50/30/20 rule counts extra debt payments. `saving.debts`; left over = after tax - needs - wants - retirement -
-goals - extra on debts.
+goals - extra on debts. **The saved debt plan's extra** (Pay off debts' `debtPlan.extra`, review 2026-11-02, round 5) is
+extra on debts too: `saving.debtPlan` = Pay off debts' `savedPlan(plan, { today })?.extra` (0 without one, or once the
+debts it was aimed at are paid off), added to `saving.debts`. It is the one reading Next best action's left-over figure
+takes (`spare.debtExtra`), not a copy: with the invented freelancer and a $150 extra this page said "about $1,200" and
+"$770 short" while every other page said "about $1,050" and "$920 short"; now all say the latter.
 
-`yearTaxes` is also Next best action's tax for the month (2026-11-02), so the left over here and the app's left-over
-figure are the same number.
+`yearTaxes` is also Next best action's tax for the month (2026-11-02), and `heldAfterTax` its careful month (review
+2026-11-02), and the saved debt plan's extra the same `savedPlan` (round 5), so the left over here (left over − short) and
+the app's left-over figure are the same number **unless** (review 2026-11-02, round 5, narrowed to what is true)
+Expenses lists a tax (category "taxes", such as a property tax): this page leaves it out of needs, as it takes taxes off
+income itself, while Next best action counts it as spending (Ruth and Sam: $400 a month, $2,528 here against $2,128).
+**The full month**: `saving.full` = left over − short + `month.held`, what a month that brings the Income page's amount
+leaves, and `saving.fullAbout` = `aboutTen(full)`, to the nearest $10, the one rounding every page uses for it (`aboutTen`
+lives here beside `heldAfterTax`; Next best action imports it). The short-month notice says "about $X" with it.
+**Just about breaks even** (round 5): `fullKind(full)` -> "ahead" ($5 or more left), "even" (within `EVEN_WITHIN` = $5 of $0,
+my choice) or "short"; `saving.fullKind` here, `spare.fullKind` on Next best action, and every page that words the full
+month reads it. "even" says "only just about breaks even" instead of "leaves about $0" or "about $0 short", and counts with
+"short" (red where that is red), as good months then do not make up for lean ones.
+
+**The careful month** (review 2026-11-02): side income above what you count on (Side income's "Count on $X a month",
+`income[].countOn`) is not planned with. `heldAfterTax(plan, { today, inc, T })` -> `{ gross, tax, held }` a month: gross =
+income's `heldMonthly`; tax = (federal + Social Security and Medicare + state, from `yearTaxes`, − the same with each
+counted-on line typed as its careful figure a month) ÷ 12, never below 0; held = gross − tax. **Income after tax a month**
+is then (income − the year's taxes) ÷ 12 − held, so needs, wants and savings are shares of the month you can count on,
+while the tax lines stay the whole year's, as every tax page says them. The card names the held part ("Side income above
+what you count on, after its tax ... is left out"); a short month says it counts uneven pay at what you can count on, and
+what a month that brings the Income page's amount leaves. Before, this page split the full amount: a freelancer counting
+on $4,400 of $7,100 read "Savings 22%, $1,197 left over" while the Dashboard said she was $770 short. Next best action
+calls the same helper (it lives here, beside `yearTaxes`, because Next best action imports this module).
 
 ## Edge cases
 - No income, or no regular spending (one-off and ended expenses, and taxes, do not count): an empty state naming what
@@ -80,7 +106,8 @@ figure are the same number.
   rate, not its brackets.
 
 ## Tests
-`module.test.mjs` (12): the rule, the presets, own shares scaled (and the rule until all three are typed), the plan's
+`module.test.mjs` (13): the careful month (review 2026-11-02: the part held back after its tax by hand, at $300 and $0
+counted on, the same left over as Next best action, shares on the careful month, no taxes to work again from); the rule, the presets, own shares scaled (and the rule until all three are typed), the plan's
 preset; income after tax by hand (each person's Social Security and Medicare, self-employment tax, federal tax equal to
 the Self-employment page's, no state in Texas); the wage base, pay linked to no one, the Paycheck page's pre-tax
 benefits; business expenses, the 0.9% on self-employment earnings, a refundable child tax credit; one-off income on the
@@ -90,3 +117,6 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
 
 ## Ideas / not yet
 - The month's actual spending from the ledger instead of the Expenses page; extra debt payments counted as saving.
+- Keep a property tax filed under taxes on Expenses among the needs (only income tax is taken off here), so the left over
+  is always the app's left-over figure (review 2026-11-02, round 5; tested as a known gap in `module.test.mjs`). The saved
+  debt plan's extra, the other gap, is counted since the second review of round 5.

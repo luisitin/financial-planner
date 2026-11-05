@@ -46,5 +46,17 @@ from the month the goals step starts) counts as on track, as Goals, the Timeline
 the detail adds "counting one waiting its turn", and the fix for the others names when the waiting ones start.
 The retirement and protection parts name what is missing with setup's `retirementGap`: a missing birth date says "Add Bo's birth date on People" and links to People; a missing Social Security figure names whose, and links to the Social Security page, which now has the "won't get it" answer.
 
+## Short on the careful month (review 2026-11-02)
+When less than nothing is saved and Side income's "count on" holds part of uneven pay back (`spare.held` above $0.50), the
+saving part's detail adds ", counting uneven pay at what you can count on (Side income); a month that brings the Income
+page's amount leaves about $X" (X = spare + held; "is still about $X short" below 0). The score is unchanged. Test:
+`module.test.mjs` ("short on the careful month").
+
 ## Ideas / not yet
 - The score over time (save it with the net-worth points); estate documents and insurance once those pages exist; a benchmark part (How am I doing).
+
+## Review 2026-11-02, round 5
+The full-month figure in the saving part's detail is Next best action's `spare.full`, said as `spare.fullAbout` (to the
+nearest $10), the one number every page shows for it. Test: `module.test.mjs`.
+
+A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". Test: `module.test.mjs`.

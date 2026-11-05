@@ -76,3 +76,10 @@ average twice changes nothing, the warnings, not ready.
 ## Ideas / not yet
 - Bonuses grown with the pay; a career break (years of no pay) and a part-time stretch.
 - The pay path into Social Security's future earnings and the retirement projection's savings growth.
+
+## A raise from a later date: one record (review 2026-11-02, round 5)
+A job's settings are kept by the income's chain (`whatIfs.salary[key]`, `key` = cashflow/income `chainId`): when Income
+splits a line for a raise from a later date, the new pay reads the raise and promotions typed before its start date
+(`jobs[].key`). "Use it on the Income page" (`useAverage`) writes under that key and sets the average on the job's line and
+on the lines of its chain that start after it (the pay still to come); a line that has ended keeps its raise. Before, the
+settings were copied to the ending line, and a change made before the start date was lost on it. Test: `module.test.mjs`.

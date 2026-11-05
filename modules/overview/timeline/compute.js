@@ -53,6 +53,14 @@ export const MILESTONES = [100000, 250000, 500000, 1000000, 2000000, 5000000, 10
 
 const yearOf = (iso) => Number(String(iso).slice(0, 4));
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+/**
+ * A goal's monthly need in words: "about $1,200" (to $100), "about $50" under $100 (to $10), "under $10" below $5, so a
+ * goal that is behind never reads "about $0 a month is needed" (review 2026-11-02, round 5, third pass).
+ */
+export function needWords(monthly, cur = "USD") {
+  const n = Number(monthly) || 0;
+  return n >= 95 ? `about ${fmtMoney(Math.round(n / 100) * 100, cur)}` : n >= 5 ? `about ${fmtMoney(Math.round(n / 10) * 10, cur)}` : `under ${fmtMoney(10, cur)}`;
+}
 
 /**
  * compute(plan, { today }) -> {
@@ -130,7 +138,9 @@ export function compute(plan, params = {}) {
     if (working(55) && hasType(p, ["hsa"])) add({ id: `hsa-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 55), personId: p.id, title: `${name}'s HSA limit rises`, detail: `From 55 a health savings account takes ${fmtMoney(limits.kinds.hsa.catchUp, cur)} more a year.`, go: ["taxes", "hsa-fsa"] });
     if (hasType(p, ["401k", "ira", "roth"])) add({ id: `penalty-${p.id}`, kind: "penalty", date: addMonths(dateAtAge(p.birthDate, 59), 6), personId: p.id, title: `${name} can draw on retirement accounts freely`, detail: "From 59½ money comes out of IRAs and 401(k)s without the 10% early-withdrawal penalty (income tax still applies to pre-tax money).", go: ["retirement", "withdrawal-order"] });
     const sp = ss.people.find((x) => x.id === p.id);
-    if (sp && sp.source !== "none" && sp.monthly > 0) {
+    // someone already getting it has no start ahead, so no event (review 2026-11-02, round 5: a disability benefit paid now
+    // read "starts in 2038, at full retirement age", while the Social Security page and the projection count it from today)
+    if (sp?.claimed) { /* already paid */ } else if (sp && sp.source !== "none" && sp.monthly > 0) {
       const claimDate = addMonths(p.birthDate, Math.round(sp.claimAge * 12));
       const fra = fullRetirementAge(by);
       const when = Math.round(sp.claimAge * 12) < Math.round(fra.asYears * 12) ? "early, so smaller for life" : Math.round(sp.claimAge * 12) > Math.round(fra.asYears * 12) ? "late, so bigger for life" : "at full retirement age";
@@ -185,7 +195,7 @@ export function compute(plan, params = {}) {
     if (!g.targetDate || g.status === "done" || g.status === "no amount") continue;
     const wait = waiting.has(g.id);
     const behind = !wait && (g.status === "behind" || g.status === "past due");
-    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${wait ? ` Saving for it starts in ${monthWords(gb.turn)}, when its turn comes on Next best action.` : behind ? ` Behind: about ${money(g.neededMonthly)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : wait ? null : "ok", go: ["goals", "goals"] });
+    add({ id: `goal-${g.id}`, kind: "goal", date: g.targetDate, icon: g.icon, title: g.name, detail: `${money(g.targetThen ?? g.target)} due.${wait ? ` Saving for it starts in ${monthWords(gb.turn)}, when its turn comes on Next best action.` : behind ? ` Behind: ${needWords(g.neededMonthly, cur)} a month is needed.` : " On track at what goes in each month."}`, tone: behind ? "warn" : wait ? null : "ok", go: ["goals", "goals"] });
   }
 
   // money: independence, the savings milestones, the peak, whether it lasts

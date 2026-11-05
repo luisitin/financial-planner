@@ -303,10 +303,359 @@ test("estimated tax goes out on the quarters' due dates; 'if not paid yet' when 
   // typed payments: the past-due part is named as such; all paid: nothing past due
   const typed = plan(); typed.taxes = { ...(typed.taxes ?? {}), estimated: { paid: [1000, 0, 0, 0] } };
   assert.match(estimatedLines(typed, T, "2027-01-31")[0].name, /^Estimated tax past due/);
-  // the bank already shows tax payments: they are the forecast's, not counted twice
-  assert.deepEqual(estimatedLines(p, T, "2027-01-31", [{ amount: -2500, rawPayee: "IRS USATAXPYMT", payee: "IRS" }]), []);
+  // the bank's own IRS payment ahead (found on its rhythm) is the forecast's already: it pays these lines, the latest first
+  const ahead = estimatedLines(p, T, "2027-01-31", [{ date: "2026-12-15", amount: -2500, rawPayee: "IRS USATAXPYMT", payee: "IRS" }]);
+  assert.equal(ahead.length, 2); assert.ok(Math.abs(-ahead[1].amount - (e.nextDue.amount - 2500)) < 0.01); assert.ok(Math.abs(-ahead[0].amount - e.overdue.amount) < 0.01);
   // no business income: nothing
   const w = plan(); w.income[0].type = "salary"; assert.deepEqual(estimatedLines(w, T, "2027-01-31"), []);
+});
+
+// round 5 review (2026-11-02): who the quarters are for, and what already pays them
+function freelancer() {
+  const p = emptyPlan();
+  p.household = { ...(p.household ?? {}), people: [{ id: "dee", name: "Dee", role: "self", birthDate: "1990-04-01" }], state: "TX", filingStatus: "single" };
+  p.income = [{ id: "setup-pay-dee", name: "Dee's business", type: "business", personId: "dee", amount: 78000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true }];
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 8000 }];
+  p.transactions = [];
+  return p;
+}
+// the same freelancer with last year's tax on file ($11,200, so $2,800 a quarter) and three quarters typed as paid
+function paidFreelancer() {
+  const p = freelancer();
+  p.taxes = { ...(p.taxes ?? {}), priorYear: { tax: 11200, agi: 71000 }, estimated: { paid: [2800, 2800, 2800, 0] } };
+  return p;
+}
+const taxEvents = (d) => d.days.flatMap((x) => x.events.filter((e) => e.tax).map((e) => ({ ...e, date: x.date })));
+const bankLine = (p, date, payee, amount) => p.transactions.push({ id: `t${p.transactions.length + 1}`, date, amount, payee, rawPayee: payee, accountId: "chk", category: "", tags: [], note: "" });
+
+test("pay that withholds most of the tax: no quarterly lines, as Needs attention and Next best action (round 5)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute: estimated, taxOwedNow } = await import("../../taxes/estimated/compute.js");
+  const { estimatedLines } = await import("./compute.js");
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  const e = estimated(p, { today: T });
+  assert.ok(e.needsEstimates && e.withholding >= e.totalTax / 2, "two salaries withhold most of the tax; the photography is a little on top");
+  assert.equal(taxOwedNow(p, { today: T }), null);
+  assert.deepEqual(estimatedLines(p, T, "2027-01-31"), [], "the shortfall is the April bill or a W-4 change, not a payment today");
+  assert.deepEqual(taxEvents(compute(p, { today: T })), []);
+});
+
+test("only federal bank payments count against the quarters, and only what they pay (round 5)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const base = freelancer(), e = estimated(base, { today: T });
+  const want = e.overdue.amount + e.nextDue.amount;
+  const total = (d) => taxEvents(d).reduce((t, x) => t - x.amount, 0);
+  assert.ok(Math.abs(total(compute(base, { today: T })) - want) < 0.02);
+  // a state's fee or tax never pays the federal 1040-ES: the quarters stay
+  const ftb = freelancer(); bankLine(ftb, "2025-04-15", "FRANCHISE TAX BOARD PAYMENTS", -800); bankLine(ftb, "2026-04-15", "FRANCHISE TAX BOARD PAYMENTS", -800);
+  assert.ok(Math.abs(total(compute(ftb, { today: T })) - want) < 0.02, "an $800 franchise tax does not erase the federal estimates");
+  const dor = freelancer(); for (const m of ["07", "08", "09", "10"]) bankLine(dor, `2026-${m}-20`, "CO DEPT OF REVENUE", -140);
+  assert.ok(Math.abs(total(compute(dor, { today: T })) - want) < 0.02);
+  // a small monthly IRS payment: what it paid this year and what it will pay in the window come off, nothing more
+  const irs = freelancer(); for (const m of ["07", "08", "09", "10"]) bankLine(irs, `2026-${m}-05`, "IRS USATAXPYMT", -250);
+  const d = compute(irs, { today: T });
+  const found = d.days.flatMap((x) => x.events).filter((x) => x.name === "IRS USATAXPYMT" && x.source === "found");
+  assert.equal(found.length, 3);
+  assert.ok(Math.abs(total(d) - (want - 1000 - 750)) < 0.02, `${total(d)}: $1,000 paid since January and $750 ahead come off`);
+});
+
+test("estimated payments the bank shows (April, June, September) count as paid when none are typed (round 5)", async () => {
+  const { taxPaidInBank } = await import("./compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const p = freelancer();
+  bankLine(p, "2026-01-15", "IRS USATAXPYMT", -3000); // last year's 4th quarter
+  for (const d of ["2026-04-15", "2026-06-15", "2026-09-15"]) bankLine(p, d, "IRS USATAXPYMT", -3000);
+  bankLine(p, "2026-08-01", "IRS USATAXPYMT", 400); // a refund is not a payment
+  p.transactions.push({ id: "tx", date: "2026-05-01", amount: -500, payee: "IRS", rawPayee: "IRS", accountId: "chk", category: "", tags: [], note: "", transferId: "x" });
+  assert.equal(taxPaidInBank(p, 2026, T), 9000, "this tax year's three payments; January 15 paid last year");
+  assert.equal(taxPaidInBank(p, 2025, T), 3000);
+  const e = estimated(p, { today: T });
+  assert.equal(e.paidTyped, false);
+  const ev = taxEvents(compute(p, { today: T }));
+  assert.equal(ev.length, 2);
+  assert.ok(Math.abs(-ev[0].amount - (e.behind - 9000)) < 0.02, "only the part the bank does not show paid, today");
+  assert.match(ev[0].name, /if not paid yet/);
+  assert.ok(Math.abs(-ev[1].amount - e.nextDue.amount) < 0.02);
+  // typed on Estimated payments: the typed figures are the record, the bank lines are the same payments
+  p.taxes = { ...(p.taxes ?? {}), estimated: { paid: [3000, 3000, 3000, 0], typedAt: T } };
+  assert.ok(Math.abs(-taxEvents(compute(p, { today: T }))[0].amount - (estimated(p, { today: T }).behind)) < 0.02);
+});
+
+test("last year's balance paid in April counts at most as the 1st quarter; a catch-up payment counts in full (round 5)", async () => {
+  const { taxPaidInBank } = await import("./compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const e = estimated(freelancer(), { today: T }), share = e.perQuarter; // 3,641.95 a quarter
+  // $6,000 to the IRS on April 15: the 2025 return's balance (and maybe the 1st quarter)
+  const p = freelancer(); bankLine(p, "2026-04-15", "IRS USATAXPYMT", -6000);
+  near(taxPaidInBank(p, 2026, T, e.quarters), share);
+  assert.equal(taxPaidInBank(p, 2026, T), 6000, "without the quarters: every line in full");
+  const ev = taxEvents(compute(p, { today: T }));
+  assert.match(ev[0].name, /if not paid yet/); near(-ev[0].amount, e.behind - share);
+  near(-ev[1].amount, e.nextDue.amount);
+  // a balance in February, then the 1st quarter on April 15: together still at most the 1st quarter
+  const feb = freelancer(); bankLine(feb, "2026-02-20", "IRS USATAXPYMT", -2500); bankLine(feb, "2026-04-15", "IRS USATAXPYMT", -3641.95);
+  near(taxPaidInBank(feb, 2026, T, e.quarters), share);
+  // behind, then catching up two quarters at once in September: up to what is due by September 15, so all of it
+  const cu = freelancer(); bankLine(cu, "2026-04-15", "IRS USATAXPYMT", -3641.95); bankLine(cu, "2026-09-10", "IRS USATAXPYMT", -7283.9);
+  near(taxPaidInBank(cu, 2026, T, e.quarters), 3 * share);
+  assert.deepEqual(taxEvents(compute(cu, { today: T })).map((x) => x.date), ["2027-01-15"], "nothing past due");
+  // paid on time each quarter: each in full
+  const ok = freelancer(); for (const d of ["2026-04-15", "2026-06-15", "2026-09-15"]) bankLine(ok, d, "IRS USATAXPYMT", -3641.95);
+  near(taxPaidInBank(ok, 2026, T, e.quarters), 3 * share);
+});
+
+test("a tax bill typed on Expenses is the person's own plan for the quarters: what it pays in the window comes off them, once (round 5)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const base = freelancer(), e = estimated(base, { today: T });
+  const want = e.behind + e.nextDue.amount; // 10,925.85 behind today and 3,641.95 on January 15
+  const p = freelancer();
+  p.expenses.push({ id: "e-qt", name: "Quarterly estimated tax", category: "taxes", amount: 4000, period: "quarterly", startDate: "2026-01-15", essential: true });
+  const d = compute(p, { today: T });
+  const typedOut = d.days.flatMap((x) => x.events.filter((ev) => ev.name === "Quarterly estimated tax").map((ev) => `${x.date} ${ev.amount}`));
+  assert.deepEqual(typedOut, ["2027-01-15 -4000"], "the typed bill once, on its date");
+  // its $4,000 pays January's quarter line: nothing is taken twice. It is paid on January 15, so it cannot pay what is past
+  // due today: that stays as Estimated payments says it (third pass: it took $358.05 off it, so the line read less than owed)
+  const ev = taxEvents(d);
+  assert.deepEqual(ev.map((x) => x.date), [T], "no second January 15 line");
+  assert.match(ev[0].name, /if not paid yet/);
+  near(-ev[0].amount, e.behind);
+  assert.ok(-ev[0].amount + 4000 >= want, "together at least what is due by January 15");
+  // a smaller bill pays part of the quarter: the rest of the quarter stays on its date
+  p.expenses[0].amount = 3000;
+  const part = taxEvents(compute(p, { today: T }));
+  assert.equal(part.length, 2); near(-part[0].amount, e.behind); near(-part[1].amount, e.nextDue.amount - 3000);
+  // ended before today: the quarters are back in full
+  p.expenses[0].endDate = "2026-06-30";
+  near(taxEvents(compute(p, { today: T })).reduce((t, x) => t - x.amount, 0), want);
+  // property tax filed under "Taxes not withheld" leaves the quarters in
+  const q = freelancer(); q.expenses.push({ id: "e-pt", name: "Property tax", category: "taxes", amount: 4800, period: "annual", essential: true });
+  assert.equal(taxEvents(compute(q, { today: T })).length, 2);
+  // one dated in the window: the same
+  const once = freelancer(); once.expenses.push({ id: "e-q4", name: "Q4 estimated tax", category: "taxes", amount: 3641.95, period: "once", startDate: "2027-01-15", essential: true });
+  const o = taxEvents(compute(once, { today: T }));
+  assert.equal(o.length, 1); near(-o[0].amount, e.behind);
+});
+
+test("which typed bills are the federal estimates: not a payment plan, back taxes, a penalty, a state's tax or another tax (round 5)", async () => {
+  const { typedIncomeTax } = await import("./compute.js");
+  const typed = (x) => typedIncomeTax({ amount: 100, period: "quarterly", ...x });
+  for (const x of [{ name: "Quarterly estimated taxes", category: "taxes" }, { name: "Estimated tax", category: "other" }, { name: "Est. tax", category: "other" }, { name: "1040-ES payment", category: "other" },
+    { name: "IRS payment", category: "other" }, { name: "Federal tax", category: "taxes" }, { name: "Taxes", category: "taxes" }, { name: "Self-employment tax", category: "taxes" },
+    { name: "Auto-pay estimated tax", category: "taxes" }, { name: "Federal estimated tax (home business)", category: "taxes" }, { name: "Tax estimate", category: "taxes", period: "annual" },
+    { name: "Income tax", category: "taxes", period: "monthly" }, { name: "Federal and state estimated tax", category: "taxes" }, { name: "Internal Revenue Service estimated tax", category: "other" },
+    { name: "Estimated federal income tax", category: "other", period: "annual" }, { name: "SE tax", category: "other" },
+    { name: "IRS", category: "taxes", period: "monthly" }])
+    assert.equal(typed(x), true, x.name);
+  for (const x of [{ name: "Property tax", category: "taxes" }, { name: "Property tax (quarterly)", category: "taxes" }, { name: "Car registration and tax", category: "taxes" }, { name: "Car tax", category: "taxes" },
+    { name: "Tax preparer", category: "taxes" }, { name: "Tax software", category: "taxes" }, { name: "State estimated tax", category: "taxes" }, { name: "Gym", category: "fun" },
+    // a debt to the IRS, not this year's estimates
+    { name: "IRS payment plan", category: "debt", period: "monthly" }, { name: "IRS installment agreement", category: "taxes", period: "monthly" }, { name: "Payment plan with the IRS", category: "other" },
+    { name: "Back taxes (IRS)", category: "other", period: "monthly" }, { name: "IRS penalty", category: "other" }, { name: "Last year's taxes", category: "taxes" }, { name: "IRS", category: "other", period: "monthly" },
+    // a state's or a city's tax
+    { name: "California estimated tax", category: "taxes" }, { name: "NY estimated tax", category: "taxes" }, { name: "CA FTB estimated tax", category: "taxes" }, { name: "Colorado quarterly tax", category: "taxes" },
+    { name: "CO Dept of Revenue", category: "taxes" }, { name: "City income tax", category: "taxes" }, { name: "Franchise tax", category: "taxes" },
+    // another tax, or the April bill for last year
+    { name: "Quarterly payroll tax", category: "taxes" }, { name: "Quarterly sales tax", category: "taxes" }, { name: "Income tax", category: "taxes", period: "annual" }, { name: "Tax savings", category: "taxes" }])
+    assert.equal(typed(x), false, x.name);
+  assert.equal(typedIncomeTax({ name: "Estimated tax", amount: 0, period: "quarterly" }), false, "nothing to pay");
+  assert.equal(typed({ name: "Estimated tax paid in quarters", category: "taxes" }), true, "'in' is a word, not Indiana");
+});
+
+test("names that say estimated win over the softer debt words; an agreement, a penalty or interest never counts (round 5, third pass)", async () => {
+  const { typedIncomeTax, irsDueDay } = await import("./compute.js");
+  const typed = (x) => typedIncomeTax({ amount: 100, period: "quarterly", ...x });
+  // installment is the IRS's own word for the 1040-ES payments; owed, plan, balance and "revenue" yield to "estimated"
+  for (const x of [{ name: "Estimated tax installments", category: "taxes" }, { name: "Quarterly installment - estimated tax", category: "taxes" }, { name: "Estimated taxes owed", category: "taxes" },
+    { name: "Estimated tax on revenue", category: "taxes" }, { name: "Estimated tax plan", category: "taxes" }, { name: "Estimated tax instalment", category: "taxes" }, { name: "Est. tax installment", category: "other" },
+    { name: "Estimated tax (balance of year)", category: "taxes" }, { name: "1040-ES installment", category: "other" },
+    // a yearly or one-time federal bill on the 2nd, 3rd or 4th quarter's due date is that quarter
+    { name: "IRS Q4 payment", category: "other", period: "once", startDate: "2027-01-15" }, { name: "Federal tax", category: "taxes", period: "once", startDate: "2027-01-15" },
+    { name: "IRS payment", category: "taxes", period: "once", startDate: "2027-01-15" }, { name: "IRS payment", category: "other", period: "once", startDate: "2027-06-15" },
+    { name: "Federal income tax", category: "taxes", period: "annual", startDate: "2026-09-15" }, { name: "Income tax", category: "taxes", period: "once", startDate: "2028-01-18" }])
+    assert.equal(typed(x), true, `${x.name} ${x.period ?? "quarterly"} ${x.startDate ?? ""}`);
+  for (const x of [
+    // always a debt to the tax office, whatever else the name says
+    { name: "Estimated tax installment agreement", category: "taxes" }, { name: "Estimated back taxes", category: "taxes" }, { name: "Estimated tax penalty", category: "taxes" },
+    { name: "Estimated tax incl. interest", category: "taxes" }, { name: "IRS lien", category: "taxes", period: "monthly" }, { name: "IRS levy (estimated)", category: "taxes" },
+    { name: "Last year's estimated tax", category: "taxes" }, { name: "IRS penalty", category: "other", period: "once", startDate: "2027-01-15" },
+    // the softer words without "estimated": a debt
+    { name: "IRS payment plan", category: "taxes", period: "quarterly" }, { name: "Taxes owed to the IRS", category: "taxes" }, { name: "IRS balance", category: "taxes" },
+    // a department of revenue is a state's; "revenue" alone is one when the name does not say estimated
+    { name: "Dept of Revenue estimated tax", category: "taxes" }, { name: "Revenue quarterly tax", category: "taxes" }, { name: "Colorado revenue estimated tax", category: "taxes" },
+    // on April 15 a one-time or yearly federal bill may be last year's balance; another day is no quarter
+    { name: "IRS payment", category: "taxes", period: "once", startDate: "2027-04-15" }, { name: "Federal tax", category: "taxes", period: "annual", startDate: "2026-04-15" },
+    { name: "Federal tax", category: "taxes", period: "once", startDate: "2026-12-01" }, { name: "IRS payment", category: "taxes", period: "once" }])
+    assert.equal(typed(x), false, `${x.name} ${x.period ?? "quarterly"} ${x.startDate ?? ""}`);
+  assert.equal(irsDueDay("2028-01-18", true), true, "January 15, 2028 is a Saturday and the 17th a holiday: due the 18th");
+  assert.equal(irsDueDay("2027-04-15", true), false); assert.equal(irsDueDay("2027-04-15"), true); assert.equal(irsDueDay("2027-02-01"), false);
+  // in the forecast: the typed bill is January's quarter, so the quarter goes out once (second pass: twice, $2,800 lower)
+  const T = "2026-11-02";
+  for (const x of [{ name: "Estimated tax installments", category: "taxes", period: "quarterly", startDate: "2026-01-15" }, { name: "Estimated taxes owed", category: "taxes", period: "quarterly", startDate: "2026-01-15" },
+    { name: "Estimated tax on revenue", category: "taxes", period: "quarterly", startDate: "2026-01-15" }, { name: "IRS payment", category: "taxes", period: "once", startDate: "2027-01-15" }]) {
+    const p = paidFreelancer(); p.expenses.push({ id: "e-x", amount: 2800, essential: true, ...x });
+    assert.deepEqual(taxEvents(compute(p, { today: T })), [], `${x.name}: no quarter line of its own`);
+    const d = compute(p, { today: T });
+    assert.deepEqual(d.days.flatMap((day) => day.events.filter((ev) => ev.name === x.name).map((ev) => [day.date, ev.amount])), [["2027-01-15", -2800]]);
+  }
+});
+
+test("an IRS payment plan, back taxes, a penalty or a state's estimated tax typed on Expenses leaves every federal quarter in (round 5)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const e = estimated(freelancer(), { today: T }), want = e.behind + e.nextDue.amount;
+  const total = (d) => taxEvents(d).reduce((t, x) => t - x.amount, 0);
+  for (const x of [{ name: "IRS payment plan", category: "debt", amount: 250, period: "monthly" }, { name: "Back taxes (IRS)", category: "other", amount: 150, period: "monthly" },
+    { name: "IRS penalty", category: "other", amount: 300, period: "once", startDate: "2026-12-01" }, { name: "California estimated tax", category: "taxes", amount: 400, period: "quarterly", startDate: "2026-01-15" },
+    { name: "CA FTB estimated tax", category: "taxes", amount: 400, period: "quarterly", startDate: "2026-01-15" }, { name: "Colorado quarterly tax", category: "taxes", amount: 300, period: "quarterly", startDate: "2026-01-15" }]) {
+    const p = freelancer(); p.expenses.push({ id: "e-x", essential: true, ...x });
+    const d = compute(p, { today: T });
+    near(total(d), want);
+    assert.ok(d.days.some((day) => day.events.some((ev) => ev.name === x.name)), `${x.name} is still paid as typed`);
+  }
+});
+
+test("a typed tax bill with no payment date in the window takes nothing off (round 5)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const e = estimated(freelancer(), { today: T }), want = e.behind + e.nextDue.amount;
+  const total = (d) => taxEvents(d).reduce((t, x) => t - x.amount, 0);
+  for (const x of [
+    { name: "Estimated taxes", amount: 11200, period: "annual", startDate: "2026-04-15" }, // next on April 15, 2027
+    { name: "Quarterly estimated taxes", amount: 4200, period: "quarterly", startDate: "2026-02-01" }, // every three months from February 1: next February 1, after the window
+    { name: "Quarterly estimated taxes", amount: 4200, period: "quarterly", startDate: "2027-02-15" }, // starts after the window
+    { name: "Q1 estimated tax", amount: 3600, period: "once", startDate: "2027-04-15" }]) {
+    const p = freelancer(); p.expenses.push({ id: "e-x", category: "taxes", essential: true, ...x });
+    const d = compute(p, { today: T });
+    assert.ok(!d.days.some((day) => day.events.some((ev) => ev.name === x.name)), `${x.name}: not in the 90 days`);
+    near(total(d), want);
+  }
+});
+
+test("a payment pays only the quarter lines due on or after its own date; a quarterly tax bill with no date is paid on the IRS's dates (round 5, third pass)", async () => {
+  const { estimatedLines } = await import("./compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  // a payment after January 15 never pays January's quarter: the money would leave later than it is due
+  const f = freelancer(), T0 = "2026-11-20", e0 = estimated(f, { today: T0 });
+  const late = estimatedLines(f, T0, "2027-02-18", [{ date: "2027-02-01", amount: -4200, payee: "Quarterly estimated taxes", typedTax: true }]);
+  assert.deepEqual(late.map((x) => x.date), [T0, "2027-01-15"]); near(-late[0].amount, e0.behind); near(-late[1].amount, e0.nextDue.amount);
+  // one on January 15 pays it, and only it: what is past due today stays
+  const onTime = estimatedLines(f, T0, "2027-02-18", [{ date: "2027-01-15", amount: -4200, payee: "Quarterly estimated taxes", typedTax: true }]);
+  assert.deepEqual(onTime.map((x) => x.date), [T0]); near(-onTime[0].amount, e0.behind);
+  // the qa self-employed household ("Quarterly estimated taxes" $4,200, no date; dated January 15 in the other case),
+  // on days other than November 2: the past-due line is what Estimated payments says is behind, and the bill is paid
+  // on January 15 or September 15 and pays that quarter, never February 1 or December 1 (second pass: on November 20
+  // the line read $4,748.60 against $6,711.45 behind, and on September 15 the 3rd quarter moved to a December 1 bill)
+  const hh = () => ARCHETYPES.find((a) => a.id === "11-self-employed").build();
+  for (const dated of [false, true]) for (const [T, billDay] of [["2026-11-20", "2027-01-15"], ["2027-01-05", "2027-01-15"], ["2027-09-15", "2027-09-15"]]) {
+    const p = hh(); if (dated) p.expenses.find((x) => x.id === "e-tax").startDate = "2026-01-15";
+    const d = compute(p, { today: T });
+    const bill = d.days.flatMap((x) => x.events.filter((ev) => ev.name === "Quarterly estimated taxes").map((ev) => [x.date, ev.amount]));
+    assert.deepEqual(bill, [[billDay, -4200]], `${T} ${dated ? "dated" : "no date"}: the bill on the IRS's day`);
+    const ev = taxEvents(d);
+    assert.deepEqual(ev.map((x) => x.date), [T], `${T}: only the past-due line; the quarter is the typed bill`);
+    if (T === "2027-09-15") {
+      // the 3rd quarter is due today with the bill: the bill pays it, and the rest of the bill part of what is past due
+      const e = estimated(p, { today: T });
+      near(-ev[0].amount, e.behind + e.nextDue.amount - 4200);
+    } else {
+      const e = estimated(T.startsWith("2027-01") ? { ...p, taxes: { ...(p.taxes ?? {}), year: 2026 } } : p, { today: T });
+      near(-ev[0].amount, e.behind);
+      assert.ok(e.behind > 6700 && e.nextDue.due === "2027-01-15");
+    }
+  }
+  // the freelancer with three quarters paid and an undated $2,800 quarterly bill, on January 5: one January 15 payment,
+  // the typed bill (second pass: the bill fell on April 1 and January's quarter went out as well)
+  const p = paidFreelancer(); p.expenses.push({ id: "e-q", name: "Quarterly estimated tax", category: "taxes", amount: 2800, period: "quarterly", essential: true });
+  const d = compute(p, { today: "2027-01-05" });
+  assert.deepEqual(taxEvents(d), []);
+  const jan15 = d.days.find((x) => x.date === "2027-01-15").events.filter((ev) => /tax/i.test(ev.name));
+  assert.deepEqual(jan15.map((ev) => [ev.name, ev.amount]), [["Quarterly estimated tax", -2800]]);
+  assert.ok(!d.days.some((x) => x.date !== "2027-01-15" && x.events.some((ev) => /tax/i.test(ev.name))), "nothing on April 1");
+});
+
+test("bank payments: January 16 to April 15 count at most as the 1st quarter, later ones in full (round 5, third pass)", async () => {
+  const { taxPaidInBank } = await import("./compute.js");
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const T = "2026-11-02";
+  const base = () => { const p = paidFreelancer(); delete p.taxes.estimated; return p; };
+  const e = estimated(base(), { today: T });
+  assert.equal(e.perQuarter, 2800);
+  // paying more than the minimum each quarter: $3,500 three times counts $10,500, as the same three typed on Estimated
+  // payments (second pass: $8,400, and January's line read $2,800 instead of $700)
+  const p = base(); for (const day of ["2026-04-15", "2026-06-15", "2026-09-15"]) bankLine(p, day, "IRS USATAXPYMT", -3500);
+  assert.equal(taxPaidInBank(p, 2026, T, e.quarters), 10500);
+  const bank = taxEvents(compute(p, { today: T }));
+  const typed = base(); typed.taxes.estimated = { paid: [3500, 3500, 3500, 0] };
+  assert.deepEqual(bank.map((x) => [x.date, x.amount]), [["2027-01-15", -700]]);
+  assert.deepEqual(taxEvents(compute(typed, { today: T })).map((x) => [x.date, x.amount]), [["2027-01-15", -700]]);
+  // last year's balance with the 1st quarter in April, then the regular $2,800: April counts as $2,800
+  const bal = base(); bankLine(bal, "2026-04-15", "IRS USATAXPYMT", -6000); bankLine(bal, "2026-06-15", "IRS USATAXPYMT", -2800); bankLine(bal, "2026-09-15", "IRS USATAXPYMT", -2800);
+  assert.equal(taxPaidInBank(bal, 2026, T, e.quarters), 8400);
+  // April's balance and a September catch-up of two quarters: June shows nothing paid, so April still counts as one quarter
+  const cu = base(); bankLine(cu, "2026-04-15", "IRS USATAXPYMT", -6000); bankLine(cu, "2026-09-10", "IRS USATAXPYMT", -5600);
+  assert.equal(taxPaidInBank(cu, 2026, T, e.quarters), 8400);
+  // only April so far (May 1): its 1st-quarter share
+  const may = base(); bankLine(may, "2026-04-15", "IRS USATAXPYMT", -3500);
+  assert.equal(taxPaidInBank(may, 2026, "2026-05-01", e.quarters), 2800);
+  // a payment after April 15 that is bigger than a quarter counts in full
+  const big = base(); bankLine(big, "2026-04-15", "IRS USATAXPYMT", -2800); bankLine(big, "2026-06-15", "IRS USATAXPYMT", -5000);
+  assert.equal(taxPaidInBank(big, 2026, T, e.quarters), 7800);
+});
+
+test("last year's 4th quarter comes only from business income in that tax year (round 5, third pass)", () => {
+  // other income that needs estimates (rent), and business income that starts January 1: no 2026 quarters on January 5
+  const p = freelancer();
+  p.income[0].startDate = "2027-01-01";
+  p.income.push({ id: "i-rent", name: "Rent from the flat", type: "rental", personId: "dee", amount: 3000, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+  assert.deepEqual(taxEvents(compute(p, { today: "2027-01-05" })).filter((x) => /2026/.test(x.name)), [], "consulting from January 1 brings no quarters of the year before");
+  // business income in 2026 that goes on (from the start of the year, or from June): its 4th quarter is still due January 15
+  for (const start of ["", "2026-06-01"]) {
+    const q = freelancer(); q.income[0].startDate = start;
+    q.income.push({ id: "i-rent", name: "Rent from the flat", type: "rental", personId: "dee", amount: 3000, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+    const ev = taxEvents(compute(q, { today: "2027-01-05" }));
+    assert.ok(ev.some((x) => x.date === "2027-01-15" && /4th quarter of 2026/.test(x.name)), `from "${start}": January 15's quarter of 2026`);
+  }
+});
+
+test("only business income coming in today brings the quarters: not one that starts next year or has ended (round 5)", () => {
+  const T = "2026-11-02";
+  const later = freelancer(); later.income[0].startDate = "2027-01-01";
+  assert.deepEqual(taxEvents(compute(later, { today: T })), []);
+  const ended = freelancer(); ended.income[0].endDate = "2026-06-30";
+  assert.deepEqual(taxEvents(compute(ended, { today: T })), []);
+  assert.equal(taxEvents(compute(freelancer(), { today: T })).length, 2);
+});
+
+test("January 1 to 15: last year's 4th quarter, due January 15, stays in the forecast (round 5)", async () => {
+  const { compute: estimated } = await import("../../taxes/estimated/compute.js");
+  const p = freelancer();
+  p.taxes = { ...(p.taxes ?? {}), estimated: { paid: [3000, 3000, 3000, 0], typedAt: "2026-10-01" } };
+  const last = estimated({ ...p, taxes: { ...p.taxes, year: 2026 } }, { today: "2027-01-05" });
+  const ev = taxEvents(compute(p, { today: "2027-01-05" }));
+  assert.deepEqual(ev.map((x) => [x.date, x.name]), [["2027-01-05", "Estimated tax for 2026 past due (Quarterly payments)"], ["2027-01-15", "Estimated tax, 4th quarter of 2026 (Quarterly payments)"]]);
+  assert.ok(Math.abs(-ev[0].amount - last.behind) < 0.02);
+  assert.ok(Math.abs(-ev[0].amount - ev[1].amount - (last.remaining)) < 0.02, "together: what 2026 still needs");
+  // after its due date it is the April bill, not a quarter; the year set on the Federal estimate is that year alone
+  assert.ok(!taxEvents(compute(p, { today: "2027-01-16" })).some((x) => /2026/.test(x.name)));
+  p.taxes.year = 2027;
+  assert.ok(!taxEvents(compute(p, { today: "2027-01-05" })).some((x) => /2026/.test(x.name)));
+});
+
+test("business income typed as a typical year stays spread after an edit that starts a new amount later (round 5)", () => {
+  const T = "2026-11-02";
+  const p = freelancer();
+  p.income = [{ ...p.income[0], endDate: "2026-11-30" }, { id: "x7k2", name: "Dee's business", type: "business", personId: "dee", amount: 90000, period: "annual", growth: 0, startDate: "2026-12-01", endDate: "", taxable: true, typicalYear: true }];
+  const dep = compute(p, { today: T }).days.flatMap((x) => x.events.filter((e) => e.name === "Dee's business").map((e) => [x.date, e.amount]));
+  assert.deepEqual(dep, [["2026-11-15", 6500], ["2026-12-01", 7500], ["2027-01-01", 7500]]);
+  // without the marker, a business income typed a year on Income is a once-a-year payment and lands once
+  delete p.income[1].typicalYear;
+  assert.ok(compute(p, { today: T }).days.some((x) => x.events.some((e) => e.name === "Dee's business" && e.amount === 90000)));
 });
 
 test("a bank line covers a typed item only going the same way, and not by a word every bank line shares (review 2026-11-02)", () => {
@@ -321,4 +670,22 @@ test("a bank line covers a typed item only going the same way, and not by a word
   const d = compute(p, { today: T, days: 90 });
   const biz = d.days.flatMap((x) => x.events).filter((x) => x.name === "Dee's business");
   assert.ok(biz.length >= 2, "the business income still lands though a bill says 'business'");
+});
+
+test("a payment pays the earliest quarter it may: '1040-ES Q1' on April 1 pays April 15, June 15 stays (round 5 recheck)", () => {
+  const T = "2027-03-20";
+  const quarters = (d) => taxEvents(d).map((x) => [x.date, Math.round(x.amount)]);
+  const before = quarters(compute(freelancer(), { today: T }));
+  const apr = before.find(([date]) => date === "2027-04-15"), jun = before.find(([date]) => date === "2027-06-15");
+  assert.ok(apr && jun, "both quarters are in the 90 days");
+  const p = freelancer(); p.expenses.push({ id: "e-q1", name: "1040-ES Q1", category: "taxes", amount: -apr[1], period: "once", startDate: "2027-04-01", essential: true });
+  const after = quarters(compute(p, { today: T }));
+  assert.deepEqual(after, [jun], "the 1st quarter is paid on April 1; the 2nd is still due June 15");
+});
+
+test("a quarter word wins over 'owe'; NYS and a school district are not the federal quarters (round 5 recheck)", async () => {
+  const { typedIncomeTax } = await import("./compute.js");
+  const typed = (x) => typedIncomeTax({ amount: 100, period: "quarterly", category: "taxes", ...x });
+  for (const name of ["Quarterly tax I owe", "Taxes owed (quarterly)", "Taxes I owe each quarter"]) assert.equal(typed({ name }), true, name);
+  for (const name of ["NYS estimated tax", "School district income tax", "IRS payment plan", "Taxes owed to the IRS"]) assert.equal(typed({ name }), false, name);
 });

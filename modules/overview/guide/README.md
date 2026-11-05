@@ -179,6 +179,13 @@ empty plan and on the family fixture (worked by hand); finishing; which step a p
 the 30-day quiet, after leaving; the summary and step addresses; every change reports whether it changed anything and
 touches only `plan.guide`; compute returns plain data; the manifest's frame hook.
 
+## Review 2026-11-02 (round 5): an ended Social Security line
+`socialSecurity(p, { today })` (the retirement guide's Social Security step and its finish words) skips a Social
+Security line on Income whose end date has passed, as `pension()` does and as the projection (`incomeSocial`,
+`ssOnIncome`) does: an ended survivor benefit marked the step done and said "Social Security ... in your plan" when no
+page counted it. A line that starts later still counts: the projection counts it from its start date and Will the money
+last? takes Social Security as known with it.
+
 ## Ideas / not yet
 - Pages could read the step from the address and open their add form, or scroll to the field the step asks for.
 - The dashboard's "Continue: <guide>" tile and "Start something new" link (designer's lane; asked on the WORKBOARD).

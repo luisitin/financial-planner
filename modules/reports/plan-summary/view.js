@@ -49,12 +49,18 @@ export function render(page, ctx) {
 
     if (d.cashflow) {
       const c = d.cashflow;
+      // every line Next best action takes off the month, so the rows add up to the bottom line (review 2026-11-02: business
+      // costs, state tax, the extra on debts and the side income held back were missing); a federal tax below zero is a credit
+      const off = (v) => (v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`);
+      const some = (v) => (v ?? 0) > 0.5;
       sheet.append(section(ui, "Each month",
         rtable(ui, [{ label: "", get: (x) => x[0] }, { label: "a month", num: true, get: (x) => x[1] }], [
-          ["Income before tax", money(c.gross)], ["Federal income tax", `- ${money(c.federalTax)}`], ["Social Security and Medicare tax", `- ${money(c.payrollTax)}`], ["Spending", `- ${money(c.spending)}`],
-          ["Retirement saving", `- ${money(c.retirementSaving)}`], ["Saving for goals", `- ${money(c.goalSaving)}`], [c.monthly >= 0 ? "Spare" : "Short", money(c.monthly)],
+          ["Income before tax", money(c.gross)], ...(some(c.businessCosts) ? [["Business costs", off(c.businessCosts)]] : []),
+          ["Federal income tax", off(c.federalTax)], ["Social Security and Medicare tax", off(c.payrollTax)], ...(some(c.stateTax) ? [["State income tax", off(c.stateTax)]] : []), ["Spending", off(c.spending)],
+          ["Retirement saving", off(c.retirementSaving)], ["Saving for goals", off(c.goalSaving)], ...(some(c.debtExtra) ? [["Extra on debts (Pay off debts)", off(c.debtExtra)]] : []),
+          ...(some(c.held) ? [["Side income above what you count on, after its tax", off(c.held)]] : []), [c.monthly >= 0 ? "Spare" : "Short", money(c.monthly)],
         ]),
-        ui.h("p", { class: "rp-sub" }, "State and local income tax is not included.")));
+        ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is the State page's rate on this income; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
     }
 
     if (r.ready) sheet.append(section(ui, "Retirement",

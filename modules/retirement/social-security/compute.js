@@ -4,6 +4,7 @@
 // the bend-point formula for the year you turn 62, then adjust for the age you claim. Tables
 // come from ssa.tools (data/ssa.js). A typed "monthly at full retirement age" from a Social
 // Security statement works instead of a record.
+import { perYear } from "../../../core/math/periods.js";
 import { WAGE_INDICES, COLA, MAXIMUM_EARNINGS, EARNINGS_PER_CREDIT, EARNINGS_PER_CREDIT_BEFORE_1978, MAX_CREDITS, SSA_EARNINGS_YEARS, FULL_RETIREMENT_AGE, BENDPOINT1_IN_1977, BENDPOINT2_IN_1977, BEFORE_BENDPOINT1_MULTIPLIER, BEFORE_BENDPOINT2_MULTIPLIER, AFTER_BENDPOINT2_MULTIPLIER } from "./data/ssa.js";
 
 const awiYears = Object.keys(WAGE_INDICES).map(Number);
@@ -12,6 +13,11 @@ const awi = (year) => WAGE_INDICES[Math.min(year, LAST_AWI_YEAR)] ?? WAGE_INDICE
 const LAST_MAX_YEAR = Math.max(...Object.keys(MAXIMUM_EARNINGS).map(Number));
 /** The taxable maximum for a year; a year past the last published one keeps the last (wages are not projected either: the wage index is frozen too). */
 export const maximumEarnings = (year) => MAXIMUM_EARNINGS[Math.min(year, LAST_MAX_YEAR)] ?? Infinity;
+/**
+ * How far below the full-age amount a benefit already paid from 62 must be to count as a reduced early claim: more than
+ * 0.5% (one month early takes 5/9 of 1% off). Paid about the full amount, it is a disability benefit, which is unreduced.
+ */
+export const EARLY_TOLERANCE = 0.005;
 /** Round down to the dime, the way SSA does, without binary floating point flooring an exact $x.x0 a dime low ($2,315.50 is stored as 2315.4999...). */
 export const floorDime = (x) => Math.floor(x * 10 + 1e-8) / 10;
 
@@ -106,7 +112,13 @@ export function estimateBenefit(record, { birthYear, claimAge = null, futureEarn
 
 /**
  * compute(plan, { today }) -> {
- *   people: [{ id, name, birthYear, age, ageNow (exact, in years), fra, claimAge, source: "record"|"typed"|"none", estimate, pia, monthly,
+ *   people: [{ id, name, birthYear, age, ageNow (exact, in years), fra, claimAge (the age the benefit is valued at: the one on
+ *     file (with none saved: the full retirement age, or 70 from 70 on); for a benefit paid before the claim age on file,
+ *     never later than full retirement age: the full retirement age when it is unreduced (marked `paidUnreduced`, paid
+ *     before 62, or the Income line pays about the full-age amount), else today's age to the month, as a reduced claim),
+ *     claimAgeOnFile, source: "record"|"typed"|"none", estimate, pia (the full-age amount, always from the record or the
+ *     statement's figure), monthly (for someone paid before the claim age on file, what the Income line pays),
+ *     startedEarly (paid before the claim age on file, or marked `paidUnreduced`), reducedEarly (that, as a reduced claim), paidLine,
  *     options: [{ claimAge, monthly, factor }] (62 to 70; past 62 and not claimed, only from today's age to 70),
  *     claimed (already gets it: setup's "getting" or Social Security on Income), claimedYear, pastClaimAge (not claimed and the
  *     claim age on file has passed), wait: { nowAge, nowMonthly, at70Monthly, at70 ("YYYY-MM"), breakEven (age) } | null,
@@ -116,7 +128,8 @@ export function estimateBenefit(record, { birthYear, claimAge = null, futureEarn
  *     bothMonthly, survivorYearly (the larger benefit, kept by whoever outlives the other) },
  *   householdYearly, hasData
  * }
- * plan.retirement.socialSecurity[personId] = { claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings }
+ * plan.retirement.socialSecurity[personId] = { claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings,
+ *   paidUnreduced (optional: setup's "I get it now" before 62, a disability or survivor benefit paid at the full-age amount) }
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -126,20 +139,6 @@ export function compute(plan, params = {}) {
     const birthYear = p.birthDate ? Number(String(p.birthDate).slice(0, 4)) : null;
     const s = ss[p.id] ?? {};
     const fra = birthYear ? fullRetirementAge(birthYear) : null;
-    const claimAge = Number(s.claimAge) || (fra ? fra.asYears : 67);
-    let estimate = null, source = "none", monthly = 0;
-    if (birthYear && Array.isArray(s.record) && s.record.length) {
-      const retireYear = birthYear + (Number(p.retirementAge) || Number(plan.assumptions?.retirementAge) || 65) - 1;
-      estimate = estimateBenefit(s.record, { birthYear, claimAge, futureEarnings: s.futureEarnings ?? "same", stopYear: Math.min(retireYear, birthYear + Math.floor(claimAge) - 1), today });
-      source = "record"; monthly = estimate.eligible ? estimate.monthly : 0;
-    } else if (birthYear && Number(s.monthlyAtFRA) > 0) {
-      source = "typed"; monthly = floorDime(Number(s.monthlyAtFRA) * claimFactor(birthYear, claimAge));
-    }
-    const eligible = source === "typed" || (source === "record" && estimate.eligible);
-    const baseAtFra = !eligible ? 0 : source === "record" ? estimate.pia : Number(s.monthlyAtFRA);
-    const options = birthYear ? [62, 64, fra.asYears, 68, 70].filter((a, i, arr) => arr.indexOf(a) === i).sort((a, b) => a - b).map((a) => ({ claimAge: a, factor: claimFactor(birthYear, a), monthly: floorDime(baseAtFra * claimFactor(birthYear, a)) })) : [];
-    const spousalAtSameAge = birthYear ? floorDime(baseAtFra * spousalFactor(birthYear, claimAge)) : 0;
-    const survivor = birthYear ? survivorAmount(baseAtFra, monthly, Math.round(claimAge * 12) < Math.round(fra.asYears * 12)) : 0;
     // decisions already made (round 4, 2026-11-02): someone who already gets it (setup's "I already get it", or Social
     // Security on the Income page) is shown a fact, not a choice of claiming ages; someone past 62 who has not claimed
     // chooses only from today's age to 70, with "now or at 70" answered directly
@@ -148,11 +147,48 @@ export function compute(plan, params = {}) {
     // later (review 2026-11-02: a 2030 start date or an ended survivor benefit read as "already gets it")
     const paidLine = (plan.income ?? []).find((x) => x.type === "social" && x.personId === p.id && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < today) && !(x.startDate && today && String(x.startDate) > today)) ?? null;
     const claimed = plan.guide?.setup?.ss?.[p.id] === "getting" || !!paidLine;
+    // the claim age on file; with none saved, the full retirement age, or 70 for someone 70 or over who has not claimed (the
+    // only age still open: waiting adds nothing after 70, review 2026-11-02, round 5). A saved age is kept as it is, as
+    // under 70, and once passed it is flagged (`pastClaimAge`), so the page asks rather than silently re-valuing it
+    const over70 = !claimed && exact !== null && exact >= 70 - 1 / 24;
+    const onFile = Number(s.claimAge) || (over70 ? 70 : fra ? fra.asYears : 67);
     // the month it started: birth month + the claim age; only a month already gone is said ("since 2016"). Someone who gets
-    // it before the claim age on file (disability, survivor benefits under 62) is getting it now, not from that age
-    const claimMonth = birthYear && p.birthDate ? birthYear * 12 + (Number(String(p.birthDate).slice(5, 7)) - 1) + Math.round(claimAge * 12) : null;
+    // it before the claim age on file is getting it now, not from that age
+    const claimMonth = birthYear && p.birthDate ? birthYear * 12 + (Number(String(p.birthDate).slice(5, 7)) - 1) + Math.round(onFile * 12) : null;
     const todayMonth = today ? Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7)) - 1 : null;
-    const startedEarly = claimed && claimMonth !== null && todayMonth !== null && claimMonth > todayMonth;
+    // setup's "I get it now" before 62 (a disability or survivor benefit) marks the entry `paidUnreduced`: paid since before
+    // any claim age, so it is paid "now", never "since" the claim age on file (review 2026-11-02, round 5, third pass)
+    const marked = claimed && !!s.paidUnreduced && !!fra;
+    const startedEarly = claimed && (marked || (claimMonth !== null && todayMonth !== null && claimMonth > todayMonth));
+    const hasRecord = !!birthYear && Array.isArray(s.record) && s.record.length > 0;
+    const source = hasRecord ? "record" : birthYear && Number(s.monthlyAtFRA) > 0 ? "typed" : "none";
+    const retireYear = birthYear ? birthYear + (Number(p.retirementAge) || Number(plan.assumptions?.retirementAge) || 65) - 1 : null;
+    const estimateAt = (age) => estimateBenefit(s.record, { birthYear, claimAge: age, futureEarnings: s.futureEarnings ?? "same", stopYear: Math.min(retireYear, birthYear + Math.floor(age) - 1), today });
+    // the full-age amount always comes from its source: the record's primary insurance amount, or the statement's figure
+    // (review 2026-11-02, round 5, second pass: it was worked back from the Income line, which turned a disability
+    // benefit paid at the full figure past 62 into a reduced one and moved the survivor and spouse's figures)
+    let estimate = hasRecord ? estimateAt(onFile) : null;
+    const fullAge = source === "record" ? (estimate.eligible ? estimate.pia : null) : source === "typed" ? Number(s.monthlyAtFRA) : null;
+    // what arrives now, for someone paid before the claim age on file: the Social Security line on Income
+    const paidMonthly = startedEarly && paidLine && source !== "none" ? perYear(paidLine.amount, paidLine.period) / 12 : null;
+    // a benefit already paid before the claim age on file is never valued with delayed credits: that claim age (later than
+    // today, perhaps past full retirement age) is not used for it (third pass: a saved 70 counted $2,976 a month from 64
+    // for someone who said "I already get it"). It is unreduced, the full-age amount, only when setup marked it
+    // (`paidUnreduced`), when it is paid before 62 (only a disability or survivor benefit can be), or when the Income line
+    // pays about the full-age amount (not more than 0.5% less: one month early already takes 0.56% off). Otherwise it is a
+    // reduced early claim, valued as claimed at today's age (to the month), or at full retirement age once past it, from today
+    const unreduced = startedEarly && (marked || (exact !== null && exact < 62) || (paidMonthly !== null && fullAge !== null && paidMonthly >= fullAge * (1 - EARLY_TOLERANCE)));
+    const claimAge = !startedEarly || !fra ? onFile : unreduced || exact === null ? fra.asYears : Math.min(fra.asYears, Math.round(exact * 12) / 12);
+    const reducedEarly = startedEarly && !unreduced && Math.round(claimAge * 12) < Math.round(fra.asYears * 12);
+    if (hasRecord && claimAge !== onFile) estimate = estimateAt(claimAge);
+    let monthly = source === "record" ? (estimate.eligible ? estimate.monthly : 0) : source === "typed" ? floorDime(Number(s.monthlyAtFRA) * claimFactor(birthYear, claimAge)) : 0;
+    if (paidMonthly) monthly = paidMonthly;
+    const eligible = !!paidMonthly || source === "typed" || (source === "record" && estimate.eligible);
+    // a record short of 40 credits that is being paid anyway: the full-age amount that pays what arrives
+    const baseAtFra = !eligible ? 0 : source === "record" ? (estimate.eligible ? estimate.pia : paidMonthly / claimFactor(birthYear, claimAge)) : Number(s.monthlyAtFRA);
+    const options = birthYear ? [62, 64, fra.asYears, 68, 70].filter((a, i, arr) => arr.indexOf(a) === i).sort((a, b) => a - b).map((a) => ({ claimAge: a, factor: claimFactor(birthYear, a), monthly: floorDime(baseAtFra * claimFactor(birthYear, a)) })) : [];
+    const spousalAtSameAge = birthYear ? floorDime(baseAtFra * spousalFactor(birthYear, claimAge)) : 0;
+    const survivor = birthYear ? survivorAmount(baseAtFra, monthly, Math.round(claimAge * 12) < Math.round(fra.asYears * 12)) : 0;
     const choose = !claimed && exact !== null && exact > 62 ? (() => {
       const now = Math.min(70, Math.ceil(exact * 12) / 12);
       const ages = [now, ...[63, 64, 65, 66, 67, 68, 69].filter((a) => a > now + 1 / 24), ...(fra && fra.asYears > now + 1 / 24 && !Number.isInteger(fra.asYears) ? [fra.asYears] : []), ...(now < 70 ? [70] : [])];
@@ -167,12 +203,12 @@ export function compute(plan, params = {}) {
       const at70 = `${birthYear + 70}-${String(p.birthDate).slice(5, 7)}`;
       return { nowAge: first.claimAge, nowMonthly: first.monthly, at70Monthly: last.monthly, at70, breakEven: Math.round(breakEven * 10) / 10 };
     })() : null;
-    return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
-      options: choose ?? options, claimed, startedEarly, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
+    return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, claimAgeOnFile: onFile, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
+      options: choose ?? options, claimed, startedEarly, reducedEarly, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
       claimedYear: claimed && birthYear && !startedEarly ? birthYear + Math.floor(claimAge) : null,
       // a saved claim age gone by without a claim: only when there are figures to claim with and "won't get it" was not said;
       // from 70 on, a saved 70 is up to date (review 2026-11-02)
-      pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && claimAge < Math.min(exact, 70) - 1 / 24, wait,
+      pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && onFile < Math.min(exact, 70) - 1 / 24, wait,
       spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
   });
   return { people, couple: couple(people), householdYearly: people.reduce((s, p) => s + p.yearly, 0), hasData: people.some((p) => p.source !== "none") };
@@ -194,6 +230,77 @@ export function couple(people) {
   const survivorMonthly = { [a.id]: Math.max(a.monthly, b.survivor), [b.id]: Math.max(b.monthly, a.survivor) };
   const bothMonthly = a.monthly + b.monthly + spousal[a.id] + spousal[b.id];
   return { spousal, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
+}
+
+/** "64 and 6 months", "67": an age in years and months, as the page says it. */
+export const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
+/**
+ * The page's sentence on what `person` keeps if `partner` dies first (couple's survivorMonthly[person.id] is `keeps`), with
+ * `money` formatting an amount. When the widow(er)'s benefit is more than the partner gets (they claimed early, and it is at
+ * least 82.5% of their full-age amount), it says so and why (review 2026-11-02, round 5, third pass: "$1,733 ... Ruth's
+ * benefit" beside the $1,500 Ruth gets read as a mistake).
+ */
+export function survivorWords(person, partner, keeps, money) {
+  if (!(keeps > person.monthly + 0.5)) return `If ${partner.name} dies first, ${person.name} keeps their own ${money(person.monthly)} a month, and ${partner.name}'s ${money(partner.monthly)} stops.`;
+  const own = person.monthly > 0.5 ? `${person.name}'s own ${money(person.monthly)}` : "none of their own";
+  if (!(keeps > partner.monthly + 0.5)) return `If ${partner.name} dies first, ${person.name} keeps about ${money(keeps)} a month: ${partner.name}'s benefit in place of ${own}.`;
+  return `If ${partner.name} dies first, ${person.name} would get a widow's or widower's benefit on ${partner.name}'s record: about ${money(keeps)} a month in place of ${own}. `
+    + `That is more than the ${money(partner.monthly)} ${partner.name} ${partner.claimed ? "gets now" : `would get at ${ageWords(partner.claimAge)}`}, because it is worked out from ${partner.name}'s full-age amount.`;
+}
+
+/**
+ * What "Save <name>'s Social Security" stores, decided here so each choice is tested (review 2026-11-02, round 5).
+ * saveFigures(person (one of compute's people), saved (plan.retirement.socialSecurity[id], or {}), form: { claimAge,
+ *   record (parsed from the box), typed (the amount box: a number, or null when empty), futureEarnings }) -> {
+ *   entry (the next saved entry: only what changed is replaced, the rest kept as it was), changed,
+ *   line: null | { id, amount (a month) } (the Social Security line on Income that pays it, set to this amount),
+ *   addLine: null | amount (paid before the claim age on file and no Income line pays it: setup's own line is added),
+ *   recordRemoved (a corrected amount set the saved earnings record aside, so the amount counts),
+ *   recordPasted (a corrected amount set aside a record pasted in this same Save, which is not kept)
+ * }
+ * Not claimed: the claim age, record, statement figure and future earnings as typed. Already paid: the claim age on file
+ * is kept, and an amount equal to the one shown changes nothing. A different amount goes on the Income line that pays
+ * it. For someone paid before the claim age on file, a line is added when there is none, and the full-age amount stays
+ * (it is only worked out from what arrives when there was no figure at all). For someone paid since that age, it also
+ * becomes the full-age amount that pays it at that age, and an earnings record (saved, or pasted in the same Save) is set
+ * aside so the amount counts.
+ */
+export function saveFigures(person, saved = {}, form = {}) {
+  const s = saved ?? {};
+  const num = (x) => (Number(x) > 0 ? Number(x) : null);
+  const rec = (r) => JSON.stringify((r ?? []).map((x) => [Number(x.year), Number(x.earnings)]));
+  const same = { claimAge: (a, b) => num(a) === num(b) || (num(a) !== null && num(b) !== null && Math.abs(a - b) < 1e-9), record: (a, b) => rec(a) === rec(b), monthlyAtFRA: (a, b) => num(a) === num(b), futureEarnings: (a, b) => (a ?? "same") === (b ?? "same") };
+  const entry = { ...s };
+  const put = (k, v) => { if (!same[k](s[k], v)) entry[k] = v; };
+  const typed = num(form.typed);
+  let line = null, addLine = null, recordRemoved = false, recordPasted = false;
+  put("record", form.record ?? []);
+  put("futureEarnings", form.futureEarnings ?? s.futureEarnings ?? "same");
+  if (!person.claimed) {
+    put("claimAge", Number(form.claimAge));
+    put("monthlyAtFRA", typed);
+  } else if (typed === null) {
+    // the box emptied: the figure is taken off, as before
+    put("monthlyAtFRA", null);
+  } else if (Math.abs(typed - (Number(person.monthly) || 0)) >= 0.5) {
+    if (person.startedEarly) {
+      // what arrives now is the Income line's; the full-age amount and the claim age on file stay as they are (an
+      // unreduced benefit's full-age amount is what arrives; a reduced one's is worked back from today's age)
+      if (person.paidLine) line = { id: person.paidLine.id, amount: typed }; else addLine = typed;
+      if (person.source === "none" && person.birthYear) put("monthlyAtFRA", person.reducedEarly ? fraFromMonthly(person.birthYear, person.claimAge, typed) : typed);
+    } else {
+      put("monthlyAtFRA", person.birthYear ? fraFromMonthly(person.birthYear, person.claimAge, typed) : typed);
+      // the amount typed wins over an earnings record, the one saved or one pasted in this same Save (review 2026-11-02,
+      // round 5, third pass: a record pasted with a new amount decided, and Income said the amount): it is set aside
+      if ((entry.record ?? []).length) {
+        if ((s.record ?? []).length) recordRemoved = true; else recordPasted = true;
+        entry.record = [];
+      }
+      if (person.paidLine) line = { id: person.paidLine.id, amount: typed };
+    }
+  }
+  const changed = !!line || addLine !== null || Object.keys({ ...s, ...entry }).some((k) => !(same[k] ?? ((a, b) => a === b))(s[k], entry[k]));
+  return { entry, changed, line, addLine, recordRemoved, recordPasted };
 }
 
 /** The full-retirement-age amount that pays `monthly` at `claimAge` (the box "What <name> gets a month now" stores this), to the dime. */

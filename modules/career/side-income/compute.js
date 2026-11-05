@@ -3,7 +3,7 @@
 // months out of four (what the plan should count on), the average, the spread, the cushion that paying yourself the
 // average would have needed, the share of each payment to set aside for tax (self-employment tax, federal and state at
 // the margin), the next quarterly payment, and the forms and mileage rate that come with it.
-import { compute as computeIncome, countedOn } from "../../cashflow/income/compute.js";
+import { compute as computeIncome, countedOn, chainId } from "../../cashflow/income/compute.js";
 import { compute as computeSelfEmployment } from "../../taxes/self-employment/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { compute as computeEstimated } from "../../taxes/estimated/compute.js";
@@ -47,7 +47,7 @@ export function monthStats(values, labels = []) {
 
 /**
  * compute(plan, { today }) -> {
- *   ready, year, months (labels), items: [{ id, name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, counted (income[].countOn on file, or null), gap, below }],
+ *   ready, year, months (labels), items: [{ id, key (chainId: where its months are kept, `whatIfs.sideIncome[key]`), name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, counted (income[].countOn on file, or null), gap, below }],
  *   setAside: { rate (of each payment received), yearly (the tax this income adds), quarter, state, stateKnown, stateAverage, onAverage } | null,
  *   estimates: { needed, nextDue: { due, label, amount } | null (the next quarter not yet past), overdue: { due, label, amount } | null (past quarters not paid) } (the whole return, from the Estimated payments page),
  *   rules: { year (of the table used), stale, form1099NEC, form1099K: { apps: { amount, payments }, cards }, mileage, mileageSteps }, notes
@@ -66,11 +66,13 @@ export function compute(plan, params = {}) {
   const saved = plan.whatIfs?.sideIncome ?? {};
   const notes = [];
   const items = side.map((x) => {
-    const typedMonths = months.map((m) => num(saved[x.id]?.months?.[m]));
+    // the months are kept by the chain (a raise from a later date carries on the line it continues: review 2026-11-02, round 5)
+    const key = chainId(x);
+    const typedMonths = months.map((m) => num(saved[key]?.months?.[m]));
     const stats = monthStats(typedMonths, months);
     const enough = stats.n >= MIN_MONTHS;
     return {
-      id: x.id, name: x.name || "Side income", personName: x.personName, monthly: x.monthly, period: x.period, typedMonths, stats, enough,
+      id: x.id, key, name: x.name || "Side income", personName: x.personName, monthly: x.monthly, period: x.period, typedMonths, stats, enough,
       countOn: enough ? stats.reliable : null,
       // the careful figure already saved for cash flow (income[].countOn), or null: tax keeps the Income page's amount
       counted: countedOn(x),
@@ -99,4 +101,28 @@ export function compute(plan, params = {}) {
   const est = computeEstimated(taxPlan, { today });
   const estimates = { needed: !!est.needsEstimates, nextDue: est.nextDue ?? null, overdue: est.overdue ?? null };
   return { ready: true, year, months, items, setAside, estimates, rules, notes };
+}
+
+/**
+ * setCountOn(draft, item, value): Side income's "Count on $X a month" (value) and "Count the full ... again" (null), on every
+ * line of the item's chain (chainId), so the pay before a raise from a later date and the pay after it share one careful
+ * figure: turned off or changed before the start date, it stays so after it (review 2026-11-02, round 5: it used to change
+ * only the line on screen, and the old figure came back on the start date). A line that is not repeating business pay
+ * keeps none (countedOn would ignore it). Changes `draft` in place.
+ */
+export function setCountOn(draft, item, value) {
+  const key = item?.key ?? item?.id;
+  for (const x of draft.income ?? []) {
+    if (chainId(x) !== key) continue;
+    if (value === null || value === undefined || x.type !== "business" || x.period === "once") delete x.countOn;
+    else x.countOn = value;
+  }
+}
+
+/** saveMonths(draft, item, months): the months typed ({ "YYYY-MM": amount }) over what is kept for the item's chain. */
+export function saveMonths(draft, item, months) {
+  const key = item?.key ?? item?.id;
+  draft.whatIfs = draft.whatIfs ?? {}; draft.whatIfs.sideIncome = draft.whatIfs.sideIncome ?? {};
+  const old = draft.whatIfs.sideIncome[key]?.months ?? {};
+  draft.whatIfs.sideIncome[key] = { ...(draft.whatIfs.sideIncome[key] ?? {}), months: { ...old, ...months } };
 }

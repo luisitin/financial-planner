@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 4,
   enabledByDefault: true,
-  needs: ["accounts", "transactions", "expenses", "income", "recurringIgnored"],
+  needs: ["accounts", "transactions", "expenses", "income", "recurringIgnored", "taxes"],
   writes: [],
   heavy: false,
   purpose: "Where your everyday cash is heading over the next three months, day by day, and whether a shortfall is coming.",

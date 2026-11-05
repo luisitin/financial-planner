@@ -358,3 +358,58 @@ test("costly debt first in line: the same date as Pay off debts' offer for the s
   const offerMonths = Math.round((Date.parse(`${o.soon.slice(0, 7)}-15`) - Date.parse("2026-11-15")) / (30.44 * 864e5));
   assert.ok(offerMonths < naive);
 });
+
+test("short on the careful month (review 2026-11-02): the bills step says it counts uneven pay at what you can count on, and what a full month leaves", async () => {
+  const { money } = await import("../../../core/format.js");
+  const m = (n) => money(Math.round(n / 10) * 10, "USD");
+  const plan = (fn) => { const p = familyPlan(); if (fn) fn(p); return p; };
+  const base = compute(familyPlan(), { today: TODAY }).spare.monthly;
+  // a plan whose month leaves `leftInFull` when the side income brings its whole amount, counting on none of it
+  const at = (leftInFull, fn) => { const p = plan(fn); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: compute(plan(fn), { today: TODAY }).spare.monthly - leftInFull, period: "monthly", essential: false }); p.income.find((x) => x.id === "i-side").countOn = 0; return compute(p, { today: TODAY }); };
+  // a month that brings the Income page's amount leaves $150: lean months are short, good months make up for them
+  const d = at(150);
+  assert.ok(d.spare.monthly < 0 && d.spare.held > 0.5); near(d.spare.monthly + d.spare.held, 150, 0.01);
+  const bills = step(d, "bills");
+  assert.equal(bills.status, "now");
+  assert.match(bills.detail, new RegExp(`^About \\${m(-d.spare.monthly)} a month more goes out than comes in, after tax and saving, with uneven pay counted at what you can count on \\(Side income\\)\\. A month that brings the Income page's amount leaves about \\$150, so good months make up for lean ones; to be safe in a lean month, trim spending or pause a goal\\.$`));
+  // even a full month is short: said so, and the usual way out
+  const e = at(-120);
+  assert.match(step(e, "bills").detail, /with uneven pay counted at what you can count on \(Side income\); even a month that brings the Income page's amount is about \$120 short\. Trim spending or pause a goal first\.$/);
+  // no goal saving to pause: not offered
+  const g = at(150, (p) => { p.goals = []; });
+  assert.match(step(g, "bills").detail, /to be safe in a lean month, trim spending\.$/);
+  // nothing held back: the plain sentence, as before
+  const plain = familyPlan(); plain.expenses.push({ id: "x-more", name: "More", category: "fun", amount: base + 100, period: "monthly", essential: false });
+  assert.match(step(compute(plain, { today: TODAY }), "bills").detail, /^About \$100 a month more goes out than comes in, after tax and saving\. Trim spending or pause a goal first\.$/);
+});
+
+test("one full-month figure (review 2026-11-02, round 5): spare.full and, said with 'about', spare.fullAbout to the nearest $10", async () => {
+  const { aboutTen } = await import("../../cashflow/budget-percent/compute.js");
+  assert.equal(aboutTen(1196.82), 1200); assert.equal(aboutTen(1194.9), 1190); assert.equal(aboutTen(-769.85), -770);
+  assert.ok(Object.is(aboutTen(-4), 0), "never -0"); assert.equal(aboutTen(null), 0);
+  // the family's $600 of photography counted at $0, spending set so a full month leaves $297 (said "about $300")
+  const plan = () => { const p = familyPlan(); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const p = plan(); const s0 = compute(plan(), { today: TODAY }).spare;
+  p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s0.full - 297, period: "monthly", essential: false });
+  const d = compute(p, { today: TODAY });
+  near(d.spare.full, d.spare.monthly + d.spare.held, 1e-9); near(d.spare.full, 297, 0.01);
+  assert.equal(d.spare.fullAbout, 300);
+  assert.ok(d.spare.monthly < 0);
+  assert.match(step(d, "bills").detail, /A month that brings the Income page's amount leaves about \$300, so good months make up for lean ones/);
+  // nothing held back: the full month is the month
+  const f = compute(familyPlan(), { today: TODAY }).spare;
+  assert.equal(f.full, f.monthly); assert.equal(f.fullAbout, aboutTen(f.monthly));
+});
+
+test("a full month within $5 of $0 'only just about breaks even', never 'about $0' (review 2026-11-02, round 5)", () => {
+  const plan = () => { const p = familyPlan(); p.income.find((x) => x.id === "i-side").countOn = 0; return p; };
+  const at = (left) => { const p = plan(); p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: compute(plan(), { today: TODAY }).spare.full - left, period: "monthly", essential: false }); return compute(p, { today: TODAY }); };
+  for (const left of [3, -2]) {
+    const d = at(left);
+    assert.equal(d.spare.fullKind, "even");
+    const bills = step(d, "bills").detail;
+    assert.match(bills, /even a month that brings the Income page's amount only just about breaks even\. Trim spending or pause a goal first\.$/);
+    assert.doesNotMatch(bills, /\$0\b/);
+  }
+  assert.equal(at(8).spare.fullKind, "ahead"); assert.equal(at(-8).spare.fullKind, "short");
+});

@@ -47,8 +47,10 @@ const setup = (key) => (p) => setupSteps(p).steps.find((s) => s.key === key)?.do
 export const emergencyGoal = (p) => L(p, "goals").some((g) => g.isEmergencyFund || g.icon === "🛟" || /emergency|rainy ?day|cushion/i.test(g.name ?? ""));
 /** A goal saving to buy a home, by the same test Home affordability uses to find it (goals/house isHouseGoal: a down payment, the 🏠 icon or a home to buy; never repairs, paying it off or a trip home), so the page and the step always agree. */
 export const houseGoal = (p) => L(p, "goals").some(isHouseGoal);
-// Social Security already paid and typed on the Income page counts as saved too
-const socialSecurity = (p) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0) || (p?.income ?? []).some((x) => x.type === "social" && x.period !== "once" && Number(x.amount) > 0);
+// Social Security already paid and typed on the Income page counts as saved too, unless it has ended (review 2026-11-02,
+// round 5: an ended survivor benefit, which no other page counts, marked the step done). A line that starts later still
+// counts: the projection counts it from its start date and Will the money last? takes it as known (ssOnIncome)
+const socialSecurity = (p, { today = null } = {}) => Object.values(p?.retirement?.socialSecurity ?? {}).some((s) => Number(s?.monthlyAtFRA) > 0 || (s?.record ?? []).length > 0) || (p?.income ?? []).some((x) => x.type === "social" && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
 /** A pension saved on Pensions, or one already paid and typed on the Income page. */
 const pension = (p, { today = null } = {}) => L(p?.retirement, "pensions").length > 0 || L(p, "income").some((x) => x.type === "pension" && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
 /** Every adult is 65 or over today (Medicare age): the guide stops offering pages about the years before it. */
@@ -78,7 +80,7 @@ const retiredVariant = (p, { today }) => {
     line: "Whether your money lasts for the rest of your life, what to take out each year, and what Social Security and pensions add.",
     haveReady: "Your latest account statements, and what Social Security and any pension pay you a month.",
     more,
-    finish: { page: "retirement/projection", label: "Open your retirement forecast", text: (() => { const parts = ["ages", "savings", "spending", socialSecurity(p) ? "Social Security" : null, pension(p, { today }) ? "pensions" : null].filter(Boolean); return `Your ${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]} are in your plan.`; })() },
+    finish: { page: "retirement/projection", label: "Open your retirement forecast", text: (() => { const parts = ["ages", "savings", "spending", socialSecurity(p, { today }) ? "Social Security" : null, pension(p, { today }) ? "pensions" : null].filter(Boolean); return `Your ${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]} are in your plan.`; })() },
     steps: {
       people: { ask: "Give each adult a birth date, then tap Add person or Save changes." },
       spend: { title: "Say what you spend", short: "Say what you spend", ask: "Open Retirement settings near the bottom, type what you spend a month now, then tap Save settings.", alt: { page: "cashflow/expenses", label: "Rather list your bills? Enter them on Expenses instead", ask: "List your regular bills and spending, then tap Add expense; the plan uses them as what you spend in retirement." } },

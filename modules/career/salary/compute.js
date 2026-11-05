@@ -2,7 +2,7 @@
 // promotion every few years, and (if set) the age after which pay only keeps up with prices; in dollars of each year
 // and in today's money. With it: what the next raise keeps after tax, the pay still to come before retiring, what one
 // more percent a year or a raise won now is worth over the career, and the average growth to put on the Income page.
-import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { compute as computeIncome, chainId } from "../../cashflow/income/compute.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
@@ -10,7 +10,7 @@ import { federalTax } from "../../../core/math/tax.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { BENCHMARKS } from "./data/benchmarks.js";
 
-/** The settings of one job (`whatIfs.salary[incomeId]`); raise null = the Income page's raise, else Assumptions'. */
+/** The settings of one job (`whatIfs.salary[key]`, key = the income's chainId); raise null = the Income page's raise, else Assumptions'. */
 export const DEFAULTS = { raise: null, promoEvery: 0, promoBump: BENCHMARKS.promotion.value, levelAge: null };
 /** The employee's Social Security (up to the year's wage base) and Medicare tax on pay (IRC 3101). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
@@ -83,19 +83,22 @@ export function keepOfRaise(amount, { inputs, params, personWages = 0, wageBase 
 }
 
 /** "Use it on the Income page": that income rises at the path's average from now on, and this page keeps its own raise
- * (typed in), so the promotions are not counted a second time on top of the new figure. Changes `draft` in place. */
+ * (typed in), so the promotions are not counted a second time on top of the new figure. Changes `draft` in place.
+ * Review 2026-11-02, round 5: the settings are kept by the chain (`job.key`, the income's chainId), and the pay a raise
+ * from a later date starts (a line that `continues` this one, starting after it) rises at the same average. */
 export function useAverage(draft, job) {
   const x = (draft.income ?? []).find((y) => y.id === job.incomeId);
   if (!x) return false;
-  x.growth = Math.round(job.avgGrowth * 1000) / 1000;
+  const key = job.key ?? chainId(x), growth = Math.round(job.avgGrowth * 1000) / 1000;
+  for (const y of draft.income) if (y === x || (chainId(y) === key && String(y.startDate ?? "") > String(x.startDate ?? ""))) y.growth = growth;
   draft.whatIfs = draft.whatIfs ?? {}; draft.whatIfs.salary = draft.whatIfs.salary ?? {};
-  draft.whatIfs.salary[job.incomeId] = { ...DEFAULTS, ...(draft.whatIfs.salary[job.incomeId] ?? {}), raise: job.settings.raise, promoEvery: job.settings.promoEvery, promoBump: job.settings.promoBump, levelAge: job.settings.levelAge };
+  draft.whatIfs.salary[key] = { ...DEFAULTS, ...(draft.whatIfs.salary[key] ?? {}), raise: job.settings.raise, promoEvery: job.settings.promoEvery, promoBump: job.settings.promoBump, levelAge: job.settings.levelAge };
   return true;
 }
 
 /**
  * compute(plan, { today }) -> {
- *   ready, year, inflation, jobs: [{ incomeId, name, personId, personName, pay, ageNow, retireAge, retireYear, knownAge,
+ *   ready, year, inflation, jobs: [{ incomeId, key (chainId: where its settings are kept, whatIfs.salary[key]), name, personId, personName, pay, ageNow, retireAge, retireYear, knownAge,
  *     settings: { raise, promoEvery, promoBump, levelAge }, raiseFrom ("typed"|"income"|"assumptions"), incomeGrowth,
  *     rows, atEnd: { year, age, pay, real }, lifetime: { nominal, real }, avgGrowth, realGrowth, realRaise,
  *     endsEarly (the income's end date, when before retirement), extraPercent (lifetime in today's money from one more percent
@@ -131,7 +134,9 @@ export function compute(plan, params = {}) {
     const ends = parts(x.endDate);
     const endAt = ends ? ends.y + yearFraction(x.endDate) : null;
     const to = endAt !== null && endAt < retireAt ? endAt : retireAt;
-    const s = saved[x.id] ?? {};
+    // kept by the chain: the pay a raise from a later date starts reads the settings typed before it (round 5)
+    const key = chainId(x);
+    const s = saved[key] ?? {};
     const incomeGrowth = Number(x.growth) || 0;
     const typedRaise = num(s.raise);
     const raise = typedRaise ?? (incomeGrowth > 0 ? incomeGrowth : assumedRaise);
@@ -155,7 +160,7 @@ export function compute(plan, params = {}) {
     if (!person) warnings.push(`${x.name || "A salary"} is not linked to anyone on the Income page, so it is shown for ${HORIZON} years instead of to a retirement birthday.`);
     else if (!knownAge) warnings.push(`${name || "Someone"} has no birth date on People, so ${x.name || "this pay"} is shown for ${HORIZON} years instead of to retirement${settings.levelAge ? ", and the age pay stops growing cannot be used" : ""}.`);
     return {
-      incomeId: x.id, name: x.name || "Pay", personId: x.personId ?? "", personName: name || "", pay: x.yearly, ageNow, retireAge, retireYear, knownAge,
+      incomeId: x.id, key, name: x.name || "Pay", personId: x.personId ?? "", personName: name || "", pay: x.yearly, ageNow, retireAge, retireYear, knownAge,
       settings, raiseFrom, incomeGrowth, rows,
       atEnd: last ? { year: last.year, age: last.age, pay: last.pay, real: last.real } : null,
       endsEarly: endAt !== null && endAt < retireAt ? x.endDate : null,

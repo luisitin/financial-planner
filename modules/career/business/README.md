@@ -5,7 +5,10 @@
 
 ## Inputs
 - The business on the Income page (`income[]` with `type: "business"`; the one chosen, else the largest): its yearly
-  amount (what customers pay, unless typed here) and its holder.
+  amount (what customers pay, unless typed here) and its holder. Review 2026-11-02, round 5: the one chosen is found by
+  its chain too (cashflow/income `chainId`): once a raise from a later date saved on Income has started, the chosen line
+  has ended and the new pay `continues` it, so the page stays on that business (it went to the largest other one), also
+  after the ended half is removed. Test: `module.test.mjs`.
 - `whatIfs.business = { name, incomeId, revenue, expenses: [{ id, name, category, amount, period }], drawMonthly,
   healthPremiums, homeOfficeSqft, miles, salary, scorpCosts }`. With no expenses typed here, the one figure typed on the
   Self-employment page (`whatIfs.selfEmployment.expenses`) stands in for them, so the two pages show the same profit.

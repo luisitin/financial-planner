@@ -132,7 +132,7 @@ export function render(page, ctx) {
       ui.h("ul", { class: "records" }, marks.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year}${r.age !== null ? ` (age ${r.age})` : ""}`), ui.h("span", { class: "rec-value" }, money(r.real))), ui.h("div", { class: "rec-sub" }, `in today's money; ${money(r.pay)} in ${r.year} dollars`))))));
 
     // its settings
-    const values = { raise: plan.whatIfs?.salary?.[j.incomeId]?.raise ?? null, promoEvery: s.promoEvery || null, promoBump: s.promoBump, levelAge: s.levelAge };
+    const values = { raise: plan.whatIfs?.salary?.[j.key]?.raise ?? null, promoEvery: s.promoEvery || null, promoBump: s.promoBump, levelAge: s.levelAge };
     const fields = [
       { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: j.incomeGrowth > 0 ? `empty: the Income page's (${pct(j.incomeGrowth)})` : `empty: the Assumptions page's pay rise (${pct(plan.assumptions?.salaryGrowth ?? 0.03)})` },
       { key: "promoEvery", label: "A promotion every ... years", type: "number", min: 0, max: 20, step: "1", help: "empty or 0: no promotions" },
@@ -144,7 +144,7 @@ export function render(page, ctx) {
         pending = "Saved."; openJob = j.incomeId;
         store.update((p) => {
           p.whatIfs = p.whatIfs ?? {}; p.whatIfs.salary = p.whatIfs.salary ?? {};
-          p.whatIfs.salary[j.incomeId] = { raise: v.raise, promoEvery: v.promoEvery || 0, promoBump: v.promoBump ?? DEFAULTS.promoBump, levelAge: v.levelAge };
+          p.whatIfs.salary[j.key] = { raise: v.raise, promoEvery: v.promoEvery || 0, promoBump: v.promoBump ?? DEFAULTS.promoBump, levelAge: v.levelAge };
         });
       }, { submitLabel: "Work it out" })));
     return card;

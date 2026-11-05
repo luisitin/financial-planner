@@ -153,6 +153,9 @@ export function compute(plan, params = {}) {
     // the ages still possible: "now" (to the month, as the Social Security page offers it first), then each whole age to 70
     // (review 2026-11-02: "now" at 69 and 5 months was never tried, so "70 spends the most" could be false)
     const nowAge = Math.min(70, Math.max(62, ...movable.map((x) => (x.ageNow !== null ? Math.ceil(x.ageNow * 12 - 1e-9) / 12 : 62))));
+    // that first age is "now" only when it is now for everyone moved: within a month of each one's age today; otherwise it
+    // reads "at 64 and 6 months" (review 2026-11-02, round 5: a couple of 64 and 60 were both told "now")
+    const nowForAll = movable.every((x) => x.ageNow !== null && Math.abs(nowAge - x.ageNow) <= 1 / 12 + 1e-9);
     const candidates = [nowAge, ...[63, 64, 65, 66, 67, 68, 69, 70].filter((a) => a > nowAge + 1 / 24)];
     let best = null;
     const results = [];
@@ -168,8 +171,9 @@ export function compute(plan, params = {}) {
     const names = movable.map((x) => x.name);
     const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
-    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id),
-      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim now (${ageWords(best.age)}): about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${best.age === nowAge && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
+    const isNow = (a) => a === nowAge && nowForAll;
+    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id), nowAge, nowForAll,
+      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
   return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, levers };

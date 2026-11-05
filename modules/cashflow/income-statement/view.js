@@ -10,13 +10,17 @@ export function render(root, ctx) {
   const nba = d.planned ? ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) : null;
   // one sentence that adds up: in - tax - spending - saving = left (all Next best action's own figures, the Dashboard's). It names
   // the tax rather than an "after tax" amount, which would sit next to the Income page's take-home (that one also takes out the
-  // 401(k) and health cover) and read as a second figure for the same thing.
+  // 401(k) and health cover) and read as a second figure for the same thing. Every line Next best action takes off the month is
+  // named (review 2026-11-02: state tax, business costs, the extra on debts and the side income held back were missing, so the
+  // words did not add up to the figure, and with "count on" the sign flipped).
   const plannedLine = () => {
     if (!nba?.ready) return `From the Income and Expenses pages: ${fmt.money(d.planned.in, cur)} a month comes in before tax and ${fmt.money(d.planned.out, cur)} goes out.`;
-    const s = nba.spare, tax = s.federalTax + s.payrollTax, saving = s.retirementSaving + s.goalSaving;
-    const parts = [tax >= 1 ? [tax, "tax"] : null, [s.spending, "spending"], saving >= 1 ? [saving, "saving"] : null].filter(Boolean).map(([v, w], i) => `${fmt.money(v, cur)}${i ? "" : " goes"} to ${w}`);
+    const s = nba.spare, tax = s.federalTax + s.payrollTax + (s.stateTax ?? 0), saving = s.retirementSaving + s.goalSaving;
+    const parts = [(s.businessCosts ?? 0) >= 1 ? [s.businessCosts, "business costs"] : null, tax >= 1 ? [tax, "tax"] : null, [s.spending, "spending"], saving >= 1 ? [saving, "saving"] : null,
+      (s.debtExtra ?? 0) >= 1 ? [s.debtExtra, "extra on debts"] : null].filter(Boolean).map(([v, w], i) => `${fmt.money(v, cur)}${i ? "" : " goes"} to ${w}`);
     const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
-    return `From the Income and Expenses pages: ${fmt.money(s.gross, cur)} a month comes in before tax; about ${list}, so about ${fmt.money(Math.abs(s.monthly), cur)} a month is ${s.monthly >= 0 ? "left" : "short"}.`;
+    const held = (s.held ?? 0) >= 1 ? `, and ${fmt.money(s.held, cur)} of side income above what you count on (after its tax) is kept as a bonus to save when it comes` : "";
+    return `From the Income and Expenses pages: ${fmt.money(s.gross, cur)} a month comes in before tax; about ${list}${held}, so about ${fmt.money(Math.abs(s.monthly), cur)} a month is ${s.monthly >= 0 ? "left" : "short"}.`;
   };
 
   if (!d.hasData) {

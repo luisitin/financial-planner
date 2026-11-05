@@ -76,6 +76,17 @@ The "Where you stand" Safety cushion line uses setup `standing().cushionLater`: 
 ## Review fixes 2026-11-02 (setup resume)
 The "pick up at question N" card shows only while a step of the plan is still to do (the assumptions look aside). A plan built on its own pages after the first question keeps its "N of 6 done" checklist or the folded "done" line.
 
+## Short on the careful month (review 2026-11-02)
+When the left-over figure is below 0 only because Side income's "count on" holds part of uneven pay back (no bank gap, not
+drawing in retirement, Next best action's `spare.held` above $0.50), the "Left over each month" row reads "In a lean
+month. When all your uneven pay comes in, $X is left" (X = spare + held; "it is still $X short" when that is below 0),
+and the sentence above the rows is setup's own. Review 2026-11-02, round 5: the sentence and the figure come from setup's
+`standing()` (`headline`, `lean: { full, about }`), so the setup's done screen and this card say the same; the card no
+longer works out a held amount or a sentence of its own. The row's figure is `lean.about` ("about $X is left"), to the
+nearest $10 as every page says it. Test: `module.test.mjs`. A full month within $5 of $0 (second review of round 5):
+`lean.kind` "even" (Next best action's `spare.fullKind`) reads "In a lean month. When all your uneven pay comes in, it only
+just about breaks even", never "about $0" (test: `overview/setup` `module.test.mjs`).
+
 ## Ideas / not yet
 - Headline cards for cash flow (this month), next bills, goal progress, plan health score.
 - Alerts feed (low balance, budget overrun, rebalance drift, stale snapshot).

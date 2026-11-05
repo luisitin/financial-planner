@@ -93,14 +93,6 @@ export function looksYearly(item) {
 
 const dayBefore = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 /**
- * changeFrom(item, values, today) -> { split: true, old, next, change (a month, before tax) } | { split: false, item }: how an edit to an income is kept.
- * An income going today whose amount or how-often changes with a start date still to come (a raise from January) is split:
- * the pay on file runs until the day before (`old`, its own amount, name and dates kept) and the new pay starts that day
- * (`next`, the edit, with no id: the caller gives it one). Anything else changes the income in place. Before (round-4
- * finding, 2026-11-02), the whole income moved to the later date and the plan showed no pay until then. The same rule as
- * Life events' new pay (household/life-events, updatePay).
- */
-/**
  * countedOn(income line) -> the careful figure a month the cash-flow pages plan with (Side income's "count on",
  * income[].countOn), or null. Only uneven pay that repeats (Self-employment / business, not one-time) has one, and only
  * below what the line brings in a month: a figure at or above it, or one left on a line whose kind or schedule changed,
@@ -113,6 +105,29 @@ export function countedOn(x) {
   return Number(v) < perMonth(x.amount, x.period) - 0.005 ? Number(v) : null;
 }
 
+/**
+ * chainId(income line) -> the key everything filed under an income is kept by (Side income's typed months and careful
+ * figure, a job's raises on Salary): the line's own id, or for the new pay a raise from a later date started
+ * (`continues`, set by changeFrom's split), the id of the line it carries on. Review 2026-11-02, round 5: one record for
+ * both halves of a split, so a change on either side applies to both and nothing typed before the start date is lost.
+ */
+export const chainId = (x) => (x?.continues ? String(x.continues) : x?.id);
+
+/**
+ * changeFrom(item, values, today) -> { split: true, old, next, change (a month, before tax) } | { split: false, item }: how an edit to an income is kept.
+ * An income going today whose amount or how-often changes with a start date still to come (a raise from January) is split:
+ * the pay on file runs until the day before (`old`, its own id, amount, name and dates kept) and the new pay starts that
+ * day (`next`, the edit, with no id: the caller gives it one). Anything else changes the income in place. Before (round-4
+ * finding, 2026-11-02), the whole income moved to the later date and the plan showed no pay until then. The same rule as
+ * Life events' new pay (household/life-events, updatePay).
+ * Review 2026-11-02, round 5: the pay that ends keeps the id, so the setup's own pay line (`setup-pay-...`, Get started's
+ * pay question) still answers with today's pay, and what is filed under the id stays where it is. The new pay says which
+ * line it carries on (`continues`: the first line of the chain, `chainId`), and the pages that keep something by income
+ * read and write it by `chainId`, so both halves share one record. The careful figure (countOn) goes on with it, as an edit
+ * in place keeps it (countedOn ignores it once it is at or above the new amount), unless the new pay is not repeating
+ * business pay; a setup pay line or one marked `typicalYear` marks the new pay `typicalYear`, so the Forecast still spreads
+ * "a typical year" over the months without the setup's id.
+ */
 export function changeFrom(item, values, today) {
   const merged = { ...item, ...values };
   const going = !!today && activeOn(item, today);
@@ -120,7 +135,11 @@ export function changeFrom(item, values, today) {
   const changed = Number(values.amount) !== Number(item.amount) || values.period !== item.period;
   if (!going || !later || !changed || (item.startDate && item.startDate > today)) return { split: false, item: merged };
   const old = { ...item, endDate: item.endDate && item.endDate < values.startDate ? item.endDate : dayBefore(values.startDate) };
-  // the careful figure (countOn) was for the old amount: it stays with the old line, Side income offers it again
-  const { id, countOn, ...rest } = merged; void id; void countOn;
-  return { split: true, old, next: { ...rest, startDate: values.startDate }, change: perMonth(values.amount, values.period) - perMonth(item.amount, item.period) };
+  const { id, ...rest } = merged; void id;
+  const next = { ...rest, startDate: values.startDate };
+  const root = chainId(item);
+  if (root) next.continues = root;
+  if (next.type !== "business" || next.period === "once") delete next.countOn;
+  if (item.typicalYear || String(item.id ?? "").startsWith("setup-pay-")) next.typicalYear = true;
+  return { split: true, old, next, change: perMonth(values.amount, values.period) - perMonth(item.amount, item.period) };
 }
