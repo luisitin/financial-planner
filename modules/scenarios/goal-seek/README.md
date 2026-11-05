@@ -14,7 +14,7 @@ The goal is met when the projection (expected returns) lasts to the end and `end
 | lever | search |
 |---|---|
 | What you can spend | the largest steady, inflation-adjusted monthly spending that meets the goal (`largestWhere`, the ceiling grown until it fails) |
-| When the first person can retire | the earliest age from max(next year's age, 45) to 75 that meets it, the plan rebuilt at each age |
+| When the first person can retire | the earliest age from this year's (stopping now) to the later of 75 and the planned age that meets it, the plan rebuilt at each age (`earliestRetireAge`, exported: Financial independence leads with the same answer, 2026-11-02); compared with the plan by the year they stop, `max(this year, birth year + age)`, so 64 now and 65 later this year are the same year ("This year, as planned") |
 | What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most) |
 | The return it needs | stocks and bonds moved by the same amount until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement) |
 | Room today / short today | the most that could come out of savings now and still meet it, or the least that would have to go in (engine `events`) |
@@ -43,3 +43,7 @@ leave money, "..., leaving $250,000"): Monte Carlo's careful figure for the same
 on the Chance page's 2,000 paths), worked out after the first paint as on Will the money last? (`modules/retirement/careful.js`),
 so the page that links here and this one say the same. No line when nothing lasts in 9 of 10 markets. The Social Security
 lever's "spend the most" figure is the same average-market kind and says so too.
+The retire lever's age is the average-market one too and says so ("If markets do as well as average, as early as 58, 7 years
+before the plan's 65"); Financial independence leads with the age that lasts in 9 of 10 markets. "Years before" is counted by
+the year they stop (`yearsSooner`): someone 64 today who turns the planned 65 in December stops in 2026 either way, so the
+lever reads "This year, as planned." at the planned age instead of "1 year before" (review 2026-11-02).

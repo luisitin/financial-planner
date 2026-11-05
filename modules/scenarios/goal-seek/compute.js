@@ -25,6 +25,39 @@ export function smallestWhere(ok, lo, hi, tol = 0.5) {
 }
 
 /**
+ * earliestRetireAge(plan, { today, legacy = 0, personId }) -> { age (null: not by the last age tried), now (age is this
+ *   year's: they could stop now), planned, ageNow, upTo (the last age tried), personId, name,
+ *   stopYear (the year they stop at that age: never before this year), plannedStopYear, yearsSooner (plannedStopYear - stopYear:
+ *   0 when both are this year, as for someone who turns the planned age later this year) } | null
+ * The first whole age, from this year's (stopping now) to the later of 75 and the planned age, at which one adult (personId,
+ * else the one marked self, else the first) can stop work and the plan still lasts to its end leaving `legacy` (today's
+ * dollars), everyone else as the plan has it. null when there is no such adult or date, or they have already reached the
+ * planned age. Goal seek's "When you can retire" lever and Financial independence share it, so both pages give one answer.
+ * (Round 5 review, 2026-11-02: it started at next year's age and never below 45, so a plan that already worked now or at
+ * 40 read "at 59" or "at 45"; and someone past 75 was never tried.)
+ */
+export function earliestRetireAge(plan, params = {}) {
+  const today = params.today ?? null;
+  const legacy = Math.max(0, Number(params.legacy) || 0);
+  const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
+  const self = (params.personId ? adults.find((p) => p.id === params.personId) : null) ?? adults.find((p) => p.role === "self") ?? adults[0];
+  if (!self || !today) return null;
+  const ageNow = ageOn(self.birthDate, today);
+  const planned = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
+  if (ageNow === null || !Number.isFinite(planned) || !(ageNow < planned)) return null;
+  const meets = (inputs) => { const r = project(inputs); return r.success && r.endBalanceReal >= legacy - 0.5; };
+  const withAge = (a) => { const p2 = JSON.parse(JSON.stringify(plan)); p2.household.people.find((q) => q.id === self.id).retirementAge = a; return buildInputs(p2, { today }).inputs; };
+  const upTo = Math.max(75, planned);
+  let age = null;
+  for (let a = ageNow; a <= upTo; a++) { const inp = withAge(a); if (inp && meets(inp)) { age = a; break; } }
+  // the engine stops work in the year that age is reached, never before this year: compare stop years, not ages (review
+  // 2026-11-02: 64 now and 65 in December both stop in 2026, and were called "1 year before the plan's 65")
+  const year = Number(String(today).slice(0, 4)), by = Number(String(self.birthDate).slice(0, 4));
+  const stopYear = age === null ? null : Math.max(year, by + age), plannedStopYear = Math.max(year, by + planned);
+  return { age, now: age === ageNow, planned, ageNow, upTo, personId: self.id, name: self.name, stopYear, plannedStopYear, yearsSooner: stopYear === null ? null : plannedStopYear - stopYear };
+}
+
+/**
  * compute(plan, { today, legacy = 0 }) -> {
  *   ready, missing, legacy, meets (the plan as it stands reaches the goal), endReal, spendingMonthly,
  *   levers: [{ id, title, icon, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"needs"|"cannot"|"same", sentence, go }]
@@ -61,10 +94,19 @@ export function compute(plan, params = {}) {
   const retireAge = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
   if (ageNow < retireAge) {
-    let earliest = null;
-    for (let a = Math.max(ageNow + 1, 45); a <= 75; a++) { const inp = withPlan((p) => { p.household.people.find((q) => q.id === self.id).retirementAge = a; }); if (inp && meets(inp)) { earliest = a; break; } }
-    add({ id: "retire", icon: "🏖️", title: `When ${self.name || "you"} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : earliest < retireAge ? "room" : earliest === retireAge ? "same" : "needs",
-      sentence: earliest === null ? "Not by 75: working longer alone does not get there." : earliest < retireAge ? `As early as ${earliest}, ${retireAge - earliest} year${retireAge - earliest === 1 ? "" : "s"} before the plan's ${retireAge}.` : earliest === retireAge ? `At ${retireAge}, as planned: not a year earlier.` : `At ${earliest}: ${earliest - retireAge} year${earliest - retireAge === 1 ? "" : "s"} later than the plan's ${retireAge}.`, go: ["household", "people"] });
+    const found = earliestRetireAge(plan, { today, legacy });
+    // counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
+    const sooner = found?.yearsSooner ?? null;
+    const thisYear = !!found && found.plannedStopYear === found.stopYear && found.stopYear === Number(String(today).slice(0, 4));
+    const earliest = found?.age === null || found?.age === undefined ? null : sooner === 0 ? retireAge : found.age;
+    const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
+    // the age is markets doing exactly as well as average every year: said so (Financial independence adds the 9-in-10 age)
+    add({ id: "retire", icon: "🏖️", title: `When ${self.name || "you"} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : sooner > 0 ? "room" : sooner === 0 ? "same" : "needs",
+      sentence: earliest === null ? `Not by ${found?.upTo ?? 75}, even if markets do as well as average: working longer alone does not get there.`
+        : sooner > 0 && found.now ? `If markets do as well as average, now: the money already lasts if ${self.name && self.name !== "Me" ? self.name : "you"} stopped this year, ${yrs(sooner)} before the plan's ${retireAge}.`
+        : sooner > 0 ? `If markets do as well as average, as early as ${earliest}, ${yrs(sooner)} before the plan's ${retireAge}.`
+        : sooner === 0 ? (thisYear ? "This year, as planned." : `If markets do as well as average, at ${retireAge} as planned: not a year earlier.`)
+        : `If markets do as well as average, at ${earliest}: ${yrs(-sooner)} later than the plan's ${retireAge}.`, go: ["household", "people"] });
   }
 
   // 3. saving: the extra (or the cut) a month, before retirement, into the accounts already used (the first person's biggest contribution, else taxable)

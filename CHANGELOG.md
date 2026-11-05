@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Financial independence leads with the plan's own answer: the earliest age the money lasts in 9 of 10 markets, and the age if markets do as well as average, with Social Security, pensions, taxes and the legacy counted; the 25-times rule is folded as a quick check. Rent, dividends and other income now keep coming after work stops in the retirement engine.
 - [builder:claude-b] Will the money last? and How much to take out lead with the spending that lasts in 9 of 10 markets (Monte Carlo, worked out after the page draws); the average-market figure, which lasts in only about 4 of 10, is named as such on every page that shows it (Goal seek, Next best action, Expenses, Quick answers, the reports).
 - [builder:claude-b] Goals: the "What it costs" link under each goal is a 44 px tap target (the phone smoke test found 32 px).
 - [builder:claude-b] Get started asks someone paid by their own business what estimated tax they have paid this year, spread over the quarters already due, so Estimated payments, Needs attention and Next best action start from it instead of asking later.

@@ -86,6 +86,36 @@ export function incomeSocial(plan, people, ssPeople, today) {
   return out;
 }
 
+/** The Income page's kinds of pay: they stop when that person stops work. */
+export const PAY_TYPES = ["salary", "bonus", "business"];
+/** Income that is neither pay, a pension nor Social Security (rent, dividends and interest, support, other). */
+export const OTHER_INCOME_TYPES = ["rental", "investment", "support", "other"];
+
+/**
+ * Rent, dividends and interest, support and other income typed on the Income page (anyone's, or the household's), as engine
+ * incomes that do not stop when work does (round 5, 2026-11-02: a partner's rent came in only as their "pay" and stopped when
+ * they stopped work, and the first adult's and the household's never counted). Each counts from the household's first
+ * retirement year (the year spending starts; before it the plan's saving is what goes into the accounts) or its own later
+ * start date, to its end date (the age its owner reaches that year), rising with inflation when the item has a raise (cola,
+ * as pensions), taxed unless marked untaxed. One-off and ended items are left out.
+ * incomeOther(plan, people, retireYear, today) -> [{ name, yearly, personId, startAge (its owner's age in the year it starts), endAge?, cola, taxable, type, source: "income" }]
+ */
+export function incomeOther(plan, people, retireYear, today) {
+  const out = [];
+  if (!people.length) return out;
+  for (const x of plan.income ?? []) {
+    if (!OTHER_INCOME_TYPES.includes(x.type ?? "other") || x.period === "once") continue;
+    const yearly = perYear(x.amount, x.period);
+    if (!(yearly > 0)) continue;
+    if (x.endDate && String(x.endDate) < String(today)) continue;
+    const who = people.find((p) => p.id === x.personId) ?? people[0];
+    const starts = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : retireYear;
+    const endAge = x.endDate ? Number(String(x.endDate).slice(0, 4)) - who.birthYear : undefined;
+    out.push({ name: String(x.name || "Other income").trim(), yearly, personId: who.id, startAge: Math.max(retireYear, starts) - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type: x.type ?? "other", source: "income" });
+  }
+  return out;
+}
+
 /** An adult whose Social Security is on the Income page (type "social", recurring, not ended). */
 export const ssOnIncome = (plan, id, today) => (plan?.income ?? []).some((x) => x.type === "social" && x.personId === id && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
 
@@ -138,14 +168,16 @@ export function buildInputs(plan, params = {}) {
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
   const retireYear = Math.max(year, people[0].birthYear + people[0].retireAge);
-  // a partner who keeps working after the household retires brings their pay in as income
+  // a partner who keeps working after the household retires brings their pay in as income (pay only: salary, bonus, business)
   const inc = (plan.income ?? []).length ? computeIncome(plan, { today }) : null;
   for (let i = 1; i < people.length; i++) {
     const p = people[i];
-    const theirs = inc ? inc.active.filter((x) => x.personId === p.id && x.type !== "social" && x.type !== "pension").reduce((s, x) => s + x.yearly, 0) : 0;
+    const theirs = inc ? inc.active.filter((x) => x.personId === p.id && PAY_TYPES.includes(x.type)).reduce((s, x) => s + x.yearly, 0) : 0;
     const ageNow = year - p.birthYear;
     if (theirs > 0 && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true });
   }
+  // rent, dividends and interest, support and other income that is not pay does not stop when work does
+  for (const x of incomeOther(plan, people, retireYear, today ?? `${year}-01-01`)) incomes.push({ ...x, personIndex: personIndex(x.personId) });
   const endYear = Math.max(...people.map((p) => p.birthYear + p.endAge));
   const inputs = {
     startYear: year, endYear, people, balances, contributions, incomes,

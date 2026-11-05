@@ -16,10 +16,74 @@ Spending (the retirement figure or today's expenses), invested money (taxable + 
 - Coast number = FI number / (1 + real return)^(years to the retirement age).
 - Years from nothing (`yearsFromZero(rate, realReturn, withdrawalRate)`), shown for saving half and a tenth of income: save `rate` of income at each year's end, grow at the real return, until the pot reaches (1 - rate) / withdrawal rate; income drops out (the idea of Mr. Money Mustache's "The Shockingly Simple Math Behind Early Retirement", 2012, worked with the page's own assumptions; at 5% and 4%: 17 and 52 years).
 
+## The answer that counts Social Security (round 5, 2026-11-02)
+The guide sends "Could I stop work early?" here, and the 25-times rule alone answered it: it asks for a pot that pays all the
+spending for good, so a couple whose Social Security will cover most of it read "not until 65" while Will the money last?
+said stopping at 62 works and Goal seek said 61. The page now leads with the projection's own answer and folds the rule
+under "The 25-times rule, a quick check".
+
+`withIncome` (new; every other output is unchanged, so `tests/golden/retirement/fire.csv` passes as it was):
+- `earliestAge` = `scenarios/goal-seek` `earliestRetireAge(plan, { today, legacy, personId })`: the first whole age, from this
+  year's (stopping now) to the later of 75 and the planned age, at which that adult can stop work and the projection
+  (`retirement/projection` `buildInputs` run through `core/math/retirement.js` `project`, expected returns every year) lasts
+  to the end of the plan and leaves the legacy goal, everyone else stopping as planned. Goal seek's "When you can retire"
+  lever calls the same function, so the two pages give one answer. It is the age **if markets do as well as average**: by
+  construction the age before it fails, so it leaves little to spare (the family: 58, "It lasts, just" on Will the money
+  last?, and in only about 4 of 10 market paths).
+- `stopYear` = max(this year, birth year + age), the year the engine stops their work; `plannedStopYear` the same at the
+  planned age; `yearsSooner` = `plannedStopYear` - `stopYear`. Ages are compared by stop year: 64 today and 65 in December
+  both stop in 2026 ("This year, as planned").
+- `atAgeReal` = the projection's total in today's dollars in the stop year: the same row Will the money last? shows as "At
+  retirement" (stopping now: this year's row, not today's balance). `atRetirement(plan, today, personId, age)` works it out.
+- `ssFrom` / `ssFullFrom`: the first and last claim years of the plan's Social Security incomes (birth year + start age);
+  the page says "already being paid" when the first is before this year. `ssYearly` their sum a year in today's dollars;
+  `ssShare` = `ssYearly` / retirement spending (at 100% or more the page says "more than the $X a year you plan to spend").
+- `otherYearly`: pensions, rent, dividends and interest, and other income the engine counts that is not anyone's pay;
+  `otherKinds` which of those kinds it holds (the page names them in one order: pensions, rent, dividends, other income).
+- null when there is no adult or date. Who it is about: the adult marked self while they still work, else the next adult
+  who still works, by exact age today (`ageOn(birthDate, today) < retirement age`, as goal seek searches); with everyone
+  stopped the page says whether the money lasts (`retired`, `lasts`, `failYear`).
+
+**The 9-in-10 age** (`carefulAgeSteps` / `carefulAge`, asked for with `compute(plan, { careful: true })` and shown first):
+the earliest whole age, from the average-market age up to the same last age, at which the money lasts to the end (leaving
+the legacy goal) in at least 1,800 of 2,000 market paths: the paths and seed of Will the money last?'s careful figure
+(`monte-carlo` `drawSequences(2000, years, { seed: 1 })`), spending the plan's amount the same every year (as that figure's
+planned share, so a plan set to retire at this age shows at least 9 in 10 there). A path that lasts stopping at one age
+lasts stopping later, so each later age reruns only the paths that fell short (the family: about 6,800 runs, 58 to 64).
+`age` null when even the last age does not reach 9 in 10 (then `share` is what it reaches). The module is `heavy`: the page
+is drawn first and asks the PC when connected, else works it out a slice at a time between frames
+(`modules/retirement/careful.js`). The hero then reads "Ana could stop work at 64" / "Stopping at 64, the money lasts in 9
+of 10 markets, with Bo stopping at 62 as planned. If markets do as well as average, 58 would do, with little to spare." One
+sentence when both ages are the same; "Even working to 75, the money may run short" when 9 in 10 is not reached.
+
+Why the rule and the projection differ: the rule counts everything left over each month as saved and invested (the family:
+$104,134 a year in all, $85,264 of it left over beyond the $18,870 going into retirement accounts) and leaves out Social
+Security, pensions and taxes; the projection adds only the retirement contributions and counts the rest year by year. So it can come out earlier or later than the rule (the
+sample family: the rule says 51, the projection 58, chiefly because the rule invests all that is left over). Neither counts
+the goals being saved for, nor health cover before Medicare (not in the projection yet: the fold no longer lists it). The
+fold says so in one line, and names its figure "invested, not counting cash in the bank" (the hero's is "savings and investments together", at retirement).
+`withIncome` costs up to about 40 projection runs, so the Timeline (which reads only the number) asks for `withIncome: false`.
+
+Review fixes (2026-11-02): the search starts at this year's age ("could stop work now"), with no floor at 45, and runs to the
+later of 75 and the planned age; it leaves the legacy goal Goal seek starts from (`estate/legacy` `legacyTarget`), so the two
+pages give one age; "pensions and other income" leaves out a partner's pay; someone who said they get no Social Security is
+not told to add it; the folded rule has no headline of its own and says why it differs; plain words for "withdrawal rate",
+"real growth" and "coast". Second review (same day): exact age for who still works; stop years for "years before"; the
+9-in-10 age first and the average one named; "at retirement" from the projection's own row; "more than" at 100% or more;
+"already being paid"; "leaves" after "the money lasts"; rent and dividends counted after work stops (`retirement/projection`
+`incomeOther`, see its README).
+
 ## Tests
-`tests/retirement-pages.test.mjs`.
+`tests/retirement-pages.test.mjs`; `module.test.mjs`: the answer is goal seek's earliest age, it works and the age before
+does not, Social Security sums and share, the money at the stop year is the projection's "At retirement", the 25-times
+fields identical with and without it, null at or past the planned age; exact age (64 today, 65 in December: still working,
+"This year, as planned"); the 9-in-10 age against the careful figure's planned share at that age and the age before, a slice
+at a time, none by 75; rent, dividends and other income after work stops.
 
 ## Ideas / not yet
+- Dividends and interest typed on the Income page are counted on top of the accounts' own growth (which already holds
+  them): when they come from an account in the plan, that counts them twice. A choice for the owner (count only those
+  from outside the plan's accounts?).
 - Barista variant (part-time income), the full savings-rate-to-years table, a chart of the path.
 
 ## Independent answer-key audit

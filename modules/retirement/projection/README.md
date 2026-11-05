@@ -106,3 +106,16 @@ short is unchanged. Review fixes, 2026-11-02:
 - **$0:** no careful line; the stat goes back to "Spending it can carry", named "if markets do as well as average".
 - **No jump, no freeze:** the line is drawn first with grey bars where its figures go (the same words, so the same height) and
   filled after the first paint, on the PC when connected or here a slice at a time (`careful.js`).
+
+## Rent, dividends and other income after work stops (round 5 review, 2026-11-02)
+`incomeOther(plan, people, retireYear, today)`: rent, dividends and interest, support and other income typed on the Income page
+(types `rental`, `investment`, `support`, `other`; anyone's, or the household's, which belongs to the first adult) are engine
+incomes that do not stop when work does. Each counts from the household's first retirement year (or its own later start
+date) to its end date, rising with inflation when the item has a raise, taxed unless marked untaxed; one-offs and ended
+items are left out. Before, a partner's came in only inside "<name>'s pay" and stopped when they stopped work, and the first
+adult's and the household's never counted (the retired couple's $24,000 of rent stopped in 2026 and its $4,800 of dividends
+never counted: what the plan carries went from $62,191 to $88,824 a year). "<name>'s pay" is now salary, bonus and business
+only (`PAY_TYPES`). They start at retirement because before it the plan's saving is what goes into the accounts (income in
+those years changes nothing but, in the brackets setting, a tax taken from savings: see monte-carlo's README, "Zero").
+No frozen answer key has rent or dividends (`tests/golden` plans hold salaries only), so every key passes as it was.
+Not yet: dividends from an account already in the plan are also inside that account's growth (counted twice).

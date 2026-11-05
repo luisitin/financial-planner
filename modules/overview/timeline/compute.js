@@ -192,7 +192,7 @@ export function compute(plan, params = {}) {
   // independence on the path the chart draws: the first year the projected savings reach the independence number (yearly
   // spending / withdrawal rate, the FIRE page's), before retirement; none when they never do. It used to take the FIRE page's
   // own year, a path that invests every spare dollar, and put "$2.1 million at 50" beside a chart that peaks at $1.4 million.
-  const fi = run ? computeFire(plan, { today }) : null;
+  const fi = run ? computeFire(plan, { today, withIncome: false }) : null;
   // already past the number today: no moment to come. The event opens Will the money last?, the projection it is read from (the
   // FIRE page's own year assumes every spare dollar is invested, so it is sooner)
   const already = fi?.ready && fi.fiNumber > 0 && (rows[0]?.totalReal ?? 0) >= fi.fiNumber;
