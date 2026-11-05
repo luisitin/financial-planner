@@ -1,7 +1,7 @@
 // modules/retirement/social-security/view.js -- DOM only. Per adult: paste the ssa.gov earnings
 // record (or type the statement's figure), pick a claiming age, see the monthly benefit at
 // each age. Saved with a green line; the projection picks it up.
-import { compute, parseRecord, saveFigures, survivorWords } from "./compute.js";
+import { compute, parseRecord, saveFigures, survivorWords, spousalWords, heroTopUpWords } from "./compute.js";
 import { ssMissingFor, possessive } from "../../overview/setup/compute.js";
 
 let pending = null;
@@ -19,12 +19,14 @@ export function render(root, ctx) {
   const lo = left.length ? Math.min(...left) : 0, hi = left.length ? Math.max(...left) : 0;
   const together = left.length === 2 && d.couple.bothMonthly > hi + 0.5
     ? `If one of you dies, the one left keeps about ${hi - lo < 1 ? fmt.money(hi, cur) : `${fmt.money(lo, cur)} to ${fmt.money(hi, cur)}`} a month of the ${fmt.money(d.couple.bothMonthly, cur)} you get together: the larger benefit stays, the smaller one stops.` : "";
+  // the yearly figure and "you get together" are the same money, a spouse's top-up in both; the hero says so (recheck 2026-11-05)
+  const topUpWords = d.hasData ? heroTopUpWords(d, (n) => fmt.money(n, cur)) : "";
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.householdYearly, cur)} a year from Social Security` : "Social Security"),
-    ui.h("p", { class: "lede" }, d.hasData ? `In today's dollars, at the claiming ages chosen below. The projection counts it from those ages, rising with inflation.${together ? ` ${together}` : ""}` : "Your benefit depends on your best 35 years of earnings and the age you claim. Paste the earnings table from your ssa.gov account, or type the monthly figure your Social Security statement shows at full retirement age."),
+    ui.h("p", { class: "lede" }, d.hasData ? `In today's dollars, at the claiming ages chosen below. The projection counts it from those ages, rising with inflation.${topUpWords ? ` ${topUpWords}` : ""}${together ? ` ${together}` : ""}` : "Your benefit depends on your best 35 years of earnings and the age you claim. Paste the earnings table from your ssa.gov account, or type the monthly figure your Social Security statement shows at full retirement age."),
     ui.h("p", { class: "muted small" }, "ssa.gov > my Social Security > Earnings Record: copy the year and earnings columns and paste them below. Nothing is sent anywhere; the sums are done on this device with the SSA's own formula."),
   ));
   root.append(out);
@@ -107,10 +109,11 @@ export function render(root, ctx) {
         // a couple: what this person keeps if the other dies first, and any top-up on the other's record (F-033)
         const partner = partnerOf(p);
         const keeps = d.couple && partner && partner.source !== "none" ? d.couple.survivorMonthly[p.id] : null;
-        const topUp = d.couple && partner ? d.couple.spousal[p.id] : 0;
+        // a spouse's top-up: counted (and from when), already in the Income line, or what could come (recheck 2026-11-05)
+        const topUp = d.couple && partner ? spousalWords(p, partner, d, (n) => fmt.money(n, cur), { none }) : "";
         const couplePart = keeps === null ? [] : [
           ui.h("p", {}, survivorWords(p, partner, keeps, (n) => fmt.money(n, cur))),
-          topUp > 0.5 ? ui.h("p", {}, `On ${partner.name}'s record, ${p.name} also gets about ${fmt.money(topUp, cur)} a month more once ${partner.name} has claimed (a spouse's benefit).`) : null,
+          topUp ? ui.h("p", {}, topUp) : null,
         ];
         // already getting it: a fact, not a choice of claiming ages (round 4, 2026-11-02); the figures fold away for corrections
         if (p.claimed) return [

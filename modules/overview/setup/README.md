@@ -350,3 +350,15 @@ this README with its source; the debt guide's rates step waiting for real rates 
 Tests: `module.test.mjs` (the ended half removed, then Get started walked again; pension and other money after a start
 date; Social Security; removing a partner with a raise; who pays you before a start date; the money answer when pay has
 ended or starts later; a lean month that just about breaks even).
+
+## Recheck 2026-11-05
+- **A new amount for an unmarked benefit the Social Security page reads as unreduced** (`applyAges`, "getting" from 62).
+  An entry without the `paidUnreduced` mark that the Social Security page reads as unreduced (paid before the claim age
+  on file, and the old Income line pays at least 99.5% of `monthlyAtFRA`: that page's own test, read from its compute's
+  `unreduced` on the plan as it stands before this answer) is now taken as the marked branch takes it: given back with the
+  age as shown, a new amount is the new full-age amount (`monthlyAtFRA` = the amount) and the age on file stays. Ana (62
+  and 8 months, disability benefit set up before the mark, $1,800 at 67, $1,800 on Income; Sam $900 at 67), her yearly
+  letter saying $1,850: `{ claimAge 67, monthlyAtFRA 1850 }`, Sam's survivor figure $1,850, his top-up $25 (half of
+  $1,850 less $900). Before: `{ claimAge 62, monthlyAtFRA 2642.9 }` ($1,850 / 0.70), a $2,180.30 survivor figure and a
+  $421.40 top-up. An entry the page reads as a reduced early claim (old line clearly below the full-age amount) is not
+  touched by this rule.

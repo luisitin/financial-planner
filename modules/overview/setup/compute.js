@@ -14,7 +14,7 @@ import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/comp
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
 import { compute as computeProjection, retirementKnown, ssOnIncome } from "../../retirement/projection/compute.js";
-import { estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
+import { compute as computeSocialSecurity, estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
 import { QUARTERS } from "../../taxes/estimated/compute.js";
@@ -581,7 +581,11 @@ export function applyAges(draft, v, today) {
           const onFile = Number(rec.claimAge) || 0, given = Number(ss.started) || 0;
           const asShown = onFile > 0 && (Math.abs(given - onFile) < 1 / 24 || Math.abs(given - Math.max(62, Math.min(top, onFile))) < 1 / 24);
           const paid = L(draft, "income").find((i) => i.id === sid);
-          if (asShown && rec.paidUnreduced) set({ ...rec, monthlyAtFRA: amount });
+          // one not marked but read by the Social Security page as unreduced (paid before the claim age on file, and the
+          // old Income line pays about its full-age amount: its own test, `unreduced`) is taken the same way (recheck
+          // 2026-11-05: $1,800 to $1,850 made it a claim at 62 worth $2,642.90 at full age, a $2,180.30 survivor figure)
+          const readUnreduced = asShown && !rec.paidUnreduced && Number(rec.monthlyAtFRA) > 0 && !!computeSocialSecurity(draft, { today }).people.find((q) => q.id === p.id)?.unreduced;
+          if (asShown && (rec.paidUnreduced || readUnreduced)) set({ ...rec, monthlyAtFRA: amount });
           else if (!(asShown && Number(rec.monthlyAtFRA) > 0 && paid && Math.abs(Number(paid.amount) - amount) < 0.5)) {
             const { paidUnreduced, ...rest } = rec;
             set({ ...rest, claimAge: started, monthlyAtFRA: Math.round((amount / claimFactor(birthYear, started)) * 10) / 10 });

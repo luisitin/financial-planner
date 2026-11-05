@@ -43,11 +43,27 @@ export function claimFactor(birthYear, claimAge) {
  * A spouse's benefit as a share of the worker's primary insurance amount, claimed at `claimAge` against the spouse's
  * own full retirement age (from their birth year): half, less 25/36 of 1% a month for the first 36 months early and
  * 5/12 of 1% for each month beyond; no credits for waiting past full retirement age (SSA, benefits for a spouse).
+ * The points come off the 50% here, as the answer key (tests/golden/retirement/ss-benefits.csv) reads it; SSA applies
+ * them to the 50% (`spousalEarlyFactor` below, which the couple's top-up uses). Kept for `spousalAtSameAge` only.
  */
 export function spousalFactor(birthYear, claimAge) {
   const fraMonths = Math.round(fullRetirementAge(birthYear).asYears * 12);
   const early = Math.max(0, fraMonths - Math.round(Math.min(70, Math.max(62, claimAge)) * 12));
   return Math.max(0, 0.5 - Math.min(36, early) * (25 / 36) / 100 - Math.max(0, early - 36) * (5 / 12) / 100);
+}
+/**
+ * A spouse's benefit started at `age` as a share of its full amount (half the worker's primary insurance amount): 1 less
+ * 25/36 of 1% for each of the first 36 months before the spouse's own full retirement age and 5/12 of 1% for each month
+ * beyond; nothing added for waiting (SSA Handbook 724.1 and 724.4; https://www.ssa.gov/oact/quickcalc/spouse.html: "this
+ * reduction factor is applied to the base spousal benefit, which is 50 percent of the worker's primary insurance amount",
+ * so 62 with a full age of 67 is 65% of it, 32.5% of the worker's amount). The months are counted from the month the
+ * spouse's benefit starts (Handbook 725), which is never before the worker's own (oact/quickcalc/spouse.html). Used for a
+ * couple's top-up (recheck 2026-11-05); `spousalFactor` above keeps the answer key's reading for `spousalAtSameAge`.
+ */
+export function spousalEarlyFactor(birthYear, age) {
+  const fraMonths = Math.round(fullRetirementAge(birthYear).asYears * 12);
+  const early = Math.max(0, fraMonths - Math.round(Math.min(70, Math.max(62, age)) * 12));
+  return 1 - Math.min(36, early) * (25 / 36) / 100 - Math.max(0, early - 36) * (5 / 12) / 100;
 }
 /**
  * What a surviving spouse at their own full retirement age receives on a worker's record: the worker's benefit
@@ -117,16 +133,19 @@ export function estimateBenefit(record, { birthYear, claimAge = null, futureEarn
  *     never later than full retirement age: the full retirement age when it is unreduced (marked `paidUnreduced`, paid
  *     before 62, or the Income line pays about the full-age amount), else today's age to the month, as a reduced claim),
  *     claimAgeOnFile, source: "record"|"typed"|"none", estimate, pia (the full-age amount, always from the record or the
- *     statement's figure), monthly (for someone paid before the claim age on file, what the Income line pays),
- *     startedEarly (paid before the claim age on file, or marked `paidUnreduced`), reducedEarly (that, as a reduced claim), paidLine,
+ *     statement's figure), monthly (for anyone already paid by a Social Security line on Income, what that line pays,
+ *     at every date), fromAge (the age, whole years, the projection counts it from), birthMonth,
+ *     startedEarly (paid before the claim age on file, marked `paidUnreduced`, or paid clearly less than the full-age
+ *     amount with a claim age on file at or past full retirement age), reducedEarly (that, as a reduced claim),
+ *     unreduced (that, at the full-age amount), paidLine,
  *     options: [{ claimAge, monthly, factor }] (62 to 70; past 62 and not claimed, only from today's age to 70),
  *     claimed (already gets it: setup's "getting" or Social Security on Income), claimedYear, pastClaimAge (not claimed and the
  *     claim age on file has passed), wait: { nowAge, nowMonthly, at70Monthly, at70 ("YYYY-MM"), breakEven (age) } | null,
  *     spousalAtSameAge (a spouse with no benefit of their own, the same age, claiming at the same age, on this record),
  *     survivor (what a surviving spouse at their full retirement age would get on this record) }],
- *   couple: null | { spousal: { [personId]: monthly top-up on the partner's record at their own claim age }, survivorMonthly: { [personId who survives]: monthly },
- *     bothMonthly, survivorYearly (the larger benefit, kept by whoever outlives the other) },
- *   householdYearly, hasData
+ *   couple: null | { spousal: { [personId]: monthly top-up on the partner's record }, spousalCounted, spousalFromAge (see couple()),
+ *     survivorMonthly: { [personId who survives]: monthly }, bothMonthly, survivorYearly (the larger benefit, kept by whoever outlives the other) },
+ *   householdYearly (each one's own and the counted top-ups, a year), hasData
  * }
  * plan.retirement.socialSecurity[personId] = { claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings,
  *   paidUnreduced (optional: setup's "I get it now" before 62, a disability or survivor benefit paid at the full-age amount) }
@@ -156,10 +175,6 @@ export function compute(plan, params = {}) {
     // it before the claim age on file is getting it now, not from that age
     const claimMonth = birthYear && p.birthDate ? birthYear * 12 + (Number(String(p.birthDate).slice(5, 7)) - 1) + Math.round(onFile * 12) : null;
     const todayMonth = today ? Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7)) - 1 : null;
-    // setup's "I get it now" before 62 (a disability or survivor benefit) marks the entry `paidUnreduced`: paid since before
-    // any claim age, so it is paid "now", never "since" the claim age on file (review 2026-11-02, round 5, third pass)
-    const marked = claimed && !!s.paidUnreduced && !!fra;
-    const startedEarly = claimed && (marked || (claimMonth !== null && todayMonth !== null && claimMonth > todayMonth));
     const hasRecord = !!birthYear && Array.isArray(s.record) && s.record.length > 0;
     const source = hasRecord ? "record" : birthYear && Number(s.monthlyAtFRA) > 0 ? "typed" : "none";
     const retireYear = birthYear ? birthYear + (Number(p.retirementAge) || Number(plan.assumptions?.retirementAge) || 65) - 1 : null;
@@ -169,8 +184,19 @@ export function compute(plan, params = {}) {
     // benefit paid at the full figure past 62 into a reduced one and moved the survivor and spouse's figures)
     let estimate = hasRecord ? estimateAt(onFile) : null;
     const fullAge = source === "record" ? (estimate.eligible ? estimate.pia : null) : source === "typed" ? Number(s.monthlyAtFRA) : null;
-    // what arrives now, for someone paid before the claim age on file: the Social Security line on Income
-    const paidMonthly = startedEarly && paidLine && source !== "none" ? perYear(paidLine.amount, paidLine.period) / 12 : null;
+    // what arrives, for anyone already paid by a Social Security line on Income: that line, for life (recheck 2026-11-05:
+    // it counted only while paid before the claim age on file, so once that age passed the page and the projection switched
+    // to the claim age's figure, $2,100 "since 67" for a $1,950 line). Only a line being paid now counts (`paidLine` above)
+    const paidMonthly = paidLine && source !== "none" ? perYear(paidLine.amount, paidLine.period) / 12 : null;
+    // paid clearly less than the full-age amount (more than 0.5% less): a reduced benefit, one claimed before full age
+    const paidReduced = paidMonthly !== null && fullAge !== null && paidMonthly < fullAge * (1 - EARLY_TOLERANCE);
+    // setup's "I get it now" before 62 (a disability or survivor benefit) marks the entry `paidUnreduced`: paid since before
+    // any claim age, so it is paid "now", never "since" the claim age on file (review 2026-11-02, round 5, third pass).
+    // Started before the claim age on file too: a claim month still to come, or (recheck 2026-11-05) a reduced line with a
+    // claim age on file at or past full retirement age, which cannot have been claimed at that age, so it started earlier,
+    // when is not known: "now", not "since 67", and still valued as an early claim once the age on file has gone by
+    const marked = claimed && !!s.paidUnreduced && !!fra;
+    const startedEarly = claimed && (marked || (claimMonth !== null && todayMonth !== null && claimMonth > todayMonth) || (paidReduced && !!fra && Math.round(onFile * 12) >= Math.round(fra.asYears * 12)));
     // a benefit already paid before the claim age on file is never valued with delayed credits: that claim age (later than
     // today, perhaps past full retirement age) is not used for it (third pass: a saved 70 counted $2,976 a month from 64
     // for someone who said "I already get it"). It is unreduced, the full-age amount, only when setup marked it
@@ -188,7 +214,10 @@ export function compute(plan, params = {}) {
     const baseAtFra = !eligible ? 0 : source === "record" ? (estimate.eligible ? estimate.pia : paidMonthly / claimFactor(birthYear, claimAge)) : Number(s.monthlyAtFRA);
     const options = birthYear ? [62, 64, fra.asYears, 68, 70].filter((a, i, arr) => arr.indexOf(a) === i).sort((a, b) => a - b).map((a) => ({ claimAge: a, factor: claimFactor(birthYear, a), monthly: floorDime(baseAtFra * claimFactor(birthYear, a)) })) : [];
     const spousalAtSameAge = birthYear ? floorDime(baseAtFra * spousalFactor(birthYear, claimAge)) : 0;
-    const survivor = birthYear ? survivorAmount(baseAtFra, monthly, Math.round(claimAge * 12) < Math.round(fra.asYears * 12)) : 0;
+    // the widow(er)'s floor applies to a benefit claimed early: valued before full age, or (not marked as a disability
+    // benefit) paid clearly less than the full-age amount (recheck 2026-11-05: valued at full age once that age passed,
+    // the floor went and the figure dropped, $1,732.50 to $1,500 for a $1,500 early claim on a $2,100 full-age amount)
+    const survivor = birthYear ? survivorAmount(baseAtFra, monthly, Math.round(claimAge * 12) < Math.round(fra.asYears * 12) || (paidReduced && !marked)) : 0;
     const choose = !claimed && exact !== null && exact > 62 ? (() => {
       const now = Math.min(70, Math.ceil(exact * 12) / 12);
       const ages = [now, ...[63, 64, 65, 66, 67, 68, 69].filter((a) => a > now + 1 / 24), ...(fra && fra.asYears > now + 1 / 24 && !Number.isInteger(fra.asYears) ? [fra.asYears] : []), ...(now < 70 ? [70] : [])];
@@ -203,33 +232,85 @@ export function compute(plan, params = {}) {
       const at70 = `${birthYear + 70}-${String(p.birthDate).slice(5, 7)}`;
       return { nowAge: first.claimAge, nowMonthly: first.monthly, at70Monthly: last.monthly, at70, breakEven: Math.round(breakEven * 10) / 10 };
     })() : null;
-    return { id: p.id, name: p.name, birthYear, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, claimAgeOnFile: onFile, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
-      options: choose ?? options, claimed, startedEarly, reducedEarly, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
+    return { id: p.id, name: p.name, birthYear, birthMonth: p.birthDate ? Number(String(p.birthDate).slice(5, 7)) : null, age: birthYear && year ? year - birthYear : null, ageNow: exact, fra: fra ? { years: fra.years, months: fra.months } : null, claimAge, claimAgeOnFile: onFile, source, estimate, pia: baseAtFra, monthly, yearly: monthly * 12,
+      // the age (whole years) the projection counts it from: today's for a benefit started before the claim age on file
+      fromAge: startedEarly && exact !== null ? Math.floor(exact) : Math.floor(claimAge),
+      options: choose ?? options, claimed, startedEarly, reducedEarly, unreduced, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
       claimedYear: claimed && birthYear && !startedEarly ? birthYear + Math.floor(claimAge) : null,
       // a saved claim age gone by without a claim: only when there are figures to claim with and "won't get it" was not said;
       // from 70 on, a saved 70 is up to date (review 2026-11-02)
       pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && onFile < Math.min(exact, 70) - 1 / 24, wait,
       spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
   });
-  return { people, couple: couple(people), householdYearly: people.reduce((s, p) => s + p.yearly, 0), hasData: people.some((p) => p.source !== "none") };
+  // the household's Social Security a year: each one's own, and a spouse's top-up the plan counts (recheck 2026-11-05: the
+  // hero's yearly figure left it out while "you get together" had it, and the projection never counted it)
+  // a spouse's benefit is paid only to a husband or wife (SSA: married at least a year, or divorced after ten years), not
+  // to a partner Get started was told is not a spouse (relation "partner", who also files single)
+  const married = !(plan.household?.people ?? []).some((p) => p.role !== "dependent" && p.relation === "partner");
+  const pair = couple(people, { married });
+  const topUps = pair ? Object.values(pair.spousalCounted).reduce((s, x) => s + x, 0) : 0;
+  return { people, couple: pair, householdYearly: people.reduce((s, p) => s + p.yearly, 0) + topUps * 12, hasData: people.some((p) => p.source !== "none") };
 }
 
 /**
- * A couple's two records together: each one's spousal top-up (half the partner's primary insurance amount less their
- * own, reduced for their own claiming age; paid once the partner has claimed) and what the one who outlives the other
- * keeps: the larger of their own benefit and the survivor amount on the partner's record. `survivorYearly` is the
- * larger of the two outcomes: the household's Social Security after the first death, at best.
+ * A couple's two records together. Each one's spousal top-up: half the partner's primary insurance amount less their own
+ * (at least 0), reduced the SSA way for the age it starts (`spousalEarlyFactor`), to the dime; it starts at the later of
+ * their own claim age (as valued) and their age when the partner's benefit starts (a partner already paid adds no wait),
+ * never before 62 (recheck 2026-11-05: it was reduced as 50% less the percentage points, 15% of the partner's amount at
+ * 62 where SSA pays 32.5%, and from their own claim age alone). And what the one who outlives the other keeps: the larger
+ * of their own benefit and the survivor amount on the partner's record. `survivorYearly` is the larger of the two
+ * outcomes: the household's Social Security after the first death, at best.
+ * -> { spousal: { [id]: monthly top-up }, spousalCounted: { [id]: the part the plan adds on top of what the person gets:
+ *   the top-up when the person has a figure of their own (with none, their own amount and so the top-up are not known)
+ *   and it is not already in the Income line that pays them (SSA pays it with their own once the partner has claimed),
+ *   else 0 }, spousalFromAge: { [id]: the age (whole years) the projection counts it from: the later of the two people's
+ *   own start years, never before 62 }, survivorMonthly, bothMonthly (both own benefits and the counted top-ups),
+ *   survivorYearly }
  */
-export function couple(people) {
+export function couple(people, { married = true } = {}) {
   const adults = people.filter((p) => p.birthYear);
   if (adults.length < 2 || adults.every((p) => p.source === "none")) return null;
   const [a, b] = adults;
-  const topUp = (me, other) => floorDime(Math.max(0, other.pia / 2 - me.pia) * (spousalFactor(me.birthYear, me.claimAge) / 0.5));
-  const spousal = { [a.id]: topUp(a, b), [b.id]: topUp(b, a) };
+  const born = (p) => p.birthYear * 12 + (p.birthMonth || 7) - 1;
+  const startAge = (me, other) => Math.max(62, me.claimAge, other.claimed ? 0 : (born(other) + Math.round(other.claimAge * 12) - born(me)) / 12);
+  const topUp = (me, other) => floorDime(Math.max(0, other.pia / 2 - me.pia) * spousalEarlyFactor(me.birthYear, startAge(me, other)));
+  const spousal = married ? { [a.id]: topUp(a, b), [b.id]: topUp(b, a) } : { [a.id]: 0, [b.id]: 0 };
+  const counts = (me, other) => me.source !== "none" && !(me.paidLine && other.claimed);
+  const spousalCounted = { [a.id]: counts(a, b) ? spousal[a.id] : 0, [b.id]: counts(b, a) ? spousal[b.id] : 0 };
+  const fromAge = (me, other) => Math.max(62, me.fromAge, other.birthYear + other.fromAge - me.birthYear);
+  const spousalFromAge = { [a.id]: fromAge(a, b), [b.id]: fromAge(b, a) };
   // the spousal top-up stops when the partner dies; the survivor amount on their record takes its place when it is larger
   const survivorMonthly = { [a.id]: Math.max(a.monthly, b.survivor), [b.id]: Math.max(b.monthly, a.survivor) };
-  const bothMonthly = a.monthly + b.monthly + spousal[a.id] + spousal[b.id];
-  return { spousal, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
+  const bothMonthly = a.monthly + b.monthly + spousalCounted[a.id] + spousalCounted[b.id];
+  return { spousal, spousalCounted, spousalFromAge, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
+}
+
+/** This year, from a person of compute's people (their birth year and age this year), or null without today. */
+const yearOf = (p) => (p.age !== null && p.age !== undefined ? p.birthYear + p.age : null);
+/**
+ * The page's sentence on a spouse's top-up for `person` on `partner`'s record (`d`: compute's result, `money` formats an
+ * amount), "" when there is none (recheck 2026-11-05): counted ("also gets about $X a month more ... The plan counts
+ * it."), already in the Income line that pays them, or what they could get while it is not counted (no figure of their
+ * own, or `none`: they said they won't get Social Security).
+ */
+export function spousalWords(person, partner, d, money, { none = false } = {}) {
+  const c = d?.couple;
+  if (!c || !partner || !(c.spousal[person.id] > 0.5)) return "";
+  if (person.paidLine && partner.claimed) return `Any spouse's benefit ${person.name} gets on ${partner.name}'s record is paid with ${person.name}'s own, so the ${money(person.paidLine.period === "monthly" ? person.paidLine.amount : person.monthly)} a month on the Income page already holds it.`;
+  if (c.spousalCounted[person.id] > 0.5) {
+    const from = person.birthYear + c.spousalFromAge[person.id], now = yearOf(person);
+    return `On ${partner.name}'s record, ${person.name} also gets about ${money(c.spousalCounted[person.id])} a month more (a spouse's benefit)${now !== null && from > now ? ` from ${from}, once both have claimed` : ""}. The plan counts it.`;
+  }
+  return `On ${partner.name}'s record, ${person.name} could get up to about ${money(c.spousal[person.id])} a month (a spouse's benefit) once both have claimed. ${none ? `The plan leaves it out, as ${person.name} won't get Social Security.` : `The plan does not count it until ${person.name}'s own figure is added below.`}`;
+}
+/** The hero's word on a top-up inside its yearly figure (householdYearly counts it), or "" (recheck 2026-11-05). */
+export function heroTopUpWords(d, money) {
+  const c = d?.couple;
+  const p = c ? d.people.find((x) => c.spousalCounted[x.id] > 0.5) : null;
+  if (!p) return "";
+  const w = d.people.find((x) => x.id !== p.id && x.birthYear);
+  const from = p.birthYear + c.spousalFromAge[p.id], now = yearOf(p);
+  return `The ${money(d.householdYearly)} a year includes about ${money(c.spousalCounted[p.id])} a month ${p.name} gets on ${w.name}'s record (a spouse's benefit)${now !== null && from > now ? ` from ${from}` : ""}.`;
 }
 
 /** "64 and 6 months", "67": an age in years and months, as the page says it. */
@@ -261,7 +342,8 @@ export function survivorWords(person, partner, keeps, money) {
  * Not claimed: the claim age, record, statement figure and future earnings as typed. Already paid: the claim age on file
  * is kept, and an amount equal to the one shown changes nothing. A different amount goes on the Income line that pays
  * it. For someone paid before the claim age on file, a line is added when there is none, and the full-age amount stays
- * (it is only worked out from what arrives when there was no figure at all). For someone paid since that age, it also
+ * (it is only worked out from what arrives when there was no figure at all), unless the benefit is paid unreduced
+ * (`unreduced`): a typed full-age amount then becomes what arrives (recheck 2026-11-05). For someone paid since that age, it also
  * becomes the full-age amount that pays it at that age, and an earnings record (saved, or pasted in the same Save) is set
  * aside so the amount counts.
  */
@@ -288,6 +370,9 @@ export function saveFigures(person, saved = {}, form = {}) {
       // unreduced benefit's full-age amount is what arrives; a reduced one's is worked back from today's age)
       if (person.paidLine) line = { id: person.paidLine.id, amount: typed }; else addLine = typed;
       if (person.source === "none" && person.birthYear) put("monthlyAtFRA", person.reducedEarly ? fraFromMonthly(person.birthYear, person.claimAge, typed) : typed);
+      // paid unreduced (a disability benefit, marked or read so): what arrives is the full-age amount, as Get started takes
+      // a new amount (recheck 2026-11-05: the statement's figure stayed, so a yearly rise left the spouse's top-up behind)
+      else if (person.unreduced && person.source === "typed") put("monthlyAtFRA", typed);
     } else {
       put("monthlyAtFRA", person.birthYear ? fraFromMonthly(person.birthYear, person.claimAge, typed) : typed);
       // the amount typed wins over an earnings record, the one saved or one pasted in this same Save (review 2026-11-02,

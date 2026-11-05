@@ -100,14 +100,23 @@ in each month:
   in December 2027" on that money: the later waiting goals count as behind until it is fixed (the $36,000 Wedding and the
   2035 Boat both read behind, as the brief asked). A waiting goal due within the turn's first month gets nothing and holds
   nothing.
-- Results: H-0777 (retired): the trip's $1,500 extra lasts 4 months, so Share B ($15,000 to go in 11 months) gets
-  $828 x 4 + $2,328 x 7 = $19,608 and waits its turn (second pass: "2 goals are behind", $2,106 needed; now the trip
+- Results: H-0777 (retired): the trip's $1,486 extra lasts 4 months, so Share B ($15,000 to go in 11 months) has
+  $842.82 x 4 + $2,328.44 x 7, about $19,670, of the step (it draws about $14,650 of it, reaching $30,000 with
+  interest) and waits its turn (second pass: "2 goals are behind", $2,106 needed; now the trip
   alone, $989, as at dc6e73c). H-0177 (couple): the baby fund's extra ends after 5 months, so Share A waits and Share B
   ($30,000 from nothing) is behind. Family plan without the trip: a Wedding due December 2029 gets about $405 a month
   for 15 months (until the car's date) and $1,449 for 9, about $19,100: a $12,000 Wedding waits its turn again (the
   second pass's test said "behind" because it counted the car's extra until December 2029, which the review showed was
   wrong), a $20,000 one is behind. A $3,000 Holiday getting $100 a month, due three days after the turn, leaves the Boat
   waiting.
+
+## Recheck 2026-11-05
+- The third pass's H-0777 figures are the code's: the goals step has $2,328.44 a month from January 2027
+  (`capacity`); the trip holds $4,010.84 at the turn and needs `pmtToReach(0.02 / 12, 4, 12000, 4010.84)` = $1,985.62 a
+  month for its 4 months, $1,485.62 more than its $500, which leaves $842.82; Share B ($15,050.04 at the turn, 11
+  months) then has $842.82 x 4 + $2,328.44 x 7, about $19,670 (to the dollar, $843 x 4 + $2,328 x 7 = $19,668). The
+  note said "$828 x 4 + $2,328 x 7 = $19,608", the unit test's rounded case at a 0% rate ($2,000 - $500 = $1,500 extra),
+  not the household's 2% rate. No code changed.
 
 ## Estimated tax with nothing typed (review 2026-11-02)
 `estimates-behind` asks first when no payments were ever typed (taxes/estimated `paidTyped` false): "Estimated tax: type

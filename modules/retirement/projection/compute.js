@@ -162,8 +162,12 @@ export function buildInputs(plan, params = {}) {
   }).filter((c) => c.yearly > 0);
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });
-  // someone already getting it before the claim age on file (disability or survivor benefits) gets it from now
-  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.startedEarly && p.ageNow !== null ? Math.floor(p.ageNow) : Math.floor(p.claimAge), cola: true, taxable: true, kind: "social" });
+  // someone already getting it before the claim age on file (disability or survivor benefits) gets it from now (fromAge)
+  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.fromAge, cola: true, taxable: true, kind: "social" });
+  // a spouse's top-up on the partner's record, as the Social Security page counts it (couple.spousalCounted): from the
+  // later of the two people's own start years, never before the partner has claimed (recheck 2026-11-05: never counted).
+  // After each person's own line, so the stress tests' "first Social Security line of a person" stays their own
+  for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: `${p.name}'s spouse's benefit`, yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social" }); }
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });

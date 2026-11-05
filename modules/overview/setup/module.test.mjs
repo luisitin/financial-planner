@@ -997,3 +997,32 @@ test("the done screen's lean month within $5 of $0: 'only just about breaks even
   const view = fs.readFileSync(`${HERE}view.js`, "utf8"), dash = fs.readFileSync(`${HERE}../dashboard/view.js`, "utf8");
   assert.ok(view.includes('st.lean.kind === "even" ? "it only just about breaks even"') && dash.includes('lean.kind === "even" ? "it only just about breaks even"'));
 });
+
+test("recheck 2026-11-05: a new amount for an unmarked benefit the Social Security page reads as unreduced is its new full-age amount; the age on file stays", async () => {
+  const { compute: ss } = await import("../../retirement/social-security/compute.js");
+  const T2 = "2026-11-02";
+  // Ana, 62 and 8 months, on a disability benefit set up before the mark existed: $1,800 at full age, 67 on file, $1,800 on
+  // Income (the page reads it as unreduced: the line pays the full-age amount); Sam $900 at 67
+  const ana = (line = 1800) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1964-03-15" }, { id: "s", name: "Sam", role: "partner", birthDate: "1966-06-15" }];
+    p.retirement.socialSecurity = { a: { claimAge: 67, monthlyAtFRA: 1800 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    p.income = [{ id: "setup-ss-a", name: "Ana's Social Security", type: "social", personId: "a", amount: line, period: "monthly", startDate: "", endDate: "" }];
+    p.guide = { setup: { ss: { a: "getting", s: "statement" } } };
+    return p;
+  };
+  const again = (p, started, amount) => S.applyAges(p, { people: { a: { year: 1964, month: 3, stopAge: 55, retired: true, ss: { mode: "getting", amount, started } }, s: { year: 1966, month: 6, stopAge: 67, ss: { mode: "statement", amount: 900 } } } }, T2);
+  // the yearly letter says $1,850: given back with the age as the screen shows it (62, its stepper's floor) or as on file
+  for (const started of [62, 67]) {
+    const p = ana(); again(p, started, 1850);
+    // before: { claimAge 62, monthlyAtFRA 2,642.90 }, a $2,180.30 survivor figure and a $421.40 top-up for Sam
+    assert.deepEqual(p.retirement.socialSecurity.a, { claimAge: 67, monthlyAtFRA: 1850 }, String(started));
+    assert.equal(p.income.find((x) => x.id === "setup-ss-a").amount, 1850);
+    const d = ss(p, { today: T2 });
+    assert.equal(d.people[0].monthly, 1850); assert.equal(d.people[0].pia, 1850);
+    assert.equal(d.couple.survivorMonthly.s, 1850); assert.equal(d.couple.spousal.s, 25, "half of 1,850 less Sam's 900");
+  }
+  // the old line clearly below the full-age amount (a reduced early claim, as the page reads it): not this branch
+  const reduced = ana(1500); again(reduced, 62, 1550);
+  assert.notDeepEqual(reduced.retirement.socialSecurity.a, { claimAge: 67, monthlyAtFRA: 1550 });
+});

@@ -165,3 +165,32 @@ test("review 2026-11-02: a retired household with the retirement age left blank 
   const first = d.rows[0];
   assert.ok(first.incomeLines.some((x) => /Social Security/.test(x.name) && x.amount > 0), "paid from this year");
 });
+
+test("recheck 2026-11-05: a spouse's top-up counts from when both have claimed, as the Social Security page says it", async () => {
+  const { compute: ss } = await import("../social-security/compute.js");
+  const T = "2026-11-02";
+  // Ruth (born August 1960) $2,100 at full age; Sam (born June 1966) $900 of his own, so $150 a month more on Ruth's record
+  const plan = (rClaim, sClaim) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15", retirementAge: 66 }, { id: "s", name: "Sam", role: "partner", birthDate: "1966-06-15", retirementAge: 62 }];
+    p.accounts = [{ id: "a", name: "Savings", type: "savings", balance: 300000, history: [] }]; p.retirement.spendingMonthly = 4000;
+    p.retirement.socialSecurity = { r: { claimAge: rClaim, monthlyAtFRA: 2100 }, s: { claimAge: sClaim, monthlyAtFRA: 900 } };
+    return p;
+  };
+  for (const [rClaim, sClaim, fromAge] of [[67, 67, 67], [67, 62, 62], [70, 62, 64]]) {
+    const p = plan(rClaim, sClaim), d = ss(p, { today: T });
+    const b = buildInputs(p, { today: T });
+    const social = b.inputs.incomes.filter((x) => x.kind === "social");
+    const top = social.filter((x) => x.personIndex === 1 && /spouse's benefit/.test(x.name));
+    assert.equal(top.length, 1, `${rClaim}/${sClaim}`);
+    assert.equal(top[0].yearly, d.couple.spousalCounted.s * 12); assert.equal(top[0].startAge, fromAge, `${rClaim}/${sClaim}: never before Ruth's own starts (${1960 + rClaim})`);
+    assert.ok(1966 + top[0].startAge >= 1960 + rClaim, "not before the worker has claimed");
+    // the projection's Social Security a year is the page's
+    assert.ok(Math.abs(social.reduce((s, x) => s + x.yearly, 0) - d.householdYearly) < 1e-6); assert.equal(b.ssYearly, d.householdYearly);
+    // each person's own benefit comes first (the stress tests replace a person's first Social Security line)
+    assert.ok(social.findIndex((x) => x.personIndex === 1) < social.indexOf(top[0]));
+  }
+  // no figure of Sam's own: nothing counted for him
+  const none = plan(67, 67); delete none.retirement.socialSecurity.s;
+  assert.equal(buildInputs(none, { today: T }).inputs.incomes.filter((x) => x.kind === "social" && x.personIndex === 1).length, 0);
+});

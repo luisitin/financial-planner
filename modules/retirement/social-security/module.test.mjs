@@ -437,3 +437,200 @@ test("review 2026-11-02 (round 5, third pass): a survivor's figure larger than w
   const f = compute(p, { today: T });
   assert.equal(survivorWords(f.people[1], f.people[0], f.couple.survivorMonthly.s, usd), "If Ruth dies first, Sam keeps about $2,100 a month: Ruth's benefit in place of Sam's own $900.");
 });
+
+// ---- recheck 2026-11-05: what Income says counts for life; a spouse's top-up by SSA's own reduction, counted once
+test("recheck 2026-11-05: a benefit already paid counts what its Income line says, also once the claim age on file has passed", async () => {
+  const { compute, floorDime } = await import("./compute.js");
+  const { buildInputs } = await import("../projection/compute.js");
+  // Ruth, born August 1960 (full retirement age 67): her $2,100 statement saved here with the page's 67, then "I already
+  // get it" and $1,950 typed on this page (the line it adds); Sam, born June 1964, $900 of his own at 67
+  const plan = (line = 1950) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15", retirementAge: 66 }, { id: "s", name: "Sam", role: "partner", birthDate: "1964-06-15", retirementAge: 67 }];
+    p.accounts = [{ id: "a", name: "Savings", type: "savings", balance: 100000, history: [] }]; p.retirement.spendingMonthly = 3000;
+    p.retirement.socialSecurity = { r: { claimAge: 67, record: [], monthlyAtFRA: 2100, futureEarnings: "same" }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    p.income = [{ id: "setup-ss-r", name: "Ruth's Social Security", type: "social", personId: "r", amount: line, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true }];
+    p.guide = { setup: { ss: { r: "getting" } } };
+    return p;
+  };
+  for (const today of ["2026-11-02", "2027-05-20", "2027-08-20", "2028-06-01"]) {
+    const d = compute(plan(), { today }); const [ruth] = d.people;
+    // before: $2,100 "since 67" from August 2027, and the projection counted $2,100 a month for life
+    assert.equal(ruth.monthly, 1950, today); assert.equal(ruth.yearly, 1950 * 12, today);
+    assert.equal(ruth.pia, 2100, `${today}: the full-age amount stays the statement's`);
+    // $1,950 is less than the full-age amount, so it was not claimed at 67: "now", never "since 2027 (at 67)"
+    assert.equal(ruth.startedEarly, true, today); assert.equal(ruth.claimedYear, null, today);
+    // the widow(er)'s figure and the spouse's top-up do not move when the claim age on file goes by
+    assert.equal(d.couple.survivorMonthly.s, 1950, today); assert.equal(d.couple.spousal.s, 150, today);
+    const own = buildInputs(plan(), { today }).inputs.incomes.filter((x) => x.kind === "social" && x.personIndex === 0);
+    assert.equal(own.length, 1, today); assert.equal(own[0].yearly, 1950 * 12, today);
+    assert.ok(own[0].startAge <= Number(today.slice(0, 4)) - 1960, `${today}: counted from now`);
+  }
+  // an early claim of $1,500 (no claim age saved: full retirement age): the same $1,500 and the same 82.5% widow(er)'s
+  // floor before and after full retirement age (before the fix: $2,100 "since 67" from August 2027, the floor gone)
+  for (const today of ["2027-05-20", "2027-08-20", "2030-01-15"]) {
+    const p = plan(1500); delete p.retirement.socialSecurity.r.claimAge; p.guide = {};
+    const d = compute(p, { today });
+    assert.equal(d.people[0].monthly, 1500, today); assert.equal(d.people[0].claimedYear, null, today);
+    assert.equal(d.couple.survivorMonthly.s, floorDime(2100 * 0.825), today);
+  }
+  // a line that agrees with the claim age on file (62 pays $1,470; the line says $1,480 after a rise): "since 62", and
+  // the page counts the $1,480 Income says, not the $1,470 the age gives
+  const at62 = plan(1480); at62.retirement.socialSecurity.r.claimAge = 62;
+  const s62 = compute(at62, { today: "2028-06-01" }).people[0];
+  assert.equal(s62.startedEarly, false); assert.equal(s62.claimedYear, 2022); assert.equal(s62.monthly, 1480); assert.equal(s62.pia, 2100);
+  // with an earnings record the record still gives the full-age amount; Income gives what arrives
+  const rec = []; for (let y = 1984; y <= 2024; y++) rec.push({ year: y, earnings: Math.round(30000 * Math.pow(1.04, y - 1984)) });
+  const withRec = plan(1950); withRec.retirement.socialSecurity.r = { claimAge: 67, record: rec, futureEarnings: "none" };
+  const r2 = compute(withRec, { today: "2028-06-01" }).people[0];
+  assert.equal(r2.source, "record"); assert.equal(r2.monthly, 1950); assert.equal(r2.pia, r2.estimate.pia);
+});
+
+test("recheck 2026-11-05: a line that is not a payment being received is not counted (the 'already gets it' rules)", async () => {
+  const { compute, claimFactor, floorDime } = await import("./compute.js");
+  const T = "2028-06-01";
+  const ruth = (line) => {
+    const p = emptyPlan(); p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15" }];
+    p.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 } };
+    p.income = line ? [{ id: "i", name: "Ruth's Social Security", type: "social", personId: "r", amount: 1950, period: "monthly", startDate: "", endDate: "", ...line }] : [];
+    return p;
+  };
+  // starting later, ended, or a one-off: not claimed, and the page counts the claim age's figure
+  for (const line of [{ startDate: "2030-01-01" }, { endDate: "2027-12-31" }, { period: "once" }]) {
+    const r = compute(ruth(line), { today: T }).people[0];
+    assert.equal(r.claimed, false, JSON.stringify(line)); assert.equal(r.monthly, 2100, JSON.stringify(line));
+  }
+  // another person's line is not Ruth's
+  const other = ruth({ personId: "someone-else" });
+  assert.equal(compute(other, { today: T }).people[0].monthly, 2100);
+  // "I already get it" with no line: the figure on file, as before
+  const said = ruth(null); said.guide = { setup: { ss: { r: "getting" } } };
+  assert.equal(compute(said, { today: T }).people[0].monthly, floorDime(2100 * claimFactor(1960, 67)));
+});
+
+test("recheck 2026-11-05: a spouse's top-up is reduced the SSA way (applied to the 50%) from the age it starts, never before the worker claims", async () => {
+  const { compute, spousalEarlyFactor, spousalFactor } = await import("./compute.js");
+  const near9 = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-9, `${m}: ${a} != ${b}`);
+  // SSA's tables (agereduction.html, oact/quickcalc/earlyretire.html): a $500 spouse's benefit is $325 at 62 for a full
+  // age of 67 (35% less) and $350 for 66 (30% less); oact/quickcalc/spouse.html: 36 months early, $800 becomes $600
+  near9(spousalEarlyFactor(1960, 62), 0.65, "born 1960 at 62"); near9(spousalEarlyFactor(1950, 62), 0.70, "born 1950 at 62");
+  near9(spousalEarlyFactor(1960, 64), 0.75, "36 months early"); near9(spousalEarlyFactor(1960, 67), 1, "at full age"); near9(spousalEarlyFactor(1960, 70), 1, "no credits for waiting");
+  near9(spousalEarlyFactor(1957, 62), 1 - 36 * (25 / 36) / 100 - 18 * (5 / 12) / 100, "born 1957: 54 months");
+  // spousalAtSameAge keeps the answer key's own reading (tests/golden/retirement/ss-benefits.csv): see the README
+  near9(spousalFactor(1960, 62), 0.15, "the key's 50% less 35 points");
+  const T = "2026-11-02";
+  // Ruth (born August 1960) $2,100 at full age; Sam (born June 1966) $900 of his own
+  const plan = (rClaim, sClaim, extra = {}) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15", retirementAge: 66 }, { id: "s", name: "Sam", role: "partner", birthDate: "1966-06-15", retirementAge: 62 }];
+    p.accounts = [{ id: "a", name: "Savings", type: "savings", balance: 300000, history: [] }]; p.retirement.spendingMonthly = 4000;
+    p.retirement.socialSecurity = { r: { claimAge: rClaim, monthlyAtFRA: 2100 }, s: { claimAge: sClaim, monthlyAtFRA: 900 } };
+    Object.assign(p, extra);
+    return p;
+  };
+  // Sam claims at 62 (June 2028), after Ruth's 67 (August 2027): $150 x 0.65 (before: $150 x 0.30 = $45)
+  const a = compute(plan(67, 62), { today: T });
+  assert.equal(a.couple.spousal.s, 97.5); assert.equal(a.couple.spousalCounted.s, 97.5); assert.equal(a.couple.spousalFromAge.s, 62);
+  // Ruth waits to 70 (August 2030): Sam's top-up starts then, at 64 and 2 months (34 months early)
+  const b = compute(plan(70, 62), { today: T });
+  assert.equal(b.couple.spousal.s, Math.floor(150 * (1 - 34 * (25 / 36) / 100) * 10 + 1e-8) / 10); assert.equal(b.couple.spousalFromAge.s, 64);
+  // Sam at full age: the whole $150, from his 67
+  assert.equal(compute(plan(67, 67), { today: T }).couple.spousal.s, 150);
+  // the hero's yearly figure and "you get together" are the same money: both people's own and the top-up
+  for (const d of [a, b]) {
+    assert.ok(Math.abs(d.householdYearly - 12 * d.couple.bothMonthly) < 1e-6);
+    assert.ok(Math.abs(d.householdYearly - 12 * (d.people[0].monthly + d.people[1].monthly + d.couple.spousalCounted.s)) < 1e-6);
+  }
+});
+
+test("recheck 2026-11-05: the top-up is counted only with the person's own figure, and not when the Income line already pays it", async () => {
+  const { compute } = await import("./compute.js");
+  const T = "2028-06-01";
+  const plan = () => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15" }, { id: "s", name: "Sam", role: "partner", birthDate: "1962-06-15" }];
+    p.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    return p;
+  };
+  // Sam has no figure of his own: the page can say what he could get, the plan does not count it
+  const none = plan(); delete none.retirement.socialSecurity.s;
+  const n = compute(none, { today: "2026-11-02" });
+  assert.ok(n.couple.spousal.s > 0); assert.equal(n.couple.spousalCounted.s, 0);
+  assert.equal(n.householdYearly, n.people[0].yearly);
+  // Sam already paid by an Income line and Ruth already claimed: the line is what arrives, the top-up in it
+  const paid = plan(); paid.income = [{ id: "i", name: "Sam's Social Security", type: "social", personId: "s", amount: 1050, period: "monthly" }, { id: "j", name: "Ruth's Social Security", type: "social", personId: "r", amount: 2100, period: "monthly" }];
+  const p = compute(paid, { today: T });
+  assert.equal(p.people[1].monthly, 1050); assert.equal(p.couple.spousalCounted.s, 0); assert.equal(p.householdYearly, (1050 + 2100) * 12);
+  // ...while Ruth has not claimed yet, it comes on top once she does
+  paid.income = paid.income.slice(0, 1); paid.retirement.socialSecurity.r.claimAge = 70;
+  const q = compute(paid, { today: T });
+  assert.equal(q.couple.spousalCounted.s, 150); assert.equal(q.couple.spousalFromAge.s, 68, "Ruth claims at 70, in 2030, when Sam is 68");
+});
+
+test("verify 2026-11-05: no spouse's benefit for a partner Get started was told is not a spouse (SSA pays it to a husband or wife)", async () => {
+  const { compute, spousalWords, heroTopUpWords } = await import("./compute.js");
+  const { compute: projection } = await import("../projection/compute.js");
+  const plan = (relation) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1966-03-10", retirementAge: 67 }, { id: "s", name: "Sam", role: "partner", relation, birthDate: "1966-06-15", retirementAge: 67 }];
+    p.household.filingStatus = relation === "spouse" ? "married_joint" : "single";
+    p.accounts = [{ id: "a", name: "S", type: "savings", balance: 300000, history: [] }]; p.retirement.spendingMonthly = 4000;
+    p.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    return p;
+  };
+  const T = "2026-11-05", usd = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const wed = compute(plan("spouse"), { today: T });
+  assert.equal(wed.couple.spousalCounted.s, 150); assert.equal(wed.householdYearly, (2100 + 900 + 150) * 12);
+  const un = compute(plan("partner"), { today: T });
+  assert.equal(un.couple.spousal.s, 0); assert.equal(un.couple.spousalCounted.s, 0);
+  assert.equal(un.householdYearly, (2100 + 900) * 12); assert.equal(un.couple.bothMonthly, 3000);
+  assert.equal(heroTopUpWords(un, usd), ""); assert.equal(spousalWords(un.people[1], un.people[0], un, usd), "");
+  const soc = projection(plan("partner"), { today: T }).inputs.incomes.filter((x) => x.kind === "social").map((x) => x.name);
+  assert.deepEqual(soc, ["Ruth's Social Security", "Sam's Social Security"]);
+});
+
+test("recheck 2026-11-05: the page's words for the top-up and the hero say the same money", async () => {
+  const { compute, spousalWords, heroTopUpWords } = await import("./compute.js");
+  const { money } = await import("../../../core/format.js");
+  const usd = (n) => money(n, "USD");
+  const T = "2026-11-02";
+  const p = emptyPlan();
+  p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15" }, { id: "s", name: "Sam", role: "partner", birthDate: "1966-06-15" }];
+  p.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+  const d = compute(p, { today: T }); const [ruth, sam] = d.people;
+  assert.equal(heroTopUpWords(d, usd), "The $37,800 a year includes about $150 a month Sam gets on Ruth's record (a spouse's benefit) from 2033.");
+  assert.equal(spousalWords(sam, ruth, d, usd), "On Ruth's record, Sam also gets about $150 a month more (a spouse's benefit) from 2033, once both have claimed. The plan counts it.");
+  assert.equal(spousalWords(ruth, sam, d, usd), "");
+  // no figure of Sam's own: what he could get, and that it is not counted
+  delete p.retirement.socialSecurity.s;
+  const e = compute(p, { today: T });
+  assert.equal(heroTopUpWords(e, usd), "");
+  assert.match(spousalWords(e.people[1], e.people[0], e, usd), /^On Ruth's record, Sam could get up to about \$1,050 a month \(a spouse's benefit\) once both have claimed\. The plan does not count it until Sam's own figure is added below\.$/);
+  // already in Sam's Income line
+  p.retirement.socialSecurity.s = { claimAge: 67, monthlyAtFRA: 900 };
+  p.household.people[1].birthDate = "1958-06-15";
+  p.income = [{ id: "i", name: "Sam's Social Security", type: "social", personId: "s", amount: 1050, period: "monthly" }, { id: "j", name: "Ruth's Social Security", type: "social", personId: "r", amount: 2100, period: "monthly" }];
+  const f = compute(p, { today: T });
+  assert.equal(spousalWords(f.people[1], f.people[0], f, usd), "Any spouse's benefit Sam gets on Ruth's record is paid with Sam's own, so the $1,050 a month on the Income page already holds it.");
+});
+
+test("recheck 2026-11-05: a new amount saved here for a benefit paid unreduced is its new full-age amount, as Get started takes it", async () => {
+  const { compute, saveFigures } = await import("./compute.js");
+  const T = "2026-11-02";
+  // Ana, 62 and 8 months, disability benefit: $1,800 at 67 on file, $1,800 on Income; Sam $900 at 67. Her yearly letter says $1,850
+  for (const mark of [false, true]) {
+    const p = emptyPlan();
+    p.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1964-03-15" }, { id: "s", name: "Sam", role: "partner", birthDate: "1966-06-15" }];
+    p.retirement.socialSecurity = { a: { claimAge: 67, monthlyAtFRA: 1800, ...(mark ? { paidUnreduced: true } : {}) }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    p.income = [{ id: "setup-ss-a", name: "Ana's Social Security", type: "social", personId: "a", amount: 1800, period: "monthly", startDate: "", endDate: "" }];
+    p.guide = { setup: { ss: { a: "getting", s: "statement" } } };
+    const a = compute(p, { today: T }).people[0];
+    assert.equal(a.unreduced, true);
+    const r = saveFigures(a, p.retirement.socialSecurity.a, { claimAge: a.claimAge, record: [], typed: 1850, futureEarnings: "same" });
+    // before: the line only, so the full-age amount stayed $1,800 and Sam's top-up $0 (Get started's marked path: $25)
+    assert.deepEqual(r.entry, { claimAge: 67, monthlyAtFRA: 1850, ...(mark ? { paidUnreduced: true } : {}) }); assert.deepEqual(r.line, { id: "setup-ss-a", amount: 1850 });
+    p.retirement.socialSecurity.a = r.entry; p.income[0].amount = 1850;
+    const d = compute(p, { today: T });
+    assert.equal(d.people[0].monthly, 1850); assert.equal(d.couple.survivorMonthly.s, 1850); assert.equal(d.couple.spousal.s, 25);
+  }
+});

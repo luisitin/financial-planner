@@ -7,14 +7,14 @@
 `household` (adults, birth dates, retirement ages), `retirement.socialSecurity[personId]` = `{ claimAge, record: [{ year, earnings }], monthlyAtFRA, futureEarnings: "same"|"none", paidUnreduced? }` (`paidUnreduced`: written by Get started, read here; see the third pass below). Writes the same.
 
 ## Outputs
-`people[]` (`fra`, `claimAge`, `claimAgeOnFile`, `source` record/typed/none, `estimate`, `pia` (the full-age amount, from the record or the statement), `monthly`, `yearly`, `startedEarly`, `reducedEarly`, `paidLine`, `options[]` at 62/64/FRA/68/70, `spousalAtSameAge`, `survivor`), `couple` (two adults: `spousal` top-ups, `survivorMonthly` per survivor, `bothMonthly`, `survivorYearly`), `householdYearly`, `hasData`.
+`people[]` (`fra`, `birthMonth`, `claimAge`, `claimAgeOnFile`, `source` record/typed/none, `estimate`, `pia` (the full-age amount, from the record or the statement), `monthly`, `yearly`, `fromAge` (the age the projection counts it from), `startedEarly`, `reducedEarly`, `unreduced`, `paidLine`, `options[]` at 62/64/FRA/68/70, `spousalAtSameAge`, `survivor`), `couple` (two adults: `spousal` top-ups, `spousalCounted` (the part the plan counts), `spousalFromAge`, `survivorMonthly` per survivor, `bothMonthly`, `survivorYearly`), `householdYearly` (own benefits and the counted top-ups), `hasData`.
 
 ## Formulas (the SSA's, tables lifted from ssa.tools via `data/ssa.js`)
 - Earnings capped at each year's taxable maximum (a year past the table keeps the last published maximum, as the wage index is frozen at the last published one too); indexed by the average wage index of the year you turn 60 over the index of the earnings year (years after that count as is; future years use the latest index).
 - AIME = the best 35 indexed years / 420, floored to the dollar. Bend points for the year you turn 62 = 180 and 1,085 scaled by the wage index of that year minus two over 1977. PIA = 90% to the first bend, 32% to the second, 15% above, floored to the dime; cost-of-living increases apply from the year you turn 62 (published values; each COLA is paid from January of the next year, so the 3.6% COLA of December 2026 is in amounts valued from 2027). Every floor to the dime goes through `floorDime` (x x 10 + 1e-8), so an exact $2,315.50 that binary floating point stores as 2315.4999... is not a dime low.
 - Claiming: 5/9 of 1% per month early for the first 36 months, 5/12 of 1% beyond; delayed credits (8% a year for people born 1943 or later) up to 70. Full retirement age from the birth-year table.
 - Credits: 4 a year at most, one per the year's earnings-per-credit; 40 needed. Future earnings: the last year repeated until the year before retiring or claiming.
-- Spouse (`spousalFactor`, SSA "benefits for a spouse"): half the worker's PIA at the spouse's full retirement age, less 25/36 of 1% a month for the first 36 months early and 5/12 of 1% beyond; no delayed credits. `spousalAtSameAge` assumes a spouse with no benefit of their own, the same age, claiming at the same age. For a couple, each one's top-up is half the partner's PIA less their own, reduced the same way for their own claiming age.
+- Spouse (`spousalFactor`, SSA "benefits for a spouse"): half the worker's PIA at the spouse's full retirement age, less 25/36 of 1% a month for the first 36 months early and 5/12 of 1% beyond; no delayed credits. `spousalAtSameAge` assumes a spouse with no benefit of their own, the same age, claiming at the same age; it keeps the answer key's reading (the percentage points taken off the 50%; see "Recheck 2026-11-05"). For a couple, each one's top-up is half the partner's PIA less their own, reduced by `spousalEarlyFactor` (SSA's reading, applied to the 50%) for the age it starts (Recheck 2026-11-05).
 - Survivor (`survivorAmount`): a surviving spouse at their own full retirement age gets the worker's benefit (with any delayed credits), but when the worker claimed early never less than 82.5% of the worker's PIA (the widow(er)'s limit, SSA POMS RS 00615.320). For a couple, whoever outlives the other keeps the larger of their own benefit and the survivor amount on the partner's record; the spousal top-up stops.
 
 ## Tables
@@ -125,6 +125,73 @@ Each person with no figure, no record and no Social Security on Income gets an o
   month in place of Sam's own $900. That is more than the $1,500 Ruth gets now, because it is worked out from Ruth's
   full-age amount." (Not claimed yet: "... the $1,470 Ruth would get at 62 ..."). Otherwise the two plain sentences stay.
 
+## Recheck 2026-11-05
+- **What Income says counts for life** (`compute`, `paidMonthly`). A benefit already being paid with a Social Security
+  line on Income (being paid now: going, not a one-off, not ended, not starting later, the person's own; the "already gets
+  it" rules above) counts what that line says, at every date. Before, it counted only while the claim age on file was still
+  to come (`startedEarly`), so once that age passed the page and the projection switched to the claim age's figure: Ruth
+  (born August 1960, $2,100 statement saved with the page's 67, "I already get it", $1,950 typed here) read "$2,100 a month
+  since 67" from August 2027 and the projection counted $150 a month too much for life. Now $1,950 on 2026-11-02,
+  2027-05-20, 2027-08-20 and 2028-06-01, on the page and in the projection. The record or the statement still gives the
+  full-age amount (`pia`), so the survivor figure and the spouse's top-up keep their source. The Save path follows: the
+  amount box shows what Income says, and a changed amount goes on that line as before.
+- **"Now", not "since 67", when the line cannot have been claimed at the age on file** (`startedEarly`). A line clearly
+  below the full-age amount (more than 0.5% less, `EARLY_TOLERANCE`) is a reduced benefit, claimed before full retirement
+  age. When the claim age on file is at or past full retirement age it cannot have started then, so it counts as started
+  before the claim age on file even once that age has gone by: the page says "now" (no "since 2027 (at 67)"), the
+  projection counts it from today, and it is valued as before that date (a reduced claim at today's age, at most full
+  retirement age). A line that fits the claim age on file keeps "since": claimed at 62 on file, $1,480 on Income (62 pays
+  $1,470), "since 62" and $1,480.
+- **The widow(er)'s floor stays** (`survivorAmount` called with "claimed early" = valued before full age, or, unless
+  marked `paidUnreduced`, paid clearly less than the full-age amount). Valued at full age once that age passed, the
+  floor went: a $1,500 early claim on a $2,100 full-age amount gave the partner $1,732.50 (82.5% x $2,100) until full
+  retirement age and $1,500 after. Now $1,732.50 at every date. A marked benefit (a disability benefit) is unreduced by
+  definition; no floor is added for it.
+- Sweep (6 birth dates x 5 claim ages on file x typed or record x 6 Income lines x setup's answer and mark x 4 dates up
+  to 2034, a $900 partner): before, 1,498 of 4,320 claimed-with-a-line cases had the page differ from Income and 296 said
+  "since" an age at or past full age for a reduced line; now none. For typed figures, the person's own amount, the
+  partner's survivor figure and the top-up no longer move from one date to the next (before: 130, 132 and 0 cases moved).
+- **A new amount for a benefit paid unreduced is its new full-age amount here too** (`saveFigures`, `unreduced`). Get
+  started takes a new amount for a marked benefit (and now for one this page reads as unreduced) as the full-age amount;
+  this page's Save only moved the Income line, so the statement's figure stayed: Ana (disability, $1,800 at 67, $1,800 on
+  Income) typing her letter's $1,850 got a $1,850 survivor figure but a $0 top-up for Sam (half of $1,800 is Sam's $900),
+  where Get started gave $25. Now, for a typed figure paid unreduced (`unreduced`: marked, before 62, or a line within
+  0.5% of the full-age amount), the typed amount becomes `monthlyAtFRA` as well: `{ claimAge 67, monthlyAtFRA 1850 }`,
+  survivor $1,850, top-up $25, on both pages. A record still gives its own full-age amount.
+- **A spouse's top-up, SSA's way, counted once** (`couple`, `spousalEarlyFactor`).
+  - Reduction: 1 - 25/36 of 1% x (months early, up to 36) - 5/12 of 1% x (months early beyond 36), applied to the
+    spouse's benefit itself, which is half the worker's full-age amount (SSA Handbook 724.1 and 724.4,
+    https://www.ssa.gov/OP_Home/handbook/handbook.07/handbook-0724.html; https://www.ssa.gov/oact/quickcalc/spouse.html:
+    "this reduction factor is applied to the base spousal benefit, which is 50 percent of the worker's primary insurance
+    amount", 36 months early turns $800 into $600; https://www.ssa.gov/benefits/retirement/planner/agereduction.html: a $500
+    spouse's benefit is $325 at 62 for a full age of 67, $350 for 66). The code took the percentage points off the 50%
+    (`spousalFactor`): 15% of the worker's amount at 62 where SSA pays 32.5%.
+  - Someone with a benefit of their own gets it plus the difference to the higher spouse's benefit (SSA Handbook 734.1,
+    https://www.ssa.gov/OP_Home/handbook/handbook.07/handbook-0734.html): top-up = max(0, partner's PIA / 2 - own PIA) x
+    `spousalEarlyFactor`, to the dime.
+  - Months early are counted from the month it starts (Handbook 725): the later of the person's own claim age (as
+    valued) and their age when the partner's benefit starts (a partner already paid adds no wait), never before 62; a
+    spouse is paid only once the worker has filed (oact/quickcalc/spouse.html). Sam (born June 1966, $900) on Ruth's
+    $2,100 (born August 1960): at 67, $150; at 62 with Ruth claiming at 67, $97.50 (before $45); at 62 with Ruth waiting to
+    70, it starts at 64 and 2 months, $114.50.
+  - Counted (`spousalCounted`) when the person has a figure of their own (with none, their own amount, and so the
+    difference, is not known; the page says "could get up to about $X ... The plan does not count it until <name>'s own
+    figure is added below", or "leaves it out" after "won't get Social Security"), and not when the Income line that pays
+    them already holds it (SSA pays it with their own once the partner has claimed: "... so the $1,050 a month on the
+    Income page already holds it").
+  - `householdYearly` = each one's own yearly amount + 12 x the counted top-ups, so the hero's "$37,800 a year" and "the
+    $3,150 you get together" are the same money, and the hero says what is in it: "The $37,800 a year includes about $150 a
+    month Sam gets on Ruth's record (a spouse's benefit) from 2033." (`heroTopUpWords`, `spousalWords`, tested). Before:
+    "$28,800 a year" beside "$2,550 you get together".
+  - The projection counts it (retirement/projection `buildInputs`): a "<name>'s spouse's benefit" line, `kind: "social"`,
+    yearly = 12 x `spousalCounted`, from `spousalFromAge` (the later of the two people's own start years, never before
+    62), rising with inflation, after each person's own line. Stress tests, sensitivity (the 77% row cuts it too), goal
+    seek and FIRE read it from there.
+  - Not changed: `spousalFactor` and `spousalAtSameAge`. `tests/golden/retirement/ss-benefits.csv` (`spousal_at_same_age`,
+    every claim age before full retirement age: 2,000 histories) and `tests/golden-social-security.test.mjs:489` (450 =
+    15% of $3,000 at 62) encode the 50%-less-points reading; SSA's reading gives $975 there (32.5%). The answer key is the
+    owner's to change; until then `spousalAtSameAge` (not shown on any page) follows it.
+
 ## Ideas / not yet
 - The earnings test before full retirement age; survivors claiming before their own full retirement age (71.5% at 60); the family maximum; taxation of benefits (in the tax pages); Medicare premiums.
 
@@ -135,3 +202,9 @@ differ). Each person's fold says "If Bo dies first, Ana keeps about $2,900 a mon
 $2,650" (or keeps their own, and the other's stops), and, when it is above 0, the spouse's top-up on the partner's record.
 Only when the partner has a figure; the footnote says a survivor's amount is for a widow or widower at full retirement
 age or later and at least 82.5% of the full-age amount when the one who died claimed early.
+- **Only a husband or wife gets a spouse's benefit** (verify 2026-11-05). SSA pays it to a spouse, generally married at
+  least a year, or a divorced spouse after ten years (20 CFR 404.330, https://www.ssa.gov/OP_Home/cfr20/404/404-0330.htm).
+  A partner Get started was told is not a spouse (`relation: "partner"`, who also files single) gets no top-up: `couple()`
+  takes `{ married }`, and the hero, the folds and the projection follow. My choice: the relation, not the filing status,
+  because a new plan's filing status defaults to single and a married couple typed only on People never sets it. The
+  survivor figure still assumes marriage for an unmarried partner (older behaviour, a follow-up).

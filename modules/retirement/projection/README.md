@@ -128,3 +128,20 @@ spending lasts in fewer than 9 of 10 markets, the careful line says so with an a
 rounded down (89.8% never reads "90%"). With nothing lasting even at $0 there is no careful search and no placeholder; the
 average figure is named as such from the start. When the PC does not answer, the search runs here in slices (careful.js),
 never in one block; a screen reader hears "Working out ..." while the grey bars stand in for the figures.
+
+## Recheck 2026-11-05
+- **Social Security already paid counts what Income says, for life.** The Social Security page's figure for someone paid
+  by a Social Security line on Income is that line at every date (retirement/social-security, "Recheck 2026-11-05"); it
+  used to switch to the claim age's figure once that age passed (Ruth: $2,100 a month for life against the $1,950 Income
+  says). Each person's own line starts at the page's `fromAge` (today's age for a benefit started before the claim age on
+  file, else the claim age), the same rule as before, now read from the page.
+- **A spouse's top-up is counted** (it never was): one more `kind: "social"` income per person with a counted top-up
+  (`couple.spousalCounted` on the Social Security page), named "<name>'s spouse's benefit", yearly = 12 x the top-up, from
+  `couple.spousalFromAge` (the later of the two people's own start years, never before 62: never before the worker has
+  claimed), rising with inflation, taxed like the rest of Social Security. It comes after each person's own line, so the
+  stress tests' "a person's first Social Security line" is still their own. Not counted when the person has no figure of
+  their own, or when their Income line already holds it. Formula and sources (SSA Handbook 724, 725, 734;
+  https://www.ssa.gov/oact/quickcalc/spouse.html) in the Social Security README. `ssYearly` (the page's `householdYearly`)
+  includes it, as the projection's social incomes do.
+- No answer key changed: no row of tests/golden/retirement/*.csv has a couple with a Social Security figure (checked: the
+  700 projection rows, 1,800 FIRE rows and every other page's plan rows), and the 12,710 golden retirement tests pass.
