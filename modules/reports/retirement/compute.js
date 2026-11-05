@@ -30,7 +30,7 @@ export function compute(plan, params = {}) {
   const pr = computeProjection(plan, { today });
   if (!today || !pr.ready) return { ready: false, missing: pr.missing ?? ["today's date"] };
   const paths = Math.min(REPORT_PATHS, params.maxPaths ?? REPORT_PATHS);
-  const mc = computeMonteCarlo(plan, { today, paths, seed: 1 });
+  const mc = computeMonteCarlo(plan, { today, paths, seed: 1, careful: false });   // the careful figure is not shown here: no need to work it out
   const hi = computeHistorical(plan, { today, quick: true });
   const ss = computeSocialSecurity(plan, { today });
   const wo = computeOrder(plan, { today });

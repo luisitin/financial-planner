@@ -80,3 +80,10 @@ test("the claiming lever moves only who has not claimed, from the ages still pos
   assert.deepEqual(lever.results.map((r) => Math.round(r.age * 12)), [69 * 12 + 5, 70 * 12]);
   assert.match(lever.sentence, /^Lee claiming (at 70|now \(69 and 5 months\))/); assert.match(lever.sentence, /Sam already gets it/);
 });
+
+test("the spending lever says its figure is the average-market one (round 5, 2026-11-02)", () => {
+  const d = compute(familyPlan(), { today: TODAY });
+  assert.match(lever(d, "spending").sentence, /^If markets do as well as average, (up to )?about \$[\d,]+ a month/);
+  const big = compute(familyPlan(), { today: TODAY, legacy: 2500000 });
+  assert.ok(lever(big, "spending").status === "cannot" || /^If markets do as well as average/.test(lever(big, "spending").sentence));
+});

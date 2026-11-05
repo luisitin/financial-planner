@@ -67,3 +67,9 @@ and pages in `off` are left out.
 - Make the debt, retirement, paycheck and emergency-fund pages answer on an empty plan (example figures saved under
   `whatIfs.<page>`, as Home affordability does); then list them here.
 - Search that understands questions across all pages (aliases on the existing manifests).
+
+## Retirement line (round 5, 2026-11-02)
+"The plan carries $X" is the average-market figure: the line now says so ("if markets do as well as average ... less in a bad
+run of years") and points to Will the money last?, which gives the figure that lasts in 9 of 10 markets (too slow to work out
+on every page this line shows on). Review 2026-11-02: "carries $111,897 a year, less in a bad run of years" (the "a year" was
+missing).

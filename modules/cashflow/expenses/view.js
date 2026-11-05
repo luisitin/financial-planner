@@ -41,7 +41,7 @@ export function render(root, ctx) {
     if (!(nba?.ready && nba.spare.monthly < 0)) return null;
     // retired and living on savings as the plan intends: a calm line, not a list of things to cut
     if (nba.drawing) return ui.h("section", { class: "card" }, ui.h("h2", {}, "Drawn from savings"),
-      ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. That is inside the ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending your plan can carry, and the money lasts.`),
+      ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. If markets do as well as average, your plan can carry ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less).`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last? ›")));
     const g = closeGap(d.items, -nba.spare.monthly, { goalSaving: nba.spare.goalSaving });
     const m = (v) => fmt.money(v, cur);

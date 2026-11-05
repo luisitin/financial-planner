@@ -4,6 +4,10 @@ import { compute } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
+import { whenCareful, monthlyOf } from "../careful.js";
+
+/** The withdrawal rules other than steady spending, in plain words, for the careful line. */
+const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "steady spending cut by a tenth after a bad stretch and raised by a tenth after a good one", vpw: "spending what the years left can afford" };
 
 let pending = null;
 
@@ -28,17 +32,43 @@ export function render(root, ctx) {
   // "(Contributions page)" and the like are links to that page, not plain text to go and find
   const PAGES = { Contributions: "#/retirement/contributions", "Social Security": "#/retirement/social-security", Assumptions: "#/system/assumptions", Taxes: "#/taxes/federal" };
   const linked = (text) => String(text).split(/\((Contributions|Social Security|Assumptions|Taxes) pages?\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part] }, `${part} page`), ")"] : part);
-  const verdictText = { "on track": `On track. The plan carries ${money(d.affordable)} a year of spending in today's dollars; you plan on ${money(d.spendingYearly)}.`, tight: `Tight. The plan carries about ${money(d.affordable)} a year; you plan on ${money(d.spendingYearly)}. Small changes matter here.`, short: `Short. At ${money(d.spendingYearly)} a year the money runs out in ${d.shortYear} (age ${d.shortAge}). The plan carries about ${money(d.affordable)} a year.` }[d.verdict];
+  // the line below is markets doing exactly as well as average every year; the careful figure (9 of 10 markets, from the
+  // Monte Carlo page's engine) fills in under it once worked out (round 5, 2026-11-02: the average figure lasts in only
+  // about 4 of 10 markets, and every page called it the most you could spend)
+  const verdictText = { "on track": `On track if markets do as well as average: the plan then carries ${money(d.affordable)} a year of spending in today's dollars; you plan on ${money(d.spendingYearly)}.`, tight: `Tight. If markets do as well as average the plan carries about ${money(d.affordable)} a year; you plan on ${money(d.spendingYearly)}. Small changes matter here.`, short: `Short. If markets do as well as average, ${money(d.spendingYearly)} a year runs out in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan carries is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
+  // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
+  // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
+  const steady = d.strategy === "fixed-real";
+  const careWords = (y, mo, share) => steady
+    ? ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month). At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of them (", ui.h("a", { href: "#/retirement/monte-carlo" }, "Chance the money lasts"), ")."]
+    : ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month), spent the same every year. Your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."];
+  // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
+  const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
+  const careLine = ui.h("p", { "aria-live": "polite", style: { color: "var(--muted)" } }, ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
+  const careSub = `a year, today's dollars; ${money(d.affordable)} if markets do as well as average`;
+  const careStat = ui.h("div", { style: { display: "contents" } }, ui.stat("Spending that lasts in 9 of 10 markets", "...", careSub));
+  const headline = ui.h("h1", {}, d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`);
+  whenCareful(ctx, careLine, (c) => {
+    // nothing worked out, or nothing lasts in 9 of 10 markets even at $0: no careful line, the average figure named as such
+    if (!c || !(c.yearly > 0)) { careLine.remove(); careStat.replaceChildren(ui.stat("Spending it can carry", money(d.affordable), "a year, today's dollars, if markets do as well as average")); return; }
+    careLine.style.minHeight = `${careLine.offsetHeight}px`;   // never shorter than the placeholder it replaces
+    careLine.style.color = "";
+    careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly)), `${Math.round(c.planned * 100)}%`));
+    careStat.replaceChildren(ui.stat("Spending that lasts in 9 of 10 markets", money(c.yearly), careSub));
+    // "The money lasts" over a line saying the planned spending lasts in fewer than 9 of 10 markets read as a contradiction
+    if (d.verdict === "on track" && c.yearly < d.spendingYearly) headline.textContent = "It lasts, just";
+  });
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`),
+    headline,
     ui.h("p", { class: "lede" }, verdictText),
+    careLine,
     ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${d.people[0].name} at ${d.atRetirement.age}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`)),
     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away
     ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›")),
   ));
   root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
-    ui.stat("Spending it can carry", money(d.affordable), "a year, today's dollars, to the end"),
+    careStat,
     ui.stat("Guaranteed income", d.coverage !== null ? fmt.pct(d.coverage, 0) : "-", "of the first retirement year's spending: Social Security, pensions, a partner's pay"),
     ui.stat(`Left in ${d.atEnd.year}`, money(Math.max(0, d.atEnd.totalReal)), d.atEnd.totalReal > 0 ? "today's dollars" : "nothing"),
   )));

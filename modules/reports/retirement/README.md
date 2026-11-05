@@ -17,3 +17,7 @@ An opening paragraph (when the spending years start, whether the money lasts at 
 
 ## Ideas / not yet
 - The advisor's numbers beside these (`scenarios/advisor-plan`); the withdrawal-strategy comparison; a page per person for a couple's Social Security choices.
+
+## Average markets, said so (round 5, 2026-11-02)
+"Can carry a month" is the average-market figure: it reads "Can carry a month if markets do as well as average". The Monte
+Carlo run here passes `careful: false`: the careful figure (9 of 10 markets) is not shown in the report, so it is not worked out.

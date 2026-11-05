@@ -87,3 +87,22 @@ IRS Publication590-B TableIII supplies the tested RMD factor24.6 at75:
 https://www.irs.gov/publications/p590b . Whole-dime typed Social Security amounts claimed
 at full retirement age67 isolate the annualization adapter; the SSA benefit formula remains
 in its own test scope. Since 2026-10-30 (F-030) every case agrees: the affordable-spending search's ceiling grows until it fails and narrows below a cent.
+
+## Average markets, said so (round 5, 2026-11-02)
+The verdict and "carries $X a year" are markets earning exactly the average every year, and now say so ("On track if markets
+do as well as average"; short: "If markets do as well as average, $168,000 a year runs out in 2050 (age 82), and the most
+the plan carries is about $131,224 a year"). Under them the careful line (Monte Carlo's `careful`, see its README): "In 9 of
+10 markets the money carries about $90,200 a year ($7,500 a month). At the $84,000 you plan, it lasts in 98% of them", and
+the stat reads "Spending that lasts in 9 of 10 markets" with the average figure under it. The rule for on track / tight /
+short is unchanged. Review fixes, 2026-11-02:
+- **Another withdrawal rule:** the share quoted is `careful.planned` (steady spending at the plan's amount, on the same
+  2,000 paths), never the rule's own chance. When the plan's rule is not steady spending, the second sentence names it in
+  plain words instead ("Your plan uses another rule, a set share of what is left each year, so what you spend moves with
+  markets"), linking How much to take out.
+- **"It lasts, just":** the headline when the verdict is on track but the careful figure is below the planned spending (the
+  plan lasts in fewer than 9 of 10 markets). View only: the verdict keys are unchanged.
+- **The month:** whole $100s rounded down (`careful.js` `monthlyOf`), so $110,100 a year is $9,100 a month, never more than
+  the year.
+- **$0:** no careful line; the stat goes back to "Spending it can carry", named "if markets do as well as average".
+- **No jump, no freeze:** the line is drawn first with grey bars where its figures go (the same words, so the same height) and
+  filled after the first paint, on the PC when connected or here a slice at a time (`careful.js`).

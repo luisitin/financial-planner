@@ -2,6 +2,7 @@
 // much), then every lever solved for it on its own: spending, retirement age, saving, the return
 // needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
+import { whenCareful, monthlyOf } from "../../retirement/careful.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 
@@ -69,6 +70,7 @@ export function render(page, ctx) {
         return ui.h("div", { class: "card flat gs-lever", style: { margin: "0" } },
           ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), ui.h("span", { class: `pill ${tone}` }, label)),
           l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
+          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money) : null,
           ui.h("div", { class: "gs-s" }, l.sentence),
           l.id === "claim" && l.results?.length ? claimBars(ui, l, money) : null,
           ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, "Open the page")));
@@ -82,6 +84,16 @@ export function render(page, ctx) {
       ))));
   };
   load();
+}
+
+/** "In 9 of 10 markets: about $7,500 a month": drawn with "..." first (the same line, so nothing moves), filled after the first
+ * paint with Monte Carlo's careful figure for the same goal (careful.js); gone when nothing lasts in 9 of 10 markets. */
+function carefulLine(ctx, legacy, money) {
+  const { ui } = ctx;
+  const words = (v) => [ui.h("strong", {}, "In 9 of 10 markets:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}`];
+  const el = ui.h("div", { class: "gs-s", "aria-live": "polite" }, ...words("..."));
+  whenCareful(ctx, el, (c) => { if (!c || !(c.yearly >= 1200)) el.remove(); else el.replaceChildren(...words(money(monthlyOf(c.yearly)))); }, { legacy });
+  return el;
 }
 
 function claimBars(ui, l, money) {

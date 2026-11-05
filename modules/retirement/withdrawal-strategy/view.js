@@ -3,6 +3,7 @@
 // stretch of history. Pick one; the Projection page uses it.
 import { compute, firstYear } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
+import { whenCareful, monthlyOf } from "../careful.js";
 
 let pending = null;
 
@@ -30,6 +31,10 @@ export function render(root, ctx) {
   const list = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
   const KIND = { cash: "your cash savings", taxable: "your investment account", deferred: "your 401(k) or IRA", free: "your Roth" };
   const from = (b) => (b.accounts.length ? list(b.accounts) : KIND[b.bucket]);
+  const averageWords = fy ? `If markets do as well as average, you could spend up to about ${money(Math.round(fy.affordable / 100) * 100)} a year.` : "";
+  const carefulWords = (mo, yr) => ["You can spend about ", mo, " a month ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", yr), ` a year)${d.chosen === "fixed-real" ? "" : ", the same every year,"} and the money lasts in about 9 of 10 markets. If markets do as well as average, up to about ${money(Math.round((fy?.affordable ?? 0) / 100) * 100)} a year.`];
+  // while it is worked out: a soft grey bar as wide as the figure that will take its place, so the lines break the same
+  const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   const answer = (() => {
     if (!fy) return null;
     const when = fy.thisYear ? `This year (${fy.year})` : `In ${fy.year}, your first year of retirement (in today's dollars)`;
@@ -46,13 +51,28 @@ export function render(root, ctx) {
       bits.push(`${when}, take about ${money(fy.fromSavings)} from savings, starting with ${from(a)}${b2 ? `, then ${from(b2)}` : ""}.`);
       bits.push(`${fy.income >= 0.5 ? `With about ${money(fy.income)} of ${src}, that` : "That"} pays for the ${money(fy.spending)} you plan to spend${fy.taxes >= 0.5 ? ` and about ${money(fy.taxes)} of tax` : ""}.`);
     }
-    bits.push(fy.verdict === "short" ? `At this spending the money runs out${fy.shortAge ? ` at ${fy.shortAge}` : ""}: Will the money last? shows what would fix it.` : `The most you could spend and still have the money last: about ${money(Math.round(fy.affordable / 100) * 100)} a year.`);
+    // the careful figure (lasts in 9 of 10 markets) fills in below once worked out; the average-market one is the fallback
+    bits.push(fy.verdict === "short" ? `At this spending the money runs out${fy.shortAge ? ` at ${fy.shortAge}` : ""}: Will the money last? shows what would fix it.` : averageWords);
     return bits;
   })();
+  const say = (answer ?? []).slice(1).map((t) => ui.h("p", {}, t));
+  // the spending that lasts in 9 of 10 markets (Monte Carlo's careful figure) replaces the average-market sentence (round 5):
+  // drawn first with grey bars where its figures go (the same words, so nothing jumps), filled in after the first paint
+  if (answer && fy.verdict !== "short" && say.length) {
+    const last = say[say.length - 1];
+    last.replaceChildren(...carefulWords(slot(money((fy.affordable * 0.8) / 12)), slot(money(fy.affordable * 0.8))));
+    last.style.color = "var(--muted)";
+    whenCareful(ctx, last, (c) => {
+      last.style.color = "";
+      if (!c || !(c.yearly > 0)) { last.replaceChildren(averageWords); return; }
+      last.style.minHeight = `${last.offsetHeight}px`;
+      last.replaceChildren(...carefulWords(money(monthlyOf(c.yearly)), money(c.yearly)));
+    });
+  }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "How much to take out each year"),
     answer ? ui.h("p", { class: "lede" }, answer[0]) : null,
-    ...(answer ?? []).slice(1).map((t) => ui.h("p", {}, t)),
+    ...say,
     answer && fy.required >= 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")) : null,
     ui.h("p", { class: answer ? "muted small" : "lede" }, `Below: four ways to decide how much to spend, run on your plan with the returns you assume and through the worst stretch of history for a plan like yours (starting in ${d.worstStartYear}). Amounts are yearly spending in today's dollars.`),
   ));

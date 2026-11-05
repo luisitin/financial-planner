@@ -28,3 +28,33 @@ grey sentence at the end of a paragraph said why the plan looked short.
 
 ## Ideas / not yet
 - Random inflation; fat tails (historical bootstrap); the chart's touch readout.
+
+## The careful spending figure (round 5, 2026-11-02)
+`spendingAtChance(inputs, { chance = 0.9, seed = 1, legacy = 0 })` is the most a year (today's dollars, whole $100s, the same
+every year after inflation, as `affordableSpending` does) that still lasts to the end, and leaves at least `legacy` (Goal
+seek's goal), in at least 9 of 10 of the market paths drawn around the plan's returns. It returns it with `rate` (the share
+that lasts at that figure), `planned` (the share that lasts at the plan's own spending spent the same way: steady spending,
+whatever withdrawal rule the plan picked) and `average` (affordableSpending: every year earning exactly the average return).
+- **The paths:** the seed's first 2,000 (`drawSequences(2000, years, { seed: 1 })`), the Chance page's own draw, whatever
+  `paths` a page asks `compute()` for (it passes its own draw when it holds 2,000 or more). So the figure is the same on
+  every page and between visits, and a plan that spends exactly the careful figure lasts in at least 9 of 10 of the paths
+  the Chance page counts (review 2026-11-02: the figure was worked on 300 other paths, and $110,100 lasted in only 88% of
+  these; it is $109,000 now). For a steady-spending plan `planned` is exactly the Chance page's `successRate`.
+- **The search:** a first guess on the first 300 paths (halving the gap between a figure that lasts and one that does not,
+  to $100), then settled on all 2,000: a figure a little above the guess (4%, at least $1,000) that falls short, one below
+  that lasts, and the gap halved to $100. A path that lasts at some spending lasts at any less, and one that falls short at
+  some spending falls short at any more, so each path keeps the most it lasted at and the least it fell short at, and only
+  paths whose answer is not known yet run again: about 3,900 to 4,000 runs of the projection on the fixtures (`runs`),
+  where the 300-path search alone took about 4,200. Tests check the answer against every path run in full.
+- **A slice at a time:** `carefulSteps(inputs, options)` is the same search as a generator that yields every 40 runs and
+  returns the same object; `modules/retirement/careful.js` drives it between frames on a phone (or asks the PC), so the page
+  is drawn first and never freezes while it works (review 2026-11-02: the page was blocked for about a second).
+- On the fixtures the average figure lasts in only about 4 of 10 markets (retirement fixture: $131,224 against $109,000;
+  the family: $111,897 against $90,200). `compute()` carries the careful figure as `careful`; `careful: false` leaves it
+  out (the Chance page itself and the reports, which do not show it). The projection's verdict and `affordable` are
+  unchanged (frozen answer keys).
+- **Zero:** when even spending nothing falls short in more than 1 path in 10, the figure is $0 and the pages show no
+  careful line. That happens today for a partner's pay with little in savings: `core/math/retirement.js` takes the tax on
+  income above spending from savings (`need = max(0, spending - income)`, with the tax on top). Paying that tax from the
+  income instead changes seven frozen answer keys (roth-conversions-irmaa-010 to -100, `table.0.bracketTop`), so it waits
+  for the owner.

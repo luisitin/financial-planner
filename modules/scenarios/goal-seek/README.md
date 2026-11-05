@@ -35,3 +35,11 @@ The claiming lever tries "now" (today's age to the month, the Social Security pa
 
 Today's age as a claiming age is in years and months (69.4166...): the card's big figure says "now" and its bar "now";
 the sentence says "now (69 and 5 months)" (2026-11-02: the first version printed "age 69.41666666666667").
+
+## Average markets, said so (round 5, 2026-11-02)
+The spending lever is markets earning exactly the average every year: its sentence now says "If markets do as well as average,
+up to about $9,320 a month...". Under its figure the view adds "In 9 of 10 markets: about $7,500 a month" (with a goal to
+leave money, "..., leaving $250,000"): Monte Carlo's careful figure for the same goal (`spendingAtChance(inputs, { legacy })`,
+on the Chance page's 2,000 paths), worked out after the first paint as on Will the money last? (`modules/retirement/careful.js`),
+so the page that links here and this one say the same. No line when nothing lasts in 9 of 10 markets. The Social Security
+lever's "spend the most" figure is the same average-market kind and says so too.

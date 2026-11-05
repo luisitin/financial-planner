@@ -150,3 +150,7 @@ adds "counting uneven pay at what you can count on".
 With estimated tax past due and no payments ever typed (taxes/estimated `paidTyped` false), the step is "Type or pay this
 year's estimated tax": what was due if none were made, and to type what was paid. Paid from the cash already kept apart for
 tax, its line reads "From the cash kept apart for tax, today." instead of a month at the spare money's pace.
+
+## Average markets, said so (round 5, 2026-11-02)
+Retired and drawing as planned: "If markets do as well as average, the plan can carry about $X a month of spending and the money
+lasts; less in a bad run of years (Will the money last? shows how much less)". The figure is the projection's average-market one.

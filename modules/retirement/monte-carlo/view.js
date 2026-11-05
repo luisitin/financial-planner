@@ -18,7 +18,8 @@ export function render(root, ctx) {
   ));
   root.append(host);
   host.append(ui.notice("info", `Running ${state.paths.toLocaleString("en-US")} paths...`));
-  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed }).then((d) => {
+  // careful: false: this page shows the chance at the plan's own spending, not the careful figure (Will the money last? does)
+  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false }).then((d) => {
     host.innerHTML = "";
     if (!d || !d.ready) {
       const missing = (d?.missing ?? ["see the Projection page"]).join("; ");

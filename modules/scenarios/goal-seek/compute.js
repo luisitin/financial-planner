@@ -45,12 +45,13 @@ export function compute(plan, params = {}) {
   const add = (l) => levers.push(l);
   const spendingMonthly = I.spending.yearly / 12;
 
-  // 1. spending: the most a month that still reaches the goal
+  // 1. spending: the most a month that still reaches the goal, if markets do as well as average every year (the view adds the
+  // figure that does it in 9 of 10 markets, Monte Carlo's careful figure for the same goal, once worked out)
   {
     const best = largestWhere((s) => meets({ ...copyInputs(I), strategy: "fixed-real", spending: { yearly: s } }), 0, Math.max(12000, I.spending.yearly * 2), 1);
     const m = best === null ? 0 : best / 12;
     add({ id: "spending", icon: "🛒", title: "What you can spend", value: m, current: spendingMonthly, unit: "month", status: best === null ? "cannot" : m >= spendingMonthly ? "room" : "needs",
-      sentence: best === null ? "Even spending nothing in retirement does not reach the goal: look at the other levers." : m >= spendingMonthly ? `Up to about ${fmt(m)} a month, ${fmt(m - spendingMonthly)} more than the ${fmt(spendingMonthly)} the plan spends.` : `About ${fmt(m)} a month: ${fmt(spendingMonthly - m)} less than the ${fmt(spendingMonthly)} the plan spends.`, go: ["retirement", "projection"] });
+      sentence: best === null ? "Even spending nothing in retirement does not reach the goal: look at the other levers." : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m)} a month, ${fmt(m - spendingMonthly)} more than the ${fmt(spendingMonthly)} the plan spends.` : `If markets do as well as average, about ${fmt(m)} a month: ${fmt(spendingMonthly - m)} less than the ${fmt(spendingMonthly)} the plan spends.`, go: ["retirement", "projection"] });
   }
 
   // 2. the earliest retirement age for the first person that reaches the goal
@@ -126,7 +127,7 @@ export function compute(plan, params = {}) {
     const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
     add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id),
-      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim now (${ageWords(best.age)}): about ${fmt(best.monthly)} a month can be spent` : `${who} claiming ${best.age === nowAge && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
+      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim now (${ageWords(best.age)}): about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${best.age === nowAge && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
   return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, levers };

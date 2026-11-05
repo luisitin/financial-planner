@@ -37,3 +37,7 @@ retirement plan intends" and a calm "Drawn from savings" card replaces Close the
 ## Ideas / not yet
 - Fill amounts from imported transactions (phase 3): average of the last 3 months per category.
 - Per-person expenses for the survivor scenario (phase 8).
+
+## Average markets, said so (round 5, 2026-11-02)
+"Drawn from savings": "If markets do as well as average, your plan can carry $X a month of spending and the money lasts; less in
+a bad run of years (Will the money last? shows how much less)". The figure is the projection's average-market one.

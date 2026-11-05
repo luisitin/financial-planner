@@ -51,7 +51,7 @@ export function render(page, ctx) {
     ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
     ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),
     // retired and drawing as planned: say that, not "the tax-sheltered accounts full"
-    ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${money(-d.spare.monthly)} a month comes from savings, and the plan can carry about ${money(d.drawing.affordableMonthly)} a month of spending: the money lasts. Check it once a year, or after a big fall in the markets.` : "Bills covered, cushion full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
+    ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${money(-d.spare.monthly)} a month comes from savings. If markets do as well as average, the plan can carry about ${money(d.drawing.affordableMonthly)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less). Check it once a year, or after a big fall in the markets.` : "Bills covered, cushion full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
     n && when(n) ? ui.h("p", {}, when(n)) : null,
     n ? ui.row(ui.h("a", { class: "btn", href: `#/${n.go[0]}/${n.go[1]}` }, "Open the page")) : null));
 

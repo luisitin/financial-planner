@@ -40,7 +40,7 @@ export function render(page, ctx) {
         ui.h("p", { class: "rp-sub" }, "The band holds the middle 80% of the simulated outcomes; the line is the middle one. Today's dollars.")));
     }
     sheet.append(section(ui, "The plan at expected returns",
-      figs(ui, [p.retireYear ? ["Spending years start", String(p.retireYear)] : null, p.atRetirementReal !== null ? ["Saved by then", big(p.atRetirementReal)] : null, p.success ? ["The money lasts", `to ${p.lastsTo}`, "good"] : ["The money runs out", String(p.shortYear), "bad"], ["Left at the end", big(p.endReal)], ["Can carry a month", money(p.affordableMonthly)], ["Planned a month", money(p.spendingMonthly)]]),
+      figs(ui, [p.retireYear ? ["Spending years start", String(p.retireYear)] : null, p.atRetirementReal !== null ? ["Saved by then", big(p.atRetirementReal)] : null, p.success ? ["The money lasts", `to ${p.lastsTo}`, "good"] : ["The money runs out", String(p.shortYear), "bad"], ["Left at the end", big(p.endReal)], ["Can carry a month if markets do as well as average", money(p.affordableMonthly)], ["Planned a month", money(p.spendingMonthly)]]),
       list(ui, [`Spending: ${lc(p.strategy)}.`, `Withdrawals: cash first, then ${lc(p.orderLabel)}.`, p.taxMode === "brackets" ? "Tax: the federal brackets on each year's income." : "Tax: one flat rate on pre-tax withdrawals."])));
     if (d.history) sheet.append(section(ui, "If history repeated",
       ui.h("p", {}, `The plan replayed from every starting year with the real returns and inflation that followed (${d.history.from} to ${d.history.to}): the money lasts in ${d.history.windows ? fmt.pct(d.history.rate, 0) : "-"} of ${d.history.windows}.`),

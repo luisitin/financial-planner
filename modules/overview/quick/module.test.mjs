@@ -72,3 +72,10 @@ test("the plan's own answers: the sample family's three questions answer at once
   assert.deepEqual(e.answers, []);
   assert.deepEqual(e.needsFirst.map((n) => n.guide), ["retire", "debt", "taxes"]);
 });
+
+test("the retirement answer names its figure as the average-market one, a year at a time (review 2026-11-02)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { compute } = await import("./compute.js");
+  const by = Object.fromEntries(compute(familyPlan("2026-11-02"), { today: "2026-11-02" }).answers.map((a) => [a.guide, a]));
+  assert.match(by.retire.line, /^You plan on \$[\d,]+ a year; if markets do as well as average the plan carries (about )?\$[\d,]+ a year, less in a bad run of years/);
+});

@@ -63,10 +63,10 @@ export function render(page, ctx) {
         r.atRetirementReal !== null ? ["Saved by then (today's dollars)", big(r.atRetirementReal)] : null,
         r.success ? ["The money lasts", `to ${r.lastsTo}`, "good"] : ["The money runs out", String(r.shortYear), "bad"],
         r.chance !== null ? ["Chance it lasts (simulated)", pct(r.chance), r.chance >= 0.85 ? "good" : r.chance < 0.7 ? "bad" : null] : null,
-        ["Can carry a month", money(r.affordableMonthly)], ["Planned a month", money(r.spendingMonthly)],
+        ["Can carry a month if markets do as well as average", money(r.affordableMonthly)], ["Planned a month", money(r.spendingMonthly)],
         r.socialSecurityMonthly > 0 ? ["Social Security a month", money(r.socialSecurityMonthly)] : null,
       ]),
-      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `The plan can carry about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation, at expected returns.` : `To last at expected returns the plan would spend about ${money(r.spendingMonthly - r.affordableMonthly)} a month less, or save more, or retire later (Goal seek).`)));
+      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can carry about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : `To last even if markets do as well as average, the plan would spend about ${money(r.spendingMonthly - r.affordableMonthly)} a month less, or save more, or retire later (Goal seek).`)));
 
     if (d.protection) sheet.append(section(ui, "Protection: the stress tests",
       ui.h("p", {}, `The plan survives ${d.protection.passed} of ${d.protection.total} shocks: five real market crises, lower returns, a job loss, never working again, a death, a long life and a care home.`),

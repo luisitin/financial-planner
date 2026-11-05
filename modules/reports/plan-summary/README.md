@@ -28,3 +28,8 @@ amber, as Goals and the Timeline say.
 
 ## Ideas / not yet
 - The advisor's plan side by side (`scenarios/advisor-plan`), a net-worth chart, a cover page with the household's name; a monthly or yearly copy saved with the date.
+
+## Average markets, said so (round 5, 2026-11-02)
+"Can carry a month" reads "Can carry a month if markets do as well as average", and the sentence under it starts "If markets do
+as well as average, the plan can carry about $X a month more than it spends ... less in a bad run of years". The Monte Carlo run
+passes `careful: false` (the careful figure is not shown here).

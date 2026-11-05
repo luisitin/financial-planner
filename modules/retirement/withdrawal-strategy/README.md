@@ -56,3 +56,14 @@ $100,000, not $103,000, and the money lasts exactly to the end instead of failin
 in the last year (fixed 2026-10-30, F-030; the key's `vpw` rule follows the same timing). Sources: the model's Projection README, the
 [FPA Bengen reprint](https://www.financialplanningassociation.org/sites/default/files/2021-04/MAR04%20Determining%20Withdrawal%20Rates%20Using%20Historical%20Data.pdf),
 and [Bogleheads VPW](https://www.bogleheads.org/wiki/Variable_percentage_withdrawal).
+
+## The most you can spend, carefully (round 5, 2026-11-02)
+The answer's last line was "The most you could spend and still have the money last: $X", the average-market figure, which
+lasts in about 4 of 10 markets. It now reads "You can spend about $7,800 a month ($93,600 a year) and the money lasts in
+about 9 of 10 markets. If markets do as well as average, up to about $100,800 a year" (Monte Carlo's careful figure, filled
+in once worked out; until then the average one, named as such).
+Review fixes, 2026-11-02: the month is whole $100s rounded down (never more than the year); the sentence is drawn first with grey
+bars where its figures go and filled after the first paint (`modules/retirement/careful.js`: on the PC, or here a slice at a
+time), so nothing jumps or freezes; with a rule other than steady spending it says "the same every year"; when nothing lasts in
+9 of 10 markets it keeps the average-market sentence. The figure is settled on the Chance page's 2,000 paths, the same as on
+Will the money last?.
