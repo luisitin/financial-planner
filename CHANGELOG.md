@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] WORKBOARD: claude-b status (7b10000, 88b31f1, e6cc20a), a note for claude-a on balance/projection, and the golden retirement harness note for the owner.
 - [builder:claude-b] A birth year typo no longer breaks pages: with everyone past the age the plan runs to (1926 typed for 1962), Will the money last?, the Timeline, Chance the money lasts, the reports and ten more pages showed "This page failed to render"; they now say "Ana is 126, past the age the plan runs to (95): check the birth date on the People page". A birth date after today no longer breaks How you compare.
 - [builder:claude-b] Every report finishes: the Tax report, Retirement report, Plan summary, Annual review and Statements no longer wait forever when a figure cannot be worked out, and a plan with no retirement years says why ("Ana is 126, past the age the plan runs to (95). Check the birth date on the People page").
 - [builder:claude-b] Filing separately: the bracket page and the Tax report show each return's own bracket, room and tax, one column a return; the child care credit uses one threshold on every tax page; Tax, year by year says "1 year" for a single retirement year.
