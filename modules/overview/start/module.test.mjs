@@ -5,7 +5,6 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { compute, isEmptyPlan, firstRun, opensHere, setChosen, featured, ROWS, CHOICE_IDS, MORE } from "./compute.js";
 import { activeSummary, startGuide, journeyById } from "../guide/compute.js";
-import { compute as dashboard } from "../dashboard/compute.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { router } from "../../../core/router.js";
@@ -47,22 +46,33 @@ test("setChosen writes { id, at } and nothing else, and does not save the same c
   assert.equal(setChosen(p, "nonsense", "2026-11-01"), false);
   assert.equal(JSON.stringify({ ...p, guide: undefined }), before);
 });
-test("the featured panel follows the dashboard's six steps: start, continue, look over", () => {
+test("the featured panel follows the path: Build my plan, Continue my plan, See your plan (the old shape, from pathSummary)", async () => {
+  const S = await import("../setup/compute.js");
+  const T = "2026-11-02";
   const p = empty();
-  let f = featured(p);
-  assert.deepEqual([f.label, f.state, f.href], ["Start my plan", "new", "#/balance/net-worth?guide=whole-plan&step=accounts"]);
-  assert.match(f.line, /6 short steps, about 30 minutes/);
-  const fam = migrate(familyPlan("2026-10-31"));
-  f = featured(fam);
-  assert.deepEqual([f.label, f.doneCount, f.total], ["Continue my plan", dashboard(fam).doneCount, 6]);
-  assert.equal(f.line, "5 of 6 steps are done. Next: check the assumptions.");
-  const sk = empty(); startGuide(sk, "whole-plan", "2026-10-31");
-  sk.guide.journeys["whole-plan"].later = { accounts: "2026-10-31" };
-  f = featured(sk);
-  assert.deepEqual([f.label, f.state, f.line], ["Continue my plan", "started", "You skipped 1 step for now. Next: add your household."], "started and skipped step 1: not 'Start my plan'");
-  fam.assumptions = { ...(fam.assumptions ?? {}), reviewedAt: "2026-10-31" };
-  f = featured(fam);
-  assert.deepEqual([f.label, f.href], ["Look over my plan", "#/overview/guide/whole-plan"]);
+  let f = featured(p, { today: T });
+  assert.deepEqual([f.label, f.state, f.href, f.doneCount], ["Build my plan", "new", "#/overview/setup/you", 0]);
+  assert.match(f.line, /About 20 minutes in all/);
+  const fam = migrate(familyPlan(T));
+  f = featured(fam, { today: T });
+  assert.deepEqual([f.label, f.state], ["Continue my plan", "started"]);
+  assert.match(f.line, /^Step \d of \d\. Next: /);
+  assert.ok(f.href.includes("guide=plan&step="));
+  const q = empty(); S.applyYou(q, { name: "Ana", who: "me" }); S.markAt(q, "money", T);
+  assert.equal(featured(q, { today: T }).state, "started", "the questions started: the plan is under way");
+  const { passStep, pathSummary } = await import("../guide/compute.js");
+  const done = migrate(familyPlan(T)); S.markAt(done, "done", T);
+  for (const x of pathSummary(done, { today: T }).parts.slice(1)) passStep(done, x.key, T);
+  f = featured(done, { today: T });
+  assert.deepEqual([f.label, f.state, f.href], ["See your plan", "done", "#/overview/plan"]);
+  assert.equal(compute(done, { today: T }).path.complete, true);
+  assert.equal(compute(done, { today: T }).resume, null);
+});
+test("CHOICE_IDS keeps whole-plan (a stored choice) and adds plan", () => {
+  assert.ok(CHOICE_IDS.includes("whole-plan") && CHOICE_IDS.includes("plan"));
+  const p = empty();
+  assert.equal(setChosen(p, "plan", "2026-11-02"), true);
+  assert.equal(p.guide.chosen.id, "plan");
 });
 test("choices: a quick answer and four guides, then more guides; every target is a real page or guide", () => {
   assert.deepEqual(ROWS, ["quick", "debt", "budget", "home", "retire"]);
@@ -78,14 +88,14 @@ test("choices: a quick answer and four guides, then more guides; every target is
   assert.equal(router.parse(MORE.href).query.more, "1");
   assert.equal(d.rows.find((r) => r.id === "debt").status, null, "not started: no status line");
 });
-test("the resume card: the followed guide unless it is the whole plan (the featured panel covers that)", () => {
+test("the resume card: the followed guide unless it is the path (the featured panel covers that)", () => {
   const p = migrate(familyPlan("2026-10-31"));
   assert.equal(compute(p).resume, null);
   startGuide(p, "taxes", "2026-10-31");
   const d = compute(p, { today: "2026-10-31" });
   assert.deepEqual(d.resume, activeSummary(p, { today: "2026-10-31" }));
   assert.equal(d.rows.find((r) => r.id === "debt").status, null);
-  const q = migrate(familyPlan("2026-10-31")); startGuide(q, "whole-plan", "2026-10-31");
+  const q = migrate(familyPlan("2026-10-31")); startGuide(q, "plan", "2026-10-31");
   assert.equal(compute(q).resume, null);
   startGuide(q, "debt", "2026-10-31");
   assert.equal(compute(q).rows.find((r) => r.id === "debt").status, "In progress: 2 of 3 steps done");
@@ -140,4 +150,20 @@ test("setupCard: a stored question whose screen is now hidden keeps its number (
   // stopped at question 2: question 2
   p.guide.setup = { startedAt: "2026-10-20", at: "money" };
   assert.equal(setupCard(p, {}).q, 2);
+});
+test("setupCard is done for a plan built page by page: the Dashboard's first five steps, no whole-plan anywhere", async () => {
+  const { setupCard } = await import("./compute.js");
+  const p = migrate(familyPlan("2026-11-02"));
+  assert.equal(p.guide?.setup?.startedAt, undefined);
+  assert.equal(setupCard(p, { today: "2026-11-02" }).state, "done");
+  const q = structuredClone(p); q.goals = [];
+  assert.notEqual(setupCard(q, { today: "2026-11-02" }).state, "done", "four of the five: not built yet");
+  const src = fs.readFileSync(fileURLToPath(new URL("./compute.js", import.meta.url)), "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l));
+  assert.ok(!src.some((l) => /journeyById\("whole-plan"\)/.test(l)));
+});
+
+test("review fix: the Dashboard of a plan with only questions answered or skipped links to Your plan, and says both times", () => {
+  const dash = fs.readFileSync(new URL("../dashboard/view.js", import.meta.url), "utf8");
+  assert.match(dash, /setupOn && pathStarted \? ui\.h\("a", \{ href: pathStarted\.planHref/);
+  assert.match(dash, /about five minutes for those, about 20 for your whole plan/);
 });

@@ -94,6 +94,7 @@ export default [
   { group: "overview", id: "monthly-review", load: () => import("./overview/monthly-review/module.js") },
   { group: "overview", id: "next-best-action", load: () => import("./overview/next-best-action/module.js") },
   { group: "overview", id: "pages", load: () => import("./overview/pages/module.js") },
+  { group: "overview", id: "plan", load: () => import("./overview/plan/module.js") },
   { group: "overview", id: "quick", load: () => import("./overview/quick/module.js") },
   { group: "overview", id: "setup", load: () => import("./overview/setup/module.js") },
   { group: "overview", id: "start", load: () => import("./overview/start/module.js") },

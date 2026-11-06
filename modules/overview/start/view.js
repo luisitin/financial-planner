@@ -1,9 +1,10 @@
-// modules/overview/start/view.js -- DOM only. "What would you like to do?": one big card, "Set up my plan" (new: Let's
-// go; started: the bar and where to pick up; done: two figures and your next move), then "Or jump straight to" as a
-// grid of tiles (a quick answer, six guides, a big life change), and a quiet way to just look around.
+// modules/overview/start/view.js -- DOM only. "What would you like to do?": one big card, "Build my plan" (the path: new:
+// Let's go; the questions started: the bar and where to pick up; under way: the step and Continue; complete: two figures and
+// "See your plan"), then "Or jump straight to" as a grid of tiles (a quick answer, six guides, a big life change; folded
+// behind "Just want one answer?" on the first visit), and a quiet way to just look around.
 // Every choice is a real link; tapping it remembers the choice (plan.guide.chosen) and lets the link navigate.
 import { compute, setChosen } from "./compute.js";
-import { startGuide } from "../guide/compute.js";
+import { startGuide, PATH_ID } from "../guide/compute.js";
 import { offKeys, usable, change } from "../guide/act.js";
 
 const STYLE = `
@@ -35,6 +36,8 @@ const STYLE = `
 .go-tiles .d { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.35; }
 .go-tiles .st { position: absolute; top: 10px; right: 10px; font-size: var(--fs-xs); font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
 .go-tiles .st.done { background: var(--panel); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.go-fold { margin: 0 0 22px; }
+.go-fold .go-h { display: none; }
 .go-foot { text-align: center; }
 .go-foot .go-look { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
 .go-foot p { color: var(--text-2); font-size: var(--fs-sm); margin: 6px 0 0; line-height: 1.5; }
@@ -70,49 +73,62 @@ export function render(root, ctx) {
     "This device is not connected to your PC, so what you save stays on this device only. To keep one plan on your phone and your PC, ",
     ui.h("a", { href: "#/system/settings" }, "connect them in Settings"), "."));
 
-  const h1 = ui.h("h1", { tabindex: "-1" }, name ? `Hi ${name}. What would you like to do?` : "What would you like to do?");
+  const s = d.setup, p = d.path;
+  // which hero: the first visit, the questions part way, the path under way (the questions done), or the whole plan done
+  const hero$ = p.complete ? "complete" : s.state === "started" ? "questions" : s.state === "done" || (p.started && p.next && p.next.key !== "answers") ? "path" : "new";
+  const first = d.firstRun;
+  const h1 = ui.h("h1", { tabindex: "-1" }, first ? "Let's build your plan" : name ? `Hi ${name}. What would you like to do?` : "What would you like to do?");
   wrap.append(h1);
 
-  // the big card: Set up my plan
-  const s = d.setup;
+  // the big card: Build my plan
   const btnClass = r ? "btn secondary" : "btn";
   if (usable(ctx, "overview/setup")) {
     const hero = ui.h("section", { class: "go-hero", "aria-labelledby": "go-s-t" });
-    if (s.state === "new") hero.append(
+    const put = (...xs) => hero.append(...xs.filter(Boolean));   // (Element.append turns a null into the text "null")
+    if (hero$ === "new") put(
       ui.h("p", { class: "go-k" }, "Start here"),
-      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Set up my plan"),
-      ui.h("p", { class: "go-d" }, d.empty ? `${s.total} easy questions, about 5 minutes. At the end: your money on one page and your first three moves.` : `${s.total} easy questions. What your plan already has is shown, not asked again. At the end: where you stand and your first three moves.`),
-      ui.h("ul", {}, ui.h("li", {}, "Rough numbers are fine"), ui.h("li", {}, "Stop any time, pick up later"), ui.h("li", {}, "No bank logins or account numbers")),
-      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("setup") }, "Let's go"));
-    else if (s.state === "started") hero.append(
+      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Build my plan"),
+      ui.h("p", { class: "go-d" }, "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time. At the end: your whole plan on one page."),
+      ui.h("ul", {}, ui.h("li", {}, "Rough numbers are fine"), ui.h("li", {}, "Don't know something? We fill it in"), ui.h("li", {}, "No bank logins or account numbers")),
+      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("plan") }, "Let's go"));
+    else if (hero$ === "questions") put(
       ui.h("p", { class: "go-k" }, `Question ${s.q} of ${s.total}`),
-      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Set up my plan"),
+      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Build my plan"),
       ui.h("div", { class: "go-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(s.share * 100)), "aria-label": "Questions answered" }, ui.h("span", { style: { width: `${Math.max(4, Math.round(s.share * 100))}%` } })),
       ui.h("p", { class: "go-d" }, s.next ? `Next: ${s.next}.` : "Pick up where you stopped."),
-      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("setup") }, "Pick up where you left off"));
-    else hero.append(
+      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("plan") }, "Pick up where you left off"));
+    else if (hero$ === "path") put(
+      ui.h("p", { class: "go-k" }, `Step ${p.step} of ${p.total}`),
+      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Your plan"),
+      ui.h("div", { class: "go-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(p.total), "aria-valuenow": String(p.doneCount), "aria-label": "Steps done" }, ui.h("span", { style: { width: `${p.total ? Math.max(4, Math.round(100 * p.doneCount / p.total)) : 4}%` } })),
+      ui.h("p", { class: "go-d" }, `Next: ${p.next.name}.`),
+      ui.h("a", { class: btnClass, href: p.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Continue: ${p.next.name} ›`),
+      ui.h("div", {}, ui.h("a", { class: "go-more", href: p.planHref }, "See your plan so far ›")));
+    else put(
       ui.h("p", { class: "go-k" }, "Your plan"),
       ui.h("h2", { class: "go-t", id: "go-s-t" }, "Here's where you stand"),
       s.netWorth !== null || s.spare !== null ? ui.h("div", { class: "go-figs" },
         s.netWorth !== null ? ui.stat("What you own, minus what you owe", money(s.netWorth)) : null,
         s.spare !== null ? ui.stat("Left over each month", money(s.spare)) : null) : null,
-      s.move ? ui.h("a", { class: btnClass, href: s.move.href }, `Your next move: ${s.move.title} ›`) : ui.h("a", { class: btnClass, href: "#/overview/dashboard", onClick: () => choose("look") }, "Go to my dashboard"),
-      ui.h("div", {}, ui.h("a", { class: "go-more", href: s.href }, "See everything on one page ›")));
+      ui.h("a", { class: btnClass, href: p.planHref }, "See your plan ›"));
     wrap.append(hero);
   }
 
-  // or jump straight to
+  // or jump straight to: folded behind "Just want one answer?" on the first visit (eight tiles under "Start here" asked a near-retirement walker "which one is me?")
   const tiles = d.tiles.filter((t) => usable(ctx, t.page));
-  wrap.append(ui.h("h2", { class: "go-h" }, "Or jump straight to"),
-    ui.h("ul", { class: "go-tiles" }, tiles.map((t) => ui.h("li", {},
+  const tileList = ui.h("ul", { class: "go-tiles" }, tiles.map((t) => ui.h("li", {},
       ui.h("a", { href: t.href, onClick: () => choose(t.id), "aria-label": t.status ? `${t.title}: ${t.status === "Done" ? "done" : `${t.status} steps done`}` : null },
         ui.h("span", { class: "ic", "aria-hidden": "true" }, t.icon),
         ui.h("span", { class: "t" }, t.title),
         ui.h("span", { class: "d" }, t.line),
-        t.status ? ui.h("span", { class: `st${t.status === "Done" ? " done" : ""}`, "aria-hidden": "true" }, t.status === "Done" ? "✓ Done" : t.status) : null)))));
+        t.status ? ui.h("span", { class: `st${t.status === "Done" ? " done" : ""}`, "aria-hidden": "true" }, t.status === "Done" ? "✓ Done" : t.status) : null))));
+  if (first) wrap.append(ui.h("details", { class: "card fold fold-card go-fold" },
+    ui.h("summary", {}, ui.h("h2", {}, "Just want one answer?"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+    ui.h("div", { class: "fold-body" }, ui.h("h2", { class: "go-h" }, "Or jump straight to"), tileList)));
+  else wrap.append(ui.h("h2", { class: "go-h" }, "Or jump straight to"), tileList);
 
   // the hero already says "Go to my dashboard" once the setup is done and has no next move: no second link
-  const heroDash = usable(ctx, "overview/setup") && s.state === "done" && !s.move;
+  const heroDash = false;
   wrap.append(ui.h("div", { class: "go-foot" },
     heroDash ? null : ui.h("a", { href: "#/overview/dashboard", class: "go-look", onClick: () => choose("look") }, d.empty ? "Just exploring? Go to the dashboard ›" : "Go to my dashboard ›"),
     ui.h("p", {}, "🔒 Everything stays on your own devices. No bank logins or account numbers, ever.")));

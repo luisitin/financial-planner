@@ -1,11 +1,13 @@
-// modules/overview/start/compute.js -- PURE. Get started: the choices, what the featured "Build my whole plan" panel
-// says for this plan, the guide being followed (the resume card), and whether opening the app with no page in the
+// modules/overview/start/compute.js -- PURE. Get started: the choices, what the featured "Build my plan" panel
+// says for this plan (the path, overview/guide's "plan" journey), the guide being followed (the resume card), and whether opening the app with no page in the
 // address should land here instead of on the dashboard.
-import { journeyById, journeyStatus, activeSummary, guideHref } from "../guide/compute.js";
+import { journeyById, journeyStatus, activeSummary, guideHref, pathSummary, PATH_ID, PLAN_HREF } from "../guide/compute.js";
 import { progress as setupProgress, standing, SCREENS as SETUP_SCREENS, QUESTIONS } from "../setup/compute.js";
+import { compute as dashboardSteps } from "../dashboard/compute.js";
 
 /** Every choice the page offers (written to plan.guide.chosen when tapped). */
-export const CHOICE_IDS = ["setup", "whole-plan", "quick", "debt", "budget", "home", "retire", "taxes", "protect", "life", "more", "look"];
+// ("whole-plan" stays: a plan may already hold it as guide.chosen.id; the path itself is "plan")
+export const CHOICE_IDS = ["setup", "whole-plan", "plan", "quick", "debt", "budget", "home", "retire", "taxes", "protect", "life", "more", "look"];
 const QUICK = { id: "quick", icon: "⚡", title: "Get a quick answer", line: "Work out one thing, like paying cash for a car or borrowing, or which health plan costs least. Nothing to set up.", href: "#/overview/quick" };
 /** The rows under the featured panel, in order: a quick answer, then four guides. */
 export const ROWS = ["quick", "debt", "budget", "home", "retire"];
@@ -38,14 +40,15 @@ export function setChosen(draft, id, today) {
   draft.guide.chosen = { id, at: today };
   return true;
 }
-/** The featured panel: Start / Continue / Look over my plan, from the whole-plan guide (= the dashboard's six steps). */
-export function featured(plan, { off = [] } = {}) {
-  const s = journeyStatus(journeyById("whole-plan"), plan, { off });
-  if (s.complete) return { state: "done", label: "Look over my plan", line: `All ${s.total} steps are done. See what to look at next.`, href: s.guideHref, doneCount: s.doneCount, total: s.total };
-  if (s.doneCount === 0 && !s.started) return { state: "new", label: "Start my plan", line: `Your accounts, family, income, bills and goals, put in once. ${s.total} short steps, about ${s.minutes} minutes in all; stop any time.`, href: s.next.href, doneCount: 0, total: s.total };
-  const skipped = s.steps.filter((x) => x.state === "later").length;
-  const line = s.doneCount === 0 && skipped ? `You skipped ${skipped} step${skipped === 1 ? "" : "s"} for now. Next: ${s.next.short.toLowerCase()}.` : `${s.doneCount} of ${s.total} steps are done. Next: ${s.next.short.toLowerCase()}.`;
-  return { state: "started", label: "Continue my plan", line, href: s.next.href, doneCount: s.doneCount, total: s.total };
+/**
+ * The featured panel: Build my plan / Continue my plan / See your plan, from the path (pathSummary). The same shape as
+ * before the path: { state: new | started | done, label, line, href, doneCount, total }.
+ */
+export function featured(plan, { off = [], today = null } = {}) {
+  const p = pathSummary(plan, { off, today });
+  if (p.complete) return { state: "done", label: "See your plan", line: `All ${p.total} steps are done. See your whole plan on one page.`, href: p.planHref, doneCount: p.doneCount, total: p.total };
+  if (!p.started || !p.next) return { state: "new", label: "Build my plan", line: journeyById(PATH_ID).line, href: "#/overview/setup/you", doneCount: 0, total: p.total };
+  return { state: "started", label: "Continue my plan", line: `Step ${p.step} of ${p.total}. Next: ${p.next.name.charAt(0).toLowerCase()}${p.next.name.slice(1)}.`, href: p.next.href, doneCount: p.doneCount, total: p.total };
 }
 
 /** The tiles under "Or jump straight to", in order: a quick answer, six guides, and a big life change. */
@@ -61,13 +64,14 @@ export const TILES = [
 ];
 /**
  * The "Set up my plan" card: new (Let's go), started (the bar and where to pick up), or done (two figures and the
- * next move, from the setup's own "where you stand"). A plan built on its own pages first (the whole-plan guide's
- * steps all done) counts as done too: the questions would only show what is there.
+ * next move, from the setup's own "where you stand"). A plan built on its own pages first (the Dashboard's first five
+ * steps all done: accounts, people, income, expenses, goals; the sixth, assumptions, is left out) counts as done too:
+ * the questions would only show what is there. The path's first step uses the same five.
  */
 export function setupCard(plan, { off = [], today = null } = {}) {
   const sp = setupProgress(plan);
-  const whole = journeyStatus(journeyById("whole-plan"), plan, { off });
-  if (sp.finished || (!sp.started && whole.complete)) {
+  const builtByHand = dashboardSteps(plan).steps.filter((x) => x.key !== "assumptions").every((x) => x.done);
+  if (sp.finished || (!sp.started && builtByHand)) {
     let st = null;
     try { st = today ? standing(plan, { today }) : null; } catch { st = null; }
     return { state: "done", href: "#/overview/setup/done", netWorth: st?.netWorth ?? null, spare: st?.spare ?? null, move: st?.moves?.[0] ?? null };
@@ -80,7 +84,7 @@ export function setupCard(plan, { off = [], today = null } = {}) {
 }
 const NEXT_LABEL = { you: "who the plan is for", money: "what comes in", ages: "your ages", have: "what you have", "have-amounts": "how much is in each", owe: "what you owe", "owe-amounts": "each debt", spend: "a typical month", goals: "what you're working toward", "goal-details": "how much, and by when", done: "where you stand" };
 
-/** compute(plan, { today?, off? }) -> { empty, firstRun, opensHere, featured, setup, tiles, rows, more, resume, hasAccounts } */
+/** compute(plan, { today?, off? }) -> { empty, firstRun, opensHere, featured, path, setup, tiles, rows, more, resume, hasAccounts } */
 export function compute(plan, params = {}) {
   const off = params.off ?? [], today = params.today ?? null;
   const rows = ROWS.map((id) => {
@@ -91,15 +95,15 @@ export function compute(plan, params = {}) {
   const active = activeSummary(plan, { off, today });
   return {
     empty: isEmptyPlan(plan), firstRun: firstRun(plan), opensHere: opensHere(plan, { today }),
-    featured: featured(plan, { off }), rows, more: MORE,
+    featured: featured(plan, { off, today }), rows, more: MORE, path: pathSummary(plan, { off, today }),
     setup: setupCard(plan, { off, today }),
     tiles: TILES.map((t) => {
       const j = t.href ? null : journeyById(t.id);
       const s = j ? journeyStatus(j, plan, { off, today }) : null;
       return { id: t.id, icon: t.icon ?? j.icon, title: t.title, line: t.line, href: t.href ?? guideHref(t.id), page: t.page ?? "overview/guide", status: !s ? null : s.finished ? "Done" : s.started ? `${s.doneCount} of ${s.total}` : null };
     }),
-    // the whole plan's own progress is the featured panel, so it gets no second card
-    resume: active && !active.complete && active.id !== "whole-plan" ? active : null,
+    // the path's own progress is the featured panel, so it gets no second card
+    resume: active && !active.complete && active.id !== PATH_ID ? active : null,
     hasAccounts: L(plan, "accounts").length > 0,
   };
 }

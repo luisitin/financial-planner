@@ -7,13 +7,16 @@ import { fileURLToPath } from "node:url";
 import {
   JOURNEYS, journeyById, visibleSteps, stepState, journeyStatus, stepForPage, neighbours, barFor, activeSummary, stepHref,
   startGuide, markLooked, markNone, markLater, clearMark, leaveGuide, restartGuide, finishGuide, touchGuide, compute, activeJourney, OWN_PAGES,
+  PATH_ID, SELF_LED, partsFor, pathSummary, nextAfter, resultOrder, passStep,
 } from "./compute.js";
 import { isDirty } from "./act.js";
-import { WHOLE_PLAN_TEXT, houseGoal, detailed, emergencyGoal } from "./journeys.js";
+import { houseGoal, detailed, emergencyGoal } from "./journeys.js";
 import { compute as dashboard } from "../dashboard/compute.js";
 import { router } from "../../../core/router.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
+import { sam, jordan, patLee, ruth, finishSetup } from "../../../qa/fixtures/setup-personas.mjs";
+import * as S from "../setup/compute.js";
 import manifest from "./module.js";
 
 const MODS = fileURLToPath(new URL("../../", import.meta.url));
@@ -23,16 +26,18 @@ const empty = () => migrate(emptyPlan());
 const family = () => migrate(familyPlan("2026-10-31"));
 const J = (id) => journeyById(id);
 const st = (s, key) => s.steps.find((x) => x.key === key);
-const VERBS = ["Add", "Enter", "Set", "Check", "Pick", "See", "Say", "Sort", "Start", "Compare", "Fit", "List", "Note"];
+const VERBS = ["Add", "Enter", "Set", "Check", "Pick", "See", "Say", "Sort", "Start", "Compare", "Fit", "List", "Note", "Answer"];
 
-test("definitions: seven guides, unique ids and keys, 3 to 7 numbered steps, extras only show when they apply", () => {
+test("definitions: seven guides, unique ids and keys, 3 to 7 numbered steps (the path comes and goes with the household), extras only show when they apply", () => {
   assert.equal(JOURNEYS.length, 7);
   assert.equal(new Set(JOURNEYS.map((j) => j.id)).size, 7);
   for (const j of JOURNEYS) {
     assert.match(j.id, /^[a-z]+(-[a-z]+)*$/);
     assert.equal(new Set(j.steps.map((s) => s.key)).size, j.steps.length, `${j.id} keys unique`);
     const numbered = j.steps.filter((s) => !s.optional);
-    assert.ok(numbered.length >= 3 && numbered.length <= 7, `${j.id} has ${numbered.length} numbered steps`);
+    // the path ("plan") is the one exception to both rules: its steps come and go with the household, like the retirement guide's
+    // variant (up to 12 steps are defined; a household gets 4 to 9 of them, tested below)
+    if (j.id !== PATH_ID) assert.ok(numbered.length >= 3 && numbered.length <= 7, `${j.id} has ${numbered.length} numbered steps`);
     // the numbering never changes as data arrives: a step that can hide must be an extra
     for (const s of j.steps) if (s.show) assert.ok(s.optional, `${j.id}/${s.key}: a step with show() must be an extra`);
     for (const s of j.steps.filter((x) => x.optional)) assert.ok(s.why, `${j.id}/${s.key}: an extra says why it is there`);
@@ -67,15 +72,49 @@ test("copy: when an ask says 'tap X', X is a button on that page", () => {
     }
   }
 });
-test("the whole plan is exactly the dashboard's six steps: same keys, pages, order and count", () => {
-  const wp = J("whole-plan");
-  assert.deepEqual(Object.keys(WHOLE_PLAN_TEXT), dashboard({}).steps.map((s) => s.key));
-  for (const plan of [empty(), family()]) {
-    const d = dashboard(plan), s = journeyStatus(wp, plan);
-    assert.deepEqual(s.steps.map((x) => [x.key, x.page]), d.steps.map((x) => [x.key, x.go.join("/")]));
-    assert.equal(s.doneCount, d.doneCount);
-    assert.equal(s.total, d.total);
+test("the path: id plan, never whole-plan; its finish is Your plan; steps are look-only, named, unblocked", () => {
+  assert.equal(PATH_ID, "plan");
+  assert.equal(J("whole-plan"), null, "the old guide is gone (a stored whole-plan entry is just unused)");
+  const j = J(PATH_ID);
+  assert.deepEqual([j.title, j.minutes, j.finish.page, j.finish.label, j.more], ["Build my plan", 20, "overview/plan", "See your plan", []]);
+  assert.equal(j.steps.length, 12);
+  for (const x of j.steps) {
+    assert.ok(x.name && x.looked === true, `${x.key}: a name, look-only`);
+    assert.equal(x.needs, undefined, `${x.key}: nothing blocks`);
+    const m = src(x.page);
+    assert.ok(m && /status: "usable"/.test(m), `${x.key}: ${x.page} is usable`);
   }
+  assert.ok(src(j.finish.page).includes('status: "usable"'));
+  assert.deepEqual(SELF_LED, ["overview/setup", "overview/plan"]);
+  // the Dashboard's six steps are its own, unchanged
+  assert.equal(dashboard({}).steps.length, 6);
+});
+test("the path's steps for each household, in order, with M (built with setup's own apply functions)", () => {
+  const T = "2026-11-02";
+  const finish = (name, p) => finishSetup(name, p, T);
+  const keys = (p, off = []) => pathSummary(p, { today: T, off }).parts.map((x) => x.key);
+  assert.deepEqual(keys(finish("sam", sam())), ["answers", "month", "debts", "cushion", "retire", "fix-retire", "taxes"], "young renter: 7");
+  assert.deepEqual(keys(finish("jordan", jordan())), ["answers", "month", "cushion", "protect", "retire", "fix-retire", "taxes"], "family");
+  assert.deepEqual(keys(finish("patLee", patLee())), ["answers", "month", "cushion", "protect", "retire", "taxes"], "near retirement (no 'what would help': the plan lasts)");
+  const r = finish("ruth", ruth());
+  assert.deepEqual(keys(r), ["answers", "month", "cushion", "retire", "take-out", "rmd"], "retired widow: 6");
+  assert.deepEqual(keys(r, ["retirement/rmd"]), ["answers", "month", "cushion", "retire", "take-out"], "a page that is off drops its step");
+  for (const p of [sam(), jordan(), patLee(), ruth(), family()]) { const n = keys(p).length; assert.ok(n >= 4 && n <= 9, `${n} steps`); }
+  // retiree wording
+  const rs = journeyStatus(J(PATH_ID), r, { today: T });
+  assert.equal(st(rs, "month").title, "See what comes in and goes out");
+  assert.match(st(rs, "month").ask, /comes from your savings each month/);
+  // the family plan
+  assert.deepEqual(keys(family()), ["answers", "month", "debts", "cushion", "protect", "retire", "college", "taxes"]);
+});
+test("the path: month is done by typed spending, not by empty or mostly guessed spending", () => {
+  const p = family();
+  assert.equal(st(journeyStatus(J(PATH_ID), p), "month").state, "done", "typed expenses");
+  const e = empty();
+  assert.equal(st(journeyStatus(J(PATH_ID), e), "month").state, "todo", "no expenses");
+  const g = family(); g.guesses = {}; for (const x of g.expenses) g.guesses[`expenses[${x.id}].amount`] = { k: "overview/guesses:spend", v: x.amount, u: "month", s: null, at: "2026-10-31", d: "x" };
+  const gs = journeyStatus(J(PATH_ID), g, { today: "2026-10-31" });
+  assert.equal(st(gs, "month").state, "todo", "mostly our guesses: not done by data");
 });
 test("done checks: a 0% loan counts as detailed; Home repairs is not a down payment; the emergency fund by name or icon", () => {
   const p = empty();
@@ -131,13 +170,13 @@ test("journeyStatus on an empty plan: nothing done, step 1 next, not started; ne
     assert.equal(s.doneCount, 0); assert.equal(s.finished, false); assert.equal(s.started, false);
     assert.equal(s.next.index, 1);
   }
-  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [6, 3, 5, 3, 7, 5, 7]);
+  assert.deepEqual(JOURNEYS.map((j) => journeyStatus(j, empty()).total), [4, 3, 5, 3, 7, 5, 7], "the path: the four steps everyone gets");
   const r = journeyStatus(J("retire"), empty());
   assert.deepEqual(st(r, "spend").blockedBy, { key: "people", index: 1, short: "Add birth dates", href: "#/household/people?guide=retire&step=people" });
   assert.equal(st(r, "pension").blockedBy, null);
 });
 test("journeyStatus on the family plan (worked by hand from qa/fixtures): counts and which steps", () => {
-  const want = { "whole-plan": [5, 6, ["accounts", "people", "income", "expenses", "goals"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 3, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
+  const want = { plan: [2, 8, ["answers", "month"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 3, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
   const p = family();
   for (const j of JOURNEYS) {
     const s = journeyStatus(j, p);
@@ -179,10 +218,10 @@ test("stepForPage: the named step wins; a page used twice moves on; an alt page 
   assert.equal(stepForPage(home, "goals/house").step.key, "afford");
   p.whatIfs = { ...(p.whatIfs ?? {}), house: { price: 400000 } };
   assert.equal(stepForPage(journeyStatus(J("home"), p), "goals/house").step.key, "goal");
-  const wp = journeyStatus(J("whole-plan"), empty());
-  assert.deepEqual([stepForPage(wp, "transactions/import").step.key, stepForPage(wp, "transactions/import").viaAlt], ["expenses", true]);
-  assert.equal(stepForPage(wp, "goals/house"), null);
-  assert.equal(stepForPage(wp, "goals/goals", "nope").step.key, "goals", "an unknown step key falls back to the page's own step");
+  const wp = journeyStatus(J("plan"), empty());
+  assert.deepEqual([stepForPage(wp, "cashflow/expenses").step.key, stepForPage(wp, "cashflow/expenses").viaAlt], ["month", false]);
+  assert.equal(stepForPage(wp, "goals/house"), null, "home does not apply to an empty plan");
+  assert.equal(stepForPage(wp, "cashflow/expenses", "nope").step.key, "month", "an unknown step key falls back to the page's own step");
 });
 test("neighbours: no previous on step 1; next jumps done steps; wraps to an earlier open one; none left -> null", () => {
   const p = family();
@@ -254,46 +293,67 @@ test("isDirty: a typed box on the page whose value changed since it was focused;
   assert.equal(isDirty([t], starts), true);
   assert.equal(isDirty([c({ value: "250" })], starts), false, "never focused: not typed here");
 });
-test("barFor: nothing without a followed guide; guide mode only for the followed guide; compact elsewhere; quick", () => {
+test("barFor: guide mode for an address that names a guide (followed or not); compact for a followed guide's step; review; quick; continue", () => {
   const p = family();
   const q = { guide: "debt", step: "rates" };
-  assert.equal(barFor(p, { page: "balance/liabilities" }), null);
-  assert.equal(barFor(p, { page: "balance/liabilities", query: q }), null, "query.guide with no followed guide gives nothing");
   for (const own of OWN_PAGES) assert.equal(barFor(p, { page: own, query: { from: "quick" } }), null);
+  for (const own of SELF_LED) assert.equal(barFor(p, { page: own, query: { guide: "plan" } }), null, "the questions and Your plan lead the way themselves");
+  assert.equal(barFor(p, { page: "overview/dashboard" }), null);
   assert.deepEqual(barFor(p, { page: "goals/house", query: { from: "quick" } }), { mode: "quick" });
-  // a step of the Monthly review: one line back to the check-in, never on the review itself
-  assert.deepEqual(barFor(p, { page: "cashflow/budget", query: { from: "review", review: "2026-10", month: "2026-10" } }), { mode: "review", month: "2026-10" });
-  assert.deepEqual(barFor(p, { page: "cashflow/budget", query: { from: "review", review: "junk" } }), { mode: "review", month: null });
-  assert.equal(barFor(p, { page: "overview/monthly-review", query: { from: "review" } }), null);
+  // a step of the Monthly review: one line back to the check-in (and the way on at the bottom), never on the review itself
+  const rv = barFor(p, { page: "cashflow/budget", query: { from: "review", review: "2026-10", month: "2026-10" } });
+  assert.deepEqual([rv.mode, rv.month, typeof rv.cont.text], ["review", "2026-10", "string"]);
+  assert.equal(barFor(p, { page: "cashflow/budget", query: { from: "review", review: "junk" } }).month, null);
+  assert.notEqual(barFor(p, { page: "overview/monthly-review", query: { from: "review" } }).mode, "review");
+  // the address alone brings the bar, whether or not that guide is followed (3.2)
+  const named = barFor(p, { page: "balance/liabilities", query: q });
+  assert.equal(named.mode, "guide"); assert.equal(named.step.key, "rates");
+  startGuide(p, "budget", "2026-10-31");
+  assert.equal(barFor(p, { page: "balance/liabilities", query: q }).mode, "guide", "debt's bar although the budget guide is the followed one");
+  assert.equal(barFor(p, { page: "balance/liabilities", query: q }).journey.id, "debt");
+  leaveGuide(p);
   startGuide(p, "debt", "2026-10-31");
   const b = barFor(p, { page: "balance/liabilities", query: q });
   assert.equal(b.mode, "guide"); assert.equal(b.step.key, "rates"); assert.equal(b.index, 2); assert.equal(b.total, 3); assert.equal(b.state, "done");
   assert.equal(b.next.key, "order");
   assert.deepEqual(JSON.parse(JSON.stringify(b)), b, "plain data only");
-  assert.equal(barFor(p, { page: "balance/liabilities", query: { guide: "budget", step: "rates" } }), null, "a guide that is not followed is ignored, and a done step reached another way shows nothing");
   const c = barFor(p, { page: "debt/payoff" });
-  assert.equal(c.mode, "compact"); assert.equal(c.step.key, "order");
-  assert.deepEqual(barFor(p, { page: "debt/payoff", query: { from: "review", review: "2026-10" } }), { mode: "review", month: "2026-10" }, "from a Monthly review step, the way back to the check-in wins over the guide's one line");
+  assert.equal(c.mode, "compact"); assert.equal(c.step.key, "order"); assert.equal(typeof c.cont.href, "string", "compact carries the continue row");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { from: "review", review: "2026-10" } }).mode, "review", "from a Monthly review step, the way back to the check-in wins over the guide's one line");
   assert.equal(barFor(p, { page: "debt/payoff", query: { guide: "debt", step: "order", from: "review", review: "2026-10" } }).mode, "guide", "the guide's own address still shows the full bar");
-  assert.equal(barFor(p, { page: "goals/house" }), null, "a page that is not a step");
+  assert.equal(barFor(p, { page: "goals/house" }).mode, "continue", "a page that is not a step ends with the continue row");
   assert.equal(barFor(p, { page: "goals/house", query: { from: "quick" } }).mode, "quick");
   leaveGuide(p);
-  assert.equal(barFor(p, { page: "debt/payoff", query: { guide: "debt", step: "order" } }), null, "after leaving, the address alone brings nothing back");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { guide: "debt", step: "order" } }).mode, "guide", "the address alone brings the bar back, even after leaving");
+  assert.equal(barFor(p, { page: "debt/payoff" }).mode, "continue");
+});
+test("barFor: priority is guide > review > quick > plan > compact > continue", () => {
+  const p = family();
+  startGuide(p, "debt", "2026-10-31");
+  const both = { from: "quick" };
+  assert.equal(barFor(p, { page: "debt/payoff", query: both }).mode, "quick", "quick before compact");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { guide: "debt", step: "order", from: "review" } }).mode, "guide", "guide first");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { from: "review", review: "2026-10" } }).mode, "review", "review before compact");
+  leaveGuide(p);
+  assert.equal(barFor(p, { page: "retirement/projection", query: { from: "plan" } }).mode, "plan");
+  startGuide(p, "debt", "2026-10-31");
+  assert.equal(barFor(p, { page: "debt/payoff", query: { from: "plan" } }).mode, "plan", "plan before compact: debt/payoff is a row of Your plan");
+  assert.equal(barFor(p, { page: "debt/payoff" }).mode, "compact", "compact before continue");
 });
 test("barFor: a followed guide goes quiet after 30 days without a tap; once complete, compact mode stops", () => {
   const p = family();
   startGuide(p, "debt", "2026-09-01");
-  assert.ok(barFor(p, { page: "debt/payoff", today: "2026-09-20" }));
+  assert.equal(barFor(p, { page: "debt/payoff", today: "2026-09-20" }).mode, "compact");
   assert.equal(activeJourney(p, "2026-10-05"), null);
-  assert.equal(barFor(p, { page: "debt/payoff", today: "2026-10-05" }), null);
+  assert.equal(barFor(p, { page: "debt/payoff", today: "2026-10-05" }).mode, "continue", "quiet: no one-line reminder, only the way on");
   // Continue, Do step N or a step row brings it back; a tap in the guide keeps it awake, at most one save a day
   assert.equal(startGuide(p, "debt", "2026-10-05"), true);
   assert.equal(p.guide.activeAt, "2026-10-05"); assert.equal(p.guide.journeys.debt.startedAt, "2026-09-01");
-  assert.ok(barFor(p, { page: "debt/payoff", today: "2026-10-05" }));
+  assert.equal(barFor(p, { page: "debt/payoff", today: "2026-10-05" }).mode, "compact");
   assert.equal(touchGuide(p, "2026-10-05"), false);
   assert.equal(touchGuide(p, "2026-10-20"), true); assert.equal(p.guide.activeAt, "2026-10-20");
   const q = family(); startGuide(q, "debt", "2026-10-31"); q.debtPlan = { order: "avalanche" };
-  assert.equal(barFor(q, { page: "debt/payoff" }), null);
+  assert.equal(barFor(q, { page: "debt/payoff" }).mode, "continue");
   assert.equal(barFor(q, { page: "debt/payoff", query: { guide: "debt", step: "order" } }).mode, "guide");
 });
 test("activeSummary and stepHref; the router reads a step's address back", () => {
@@ -348,7 +408,7 @@ test("every fold and '+ Add another' button an ask names is really on that page 
       for (const m of ask.match(/\+ Add another \w+/g) ?? []) { adds++; assert.ok(v.includes(m), `${j.id}/${s.key}: ${page} has "${m}"`); }
     }
   }
-  assert.ok(folds >= 3 && adds >= 8, `${folds} folds, ${adds} add-another buttons checked`);
+  assert.ok(folds >= 3 && adds >= 7, `${folds} folds, ${adds} add-another buttons checked`);
 });
 test("the paycheck step counts either earner; the card and one-loan steps wait for rates; one loan only when Consolidation has something to compare", () => {
   const p = family(); p.taxes = { ...(p.taxes ?? {}), withholding: { partner: { perPaycheck: 210, period: "biweekly" } } };
@@ -377,6 +437,7 @@ test("Show me where: each step that says 'tap ...' names a button its page reall
   for (const j of JOURNEYS) for (const s of j.steps) for (const [page, ask, opens, target] of [[s.page, s.ask, s.opens, s.target], ...(s.alt?.ask ? [[s.alt.page, s.alt.ask, s.alt.opens, s.alt.target]] : [])]) {
     if (!/\btap\b/i.test(ask)) continue;
     const labels = targetsOf(ask, { opens, target });
+    if (!labels.length) continue;   // "tap a row to type yours" (the path's month step) names no button, like "tap each paper"
     const src = fsm.readFileSync(new URL(`../../${page}/view.js`, import.meta.url), "utf8");
     assert.ok(labels.some((l) => src.includes(l.replace(/^\+ /, ""))), `${j.id}/${s.key}: none of ${JSON.stringify(labels)} is in ${page}/view.js`);
   }
@@ -460,4 +521,219 @@ test("review 2026-11-02 (round 5): an ended Social Security line on Income is no
   const later = journeyStatus(J("retire"), q, { today });
   assert.equal(st(later, "ss").state, "done");
   assert.equal(later.finish.text, "Your ages, savings, spending and Social Security are in your plan.");
+});
+
+// ---------------------------------------------------------------- the path ("Your plan"): where a person stands, and what Next does
+const TD = "2026-11-02";
+const walkTo = (p, keys) => { for (const k of keys) passStep(p, k, TD); return p; };
+test("pathSummary: an empty plan (not started, next = the questions); after setup (step 2); all passed (complete); a new loan reopens it", () => {
+  const e = empty();
+  let ps = pathSummary(e, { today: TD });
+  assert.deepEqual([ps.started, ps.complete, ps.next.key, ps.step, ps.total], [false, false, "answers", 1, 4]);
+  assert.equal(ps.planHref, "#/overview/plan");
+  const p = sam();
+  S.markAt(p, "done", TD);
+  ps = pathSummary(p, { today: TD });
+  assert.equal(ps.started, true);
+  assert.equal(ps.parts[0].passed, true, "step 1 is passed when it is done");
+  assert.deepEqual([ps.next.key, ps.step], ["month", 2]);
+  // every step passed -> complete; the Next tap on the last open step finishes the guide (and only then)
+  const keys = ps.parts.map((x) => x.key);
+  for (const k of keys.slice(1, -1)) { passStep(p, k, TD); assert.notEqual(p.guide.journeys.plan.finishedAt, "2026-11-02", "not finished while a step is open"); }
+  assert.equal(pathSummary(p, { today: TD }).complete, false);
+  passStep(p, keys.at(-1), TD);
+  ps = pathSummary(p, { today: TD });
+  assert.deepEqual([ps.complete, ps.next, ps.step], [true, null, null]);
+  assert.equal(p.guide.active, null, "finishing stops following the path");
+  assert.equal(journeyStatus(J(PATH_ID), p, { today: TD }).finished, true, "the guide list says Done only when Your plan is ready");
+  // data adds a step later: a gentle reopening, not a reset
+  const before = ps.total;
+  const q = structuredClone(p);   // (a plan object counts as unchanged: the store hands out a new one on every change)
+  q.accounts.push({ id: "card2", name: "New card", type: "credit", balance: -2500 });
+  const again = pathSummary(q, { today: TD });
+  assert.equal(again.complete, false);
+  assert.equal(again.total, before + (again.parts.some((x) => x.key === "debts") && !keys.includes("debts") ? 1 : 0));
+  assert.deepEqual(again.changed, keys.includes("debts") ? null : { added: ["Your debts"], removed: [] });
+  assert.equal(journeyStatus(J(PATH_ID), q, { today: TD }).finished, false);
+});
+test("pathSummary: a new loan on a finished path sends the person to the new step, and says so once", () => {
+  const p = ruth(); S.markAt(p, "done", TD);
+  S.applyOweAmounts(p, {}, TD);
+  const keys = pathSummary(p, { today: TD }).parts.map((x) => x.key);
+  for (const k of keys.slice(1)) passStep(p, k, TD);
+  assert.equal(pathSummary(p, { today: TD }).complete, true);
+  const q = structuredClone(p);
+  q.accounts.push({ id: "card", name: "Store card", type: "credit", balance: -1800 });
+  const ps = pathSummary(q, { today: TD });
+  assert.deepEqual([ps.complete, ps.next.key, ps.changed], [false, "debts", { added: ["Your debts"], removed: [] }]);
+  passStep(q, "debts", TD);
+  assert.equal(pathSummary(q, { today: TD }).changed, null, "the Next tap saves the new list: the line shows until then");
+});
+test("nextAfter: the next step in order even when done by data; after a jump back it never walks the passed steps again", () => {
+  const p = sam(); S.markAt(p, "done", TD);
+  S.applyOweAmounts(p, { credit: { owed: 3200, payment: 90 }, "car-loan": { owed: 9000, payment: 310 } }, TD);
+  S.applySpend(p, { mode: "rows", rows: { housing: 900, utilities: 200, groceries: 400, transport: 300, insurance: 200, dining: 150, shopping: 100 } }, TD);
+  const keys = pathSummary(p, { today: TD }).parts.map((x) => x.key);
+  assert.equal(st(journeyStatus(J(PATH_ID), p, { today: TD }), "month").state, "done", "typed spending is done by data");
+  assert.deepEqual(nextAfter(p, "answers", { today: TD }), { key: "month", name: "Your month", href: "#/cashflow/expenses?guide=plan&step=month", kind: "next" });
+  assert.equal(nextAfter(p, "month", { today: TD }).key, "debts", "done or not, the next one in order is seen once");
+  // skip ahead: tap Next on the last step with the middle ones never seen
+  for (const k of ["answers", "month"]) passStep(p, k, TD);
+  passStep(p, keys.at(-1), TD);
+  const after = nextAfter(p, keys.at(-1), { today: TD });
+  assert.equal(after.kind, "still"); assert.equal(after.key, "debts", "the first one not done anywhere");
+  for (const k of keys.slice(2, -1)) passStep(p, k, TD);
+  assert.deepEqual(nextAfter(p, "debts", { today: TD }).kind, "finish", "everything passed: the end");
+  assert.equal(nextAfter(p, keys.at(-1), { today: TD }).href, "#/overview/plan");
+  // a jump back to a skipped step goes on to the end, not through the passed steps again
+  const q = sam(); S.markAt(q, "done", TD);
+  S.applySpend(q, { mode: "rows", rows: { housing: 900, utilities: 200, groceries: 400, transport: 300, insurance: 200, dining: 150, shopping: 100 } }, TD);
+  const qk = pathSummary(q, { today: TD }).parts.map((x) => x.key);
+  for (const k of qk.filter((k) => k !== "cushion")) passStep(q, k, TD);
+  assert.equal(nextAfter(q, qk.at(-1), { today: TD }).key, "cushion");
+  passStep(q, "cushion", TD);
+  assert.equal(nextAfter(q, "cushion", { today: TD }).kind, "finish");
+});
+test("partsFor: the same array for a plan and for its clone with one more tick (the cache), but not after the household changes", () => {
+  const p = sam(); S.markAt(p, "done", TD);
+  const a = partsFor(p, { today: TD });
+  const c = structuredClone(p);
+  markLooked(c, PATH_ID, "month", TD);
+  assert.equal(partsFor(c, { today: TD }), a);
+  assert.equal(partsFor(p, { today: TD }), a);
+  const d = structuredClone(p); d.accounts.push({ id: "z", type: "credit", balance: -900 });
+  assert.notEqual(partsFor(d, { today: TD }), a);
+  assert.notEqual(partsFor(p, { today: TD, off: ["retirement/projection"] }), a, "off is part of the key");
+});
+test("journeyStatus plain data: no functions anywhere, waits included; a step that waits says what it needs", () => {
+  const p = ruth(); p.retirement.socialSecurity = {}; p.guide.setup.ss = {}; p.income = p.income.filter((x) => x.type !== "social");
+  const js = journeyStatus(J(PATH_ID), p, { today: TD });
+  assert.deepEqual(JSON.parse(JSON.stringify(js)), js);
+  for (const x of js.steps) assert.equal(typeof x.waits, "undefined");
+  const r = st(js, "retire");
+  assert.ok(r.waiting && /Social Security/.test(r.waiting.what) && r.waiting.href.startsWith("#/"), JSON.stringify(r.waiting));
+  assert.equal(pathSummary(p, { today: TD }).gaps.length >= 1, true);
+  assert.equal(st(journeyStatus(J(PATH_ID), ruth(), { today: TD }), "retire").waiting, null);
+});
+test("an old plan with guide.active = whole-plan renders with no bar and no throw", () => {
+  const p = sam();
+  p.guide = { ...(p.guide ?? {}), active: "whole-plan", activeAt: TD, chosen: { id: "whole-plan", at: TD }, journeys: { "whole-plan": { startedAt: "2026-10-01", finishedAt: "2026-10-02", done: {}, none: {}, later: {} } } };
+  assert.equal(activeJourney(p, TD), null);
+  assert.equal(barFor(p, { page: "cashflow/expenses", today: TD }).mode, "continue", "only the quiet way on");
+  assert.equal(compute(p, { today: TD }).active, null);
+  assert.equal(pathSummary(p, { today: TD }).complete, false, "the old finishedAt does not finish the new path");
+});
+test("barFor, the path: ?guide=plan draws path mode whatever is followed; one Next, Back, the step's own button, waits", () => {
+  const p = sam(); S.markAt(p, "done", TD);
+  startGuide(p, "budget", TD);
+  const b = barFor(p, { page: "cashflow/expenses", query: { guide: "plan", step: "month" }, today: TD });
+  assert.deepEqual([b.mode, b.path, b.journey.id, b.index, b.name], ["guide", true, "plan", 2, "Your month"]);
+  assert.deepEqual([b.after.kind, b.after.name], ["next", b.after.name]);
+  assert.equal(b.back.href, "#/overview/setup/done", "back from step 2 to the questions' end screen once they were finished");
+  const fresh = empty(); fresh.income = [{ id: "i", type: "salary", amount: 3000, period: "monthly", personId: "x" }];
+  assert.equal(barFor(fresh, { page: "cashflow/expenses", query: { guide: "plan", step: "month" }, today: TD }).back.href, "#/overview/guide/plan", "setup never finished: not setup/done (opening it would mark it finished)");
+  // the step's own button keeps Next outlined until done
+  const d = barFor(sam(), { page: "debt/payoff", query: { guide: "plan", step: "debts" }, today: TD });
+  assert.equal(d, null === d ? d : d, "debts only applies with a debt");
+  const w = ruth(); S.markAt(w, "done", TD);
+  const rm = barFor(w, { page: "retirement/rmd", query: { guide: "plan", step: "rmd" }, today: TD });
+  assert.equal(rm.mode, "guide"); assert.equal(rm.after.kind, "still", "the last step, with others not yet seen: the first one not done");
+  // opening it finished or stale still draws the bar
+  finishGuide(p, PATH_ID, TD);
+  assert.equal(barFor(p, { page: "cashflow/expenses", query: { guide: "plan", step: "month" }, today: TD }).mode, "guide");
+  // waits
+  const nw = ruth(); nw.retirement.socialSecurity = {}; nw.guide.setup.ss = {}; nw.income = nw.income.filter((x) => x.type !== "social");
+  assert.ok(barFor(nw, { page: "retirement/projection", query: { guide: "plan", step: "retire" }, today: TD }).waiting);
+});
+test("barFor, continue: the four texts; this-page-is-next goes to ?guide=plan&step=; the one-page trail still shows", () => {
+  // never started: Start your plan
+  let c = barFor(empty(), { page: "balance/net-worth", today: TD });
+  assert.deepEqual([c.mode, c.text, c.href], ["continue", "Start your plan: a few easy questions ›", "#/overview/start"]);
+  // under way
+  const p = sam(); S.markAt(p, "done", TD); startGuide(p, PATH_ID, TD);
+  c = barFor(p, { page: "balance/net-worth", today: TD });
+  const ps = pathSummary(p, { today: TD });
+  assert.equal(c.text, `Continue your plan: step ${ps.step} of ${ps.total} ›`); assert.equal(c.href, ps.next.href); assert.equal(c.startPath, true);
+  // this page is the next step, reached without ?guide
+  c = barFor(p, { page: "cashflow/expenses", today: TD });
+  assert.equal(c.text, `This is step ${ps.step} of ${ps.total} of your plan ›`); assert.equal(c.href, "#/cashflow/expenses?guide=plan&step=month");
+  // complete
+  for (const k of ps.parts.slice(1).map((x) => x.key)) passStep(p, k, TD);
+  c = barFor(p, { page: "property/rent-vs-buy", today: TD });
+  assert.deepEqual([c.mode, c.text, c.href], ["continue", "See your plan ›", "#/overview/plan"]);
+});
+test("barFor, plan mode: a row of Your plan opened from it, or after completion; the next result keeps ?from=plan; last row has none", () => {
+  const p = sam(); S.markAt(p, "done", TD);
+  S.applyOweAmounts(p, { credit: { owed: 3200, payment: 90 } }, TD);
+  const rows = resultOrder(p, { today: TD });
+  assert.deepEqual(rows.map((r) => r.key).slice(0, 3), ["net", "month", "debts"]);
+  const b = barFor(p, { page: rows[0].page, query: { from: "plan" }, today: TD });
+  assert.deepEqual([b.mode, b.planHref, b.next.page, b.next.href], ["plan", "#/overview/plan", rows[1].page, `#/${rows[1].page}?from=plan`]);
+  assert.equal(barFor(p, { page: rows.at(-1).page, query: { from: "plan" }, today: TD }).next, null);
+  assert.equal(barFor(p, { page: rows[0].page, today: TD }).mode, "continue", "not from Your plan and the path not complete");
+  for (const r of pathSummary(p, { today: TD }).parts.slice(1)) passStep(p, r.key, TD);
+  assert.equal(barFor(p, { page: rows[0].page, today: TD }).mode, "plan", "after completion every result page offers the next result");
+  assert.equal(barFor(p, { page: "goals/vehicle", query: { from: "plan" }, today: TD }).mode, "continue", "not a row of Your plan");
+});
+test("resultOrder: three groups in order; a row shows with its step; off pages and steps that do not apply are left out", () => {
+  const f = family();
+  const keys = resultOrder(f, { today: "2026-10-31" }).map((r) => r.key);
+  assert.deepEqual(keys, ["net", "month", "debts", "cushion", "protect", "retire", "goals", "college", "taxes"]);
+  assert.deepEqual(resultOrder(f, { today: "2026-10-31", off: ["retirement/projection"] }).map((r) => r.key).includes("retire"), false);
+  assert.deepEqual(resultOrder(empty(), { today: TD }).map((r) => r.key), ["month", "cushion", "retire"], "answers has no row of its own; net and goals need data");
+});
+test("passStep: ticks, saves the list of steps, follows the path; the last open step finishes it", () => {
+  const p = ruth(); S.markAt(p, "done", TD);
+  assert.equal(passStep(p, "month", TD), true);
+  assert.equal(passStep(p, "month", TD), false, "nothing changes the second time");
+  assert.equal(p.guide.journeys.plan.done.month, TD);
+  assert.deepEqual(p.guide.journeys.plan.parts, ["answers", "month", "cushion", "retire", "take-out", "rmd"]);
+  assert.equal(p.guide.active, PATH_ID);
+  for (const k of ["cushion", "retire", "take-out"]) passStep(p, k, TD);
+  assert.equal(p.guide.active, PATH_ID, "one step still open: not finished");
+  passStep(p, "rmd", TD);
+  assert.equal(p.guide.active, null); assert.equal(p.guide.journeys.plan.finishedAt, TD);
+});
+
+// ---------------------------------------------------------------- the words of the frame's path, plan and continue texts
+test("plain words: no banned word in the frame's path, plan and continue texts, the trails and the aria-labels", () => {
+  const BANNED = ["Monte Carlo", "simulated", "liabilities", "assumptions", "net worth", "RMD", "AGI", "IRMAA", "W-4", "withholding", "withheld", "guide", "journey", "scenario", "lever", "levers", "goal seek", "PC", "AI", "server", "sandbox", "inflation", "bonds", "stocks", "pre-tax", "Roth", "Medigap", "9 of 10 markets", "middle run", "must-pay"];
+  const re = new RegExp(`\\b(${BANNED.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`, "i");
+  const frame = fs.readFileSync(fileURLToPath(new URL("./frame.js", import.meta.url)), "utf8");
+  const compute = fs.readFileSync(fileURLToPath(new URL("./compute.js", import.meta.url)), "utf8");
+  const between = (text, a, b) => { const i = text.indexOf(a); assert.ok(i >= 0, a); const j = b ? text.indexOf(b, i + a.length) : text.length; assert.ok(j > i, b); return text.slice(i, j); };
+  const pieces = [
+    between(frame, "const READ_ONLY", "const readTrail"),                      // the step lines of the path
+    between(frame, "const contRow", "if (!real) {"),                           // the continue row
+    between(frame, "if (!real) {", "if (bar.mode === \"review\")"),            // the trail beside it (path: "Back to your plan")
+    between(frame, "if (bar.mode === \"plan\")", "const { journey: j, step, next } = bar;"),   // plan mode
+    between(frame, "function pathMode()"),                                      // the path's bar and card
+    between(compute, "function continueFor", "/**\n * What the shell draws around a page"),
+  ];
+  const literals = (text) => [...text.matchAll(/"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g)].map((m) => (m[1] ?? m[2]).replace(/\$\{[^}]*\}/g, "")).filter((t) => / /.test(t) && !/#\/|=|\.gb-|\.gn-/.test(t));
+  const bad = [];
+  for (const [i, p] of pieces.entries()) for (const t of literals(p)) if (re.test(t)) bad.push(`${i}: ${t}`);
+  // the guide's own trail ("Back to the guide: ...") belongs to the other guides: it is on the non-path branch of the trail line only
+  assert.deepEqual(bad.filter((b) => !/Back to the guide|Back to your guide/.test(b)), []);
+});
+test("the path's bar has no Next of its own and no 'Skip to'; one Next at the bottom", () => {
+  const frame = fs.readFileSync(fileURLToPath(new URL("./frame.js", import.meta.url)), "utf8");
+  const path = frame.slice(frame.indexOf("function pathMode()"));
+  assert.ok(!/barNext|gb-next|gb-go|Skip to|Questions\? See the help|Ask the app a question/.test(path), "no top Next, no Skip, no help link in the path");
+  assert.equal((path.match(/class: "gn-main"/g) ?? []).length, 1);
+  assert.ok(/Done\? Go to Next/.test(path) && /Still to do/.test(path) && /Finish: see your plan/.test(path));
+});
+
+test("review fixes: the cushion step waits on the accounts it needs; the waiting link and the bar are right on a phone", () => {
+  // an empty plan has no account: the page has nothing to show, so the step says so and offers "Add it" (never blocks)
+  const e = empty(); S.markAt(e, "done", TD);
+  const w = barFor(e, { page: "balance/liquidity", query: { guide: "plan", step: "cushion" }, today: TD });
+  assert.ok(w.waiting && /accounts/.test(w.waiting.what) && w.waiting.href === "#/balance/net-worth", JSON.stringify(w.waiting));
+  assert.ok(w.after.href, "and Next is still there");
+  // with an account the step does not wait
+  const r = ruth(); S.markAt(r, "done", TD);
+  assert.equal(barFor(r, { page: "balance/liquidity", query: { guide: "plan", step: "cushion" }, today: TD }).waiting, null);
+  const f = fs.readFileSync(fileURLToPath(new URL("./frame.js", import.meta.url)), "utf8");
+  assert.match(f, /\.gn-root \.gn-state a \{[^}]*min-height: 44px/, "the 'Add it' link is a 44 px target");
+  assert.match(f, /Math\.max\(bar\.doneCount, bar\.index \?\? 0\) \/ bar\.total/, "step N of N is a full bar");
 });

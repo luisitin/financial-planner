@@ -93,7 +93,7 @@ Done checks in words (`journeys.js`):
 
 | Guide | Steps (extras in brackets) | Done when |
 |---|---|---|
-| Build my whole plan | accounts, people, income, expenses, goals, assumptions | the dashboard's own six checks (`dashboard/compute.js`), so the count is always the dashboard's |
+| Build my plan (`plan`, "Your plan") | the questions, month, debts, cushion, cover, retirement, what would help, where to take money from, the yearly amount the law requires, home, college, tax: only those that apply to the household | `variant`/`partsFor` leave out the steps that do not apply; see "The path" |
 | Pay off what I owe | add, rates, order, [cards, student, one-loan] | a liability account; every loan and card with a balance has its details saved, a 0% one too (Liabilities' own `detail`); a payoff order saved; [looked, once rates are in; saved or looked; saved or looked, once rates are in, and shown only when Consolidation has two cards or loans it can roll together (not a mortgage or student loan) with one at 10% or more: its own pick] |
 | Spend less and save more | income, accounts, spending, budget, cushion, [sort] | an income; a checking, savings, cash or card account; an expense or a bank row; an envelope or a 50/30/20 split; a goal named emergency / rainy day / cushion or with the 🛟 icon (Emergency fund's own test); [90% of bank rows sorted, or looked] |
 | Buy a home | pay, afford, goal, [lenders, rent-buy, fit] | an income (first, so Home affordability can show a price range at once); its inputs saved; the house goal by Home affordability's own test (`goals/house` `isHouseGoal`: a down payment, the 🏠 icon or a home to buy, never repairs, paying it off or a trip home); [looked, shown only with loans or cards (Debt ratios works from today's debts, not the home just priced); saved or looked; looked] |
@@ -190,3 +190,25 @@ last? takes Social Security as known with it.
 - Pages could read the step from the address and open their add form, or scroll to the field the step asks for.
 - The dashboard's "Continue: <guide>" tile and "Start something new" link (designer's lane; asked on the WORKBOARD).
 - The server could skip its backup copy when a save changes only `plan.guide`.
+
+
+## The path (2026-11-06)
+The owner asked for one easy way from point A (Get started) to point B (the finished plan, with every result page). The path
+is the `plan` journey (never `whole-plan`: a stored `journeys["whole-plan"].finishedAt` must not read as finished). It is the
+one guide whose steps come and go with the household (`pathVariant` in journeys.js, cached by `partsFor` in compute.js).
+- **Steps** (12 defined, 4 to 9 apply): answer the questions, your month, your debts (any card or loan but the mortgage), your
+  cash cushion, cover for your family (children or a second adult, pay on file, not retired), your retirement, what would help
+  (the projection is tight or short), where to take money from (retired), the yearly amount the law requires (an adult is within
+  a year of the start age), the home you can afford (picked in the questions, or a home goal), college costs (children and a
+  college goal), this year's tax (pay or business income). Every step is look-only and passable: Next ticks it.
+- **done / passed / complete**: done = a passing check, a Next tick or "does not apply"; passed = the person tapped Next on it (or
+  the questions are done); complete = every step that applies now is done (never `finishedAt`: new data can add a step).
+- **Next** (frame, path mode) = `nextAfter`: the first step after this one that is not passed; else the first not done anywhere
+  ("Still to do"); else the end ("Finish: see your plan"). `pathSummary().next` is where to resume (Get started, the Dashboard,
+  the continue row, Your plan).
+- **Every other page** ends with the continue row (frame.js); a result page opened from Your plan ends with "Next result".
+- **Cost**: the frame runs this on every page, so `pathSummary` never runs standing(), protectionGaps() or answerFor(); only
+  `fix-retire` runs a projection, behind the `partsFor` cache (a `WeakMap` on the plan, then one entry keyed on the plan without
+  guide.journeys/active/activeAt/chosen/meta).
+- **Words**: no banned word (Monte Carlo, assumptions, net worth, RMD, inflation, ...) in the path's text; the test lists them.
+- **Not blocked**: no `needs`. A step whose page cannot answer yet (`waits`) says what it needs and still lets Next through.

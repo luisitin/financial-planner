@@ -1,0 +1,79 @@
+# Your plan  (`overview/plan`)
+
+**Status:** usable
+**Purpose:** Your whole plan on one page: each answer in one plain sentence, which figures are our guesses, and what to do next.
+
+The owner asked (2026-11-06): "when a layman clicks on something to go navigate it, at the end of it, there should be a way
+to go to the next part and the next part and the next part, right? It should be very easy to follow a set of steps to go from
+point A to point B, where point B is the final plan with everything in it and all the result pages." This page is B. A is
+Get started; the way between is the path: overview/guide's `plan` journey, with Next at the end of every page
+(`overview/guide/frame.js`, path mode). Spec: the path build spec of 2026-11-06 (revision 2).
+
+## Inputs
+Plan sections read (`needs`): accounts, household, income, expenses, debts, debtPlan, goals, retirement, taxes, insurance,
+whatIfs, assumptions, guesses, guide, reviews.
+`compute(plan, { today, off })`: `off` is the list of pages turned off or hidden on this device; a row whose page is off is not drawn.
+
+## B quotes; it never works out a figure
+Each row's figure and words come from the function the result page uses for its own top answer, so the two never disagree
+(the test compares them on four households). This file adds no formula of its own.
+
+| row | page | source |
+|---|---|---|
+| What you own, minus what you owe | balance/net-worth | `standing()` netWorth, assets, liabilities, netWorthGuessed (overview/setup) |
+| Your month | cashflow/expenses | `standing()` spare, spareWaits, drawing, bank |
+| Your debts | debt/payoff | `answerFor("debt")` (overview/quick); a guessed rate from `standing().guessed` |
+| Your cash cushion | balance/liquidity | `standing()` runway, runwayTarget, runwayStatus, runwayWaits, cushionLater |
+| Cover for your family | insurance/life-needs | `protectionGaps()`, or the "No one depends on my pay" mark |
+| Your retirement | retirement/projection | `answerFor("retire")` (headline, line, verdict, shortAge); `standing().retireGuessed` |
+| What would help | scenarios/goal-seek | no figure: goal seek is heavy and stays on its own page |
+| Where to take money from | retirement/withdrawal-strategy | `firstYear()` |
+| The yearly amount the law requires | retirement/rmd | `thisYear()` |
+| Your goals | goals/goals | goals compute and `goalsBehind`, worded by `goalsWords` (words.js) |
+| The home you can afford | goals/house | `maxPrice` |
+| College costs | goals/education | the children's totals |
+| This year's tax | taxes/federal | `answerFor("taxes")` |
+
+No heavy simulation runs here (Monte Carlo, stress tests, goal seek and the health score stay on their own pages and in
+Plan summary; the test reads this file's imports). Life-needs is heavy-marked but Next best action already runs it.
+
+## Outputs
+`{ head: { state: empty | going | complete, ready, title, lede, step, total, doneCount, next, name, inShort, gaps, firstGap }, groups: [{ title,
+rows: [{ key, label, value, line, short, status: ok | warn | bad | calm | open, guessed, href, figure, note, needs, fixHref }] }],
+moves, guesses, guessCount, notCounted, assumptions, checkIn: { due, next, nextName }, madeOn, someGuessed }`.
+- A row shows when its step applies (guide/compute.js `resultOrder`) and its page is not off. "What you own, minus what you
+  owe" and "Your goals" also show whenever there is data.
+- `status`: ok (green), warn (amber), bad (red), calm (grey: information, or a figure that rests mostly on our guesses),
+  open (a gap: "Not worked out yet: needs ...").
+- A row that rests mostly on guesses is never warn or bad (`mostlyGuessed`).
+- `head.inShort` joins up to three rows' `short` phrases, the red ones first, then amber, then green; it ends "Some of this
+  rests on our guesses." when one of those rows is `guessed` (the tax row is until the paycheck's tax is typed).
+- `head.ready` is true only when the steps are all done and no row is open. With a gap the title is "Your plan is not
+  finished yet" (no check mark, no "ready"), "What to do next" says to fill the gaps first, and the closing "You're done for now"
+  lines are left out (review of the first build: an empty plan that skipped every question read "ready" and "Nothing urgent").
+- The cushion row has no bare figure while its bills are mostly our guesses ("isn't known yet", like its page); the month row
+  says "Spending is our guess (about $X a month). Add your pay to see what is left." when only the pay is missing; the cover row
+  is grey "Not checked yet" until the cover step is passed; the retirement row drops the page's "(Will the money last? shows
+  how much less)" pointer.
+- Rows that open a setup screen end in `?back=done&from=plan`: setup's Back ("‹ Your plan") and Save lead back here.
+- `words.js` holds what is shared with the path: `goalsWords` (the Dashboard builds the same sentence inline today),
+  `protectionAsks` (life-needs' first test, for the path's "Cover for your family" step), `guessList` and `notCounted` (what the
+  questions' last screen used to list).
+
+## The page
+Head (one filled button in every state: Let's go; Continue: <step>; Fill in the first gap; or, when complete and a check-in is
+due, Start the <Month> check-in; else Go to my dashboard), the three groups, What to do next (`standing().moves`), Make it fit you
+better (three guesses, then the page with all of them), What we're counting on (folded; "These sound fine" calls setup's
+`applyGuesses`), Keep it up to date (the monthly check-in, Plan summary for a copy to print, Timeline), and the end.
+
+## Edge cases
+An empty plan (the intro and Let's go); a path under way; complete with gaps (a step whose page waits); a household that
+is retired (the retirement steps instead of the saving ones); a page turned off (its row and step are left out).
+
+## Tests
+`module.test.mjs`: the numbers agree with the result pages for four households, calm rows, `inShort`, the guess list, banned
+words, imports, and the A-to-B walk in pure code (taps from an empty plan to this page).
+
+## Ideas / not yet
+- The Dashboard could import `goalsWords` from here (or from overview/alerts) instead of building the line inline.
+- A row for Medicare, Social Security and stress tests as links, not steps.

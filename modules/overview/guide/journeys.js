@@ -20,19 +20,25 @@
 //   opens      the title of a fold (<details>) on the page that the ask names; the guide opens it while the step is to do
 //   needs      keys of earlier steps this page needs first (it shows "This step needs step 1 first")
 //
-// A guide may also have variant(plan, { today }) -> null | { line?, haveReady?, more?, finish?, steps: { [key]: fields | null } }:
+//   name       (the "plan" path only) a noun phrase for "Next: <name> ›", the rows of Your plan and the continue row
+//   waits      (the path only) (plan, { today }) -> null | { what, href }: this page cannot answer yet; says what it needs, never blocks
+//   ownAction  (the path only) the label of a page button that is this step's own action ("Save plan"): Next stays outlined until the step is done
+//
+// A guide may also have variant(plan, { today, off }) -> null | { line?, haveReady?, more?, finish?, steps: { [key]: fields | null } }:
 // other words for this plan, a step's fields replaced, or a step left out (null). guide/compute.js forPlan applies it.
 import { compute as setupSteps } from "../dashboard/compute.js";
-import { rateIsGuess, paymentIsGuess } from "../setup/compute.js";
+import { rateIsGuess, paymentIsGuess, picks, retirementGap } from "../setup/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
 import { isHouseGoal } from "../../goals/house/compute.js";
 import { compute as consolidation } from "../../debt/consolidation/compute.js";
-import { householdRetired } from "../../retirement/projection/compute.js";
+import { householdRetired, retirementKnown, savingVerdict } from "../../retirement/projection/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
-import { RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
+import { RMD_ACCOUNT_TYPES, rmdStartYear } from "../../../core/math/rmd.js";
+import { compute as expenses } from "../../cashflow/expenses/compute.js";
+import { protectionAsks } from "../plan/words.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 const RETIRE = ["401k", "ira", "roth", "hsa"];
@@ -42,7 +48,6 @@ export const hasType = (p, ...types) => L(p, "accounts").some((a) => types.inclu
 /** Every loan and card with a balance has its rate and payment saved (a 0% loan counts): Liabilities' own test. A typical rate the setup put in (`rateGuessed`) is not a saved rate yet. */
 export const detailed = (p) => { const owed = liabilities(p).rows.filter((r) => r.owed > 0); return owed.length > 0 && owed.every((r) => !!r.detail && !rateIsGuess(r.detail) && !paymentIsGuess(r.detail)); };
 export const adults = (p) => (p?.household?.people ?? []).filter((x) => x.role !== "dependent");
-const setup = (key) => (p) => setupSteps(p).steps.find((s) => s.key === key)?.done === true;
 /** The same test as goals/emergency-fund (its EMERGENCY pattern and the 🛟 icon), plus the flag a goal may carry. */
 export const emergencyGoal = (p) => L(p, "goals").some((g) => g.isEmergencyFund || g.icon === "🛟" || /emergency|rainy ?day|cushion/i.test(g.name ?? ""));
 /** A goal saving to buy a home, by the same test Home affordability uses to find it (goals/house isHouseGoal: a down payment, the 🏠 icon or a home to buy; never repairs, paying it off or a trip home), so the page and the step always agree. */
@@ -96,31 +101,96 @@ const paycheckTax = (p) => ["self", "partner"].some((k) => Number(p?.taxes?.with
 const oneLoanHelps = (p) => { try { const c = consolidation(p); return c.candidates.length >= 2 && c.ready; } catch { return false; } };
 const lifePolicy = (p) => (p?.insurance?.policies ?? []).some((x) => x.kind === "term" || x.kind === "whole");
 
-/** The whole-plan guide's words for the dashboard's six setup steps (same keys, pages, order and done checks). */
-export const WHOLE_PLAN_TEXT = {
-  accounts: { title: "Add your accounts and balances", short: "Add your accounts", ask: "List each bank, retirement and loan account with today's balance, starting with the big ones; for a card or loan, choose its kind under Type, then tap Add account, and + Add another account for the next.", doneWhen: "it is done once one account is saved." },
-  people: { title: "Add the people in your household", short: "Add your household", ask: "Add yourself, a partner and anyone who depends on you, with birth dates, then tap Add person.", doneWhen: "it is done once one person is saved." },
-  income: { title: "Enter what comes in each month", short: "Enter what comes in", ask: "List each paycheck and any other money coming in and how often it comes, then tap Add income, and + Add another income for the next.", doneWhen: "it is done once one income is saved." },
-  expenses: { title: "Enter what goes out", short: "Enter what goes out", ask: "List your regular bills and spending, then tap Add expense, and + Add another expense for the next.", doneWhen: "it is done once one expense or one bank file is saved.", alt: { page: "transactions/import", label: "Have a file from your bank? Bring it in instead", ask: "Bring in a file from your bank's website, easiest on your computer (the account it comes from must be on Net worth first); what it shows going out counts for this step." } },
-  goals: { title: "Set your first goal", short: "Set your first goal", ask: "Say what you are saving for and by when, then tap Add goal; an emergency fund for a few months of bills is a good first one.", doneWhen: "it is done once one goal is saved." },
-  assumptions: { title: "Check the assumptions", short: "Check the assumptions", ask: "These are the guesses behind every forecast, like prices rising 3% a year; if you are not sure, leave them as they are and tap Save and mark as reviewed.", doneWhen: "it is done once you tap Save and mark as reviewed." },
+// ---------------------------------------------------------------- the path ("Your plan")
+// One journey, id "plan" (never "whole-plan": a stored journeys["whole-plan"].finishedAt must not read as finished here).
+// Its steps come and go with the household, the way the retirement guide's variant does: pathVariant() leaves out every step
+// that does not apply. Nothing blocks (no `needs`); every step is look-only, so Next on it counts it as passed.
+// Three fields only this journey uses:
+//   name       a noun phrase for "Next: <name> ›", "Your plan" rows and the continue row
+//   waits      (plan, { today }) -> null | { what, href }: this page cannot answer yet; says what it needs, never blocks
+//   ownAction  the label of the page's own button that is this step's action ("Save plan"): Next stays outlined until done
+export const PATH_ID = "plan";
+/** Pay or business income still running (this year's tax has something to estimate from). */
+const paidWork = (p, { today = null } = {}) => L(p, "income").some((x) => (x.type === "salary" || x.type === "business") && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
+const thisYearNum = (today) => Number(String(today ?? "").slice(0, 4)) || null;
+/** Debts that are not a mortgage and still have a balance (the debt step is about cards and loans). */
+const debtsToPay = (p) => debtAccounts(p).filter((a) => a.type !== "mortgage" && Math.abs(Number(a.balance) || 0) > 0);
+/** Setup's goal picks name `kind`, or a goal's name matches it. */
+const wantsGoal = (p, kind, re) => picks(p, "goals").includes(kind) || (!!re && L(p, "goals").some((g) => re.test(g.name ?? "")));
+const hasChildren = (p) => (p?.household?.people ?? []).some((x) => x.role === "dependent");
+/** The expenses are typed, not mostly our guesses (Expenses' own guessedShare). */
+const monthTyped = (p, { today = null } = {}) => { try { return L(p, "expenses").length > 0 && (Number(expenses(p, { today }).guessedShare) || 0) < 0.5; } catch { return false; } };
+/** Setup finished, or the Dashboard's first five steps are done (the sixth, assumptions, is left out). */
+const questionsDone = (p) => !!p?.guide?.setup?.finishedAt || setupSteps(p).steps.filter((s) => s.key !== "assumptions").every((s) => s.done);
+const rmdNow = (p, { today = null } = {}) => {
+  const y = thisYearNum(today);
+  if (!y) return false;
+  const ad = adults(p).filter((a) => a.birthDate), first = ad.find((a) => a.role === "self") ?? ad[0];
+  return ad.some((a) => rmdStartYear(a.birthDate) <= y + 1 && L(p, "accounts").some((x) => RMD_ACCOUNT_TYPES.includes(x.type) && Number(x.balance) > 0 && (x.ownerId === a.id || (a === first && !ad.some((q) => q.id === x.ownerId)))));
 };
-const wholePlanSteps = () => setupSteps({}).steps.map((s) => ({ key: s.key, page: s.go.join("/"), ...WHOLE_PLAN_TEXT[s.key], check: setup(s.key) }));
+const rmdTaken = (p, { today = null } = {}) => { const y = thisYearNum(today); return !!y && Object.keys(p?.retirement?.rmdTaken?.[y] ?? {}).length > 0; };
+/** The projection's own saving verdict (cached by partsFor): tight or short. */
+const savingHelp = (p, { today = null } = {}) => { try { const v = savingVerdict(p, { today }); return !!v && (v.verdict === "tight" || v.verdict === "short"); } catch { return false; } };
+/** Which keys of the path apply to this plan. Cheap except `fix-retire`, which runs the projection (partsFor caches it). */
+export function pathApplies(p, { today = null } = {}) {
+  const retired = householdRetired(p, { today });
+  return {
+    answers: true, month: true,
+    debts: debtsToPay(p).length > 0,
+    cushion: true,
+    protect: protectionAsks(p, { today }),
+    retire: true,
+    "fix-retire": retirementKnown(p, today) && savingHelp(p, { today }),
+    "take-out": retired,
+    rmd: rmdNow(p, { today }),
+    home: wantsGoal(p, "home") || houseGoal(p),
+    college: hasChildren(p) && wantsGoal(p, "education", /college|education|529|school/i),
+    taxes: paidWork(p, { today }),
+  };
+}
+/** Steps left out of the path for this plan, and the wording for a household already retired. `off`: pages turned off or hidden. */
+export const pathVariant = (p, { today = null, off = [] } = {}) => {
+  let ap = null;
+  try { ap = pathApplies(p, { today }); } catch { ap = null; }
+  if (!ap) return null;
+  const steps = {};
+  for (const s of PATH_STEPS) if (!ap[s.key] || off.includes(s.page)) steps[s.key] = null;
+  if (householdRetired(p, { today })) {
+    steps.month = steps.month === null ? null : { title: "See what comes in and goes out", ask: "Read what comes from your savings each month at the top; rows marked our guess are figures we filled in, so tap a row to type yours, or leave them." };
+    if (steps["fix-retire"] !== null) steps["fix-retire"] = { ask: "Each card is one change that would make the money last, like spending a little less." };
+  }
+  return { steps };
+};
+/** What "Your retirement" waits for: the Social Security figure (setup's retirementGap), never blocking. */
+const retireWaits = (p) => { try { const g = retirementGap(p); return g ? { what: g.what, href: `#/${g.go.join("/")}` } : null; } catch { return null; } };
+
+/** What "Your cash cushion" waits for: any account at all (the page has nothing to show without one), never blocking. */
+const cushionWaits = (p) => ((p?.accounts ?? []).length ? null : { what: "your accounts and spending", href: "#/balance/net-worth" });
+
+export const PATH_STEPS = [
+  { key: "answers", name: "The questions", page: "overview/setup", title: "Answer a few easy questions", short: "Answer the questions", ask: "Answer one question at a time, and skip any you don't know.", doneWhen: "it is done once you reach the end of the questions.", check: questionsDone, looked: true },
+  { key: "month", name: "Your month", page: "cashflow/expenses", title: "See what's left each month", short: "See your month", ask: "Read what is left each month at the top; rows marked our guess are figures we filled in, so tap a row to type yours, or leave them.", doneWhen: "it is done once most of your spending is typed by you, or you go on.", check: monthTyped, looked: true },
+  { key: "debts", name: "Your debts", page: "debt/payoff", title: "See when your debts are gone", short: "See your debt plan", ask: "See the month you'll be debt-free; to keep this plan, tap Save plan.", doneWhen: "it is done once you tap Save plan, or you go on.", check: (p) => !!p?.debtPlan?.order, looked: true, ownAction: "Save plan" },
+  { key: "cushion", name: "Your cash cushion", page: "balance/liquidity", title: "See your cash cushion", short: "See your cushion", ask: "See how many months your cash would cover the bills you have to pay, if your pay stopped or a big repair came up.", doneWhen: "it is done once you go on.", looked: true, waits: cushionWaits },
+  { key: "protect", name: "Cover for your family", page: "insurance/life-needs", title: "Check life insurance for the people who count on you", short: "Check life cover", ask: "See whether your family would be all right if an earner died, and how much life insurance would close the gap.", doneWhen: "it is done once a life policy is saved, or you go on.", check: lifePolicy, looked: true, none: "No one depends on my pay", noneSaid: "You said no one depends on your pay." },
+  { key: "retire", name: "Your retirement", page: "retirement/projection", title: "See if your money lasts", short: "See if money lasts", ask: "Read the answer at the top: whether your money lasts, and to what age.", doneWhen: "it is done once you go on.", looked: true, waits: retireWaits },
+  { key: "fix-retire", name: "What would help", page: "scenarios/goal-seek", title: "See what would make it last", short: "See what would help", ask: "Each card is one change that would make the money last, like stopping work later or spending less.", doneWhen: "it is done once you go on.", looked: true },
+  { key: "take-out", name: "Where to take money from", page: "retirement/withdrawal-strategy", title: "See where to take money from each year", short: "See what to take out", ask: "Read the first line: how much to take from savings this year, and from which accounts.", doneWhen: "it is done once you go on.", looked: true },
+  { key: "rmd", name: "The yearly amount the law requires", page: "retirement/rmd", title: "Check what the law says you must take out", short: "Check required amount", ask: "See how much the law says you must take out this year, from which accounts and by when.", doneWhen: "it is done once you mark it taken, or you go on.", check: rmdTaken, looked: true },
+  { key: "home", name: "The home you can afford", page: "goals/house", title: "See the home you can afford", short: "See your price range", ask: "See the price your pay supports at the top; the rate and down payment are typical figures until you type yours.", doneWhen: "it is done once you tap Work it out, or you go on.", check: (p) => !!p?.whatIfs?.house, looked: true, ownAction: "Work it out" },
+  { key: "college", name: "College costs", page: "goals/education", title: "See what college could cost", short: "See college costs", ask: "See what college could cost for each child, and how much to save a month.", doneWhen: "it is done once you go on.", looked: true },
+  { key: "taxes", name: "This year's tax", page: "taxes/federal", title: "See this year's tax: refund or bill", short: "See this year's tax", ask: "Read the answer at the top: what comes back, or what you owe, in April.", doneWhen: "it is done once you go on.", check: (p) => p?.taxes?.thisYear?.withheldTyped === true, looked: true },
+];
+
 
 export const JOURNEYS = [
   {
-    id: "whole-plan", icon: "🗺️", title: "Build my whole plan", minutes: 30,
-    line: "Your accounts, family, income, bills and goals, put in once. Every page in the app then works from them.",
-    haveReady: "Your latest bank, card, loan and retirement statements.",
-    steps: wholePlanSteps(),
-    moreTitle: "After that",
-    more: [
-      { page: "balance/liabilities", title: "Add the rates on your loans and cards" },
-      { page: "retirement/contributions", title: "Add what you save for retirement" },
-      { page: "overview/health-score", title: "See your plan's health score" },
-      { page: "overview/monthly-review", title: "Check in on the month" },
-    ],
-    finish: { page: "overview/dashboard", label: "See your dashboard", text: "The basics are in your plan. Every page now works from them." },
+    id: PATH_ID, icon: "🧭", title: "Build my plan", minutes: 20,
+    line: "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time.",
+    haveReady: "Nothing special. Rough numbers are fine, and we fill in what you don't know.",
+    steps: PATH_STEPS, variant: pathVariant,
+    more: [],
+    finish: { page: "overview/plan", label: "See your plan", text: "You've done every step of your plan." },
   },
   {
     id: "debt", icon: "💳", title: "Pay off what I owe", minutes: 10,

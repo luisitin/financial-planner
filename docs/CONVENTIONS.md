@@ -83,9 +83,32 @@ shows no notice gets no copy, so every save, add and remove still needs its own 
 A manifest may export `frame(ctx, page) -> { before, after } | null`. The shell calls it only on `overview/guide`
 (the step-by-step guides), for every page it renders, and draws `before` above the page and `after` below it. The page
 itself renders into its own plain `<div data-page="group/id">` (`page` above) inside `#content`, so a page that clears
-and redraws its root never wipes them, and pages never need to know. It draws the guide bar and the next-step card
-while a guide is followed (`?guide=<id>&step=<key>` in the address, or `plan.guide.active`), and "‹ Quick answers"
-on a page opened from Quick answers (`?from=quick`).
+and redraws its root never wipes them, and pages never need to know.
+
+`guide/compute.js barFor` decides which one of these the page gets (the first that applies):
+1. **guide**: the address names a guide (`?guide=<id>&step=<key>`, any of the seven and the path, followed or not, finished
+   or gone quiet). The bar says what to do here; the card at the bottom has Next. In the path (`plan`, "Your plan", `path:
+   true`) the bar is smaller (one line "Your plan · Step 4 of 7", the step's ask, "Show me where", "Done? Go to Next ↓" on a long
+   page, no Next of its own) and the card has the page's one Next: the next step in order, "Still to do: ..." for one skipped
+   earlier, or "Finish: see your plan"; it ticks the step as passed (`passStep`) in one `store.update`. A path step may export `waits(plan, { today }) -> { what, href } | null` (retirement: Social Security; cushion: any account): the card says "This step needs <what> first. Add it › Or go on and come back to it." with a 44 px link; it never blocks. The bar's fill is the step you are on (a full bar on the last step), not the steps done.
+2. **review**: `?from=review`: "‹ Back to the October 2026 check-in".
+3. **quick**: `?from=quick`: "‹ Quick answers" above, "Another question?" below.
+4. **plan**: a result page that is a row of Your plan (`resultOrder`), opened from it (`?from=plan`) or after the path is
+   complete: "‹ Your plan" above, "Next result: ..." below.
+5. **compact**: a page that is a step of another guide being followed (not the path), reached another way: one line above.
+6. **continue**: one quiet 44 px row at the bottom of every other page: "Continue your plan: step 4 of 7 ›", "This is step 4 of 7
+   of your plan ›" (this page is the next step: the link draws the bar), "See your plan ›" (complete) or "Start your plan: a
+   few easy questions ›" (never started). `review` and `compact` carry the same row at their bottom.
+
+So every page ends with a way on, except the pages that lead the way themselves: `OWN_PAGES` (`overview/start`,
+`overview/guide`, `overview/quick`), `SELF_LED` (`overview/setup`, `overview/plan`) and the Dashboard. The one-page "‹ Back to
+..." trails (sessionStorage) are kept beside the continue row; in path mode the trail reads "‹ Back to your plan".
+**The path is the one journey whose steps come and go with the household** (`pathVariant`, cached by `partsFor`); its
+progress is `guide.journeys.plan`, and "done" for the whole path is `pathSummary().complete`, never `finishedAt`.
+**Two filled buttons**: on a read-only step page Next is the only filled button; a few step pages draw a filled button of their
+own that is not the step's action (Pay off debts' "Add the rates and payments", Emergency fund's "I moved it"), so they show
+two. The path walk (`qa/flows/path-walk.js`) reports them and does not fail on them. A step with an `ownAction` ("Save plan",
+"Work it out") draws Next outlined until it is done.
 
 ## Input schemas (ui.form)
 ```js

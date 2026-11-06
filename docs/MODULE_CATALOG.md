@@ -12,7 +12,8 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 |---|---|---|---|---|---|
 | `overview/dashboard` | Dashboard | usable | 0 | Welcomes you with start-here actions, the setup steps still to do and, in the build view only, a look at what is coming next. | - |
 | `overview/pages` | All pages | usable | 0 | Lets you search every page in the app and see which ones work today and which build phase the rest belong to. | - |
-| `overview/start` | Get started | usable | 10 | Pick what you came to do: a quick answer, one goal or the whole plan, then follow it step by step. | Material self-select, GOV.UK start pages |
+| `overview/plan` | Your plan | usable | 10 | Your whole plan on one page: each answer in one plain sentence, which figures are our guesses, and what to do next. | GOV.UK "check your answers" page; Plan summary |
+| `overview/start` | Get started | usable | 10 | Start your plan with a few easy questions, or pick one answer or one goal, then follow it step by step. | Material self-select, GOV.UK start pages |
 | `overview/setup` | Set up my plan | usable | 10 | A few friendly questions, one per screen, that put your household, pay, accounts, debts, spending and goals in the plan, then show where you stand and your first three moves. | Monarch, Copilot and YNAB onboarding; TurboTax interview |
 | `overview/guesses` | Our guesses for you | usable | 10 | The figures the plan guessed for you, the ones that matter most first. Type the real ones when you have them. | BLS Consumer Expenditure Surveys, Fed SCF 2025 and G.19, FHFA NMDB, Census ACS and CPS, Vanguard How America Saves (industry), KFF (industry); est/design SPEC |
 | `overview/quick` | Quick answers | usable | 10 | Questions you can answer in a minute with your own numbers, with nothing to set up first. | NerdWallet, Vanguard tools hubs |

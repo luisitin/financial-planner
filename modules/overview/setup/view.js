@@ -10,17 +10,25 @@ import {
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
-  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
+  applyGoalPicks, applyGoalDetails, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
 import { typoCheck } from "../../../core/math/estimate.js";
-import { applies, guessesInUse, isGuess } from "../../../core/estimate/index.js";
-import { guessTwins } from "../guesses/compute.js";
+import { applies, isGuess } from "../../../core/estimate/index.js";
+import { startGuide, pathSummary, PATH_ID } from "../guide/compute.js";
+import { offKeys, change } from "../guide/act.js";
 import { dayWords } from "../next-best-action/compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
+
+/**
+ * Where the person is now (markAt), and the path starts with the first screen: "Build my plan" is followed from the moment the
+ * questions begin (startGuide changes nothing once it has started, so no extra save). It lives here, not in compute.js:
+ * guide/journeys imports the setup's compute, so the other way round would be a cycle.
+ */
+const atScreen = (d, screen, today) => { markAt(d, screen, today); if (!d.guide?.journeys?.[PATH_ID]?.startedAt) startGuide(d, PATH_ID, today); };
 
 let pending = [];        // [{ kind, text }] for the top of the next screen (the shell redraws after every save)
 let lastShare = 0;       // the bar starts where the last screen left it, then fills to this one
@@ -183,6 +191,13 @@ select.su-in { font-size: var(--fs-md); }
 .su-guess .su-list { margin-top: 12px; }
 .su-guess .su-gbtns { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .su-end { display: grid; gap: 10px; }
+.su-next { margin: 4px 0 0; }
+.su-next .su-help { margin-bottom: 12px; }
+.su-steps { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 8px; }
+.su-steps li { display: flex; gap: 12px; align-items: center; min-height: 32px; line-height: 1.3; }
+.su-steps li .n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-ink); font-size: var(--fs-sm); font-weight: 700; }
+.su-steps li.done { color: var(--text-2); }
+.su-steps li.done .n { background: var(--ok-soft); color: var(--ok); }
 .su-root .su-end .btn, .su-root .su-end button { display: flex; align-items: center; justify-content: center; min-height: 52px; font-size: var(--fs-md); }
 @media (max-width: 719px) { .su-stand .su-fig:last-child:nth-child(even) { grid-column: 1 / -1; } }
 @media (min-width: 720px) {
@@ -247,8 +262,11 @@ export function render(page, ctx) {
   const prog = progress(plan);
   const asked = ctx.route.rest?.[0] ?? "welcome";
   const backDone = ctx.route.query?.back === "done";
+  // opened from a row of Your plan ("&from=plan"): Back and Save both lead back to Your plan, not to the reveal
+  const fromPlan = backDone && ctx.route.query?.from === "plan";
+  const keepQuery = backDone ? `?back=done${fromPlan ? "&from=plan" : ""}` : "";
   const screenId = resolveScreen(plan, SCREENS.some((s) => s.id === asked) ? asked : "welcome");
-  if (screenId !== asked && asked !== "welcome") { try { history.replaceState(history.state, "", `#/overview/setup/${screenId}${backDone ? "?back=done" : ""}`); } catch { /* the address stays; the screen is right */ } }
+  if (screenId !== asked && asked !== "welcome") { try { history.replaceState(history.state, "", `#/overview/setup/${screenId}${keepQuery}`); } catch { /* the address stays; the screen is right */ } }
   if (cameFrom) { try { history.replaceState({ ...(history.state ?? {}), suFrom: cameFrom }, ""); } catch { /* Back then replaces instead */ } cameFrom = null; }
   const screen = SCREENS.find((s) => s.id === screenId);
   const root = ui.h("div", { class: "su-root" }, ui.h("style", {}, STYLE));
@@ -271,7 +289,7 @@ export function render(page, ctx) {
   const save = (then) => {
     if (!current) { then(nextScreen(plan, screenId)); return; }
     let kept = [];
-    const fn = (d) => { kept = current.apply(d) || []; markAt(d, then === toStart ? screenId : nextScreen(d, screenId), today); };
+    const fn = (d) => { kept = current.apply(d) || []; atScreen(d, then === toStart ? screenId : nextScreen(d, screenId), today); };
     const changed = wouldChange(plan, fn);
     if (changed) store.update(fn);
     delete drafts[screenId];
@@ -307,13 +325,13 @@ export function render(page, ctx) {
     }
     save((next) => {
       cameFrom = screenId;
-      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, { back: "done" }); else go("done"); return; }
+      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, fromPlan ? { back: "done", from: "plan" } : { back: "done" }); else if (fromPlan) ctx.go("overview", "plan"); else go("done"); return; }
       if (next === "done") reveal = true;
       go(next);
     });
   };
   const skip = () => {
-    const fn = (d) => { if (screenId === "you" && !(d.household?.people ?? []).length) applyYou(d, { who: "me" }); markAt(d, nextScreen(d, screenId), today); };
+    const fn = (d) => { if (screenId === "you" && !(d.household?.people ?? []).length) applyYou(d, { who: "me" }); atScreen(d, nextScreen(d, screenId), today); };
     if (wouldChange(plan, fn)) store.update(fn);
     delete drafts[screenId];
     const next = nextScreen(store.get(), screenId);
@@ -324,6 +342,7 @@ export function render(page, ctx) {
   // Back goes back in history when this screen was reached by Continue from the one before; else it replaces the
   // address, so the phone's Back never walks forward through the questions
   const back = () => {
+    if (fromPlan) { ctx.go("overview", "plan"); return; }
     if (backDone) { history.back(); return; }
     const prev = prevScreen(plan, screenId);
     if (!prev || prev === "welcome") { toStart(); return; }
@@ -369,7 +388,7 @@ export function render(page, ctx) {
     help ? ui.h("p", { class: "su-help" }, help) : null);
   const actions = (label = "Continue", { noSkip = false, skipLabel = "Skip this question", onSkip = skip } = {}) => {
     add(card, ui.h("div", { class: "su-actions" },
-      ui.h("button", { type: "button", class: "secondary su-backbtn", onClick: back }, "‹ Back"),
+      ui.h("button", { type: "button", class: "secondary su-backbtn", onClick: back }, fromPlan ? "‹ Your plan" : "‹ Back"),
       ui.h("button", { type: "submit", class: "su-go" }, backDone ? "Save" : label)));
     if (!noSkip && !backDone) add(card, ui.h("button", { type: "button", class: "su-skip", onClick: onSkip }, skipLabel));
   };
@@ -494,8 +513,8 @@ export function render(page, ctx) {
       const resume = prog.started && prog.at && prog.at !== "welcome" && prog.at !== "done";
       const btns = ui.h("div", { class: "su-end" });
       if (resume) add(btns, ui.h("button", { type: "button", onClick: () => go(prog.at) }, `Pick up at question ${SCREENS.find((s) => s.id === prog.at)?.q ?? 1} of ${QUESTIONS}`), ui.h("button", { type: "button", class: "secondary", onClick: () => go("you") }, "Start from the first question"));
-      else add(btns, ui.h("button", { type: "button", onClick: () => { if (wouldChange(plan, (d) => markAt(d, "you", today))) store.update((d) => markAt(d, "you", today)); go("you"); } }, "Let's go"));
-      add(card, btns, ui.h("a", { class: "su-skip", href: "#/overview/guide/whole-plan" }, "I'd rather fill in the full pages myself"));
+      else add(btns, ui.h("button", { type: "button", onClick: () => { if (wouldChange(plan, (d) => atScreen(d, "you", today))) store.update((d) => atScreen(d, "you", today)); go("you"); } }, "Let's go"));
+      add(card, btns);
     },
 
     you() {
@@ -1159,7 +1178,7 @@ export function render(page, ctx) {
     },
 
     done() {
-      if (!plan.guide?.setup?.finishedAt && wouldChange(plan, (d) => markAt(d, "done", today))) { store.update((d) => markAt(d, "done", today)); return; }
+      if (!plan.guide?.setup?.finishedAt && wouldChange(plan, (d) => atScreen(d, "done", today))) { store.update((d) => atScreen(d, "done", today)); return; }
       if (reveal && !reduced()) {
         reveal = false;
         add(card, ui.h("div", { class: "su-wait", role: "status" }, ui.h("div", { class: "su-dots", "aria-hidden": "true" }, ui.h("i"), ui.h("i"), ui.h("i")), ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, "Putting your plan together…")));
@@ -1176,7 +1195,7 @@ export function render(page, ctx) {
     const st = standing(plan, { today });
     const any = st.netWorth !== null || st.spare !== null || st.runway !== null || !!st.retire;
     add(card, ui.h("div", { class: "su-done-head" }, any ? ui.h("div", { class: "su-check", "aria-hidden": "true" }, "✓") : ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, "🌱"),
-      ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money on one page.` : "You did it. Here is your money on one page.") : "Your plan is ready for numbers"),
+      ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money so far.` : "You did it. Here is your money so far.") : "You're set up. The numbers come next."),
       ui.h("p", {}, st.headline)));
     const counters = [];
     const fig = (cls, label, value, sub, status, href) => {
@@ -1217,49 +1236,19 @@ export function render(page, ctx) {
       const tick = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); for (const c of counters) c.el.textContent = money(c.to * e).replace(/,/g, ",​"); if (k < 1 && card.isConnected) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
     }
-    if (st.moves.length) {
-      add(card, ui.h("h2", { class: "su-h2" }, st.moves.length === 1 ? "Your first move" : `Your first ${st.moves.length === 2 ? "two" : "three"} moves`),
-        ui.h("ol", { class: "su-moves" }, st.moves.map((m, i) => ui.h("li", {}, ui.h("a", { href: m.href }, ui.h("span", { class: "n", "aria-hidden": "true" }, String(i + 1)), ui.h("span", {}, ui.h("b", {}, m.title), m.detail ? ui.h("span", { class: "d" }, m.detail) : null), ui.h("span", { class: "c", "aria-hidden": "true" }, "›"))))));
-    }
-    // what is not counted yet: what no tile above already asks for (their "Add them" links cover the rest)
-    // Social Security worked out from pay is counted, so it is one of our guesses, not "not counted yet"
-    const ssLine = st.later.find((l) => l.key === "ss-estimate");
-    const notes = st.later.filter((l) => !["income", "spend", "accounts", "retire", "ss-estimate"].includes(l.key)).map((l) => rowLink(l.href, null, l.label));
-    // a car loan counts while the car is not in yet (question 4 left its value empty): said, with where to add it
-    const carLoan = (plan.accounts ?? []).some((a) => a.type === "loan" && (a.id === "setup-owe-car-loan" || /car|auto|vehicle|truck/i.test(a.name ?? "")) && Math.abs(Number(a.balance) || 0) > 0);
-    const carIn = (plan.accounts ?? []).some((a) => a.type === "vehicle" && Number(a.balance) > 0);
-    if (carLoan && !carIn) notes.unshift(rowLink(setupHref(picks(plan, "have").includes("car") ? "have-amounts" : "have"), null, "Your car: type what it would sell for, so it counts beside its loan"));
-    // the debt figures we filled in are counted, so they are not "not counted yet": they are listed as our guesses, each
-    // debt on one row, with the page that lists every guess (and where to type the real figures)
-    const homes = (plan.accounts ?? []).filter((a) => a.type === "property" && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`))
-      .map((a) => rowLink("#/overview/guesses", null, `${a.name}: worth about ${money(a.balance)}`));
-    // the month's spending we filled in comes first: it moves the most
-    const spendRow = st.spendGuessed ? [rowLink(setupHref("spend"), null, `Spending: about ${money(about(st.spendGuessed.monthly))} a month${st.spendGuessed.typed > 0 ? `, besides the ${money(st.spendGuessed.typed)} you typed` : ""}`)] : [];
-    const ours = [...spendRow, ...guessTwins(plan).map((t) => rowLink("#/overview/guesses", null, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once`)), ...homes, ...st.guessed.map((g) => {
-      const parts = [g.owed !== undefined ? `still owed about ${money(g.owed)}` : null, g.rate !== null ? `rate ${pctOf(g.rate)}` : null, g.payment !== null ? `${money(g.payment)} a month` : null].filter(Boolean);
-      return rowLink("#/overview/guesses", null, `${g.name}: ${parts.join(", ")}`);
-    }), ...(st.iraGuessed ?? []).map((x) => rowLink(setupHref("have-amounts"), null, `${ad.length > 1 ? x.name : "Your retirement"}: counted as a traditional IRA. A Roth? Tell us which`)),
-    ...(ssLine ? [rowLink(ssLine.href, null, ssLine.label)] : [])];
-    if (ours.length) {
-      const n = guessesInUse(plan).length;
-      add(card, ui.h("h2", { class: "su-h2" }, "Our guesses for now"),
-        ui.h("p", { class: "su-help" }, "Typical figures for a household like yours. Good enough to start; type the real ones when you have them."),
-        ui.h("ul", { class: "page-list" }, ours, n > ours.length ? rowLink("#/overview/guesses", null, `All ${n} of our guesses`) : null));
-    }
-    if (notes.length) add(card, ui.h("h2", { class: "su-h2" }, "Not counted yet"), ui.h("ul", { class: "page-list" }, notes));
-    const a = plan.assumptions ?? {};
-    const pc = (x) => `${Math.round(Number(x) * 1000) / 10}%`;
-    const looked = !!a.reviewedAt;
-    add(card, ui.h("details", { class: "card fold fold-card su-guess" },
-      ui.h("summary", {}, ui.h("h2", {}, "What the plan assumes about prices and markets"), ui.h("span", { class: "fold-status" }, looked ? "✓ Looked over" : "Worth a look"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-      ui.h("ul", { class: "su-list" },
-        [["🏷️", `Prices rise ${pc(a.inflation ?? 0.03)} a year`, "Inflation, the long-run average"],
-          ["📈", `Stocks grow about ${pc(a.returnStocks ?? 0.07)} a year, bonds ${pc(a.returnBonds ?? 0.04)}`, "Before inflation, on average; some years fall"],
-          ["🎂", `The plan runs to age ${a.planEndAge ?? 95}`, "So the money is planned to last"],
-          ["🛟", `A cushion of ${a.emergencyMonths ?? 6} months of must-pay bills`, "For a lost job or a big repair"]]
-          .map(([i, b, m]) => ui.h("li", {}, ui.h("span", { class: "su-li", "aria-hidden": "true" }, i), ui.h("div", {}, ui.h("b", {}, b), ui.h("span", { class: "m" }, m))))),
-      ui.h("div", { class: "su-gbtns" }, looked ? null : ui.h("button", { type: "button", class: "secondary", onClick: () => { pending = [{ kind: "ok", text: "Saved: you've looked over what the plan assumes." }]; store.update((d) => applyGuesses(d, today)); } }, "These sound fine"), ui.h("a", { href: "#/system/assumptions", class: "btn secondary" }, "Change them ›"))));
-    add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: "#/overview/dashboard" }, "Go to my dashboard"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer")));
+    // what's next: the rest of the path, one page at a time, ending at Your plan. The first moves, our guesses and what the plan
+    // counts on moved to Your plan (overview/plan), where the whole picture is
+    const ps = pathSummary(plan, { off: offKeys(ctx), today });
+    const rest = ps.parts.slice(1);
+    const minutes = Math.max(5, Math.round((2 * Math.max(1, ps.total - 1)) / 5) * 5);
+    if (ps.complete) add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: ps.planHref }, "Back to your plan ›"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer")));
+    else add(card, ui.h("section", { class: "su-next", "aria-labelledby": "su-next-h" },
+      ui.h("h2", { class: "su-h2", id: "su-next-h" }, "What's next"),
+      ui.h("p", { class: "su-help" }, `Now a quick look at each step of your plan, one page at a time: about ${minutes} more minutes. Anything you don't know, we fill in with our guesses.`),
+      ui.h("ol", { class: "su-steps" }, [...rest.map((x) => ui.h("li", { class: x.done ? "done" : "" }, ui.h("span", { class: "n", "aria-hidden": "true" }, x.done ? "✓" : String(rest.indexOf(x) + 2)), x.name)), ui.h("li", { class: "then" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "→"), "Then: your whole plan on one page")]),
+      ui.h("div", { class: "su-end" },
+        ps.next ? ui.h("a", { class: "btn", href: ps.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Next: ${ps.next.name} ›`) : null,
+        ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer"))));
     try { card.querySelector("#su-q")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
   }
 

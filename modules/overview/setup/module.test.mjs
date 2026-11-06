@@ -2194,3 +2194,33 @@ test("C7 integration (M10): a spending row read from bank files is not counted a
   assert.equal(r.guessedMonthly, 400);
   assert.equal(r.typedMonthly, 900);
 });
+
+test("the path: starting it after the questions says started with the next step 'month'; guessList lists what the old done screen did", async () => {
+  const { startGuide, pathSummary, PATH_ID } = await import("../guide/compute.js");
+  const { guessList, notCounted } = await import("../plan/words.js");
+  const { sam, finishSetup } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const p = finishSetup("sam", sam(T), T);
+  S.markAt(p, "done", T);
+  assert.equal(startGuide(p, PATH_ID, T), true);
+  const ps = pathSummary(p, { today: T });
+  assert.deepEqual([ps.started, ps.next.key, ps.step], [true, "month", 2]);
+  // the same rows, in the same order: the spending we filled in first, then each debt's figures, in plain words
+  const rows = guessList(p, { today: T });
+  const st = S.standing(p, { today: T });
+  assert.equal(rows.length >= (st.guessed?.length ?? 0), true);
+  for (const g of st.guessed ?? []) assert.ok(rows.some((r) => r.label.startsWith(`${g.name}: `)), g.name);
+  for (const r of rows) assert.ok(r.label && /^#\//.test(r.href), JSON.stringify(r));
+  if (st.spendGuessed) assert.match(rows[0].label, /^Spending: about \$[\d,]+ a month/);
+  // (a car loan with no car in yet gets its own line first, as on the old done screen)
+  assert.deepEqual(notCounted(p, { today: T }).map((r) => r.label).filter((l) => !l.startsWith("Your car:")), (st.later ?? []).filter((l) => !["income", "spend", "accounts", "retire", "ss-estimate"].includes(l.key)).map((l) => l.label));
+});
+
+test("review fixes: the reveal's list numbers only the steps and ends on an unnumbered 'Then' line; an empty reveal does not say 'ready'", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.match(view, /class: "then"[^]*"Then: your whole plan on one page"/);
+  assert.doesNotMatch(view, /String\(rest\.length \+ 2\)/, "the last line takes no step number");
+  assert.doesNotMatch(view, /ready for numbers/i);
+  assert.match(view, /You're set up\. The numbers come next\./);
+  // opened from a row of Your plan: Back and Save go back there, and the address keeps the mark
+  assert.match(view, /const keepQuery = backDone \? `\?back=done\$\{fromPlan \? "&from=plan" : ""\}` : ""/);
+});

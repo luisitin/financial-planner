@@ -3,6 +3,8 @@
 //   jordan()  one parent of two in Ohio, $58,000 a year, born June 1985, a home and a mortgage (knows the payment only)
 //   patLee()  a couple in Arizona, $85,000 + $40,000, born 1965 and 1967, a typed $450,000 home, a mortgage
 //   sam()     one person in Texas, $48,000, born 2002, $1,200 checking and $800 savings, a car loan and credit cards
+//   ruth()    a retired widow in Florida, born 1954, a pension and Social Security paid, savings and a $380,000 retirement account, no debts
+//             (the path walk's fourth household: the retirement steps, and a required withdrawal that starts next year)
 // Used by modules/overview/guesses/module.test.mjs, modules/overview/setup/module.test.mjs and the C2 phone walks.
 import * as S from "../../modules/overview/setup/compute.js";
 import { emptyPlan, migrate } from "../../core/schema/migrate.js";
@@ -38,5 +40,29 @@ export function sam(today = PERSONA_TODAY) {
   S.applyHavePicks(p, ["checking", "savings"]);
   S.applyHaveAmounts(p, { checking: 1200, savings: 800 }, today);
   S.applyOwePicks(p, ["car-loan", "credit"]);
+  return p;
+}
+
+export function ruth(today = PERSONA_TODAY) {
+  const p = migrate(emptyPlan());
+  S.applyYou(p, { name: "Ruth", who: "me", kids: 0, state: "FL" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired", pension: 1200 } }, other: {} });
+  S.applyAges(p, { people: { "setup-self": { month: 5, year: 1954, retired: true, ss: { mode: "getting", amount: 1900, started: 66 } } } }, today);
+  S.applyHavePicks(p, ["checking", "savings", "retire"]);
+  S.applyHaveAmounts(p, { checking: 9000, savings: 40000, "retire-setup-self": 380000 }, today);
+  S.applyOwePicks(p, ["none"]);
+  return p;
+}
+
+/**
+ * The rest of the questions, answered with typed figures (Q5b to Q7), for the four households above, so a test can walk the
+ * path from an empty plan to Your plan. `name` is "sam" | "jordan" | "patLee" | "ruth".
+ */
+export function finishSetup(name, p, today = PERSONA_TODAY) {
+  if (name === "sam") S.applyOweAmounts(p, { credit: { owed: 3200, payment: 90 }, "car-loan": { owed: 9000, payment: 310 } }, today);
+  if (name === "jordan") S.applyOweAmounts(p, { mortgage: { owed: 180000, rate: "6.5", payment: 1500, home: "260k" } }, today);
+  if (name === "patLee") S.applyOweAmounts(p, { mortgage: { owed: 120000, rate: "3.1", payment: 1100 } }, today);
+  S.applySpend(p, { mode: "rows", rows: { housing: name === "sam" ? 900 : 1200, utilities: 200, groceries: 400, transport: 300, insurance: 200, dining: 150, shopping: 100 } }, today);
+  S.applyGoalPicks(p, ["cushion", "retire"]);
   return p;
 }

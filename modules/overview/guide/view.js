@@ -1,7 +1,7 @@
 // modules/overview/guide/view.js -- DOM only. #/overview/guide: the list of guides. #/overview/guide/<id>: one guide,
 // its steps (the whole row is the link; the next step also gets the page's only filled button, as the dashboard's
 // setup steps do), and when every numbered step is done, a finish card.
-import { compute, journeyById, startGuide, leaveGuide, finishGuide } from "./compute.js";
+import { compute, journeyById, startGuide, leaveGuide, finishGuide, PATH_ID } from "./compute.js";
 import { offKeys, usable, change } from "./act.js";
 
 let pending = null;   // { id, text }: a green line shown once on the next render of that guide
@@ -91,7 +91,7 @@ function renderOne(wrap, ctx, id) {
   // header
   const pct = s.total ? Math.round(100 * s.doneCount / s.total) : 0;
   wrap.append(ui.h("section", { class: "card" },
-    ui.h("div", { class: "gd-kicker" }, "Step-by-step guide"),
+    ui.h("div", { class: "gd-kicker" }, id === PATH_ID ? "Your plan" : "Step-by-step guide"),
     ui.h("h1", {}, s.title),
     ui.h("p", { class: "gd-lede" }, s.line),
     ui.h("p", { class: "gd-meta" }, `About ${s.minutes} minutes. Stop any time; what you have saved stays in your plan.`),
@@ -120,19 +120,19 @@ function renderOne(wrap, ctx, id) {
     ui.h("ol", { class: "steps" }, numbered.map(stepRow)),
     extras.length ? [ui.h("h3", { class: "gd-extra" }, "Extra steps for you"), ui.h("p", { class: "gd-extra-sub" }, "Not needed to finish; worth a look when they apply."), ui.h("ul", { class: "steps" }, extras.map(stepRow))] : null,
   ];
-  const stopBtn = active ? ui.h("button", { type: "button", class: "gd-textbtn", onClick: () => { pending = { id, text: "You stopped following this guide. Your steps are kept; start it again from here or from Get started." }; change(ctx, (q) => leaveGuide(q)); } }, "Stop following this guide") : null;
+  const stopBtn = active && id !== PATH_ID ? ui.h("button", { type: "button", class: "gd-textbtn", onClick: () => { pending = { id, text: "You stopped following this guide. Your steps are kept; start it again from here or from Get started." }; change(ctx, (q) => leaveGuide(q)); } }, "Stop following this guide") : null;
 
   if (s.complete) {
     const extrasLine = s.extrasLeft ? `${s.extrasLeft} extra step${s.extrasLeft === 1 ? " is" : "s are"} left if you want ${s.extrasLeft === 1 ? "it" : "them"}.` : null;
     const fin = s.finish;
     wrap.append(ui.h("section", { class: "card gd-finish", "aria-labelledby": "gd-fin-h" },
       ui.h("div", { class: "gd-done", "aria-hidden": "true" }, "✓"),
-      ui.h("h2", { id: "gd-fin-h" }, "Guide finished"),
+      ui.h("h2", { id: "gd-fin-h" }, id === PATH_ID ? "Every step is done" : "Guide finished"),
       ui.h("p", {}, fin.text),
       extrasLine ? ui.h("p", { class: "gd-extras" }, extrasLine) : null,
       ui.h("div", { class: "steps-cta" },
         usable(ctx, fin.page) ? ui.h("a", { href: `#/${fin.page}`, class: "btn", onClick: () => change(ctx, (q) => finishGuide(q, id, today)) }, fin.label) : null,
-        ui.h("a", { href: "#/overview/guide", class: "btn secondary", onClick: () => change(ctx, (q) => finishGuide(q, id, today)) }, "Pick another guide"),
+        ui.h("a", { href: id === PATH_ID ? "#/overview/start" : "#/overview/guide", class: "btn secondary", onClick: () => change(ctx, (q) => finishGuide(q, id, today)) }, id === PATH_ID ? "Do something else" : "Pick another guide"),
         ui.h("button", { type: "button", class: "gd-textbtn", onClick: () => { const f = wrap.querySelector("details.gd-all"); if (f) { f.open = true; f.scrollIntoView({ block: "start" }); } } }, "Show all the steps"))));
     wrap.append(ui.h("details", { class: "card fold fold-card gd-all" },
       ui.h("summary", {}, ui.h("h2", {}, s.extrasLeft ? "Main steps done ✓" : `All ${s.total + s.extrasTotal} steps done ✓`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),

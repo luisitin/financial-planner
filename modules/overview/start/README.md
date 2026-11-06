@@ -8,13 +8,12 @@ one big card, **Set up my plan** (`overview/setup`: seven questions, one per scr
 "Or jump straight to" as a grid of eight tiles. The card has three states (`setupCard`): new ("Let's go", three ticks:
 rough numbers are fine, stop any time, no bank logins); started ("Question 4 of 7", the bar, "Next: what you owe", "Pick
 up where you left off"); done (what you own minus what you owe, what's left each month, "Your next move: ..." from the
-setup's own where-you-stand, and "See everything on one page"). A plan built on its own pages first (the whole-plan
-guide's steps all done) counts as done. The heading greets the person by the name the plan has ("Hi Ana. What would you
+setup's own where-you-stand, and "See everything on one page"). A plan built on its own pages first (the Dashboard's first five
+steps all done) counts as done. The heading greets the person by the name the plan has ("Hi Ana. What would you
 like to do?"; no "Hi there"). The tiles: Quick answer, Pay off debt, Spend less save more, Buy a home, Plan retirement,
 Sort out taxes, Protect my family, Big life change (Life events); a started guide's tile shows "2 of 3" and a finished
-one "✓ Done". Footer: "Just exploring? Go to the dashboard ›" and the privacy line. The whole-plan guide stays on Step
-by step and behind "I'd rather fill in the full pages myself" on the setup's welcome screen; the sections below keep
-the earlier rules that still hold.
+one "✓ Done". Footer: "Just exploring? Go to the dashboard ›" and the privacy line. The old whole-plan guide is gone (the path replaced it);
+the sections below keep the earlier rules that still hold.
 
 The owner asked (2026-10-31): "Focus on making it user friendly and easy to use. Maybe have a way to start picking an
 option of what you want to do (calculator / financial plan / etc...) then guide." This page is that start: "What would
@@ -41,12 +40,12 @@ guide. `compute(plan, { today, off })`.
 ## Outputs
 `{ empty, firstRun, opensHere, setup: { state: new|started|done, href, q?, total?, share?, next?, netWorth?, spare?, move? },
 tiles: [{ id, icon, title, line, href, page, status: null | "2 of 3" | "Done" }], featured: { state: new|started|done,
-label, line, href, doneCount, total } (the whole-plan guide, kept for Step by step), rows (the earlier list, kept for
+label, line, href, doneCount, total } (the path, "Build my plan", built on `pathSummary`), rows (the earlier list, kept for
 compatibility), more: { label, href }, resume: activeSummary | null, hasAccounts }`.
 
 ## Rules (tested)
-- **Featured panel** = the whole-plan guide, which is exactly the dashboard's six setup steps, so the count is the
-  dashboard's: none done and the guide never started "Start my plan" (it goes straight to the next step, not to another list; the
+- **Featured panel** = the path (the `plan` journey: questions, then a look at each step, ending on Your plan), so the count is
+  the path's: none done and the path never started "Start my plan" (it goes straight to the next step, not to another list; the
   "Not sure? Start here." line shows only then), some done or some skipped
   "Continue my plan" ("5 of 6 steps are done. Next: check the assumptions."), all done "Look over my plan" (the guide
   page). The number of steps comes from the data, never typed as "six".
@@ -55,7 +54,7 @@ compatibility), more: { label, href }, resume: activeSummary | null, hasAccounts
 - **Resume card**: while a guide other than the whole plan is followed and not finished, "Pick up where you left off"
   with "Do step N: ..." (then the page's only filled button; the featured button turns outlined).
 - **Choosing** writes `plan.guide.chosen = { id, at }` (DATA_MODEL `guide`), at most once a day per choice (every save
-  sends the whole plan to the PC and leaves a backup copy there). The featured button also starts the whole-plan guide.
+  sends the whole plan to the PC and leaves a backup copy there). The featured button also starts the path.
 - **Not connected**: when the plan is kept on this device only (not the PC, not the sandbox), a notice says so before
   anyone types for half an hour, with a link to Settings.
 
@@ -93,3 +92,12 @@ started guide's progress.
 - The dashboard's "Choose what to do first" tile on an empty plan, "Continue: <guide>" and "Start something new"
   (designer's lane; asked on the WORKBOARD).
 - "Look around with a pretend family" (a demo household), if the owner wants to show the app to others.
+
+
+## 2026-11-06, the path
+The big card is now **Build my plan** and follows the path (`overview/guide`'s `plan` journey, `compute().path` = `pathSummary`):
+new ("Let's go", one button; the eight tiles are folded behind "Just want one answer?"), the questions started ("Question 3 of
+7", the bar), the path under way ("Step 4 of 7", "Your plan", "Continue: <step> ›", "See your plan so far ›"), complete
+("Here's where you stand", "See your plan ›"). `featured()` keeps its old shape, built on `pathSummary`. `CHOICE_IDS` keeps
+`whole-plan` (a stored choice) and adds `plan`. `setupCard` counts a plan built page by page as done when the Dashboard's first five
+steps are done.

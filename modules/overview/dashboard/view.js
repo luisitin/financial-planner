@@ -2,7 +2,8 @@
 // steps, and what is coming. Money numbers appear once there is money in the plan: first where you stand (one plain
 // sentence, three status lines and your next move, from overview/setup's standing()), then the owner's four tiles.
 import { PHASES } from "../../../core/phases.js";
-import { usable } from "../guide/act.js";
+import { usable, offKeys } from "../guide/act.js";
+import { pathSummary } from "../guide/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
 import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
@@ -52,6 +53,7 @@ export function render(root, ctx) {
   const today = fmt.today();
   const setupOn = usable(ctx, "overview/setup");
   let moveShown = false;   // the where-you-stand card holds the page's one filled button
+  const pathStarted = (() => { try { const w = pathSummary(plan, { off: offKeys(ctx), today }); return w.started ? w : null; } catch { return null; } })();
   root.append(ui.h("style", {}, STYLE));
 
   // ---- welcome / money
@@ -61,7 +63,9 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Your financial plan"),
       ui.h("p", { class: "lede" }, "Everything about your money in one place, on your own computer. Nothing here goes to the cloud."),
-      ui.h("p", { class: "lede", style: { marginTop: "10px", fontWeight: "600" } }, setupOn ? "Start with a few easy questions. It takes about five minutes." : "Start by adding your accounts. It takes about five minutes."),
+      ui.h("p", { class: "lede", style: { marginTop: "10px", fontWeight: "600" } }, setupOn ? "Start with a few easy questions: about five minutes for those, about 20 for your whole plan." : "Start by adding your accounts. It takes about five minutes."),
+      // a plan with nothing in it yet but the questions answered or skipped still has a page to see: Your plan says what is missing
+      setupOn && pathStarted ? ui.h("a", { href: pathStarted.planHref, style: { display: "flex", alignItems: "center", minHeight: "44px", fontWeight: "600" } }, "See your plan so far ›") : null,
     ));
   } else {
     // ---- our guesses (spec 11.3): one card at a time. "Fill in what you skipped" and "Is something missing?" sit right under
@@ -120,7 +124,10 @@ export function render(root, ctx) {
         }
       }
       const move = st.moves[0] ?? null;
-      moveShown = !!move;
+      // the path (Your plan) is under way: the page's one filled button continues it, and the next move waits on Your plan
+      const way = setupOn ? pathSummary(plan, { off: offKeys(ctx), today }) : null;
+      const underWay = !!way && way.started && !way.complete && !!way.next;
+      moveShown = !!move || underWay;
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
         ui.h("h1", { id: "db-now-h" }, name ? `Hi ${name}.` : "Where you stand"),
         ui.h("p", { class: "db-head" }, st.headline),
@@ -129,8 +136,10 @@ export function render(root, ctx) {
           ui.h("span", { class: "db-k", "aria-hidden": "true" }, r.k, ui.h("span", { class: "db-s" }, r.s)),
           ui.h("span", { class: `db-v${r.open ? " open" : ""}`, "aria-hidden": "true" }, r.v),
           r.open ? null : ui.h("span", { class: "db-chev", "aria-hidden": "true" }, "›"))))),
-        move ? ui.h("a", { class: "btn db-go", href: move.href }, `Your next move: ${move.title} ›`) : null,
-        ui.h("a", { class: "db-all", href: "#/overview/setup/done" }, move ? "See all your moves ›" : "See where you stand ›")));
+        underWay ? ui.h("p", { class: "db-s", style: { margin: "0 0 8px" } }, `Your plan: step ${way.step} of ${way.total}`) : null,
+        underWay ? ui.h("a", { class: "btn db-go", href: way.next.href }, `Continue your plan: ${way.next.name} ›`)
+          : move ? ui.h("a", { class: "btn db-go", href: move.href }, `Your next move: ${move.title} ›`) : null,
+        ui.h("a", { class: "db-all", href: way?.started ? way.planHref : "#/overview/setup/done" }, underWay ? "See your plan so far ›" : way?.complete ? "See your plan ›" : move ? "See all your moves ›" : "See where you stand ›")));
     }
     if (said) root.append(said);
     if (guessCard) root.append(guessCard);

@@ -1,6 +1,6 @@
 // modules/overview/guide/act.js -- small helpers the guide's views and frame share (no DOM; they touch ctx).
-/** "group/id" keys of pages that are not ready or are switched off on this device. */
-export const offKeys = (ctx) => [...ctx.modules.entries()].filter(([, m]) => !ctx.isReady(m) || !ctx.features.enabled(m)).map(([k]) => k);
+/** "group/id" keys of pages that are not ready, are switched off on this device, or are hidden by the household's view. */
+export const offKeys = (ctx) => [...ctx.modules.entries()].filter(([, m]) => !ctx.isReady(m) || !ctx.features.enabled(m) || (ctx.shown && !ctx.shown(m))).map(([k]) => k);   // shown: the household's view hides pages that need the PC or the AI helper unless they answer (core/view.js)
 export const usable = (ctx, key) => { const m = ctx.modules.get(key); return !!m && ctx.isReady(m) && ctx.features.enabled(m) && (ctx.shown ? ctx.shown(m) : true); };   // shown: the household's view (core/view.js)
 /**
  * Apply one of compute.js's changes (startGuide, markLooked, ...) through store.update, but only when it changes
