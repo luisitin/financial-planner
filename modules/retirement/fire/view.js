@@ -3,7 +3,7 @@
 // if markets do as well as average: compute's withIncome); then the 25-times rule as a quick
 // check, folded: the number, how far along you are, the years to get there at the current pace, and the coast figure.
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
-import { compute, carefulAgeSteps } from "./compute.js";
+import { compute, carefulAgeSteps, ruleWords, plannedStopWords } from "./compute.js";
 import { whenWorked, slot, RULE_WORDS, leftWords } from "../careful.js";
 
 const STYLE = `
@@ -111,10 +111,7 @@ export function render(root, ctx) {
   // runs short in 2052" and Will the money last?, spending savings only from 2031, "It lasts, just")
   // (verify 2026-11-06: one who said "Not working now", a parent at home, read "stopped" and "If Elena has stopped, set Elena's
   // retirement age to 35"; now "not working" and "if Elena does not go back to work")
-  const ps = w.plannedStop, psWho = ps ? sayName(ps.name) : "", psYou = psWho === "you";
-  const psWords = !ps ? "" : ps.notWorking
-    ? `This counts ${psWho} as not working from this year on. Your plan still has ${psWho} working until ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}. If ${psWho} ${psYou ? "do" : "does"} not go back to work, set ${psYou ? "your" : `${psWho}'s`} retirement age to ${ps.age} on the `
-    : `This counts ${psWho} as stopped from this year. Your plan still has ${psWho} stopping work at ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}. If ${psWho} ${psYou ? "have" : "has"} stopped, set ${psYou ? "your" : `${psWho}'s`} retirement age to ${ps.age} on the `;
+  const ps = w.plannedStop, psWords = plannedStopWords(ps, sayName);
   const psEl = ps ? ui.h("p", { class: "small" }, psWords, ui.h("a", { href: "#/household/people" }, "People page"), ".") : null;
   // fill in the 9-in-10 age: the same paths and seed as Will the money last?'s careful figure (fire/compute.js carefulAgeSteps)
   // (no height kept: the answer is as long as the placeholder or shorter, and a kept height left a blank gap)
@@ -169,7 +166,7 @@ export function render(root, ctx) {
   host.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `The ${times}-times rule, a quick check`), ui.h("span", { class: "fold-status" }, "for comparison"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "fi-rule" }, `A quick rule: savings of ${times} times what you spend a year pay for life without a paycheck. It counts everything left over each month as saved and leaves out Social Security, pensions and taxes, so it can come out sooner or later than the answer above. The answer above, worked out year by year from your plan, is the one to go by.`),
+      ui.h("p", { class: "fi-rule" }, ruleWords(times, d.healthAdded)),
       ui.h("p", {}, `${d.progress >= 1 ? "By this rule you have enough already. " : d.yearsToFi !== null ? `By this rule: about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}. ` : ""}${ruleLede}`), progress, statRow(), ui.h("h3", {}, "What moves it"), moveList()),
   ));
 }

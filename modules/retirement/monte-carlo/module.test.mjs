@@ -69,7 +69,15 @@ test("another withdrawal rule: the planned share is steady spending at the plan'
   assert.equal(mc.successRate, 1, "a set share of what is left never runs out");
   assert.ok(mc.careful.planned < 0.5, `$132,000 spent steadily lasts in only ${mc.careful.planned}`);
   const steady = retirementPlan(); steady.retirement.spendingMonthly = 11000;
-  assert.equal(mc.careful.yearly, mcCompute(steady, { today: "2026-11-02", paths: 100 }).careful.yearly, "the careful figure is steady spending either way");
+  // the health line (projection README, "Health cover on top of spending") is priced on the plan's own income, which the rule moves
+  // (a set share takes out other amounts, so other income): with the same health line the careful figure is the same either way
+  const { buildInputs } = await import("../projection/compute.js");
+  const { spendingAtChance } = await import("./compute.js");
+  const Ip = buildInputs(plan, { today: "2026-11-02" }).inputs, Is = buildInputs(steady, { today: "2026-11-02" }).inputs;
+  assert.equal(mc.careful.yearly, spendingAtChance({ ...Is, events: Ip.events }).yearly, "the careful figure is steady spending either way");
+  // and with no health line (the box "my spending figure already includes health cover") the two plans give one figure
+  plan.retirement.healthIncluded = true; steady.retirement.healthIncluded = true;
+  assert.equal(mcCompute(plan, { today: "2026-11-02", paths: 2000 }).careful.yearly, mcCompute(steady, { today: "2026-11-02", paths: 100 }).careful.yearly);
 });
 
 test("leaving money at the end: the careful figure for that goal, below the one that only lasts", async () => {

@@ -57,3 +57,42 @@ test("the 2027 drug-plan base premium is the 2026 one raised by the 6% yearly ca
   assert.equal(PART_D_BASE_NEXT.year, 2027); assert.equal(PART_D_BASE_NEXT.amount, 41.33);
   assert.equal(Math.round(PART_D_BASE * 1.06 * 100) / 100, PART_D_BASE_NEXT.amount);
 });
+
+// review 2026-11-02 (fifth pass): two incomes, by law. Medicare's surcharge: AGI plus tax-exempt interest (42 USC 1395r(i)(4)(A));
+// the marketplace's credit: AGI plus untaxed Social Security plus tax-exempt interest (26 USC 36B(d)(2)(B))
+const couple6863 = () => {
+  const o = familyPlan("2026-11-02"); o.household.people = o.household.people.filter((x) => x.role !== "dependent");
+  o.household.people[0].birthDate = "1958-03-01"; o.household.people[1].birthDate = "1963-06-01";
+  for (const q of o.household.people) q.retirementAge = 60;
+  o.income = []; o.retirement.contributions = []; o.retirement.spendingMonthly = null;
+  o.expenses.push({ id: "mc", name: "Medicare Part B", category: "health", amount: 203, period: "monthly", essential: true, inflates: true });
+  return o;
+};
+
+test("fifth pass: Medicare's surcharge income is AGI plus tax-exempt interest; the marketplace's adds untaxed Social Security", async () => {
+  const { irmaaIncome, marketplaceIncome, planIncome } = await import("./compute.js");
+  assert.equal(irmaaIncome({ agi: 50000, exemptInterest: 2000, untaxedSocialSecurity: 30000 }), 52000);
+  assert.equal(marketplaceIncome({ agi: 50000, exemptInterest: 2000, untaxedSocialSecurity: 30000 }), 82000);
+  assert.equal(marketplaceIncome({ agi: 50000 }), 50000); assert.equal(irmaaIncome({}), 0);
+  // the 68/63 couple in 2026: Ana's Social Security is mostly untaxed; the surcharge counts the taxed part only, the marketplace all of it
+  const pi = planIncome(couple6863(), { today: "2026-11-02" });
+  const row = pi.run.rows.find((r) => r.year === 2026), parts = pi.partsOf(row);
+  near(parts.agi, (row.taxInfo.ordinary + row.taxInfo.qualified + row.taxInfo.taxableSocialSecurity) / row.priceLevel, 1e-6);
+  near(parts.untaxedSocialSecurity, (row.taxInfo.socialSecurity - row.taxInfo.taxableSocialSecurity) / row.priceLevel, 1e-6);
+  assert.ok(parts.untaxedSocialSecurity > 20000, String(parts.untaxedSocialSecurity));
+  near(pi.magiOf(row), parts.agi, 1e-6, "was the same figure for both");
+  near(pi.acaMagiOf(row), parts.agi + parts.untaxedSocialSecurity, 1e-6);
+  // an interest line on Income, even marked untaxed, is never added to the plan (its money is in the accounts' growth, which the
+  // brackets count as dividends in AGI: projection otherIncome, recheck 2026-11-05), so nothing is added on top of AGI for it
+  // (review 2026-11-06, was 3,000 in both); other untaxed income (support) is in neither
+  const q = couple6863();
+  q.income.push({ id: "muni", name: "Muni bond interest", type: "investment", personId: "", amount: 3000, period: "annual", growth: 0, taxable: false },
+    { id: "kid", name: "Support", type: "support", personId: "", amount: 2400, period: "annual", growth: 0, taxable: false });
+  const qi = planIncome(q, { today: "2026-11-02" }), qrow = qi.run.rows.find((r) => r.year === 2026), qp = qi.partsOf(qrow);
+  near(qp.exemptInterest, 0, 1e-6); assert.equal(qi.inputs.incomes.some((x) => x.name === "Muni bond interest"), false);
+  near(qi.magiOf(qrow), qp.agi, 1e-6); near(qi.acaMagiOf(qrow), qp.agi + qp.untaxedSocialSecurity, 1e-6);
+  // Medicare's page prices the surcharge on its own income (the year two before), never the marketplace's
+  const d = compute(couple6863(), { today: "2026-11-02" });
+  const y = d.years.find((x) => x.year === 2028);
+  near(y.magiReal, pi.magiOf(pi.run.rows.find((r) => r.year === 2026)), 1e-6);
+});

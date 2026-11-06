@@ -64,7 +64,7 @@ plan already lasts.
 No adult with a birth date, no accounts, or no spending figure: the page lists what is missing and still shows the settings. Already retired: retirement year = this year. A partner retiring after the primary: their pay counts as income until then.
 
 ## Tests
-`module.test.mjs` (inputs from the fixture couple, the run, fallbacks) and `tests/retirement.test.mjs` (the engine: buckets in order, gross-up, RMD, sequences, strategies, affordable spending).
+`module.test.mjs` (inputs from the fixture couple, the run, fallbacks) and `tests/retirement.test.mjs` (the engine: buckets in order, gross-up, RMD, sequences, strategies, affordable spending); events marked spending paid by income first). Health line (2026-11-02): the couple at 62 year by year against Healthcare before 65 and Medicare, the job's years left out whoever is listed first (and the Medicare page's lifetime = added + `onJob`), a removed premium back while a partner works ($77,116 a year), the box (and `showHealth` saying what it would cost), a Medicare line for a parent (all Medicare stays; an added expense never raises what the plan carries) and for the older of a couple (the younger's share only), Get started's "Insurance and health" row (kept; pays a retired couple's Medicare) and its own spending figure (`retireAuto`: the premium comes out), which lines are health cover, no recursion whichever page loads first, and the verdict moving the right way.
 
 ## Review fixes 2026-11-02
 - `householdRetired`: a retirement age left blank is the plan's own (Assumptions, 65 by default), as the projection uses it, so a retired couple added on People with the age blank counts as retired.
@@ -243,3 +243,293 @@ counts 2026 to 2030, and the names the check takes and leaves. It failed on the 
   ("FERS pension and TSP"), the kind of mistake this review fixed for rent.
 Test (`module.test.mjs`, "review 2026-11-06: a draw from a business"): the names it takes and leaves; "Owner's draw from
 business account" to 2029 counts 2026 to 2029 and nothing is left out as "accounts". It failed before the change.
+
+## Health cover on top of spending (2026-11-02)
+Before, the engine had no health line: retirement spending was a typed figure or today's expenses (which leave out cover
+paid from pay through work), and the Social Security page asks for the benefit before Medicare is taken out, so Part B was
+never paid by anyone. For the family couple stopping at 62 that left out about $39,700 of marketplace cover to 65 (after
+$29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
+- `buildInputs(plan, { today, health = true })` appends one engine event a year in which cover is priced (from the
+  household's retirement year, or earlier for someone who has stopped while nobody works: fourth pass below),
+  `{ year, amount, label: "Health cover", kind: "health", spending: true }`, in today's dollars (the engine multiplies by the
+  year's price level): the marketplace cost after any credit (`retirement/healthcare` `years[].cost`: a year in which nobody
+  still works and someone who has stopped is under 65) plus Medicare (`retirement/medicare` `years[].totalYearly`: Part B, the drug
+  plan, any supplement and the income surcharge for everyone 65 or over). Appended to the events the inputs carry, never
+  replacing them; every what-if and market path built on the inputs reuses them.
+- The engine (`core/math/retirement.js`): an event with `spending: true` counts with the year's spending, so guaranteed
+  income pays it first and only the rest comes out of savings: need = max(0, spending + marked events - income) + other
+  events. Without the flag a household whose pension and Social Security cover everything would have paid its Medicare from
+  savings. Rows carry `eventSpending` (that part of `eventOut`).
+- One rule for every person and year, whoever is listed first (review fix 2026-11-02; it was "from the household's
+  retirement year", which made the answer depend on who is "self"): while anyone in the household still works, a plan
+  through that job covers the household, as Healthcare before 65 leaves those years to the job's plan (`onWorkPlan`), so no
+  marketplace and no Medicare is added that year, the working person's own Medicare included. `health.onJob` names those
+  Medicare years and the page says so ("In 2053 and 2054 Bo is 65 or over while Ana still works: a plan through Ana's job
+  can cover Bo, so Medicare those years is not added (the Medicare page counts them)"). The Medicare page's lifetime is the
+  added years plus `onJob.total`. Who works, and the years before the household's retirement year: see "Review fixes
+  2026-11-02 (third pass)" and "(fourth pass)" below.
+- One pass for income: both pages price cover on `medicare` `planIncome`, the plan run through the brackets by
+  `buildInputs({ health: false })`, worked out once per `buildInputs` and handed to both (`params.planIncome`). The premiums'
+  own withdrawals therefore do not raise the income they are priced on, and a what-if that changes income afterwards (a
+  Roth conversion fill on Roth conversions, different returns on Goal seek) does not re-price them; one that rebuilds the
+  plan (another retirement age on Goal seek, a survivor on Stress tests and Life cover) does. `planIncome` takes a shallow
+  copy of the plan (it only reads it), so a plan with years of bank transactions is not copied each time.
+- Not twice: `retirement.healthIncluded === true` ("My spending figure already includes health cover", a box under Health
+  cover on this page) adds nothing. Spending carried from today's bills is today's expenses, or Get started's own starting
+  figure (`guide.setup.retireAuto === true`: setup's `retireDefault`, today's bills less childcare and loan payments, which
+  carries the same lines, worked out live: `setupFigure`, below; review fix 2026-11-02, it was taken as typed and a premium
+  in it was counted twice). In carried
+  spending (`carriedHealth`, `healthLine`):
+  - a "cover" line, one that pays only for cover before Medicare (health or medical insurance or plan, the marketplace,
+    COBRA, an insurance or premium line under Health and medical; not dental, vision, life, care or other insurance), comes
+    out of the carried figure (`removedMonthly`, capped at the figure), because today's expenses are carried whole into
+    retirement (a work premium ending at retirement is not ended there) and the health line pays for cover from retirement
+    on. While someone still works, from the household's retirement year on, the premium is put back as health cover each
+    year (`jobPlan`: the plan at work goes on, and so does what it costs; review fix 2026-11-02, those years had no cover);
+  - a "medicare" line (`MEDICARE_LINE`: Medicare, Medigap, Part B or Part D) stays and pays the Medicare of the adults 65 or
+    over this year (`paidBy`); everyone else's Medicare is added from 65, per person: a year's `totalYearly` x those left /
+    enrolled (the premium is the same for each person on it). When nobody is 65 yet the line is someone else's (a parent's)
+    and all of the household's Medicare is added (`otherLine`; review fix 2026-11-02: one such line dropped all of it, so
+    adding an expense raised what the plan carries);
+  - a "mixed" line, cover held with other things (Get started's own "Insurance and health" row, `setup-x-insurance`:
+    "premiums you pay yourself, medicine"; or a name that joins cover to something else, "Health insurance & prescriptions")
+    is never taken out (review fix 2026-11-02: the row was taken out whole); it pays the Medicare of those 65 or over this
+    year who have stopped work, so a retired couple over 65 who answered Get started gets no Medicare on top of the row.
+  A figure typed on this page is taken as it is: the health line goes on top unless the box is ticked. Saving a new figure
+  in Retirement settings turns `guide.setup.retireAuto` off (the figure is then the household's own).
+- Pages that use the spending figure without the health line put the removed premium back: FIRE's FI number is on
+  `spending.yearly + removedMonthly x 12` (today's whole spending, as before); Annuities' "Guaranteed income covers" is
+  against the first retirement year's spending and its health events, as this page's "Guaranteed income" is.
+- Shown: under "What goes into this", "Health cover: About $400 to $1,470 a month from 2052 until 65 (marketplace, after
+  the credit), then Medicare about $240 a month for Bo from 2053 and about $480 a month for the two of you from 2055" (only
+  the parts that apply; a range when the months differ by more than a quarter; the Medicare range is over the years the
+  most are on it, the surcharge moving it, with ", including an income surcharge in 21 of those years (Medicare page)" when
+  there is one; years after a death at the plan's end are left out of the words), the total, then what is left out and why
+  (a Medicare line, the job's years, a premium taken out or kept), the cliff ("In 2053 and 2054 the plan's income is over
+  $86,560 (by as little as $3,710), so those years get no marketplace credit: about $17,240, already in the cost above.
+  Taking those years' money from Roth or cash could keep the credit (Healthcare before 65 shows how)."), two outlined
+  44 px buttons to both pages and the box, which saves on change and confirms on the next render. Ticked, the record still
+  says what cover would cost ("Without that, the plan would add ..."): `compute(plan, { showHealth: true })`, the page's own
+  call, works it out for the words only (`health.shown`); `buildInputs`, Monte Carlo and Goal seek never do. The verdict,
+  the careful figure, "Spending in retirement" and Goal seek's spending answer say "on top of health cover" (`healthAdded`);
+  "Guaranteed income" is against spending and health cover; the spending help in Retirement settings follows the box
+  ("before health cover (the plan adds it)" or "health cover included (you said so under Health cover)"). `compute()`
+  returns `health`: `{ included, total, bridge: { fromYear, untilYear, years, total, credit, monthlyFirst, monthlyLow,
+  monthlyHigh, cliff: { income, year, lost, lostTotal, years, yearsList, overBy } | null } | null, medicare: { fromYear,
+  untilYear, monthlyFirst, monthlyAll, allFromYear, allNames, monthlyLow, monthlyHigh, early, joins, enrolled, people, total,
+  surcharge, surchargeYears } | null, onJob, jobPlan, coverLines, removedMonthly, fromSetup, paidBy, medicareLine, otherLine,
+  shown? }`.
+- What moved (2026-11-02, on today's date): the family fixture, Medicare from 2055 about $484 a month for both, $174,161 in
+  all; the plan carries $106,221 a year on top of it (was $111,897), lasts in 91% of markets (was 98%), careful $84,400 (was
+  $90,000), still on track. The couple at 62: marketplace 2052-2054 $39,729 after $29,666 of credits (2053 and 2054 over the
+  cliff), Medicare from 2053, $219,695 in all; carries $89,261 (was $96,105), 53% of markets (was 76%), careful $72,400
+  (was $79,300), still tight. The review's one rule leaves both as they were; the retirement fixture (Sam stops in 2033, Lee
+  works to 2037) adds Medicare from 2037 for both, $250,160 in all, its 2033-2036 left to Lee's job: carries $124,326, 100%
+  of markets, careful $102,600, on track.
+- Cost: `buildInputs` runs `planIncome` once (one brackets run of the plan: `buildInputs` went from about 0.1 ms to 1.4 ms
+  on the family fixture); the projection, Monte Carlo (with its 9-in-10-markets figure) and the other heavy pages call
+  `buildInputs` once and reuse its inputs for every path. The engine now indexes the events by year once per run (a health
+  event in every retirement year made the old scan of all events each year cost Monte Carlo about a tenth more). Pages that
+  rebuild the plan per candidate (Goal seek's retirement ages and claiming ages) pay it per candidate, as they should: the
+  bridge years move with the age. Medians on 2026-11-02: projection compute 2.0 -> 2.7 ms, Monte Carlo 373 -> 431 ms, Goal
+  seek 29 -> 70 ms (family fixture). After the review fixes (a busy machine, medians): `buildInputs` 0.3 -> 1.2-2.6 ms,
+  projection compute 1.7-4.8 -> 3-6 ms, Monte Carlo about 400 ms either way (370-440), Goal seek 33-47 -> 67-97 ms; with the
+  box ticked everything is as before the health line, and only the page's own call (`showHealth`) pays one income run for
+  the words.
+- Not modelled: a survivor's lower cost when a what-if drops a person without rebuilding the plan; the Medicare Part B
+  deductible; out-of-pocket care (a line on Expenses stays in the spending).
+
+## Review fixes 2026-11-02 (third pass)
+- Who works (`workRule(plan, people, { today, incomes })`, one rule for the health line and Healthcare before 65): someone
+  works in a year while they are under their retirement age and alive, have pay (salary, bonus or business on the Income
+  page, pay with no owner counting as the first adult's, or the engine's "<name>'s pay" line for a partner) and did not
+  answer "retired" or "not working now" in Get started (`guide.setup.status` "retired" or "none"). It was the age alone, so
+  a partner with no job counted as working: the retirement fixture with Lee's salary taken out and Lee "not working now"
+  (born 1975, the plan's 65) left Sam's Medicare in 2033-2039 to "Lee's job" (health line $199,841 against the Medicare
+  page's $220,160) and never priced Lee's own cover. Now Sam's Medicare is added from 2033 ($220,160, the Medicare page's
+  lifetime) and Lee's marketplace cover 2033-2039 ($48,779, Healthcare before 65's total, which now covers Lee too); Lee is
+  on Sam's plan at work 2026-2032.
+- Get started's own figure is worked out live from today's bills while `retireAuto` is true (`setupFigure(plan, today)`,
+  the same parts as setup's `retireDefault`, which module.test.mjs checks it equals; worked out here because importing Get
+  started's compute pulls its page graph into every retirement page, and a module in that loop, Life cover, reads Stress
+  tests' constant at load). The saved `spendingMonthly` kept the bills of the day it was saved, so a premium added on
+  Expenses afterwards was taken out of a figure that never had it (family: $4,570 saved, a $600 premium added later, the
+  plan spent $3,970 a month, $7,200 a year short). Storing the premium with the figure would need Get started to write it;
+  the live figure needs nothing stored and also follows a premium that changes. Now: $5,170 from today's bills less the
+  $600, $4,570; changed to $800, still $4,570. `buildInputs` and `compute` return `setupMonthly` (the live figure, or
+  null); Retirement settings shows it and its fold status says it, and saving a different figure there turns `retireAuto`
+  off as before. A live figure of 0 falls back to the saved one.
+- With everyone 65 or over and retired this year (no one works by `workRule`), a cover line on Expenses is their cover
+  alongside Medicare (a supplement, an Advantage or a retiree plan): it stays in spending and pays their Medicare, as a
+  mixed line does (`paidBy.era`). It was taken out as cover before 65: a couple born 1958 and 1959 with "Supplemental
+  insurance" $300 and "Medicare premiums" $490 spent $3,076 a month (was $3,376 before the health line), and with one
+  "Health insurance" $900 line $3,070 with Medicare (was $3,486). Now $3,376 and $3,486, nothing added. The page says
+  "Your expenses list "Health insurance": with Ana and Bo 65 or over and retired, that counts as their Medicare and any
+  supplement, so it stays in your spending and Medicare is not added again." A mixed line pays the Medicare of those 65 or
+  over who do not work (`workRule`, was the age alone).
+- One reason a year: a Medicare year left to a job's plan (`onJob`) names only those whose Medicare no line on Expenses
+  pays, at their share of the year; a year with nobody left is not listed. The retired couple seed (Ruth 72, Sam 69 with
+  "Sam's pay" to 70, "Medicare premiums" on Expenses) said both "Medicare for Ruth and Sam is already in your spending" and
+  "In 2026 Ruth is 65 or over while Sam still works"; now only the first. "those years" is "that year" for one year.
+- Words: "(marketplace, after the credit)" only when the marketplace years have a credit (`bridge.credit`), else
+  "(marketplace, no credit)"; years under the poverty line (`bridge.underLine`) get "In 2026 and 2027 the plan's income is
+  under the poverty line, where the marketplace gives no credit: Medicaid may cover people with that income instead (your
+  state's marketplace site will say)", as Healthcare before 65 says. The total names what it holds ("About $219,700 in all
+  for the marketplace and Medicare") and leaves out a work premium kept while a partner works, which its own sentence
+  prices (`jobPlan.total`: "While Bo still works (2050 to 2054), the $600 a month stays in, for the plan at work: about
+  $36,000 more over those years"); it read "$210,160 in all" with the $36,000 inside it.
+- A spending figure typed in a scenario (Compare, Advisor's plan) is a typed figure: the lever turns `retireAuto` off in
+  the copy, so the premium is not taken out of it (a $6,000 scenario ran on $5,400). Compare's `current.spendingMonthly`,
+  while the plan's figure is Get started's, is what the plan spends before health cover (the "Spend 10% less" starter and
+  the editor's "the plan: $4,570"), and Advisor's plan says "yours" from the plan's own run.
+- What moved: none of the fixtures (family, couple at 62, the retirement fixture, the retired couple seed) and no golden
+  case; only plans with a partner without pay, a Get started figure saved before a premium changed, a couple all over 65
+  with a health insurance line, or a Medicare line next to a working 65-year-old.
+
+## Review fixes 2026-11-02 (fourth pass)
+- Pay is a job or a business. `workRule(plan, people, { today })` counts only salary, bonus and business lines on the Income
+  page (`PAY_TYPES`) owned by that adult; a line with no owner (or an owner no longer in the household) is the first adult's,
+  and a line owned by a child, or by an adult with no birth date, never makes anyone work. The engine's "<name>'s pay" no
+  longer counts: it is built from every Income line a partner owns that is not Social Security or a pension, so rent,
+  dividends and other income made the partner "work". The retirement fixture with Lee's salary swapped for a $1,500 a month
+  rental (nothing said in Get started): the health line was $246,687, Medicare only from 2037 and 2033-2036 "a plan through
+  Lee's job can cover Sam and Lee", and Healthcare before 65 said "everyone works until 65". Now $268,924: Sam's and Lee's
+  Medicare from 2033, $264,103 (the Medicare page's lifetime), plus Lee's marketplace 2033-2034, $4,821 (2033 $602, 2034
+  $4,220, after the credit). $400 a month of dividends owned by Lee: Medicare $257,157 from 2033 (was $239,741 from 2037),
+  plus her marketplace. The retired couple seed's "Rental duplex" (Sam's salary ended 2025) no longer has Sam "still
+  working" in 2026: with no Medicare line both are priced from 2026.
+- A Get started answer of "work" counts as working even with no Income line (Get started takes "work" with the pay box
+  blank); "retired" and "none" mean not working, whatever Income holds; no answer: pay decides.
+- The Healthcare page and the health line price the same years (`coverRule(plan, people, { today, retireYear })`, which
+  Healthcare before 65 uses for who is covered): someone under 65 is on the marketplace in a year when they do not work and
+  have stopped: Get started says retired or not working (from today), or they are past their own retirement age, or the
+  household has retired (the projection's `retireYear`) and they have no pay. Someone who works is on a job's plan until
+  their retirement year. A year in which anyone works is left to that job's plan, as before. It was "anyone not working,
+  from today", so the family with no Income lines and Get started saying both work was priced 29 marketplace years
+  2026-2054 for Ana, Bo and Cy at an income of $0 ($741,455), none of them in the projection. Now no marketplace year
+  (Bo on Ana's plan 2050-2052, as with their salaries), and the same health line as the family's ($174,161). The health line
+  now takes every year Healthcare before 65 prices, and Medicare in every year nobody works, before the household's
+  retirement year too (it took only years from it): Ana "not working now" with no pay and Bo working to 62 puts the
+  marketplace at 2050-2054 and Bo's Medicare at 2053-2054 on both pages, where the line began in 2055. Lee with no pay and
+  nothing said in Get started is on the marketplace from the household's retirement (2033), and no longer listed as on
+  Sam's plan 2026-2032 (she had not stopped; the figures are the same).
+- Retirement settings' spending box, its help and the fold status show the figure the plan counts before health cover
+  (`figureMonthly`, from `buildInputs` and `compute`, to the cent): a typed figure as it is, or Get started's own less the
+  health insurance among today's bills that the health line replaces. It showed Get started's figure with the premium still
+  in it ($5,170 against the $4,570 the plan counts), so typing $5,000 to spend less raised spending to $5,000. Saving goes
+  through `saveSpendingFigure(draft, typed, shown)`: the figure shown, saved again, keeps it Get started's (it goes on
+  following the bills; the saved figure is untouched); any other figure is taken as typed and turns `retireAuto` off ($5,000
+  saves $5,000, $4,000 saves $4,000). The help adds "Get started's figure from today's bills, less $600 a month of health
+  insurance" when a premium came out.
+- "After the credit" only over a range in which every year has a credit (`bridge.creditYears`, `creditWords`): "(marketplace,
+  after the credit)" when all do, "(marketplace, no credit)" when none does, "(marketplace; with the credit in the years it
+  applies)" when some do. It checked the credit summed over the years, so the 68/63 couple (2026 under the poverty line),
+  Lee with no job (2033 under it) and the couple at 62 (2053 and 2054 over the cliff) read "after the credit" over a range
+  whose top was a year with none. The sentences after it still name the years without one.
+
+## Review fixes 2026-11-02 (fifth pass)
+- Who is covered by whose plan. While anyone works, an adult who does not work is on that worker's plan: no marketplace is
+  priced for them. The first adult with no pay and no Get started answer is presumed at work until the household retires
+  (`workRule(..., { retireYear }).presumed`): the engine already counts those years as working years (no spending, no
+  withdrawals), so a partner's cover goes on that plan as it would with pay on Income. A partner with no pay and no answer is
+  not presumed to work; that plan covers them until the household retires, the marketplace after. The marketplace is priced
+  only in years nobody works, from then to each person's 65th birthday year, and only while the person is alive in the plan
+  (`coverRule` takes `workRule`'s end-age check). The family with Ana's salary taken out (Cy's summer job, or no Income lines
+  and nothing said): $231,756 with Bo's marketplace 2050-2052 at an income of $0 and nothing for Ana, now $174,161, the
+  family's own (Bo on Ana's plan 2050-2052, Bo's Medicare 2053-2054 left to it; Healthcare before 65 says "No pay is listed for
+  Ana and Get started does not say Ana has stopped work, so the plan takes Ana as working until 2055"). Lee with a plan to 60
+  and no pay: 2033 $394 and 2034 $3,828 of marketplace after her plan ended, now none ($115,275, Sam's Medicare alone).
+- The household's retirement year (`householdRetireYear`): the first adult's own, as before, unless Get started says they are
+  retired or not working now; then the year the last adult who works today stops, or this year when nobody works. Ana "not
+  working now" with Bo stopping at 62 had 2050-2054 with no spending and no withdrawals and the marketplace priced on an income
+  of $0 ("under the poverty line ... Medicaid may cover"); now retirement starts in 2050 ("Retirement starts in 2050 (when Bo
+  stops work at 62)", `retireBy`), the five years' $84,000 a year are spent, the marketplace is priced on the plan's own
+  withdrawals (2050 $4,941, 2051 $33,815 and 2052 $34,466 over the cliff, 2053 $1,624, and 2054 $17,606 under the poverty line,
+  the year the plan lives on Roth money: a real one, with spending), health line $315,964 -> $272,417, what the plan carries
+  $73,609 -> $60,196 (short either way). A partner Get started says is retired or not working brings no pay in, whatever Income
+  still holds (it came in as "<name>'s pay" to their retirement age). No frozen key moved: the answer keys hold no Get started
+  answers, and every `tests/golden` case passes as it was. Healthcare before 65 never prices a year before the household's
+  retirement (the engine's working years), as a safety net. Goal seek's "When ... can retire" and Financial independence ask
+  about the adult whose stop starts retirement (`leadAdult`), never one who has said they do not work; with nobody working
+  there is no age to find.
+- Rent, dividends and other income by their own names. `workRule` counts salary, bonus and business only (fourth pass); the
+  partner's pay line carries `kind: "pay"`, and every page tells it from rent by kind, never by name (a rental called "Lee's
+  pay" is rent). "What goes into this" says each line by its own name and, for a line not named for a person, the year it
+  starts (`incomeWords`): "Rental condo: $18,000 a year from 2033" (it said "from 63", Lee's age), "Dividends: $4,800 a year
+  from now"; the Guaranteed income stat lists the kinds the plan holds (`incomeKinds`: "Social Security, pensions and rent").
+- The marketplace's own income (medicare/compute.js `marketplaceIncome`): AGI plus untaxed Social Security plus tax-exempt
+  interest (26 USC 36B(d)(2)(B)); Medicare's surcharge stays AGI plus tax-exempt interest (`irmaaIncome`). The retired 68/63
+  couple: 2026 read income $15,365, under the poverty line, no credit, $17,324 ("Medicaid may cover people with that income
+  instead"); now $48,012 with Ana's untaxed Social Security, $3,644 after the credit, 2027 $5,844 -> $7,610; health line
+  $113,151 -> $101,237; no poverty sentence.
+- The words name the person and the years for each part (`healthSummary`, `bridgeParts`: the marketplace years in runs of the
+  same people): "Bo: about $300 to $630 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $240 a
+  month from 2028." and, for the couple at 62, "Ana and Bo: about $400 a month, 2052 (marketplace, after the credit). Ana:
+  about $1,440 a month, 2053 and 2054 (marketplace, no credit). Bo: Medicare, about $240 a month from 2053. Ana: Medicare from
+  2055 (about $480 a month for the two of you)." No "then" joins parts that overlap.
+- Merged with the FIRE answer (rent for life, `incomeOther`): Lee with $1,500 a month of rent keeps it after 2033 instead of to
+  her 66 inside "Lee's pay", so her income is $18,000 higher every year and Medicare's surcharge applies in 21 years
+  (2045-2065): Medicare $264,103 -> $295,353, the marketplace 2033 $602 -> $588 and 2034 $4,220 -> $4,227, the health line
+  $268,924 -> $300,168. The family ($174,161), the couple at 62 ($219,695), the retirement fixture ($250,160) and the retired
+  couple seed ($0 with its Medicare line, $148,037 without) are as the checkers expected.
+
+## Review 2026-11-06 (health cover, sixth pass: merged with the base, the fifth pass's verify fixed)
+The health line was merged with the other-income rules (recheck 2026-11-05 and review 2026-11-06 above) and Financial
+independence's work rules, which are newer than it. Both are kept:
+- **Other income** is `otherIncome` as above (rent for life, support and other to an end date or while their owner works,
+  dividends and own-account withdrawals never, `otherLeft` named on the page). The partner's pay line is `type: "pay"` (the
+  base's name; the fifth pass called it `kind: "pay"`): every page, the medicare page's incomes included, tells it from rent
+  by type, never by name. A partner Get started says is retired or not working brings no pay in (fifth pass).
+- **"Paid by income"** (the base's stat, `coverage` and `coverageFrom`): all the income in the first retirement year against
+  that year's spending and health cover (the health line is spending too), "from" the kinds in it. The fifth pass's
+  `incomeKinds` (every kind the plan holds) is gone: it did not match the share shown.
+- **"Income counted"** says each line by its own name with its ages, or its years for a line not named for a person
+  (`incomeWords`: "Rental condo: $18,000 a year from 2033 (before its costs)", "Lee's pay: $66,000 a year from 56 to 66"),
+  then "Not counted". The health record sits under "Spending in retirement" by its name (it was the fifth record by place,
+  so "Not counted" would have pushed it under the wrong row).
+
+**One work rule** (`workRule`, used by the health line, Healthcare before 65, the household's retirement year, Medicare's
+working-year income, Financial independence and Goal seek through `workingNow`). Where the two disagreed about who still works:
+- *A retirement contribution:* Financial independence counted any contribution as work; the health line none (its tests keep
+  Lee's IRA saving with her salary taken out, and Lee does not work). Now a contribution to a plan at work (a 401(k) account, or
+  one with an employer match) is work; any other (an IRA, a Roth, an HSA, a brokerage) only when nobody else in the plan has
+  pay, since a husband's or wife's pay can fund it (a spousal IRA). The retired couple's Sam with a Roth contribution and
+  nobody's pay still works (the base's test); Lee with her IRA while Sam works does not (the fifth pass's tests).
+- *Nothing typed:* Financial independence had everyone under their age working when nothing was on Income or Contributions.
+  Now only the first adult is presumed at work, while the household's retirement year is ahead (decision 1, and the base's own
+  "second pass" rule for the first adult); a partner with no pay, saving or answer is not. That is defect 2 below.
+- *An answer against pay:* Financial independence let pay or saving win over "retired" or "Not working now" in Get started; now
+  the answer wins everywhere (the engine already drops such a partner's pay).
+- *A child's pay* makes no adult work (the fifth pass); Financial independence gave it to the first adult.
+- Support and other income with no end date of an owner the rule has stopped, and of the first adult, never count from the
+  household's retirement on (the first adult's always stopped there; the household's year can now come before their own).
+- Medicare's and the marketplace's income in a working year counts the pay of whoever works that year by the rule (it went by
+  age: Lee "retired" with her salary still on Income had $59,000 in the household's 2030 income).
+
+**Defect 1 (HIGH, the fifth pass's verify): the household's year is capped at the first adult's own** (`householdRetireYear`:
+`max(this year, min(their own year, the last working adult's stop))` when Get started says they stopped). The 68/63 couple
+(Ana 68, past her 60; Bo working to 66 for $1,500 a month) read "Retirement starts in 2029 (when Bo stops work at 66)" with Ana
+saying "retired": 2026-2028 had no spending, nothing drawn and Ana's Social Security dropped, "Runs out in 2054", carries
+$71,564. Now 2026 with or without the answer: Bo's pay comes in as "Bo's pay" ($18,000), "Runs out in 2041 (age 83)", carries
+$68,896, health line $87,080 for both. `retireStarter` names the first adult when the year is their own (or this year once it
+has passed), else the adult who stops in it, else nobody. Ana "not working now" at 40 with Bo stopping at 62 keeps 2050 (her
+own year is 2055), and nobody working keeps this year, as the fifth pass had them.
+
+**Defect 3 ("null" in the hero):** already gone in the base (the careful line filters nulls before `replaceChildren`); the
+page text of every phone shot was checked for it.
+
+Figures (hand-derived again, `scratchpad/h6/mine.mjs`, my own reading of the rules above, every year matching the engine's
+health events): the family $174,161, the couple at 62 $219,695, the retirement fixture $250,160, Lee with rent $300,168, Lee
+not working $273,750, the 68/63 couple $101,237, the seed $0 ($148,037 without its Medicare line), Ana not working $272,417:
+as the fifth pass. Lee with $400 a month of dividends $284,478 -> $273,750: dividends are never added (the base's rule), so
+she is Lee with no job. All 1,371 runnable qa/households and fixture plans with the health line off are exactly the base's;
+with it on, 1,254 move by the health line alone (77 short -> tight where a premium on Expenses gives way to cheaper Medicare
+or marketplace cover, 5 tight -> short, 2 on track -> tight).
+Tests (`module.test.mjs`, "review 2026-11-06"): the part-time couple with and without the answer (defect 1); the cap and
+`retireStarter`; the contribution rule; support of a stopped owner; Medicare's working-year pay. Each failed without its fix.
+- Verify of the sixth pass: the Medicare years left to a job's plan (`health.onJob`) are now also in runs of the same worker
+  (`onJob.parts`), and `onJobWords` words each run. One sentence named the first year's worker for the whole span: Ana working
+  to 65 (2031) and Bo to 70 (2033) read "In 2028 to 2032 Bo is 65 or over while Ana still works: a plan through Ana's job can
+  cover Bo and Ana", Ana's job named for 2031 and 2032 after she stopped. It now reads "In 2028 to 2030 Bo is 65 or over while
+  Ana still works: a plan through Ana's job can cover Bo, ..." and "In 2031 and 2032 Ana is 65 or over while Bo still works: a
+  plan through Bo's job can cover Ana and Bo, ...". No figure moves (no Medicare is added while either works; both from 2033).

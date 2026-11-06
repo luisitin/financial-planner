@@ -28,3 +28,14 @@ test("their plan, the fee's cost, their quote against this app's, each assumptio
   near(by.spendingMonthly, -500, 1e-6);
   for (let i = 1; i < d.effects.length; i++) assert.ok(Math.abs(d.effects[i - 1].roomMonthly) >= Math.abs(d.effects[i].roomMonthly));
 });
+
+test("review 2026-11-02: the advisor's spending figure is a typed figure, so a premium is not taken out of it", async () => {
+  const { retireDefault } = await import("../../overview/setup/compute.js");
+  const p = familyPlan(TODAY);
+  p.expenses.push({ id: "hi", name: "Health insurance", category: "health", amount: 600, period: "monthly", essential: true, inflates: true });
+  p.retirement.spendingMonthly = retireDefault(p, TODAY); p.guide = { setup: { retireAuto: true } };
+  p.advisor = { firm: "Northgate", changes: { spendingMonthly: 6000 } };
+  const d = compute(p, { today: TODAY, paths: 0 });
+  near(d.yours.spendingMonthly, 4570, 1e-6); assert.equal(d.theirs.spendingMonthly, 6000, "was 5,400");
+  near(d.effects.find((e) => e.key === "spendingMonthly").roomMonthly, -(6000 - 4570), 1e-6);
+});

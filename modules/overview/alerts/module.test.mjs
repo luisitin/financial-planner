@@ -180,13 +180,13 @@ test("protection: no life cover on an earner others depend on, and no guardian f
   const p = familyPlan("2026-11-02");
   const a = compute(p, { today: "2026-11-02" }).alerts;
   const life = a.find((x) => x.id === "life-cover-p-ana");
-  assert.equal(life.level, "warn"); assert.equal(life.title, "No life insurance on Ana: Bo and Cy would be about $235,000 short");
+  assert.equal(life.level, "warn"); assert.equal(life.title, "No life insurance on Ana: Bo and Cy would be about $287,000 short");   // 2026-11-02, the health line (Bo alone pays his cover): was 235,000
   assert.deepEqual(life.go, ["insurance", "life-needs"]);
   assert.ok(!a.some((x) => x.id === "life-cover-p-bo"), "the plan holds if Bo died");
   const g = a.find((x) => x.id === "guardian");
   assert.equal(g.level, "info"); assert.equal(g.title, "No one is named to raise Cy if you both died"); assert.deepEqual(g.go, ["estate", "documents"]);
   p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 100000, premium: 20, period: "monthly" }] };
-  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $135,000 short");
+  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $187,000 short");   // the health line: was 135,000
   p.insurance.policies[0].benefit = 300000;
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id.startsWith("life-cover")), "covered: nothing");
 });

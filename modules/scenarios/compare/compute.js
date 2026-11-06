@@ -14,7 +14,9 @@ export const PATHS = 400;
 export const LEVERS = [
   { key: "retireAge", label: "Retire at age", type: "number", person: true, min: 40, max: 85, get: (p, id) => person(p, id)?.retirementAge ?? p.assumptions?.retirementAge ?? 65, set: (p, v, id) => { const x = person(p, id); if (x) x.retirementAge = v; } },
   { key: "claimAge", label: "Start Social Security at", type: "number", person: true, min: 62, max: 70, get: (p, id) => p.retirement?.socialSecurity?.[id]?.claimAge ?? 67, set: (p, v, id) => { p.retirement = p.retirement ?? {}; p.retirement.socialSecurity = p.retirement.socialSecurity ?? {}; p.retirement.socialSecurity[id] = { ...(p.retirement.socialSecurity[id] ?? {}), claimAge: v }; } },
-  { key: "spendingMonthly", label: "Spend in retirement, a month", type: "money", get: (p) => p.retirement?.spendingMonthly ?? null, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.spendingMonthly = v; } },
+  // a figure typed in a scenario is a typed figure (review 2026-11-02): no longer Get started's own (retireAuto), so a health
+  // premium on Expenses is not taken out of it and health cover goes on top, as when it is typed on Will the money last?
+  { key: "spendingMonthly", label: "Spend in retirement, a month", type: "money", get: (p) => p.retirement?.spendingMonthly ?? null, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.spendingMonthly = v; if (p.guide?.setup?.retireAuto === true) p.guide.setup.retireAuto = false; } },
   { key: "extraSavingMonthly", label: "Save more each month (until retiring)", type: "money", get: () => 0, set: (p, v) => { const self = (p.household?.people ?? []).find((x) => x.role === "self") ?? (p.household?.people ?? [])[0]; p.retirement = p.retirement ?? {}; p.retirement.contributions = [...(p.retirement.contributions ?? []), { id: "scenario-extra", accountId: "", personId: self?.id ?? "", amount: v, period: "monthly", employerMatch: 0 }]; } },
   { key: "stocksNow", label: "Share in stocks now", type: "percent", get: (p) => p.retirement?.stocksNow ?? 0.7, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.stocksNow = v; } },
   { key: "stocksRetired", label: "Share in stocks in retirement", type: "percent", get: (p) => p.retirement?.stocksRetired ?? 0.5, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.stocksRetired = v; } },
@@ -88,6 +90,8 @@ export function describe(plan, changes = {}) {
  *   ready, missing, base: results, scenarios: [{ id, name, changes, described: [text], results, missing }],
  *   current: { [lever key or key:personId]: the plan's own value }, adults: [{ id, name }]
  * }
+ * current.spendingMonthly, while the plan's figure is Get started's own (retireAuto), is what the plan spends before health
+ * cover (Get started's figure from today's bills, less a health premium among them): the figure a typed scenario is set against.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -97,6 +101,7 @@ export function compute(plan, params = {}) {
   const current = {};
   for (const lv of LEVERS) if (lv.person) for (const a of adults) current[`${lv.key}:${a.id}`] = lv.get(plan, a.id); else current[lv.key] = lv.get(plan);
   if (!b.inputs) return { ready: false, missing: b.missing ?? [], scenarios: [], current, adults };
+  if (b.health?.fromSetup) current.spendingMonthly = Math.round(b.spendingYearly / 12);
   const base = results(b.inputs, { paths });
   const scenarios = (plan.scenarios ?? []).slice(0, MAX_SCENARIOS).map((s) => {
     const a = applyChanges(plan, s.changes ?? {}, { today });

@@ -27,3 +27,61 @@
 ## Ideas / not yet
 - Plan the withdrawals to stay under the cliff (draw from Roth, cash and taxable first in those years), and show its saving on Withdrawal order.
 - The state's own subsidies and Medicaid.
+
+## In the plan's verdict (2026-11-02)
+`retirement/projection` `buildInputs` adds each marketplace year's `cost` (after the credit) to the plan as a "Health cover"
+engine line in that year, every year listed here (fourth pass below), on top of the spending figure, unless
+`retirement.healthIncluded` says the spending figure already includes cover (or, with spending taken from today's expenses,
+the health-insurance premium line it carries gives way to this). So Will the money last?, the careful spending figure, Monte
+Carlo and Goal seek pay for it. `compute(plan, { today, planIncome })` takes the income run the projection already made (one
+run shared with Medicare); called alone it makes its own. The income it prices the credit on is the plan without its own
+health line (`buildInputs({ health: false })`): a one-pass approximation, so the premiums' withdrawals do not raise the
+income they are priced on, and a Roth conversion fill tried only on the Roth conversions page does not re-price it. The
+cliff (`years[].overCliff`, `lostCredit`, `cliff`) is shown there as one line (review fix 2026-11-02, it did not say the
+plan is over or that the loss is counted): "In 2053 and 2054 the plan's income is over $86,560 (by as little as $3,710), so
+those years get no marketplace credit: about $17,240, already in the cost above. Taking those years' money from Roth or cash
+could keep the credit (Healthcare before 65 shows how)." This page's `onWorkPlan` rule (a working partner's job plan covers
+the household) is the projection's rule for Medicare too, and a health premium the projection takes out of today's
+expenses is put back in those years from the household's retirement on (the plan at work goes on).
+
+Who works (review fix 2026-11-02): the projection's `workRule`, one rule for both pages. Someone works in a year while under
+their retirement age, with pay (salary, bonus or business on Income, or the projection's "<name>'s pay") and not "retired"
+or "not working now" in Get started. Covered: every adult under 65 who does not work (was: past their retirement age), so a
+partner with no job is covered through the other's job while it lasts (`onWorkPlan`) and on the marketplace after it (the
+retirement fixture with Lee not working: 2026-2032 on Sam's plan, 2033-2039 Lee on the marketplace, $48,779 after $65,658
+of credits). An adult under their retirement age with no pay is covered from today when nobody works; the projection adds
+only the years from the household's retirement (before it, today's bills pay today's cover).
+
+Fourth pass (review fix 2026-11-02): the projection prices the same years as this page. Pay is only a salary, bonus or
+business line on Income owned by that adult (no owner: the first adult's; a child's never counts); rent, dividends, pensions
+and other income never make anyone work (the projection's "<name>'s pay" carried them, so Lee with a rental and no job was
+"working" and this page said "everyone works until 65"). A Get started answer of "work" counts as working even with no
+Income line; "retired" and "none" mean not working. Covered (`coverRule`): an adult under 65 who does not work and has
+stopped: Get started says retired or not working (from today), or past their own retirement age, or the household has
+retired (the projection's retirement year) and they have no pay. It was every adult under 65 not working, from today, so the
+family with no Income lines and Get started saying both work was priced 2026-2054 at an income of $0 ($741,455); now no
+marketplace year (Bo on Ana's plan 2050-2052). The retirement fixture with Lee's salary swapped for a $1,500 a month rental:
+2033 $602 and 2034 $4,220 (was none). The health line adds every year listed here, those before the household's retirement
+year included.
+
+## Review fixes 2026-11-02 (fifth pass)
+- Income: the marketplace's own, AGI plus untaxed Social Security plus tax-exempt interest (26 USC 36B(d)(2)(B); `acaMagiOf`,
+  medicare/compute.js `marketplaceIncome`). It used Medicare's (AGI, the taxable part of Social Security only), so the retired
+  68/63 couple's 2026 read $15,365, under the poverty line, no credit and $17,324; now $48,012, $3,644 after the credit (2027
+  $5,844 -> $7,610), and no Medicaid sentence.
+- Who is covered: the first adult with no pay and no Get started answer is presumed at work until the household retires, so a
+  partner who stops sooner is on that plan (the page says "No pay is listed for Ana and Get started does not say Ana has
+  stopped work, so the plan takes Ana as working until 2055"); no one is priced after the end of their plan (Lee with a plan to
+  60: 2033 and 2034 are gone); no year before the household's retirement is priced (the projection's working years).
+- No marketplace years: the page names the real reason, person by person (`noBridgeWhy`, `whyNoBridge`): "Ruth and Sam are 65
+  or over, so Medicare is the cover: no one in your plan needs the marketplace." for the retired couple seed (it said
+  "everyone works until 65, or a partner's job covers the gap"); "In your plan no one needs marketplace cover: Ana works until
+  65 and Bo works until 62, then is on Ana's plan at work until 65." for the family. The Compare what-ifs prompt shows only
+  when someone is under 65.
+
+## Review 2026-11-06 (sixth pass)
+Who works is the projection's one work rule, now shared with Financial independence and Goal seek (projection README, "Review
+2026-11-06 (health cover, sixth pass)"): a retirement contribution counts as work when it goes to a plan at work (a 401(k), or
+one with a match) or nobody else has pay, and the household's retirement year is never after the first adult's own. No
+fixture's marketplace years move: Lee with her IRA saving kept and Sam working is still priced 2033-2034 (a spousal IRA is not a
+job), and the 68/63 couple's Bo 2026-2027.

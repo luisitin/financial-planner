@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { compute } from "./compute.js";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
+import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 
 test("fire: runs on the sample couple and on an empty plan", () => {
   const d = compute(retirementPlan(), { today: "2026-09-16", paths: 200, quick: true });
@@ -138,7 +139,8 @@ test("the 9-in-10 age: the first age the money lasts in at least 1,800 of the ca
   // even 75 does not reach 9 in 10: no age, and the share it does reach
   const hard = familyPlan(TODAY); hard.retirement.spendingMonthly = 12000;
   const hw = incomeAnswer(hard, TODAY);
-  assert.equal(hw.earliestAge, 73, "average markets: 73");
+  // 74 with the projection's health line on top of the $12,000 a month (73 before it: Medicare is spending too)
+  assert.equal(hw.earliestAge, 74, "average markets: 74");
   const hc = carefulAge(hard, { today: TODAY, legacy: hw.legacy, personId: hw.personId, from: hw.earliestAge, upTo: hw.upTo });
   assert.equal(hc.age, null, `9 in 10 never by ${hw.upTo}`); assert.ok(hc.share < 0.9); assert.equal(hc.upTo, 75);
 });
@@ -326,8 +328,13 @@ test("review 2026-11-06: rent named by its unit ('Rent from condo 401B') counts 
   // the second pass read the rent as a 401(k): "Runs out in 2049", carries $72,547, and "Dee would need to work until 74"
   // (average 66). An independent year-by-year model: the plan lasts, carries $94,147, $845,656 left in 2058, Dee 63 now
   const p = condoCouple();
+  // those figures are the plan's spending with health cover in it ("My spending figure already includes health cover"); with the
+  // projection's health line on top (review 2026-11-06: Medicare for both, $180,579 in all) it lasts and carries $88,504
+  const inc = condoCouple(); inc.retirement.healthIncluded = true;
+  const d0 = projection(inc, { today: TODAY });
+  assert.equal(d0.result.success, true); assert.equal(Math.round(d0.affordable), 94147); assert.equal(Math.round(d0.atEnd.totalReal), 845656);
   const d = projection(p, { today: TODAY });
-  assert.equal(d.result.success, true); assert.equal(Math.round(d.affordable), 94147); assert.equal(Math.round(d.atEnd.totalReal), 845656);
+  assert.equal(d.result.success, true); assert.equal(Math.round(d.affordable), 88504, "was 94,147 with no health line"); assert.equal(Math.round(d.atEnd.totalReal), 558091);
   const w = incomeAnswer(p, TODAY);
   assert.equal(w.otherYearly, 21600); assert.deepEqual(w.otherKinds, ["rent"]); assert.deepEqual(w.left, []);
   assert.equal(w.name, "Dee"); assert.equal(w.earliestAge, 63); assert.equal(w.now, true);
@@ -361,7 +368,11 @@ test("review 2026-11-06: the first adult counted as stopped now while a later ag
   r.accounts[0].balance = 700000; r.retirement.spendingMonthly = 4500;
   const rw = incomeAnswer(r, TODAY);
   assert.equal(rw.retired, true); assert.equal(rw.lasts, false);
-  assert.deepEqual(rw.plannedStop, { personId: "s", name: "Sam", age: 60, plannedAge: 65, plannedYear: 2031 });
+  // review 2026-11-06: Will the money last? now starts spending savings this year too (projection householdRetireYear: nobody
+  // works), so the two pages agree and there is nothing to explain (was { s, Sam, 60, 65, 2031 })
+  assert.equal(rw.plannedStop, null);
+  const { compute: projection } = await import("../projection/compute.js");
+  assert.equal(projection(r, { today: TODAY }).inputs.retireYear, 2026);
   // a partner asked about while the first adult said "retired": the same
   const p = emptyPlan();
   p.household.people.push({ id: "s", name: "Pat", role: "self", birthDate: "1966-04-10", retirementAge: 65 }, { id: "t", name: "Tom", role: "partner", birthDate: "1968-05-05", retirementAge: 65 });
@@ -394,8 +405,157 @@ test("review 2026-11-06 (verify): a first adult who said 'Not working now' is na
   p.guide = { setup: { status: { e: "none", m: "work" } } };
   const w = incomeAnswer(p, TODAY);
   assert.equal(w.name, "Marcus");
-  assert.deepEqual(w.plannedStop, { personId: "e", name: "Elena", age: 35, plannedAge: 65, plannedYear: 2056, notWorking: true });
+  // review 2026-11-06: Will the money last? lives on Marcus's pay until he stops at 65, in 2054 (projection householdRetireYear),
+  // so that is the year it starts spending savings, and the page says whose stop it is (was plannedYear 2056, Elena's 65)
+  assert.deepEqual(w.plannedStop, { personId: "e", name: "Elena", age: 35, plannedAge: 65, plannedYear: 2054, notWorking: true, by: { name: "Marcus", age: 65 } });
   // one who said "retired" has no notWorking (the earlier test's deepEqual)
   p.guide.setup.status.e = "retired";
   assert.equal(incomeAnswer(p, TODAY).plannedStop.notWorking, undefined);
+});
+
+// review 2026-11-02: the projection takes a health premium out of today's expenses (its health line pays cover from
+// retirement on); this page has no health line, so the FI number is still on all of today's spending, premium included
+test("fire: a health premium on Expenses stays in the spending the FI number is worked on", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-02"); p.retirement.spendingMonthly = null;
+  const before = compute(p, { today: "2026-11-02" });
+  p.expenses.push({ id: "hi", name: "Health insurance", category: "health", amount: 600, period: "monthly", essential: true, inflates: true });
+  const d = compute(p, { today: "2026-11-02" });
+  assert.ok(Math.abs(d.spendingYearly - (before.spendingYearly + 7200)) < 0.01, `${d.spendingYearly} vs ${before.spendingYearly} + 7,200`);
+  assert.ok(Math.abs(d.spendingYearly - 77116) < 1, String(d.spendingYearly));   // the reviewer's figure: 69,916 + 7,200 (was 69,916 with the patch)
+  assert.ok(Math.abs(d.fiNumber - d.spendingYearly / d.withdrawalRate) < 0.01);
+});
+
+// review 2026-11-02 (fifth pass): the rule of thumb's fold, and who the answer is about when Get started says the first adult
+// does not work
+test("fifth pass: the fold says the rule leaves out health cover before Medicare, which the answer above counts", async () => {
+  const { ruleWords } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const d = compute(familyPlan(TODAY), { today: TODAY, withIncome: false });
+  assert.equal(d.healthAdded, true);
+  assert.match(ruleWords(25, d.healthAdded), /leaves out Social Security, pensions, taxes and health cover before Medicare, which the answer above counts, so it can come out sooner or later/);
+  // "my spending figure already includes health cover": the rule's spending holds it, so no such words
+  const q = familyPlan(TODAY); q.retirement.healthIncluded = true;
+  assert.equal(compute(q, { today: TODAY, withIncome: false }).healthAdded, false);
+  assert.match(ruleWords(25, false), /leaves out Social Security, pensions and taxes, so it can come out/);
+});
+
+test("fifth pass: with the first adult not working now, the answer is about the one who still works", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const { earliestRetireAge, compute: goalSeek } = await import("../../scenarios/goal-seek/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan(TODAY);
+  p.income = p.income.filter((x) => x.personId !== "p-ana"); p.retirement.contributions = p.retirement.contributions.filter((c) => c.personId !== "p-ana");
+  p.guide = { setup: { status: { "p-ana": "none" } } };
+  // was: about Ana, whose retirement age no longer moves the household's retirement (Bo's stop starts it)
+  const w = incomeAnswer(p, TODAY);
+  assert.equal(w.name, "Bo"); assert.equal(w.personId, "p-bo");
+  assert.equal(earliestRetireAge(p, { today: TODAY }).personId, "p-bo");
+  assert.equal(goalSeek(p, { today: TODAY }).levers.find((l) => l.id === "retire").title, "When Bo can retire");
+  // nobody works: no age to find, the plan's own verdict
+  const q = JSON.parse(JSON.stringify(p)); q.guide.setup.status["p-bo"] = "retired";
+  assert.equal(incomeAnswer(q, TODAY).retired, true);
+  assert.equal(earliestRetireAge(q, { today: TODAY }), null);
+  assert.equal(goalSeek(q, { today: TODAY }).levers.find((l) => l.id === "retire"), undefined);
+});
+
+test("fifth pass: rent is told from pay by its kind, never its name: a rental called \"Lee's pay\" counts as rent", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const p = retirementPlan();
+  p.income = p.income.filter((x) => x.personId !== "lee").concat({ id: "r", name: "Lee's pay", type: "rental", personId: "lee", amount: 1500, period: "monthly", growth: 0, taxable: true });
+  const w = incomeAnswer(p, TODAY);
+  // was: left out of "pensions, rent, dividends and other income" because its name ends in "'s pay"
+  assert.equal(w.otherYearly, 10800 + 18000); assert.deepEqual([...w.otherKinds].sort(), ["pension", "rent"]);
+  // a partner's real pay is still pay (kind "pay"), never counted as other income
+  assert.equal(incomeAnswer(retirementPlan(), TODAY).otherYearly, 10800);
+});
+
+// ---- review 2026-11-06 (sixth pass, defect 2 of the health line's fifth-pass verify): one work rule with the health line and
+// Goal seek (projection workingNow on workRule)
+const couple6863 = (boAge = 66, said = true) => {
+  // Ana (68, 60 on file) and Bo (63) with nothing on Income and no contributions; Get started has Ana "retired"
+  const o = familyPlan(TODAY); o.household.people = o.household.people.filter((x) => x.role !== "dependent");
+  o.household.people[0].birthDate = "1958-03-01"; o.household.people[1].birthDate = "1963-06-01";
+  o.household.people[0].retirementAge = 60; o.household.people[1].retirementAge = boAge;
+  o.income = []; o.retirement.contributions = []; o.retirement.spendingMonthly = null;
+  o.expenses.push({ id: "mc", name: "Medicare Part B", category: "health", amount: 203, period: "monthly", essential: true, inflates: true });
+  if (said) o.guide = { setup: { status: { "p-ana": "retired" } } };
+  return o;
+};
+
+test("review 2026-11-06 (defect 2): a partner with no pay is not asked about, even with nothing on Income: the health line's and Goal seek's rule", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const { compute: projection } = await import("../projection/compute.js");
+  const { compute: healthcare } = await import("../healthcare/compute.js");
+  const { compute: goalSeek } = await import("../../scenarios/goal-seek/compute.js");
+  for (const said of [true, false]) {
+    const p = couple6863(66, said);
+    const w = incomeAnswer(p, TODAY), d = projection(p, { today: TODAY });
+    // was "Even working to 75, the money runs short ... and Bo works until 75": Bo's age moves nothing in this plan
+    assert.equal(w.retired, true, `said ${said}`); assert.equal(w.earliestAge, null); assert.deepEqual(w.others, []);
+    assert.equal(w.lasts, d.result.success); assert.equal(w.failYear, d.shortYear ?? null);
+    assert.equal(d.inputs.retireYear, 2026);
+    assert.equal(goalSeek(p, { today: TODAY }).levers.some((l) => l.id === "retire"), false);
+    assert.deepEqual(healthcare(p, { today: TODAY }).years.map((y) => [y.year, y.covered.join()]), [[2026, "Bo"], [2027, "Bo"]], "Bo is priced as not working");
+  }
+  // Lee with her salary taken out, rent and her IRA saving kept, Sam working: "Lee not working" (was "Lee stopping at 67 as
+  // planned"), as the health line prices her own cover in 2033-2034
+  const r = retirementPlan(); r.income = r.income.filter((x) => x.personId !== "lee").concat({ id: "rent", name: "Rental condo", type: "rental", personId: "lee", amount: 1500, period: "monthly", growth: 0.02, taxable: true });
+  const lw = incomeAnswer(r, TODAY);
+  assert.equal(lw.name, "Sam"); assert.deepEqual(lw.others.map((o) => [o.name, o.retired, o.notWorking]), [["Lee", true, true]]);
+  assert.deepEqual(healthcare(r, { today: TODAY }).years.map((y) => [y.year, y.covered.join()]), [[2033, "Lee"], [2034, "Lee"]]);
+});
+
+test("review 2026-11-06: Financial independence and Goal seek ask about the same adult, on the same plan, and give one age", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const { compute: goalSeek } = await import("../../scenarios/goal-seek/compute.js");
+  const retireLever = (p) => goalSeek(p, { today: TODAY }).levers.find((l) => l.id === "retire") ?? null;
+  // Pat (60, 65 on file) said "retired", Tom (58) works: both pages search Tom's age with Pat stopping now (Goal seek asked
+  // about Pat, whose age could not move: the fifth pass about Tom, but on the plan with Pat working to 65)
+  const p = emptyPlan();
+  p.household.people.push({ id: "s", name: "Pat", role: "self", birthDate: "1966-04-10", retirementAge: 65 }, { id: "t", name: "Tom", role: "partner", birthDate: "1968-05-05", retirementAge: 65 });
+  p.accounts.push({ id: "b", name: "Brokerage", type: "brokerage", balance: 700000 });
+  p.retirement.spendingMonthly = 6000; p.retirement.socialSecurity = { s: { claimAge: 67, monthlyAtFRA: 2000 }, t: { claimAge: 67, monthlyAtFRA: 2200 } };
+  p.income.push({ id: "i", name: "Pat's pay", type: "salary", personId: "s", amount: 6000, period: "monthly", endDate: "2026-06-30" }, { id: "j", name: "Tom's pay", type: "salary", personId: "t", amount: 7000, period: "monthly" });
+  p.guide = { setup: { status: { s: "retired", t: "work" } } };
+  const w = incomeAnswer(p, TODAY), l = retireLever(p);
+  assert.equal(w.name, "Tom"); assert.equal(l.title, "When Tom can retire");
+  assert.equal(l.value, w.earliestAge); assert.match(l.sentence, /This counts Pat as stopped from this year\.$/);
+  // the first adult past their own age with no answer and a partner at work: the partner, on both (Goal seek had no lever)
+  const q = retirementPlan(); q.household.people[0].birthDate = "1958-04-10";   // Sam 68, 65 on file
+  assert.equal(incomeAnswer(q, TODAY).name, "Lee"); assert.equal(retireLever(q).title, "When Lee can retire");
+  assert.equal(retireLever(q).value, incomeAnswer(q, TODAY).earliestAge);
+  // nobody works: no question on either page; the family: Ana on both, as before
+  assert.equal(retireLever(couple6863()), null);
+  assert.equal(retireLever(familyPlan(TODAY)).title, "When Ana can retire"); assert.equal(incomeAnswer(familyPlan(TODAY), TODAY).name, "Ana");
+});
+
+test("review 2026-11-06: a partner who works by a Get started answer or saving alone is searched on the plan as it is (no pay to count with the first adult stopped)", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const { compute: goalSeek } = await import("../../scenarios/goal-seek/compute.js");
+  // the family with nothing on Income, Ana "not working now", Bo saving into his Roth: the household lives on Bo's work until he
+  // stops (Will the money last? retires in 2050); with Ana stopping now his pay is in no line, so only his saving moved
+  const p = familyPlan(TODAY); p.income = []; p.guide = { setup: { status: { "p-ana": "none" } } };
+  const w = incomeAnswer(p, TODAY);
+  assert.equal(w.name, "Bo"); assert.deepEqual(w.stopNow, [], "was Ana stopping now: 'Not by 75'"); assert.equal(w.plannedStop, null);
+  assert.equal(w.earliestAge, 63); assert.equal(goalSeek(p, { today: TODAY }).levers.find((l) => l.id === "retire").value, 63);
+});
+
+test("review 2026-11-06: the year Will the money last? starts spending is named by whose stop it is (plannedStop.by)", async () => {
+  const { incomeAnswer, plannedStopWords } = await import("./compute.js");
+  // Elena (35) said "Not working now", Marcus (37) works to 65 (2054): the projection lives on his pay until then
+  const p = emptyPlan();
+  p.household.people.push({ id: "e", name: "Elena", role: "self", birthDate: "1991-03-03", retirementAge: 65 }, { id: "m", name: "Marcus", role: "partner", birthDate: "1989-05-05", retirementAge: 65 });
+  p.accounts.push({ id: "a1", name: "Marcus's 401(k)", type: "401k", balance: 90000, ownerId: "m" }, { id: "a2", name: "Savings", type: "savings", balance: 15000 });
+  p.income.push({ id: "i1", name: "Marcus's salary", type: "salary", personId: "m", amount: 7500, period: "monthly", growth: 0.03 });
+  p.retirement.contributions = [{ id: "c1", accountId: "a1", personId: "m", amount: 500, period: "monthly", employerMatch: 3000 }];
+  p.retirement.spendingMonthly = 6000; p.retirement.socialSecurity = { e: { claimAge: 67, monthlyAtFRA: 1100 }, m: { claimAge: 67, monthlyAtFRA: 2600 } };
+  p.guide = { setup: { status: { e: "none", m: "work" } } };
+  const ps = incomeAnswer(p, TODAY).plannedStop;
+  assert.deepEqual([ps.plannedYear, ps.by], [2054, { name: "Marcus", age: 65 }]);
+  assert.equal(plannedStopWords(ps), "This counts Elena as not working from this year on. Will the money last? counts the household as living on Marcus's pay until Marcus stops work at 65, so it starts spending savings only in 2054. If Elena does not go back to work, set Elena's retirement age to 35 on the ");
+  // the year being the first adult's own: as before (Pat, 65 on file, Tom working to 65 in 2033)
+  assert.equal(plannedStopWords({ personId: "s", name: "Pat", age: 60, plannedAge: 65, plannedYear: 2031 }), "This counts Pat as stopped from this year. Your plan still has Pat stopping work at 65, so Will the money last? starts spending savings only in 2031. If Pat has stopped, set Pat's retirement age to 60 on the ");
+  assert.equal(plannedStopWords({ personId: "s", name: "Me", age: 60, plannedAge: 65, plannedYear: 2031 }).startsWith("This counts you as stopped from this year. Your plan still has you stopping"), true);
+  assert.equal(plannedStopWords(null), "");
 });

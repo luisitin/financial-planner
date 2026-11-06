@@ -6,7 +6,7 @@
 //   line     one sentence: what the answer holds
 //   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
-import { compute as projection, retirementKnown } from "../../retirement/projection/compute.js";
+import { compute as projection, retirementKnown, healthAdded } from "../../retirement/projection/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -56,7 +56,7 @@ export function answerFor(guide, plan, params = {}) {
       headline: d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`,
       // the carried figure is markets doing exactly as well as average (about a 4 in 10 chance); Will the money last? gives the
       // figure that lasts in 9 of 10 markets, too slow to work out on every page this line shows on (round 5, 2026-11-02)
-      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan on ${m(d.spendingYearly)} a year; if markets do as well as average the plan carries ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year, less in a bad run of years (Will the money last? shows how much less).`,
+      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health cover" : ""} the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan on ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health cover" : ""}; if markets do as well as average the plan carries ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year, less in a bad run of years (Will the money last? shows how much less).`,
       status: d.verdict === "on track" ? "ok" : "warn",
     };
   }

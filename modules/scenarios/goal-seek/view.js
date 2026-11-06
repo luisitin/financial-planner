@@ -3,6 +3,7 @@
 // needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
 import { whenCareful, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
+import { RETIRE_HOW } from "./compute.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 
@@ -84,7 +85,7 @@ export function render(page, ctx) {
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
         ui.h("li", {}, "Every lever runs your plan's own year-by-year engine (Will the money last?) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
-        ui.h("li", {}, "Spending: the most a month, steady after inflation. Retirement: the first person's earliest age, from this year's to 75 (or the planned age if later), counted by the year they stop. Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are."),
+        ui.h("li", {}, `Spending: the most a month, steady after inflation. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The 9-in-10 figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
       ))));
   };

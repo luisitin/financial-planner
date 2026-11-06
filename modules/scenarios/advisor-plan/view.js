@@ -68,7 +68,8 @@ export function render(page, ctx) {
     ];
     for (const lv of LEVERS.filter((l) => ADVISOR_LEVERS.includes(l.key))) for (const a of lv.person ? adults : [null]) {
       const k = lv.person ? `${lv.key}:${a.id}` : lv.key;
-      const now = lv.person ? lv.get(plan, a.id) : lv.get(plan);
+      // spending: what your plan spends before health cover (the engine's figure), the one an advisor's typed figure is set against
+      const now = lv.key === "spendingMonthly" && d?.yours ? Math.round(d.yours.spendingMonthly) : lv.person ? lv.get(plan, a.id) : lv.get(plan);
       fields.push({ key: k, label: a ? `${a.name}: ${lv.label.toLowerCase()}` : lv.label, type: lv.type, min: lv.min ?? 0, max: lv.max, step: lv.type === "number" ? "1" : undefined, help: lv.key === "extraSavingMonthly" ? "what they recommend saving beyond what you save now" : now !== null && now !== undefined && now !== 0 ? `yours: ${lv.type === "percent" ? `${Math.round(now * 1000) / 10}%` : lv.type === "money" ? money(now) : now}` : undefined });
     }
     fields.push({ key: "fee", label: "Their fee a year", type: "percent", min: 0, max: 5, help: "the advisory fee, plus the funds' own costs if they say" }, { key: "quotedChance", label: "Chance of success they quote", type: "percent", min: 0, max: 100 }, { key: "notes", label: "Their recommendations", type: "textarea", rows: 3 });

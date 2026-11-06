@@ -30,8 +30,9 @@ test("the order for the family, the next step, and the dates the spare money rea
   assert.equal(d.next.id, "starter");
   // Ana's death would leave Bo and Cy short (Life insurance needs' own answer); Bo's would not: the plan holds
   const pr = step(d, "protect");
-  assert.deepEqual(pr.people.map((x) => [x.name, x.gap, x.cover, x.until, x.depends]), [["Ana", 235000, 0, 2042, ["Bo", "Cy"]]]);
-  assert.match(pr.detail, /^If Ana died this year, Bo and Cy would be about \$235,000 short\. Term life cover on Ana until about 2042 \(Cy turns 22\) closes it\./);
+  // 2026-11-02, the health line (Bo alone pays marketplace cover 2050-2052 and Medicare from 2053): 235,000 -> 287,000
+  assert.deepEqual(pr.people.map((x) => [x.name, x.gap, x.cover, x.until, x.depends]), [["Ana", 287000, 0, 2042, ["Bo", "Cy"]]]);
+  assert.match(pr.detail, /^If Ana died this year, Bo and Cy would be about \$287,000 short\. Term life cover on Ana until about 2042 \(Cy turns 22\) closes it\./);
   assert.equal(pr.gap, null, "an action, not a sum the spare money fills");
   assert.equal(step(d, "bills").status, "done");
   assert.equal(step(d, "match").status, "check", "Bo has a 401(k) and pay but no contribution");
@@ -111,11 +112,12 @@ test("review: a gap under half a dollar is done; Open enrollment's match tiers a
 
 test("protection: done once the cover on file reaches the need; no step for a household nobody depends on", () => {
   const p = familyPlan();
-  p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 250000, premium: 25, period: "monthly", throughWork: false }] };
-  assert.equal(compute(p, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "Ana's $250,000 covers the $235,000");
+  // 2026-11-02, the health line moved the need 235,000 -> 287,000: the cover that reaches it 250,000 -> 300,000, the gap left by 100,000 135,000 -> 187,000
+  p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 300000, premium: 25, period: "monthly", throughWork: false }] };
+  assert.equal(compute(p, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "Ana's $300,000 covers the $287,000");
   p.insurance.policies[0].benefit = 100000;
   const pr = compute(p, { today: TODAY }).steps.find((s) => s.id === "protect");
-  assert.equal(pr.people[0].gap, 135000); assert.match(pr.detail, /even with the \$100,000 of cover on file\. More cover on Ana/);
+  assert.equal(pr.people[0].gap, 187000); assert.match(pr.detail, /even with the \$100,000 of cover on file\. More cover on Ana/);
   const single = familyPlan();
   single.household.people = single.household.people.filter((x) => x.id === "p-ana");
   single.income = single.income.filter((x) => x.personId === "p-ana");

@@ -6,7 +6,7 @@
 import { compute as computeProjection } from "../projection/compute.js";
 
 /**
- * compute(plan, { today, real = true }) -> { ready, missing, real, rows: [{ year, age, ages, retired, in: { contributions, income, lines }, out: { spending, taxes }, from: { cash, taxable, deferred, free }, rmd, end: { cash, taxable, deferred, free, total }, shortfall }], totals, retireYear }
+ * compute(plan, { today, real = true }) -> { ready, missing, real, rows: [{ year, age, ages, retired, in: { contributions, income, lines }, out: { spending (health cover included), health, taxes }, from: { cash, taxable, deferred, free }, rmd, end: { cash, taxable, deferred, free, total }, shortfall }], totals, retireYear }
  */
 export function compute(plan, params = {}) {
   const pr = computeProjection(plan, params);
@@ -16,7 +16,8 @@ export function compute(plan, params = {}) {
   const rows = pr.rows.map((r) => ({
     year: r.year, age: r.ages[0], ages: r.ages, retired: r.retired, priceLevel: r.priceLevel,
     in: { contributions: k(r, r.contributions), income: k(r, r.income), lines: r.incomeLines.map((l) => ({ name: l.name, amount: k(r, l.amount) })) },
-    out: { spending: k(r, r.spending), taxes: k(r, r.taxes) },
+    // spending is all of it: the plan's spending and its health cover (marketplace to 65, then Medicare; 2026-11-02)
+    out: { spending: k(r, r.spending + (r.eventSpending ?? 0)), health: k(r, r.eventSpending ?? 0), taxes: k(r, r.taxes) },
     from: { cash: k(r, r.withdrawn.cash), taxable: k(r, r.withdrawn.taxable), deferred: k(r, r.withdrawn.deferred), free: k(r, r.withdrawn.free) },
     rmd: k(r, r.rmd), returnPct: r.portfolioReturn,
     end: { cash: k(r, r.balances.cash), taxable: k(r, r.balances.taxable), deferred: k(r, r.balances.deferred), free: k(r, r.balances.free), total: k(r, r.total) },

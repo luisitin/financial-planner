@@ -27,3 +27,39 @@
 ## Ideas / not yet
 - Show the surcharge on the Roth conversions page as a cost of each conversion.
 - Medigap against Medicare Advantage by expected use.
+
+## In the plan's verdict (2026-11-02)
+`retirement/projection` `buildInputs` adds each year's `totalYearly` (Part B, the drug plan, any supplement and the
+surcharge, for everyone 65 or over) to the plan as a "Health cover" engine line, on top of the spending figure, in the years
+nobody in the household still works (review fix 2026-11-02, one rule whoever is listed first: while anyone works, a plan
+through that job covers the household, as on Healthcare before 65, so those years are not added there and the projection
+says which; this page still counts every year from 65, so its lifetime is the projection's Medicare plus those years). Fourth
+pass (2026-11-02): a year nobody works is added before the household's retirement year too, and who works is the
+projection's `workRule` (a salary, bonus or business line on Income, or "work" in Get started; rent or dividends are not a job).
+Left out when `retirement.healthIncluded` is true ("My spending figure already includes health cover"). When the spending
+is carried from today's bills and one of them already pays for Medicare (its name says Medicare, Medigap, Part B or Part D;
+or Get started's "Insurance and health" row, for those who have stopped work), that line stays in the spending and pays the
+Medicare of the adults 65 or over now; everyone else's is added, per person (each year's `totalYearly` x those left /
+`enrolled`: the premium is the same for each person on it). A Medicare line when nobody is 65 yet is someone else's (a
+parent's): all of the household's Medicare is added (review fix 2026-11-02: it used to drop all of it). `planIncome` runs `buildInputs(..., { health: false })`, the plan without its own health line: a one-pass
+approximation for the income the surcharge is priced on (the premiums' own withdrawals are not in it), and it stops the
+recursion (projection -> medicare -> projection). It copies the plan shallowly now (it only reads it). `compute(plan, { today,
+planIncome })` takes the run the projection already made (one run shared with Healthcare before 65).
+
+## Two incomes (fifth pass, 2026-11-02)
+`planIncome` gives a year's parts (`partsOf(row)`: AGI, tax-exempt interest, untaxed Social Security) and two incomes, one per
+law: `magiOf` for this page's surcharge, AGI plus tax-exempt interest (42 USC 1395r(i)(4)(A); 20 CFR 418.1010), and
+`acaMagiOf` for the marketplace credit on Healthcare before 65, AGI plus untaxed Social Security plus tax-exempt interest (26 USC
+36B(d)(2)(B)). The formulas are `irmaaIncome` and `marketplaceIncome`. Tax-exempt interest is an interest and dividends line on
+Income marked untaxed; untaxed Social Security is the benefit less its taxable part (all of it in a working year, whose AGI
+leaves Social Security out). Lines are told apart by kind (Social Security, a partner's pay) and Income type, never by name.
+This page's figures do not move for any fixture (none holds tax-exempt interest).
+
+## Review 2026-11-06 (sixth pass)
+- A partner's pay is told by `type: "pay"` (the base's name for the line; it was `kind: "pay"`).
+- In a working year the pay counted is that of whoever works that year by the projection's one work rule (`workRule`): a
+  partner Get started says is retired or not working brings none in, whatever Income still holds (it went by age: Lee "retired"
+  with her salary on Income added $59,000 to the household's 2030 income).
+- An interest and dividends line on Income is never an engine income (the base's other-income rule: the accounts' growth holds
+  it, and the brackets count that growth as dividends in AGI), so `exemptInterest` comes to $0 for every plan and nothing is
+  added on top of AGI for a muni line (was $3,000 in both incomes in the fifth pass's test). The two formulas stay as they are.

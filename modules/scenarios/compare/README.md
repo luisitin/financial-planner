@@ -22,9 +22,15 @@ Input levers (applied to the engine's inputs): fees a year (taken off both the s
 - At most `MAX_SCENARIOS` (4) are run.
 - A version that cannot be built shows its missing items.
 - Empty fields in the editor are not stored: they stay as the plan has them.
+- A spending figure typed in a scenario is a typed figure (review fix 2026-11-02): the `spendingMonthly` lever sets
+  `guide.setup.retireAuto` false in the copy, so Will the money last?'s health line goes on top of it and a health premium on
+  Expenses is not taken out of it, as when the figure is typed on Will the money last? (a $6,000 scenario ran on $5,400
+  while the plan's figure was Get started's own). While the plan's figure is Get started's, `current.spendingMonthly` is
+  what the plan spends before health cover (`buildInputs` `spendingYearly` / 12), so "Spend 10% less" and the editor's
+  "the plan: $4,570" start from the figure a typed one is set against.
 
 ## Tests
-`module.test.mjs`: the levers read the plan, `applyChanges` copies (the original untouched) and reaches the engine, `results` matches the projection, `describe` in plain words, the family's scenarios (earlier retirement and fees cost, saving gains, the four-scenario cap).
+`module.test.mjs`: the levers read the plan, `applyChanges` copies (the original untouched) and reaches the engine, `results` matches the projection, `describe` in plain words, the family's scenarios (earlier retirement and fees cost, saving gains, the four-scenario cap), a typed scenario figure with Get started's own figure in the plan ($6,000 stays $6,000; "10% less" is less).
 
 ## Ideas / not yet
 - More levers: selling the house, a part-time job, a pension, the withdrawal strategy.

@@ -122,3 +122,30 @@ test("recheck 2026-11-05: the earliest age spends the plan's amount the same eve
   }
   assert.equal(compute(familyPlan(T), { today: T }).strategy, "fixed-real");
 });
+
+// review 2026-11-02: the spending answer says it is on top of health cover, as Will the money last? does (its target)
+test("the spending lever says it is on top of health cover, and not when the spending figure already includes it", () => {
+  const p = familyPlan();
+  assert.match(lever(compute(p, { today: TODAY }), "spending").sentence, /a month on top of health cover, .* the plan spends before health cover\.$/);
+  p.retirement.healthIncluded = true;
+  assert.doesNotMatch(lever(compute(p, { today: TODAY }), "spending").sentence, /health cover/);
+});
+
+// Review 2026-11-06 (sixth pass verify): "How it is worked out" said "Retirement: the first person's earliest age" while the lever
+// is about the adult who still works (workingNow): the part-time couple's "When Jo can retire" (Jo listed second) sat under it.
+test("verify 2026-11-06: the method sentence names the adult the retirement lever is about, not the first person", async () => {
+  const { RETIRE_HOW } = await import("./compute.js");
+  assert.ok(!/first person's earliest age/.test(RETIRE_HOW), "was: the first person's earliest age");
+  assert.match(RETIRE_HOW, /earliest age of the adult who still works/);
+  const { emptyPlan: empty } = await import("../../../core/schema/migrate.js");
+  const p = empty();
+  p.household.filingStatus = "married_joint";
+  p.household.people.push({ id: "rae", name: "Rae", role: "self", birthDate: "1960-01-15", retirementAge: 63 }, { id: "jo", name: "Jo", role: "partner", birthDate: "1964-10-01", retirementAge: 66 });
+  p.guide = { setup: { status: { rae: "retired", jo: "work" } } };
+  p.accounts.push({ id: "ira", name: "Rae's IRA", type: "ira", balance: 380000, ownerId: "rae" }, { id: "sav", name: "Savings", type: "savings", balance: 30000 });
+  p.income.push({ id: "ss", name: "Rae's Social Security", type: "social", personId: "rae", amount: 2400, period: "monthly", growth: 0.025, taxable: true }, { id: "jo", name: "Jo's part-time job", type: "salary", personId: "jo", amount: 2200, period: "monthly", growth: 0.02, taxable: true });
+  p.retirement.socialSecurity = { jo: { claimAge: 67, monthlyAtFRA: 1600 } };
+  p.expenses.push({ id: "o", name: "Everything", category: "other", amount: 4350, period: "monthly", essential: true, inflates: true });
+  const d = compute(p, { today: "2026-11-06" });
+  assert.equal(lever(d, "retire").title, "When Jo can retire", "the second adult listed: the words must not say the first person");
+});

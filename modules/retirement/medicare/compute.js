@@ -2,7 +2,7 @@
 // Part B, a drug plan and any supplement cost, and the income surcharge (IRMAA) each year, from the plan's
 // own income two years before (Roth conversions and required withdrawals included): which years it bites,
 // how much it adds over retirement, and how much room is left under the first threshold.
-import { buildInputs } from "../projection/compute.js";
+import { buildInputs, workRule } from "../projection/compute.js";
 import { project } from "../../../core/math/retirement.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { YEAR, PART_B, PART_B_DEDUCTIBLE, PART_D_BASE, tiersFor, LATE_PENALTY } from "./data/medicare.js";
@@ -27,29 +27,62 @@ export function enrollmentWindow(birthDate) {
 }
 
 /**
+ * The two incomes means-tested costs are priced on, from a year's parts in today's dollars (fifth pass, 2026-11-02):
+ * - Medicare's income surcharge (IRMAA): modified AGI is AGI plus tax-exempt interest (42 USC 1395r(i)(4)(A); 20 CFR
+ *   418.1010). Untaxed Social Security stays out.
+ * - The marketplace's premium tax credit: modified AGI is AGI plus untaxed Social Security plus tax-exempt interest (26 USC
+ *   36B(d)(2)(B); foreign income excluded under section 911 too, which the plan does not hold). It was the IRMAA figure, so a
+ *   couple living on Social Security read as under the poverty line (the 68/63 couple: $15,365 in 2026, "Medicaid may cover
+ *   people with that income instead"), while the marketplace counts the whole benefit.
+ * irmaaIncome({ agi, exemptInterest }) / marketplaceIncome({ agi, exemptInterest, untaxedSocialSecurity }) -> dollars
+ */
+export const irmaaIncome = ({ agi = 0, exemptInterest = 0 } = {}) => agi + exemptInterest;
+export const marketplaceIncome = ({ agi = 0, exemptInterest = 0, untaxedSocialSecurity = 0 } = {}) => agi + exemptInterest + untaxedSocialSecurity;
+
+/**
  * The plan's income for means-tested costs (Medicare's surcharge, marketplace credits), year by year, in today's dollars:
- * the plan run through the federal brackets; in a retired year, ordinary income + qualified dividends and gains + taxable
- * Social Security (the brackets' own figures, conversions and required withdrawals included); in a working year (the
- * engine works out no tax), the pay of whoever still works less their pre-tax 401(k) and IRA saving, plus the plan's other
- * taxable income that year. -> { inputs, run, magiOf(row) } | { inputs: null, missing }. Shared with retirement/healthcare.
+ * the plan run through the federal brackets. AGI: in a retired year, ordinary income + qualified dividends and gains + taxable
+ * Social Security (the brackets' own figures, conversions and required withdrawals included); in a working year (the engine
+ * works out no tax), the pay of whoever still works less their pre-tax 401(k) and IRA saving, plus the plan's other taxable
+ * income that year. Tax-exempt interest: an Income line of interest and dividends ("investment") marked untaxed. Untaxed
+ * Social Security: the benefit less its taxable part (all of it in a working year, where AGI leaves it out). Lines are told
+ * apart by their kind (Social Security) and type (a partner's pay is type "pay", else the Income type), never by name. In a working
+ * year the pay counted is that of whoever works that year by the projection's one work rule (workRule: a partner Get started says
+ * is retired or not working brings none in, whatever Income still holds; review 2026-11-06, it went by age alone).
+ * -> { inputs, run, partsOf(row): { agi, exemptInterest, untaxedSocialSecurity }, magiOf(row) (IRMAA's), acaMagiOf(row) (the
+ * marketplace's) } | { inputs: null, missing }. Shared with retirement/healthcare and, through both, with the projection's health
+ * line (buildInputs works it out once and hands it to both as `params.planIncome`).
  */
 export function planIncome(plan, { today } = {}) {
-  const p2 = JSON.parse(JSON.stringify(plan));
-  p2.retirement = { ...(p2.retirement ?? {}), taxMode: "brackets" };
-  const b = buildInputs(p2, { today });
+  // buildInputs only reads the plan: a shallow copy with the brackets is enough (a deep copy of a plan with years of bank
+  // transactions cost more than the rest of this together, and the projection now runs this for its health line)
+  const p2 = { ...plan, retirement: { ...(plan.retirement ?? {}), taxMode: "brackets" } };
+  // health: false -- the plan without its own health line (Will the money last? adds this page's premiums and the
+  // marketplace's to the plan, worked from this income: one pass, so the income here leaves the premiums' own withdrawals out)
+  const b = buildInputs(p2, { today, health: false });
   if (!b.inputs) return { inputs: null, missing: b.missing ?? [] };
   const I = b.inputs;
   const run = project(I);
   const inc = computeIncome(plan, { today }), con = computeContributions(plan, { today });
   const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
   const preTaxOf = (id) => (con.items ?? []).filter((c) => c.personId === id && ["401k", "ira"].includes(c.accountType)).reduce((s, c) => s + c.yearly, 0);
-  const magiOf = (row) => {
-    if (row?.retired && row.taxInfo) return (row.taxInfo.ordinary + row.taxInfo.qualified + row.taxInfo.taxableSocialSecurity) / row.priceLevel;
-    const working = I.people.reduce((s, p, k) => s + (row.ages[k] < p.retireAge ? Math.max(0, payOf(p.id) - preTaxOf(p.id)) : 0), 0);
-    const other = (row.incomeLines ?? []).filter((l) => !/'s pay$/.test(l.name) && !/Social Security/.test(l.name)).reduce((s, l) => s + l.amount, 0) / row.priceLevel;
-    return working + other;
+  // each engine income line's kind, by the income it comes from
+  const works = workRule(plan, I.people, { today, retireYear: I.retireYear });
+  const kindOf = new Map();
+  for (const x of I.incomes ?? []) kindOf.set(x.name, x.kind === "social" ? "social" : x.type === "pay" ? "pay" : x.taxable === false ? (x.type === "investment" ? "exempt" : "untaxed") : "taxed");
+  const partsOf = (row) => {
+    const sum = (k) => (row?.incomeLines ?? []).filter((l) => kindOf.get(l.name) === k).reduce((s, l) => s + l.amount, 0) / row.priceLevel;
+    const exemptInterest = sum("exempt"), social = sum("social");
+    if (row?.retired && row.taxInfo) {
+      const t = row.taxInfo;
+      return { agi: (t.ordinary + t.qualified + t.taxableSocialSecurity) / row.priceLevel, exemptInterest, untaxedSocialSecurity: Math.max(0, social - t.taxableSocialSecurity / row.priceLevel) };
+    }
+    const working = I.people.reduce((s, p) => s + (works(p, row.year) ? Math.max(0, payOf(p.id) - preTaxOf(p.id)) : 0), 0);
+    return { agi: working + sum("taxed"), exemptInterest, untaxedSocialSecurity: social };
   };
-  return { inputs: I, run, magiOf };
+  const magiOf = (row) => irmaaIncome(partsOf(row));
+  const acaMagiOf = (row) => marketplaceIncome(partsOf(row));
+  return { inputs: I, run, partsOf, magiOf, acaMagiOf };
 }
 
 /**
@@ -69,7 +102,7 @@ export function compute(plan, params = {}) {
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const people = adults.map((p) => ({ id: p.id, name: p.name, medicareYear: Number(p.birthDate.slice(0, 4)) + 65, signup: enrollmentWindow(p.birthDate), age: today ? ageOn(p.birthDate, today) : null }));
   const base = { year: YEAR, partB: PART_B, deductible: PART_B_DEDUCTIBLE, partD, supplement, status, people, latePenalty: LATE_PENALTY };
-  const pi = planIncome(plan, { today });
+  const pi = params.planIncome ?? planIncome(plan, { today });   // the projection's health line passes the run it already made
   if (!pi.inputs) return { ...base, ready: false, missing: pi.missing };
   const { inputs: I, run: r, magiOf } = pi;
   const byYear = new Map(r.rows.map((row) => [row.year, row]));

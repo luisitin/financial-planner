@@ -41,8 +41,10 @@ export const STRATEGIES = {
  *                                                   // what no owner holds (life-insurance cash value) has none. Without owners the primary owns it all.
  *   contributions[].rmdExempt: true adds to the part with no required withdrawals,
  *   contributions[].untilYear / skipYears, incomes[].fromYear / untilYear: calendar-year bounds on top of the ages (what-if pages),
- *   events: [{ year, amount, label }] | undefined   // today's dollars that year: > 0 comes out of savings on top of spending (in the
- *                                                   // withdrawal order, working years too); < 0 goes into the taxable bucket at the start of the year
+ *   events: [{ year, amount, label, spending? }] | undefined   // today's dollars that year: > 0 comes out of savings on top of spending (in the
+ *                                                   // withdrawal order, working years too); < 0 goes into the taxable bucket at the start of the year;
+ *                                                   // spending: true (health cover) counts with the year's spending, so guaranteed income pays it
+ *                                                   // first and only the rest comes out of savings (rows: eventOut has it, eventSpending is that part)
  *   spendingChanges: [{ fromYear, factor }] | undefined   // fixed-real and guardrail spending times the factor from that year on (a survivor, say),
  *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw", withdrawalRate (for percent/guardrails, e.g. 0.04),
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
@@ -77,6 +79,9 @@ export function project(inputs, options = {}) {
   const owners = !I.rmd ? [] : Array.isArray(I.rmd.owners) ? I.rmd.owners : [{ personIndex: 0, share: 1, startAge: I.rmd.startAge }];
   const slices = owners.map((o) => (Number(o.share) || 0) * buckets.deferred);
   const rmdAge = I.rmd ? (I.rmd.startAge ?? owners.find((o) => o.personIndex === 0)?.startAge ?? null) : null;
+  // the events by year, once per run (the health line puts one in every retirement year; Monte Carlo runs this thousands of times)
+  const eventsIn = new Map();
+  for (const e of I.events ?? []) { if (!eventsIn.has(e.year)) eventsIn.set(e.year, []); eventsIn.get(e.year).push(e); }
   for (let year = I.startYear, i = 0; year <= I.endYear; year++, i++) {
     const ages = people.map((p) => year - p.birthYear);
     const retired = year >= I.retireYear;
@@ -132,10 +137,11 @@ export function project(inputs, options = {}) {
     // what-if hooks: a spending change from a year on (fixed-real and guardrails), one-off money out of or into savings
     const factor = (I.spendingChanges ?? []).reduce((f, s) => (year >= s.fromYear ? f * s.factor : f), 1);
     if (factor !== 1 && (strategy === "fixed-real" || strategy === "guardrails")) spending *= factor;
-    let eventOut = 0;
-    for (const e of I.events ?? []) if (e.year === year) { const amt = (Number(e.amount) || 0) * priceLevel; if (amt >= 0) eventOut += amt; else buckets.taxable += -amt; }
+    // an event marked `spending` (health cover) is part of the year's spending: guaranteed income pays it first, like the rest
+    let eventOut = 0, eventSpending = 0;
+    for (const e of eventsIn.get(year) ?? []) { const amt = (Number(e.amount) || 0) * priceLevel; if (amt >= 0) { eventOut += amt; if (e.spending) eventSpending += amt; } else buckets.taxable += -amt; }
     // 4. the gap, required withdrawals, Roth conversions, then withdrawals in order until spending and the year's tax are covered
-    const need = Math.max(0, spending - income) + eventOut;
+    const need = Math.max(0, spending + eventSpending - income) + (eventOut - eventSpending);
     const withdrawn = { cash: 0, taxable: 0, deferred: 0, free: 0 };
     let rmd = 0, conversion = 0, taxes = 0, taxInfo = null;
     const taxableStart = buckets.taxable;
@@ -219,7 +225,7 @@ export function project(inputs, options = {}) {
     lastReal = (1 + portfolioReturn) / (1 + infl) - 1;
     rows.push({
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
-      contributions: contrib, income, incomeLines, spending, eventOut, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
+      contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }

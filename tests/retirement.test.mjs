@@ -151,3 +151,20 @@ test("what-if hooks: one-off money out and in, a spending change, calendar bound
   const big = base(); big.events = [{ year: 2027, amount: 1e6 }];
   const rb = project(big); assert.equal(rb.success, false); assert.equal(rb.failYear, 2027);
 });
+
+// 2026-11-02: an event marked `spending` (the projection's health cover) is part of the year's spending, so guaranteed income
+// pays it first; an unmarked event still comes out of savings on top of spending
+test("events marked spending are paid by guaranteed income first", () => {
+  const rich = () => { const I = base(); I.incomes = [{ name: "Pension", yearly: 60000, personIndex: 0, startAge: 60, cola: true, taxable: false }]; I.contributions = []; return I; };
+  const marked = rich(); marked.events = [{ year: 2028, amount: 8000, label: "Health cover", spending: true }];
+  const r = project(marked).rows.find((x) => x.year === 2028);
+  near(r.eventOut, 8000); near(r.eventSpending, 8000);
+  near(r.withdrawn.cash + r.withdrawn.taxable + r.withdrawn.deferred + r.withdrawn.free, 0);   // 60,000 of income covers 50,000 + 8,000
+  const plain = rich(); plain.events = [{ year: 2028, amount: 8000, label: "one-off" }];
+  const q = project(plain).rows.find((x) => x.year === 2028);
+  near(q.eventSpending, 0); near(q.withdrawn.cash, 8000);   // a one-off still comes out of savings
+  // no income yet (Social Security from 67): the marked event adds to the gap one for one, 50,000 + 8,000
+  const short = base(); short.events = [{ year: 2028, amount: 8000, spending: true }];
+  const s = project(short).rows.find((x) => x.year === 2028);
+  near(s.withdrawn.cash + s.withdrawn.taxable, 58000);
+});

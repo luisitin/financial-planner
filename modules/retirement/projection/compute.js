@@ -8,8 +8,14 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeSocialSecurity } from "../social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { nper } from "../../../core/math/finance.js";
+import { ageOn } from "../../../core/math/dates.js";
 import { paramsFor } from "../../../core/math/tax.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
+// health cover (marketplace to 65, Medicare from 65): both pages run the plan through buildInputs({ health: false }) for its
+// income, so this import cycle is calls inside functions only, never at load
+import { compute as computeHealthcare } from "../healthcare/compute.js";
+import { compute as computeMedicare, planIncome } from "../medicare/compute.js";
 
 /** The withdrawal orders a plan can choose (after cash, which always goes first). */
 export const WITHDRAWAL_ORDERS = {
@@ -89,7 +95,8 @@ export function incomeSocial(plan, people, ssPeople, today) {
   return out;
 }
 
-/** The Income page's kinds of pay: they stop when that person stops work. */
+/** The Income page's kinds of pay (a job: salary, bonus; or a business): they stop when that person stops work. Rent,
+ * dividends, pensions, Social Security and other income are not pay, so they never make anyone "work" (workRule). */
 export const PAY_TYPES = ["salary", "bonus", "business"];
 /** Income that is neither pay, a pension nor Social Security (rent, dividends and interest, support, other). */
 export const OTHER_INCOME_TYPES = ["rental", "investment", "support", "other"];
@@ -140,12 +147,14 @@ export function ownAccountMoney(name) {
  * - dividends and interest (`investment`): never, the accounts' own growth already holds them; listed in `left` (why "growth").
  * Each rises with inflation when the item has a raise (cola, as pensions), taxed unless marked untaxed. One-off and ended items
  * are left out, and so is an item that ends before retirement. An unknown type is "other", as on the Income page.
- * otherIncome(plan, people, retireYear, today) -> {
+ * Review 2026-11-06: `works` (workRule) is the one rule for who stops work: support and other with no end date of an owner Get
+ * started says is retired or not working, and the first adult's, never count from the household's retirement on.
+ * otherIncome(plan, people, retireYear, today, works?) -> {
  *   counted: [{ name, yearly, personId, startAge (its owner's age in the year it starts), endAge?, cola, taxable, type, source: "income", whileWorking? }],
  *   left: [{ name, yearly, type, personId, why: "work" | "growth" | "accounts" }]
  * }
  */
-export function otherIncome(plan, people, retireYear, today) {
+export function otherIncome(plan, people, retireYear, today, works = null) {
   const counted = [], left = [];
   if (!people.length) return { counted, left };
   const deps = (plan.household?.people ?? []).filter((p) => p.role === "dependent" && /^\d{4}/.test(String(p.birthDate ?? "")));
@@ -175,7 +184,13 @@ export function otherIncome(plan, people, retireYear, today) {
     if (until === null && type !== "rental") {
       const kid = childSupport(name, type) ? childEnd(name) : null;
       if (kid !== null) until = kid;
-      else { until = who.birthYear + who.retireAge - 1; whileWorking = true; left.push({ name, yearly, type, personId: who.id, why: "work" }); }
+      else {
+        // the first adult's (and the household's) stop at the household's retirement, which can now come before their own
+        // retirement age (householdRetireYear); one Get started says has stopped work has none after it (review 2026-11-06)
+        const own = who.birthYear + who.retireAge - 1;
+        until = who.id === people[0].id || works?.status(who) === "stopped" ? Math.min(own, retireYear - 1) : own;
+        whileWorking = true; left.push({ name, yearly, type, personId: who.id, why: "work" });
+      }
     }
     if (until !== null && until < from) continue;
     counted.push({ name, yearly, personId: who.id, startAge: from - who.birthYear, endAge: until === null ? undefined : until - who.birthYear, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type, source: "income", ...(whileWorking ? { whileWorking: true } : {}) });
@@ -202,8 +217,349 @@ export function rmdOwners(plan, people, adults, deferredTotal) {
   });
 }
 
+/** An Expenses line's name that pays for Medicare: Part B, a drug plan (Part D), a supplement (Medigap). */
+export const MEDICARE_LINE = /medicare|medigap|part\s*b\b|part\s*d\b/i;
+const NOT_COVER = /dental|vision|\beye|life|disabil|long[- ]?term|\bltc\b|\bpet|accident|indemnity|\bcar\b|\bauto|home|renter|umbrella/i;
+/** A name that joins two things ("Insurance and health", "Health & medicine", "Premiums, medicine"). */
+const JOINED = /\band\b|&|\+|,|\//i;
 /**
- * buildInputs(plan, { today }) -> { inputs, notes: [text], people, spendingSource } or { inputs: null, missing: [text] }
+ * What an Expenses line is for health cover: "medicare" (its name says Medicare, Medigap, Part B or Part D), "cover" (a premium
+ * for cover bought before Medicare and nothing else: health or medical insurance, a health plan, the marketplace, COBRA; or an
+ * insurance or premium line under "Health and medical"), "mixed" (cover held with other things: Get started's own
+ * "Insurance and health" row, `setup-x-insurance`, "premiums you pay yourself, medicine", or a name that joins health cover
+ * to something else), or null (care itself, dental, vision, life and other insurance, everything else).
+ */
+export function healthLine(x) {
+  const name = String(x?.name ?? "");
+  if (MEDICARE_LINE.test(name)) return "medicare";
+  if (x?.id === "setup-x-insurance") return "mixed";
+  if (NOT_COVER.test(name)) return null;
+  const says = /\b(marketplace|cobra|obamacare|aca)\b/i.test(name) || (/\b(health|medical)\b/i.test(name) && /\b(insurance|cover|coverage|plan|premiums?)\b/i.test(name)) || (x?.category === "health" && /\b(insurance|premiums?)\b/i.test(name));
+  if (!says) return null;
+  return JOINED.test(name) ? "mixed" : "cover";
+}
+
+/**
+ * Get started's own starting figure for retirement spending, a month, to $10: setup's `retireDefault` (overview/setup/
+ * compute.js), worked out here from the same parts so the retirement pages do not load Get started's page graph (it reaches
+ * back into this one through Next best action and Life cover, and a module in that loop reads another's constant at load).
+ * module.test.mjs checks the two agree. Today's bills without loan payments and childcare (setup's `spendBase` core, every
+ * line whatever its dates, plus the setup's own rows but childcare), plus each loan still being paid when the first adult
+ * stops work (months to payoff at its payment, `nper`, past the months until then; none when a bill on Expenses is a loan
+ * payment, or without birth dates).
+ */
+export function setupFigure(plan, today = null) {
+  const L = (k) => (Array.isArray(plan?.[k]) ? plan[k] : []);
+  const isSetup = (id) => typeof id === "string" && id.startsWith("setup-");
+  const own = L("expenses").filter((x) => !isSetup(x.id));
+  const ex = own.length ? computeExpenses({ ...plan, expenses: own, debts: [] }, {}) : null;
+  const cat = (k) => ex?.byCategory.find((c) => c.category === k)?.monthly ?? 0;
+  const core = (ex?.monthly ?? 0) - cat("debt") - cat("childcare");
+  const rows = L("expenses").filter((x) => isSetup(x.id) && x.category !== "childcare").reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
+  const planAge = Number(plan?.assumptions?.retirementAge ?? 65), status = plan?.guide?.setup?.status ?? {};
+  const people = Array.isArray(plan?.household?.people) ? plan.household.people : [];
+  const left = today ? people.filter((p) => p.role !== "dependent" && p.birthDate && status[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
+  const until = left.length ? Math.min(...left) : null;
+  let loans = 0;
+  if (until !== null && !L("expenses").some((x) => x.category === "debt")) {
+    for (const d of L("debts")) {
+      const owed = Math.abs(Number(L("accounts").find((a) => a.id === d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
+      if (!(owed > 0) || !(pay > 0)) continue;
+      const months = nper((Number(d.rate) || 0) / 12, pay, owed);
+      if (!Number.isFinite(months) || months > until) loans += pay;
+    }
+  }
+  return Math.round((core + rows + loans) / 10) * 10;
+}
+
+/**
+ * Who works in a year: one rule for the health line and Healthcare before 65 (review 2026-11-02, it was "under the retirement
+ * age", so a partner with no job counted as working and the retired one's Medicare was left to a job nobody has), and since
+ * review 2026-11-06 for the household's retirement year, Financial independence and Goal seek too (`workingNow`): the
+ * pages had three rules, and Financial independence asked "when can Bo retire" about a partner the health line priced as not
+ * working, whose age moves nothing in the plan. Someone works while they are alive and under their retirement age, and either:
+ * - said "work" in Get started (`guide.setup.status`: working, even with no pay on Income yet), or
+ * - said nothing there and have pay: a salary, bonus or business line on the Income page that is theirs (a line with no owner
+ *   is the first adult's; a child's, or another household member's, never counts), or a retirement contribution of theirs on
+ *   Contributions (one that names nobody in the plan is the first adult's, as the engine adds it), Financial independence's
+ *   rule since recheck 2026-11-05 ("the retired couple's Sam has neither"; "a contribution alone also counts"): one to a plan
+ *   at work (a 401(k) account, or any with an employer match) always, any other (an IRA, a Roth, an HSA, a brokerage) only
+ *   when nobody else in the plan has pay, which could fund it (a spousal IRA), or
+ * - is the first adult with nothing said and no pay: presumed at work until the household retires (with `retireYear`, the
+ *   household's, householdRetireYear: `.presumed(person, year)`), as the engine counts those years as working years (no
+ *   spending, no withdrawals) and Financial independence asks about them while that year is ahead (recheck 2026-11-05, second
+ *   pass: someone between jobs). Fifth pass (2026-11-02): the family with Ana's salary taken out has Bo on Ana's plan 2050-2052
+ *   and Bo's Medicare 2053-2054 left to it, the health line $174,161 as with her salary.
+ * "retired" or "none" (not working now) in Get started: not working, whatever Income or Contributions hold (the latest word;
+ * Financial independence let pay or a contribution win, review 2026-11-06). Rent, dividends, pensions, Social Security and
+ * other income never make anyone work, nor does the projection's "<name>'s pay" (fourth pass). A partner with no pay, no
+ * contribution and no answer does not work (fifth pass), also in a plan with nothing on Income or Contributions at all
+ * (review 2026-11-06: Financial independence went by age alone there, and asked about such a partner, whose age moves nothing
+ * in the plan; defect 2 of the fifth pass's verify); their cover is the first adult's plan until the household retires.
+ * Without `retireYear` nobody is presumed (the household's own retirement year is worked out from that).
+ * workRule(plan, people, { today, retireYear }) -> (person, year) => boolean (people as buildInputs makes them), with
+ * `.presumed(person, year)`, `.holds(person, year)` (the rule without the age and end-of-plan tests: Financial independence
+ * tests the age by exact age today), `.hasPay(person)` (pay of their own on Income, which the engine can count) and
+ * `.status(person)`: "work" (an answer, pay or a contribution), "stopped" ("retired" or "none") or "unknown"
+ */
+export function workRule(plan, people, { today = null, retireYear = null } = {}) {
+  const said = plan?.guide?.setup?.status ?? {};
+  let active = [];
+  try { active = (plan?.income ?? []).length ? computeIncome(plan, { today }).active : []; } catch { active = []; }
+  const household = plan?.household?.people ?? [];
+  const paid = new Set();
+  for (const x of active) {
+    if (!PAY_TYPES.includes(x.type) || !(Number(x.yearly) > 0)) continue;
+    // theirs; someone else in the household (a child, an adult with no birth date) never makes another adult work; no owner (or one gone): the first adult
+    const owner = people.some((p) => p.id === x.personId) ? x.personId : household.some((q) => q.id && q.id === x.personId) ? null : people[0]?.id;
+    if (owner) paid.add(owner);
+  }
+  // a retirement contribution still going in, theirs (one that names nobody in the plan is the first adult's, as buildInputs adds
+  // it): one to a plan at work (a 401(k) or 403(b) account, or any with an employer match) is that person's work; any other (an
+  // IRA, a Roth, an HSA, a brokerage) only when nobody else in the plan has pay, since a husband's or wife's pay can fund it (a
+  // spousal IRA: the fourth pass's Lee, salary taken out and IRA saving kept, does not work while Sam does)
+  const payOwners = [...paid];
+  for (const c of plan?.retirement?.contributions ?? []) {
+    if (!(perYear(c.amount, c.period) + (Number(c.employerMatch) || 0) > 0)) continue;
+    const owner = people.some((p) => p.id === c.personId) ? c.personId : people[0]?.id;
+    if (!owner) continue;
+    const atWork = (plan.accounts ?? []).find((x) => x.id === c.accountId)?.type === "401k" || Number(c.employerMatch) > 0;
+    if (atWork || !payOwners.some((id) => id !== owner)) paid.add(owner);
+  }
+  const status = (p) => (said[p.id] === "retired" || said[p.id] === "none" ? "stopped" : said[p.id] === "work" || paid.has(p.id) ? "work" : "unknown");
+  // only the first adult: their retirement year is the household's, so the household is at work until then; a partner with no
+  // pay and no answer is covered by that plan in those years (no marketplace is priced while anyone works) without working
+  const presumed = (p, year) => retireYear !== null && p.id === people[0]?.id && status(p) === "unknown" && year < retireYear && year - p.birthYear <= p.endAge;
+  const holds = (p, year) => status(p) === "work" || presumed(p, year);
+  const rule = (p, year) => {
+    const age = year - p.birthYear;
+    if (age > p.endAge) return false;
+    return holds(p, year) && age < p.retireAge;
+  };
+  rule.presumed = presumed;
+  rule.holds = holds;
+  rule.status = status;
+  rule.hasPay = (p) => payOwners.includes(p.id);
+  return rule;
+}
+
+/**
+ * The household's retirement year (fifth pass, 2026-11-02): the first year of spending and withdrawals in the engine. The first
+ * adult's own retirement year, as before, while they work or nothing says otherwise (no pay and no Get started answer: presumed
+ * to work to their retirement age). When Get started says the first adult is retired or not working now, they no longer hold
+ * the household at work: it is the year the last adult who works today stops, or this year when nobody works (it was the
+ * first adult's retirement age whatever they said, so Ana "not working now" with Bo stopping at 62 left 2050-2054 with no
+ * spending and no income, the marketplace priced on an income of $0, "under the poverty line").
+ * Review 2026-11-06 (defect 1 of the fifth pass's verify): never later than the first adult's own year (or this year, when that
+ * has passed). A partner who works on after it brings their pay in as income ("<name>'s pay"), as with no answer; it let a
+ * part-time partner's job hold the whole household at work: the 68/63 couple with Ana (68, past her 60) saying "retired" and
+ * Bo working to 66 for $1,500 a month read 2026-2028 as working years (no spending, nothing drawn, Ana's Social Security
+ * dropped) and "Runs out in 2054", where the same plan with no answer read "Runs out in 2041".
+ * householdRetireYear(plan, people, year, works = workRule(...)) -> year
+ */
+export function householdRetireYear(plan, people, year, works = null) {
+  if (!people.length) return year;
+  const first = people[0];
+  const own = Math.max(year, first.birthYear + first.retireAge);
+  const w = works ?? workRule(plan, people, { today: `${year}-01-01` });
+  if (w.status(first) !== "stopped") return own;
+  const stop = (p) => Math.min(p.birthYear + p.retireAge, p.birthYear + p.endAge + 1);
+  const working = people.filter((p) => w(p, year));
+  return working.length ? Math.max(year, Math.min(own, Math.max(...working.map(stop)))) : year;
+}
+
+/**
+ * Who starts the household's retirement (fifth pass; review 2026-11-06): the first adult while they work or nothing says
+ * otherwise, and also when the year is their own (it is capped there: householdRetireYear), else the adult who works today and
+ * stops in that year, or nobody when nobody works (retirement starts this year).
+ * retireStarter(people, year, retireYear, works) -> { id, name, age, first } | { id: null, name: null, age: null, first: false, nobody: true }
+ */
+export function retireStarter(people, year, retireYear, works) {
+  const first = people[0];
+  const stop = (p) => Math.min(p.birthYear + p.retireAge, p.birthYear + p.endAge + 1);
+  const working = people.filter((p) => p !== first && works(p, year));
+  const by = works.status(first) !== "stopped" || (working.length && retireYear === Math.max(year, first.birthYear + first.retireAge)) ? first
+    : working.find((p) => Math.max(year, stop(p)) === retireYear) ?? working.sort((x, y) => stop(y) - stop(x))[0] ?? null;
+  return by ? { id: by.id, name: by.name, age: retireYear - by.birthYear, first: by === first } : { id: null, name: null, age: null, first: false, nobody: true };
+}
+
+/**
+ * Who still works today, for the questions about an age to stop work (review 2026-11-06: Financial independence and Goal seek's
+ * "When ... can retire" lever, on the one work rule above): an adult under their retirement age by exact age today
+ * (`underAge`; someone turning that age later this year still works) whom the work rule has at work this year (`holds`).
+ * The question is about the first adult while they still work, else the first other adult who does (`lead`), else nobody
+ * (everyone has stopped: there is no age to find). When it is about a partner while the first adult has stopped before the
+ * age on file, the partner's age is searched with the first adult stopping now (`stopNow`, withStops: Financial independence's
+ * rule since recheck 2026-11-05, second pass; Goal seek searches the same plan, so both give one age), the partner's pay coming
+ * in as "<name>'s pay"; only when that pay is on Income: a partner who works by a Get started answer or a contribution alone
+ * has no pay the plan can count, so their age is searched on the plan as it is, where the household's retirement year moves
+ * with their stop (householdRetireYear; review 2026-11-06: with the first adult stopping now it moved only their saving).
+ * workingNow(plan, inputs, today) -> { ageNow(p), underAge(p), holds(p), stillWorks(p), status(p), lead (an engine person or null), stopNow: [{ personId, age }] }
+ */
+export function workingNow(plan, I, today) {
+  const birth = Object.fromEntries((plan?.household?.people ?? []).map((p) => [p.id, p.birthDate]));
+  const W = workRule(plan, I.people, { today, retireYear: I.retireYear });
+  const ageNow = (q) => ageOn(birth[q.id], today) ?? I.startYear - q.birthYear;
+  const underAge = (q) => ageNow(q) < q.retireAge;
+  const holds = (q) => W.holds(q, I.startYear) && I.startYear - q.birthYear <= q.endAge;
+  const stillWorks = (q) => underAge(q) && holds(q);
+  const self = I.people[0];
+  const working = I.people.filter(stillWorks);
+  const lead = working.find((q) => q.id === self.id) ?? working[0] ?? null;
+  const stopNow = lead && lead.id !== self.id && W.hasPay(lead) && underAge(self) && !holds(self) ? [{ personId: self.id, age: ageNow(self) }] : [];
+  return { ageNow, underAge, holds, stillWorks, status: W.status, lead, stopNow };
+}
+
+/** withStops(plan, stopNow) -> the plan with each of those adults' retirement age set to the age given (their age today); the
+ * plan itself when there are none (workingNow's and Financial independence's stopNow). */
+export function withStops(plan, stopNow = []) {
+  if (!stopNow?.length) return plan;
+  const p2 = JSON.parse(JSON.stringify(plan));
+  for (const s of stopNow) { const q = p2.household?.people?.find((x) => x.id === s.personId); if (q) q.retirementAge = s.age; }
+  return p2;
+}
+
+/**
+ * Who needs marketplace cover in a year, before 65 (fourth pass, 2026-11-02: the Healthcare page and the health line price the
+ * same years): someone under 65 and alive in the plan who does not work (workRule, the household's presumption included) and
+ * has stopped: Get started says retired or not working now (from today), or they are past their own retirement age, or the
+ * household has retired (`retireYear`, the projection's). Someone who works is on a job's plan until their retirement year,
+ * so with no Income lines and Get started saying both work there are no marketplace years before the household retires.
+ * Whether a working partner's job covers them that year is the caller's (Healthcare's `onWorkPlan`), and so is the rule that
+ * no year before the household's retirement is priced (the engine's working years). Fifth pass (2026-11-02): never after the
+ * end of their plan (their `endAge`; Lee with a plan to 60 was priced cover at 63 and 64), and an adult with no pay and no
+ * answer is presumed at work, so on a job's plan, until the household retires.
+ * coverRule(plan, people, { today, retireYear }) -> (person, year) => boolean
+ */
+export function coverRule(plan, people, { today = null, retireYear = null } = {}) {
+  const said = plan?.guide?.setup?.status ?? {};
+  const works = workRule(plan, people, { today, retireYear });
+  return (p, year) => {
+    const age = year - p.birthYear;
+    if (age >= 65 || age > p.endAge || works(p, year)) return false;
+    return said[p.id] === "retired" || said[p.id] === "none" || age >= p.retireAge || (retireYear !== null && year >= retireYear);
+  };
+}
+
+/**
+ * The health lines among the bills carried into retirement, and whose Medicare they already pay (2026-11-02): `cover` lines
+ * come out of the carried figure (the health line pays cover from retirement on); Medicare and mixed lines stay. A Medicare
+ * line pays the Medicare of the adults 65 or over this year (a line for anyone else, a parent say, leaves the household's own
+ * Medicare in, and it is never a younger adult's, who is not on Medicare yet); a mixed line pays it only for those 65 or over
+ * who have also stopped work (a worker's cover comes through the job; `works`, workRule). With everyone 65 or over and
+ * retired this year (review 2026-11-02), a cover line is their cover alongside Medicare (a supplement, an Advantage plan or a
+ * retiree plan): it stays, and pays their Medicare as a mixed line does (`era`).
+ * -> { cover: [{ name, monthly }], line (a Medicare line's name), mixed (a mixed line's name), paidBy: { line, ids, names, era } | null }
+ */
+function carriedHealth(active, people, year, works) {
+  const covers = active.filter((x) => healthLine(x) === "cover");
+  const on = people.filter((p) => year - p.birthYear >= 65);
+  const era = covers.length && people.length && on.length === people.length && people.every((p) => !works(p, year)) ? covers[0] : null;
+  const cover = era ? [] : covers.map((x) => ({ name: x.name, monthly: x.monthly }));
+  const med = active.find((x) => healthLine(x) === "medicare") ?? null, mixed = active.find((x) => healthLine(x) === "mixed") ?? null;
+  const line = med ?? mixed ?? era;
+  const by = med ? on : line ? on.filter((p) => !works(p, year)) : [];
+  return { cover, line: med?.name ?? null, mixed: mixed?.name ?? null, paidBy: by.length && line ? { line: line.name, ids: by.map((p) => p.id), names: by.map((p) => p.name), era: !med && !mixed && !!era } : null };
+}
+
+/**
+ * The plan's health line (2026-11-02): what cover costs, in today's dollars, as engine events marked `spending` (guaranteed
+ * income pays them first), one a year, "Health cover". One rule for every person and year, whoever is listed first: while
+ * anyone in the household still works (`works`, workRule: pay or a "work" answer, and under their retirement age), a plan
+ * through that job covers the household (Healthcare before 65's own `onWorkPlan` rule, the same workRule), so no marketplace
+ * and no Medicare is priced that year (`onJob` lists the Medicare years left to it, for those whose Medicare no line on
+ * Expenses already pays: one reason a year). Any other year adds
+ * - the marketplace: every year of retirement/healthcare (`years[].cost`, after any credit), the same years that page prices
+ *   (fourth pass, 2026-11-02: it was only from the household's retirement year, so a year that page priced for someone Get
+ *   started says is retired or not working, or past their own retirement age, was left out here; coverRule), and
+ * - Medicare (retirement/medicare `years[].totalYearly`: Part B, the drug plan, any supplement and the income surcharge, the
+ *   same for each person on it) for everyone 65 or over, less anyone whose Medicare a line on Expenses already pays
+ *   (`paidIds`): totalYearly x those left / enrolled; in any year nobody works, before the household's retirement year too.
+ * `workPremium` (a month): a premium taken out of the carried spending is put back in each year from the household's
+ * retirement on while someone still works (the plan at work goes on, and so does what it costs; `jobPlan`).
+ * Both pages share one run of the plan's income (planIncome, worked once here), which is the plan without this line: a
+ * one-pass approximation (the premiums' own withdrawals do not raise the income they are priced on).
+ * -> { events, total, bridge, medicare, onJob, jobPlan }
+ */
+function healthCover(plan, { today, retireYear, endYear, people, works, paidIds = [], workPremium = 0 }) {
+  const pi = planIncome(plan, { today });
+  const hc = computeHealthcare(plan, { today, planIncome: pi });
+  const md = computeMedicare(plan, { today, planIncome: pi });
+  const age = (p, y) => y - p.birthYear;
+  const workers = (y) => people.filter((p) => works(p, y));
+  const paid = new Set(paidIds);
+  const byYear = new Map();
+  const add = (y, amt) => byYear.set(y, (byYear.get(y) ?? 0) + amt);
+  // 1. the marketplace (healthcare's years: nobody works, someone who has stopped is under 65; the years that page prices)
+  const bYears = hc.ready ? hc.years.filter((y) => y.year <= endYear && y.cost > 0) : [];
+  for (const y of bYears) add(y.year, y.cost);
+  // 2. Medicare: the years nobody works, for those 65 or over whose Medicare no line on Expenses already pays
+  const mYears = [], jobYears = [];
+  for (const y of md.ready ? md.years : []) {
+    if (y.year > endYear || !(y.totalYearly > 0)) continue;
+    const on = people.filter((p) => age(p, y.year) >= 65 && age(p, y.year) <= p.endAge);
+    // those whose Medicare no line on Expenses already pays: a year left to a job's plan names only them (one reason a year)
+    const left = on.filter((p) => !paid.has(p.id));
+    const share = left.length / Math.max(1, y.enrolled);
+    const w = workers(y.year);
+    if (w.length) { if (left.length) jobYears.push({ year: y.year, names: left.map((p) => p.name), worker: w[0].name, presumed: !!works.presumed?.(w[0], y.year), amount: y.totalYearly * share }); continue; }
+    if (!left.length) continue;
+    mYears.push({ year: y.year, enrolled: left.length, names: left.map((p) => p.name), totalYearly: y.totalYearly * share, surchargeYearly: y.surchargeYearly * share });
+    add(y.year, y.totalYearly * share);
+  }
+  // 3. a premium taken out of the carried spending, back in the retirement years while someone still works
+  const premiumYears = [];
+  if (workPremium > 0) for (let y = retireYear; y <= endYear; y++) if (workers(y).length) { premiumYears.push(y); add(y, workPremium * 12); }
+  const events = [...byYear].sort((a, b) => a[0] - b[0]).map(([year, amount]) => ({ year, amount, label: "Health cover", kind: "health", spending: true }));
+  const sum = (arr, k) => arr.reduce((t, y) => t + y[k], 0);
+  const over = bYears.filter((y) => y.overCliff > 0);
+  // underLine: the years the plan's income is under the poverty line (no credit; Medicaid may cover people with that income)
+  const bridge = bYears.length ? {
+    fromYear: bYears[0].year, untilYear: bYears.at(-1).year, years: bYears.length, total: sum(bYears, "cost"), credit: sum(bYears, "credit"), creditYears: bYears.filter((y) => y.credit > 0.5).length, underLine: bYears.filter((y) => y.underLine).map((y) => y.year),
+    monthlyFirst: bYears[0].cost / 12, monthlyLow: Math.min(...bYears.map((y) => y.cost)) / 12, monthlyHigh: Math.max(...bYears.map((y) => y.cost)) / 12,
+    cliff: over.length ? { income: over[0].cliff, year: over[0].year, lost: over[0].lostCredit, lostTotal: sum(over, "lostCredit"), years: over.length, yearsList: over.map((y) => y.year), overBy: Math.min(...over.map((y) => y.overCliff)) } : null,
+    parts: bridgeParts(bYears),
+  } : null;
+  const most = mYears.length ? Math.max(...mYears.map((y) => y.enrolled)) : 0;
+  const all = mYears.find((y) => y.enrolled === most);
+  // the first year each person's Medicare is added; the months it costs once the most are on it (the surcharge moves it),
+  // and before that for whoever is on it first ("about $240 a month for Bo from 2053, then about $480 for the two of you
+  // from 2055"); the years after a death at the plan's end are left out of the words
+  const joins = [];
+  for (const y of mYears) for (const name of y.names) if (!joins.some((j) => j.name === name)) joins.push({ name, year: y.year });
+  const full = mYears.filter((y) => y.enrolled === most), early = mYears.filter((y) => y.year < all?.year);
+  const lowHigh = (ys) => ({ monthlyLow: Math.min(...ys.map((y) => y.totalYearly)) / 12, monthlyHigh: Math.max(...ys.map((y) => y.totalYearly)) / 12 });
+  const medicare = mYears.length ? {
+    fromYear: mYears[0].year, untilYear: mYears.at(-1).year, monthlyFirst: mYears[0].totalYearly / 12, monthlyAll: all.totalYearly / 12, allFromYear: all.year, enrolled: most, people: people.length, joins,
+    ...lowHigh(full), allNames: all.names,
+    early: early.length ? { fromYear: early[0].year, untilYear: early.at(-1).year, names: [...new Set(early.flatMap((y) => y.names))], ...lowHigh(early) } : null,
+    total: sum(mYears, "totalYearly"), surcharge: sum(mYears, "surchargeYearly"), surchargeYears: mYears.filter((y) => y.surchargeYearly > 0.5).length,
+  } : null;
+  // in runs of the same worker (verify 2026-11-06, sixth pass: Ana working to 2030 and Bo to 2032 read "In 2028 to 2032 Bo is
+  // 65 or over while Ana still works", one worker named for every year, also those after Ana stopped)
+  const jobParts = [];
+  for (const y of jobYears) {
+    const last = jobParts.at(-1);
+    if (last && last.worker === y.worker && last.untilYear === y.year - 1) { last.untilYear = y.year; last.years++; for (const n of y.names) if (!last.names.includes(n)) last.names.push(n); }
+    else jobParts.push({ fromYear: y.year, untilYear: y.year, years: 1, names: [...y.names], worker: y.worker, presumedUntil: y.presumed ? retireYear : null });
+  }
+  const onJob = jobYears.length ? { fromYear: jobYears[0].year, untilYear: jobYears.at(-1).year, years: jobYears.length, names: [...new Set(jobYears.flatMap((y) => y.names))], worker: jobYears[0].worker, presumedUntil: jobYears[0].presumed ? retireYear : null, total: sum(jobYears, "amount"), parts: jobParts } : null;
+  const jobPlan = premiumYears.length ? { fromYear: premiumYears[0], untilYear: premiumYears.at(-1), years: premiumYears.length, monthly: workPremium, total: workPremium * 12 * premiumYears.length, worker: workers(premiumYears[0])[0].name } : null;
+  return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, jobPlan };
+}
+
+/**
+ * buildInputs(plan, { today, health = true }) -> { inputs, notes: [text], people, spendingSource, spendingYearly, setupMonthly, figureMonthly, health } or { inputs: null, missing: [text], setupMonthly, figureMonthly }
+ * health: false leaves the health line out (healthcare and medicare price it from that run); `retirement.healthIncluded`
+ * ("my spending figure already includes health cover") leaves it out too (`health.included`). Spending carried from today's
+ * bills (today's expenses, or Get started's own starting figure, `guide.setup.retireAuto`: today's bills less childcare and
+ * loans): lines that pay only for cover before Medicare (healthLine "cover": a work plan's premium, the marketplace, COBRA)
+ * come out of the carried figure, since the health line pays for cover from retirement on (and puts the premium back while
+ * someone still works); Medicare and mixed lines stay, and the Medicare they pay (`carriedHealth`) is not added again. A
+ * figure typed on this page is taken as it is: the health line goes on top unless healthIncluded. Get started's own figure is
+ * worked out live from today's bills while it is still the screen's (`setupMonthly`, setupFigure: setup's `retireDefault`; review
+ * 2026-11-02: the saved figure kept the bills of the day it was saved, so a premium added or changed on Expenses later was
+ * taken out of a figure that never had it); the figure saved in `retirement.spendingMonthly` is used only when that is 0.
  */
 export function buildInputs(plan, params = {}) {
   const today = params.today ?? null;
@@ -219,11 +575,36 @@ export function buildInputs(plan, params = {}) {
   const notes = [];
   if (!(plan.accounts ?? []).length) missing.push("your accounts on the Net worth page");
   const ex = (plan.expenses ?? []).length ? computeExpenses(plan, { today }) : null;
-  let spendingYearly, spendingSource;
-  if (Number(rt.spendingMonthly) > 0) { spendingYearly = Number(rt.spendingMonthly) * 12; spendingSource = "typed"; }
-  else if (ex && ex.monthly > 0) { spendingYearly = ex.monthly * 12; spendingSource = "expenses"; notes.push("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ."); }
-  else { spendingYearly = 0; spendingSource = "none"; missing.push("what you will spend in retirement (a figure here, or your expenses on the Expenses page)"); }
-  if (missing.length) return { inputs: null, missing, people, notes };
+  const withHealth = params.health !== false && rt.healthIncluded !== true;
+  const typed = Number(rt.spendingMonthly) > 0;
+  // spending carried from today's bills: the Expenses page's, or Get started's own starting figure (built from them, less
+  // childcare and loans, while `retireAuto`, and worked out from them now): cover paid today before Medicare gives way to the
+  // health line; Medicare lines stay
+  const fromSetup = typed && plan.guide?.setup?.retireAuto === true && !!ex;
+  const live = fromSetup ? setupFigure(plan, today) : 0;
+  const setupMonthly = fromSetup ? (live > 0 ? live : Number(rt.spendingMonthly)) : null;
+  const baseMonthly = typed ? setupMonthly ?? Number(rt.spendingMonthly) : ex?.monthly ?? 0;
+  let spendingSource;
+  if (typed) spendingSource = "typed";
+  else if (ex && ex.monthly > 0) {
+    spendingSource = "expenses";
+    notes.push("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ.");
+  }
+  else { spendingSource = "none"; missing.push("what you will spend in retirement (a figure here, or your expenses on the Expenses page)"); }
+  // who works when (pay or a "work" answer, and under their retirement age; the health line's and Healthcare before 65's one
+  // rule), the household's retirement year (fifth pass: the first adult's, unless Get started says they do not work; then the
+  // last working adult's stop year, or this year), and with it who is presumed at work until then (no pay and no answer); then
+  // the health lines among the carried bills and what comes out of the figure
+  const retireYear = householdRetireYear(plan, people, year, workRule(plan, people, { today }));
+  const works = workRule(plan, people, { today, retireYear });
+  const carried = params.health !== false && ex && (fromSetup || (!typed && ex.monthly > 0)) ? carriedHealth(ex.active, people, year, works) : null;
+  const coverLines = withHealth && carried ? carried.cover : [];
+  const removedMonthly = Math.min(baseMonthly, coverLines.reduce((t, x) => t + x.monthly, 0));
+  // the figure Retirement settings' box shows (fourth pass, 2026-11-02): what the plan counts a month before health cover, to the
+  // cent: a typed figure as it is, or Get started's own less the cover lines that give way to the health line (it showed Get
+  // started's figure with a premium still in it, so typing a lower one raised spending); null with no figure (today's expenses)
+  const figureMonthly = typed ? Math.round((baseMonthly - removedMonthly) * 100) / 100 : null;
+  if (missing.length) return { inputs: null, missing, people, notes, setupMonthly, figureMonthly };
   const personIndex = (id) => Math.max(0, people.findIndex((p) => p.id === id));
   const contributions = (rt.contributions ?? []).map((c) => {
     const acct = (plan.accounts ?? []).find((x) => x.id === c.accountId);
@@ -241,18 +622,20 @@ export function buildInputs(plan, params = {}) {
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension" });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
-  const retireYear = Math.max(year, people[0].birthYear + people[0].retireAge);
   // a partner who keeps working after the household retires brings their pay in as income (pay only: salary, bonus, business)
   const inc = (plan.income ?? []).length ? computeIncome(plan, { today }) : null;
   for (let i = 1; i < people.length; i++) {
     const p = people[i];
     const theirs = inc ? inc.active.filter((x) => x.personId === p.id && PAY_TYPES.includes(x.type)).reduce((s, x) => s + x.yearly, 0) : 0;
     const ageNow = year - p.birthYear;
-    if (theirs > 0 && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true, type: "pay" });
+    // type "pay" (recheck 2026-11-05; the fifth pass called it kind "pay"): the pages tell it from rent and the like by type,
+    // never by its name; a partner Get started says is retired or not working brings none in, whatever Income still holds (workRule)
+    if (theirs > 0 && works.status(p) !== "stopped" && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true, type: "pay" });
   }
-  // rent after work stops; support and other to their end date (else while their owner works); never dividends (otherIncome)
-  const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`);
+  // rent after work stops; support and other to their end date (else while their owner works, by the work rule); never dividends (otherIncome)
+  const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`, works);
   for (const x of other.counted) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  const spendingYearly = (baseMonthly - removedMonthly) * 12;
   const endYear = Math.max(...people.map((p) => p.birthYear + p.endAge));
   const inputs = {
     startYear: year, endYear, people, balances, contributions, incomes,
@@ -266,11 +649,24 @@ export function buildInputs(plan, params = {}) {
     tax: taxSettings(plan),
     rothConversion: rt.taxMode === "brackets" && rt.rothConversion?.on ? { fillRate: Number(rt.rothConversion.fillRate ?? 0.22), untilAge: rt.rothConversion.untilAge ? Number(rt.rothConversion.untilAge) : null } : null,
   };
+  // the health line, appended to whatever events the inputs carry (worked once here: every what-if and market path reuses it)
+  // paidBy: whose Medicare a Medicare (or mixed) line on Expenses already pays; otherLine: a Medicare line that is nobody's here yet
+  const paidBy = carried?.paidBy ?? null;
+  const said = { coverLines, removedMonthly, fromSetup: fromSetup && !!carried, paidBy, medicareLine: paidBy?.line ?? null, otherLine: carried?.line && !paidBy ? carried.line : null };
+  let health = params.health === false ? null : { included: true, total: 0, bridge: null, medicare: null, onJob: null, jobPlan: null, ...said };
+  if (withHealth) {
+    const h = healthCover(plan, { today, retireYear, endYear, people, works, paidIds: paidBy?.ids ?? [], workPremium: removedMonthly });
+    inputs.events = [...(inputs.events ?? []), ...h.events];
+    health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, jobPlan: h.jobPlan, ...said };
+  }
   if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (Contributions page), so nothing is added until retirement.");
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
-  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
+  // who starts retirement (fifth pass; review 2026-11-06): the first adult, also when the year is their own; the adult who stops
+  // in that year when Get started says the first does not work; nobody when no one works (retirement starts this year)
+  const retireBy = retireStarter(people, year, retireYear, works);
+  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
 }
 
 /** What an engine income is, in the words the page names it by (Social Security, pensions, a partner's pay, rent, other income). */
@@ -286,21 +682,33 @@ export const incomeIn = (I, x, year) => {
  * compute(plan, { today }) -> {
  *   ready, missing, notes, inputs, result (project with expected returns), rows,
  *   atRetirement: { year, age, totalReal }, atEnd: { year, age, totalReal }, yearsInRetirement,
- *   affordable (real yearly spending the plan can carry), spendingYearly,
- *   coverage (all the income that comes in / spending, in the first retirement year), coverageFrom (what that income is, in
- *   INCOME_WORDS order: ["Social Security", "pensions", "rent"]), otherLeft (buildInputs: income not counted after work stops),
+ *   affordable (real yearly spending the plan can carry, on top of the health line), spendingYearly, setupMonthly (Get started's own figure, worked out from today's bills, or null),
+ *   figureMonthly (what the plan counts a month before health cover when a figure is set: the one Retirement settings shows, or null),
+ *   coverage (all the income that comes in / spending and health cover, in the first retirement year), coverageFrom (what that
+ *   income is, in INCOME_WORDS order: ["Social Security", "pensions", "rent"]), otherLeft (buildInputs: income not counted after work stops),
+ *   retireBy (buildInputs: { id, name, age, first, nobody? }: who starts retirement),
+ *   health: buildInputs' health ({ included, total, bridge: { fromYear, untilYear, years, total, credit, creditYears (years with a credit), underLine (years under the poverty line), monthlyFirst, monthlyLow, monthlyHigh,
+ *       cliff: { income, year, lost, lostTotal, years, yearsList, overBy (the least income over it) } | null } | null,
+ *     medicare: { fromYear, untilYear, monthlyFirst, monthlyAll, allFromYear, allNames, monthlyLow, monthlyHigh (once the most are on it), enrolled, people,
+ *       early: { fromYear, untilYear, names, monthlyLow, monthlyHigh } | null (before that), joins: [{ name, year }], total, surcharge, surchargeYears } | null,
+ *     onJob: { fromYear, untilYear, years, names, worker, total } | null (Medicare years left to a job's plan, for those no line pays), jobPlan: { fromYear, untilYear, years, monthly, total, worker } | null (a premium put back),
+ *     coverLines, removedMonthly, fromSetup, paidBy: { line, ids, names, era (a cover line counted as cover alongside Medicare) } | null, medicareLine, otherLine,
+ *     shown (with `showHealth` and the box ticked: { total, bridge, medicare } worked out for the page only, never added) }),
  *   verdict: "on track" | "tight" | "short", shortYear, shortAge
  * }
+ * showHealth (the page's own call): with the box ticked, still work the health line out so the page can say what it would be.
  */
 export function compute(plan, params = {}) {
   const b = buildInputs(plan, params);
-  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, people: b.people, rows: [] };
+  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, people: b.people, rows: [], setupMonthly: b.setupMonthly ?? null, figureMonthly: b.figureMonthly ?? null };
   const result = project(b.inputs);
   const rows = result.rows;
   const rRow = rows.find((r) => r.year === b.inputs.retireYear) ?? rows[0];
   const last = rows[rows.length - 1];
   const affordable = affordableSpending(b.inputs);
-  const coverage = rRow && rRow.spending > 0 ? rRow.income / rRow.spending : null;
+  // all the income that comes in against the first retirement year's spending, health cover included (it is spending too)
+  const spentFirst = rRow ? rRow.spending + (rRow.eventSpending ?? 0) : 0;
+  const coverage = rRow && spentFirst > 0 ? rRow.income / spentFirst : null;
   const firstYear = new Set(rRow ? b.inputs.incomes.filter((x) => x.yearly > 0 && incomeIn(b.inputs, x, rRow.year)).map(wordKey) : []);
   const coverageFrom = Object.keys(INCOME_WORDS).filter((k) => firstYear.has(k)).map((k) => INCOME_WORDS[k]);
   const ratio = b.spendingYearly > 0 ? affordable / b.spendingYearly : 1;
@@ -310,9 +718,130 @@ export function compute(plan, params = {}) {
     atRetirement: rRow ? { year: rRow.year, age: rRow.ages[0], totalReal: rRow.totalReal, total: rRow.total } : null,
     atEnd: { year: last.year, age: last.ages[0], totalReal: last.totalReal, total: last.total },
     yearsInRetirement: rows.filter((r) => r.retired).length,
-    affordable, spendingYearly: b.spendingYearly, spendingSource: b.spendingSource, ssYearly: b.ssYearly, coverage, coverageFrom, otherLeft: b.otherLeft,
-    verdict, shortYear: result.failYear, shortAge: result.failAge, people: b.people, strategy: result.strategy, orderLabel: b.orderLabel,
+    affordable, spendingYearly: b.spendingYearly, spendingSource: b.spendingSource, setupMonthly: b.setupMonthly, figureMonthly: b.figureMonthly, ssYearly: b.ssYearly, coverage, coverageFrom, otherLeft: b.otherLeft,
+    verdict, shortYear: result.failYear, shortAge: result.failAge, people: b.people, retireBy: b.retireBy, strategy: result.strategy, orderLabel: b.orderLabel,
+    health: params.showHealth && b.health?.included ? { ...b.health, shown: shownHealth(plan, params.today ?? null, b) } : b.health,
   };
+}
+
+/** The plan adds health cover on top of its spending figure (buildInputs' or compute's `health`): pages then say "on top of health cover". */
+export const healthAdded = (h) => !!(h && !h.included && (h.bridge || h.medicare || h.jobPlan));
+
+/**
+ * What the marketplace years' range is, in the page's words (fourth pass, 2026-11-02): "marketplace, after the credit" only
+ * when every year in it has a credit, "marketplace, no credit" when none has, and "marketplace; with the credit in the years
+ * it applies" when only some have (a year under the poverty line or over the cliff was labelled "after the credit").
+ * creditWords(bridge: { years, creditYears }) -> text
+ */
+export function creditWords(b) {
+  const n = Number(b?.creditYears) || 0;
+  return n >= (Number(b?.years) || 0) && n > 0 ? "marketplace, after the credit" : n > 0 ? "marketplace; with the credit in the years it applies" : "marketplace, no credit";
+}
+
+/**
+ * The plan's income in words, each line by its own name (fifth pass, 2026-11-02): "Ana's Social Security: $32,647 a year from
+ * 67" (a line named for a person says that person's ages); any other line, rent, a pension or other income under its own name,
+ * says the years, or "from now": "Rental condo: $18,000 a year from 2033" (it read "from 63", Lee's age, and before the FIRE
+ * answer the rent came in as "Lee's pay"). Review 2026-11-06, with the base's "Income counted" record (recheck 2026-11-05): an
+ * end is said too ("to 66", or "to 2034"), and rent is "(before its costs)". incomeWords(inputs, money) -> [text]
+ */
+export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`) {
+  return (I?.incomes ?? []).map((x) => {
+    const who = I.people[x.personIndex ?? 0] ?? I.people[0];
+    const start = who.birthYear + x.startAge;
+    const named = I.people.some((p) => String(x.name).startsWith(`${p.name}'s `));
+    const ends = x.endAge !== undefined && x.endAge !== null ? ` to ${named ? x.endAge : who.birthYear + x.endAge}` : "";
+    return `${x.name}: ${money(x.yearly)} a year from ${named ? x.startAge : start <= I.startYear ? "now" : start}${ends}${x.type === "rental" ? " (before its costs)" : ""}`;
+  });
+}
+
+/**
+ * The marketplace years in runs of the same people covered (fifth pass, 2026-11-02), so the words can name who and when:
+ * bridgeParts(years of retirement/healthcare) -> [{ names, fromYear, untilYear, years, monthlyLow, monthlyHigh, creditYears }]
+ */
+export function bridgeParts(years) {
+  const parts = [];
+  for (const y of years) {
+    const last = parts.at(-1), key = y.covered.join("|");
+    if (last && last.key === key && last.untilYear === y.year - 1) { last.ys.push(y); last.untilYear = y.year; } else parts.push({ key, ys: [y], fromYear: y.year, untilYear: y.year });
+  }
+  return parts.map(({ ys, fromYear, untilYear }) => ({ names: ys[0].covered, fromYear, untilYear, years: ys.length, monthlyLow: Math.min(...ys.map((y) => y.cost)) / 12, monthlyHigh: Math.max(...ys.map((y) => y.cost)) / 12, creditYears: ys.filter((y) => y.credit > 0.5).length }));
+}
+
+/**
+ * The health line in words, a sentence for each part naming the people and the years (fifth pass, 2026-11-02: "About $210 to
+ * $1,440 a month from 2026 until 65 (marketplace ...), then Medicare about $240 a month for Ana from 2026" never said Bo was
+ * the one on the marketplace, and its "then" joined years that overlap). "Bo: about $210 to $1,440 a month, 2026 and 2027
+ * (marketplace; with the credit in the years it applies). Ana: Medicare, about $240 a month from 2026. Bo: Medicare from 2028
+ * (about $480 a month for the two of you)." Months are rounded to $10; a range when they differ by more than a quarter; the
+ * Medicare months are over the years the most are on it (the surcharge moving them), with "including an income surcharge in
+ * 21 of those years (Medicare page)" when there is one and `surcharge` is asked for.
+ * healthSummary(bridge, medicare, { money, surcharge }) -> text ("" when neither)
+ */
+export function healthSummary(b, m, { money = (n) => `$${Math.round(n).toLocaleString("en-US")}`, surcharge = true } = {}) {
+  const around = (n) => money(Math.round(n / 10) * 10);
+  const range = (lo, hi) => (hi > lo * 1.25 ? `${around(lo)} to ${around(hi)}` : around(lo));
+  const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+  const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
+  const out = [];
+  for (const p of b?.parts ?? (b ? [{ names: [], fromYear: b.fromYear, untilYear: b.untilYear, years: b.years, monthlyLow: b.monthlyLow, monthlyHigh: b.monthlyHigh, creditYears: b.creditYears }] : [])) {
+    out.push(`${p.names.length ? `${list(p.names)}: about` : "About"} ${range(p.monthlyLow, p.monthlyHigh)} a month, ${span(p.fromYear, p.untilYear, p.years)} (${creditWords(p)})`);
+  }
+  if (m) {
+    const whom = (names) => (names.length < 2 ? "" : names.length >= m.people ? (m.people === 2 ? " for the two of you" : " for all of you") : ` for ${list(names)}`);
+    const tail = surcharge && m.surchargeYears ? `, including an income surcharge in ${m.surchargeYears} of those years (Medicare page)` : "";
+    if (m.early && m.people > 1) {
+      const joiners = (m.allNames ?? []).filter((n) => !m.early.names.includes(n));
+      out.push(`${list(m.early.names)}: Medicare, about ${range(m.early.monthlyLow, m.early.monthlyHigh)} a month from ${m.early.fromYear}`);
+      out.push(`${list(joiners.length ? joiners : m.allNames)}: Medicare from ${m.allFromYear} (about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames)})${tail}`);
+    } else out.push(`${list(m.allNames ?? [])}: Medicare, about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames ?? [])} from ${m.allFromYear}${tail}`);
+  }
+  return out.length ? `${out.join(". ")}.` : "";
+}
+
+/**
+ * The Medicare years left to a job's plan, in words (verify 2026-11-06, sixth pass): one sentence for each run of years with
+ * the same worker (`onJob.parts`), so a worker is never named for a year they no longer work. "In 2028 to 2030 Bo is 65 or over
+ * while Ana still works: a plan through Ana's job can cover Bo, so Medicare those years is not added (the Medicare page counts
+ * them). In 2031 and 2032 Bo is 65 or over but still works: ..." With `presumedUntil`, the presumption is said after its run.
+ * onJobWords(onJob, list?) -> [text]
+ */
+export function onJobWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)) {
+  if (!j) return [];
+  const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
+  const out = [];
+  for (const p of j.parts ?? [j]) {
+    const yrs = span(p.fromYear, p.untilYear, p.years), others = p.names.filter((n) => n !== p.worker), those = p.years === 1 ? "that year" : "those years", it = p.years === 1 ? "it" : "them";
+    out.push(others.length
+      ? `In ${yrs} ${list(others)} ${others.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: a plan through ${p.worker}'s job can cover ${list(p.names)}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
+      : `In ${yrs} ${p.worker} is 65 or over but still works: cover comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
+    // the worker is presumed (no pay and no Get started answer; fifth pass): said, so "Ana's job" is not read as a fact
+    if (p.presumedUntil) out.push(`No pay is listed for ${p.worker} and Get started does not say ${p.worker} has stopped work, so the plan takes ${p.worker} as working until ${p.presumedUntil}.`);
+  }
+  return out;
+}
+
+/**
+ * Retirement settings' spending box, saved into the draft (fourth pass, 2026-11-02). `shown` is what the box showed
+ * (compute's `figureMonthly`): while the figure is Get started's own (`guide.setup.retireAuto`), what the plan counts before
+ * health cover. The same figure saved again keeps it Get started's (it goes on following today's bills; the saved figure stays
+ * as it was); any other figure, or a blank, is the household's own: retireAuto off, and it is taken as typed, so a lower figure
+ * lowers spending. -> nothing (changes the draft)
+ */
+export function saveSpendingFigure(draft, typed, shown) {
+  const v = typed === "" || typed === undefined ? null : typed;
+  draft.retirement = draft.retirement ?? {};
+  const auto = draft.guide?.setup?.retireAuto === true;
+  if (auto && v !== null && shown !== null && shown !== undefined && Math.abs(Number(v) - Number(shown)) < 0.005) return;
+  if (auto) draft.guide.setup.retireAuto = false;
+  draft.retirement.spendingMonthly = v;
+}
+
+/** The health line the plan would add, for the page to say with the box ticked (the engine never sees it). */
+function shownHealth(plan, today, b) {
+  const I = b.inputs;
+  const h = healthCover(plan, { today, retireYear: I.retireYear, endYear: I.endYear, people: I.people, works: workRule(plan, I.people, { today, retireYear: I.retireYear }), paidIds: b.health.paidBy?.ids ?? [] });
+  return h.bridge || h.medicare ? { total: h.total, bridge: h.bridge, medicare: h.medicare } : null;
 }
 
 /** Is retirement checkable: every adult has a birth date and Social Security (a figure or a record on Social Security)

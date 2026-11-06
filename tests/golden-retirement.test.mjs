@@ -95,7 +95,8 @@ for (const page of pages) {
     test(`golden retirement / ${page} / ${row.case_id}`, row.todo ? { todo: row.todo } : {}, () => {
       const data = prepare(row);
       let actual;
-      if (row.target === 'compute') actual = compute(data.plan, data.params);
+      // the key's spending is the whole of spending (it was worked before the projection added health cover on top): say so
+      if (row.target === 'compute') { data.plan.retirement = { ...data.plan.retirement, healthIncluded: true }; actual = compute(data.plan, data.params); }
       else if (row.target === 'project') {
         if (data.input.tax?.mode === 'brackets') data.input.tax.paramsFor = year => tax.paramsFor(FEDERAL, year, { inflation: data.params.inflation ?? 0 });
         actual = project(data.input, data.options);

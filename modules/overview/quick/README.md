@@ -79,3 +79,6 @@ missing).
   `taxAnswer` `returns`), so the answer names who owes and who gets money back: "Bo owes about $1,660; Ana gets about
   $2,200 back" for the family with 3,750 each, where it said "About $540 back in April". Filing jointly, nothing changes.
   Test: "the tax answer, filing separately".
+
+## Health cover (2026-11-02)
+The retirement line says "You plan on $84,000 a year plus health cover" when Will the money last? adds its health line (marketplace cover to 65, then Medicare) on top of the spending figure, so the carried figure it quotes is read the same way there and here.

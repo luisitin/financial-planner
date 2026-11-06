@@ -72,3 +72,30 @@ worked out spending the same every year; your plan uses another rule, a set shar
 moves with markets (How much to take out)." The saving, return and lump-sum levers still use the plan's own rule (under the
 share rule they read "$0" and "-9.2%", as before; not changed here). Test: `module.test.mjs` "recheck 2026-11-05" (percent,
 guardrails and VPW give the steady age on both the function and the lever).
+
+## Health cover (review 2026-11-02)
+The spending answer says what it is measured against, as Will the money last? does: "Up to about $7,440 a month on top of
+health cover, $440 more than the $7,000 the plan spends before health cover" while the projection adds its health line
+(`healthAdded`), and the old words when the spending figure already includes cover (`retirement.healthIncluded`).
+
+## Fifth pass (review 2026-11-02)
+"When ... can retire" is about the adult whose stop starts the household's retirement (`leadAdult`, the projection's
+`retireBy`): the first adult, unless Get started says they are retired or not working now, then the adult who still works; with
+nobody working there is no such lever (retirement is now). `earliestRetireAge` takes the same adult when no `personId` is given.
+
+## Review 2026-11-06 (sixth pass: one work rule with the health line and Financial independence)
+- "When ... can retire" is about the adult Financial independence asks about (`leadAdult` and the lever, the projection's
+  `workingNow` on its one work rule): the first adult while they still work, else the first other adult who does, else no
+  lever. It is searched on the same plan as Financial independence: with the first adult stopping now when they stopped before
+  the age on file and the partner has pay on Income (`stopNow`, `withStops`), and the sentence says so: "... This counts Pat as
+  stopped from this year." So both pages give one age. The fifth pass took the projection's `retireBy`: Pat (said "retired",
+  65 on file) and Tom were searched with Pat working to 65, and with the first adult past their age and a partner at work
+  (Sam 68, Lee working) there was no lever while Financial independence asked about Lee.
+- `earliestRetireAge` tests each age with steady spending in the plan too, so the health line is priced on the same
+  withdrawals: priced on the plan's own rule, a set share of what is left gave the family 61 against 62 (the recheck's test).
+- The 68/63 couple with Bo working part-time to 66: "When Bo can retire: Not by 75" with or without Ana's "retired" answer (was
+  "at 67" with it and no lever without it; projection README, defect 1).
+- Verify of the sixth pass: "How it is worked out" read "Retirement: the first person's earliest age" while the lever is about
+  the adult who still works ("When Jo can retire", Jo listed second). The sentence is now `RETIRE_HOW` in compute.js (tested),
+  naming the adult who still works and the first person stopped from this year when they have stopped and the other's pay is on
+  Income.

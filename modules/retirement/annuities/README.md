@@ -27,3 +27,8 @@
 ## Ideas / not yet
 - Live quotes; a qualified longevity annuity contract (QLAC) inside an IRA, which also lowers required withdrawals.
 - Buy with a share of savings: the floor that covers essential spending (from Expenses).
+
+## Health cover (review 2026-11-02)
+"Guaranteed income covers" (`floorBefore`, `floorAfter`) is guaranteed income in the first retirement year over that year's
+spending plus its health cover (the projection's "Health cover" events, marked `spending`, in today's dollars), the same
+share as Will the money last?'s "Guaranteed income"; it read the spending alone. Tested against the projection's `coverage`.

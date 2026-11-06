@@ -77,7 +77,8 @@ test("the retirement answer names its figure as the average-market one, a year a
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const { compute } = await import("./compute.js");
   const by = Object.fromEntries(compute(familyPlan("2026-11-02"), { today: "2026-11-02" }).answers.map((a) => [a.guide, a]));
-  assert.match(by.retire.line, /^You plan on \$[\d,]+ a year; if markets do as well as average the plan carries (about )?\$[\d,]+ a year, less in a bad run of years/);
+  // the family's plan adds health cover on top of its spending (the projection's health line), and says so
+  assert.match(by.retire.line, /^You plan on \$[\d,]+ a year plus health cover; if markets do as well as average the plan carries (about )?\$[\d,]+ a year, less in a bad run of years/);
 });
 
 test("Review 2026-11-06: the tax answer, filing separately, says each return's own bill or refund (not \"About $540 back in April\")", async () => {

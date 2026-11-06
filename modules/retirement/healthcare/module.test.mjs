@@ -55,3 +55,78 @@ test("both retiring at 58: the marketplace years, the national benchmark by age,
   assert.ok(e.total < d.total); assert.equal(e.cliffYears, 0); assert.equal(e.cliffIncome, null);
   near(e.years[0].benchmark, 12 * 2000 / (ageFactor(36) / ageFactor(40) + ageFactor(38) / ageFactor(40)) / ageFactor(40) * (ageFactor(58) + ageFactor(60)), 1e-6);
 });
+
+test("review 2026-11-02: someone with no pay does not work: covered through the partner's job while it lasts, then on the marketplace", () => {
+  // Bo has no pay (Get started: not working now) and is under his retirement age; Ana works to 65 (2055)
+  const p = familyPlan(TODAY);
+  p.income = p.income.filter((x) => x.personId !== "p-bo"); p.retirement.contributions = p.retirement.contributions.filter((c) => c.personId !== "p-bo");
+  p.guide = { setup: { status: { "p-ana": "work", "p-bo": "none" } } };
+  const d = compute(p, { today: TODAY });
+  // was: no year at all for Bo (the age alone said he worked until 62, then Ana's job covered 2050-2052)
+  assert.deepEqual([d.onWorkPlan[0].year, d.onWorkPlan.at(-1).year], [2026, 2052]); assert.deepEqual(d.onWorkPlan[0].covered, ["Bo"]); assert.equal(d.onWorkPlan[0].worker, "Ana");
+  assert.equal(d.noBridge, true, "Bo is 65 in 2053, while Ana still works");
+  // Ana stopping at 58 (2048): Bo, 60, has no job to join, so 2048 on are marketplace years for both
+  p.household.people.find((x) => x.id === "p-ana").retirementAge = 58;
+  const e = compute(p, { today: TODAY });
+  assert.equal(e.onWorkPlan.at(-1).year, 2047); assert.deepEqual(e.years.map((y) => y.year).slice(0, 2), [2048, 2049]); assert.deepEqual(e.years[0].covered.slice(0, 2), ["Ana", "Bo"]);
+  // with his pay back, Bo works to 62 (2050) and the household joins his plan in 2048 and 2049
+  const q = familyPlan(TODAY); q.household.people.find((x) => x.id === "p-ana").retirementAge = 58;
+  assert.deepEqual(compute(q, { today: TODAY }).onWorkPlan.map((y) => y.year), [2048, 2049]);
+});
+
+test("fourth pass: the years are the projection's: a work answer is a job, no pay and nothing said waits for the household's retirement", async () => {
+  // no Income lines and Get started saying both work: no marketplace years before the household retires (was 2026-2054 at $0)
+  const p = familyPlan(TODAY); p.income = []; p.guide = { setup: { status: { "p-ana": "work", "p-bo": "work" } } };
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.noBridge, true); assert.deepEqual(d.onWorkPlan.map((y) => y.year), [2050, 2051, 2052]);
+  // Lee with no pay and nothing said: not on the marketplace before the household retires (2033), then until 65
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const l = retirementPlan(); l.income = l.income.filter((x) => x.personId !== "lee"); l.retirement.contributions = [];
+  const e = compute(l, { today: TODAY });
+  assert.deepEqual(e.years.map((y) => y.year), [2033, 2034]); assert.deepEqual(e.onWorkPlan, [], "was: 2026-2032 on Sam's plan");
+  // a rental is not a job: Lee is on the marketplace from 2033 (was: no year, "everyone works until 65")
+  const r = retirementPlan(); r.income = r.income.filter((x) => x.personId !== "lee").concat({ id: "rent", name: "Rental condo", type: "rental", personId: "lee", amount: 1500, period: "monthly", growth: 0.02, taxable: true });
+  assert.deepEqual(compute(r, { today: TODAY }).years.map((y) => y.year), [2033, 2034]);
+});
+
+// review 2026-11-02 (fifth pass): the marketplace's own income, and why no one needs it, person by person
+test("fifth pass: the marketplace counts untaxed Social Security: the 68/63 couple's 2026 credit appears and no year is under the poverty line", () => {
+  const H = "2026-11-02";
+  const o = familyPlan(H); o.household.people = o.household.people.filter((x) => x.role !== "dependent");
+  o.household.people[0].birthDate = "1958-03-01"; o.household.people[1].birthDate = "1963-06-01";
+  for (const q of o.household.people) q.retirementAge = 60;
+  o.income = []; o.retirement.contributions = []; o.retirement.spendingMonthly = null;
+  o.expenses.push({ id: "mc", name: "Medicare Part B", category: "health", amount: 203, period: "monthly", essential: true, inflates: true });
+  const d = compute(o, { today: H });
+  assert.deepEqual(d.years.map((y) => y.year), [2026, 2027]);
+  const [y26, y27] = d.years;
+  // was: income $15,365, no credit ("under the poverty line"), $17,324; now Ana's untaxed Social Security counts
+  assert.equal(y26.underLine, false); assert.ok(y26.credit > 0); near(y26.magi, 48012, 1); near(y26.cost, 3644, 1);
+  near(y27.magi, 74460, 1); near(y27.cost, 7610, 1);
+  assert.equal(d.underLineYears, 0);
+});
+
+test("fifth pass: why no one needs marketplace cover names the real reason, never 'everyone works until 65' for retirees", async () => {
+  const H = "2026-11-02";
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  // a retired couple of 72 and 69 (the retired couple seed's ages): both on Medicare
+  const seed = familyPlan(H);
+  seed.household.people = [
+    { id: "p-ruth", name: "Ruth", role: "self", birthDate: "1954-03-10", retirementAge: 62, lifeExpectancy: 100 },
+    { id: "p-sam", name: "Sam", role: "partner", birthDate: "1957-06-20", retirementAge: 70, lifeExpectancy: 90 },
+  ];
+  seed.income = [{ id: "i-rent", name: "Rental duplex", type: "rental", personId: "p-sam", amount: 2000, period: "monthly", growth: 0.02, taxable: true }];
+  seed.retirement.contributions = []; seed.retirement.spendingMonthly = null;
+  const s = compute(seed, { today: H });
+  assert.equal(s.noBridge, true);
+  assert.deepEqual(s.noBridgeWhy.map((w) => [w.name, w.why]), [["Ruth", "medicare"], ["Sam", "medicare"]]);
+  // the family: Ana works to 65; Bo works to 62, then is on Ana's plan at work
+  const f = compute(familyPlan(H), { today: H });
+  assert.deepEqual(f.noBridgeWhy.map((w) => [w.name, w.why, w.worker ?? null, w.ownUntilAge ?? null]), [["Ana", "job", null, null], ["Bo", "partner", "Ana", 62]]);
+  // the retirement fixture: both work until 65 or later
+  assert.deepEqual(compute(retirementPlan(), { today: H }).noBridgeWhy.map((w) => [w.name, w.why]), [["Sam", "job"], ["Lee", "job"]]);
+  // Lee with no pay and a plan to 60: on Sam's plan to the end of her plan
+  const l = retirementPlan(); l.income = l.income.filter((x) => x.personId !== "lee"); l.household.people[1].lifeExpectancy = 60;
+  const lw = compute(l, { today: H }).noBridgeWhy.find((w) => w.name === "Lee");
+  assert.deepEqual([lw.why, lw.worker, lw.endsBefore65], ["partner", "Sam", true]);
+});

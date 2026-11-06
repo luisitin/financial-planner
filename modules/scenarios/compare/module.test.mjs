@@ -60,3 +60,21 @@ test("the family's scenarios: retiring earlier and paying fees cost, saving more
   near(by.d.endReal, d.base.endReal);
   assert.equal(d.current["retireAge:p-bo"], 62);
 });
+
+test("review 2026-11-02: a spending figure typed in a scenario is a typed figure, even when the plan's is Get started's own", async () => {
+  const { retireDefault } = await import("../../overview/setup/compute.js");
+  const p = familyPlan(TODAY);
+  p.expenses.push({ id: "hi", name: "Health insurance", category: "health", amount: 600, period: "monthly", essential: true, inflates: true });
+  p.retirement.spendingMonthly = retireDefault(p, TODAY); p.guide = { setup: { retireAuto: true } };
+  assert.equal(p.retirement.spendingMonthly, 5170);
+  // the plan: Get started's figure less the $600 premium (the health line pays cover); was the scenario's $6,000 less $600 too
+  const a = applyChanges(p, { spendingMonthly: 6000 }, { today: TODAY });
+  near(a.inputs.spending.yearly, 72000); assert.equal(a.plan.guide.setup.retireAuto, false);
+  assert.equal(p.guide.setup.retireAuto, true, "the plan itself is untouched");
+  assert.equal(results(a.inputs, { paths: 0 }).spendingMonthly, 6000);
+  // "Spend 10% less" and the editor start from what the plan spends before health cover ($4,570), not the saved $5,170
+  const d = compute(p, { today: TODAY, paths: 0 });
+  near(d.base.spendingMonthly, 4570); assert.equal(d.current.spendingMonthly, 4570);
+  const less = applyChanges(p, { spendingMonthly: Math.round(d.current.spendingMonthly * 0.9 / 10) * 10 }, { today: TODAY });
+  assert.ok(less.inputs.spending.yearly < buildInputs(p, { today: TODAY }).inputs.spending.yearly, "10% less is less");
+});

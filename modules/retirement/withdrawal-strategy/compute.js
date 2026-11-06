@@ -3,7 +3,7 @@
 // and through the worst real stretch of history. What each gives in the first year, what it
 // could fall to, and how the money ends up.
 import { project, STRATEGIES } from "../../../core/math/retirement.js";
-import { buildInputs, compute as computeProjection, BUCKET_OF } from "../projection/compute.js";
+import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded } from "../projection/compute.js";
 import { RETURNS } from "../historical/data/returns.js";
 
 export const DESCRIPTIONS = {
@@ -43,11 +43,11 @@ export function compute(plan, params = {}) {
 }
 
 /**
- * firstYear(plan, { today }) -> null | { year, thisYear, ages, spending, income, sources: ["Social Security", "a pension", ...],
+ * firstYear(plan, { today }) -> null | { year, thisYear, ages, spending, health (the plan's health cover that year, 2026-11-02), healthAdded (the plan adds health cover on top of spending in some year), income, sources: ["Social Security", "a pension", ...],
  *   fromSavings, need, required, extra, taxes, buckets: [{ bucket, amount, accounts: [names] }], affordable, verdict, shortAge }:
  * the plain answer to "how much do we take out?" for the first year of retirement (this year, for a household already
  * retired), from Will the money last?'s own year-by-year engine with the chosen way of spending. All in today's dollars.
- *   need = spending + one-off costs + the year's tax - guaranteed income (floor 0): what savings must pay for.
+ *   need = spending + one-off costs (the health cover among them) + the year's tax - guaranteed income (floor 0): what savings must pay for.
  *   fromSavings = everything taken out that year (the required withdrawal included); extra = fromSavings - need, the part of a
  *   required withdrawal not needed for spending (the engine puts it back into the taxable account).
  *   buckets: where it comes from, in the order the engine takes it (cash first, then the plan's withdrawal order), with the
@@ -75,7 +75,7 @@ export function firstYear(plan, params = {}) {
   if (lines.some((x) => !/social security|pension/i.test(x.name ?? ""))) sources.push("other income");
   const todayYear = Number(String(params.today ?? "").slice(0, 4)) || null;
   return {
-    year: r.year, thisYear: r.year === todayYear, ages: r.ages, spending, income, sources,
+    year: r.year, thisYear: r.year === todayYear, ages: r.ages, spending, health: real(r.eventSpending), healthAdded: healthAdded(p.health), income, sources,
     fromSavings, need, required: real(r.rmd), extra: Math.max(0, fromSavings - need), taxes, buckets,
     affordable: p.affordable, verdict: p.verdict, shortAge: p.shortAge ?? null,
   };

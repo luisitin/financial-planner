@@ -31,8 +31,10 @@ export function render(root, ctx) {
   const list = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
   const KIND = { cash: "your cash savings", taxable: "your investment account", deferred: "your 401(k) or IRA", free: "your Roth" };
   const from = (b) => (b.accounts.length ? list(b.accounts) : KIND[b.bucket]);
-  const averageWords = fy ? `If markets do as well as average, you could spend up to about ${money(Math.round(fy.affordable / 100) * 100)} a year.` : "";
-  const carefulWords = (mo, yr) => ["You can spend about ", mo, " a month ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", yr), ` a year)${d.chosen === "fixed-real" ? "" : ", the same every year,"} and the money lasts in about 9 of 10 markets. If markets do as well as average, up to about ${money(Math.round((fy?.affordable ?? 0) / 100) * 100)} a year.`];
+  // the plan adds health cover in some year: both spending figures are on top of it (2026-11-02)
+  const onTop = fy?.healthAdded ? " on top of health cover" : "";
+  const averageWords = fy ? `If markets do as well as average, you could spend up to about ${money(Math.round(fy.affordable / 100) * 100)} a year${onTop}.` : "";
+  const carefulWords = (mo, yr) => ["You can spend about ", mo, " a month ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", yr), ` a year)${onTop}${d.chosen === "fixed-real" ? "" : ", the same every year,"} and the money lasts in about 9 of 10 markets. If markets do as well as average, up to about ${money(Math.round((fy?.affordable ?? 0) / 100) * 100)} a year.`];
   // while it is worked out: a soft grey bar as wide as the figure that will take its place, so the lines break the same
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   const answer = (() => {
@@ -40,17 +42,20 @@ export function render(root, ctx) {
     const when = fy.thisYear ? `This year (${fy.year})` : `In ${fy.year}, your first year of retirement (in today's dollars)`;
     const src = list(fy.sources.map((x) => (x === "pension" ? "the pension" : x)));
     const bits = [];
-    if (fy.need < 0.5 && fy.fromSavings < 0.5) bits.push(`${when}, nothing needs to come out of savings: about ${money(fy.income)} of ${src} covers the ${money(fy.spending)} you plan to spend.`);
+    // the plan's health cover (marketplace to 65, then Medicare) is spending too: said with it (2026-11-02)
+    const spend = `${money(fy.spending)} you plan to spend${fy.health >= 0.5 ? ` and ${money(fy.health)} of health cover` : ""}`;
+    if (fy.need < 0.5 && fy.fromSavings < 0.5) bits.push(`${when}, nothing needs to come out of savings: about ${money(fy.income)} of ${src} covers the ${spend}.`);
     else if (fy.need < 0.5) {
       const dfr = fy.buckets.find((b) => b.bucket === "deferred");
       const back = (plan.accounts ?? []).filter((a) => a.type === "brokerage" && (Number(a.balance) || 0) > 0).map((a) => a.name);
-      bits.push(`${when}, ${src} (about ${money(fy.income)}) ${fy.sources.length > 1 ? "cover" : "covers"} the ${money(fy.spending)} you plan to spend, so savings pay for nothing.`);
+      bits.push(`${when}, ${src} (about ${money(fy.income)}) ${fy.sources.length > 1 ? "cover" : "covers"} the ${spend}, so savings pay for nothing.`);
       bits.push(`The law still requires about ${money(fy.required)} out of ${dfr ? from(dfr) : KIND.deferred}${fy.taxes >= 0.5 ? `; after about ${money(fy.taxes)} of tax on it` : ""}, what you do not spend can go into ${back.length ? list(back) : "a savings or investment account"}.`);
     } else {
       const [a, b2] = fy.buckets;
       // no account has anything left to take from (the money is already gone): say so instead of naming none (review 2026-11-05: crashed)
       bits.push(a ? `${when}, take about ${money(fy.fromSavings)} from savings, starting with ${from(a)}${b2 ? `, then ${from(b2)}` : ""}.` : `${when}, about ${money(fy.fromSavings)} would have to come from savings, and there is none left to take it from.`);
-      bits.push(`${fy.income >= 0.5 ? `With about ${money(fy.income)} of ${src}, that` : "That"} pays for the ${money(fy.spending)} you plan to spend${fy.taxes >= 0.5 ? ` and about ${money(fy.taxes)} of tax` : ""}.`);
+      // three things take commas and one "and"; two take only the "and" (no tax: "... to spend and $4,051 of health cover")
+      bits.push(`${fy.income >= 0.5 ? `With about ${money(fy.income)} of ${src}, that` : "That"} pays for the ${fy.taxes >= 0.5 ? `${fy.health >= 0.5 ? `${money(fy.spending)} you plan to spend, ${money(fy.health)} of health cover` : `${money(fy.spending)} you plan to spend`} and about ${money(fy.taxes)} of tax` : spend}.`);
     }
     // the careful figure (lasts in 9 of 10 markets) fills in below once worked out; the average-market one is the fallback
     bits.push(fy.verdict === "short" ? `At this spending the money runs out${fy.shortAge ? ` at ${fy.shortAge}` : ""}: Will the money last? shows what would fix it.` : averageWords);

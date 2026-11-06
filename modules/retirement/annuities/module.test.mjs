@@ -28,6 +28,16 @@ test("a quote: payout rate, the return over the likely lifetime, the bond ladder
   assert.ok(q.floorAfter > q.floorBefore);
 });
 
+// review 2026-11-02: "Guaranteed income covers" is against the first retirement year's spending and its health cover, as
+// on Will the money last? (it read the spending alone, so it no longer matched the projection's own share)
+test("the share guaranteed income covers matches the projection's, health cover included", async () => {
+  const { compute: projection } = await import("../projection/compute.js");
+  const p = withQuotes([{ id: "q", name: "Q", personId: "p-ana", premium: 100000, monthly: 1150, startAge: 65 }]);
+  const d = compute(p, { today: TODAY, paths: 0 }), pr = projection(p, { today: TODAY });
+  assert.ok(pr.rows.find((r) => r.year === pr.inputs.retireYear).eventSpending > 0, "health cover in the first retirement year");
+  near(d.quotes[0].floorBefore, pr.coverage, 1e-9);
+});
+
 test("joint life pays while either lives: a lower monthly can still be worth as much; a later start lowers the bond ladder", () => {
   const d = compute(withQuotes([{ id: "s", personId: "p-ana", premium: 100000, monthly: 1000, startAge: 65 }, { id: "j", personId: "p-ana", premium: 100000, monthly: 1000, startAge: 65, joint: true }, { id: "late", personId: "p-ana", premium: 100000, monthly: 1000, startAge: 75 }]), { today: TODAY, paths: 0 });
   const [s, j, late] = d.quotes;

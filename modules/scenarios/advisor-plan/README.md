@@ -20,7 +20,7 @@
 - Nothing entered: your plan alone, and the form.
 
 ## Tests
-`module.test.mjs`: nothing entered, the full comparison (levers kept, the fee's cost, the quote gap, each assumption's sign and the sort, spending's effect equal to the extra spending).
+`module.test.mjs`: nothing entered, the full comparison (levers kept, the fee's cost, the quote gap, each assumption's sign and the sort, spending's effect equal to the extra spending), the advisor's spending figure taken as typed when the plan's is Get started's own (review fix 2026-11-02: Compare's lever turns `retireAuto` off in the copy; the form's "yours" is the plan's spending before health cover, `yours.spendingMonthly`).
 
 ## Ideas / not yet
 - Read the advisor's PDF with the AI reader and fill the form (the user clicks apply).

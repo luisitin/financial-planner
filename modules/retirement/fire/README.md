@@ -208,3 +208,53 @@ the age on file matches, for the sample couple and the retired couple. Each fail
   retirement age to 35 on the People page." Someone who said "retired" reads as before. Test (`module.test.mjs`, "review
   2026-11-06 (verify)"): Elena's `plannedStop` is `{ e, Elena, 35, 65, 2056, notWorking: true }`, and has no `notWorking` once
   she says "retired". It failed before this change.
+
+## Health cover (review 2026-11-02)
+The spending figure is `spending.yearly + health.removedMonthly x 12`: Will the money last? takes a health premium out of today's
+expenses (its health line pays cover from retirement on, marketplace then Medicare), and this page has no health line, so
+the premium goes back in and the FI number is still 25 x all of today's spending (with "Health insurance" $600 a month on
+the family's Expenses: $77,116 and $1,927,900, as before the health line; the patch alone gave $69,916 and $1,747,900).
+
+## Fifth pass (review 2026-11-02)
+- The fold says again that the rule of thumb leaves out health cover before Medicare, which the answer above counts (the
+  projection's health line): "It counts everything left over each month as saved and leaves out Social Security, pensions, taxes
+  and health cover before Medicare, which the answer above counts, ..." (`ruleWords`; `healthAdded` on compute's result). With
+  "My spending figure already includes health cover" ticked the words are as before.
+- Who the answer is about: never an adult Get started says is retired or not working now (they no longer hold the household at
+  work; the projection's retirement starts when the last working adult stops). Ana "not working now" with Bo working: the
+  answer is about Bo.
+- Other income is told from a partner's pay by kind (`kind: "pay"`), never by its name: a rental called "Lee's pay" counts as
+  rent.
+
+## Review 2026-11-06 (sixth pass: one work rule with the health line and Goal seek)
+- **Who still works** is the projection's one work rule (`workRule` through `workingNow`), the health line's and Goal seek's,
+  with this page's exact-age test kept. The recheck's rule above holds with three changes, each where the two rules disagreed
+  (projection README, "Review 2026-11-06 (health cover, sixth pass)"): a contribution counts when it goes to a plan at work
+  (a 401(k), or one with a match) or nobody else has pay (a spousal IRA does not make Lee work while Sam does); "retired" or
+  "Not working now" in Get started wins over pay and saving; and with nothing on Income or Contributions only the first adult
+  is presumed at work, no longer everyone under their age.
+- **Defect 2 of the health line's fifth-pass verify:** the 68/63 couple with Bo's retirement age 66, no pay and Ana "retired"
+  read "Even working to 75, the money runs short ... and Bo works until 75", though Bo's age moves nothing in the plan, while
+  Will the money last? starts now, Healthcare prices Bo's marketplace in 2026-2027 and Goal seek has no retirement lever. Now
+  "The money runs short in 2030" (the retired answer, as Will the money last?). Lee with rent, her salary taken out and her
+  IRA saving kept: "Lee not working" (was "Lee stopping at 67 as planned"), as the health line prices her own cover.
+- **Goal seek asks about the same adult on the same plan** (`workingNow`'s `lead` and `stopNow`): the first adult while they
+  work, else the first other who does, searched with the first adult stopping now when they stopped before the age on file.
+  `stopNow` only when that partner has pay on Income: one who works by an answer or saving alone has no pay the plan can count
+  with the first adult stopped, so their age is searched on the plan as it is, where it moves the household's retirement year
+  (the family with nothing on Income, Ana "Not working now", Bo saving into his Roth: "Bo at 63" here and on Goal seek, where
+  it read "Not by 75", a search over his saving only).
+- **The year Will the money last? starts spending, by whose stop it is** (`plannedStop.by`, `plannedStopWords`): with the
+  first adult said stopped and a partner stopping before the first adult's own year, the projection lives on the partner's pay
+  until then (its household retirement year). Elena "Not working now", Marcus to 65: "This counts Elena as not working from
+  this year on. Will the money last? counts the household as living on Marcus's pay until Marcus stops work at 65, so it starts
+  spending savings only in 2054. If Elena does not go back to work, set Elena's retirement age to 35 on the People page." (was
+  "Your plan still has Elena working until 65 ... only in 2056"). Sam (60, "retired", nobody working): no such words any more,
+  as Will the money last? now starts this year too.
+- The 9-in-10 age is searched with steady spending in the plan as well (`carefulAgeSteps`), so the health line is priced on the
+  same withdrawals as each age (as Goal seek's `earliestRetireAge`).
+- The condo 401B couple: with health cover in the spending figure (the box ticked) $94,147 and $845,656 as before; with the
+  health line (Medicare for both, $180,579) it lasts and carries $88,504, $558,091 left; Dee still 63, now.
+Tests (`module.test.mjs`, "review 2026-11-06"): defect 2 with and without the answer, Lee "not working"; one adult and one age
+with Goal seek (Pat and Tom, Sam past his age); a partner with saving alone; `plannedStop.by` and its words. Each failed
+without its fix.

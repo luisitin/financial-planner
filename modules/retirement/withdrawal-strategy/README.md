@@ -67,3 +67,8 @@ bars where its figures go and filled after the first paint (`modules/retirement/
 time), so nothing jumps or freezes; with a rule other than steady spending it says "the same every year"; when nothing lasts in
 9 of 10 markets it keeps the average-market sentence. The figure is settled on the Chance page's 2,000 paths, the same as on
 Will the money last?.
+
+## Health cover in the first-year answer (2026-11-02)
+`firstYear` returns `health` (the projection's health cover that year, today's dollars), and the answer says it with the spending: "That pays for the $84,000 you plan to spend, $4,800 of health cover and about $9,000 of tax." `need` already had it (it is among the year's one-off costs, `eventOut`). `healthAdded` (the plan adds cover in some year) makes the two spending figures say "on top of health cover".
+Review fix 2026-11-02: with no tax that year the two take one "and" ("pays for the $78,000 you plan to spend and $4,051 of
+health cover"); it read "..., $4,051 of health cover." with the "and" missing.

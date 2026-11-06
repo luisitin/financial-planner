@@ -36,7 +36,9 @@ export function compute(plan, params = {}) {
   const guaranteedShare = (inputs) => {
     const yr = inputs.retireYear;
     const g = (inputs.incomes ?? []).reduce((s, x) => { const pi = x.personIndex ?? 0; const age = yr - inputs.people[pi].birthYear; return s + (age >= x.startAge && (x.endAge === undefined || x.endAge === null || age <= x.endAge) ? x.yearly * (x.cola === false ? Math.pow(1 + inputs.rates.inflation, -(yr - inputs.startYear)) : 1) : 0); }, 0);   // a fixed-dollar payment, in today's dollars
-    return inputs.spending.yearly > 0 ? g / inputs.spending.yearly : null;
+    // against that year's spending and its health cover (the projection's "Guaranteed income" share counts both, 2026-11-02)
+    const spent = inputs.spending.yearly + (inputs.events ?? []).filter((e) => e.spending && e.year === yr && e.amount > 0).reduce((s, e) => s + e.amount, 0);
+    return spent > 0 ? g / spent : null;
   };
   const quotes = raw.map((q) => {
     const person = people.find((p) => p.id === q.personId) ?? people.find((p) => p.role === "self") ?? people[0];

@@ -27,3 +27,6 @@ The projection README supplies annual timing and flat-tax assumptions, not a tax
 Expected money is rounded only when writing cents. Every tenth case has another derivation;
 the lead separately audits2%. Exact cent inputs are used before deriving the answer;
 the covered ledger cases agree with the code within the requested half-cent tolerance.
+
+## Health cover (2026-11-02)
+`out.spending` is all of the year's spending: the plan's spending and its health cover (the projection's "Health cover" line, marketplace to 65 then Medicare, the engine's `eventSpending`); `out.health` is that part, and each year's record says it ("$89,805 spent ($5,805 health cover)"). Buckets reads it, so the years it sets aside include cover.

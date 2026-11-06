@@ -109,12 +109,14 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   for (const x of protectionGaps(c, T)) { assert.ok(!x.until || x.until > 2026, String(x.until)); assert.doesNotMatch(x.sentence, /until about 20(1|2[0-6])/); }
   const old = familyPlan("2026-11-02"); old.household.people.find((x) => x.id === "p-cy").birthDate = "1950-02-02";
   assert.ok(compute(old, T).people.every((p) => !p.termUntil || p.termUntil.year > 2026));
-  // $250,000 of term cover ending in January: covered today, short from then; the step and its words stay
+  // $300,000 of term cover ending in January: covered today, short from then; the step and its words stay
+  // (2026-11-02, the health line: Bo alone pays marketplace cover 2050-2052 and Medicare from 2053, so the need moved
+  // 235,000 -> 287,000 and the policy 250,000 -> 300,000 so that it still covers the need while it lasts)
   const e = familyPlan("2026-11-02");
-  e.insurance = { ...(e.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 250000, premium: 25, period: "monthly", endDate: "2027-01-15" }] };
+  e.insurance = { ...(e.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 300000, premium: 25, period: "monthly", endDate: "2027-01-15" }] };
   const [ge] = protectionGaps(e, T);
-  assert.equal(ge.gap, 235000); assert.equal(ge.endsSoon.length, 1);
-  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $235,000 short");
+  assert.equal(ge.gap, 287000); assert.equal(ge.endsSoon.length, 1);
+  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $287,000 short");
   const e2 = familyPlan("2026-11-02"); e2.insurance = { ...(e2.insurance ?? {}), policies: [{ ...e.insurance.policies[0], endDate: "2046-01-15" }] };
   assert.deepEqual(protectionGaps(e2, T), [], "cover that lasts past 2042 covers it");
   // a policy for "Household / everyone": not counted, and said
@@ -125,8 +127,8 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   const m = familyPlan("2026-11-02");
   m.household.people.find((x) => x.id === "p-ana").name = "Me"; m.household.people.find((x) => x.id === "p-bo").name = "My spouse"; m.household.people.find((x) => x.id === "p-cy").name = "Child 1";
   const [gm] = protectionGaps(m, T);
-  assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $235,000 short");
-  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$235,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
+  assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $287,000 short");   // the health line: was 235,000
+  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$287,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
 });
 
 test("review: one parent, the children's own answer (method child) is rounded to $1,000 and said part by part, never as a rule of thumb or as the plan", async () => {
@@ -930,7 +932,8 @@ test("sixth pass: the cover is the most of each year's need in that year's dolla
   assert.doesNotMatch(pageOf(t).after("For how long"), /same dollars/);
   // the couple's method and figures do not change
   const fam = compute(familyPlan("2026-11-02"), T5).people;
-  assert.deepEqual(fam.map((q) => [q.method, q.need]), [["plan", 235000], ["plan", 0]]);
+  // (with the projection's health line Ana's need is $287,000, as the "review: no cover end year" test says; review 2026-11-06)
+  assert.deepEqual(fam.map((q) => [q.method, q.need]), [["plan", 287000], ["plan", 0]]);
 });
 
 test("sixth pass: cover on file is checked year by year in that year's dollars (twoss with $200,000 or $180,000 is not covered)", () => {
@@ -1082,8 +1085,10 @@ test("review 2026-11-06: cover that ends in 2030 or 2028 never counts for the ye
 });
 
 test("review 2026-11-06: the couple keeps 'ends soon' as by next year: $300,000 ending in 2031 reads as cover with no end date", () => {
+  // (the family with health cover in its spending figure, the box ticked: the figures as worked out before the health line;
+  // with the projection's health line Ana's need is $287,000, the "review: no cover end year" test; review 2026-11-06)
   const T = { today: "2026-11-02" };
-  const on = (extra) => { const f = familyPlan("2026-11-02"); f.insurance = { ...(f.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 300000, premium: 25, period: "monthly", ...extra }] }; return f; };
+  const on = (extra) => { const f = familyPlan("2026-11-02"); f.retirement.healthIncluded = true; f.insurance = { ...(f.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 300000, premium: 25, period: "monthly", ...extra }] }; return f; };
   const pick = (q) => [q.method, q.need, q.cover, q.gap, q.spare, q.endsSoon.length, q.gapAfterEnd, q.raise];
   const a = compute(on({ endDate: "2031-12-31" }), T).people[0], b = compute(on({}), T).people[0];
   assert.deepEqual(pick(a), ["plan", 235000, 300000, 0, 65000, 0, 0, false]);
@@ -1178,8 +1183,10 @@ test("review 2026-11-06: the worth line says which dollars each figure is in (tw
 test("review 2026-11-06: no pay to replace and cover that ends: the gap once it ends is said, never \"$0 short\" or \"Your family is covered\"", () => {
   // Ana with a pension instead of pay ($235,000 needed) and $236,000 ending 3/31/2027; Bo covered with $400,000: Ana's gap is
   // $0 today and $235,000 once the policy ends. Not raised (no pay to replace), so "Close to covered" with that gap said
+  // (the family with health cover in its spending figure, the box ticked: the figures as worked out before the health line;
+  // with the projection's health line Ana's need is $287,000, the "review: no cover end year" test; review 2026-11-06)
   const T = "2026-11-02";
-  const f = familyPlan(T);
+  const f = familyPlan(T); f.retirement.healthIncluded = true;
   for (const x of f.income) if (x.personId === "p-ana") x.type = "pension";
   f.insurance = { policies: [
     { id: "a", name: "Ana's term", kind: "term", personId: "p-ana", benefit: 236000, premium: 20, period: "monthly", endDate: "2027-03-31" },
@@ -1254,8 +1261,10 @@ test("review 2026-11-06 follow-up: a couple's figure without the job leaves out 
   // Ana ($235,000 needed) with $100,000 through work (no end) and $200,000 ending 6/30/2027. Once that policy ends only the
   // work cover is left, so without the job nothing is on file: $235,000, never 235,000 - (300,000 - 100,000) = $35,000 (the
   // ending policy counted), which hid the notice and the job-change size under a card short $135,000 from then
+  // (the family with health cover in its spending figure, the box ticked: the figures as worked out before the health line;
+  // with the projection's health line Ana's need is $287,000, the "review: no cover end year" test; review 2026-11-06)
   const T = "2026-11-02";
-  const on = (...ps) => { const f = familyPlan(T); f.insurance = { policies: ps.map((x, i) => ({ id: `t${i}`, name: `Ana ${i + 1}`, kind: "term", personId: "p-ana", premium: 20, period: "monthly", ...x })) }; return f; };
+  const on = (...ps) => { const f = familyPlan(T); f.retirement.healthIncluded = true; f.insurance = { policies: ps.map((x, i) => ({ id: `t${i}`, name: `Ana ${i + 1}`, kind: "term", personId: "p-ana", premium: 20, period: "monthly", ...x })) }; return f; };
   const f = on({ benefit: 100000, throughWork: true }, { benefit: 200000, endDate: "2027-06-30" });
   const ana = compute(f, { today: T }).people[0];
   assert.deepEqual([ana.method, ana.need, ana.cover, ana.coverWork, ana.gap, ana.gapAfterEnd, ana.gapIfJobEnds], ["plan", 235000, 300000, 100000, 0, 135000, 235000]);
@@ -1283,16 +1292,18 @@ test("review 2026-11-06 follow-up: cover that exactly meets the need says so, ne
   assert.equal(pg.h1, "Your family is covered");
   assert.ok(pg.p.includes("Covered, with nothing to spare."), pg.p.join(" | "));
   assert.doesNotMatch(wordsOf(pg), /\$0 to spare/);
-  // the couple: Ana's $235,000 on $235,000 needed
-  assert.ok(pageOf(withCover(235000), TODAY).p.includes("Covered, with nothing to spare."));
+  // the couple: Ana's $287,000 on $287,000 needed (with the health line; it was $235,000 on $235,000, review 2026-11-06)
+  assert.ok(pageOf(withCover(287000), TODAY).p.includes("Covered, with nothing to spare."));
   // $1,000 more: the spare is said
   assert.ok(pageOf(withPolicy(twoss, 249000)).p.includes("Covered, with about $1,000 to spare."));
 });
 
 test("verification 8b, review 2026-11-06: a couple's cover that ends by next year, never \"Covered until\" while short, every date named", () => {
   // Ana needs $235,000 (the family fixture). The truth, day by day from the policies on file, is in each comment.
+  // (the family with health cover in its spending figure, the box ticked: the figures as worked out before the health line;
+  // with the projection's health line Ana's need is $287,000, the "review: no cover end year" test; review 2026-11-06)
   const T = "2026-11-02";
-  const on = (...ps) => { const f = familyPlan(T); f.insurance = { policies: ps.map((x, i) => ({ id: `t${i}`, name: `Ana ${i + 1}`, kind: "term", personId: "p-ana", premium: 20, period: "monthly", ...x })) }; return f; };
+  const on = (...ps) => { const f = familyPlan(T); f.retirement.healthIncluded = true; f.insurance = { policies: ps.map((x, i) => ({ id: `t${i}`, name: `Ana ${i + 1}`, kind: "term", personId: "p-ana", premium: 20, period: "monthly", ...x })) }; return f; };
   // short today: $50,000 for good + $150,000 ending 6/30/2027 = $200,000, $35,000 short now and $185,000 once it ends
   const st = on({ benefit: 50000 }, { benefit: 150000, endDate: "2027-06-30" });
   const sa = compute(st, { today: T }).people[0];
