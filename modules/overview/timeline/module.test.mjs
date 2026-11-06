@@ -166,3 +166,55 @@ test("a goal behind by less than $100 a month says its need to the $10, never 'a
   const boat = ev(compute(p, { today: T }), "goal-g-boat");
   assert.match(boat.detail, /^\$6,000 due\. Behind: about \$\d0 a month is needed\.$/); assert.doesNotMatch(boat.detail, /about \$0 a month/);
 });
+
+// --- Review 2026-11-06 (fix round 6) --------------------------------------------------------------------------------------
+test("Review 2026-11-06: a spouse's benefit on the partner's record is a Timeline event, from when it starts, at the counted amount", async () => {
+  const { compute: ss } = await import("../../retirement/social-security/compute.js");
+  const today = "2026-11-05";
+  // Ruth (born 1960-08-15) gets 2,100 at 67; Sam (born 1964-09-20) 900 at 67. Sam's top-up: half of 2,100 less his own 900
+  // = 150 a month, from when both have claimed: Sam's own claim at 67 (2031-09-20), Ruth's at 67 being earlier
+  const p = emptyPlan(); p.household.filingStatus = "married_joint"; p.household.state = "AZ";
+  p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1960-08-15", retirementAge: 62, lifeExpectancy: 100 }, { id: "s", name: "Sam", role: "partner", birthDate: "1964-09-20", retirementAge: 70, lifeExpectancy: 90 }];
+  p.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+  const d = compute(p, { today });
+  const e = ev(d, "spousal-s");
+  assert.ok(e, "no event: " + d.events.filter((x) => x.kind === "social").map((x) => x.title).join(" | "));
+  const s = ss(p, { today });
+  assert.equal(s.couple.spousalCounted.s, 150); assert.equal(s.couple.spousalStartAge.s, 67);
+  assert.equal(e.date, "2031-09-20"); assert.equal(e.kind, "social"); assert.equal(e.title, "Sam's spouse's benefit starts");
+  assert.equal(e.detail, "About $150 a month more in today's dollars, on Ruth's record, once both have claimed. It is paid with Sam's own Social Security and rises with inflation every year after.");
+  assert.equal(ev(d, "spousal-r"), undefined, "half of Sam's 900 is less than Ruth's own 2,100: no top-up for Ruth");
+  // the year matches the projection's line ("Sam's spouse's benefit", counted from spousalFromAge)
+  assert.equal(Number(e.date.slice(0, 4)), 1964 + s.couple.spousalFromAge.s);
+  // Sam claims at 64 and Ruth at 67 (August 2027): it starts at Sam's own claim (64, September 2028), reduced 25/36 of 1%
+  // for each of the 36 months before his full age 67: 150 x 0.75 = 112.50 (SSA Handbook 724)
+  const early = structuredClone(p); early.retirement.socialSecurity.s.claimAge = 64;
+  const se = ss(early, { today });
+  assert.equal(se.couple.spousalCounted.s, 112.5); assert.equal(se.couple.spousalStartAge.s, 64);
+  const ee = ev(compute(early, { today }), "spousal-s");
+  assert.equal(ee.date, "2028-09-20"); assert.match(ee.detail, /^About \$113 a month more/);
+  // Sam claims at 62 (September 2026, before today) and Ruth only at 70 (August 2030): it starts with Ruth's claim, when Sam
+  // is 65 and 11 months (dated on Sam's day of the month, the 20th, after Ruth's claim on the 15th)
+  const later = structuredClone(p); later.retirement.socialSecurity = { r: { claimAge: 70, monthlyAtFRA: 2100 }, s: { claimAge: 62, monthlyAtFRA: 900 } };
+  const sl = ss(later, { today });
+  assert.ok(Math.abs(sl.couple.spousalStartAge.s - (65 + 11 / 12)) < 1e-9);
+  assert.equal(ev(compute(later, { today }), "spousal-s").date, "2030-08-20");
+  // not a spouse (Get started's "partner"): SSA pays a spouse's benefit only to a husband or wife, so no event
+  const partner = structuredClone(p); partner.household.people[1].relation = "partner"; partner.household.filingStatus = "single";
+  assert.equal(ev(compute(partner, { today }), "spousal-s"), undefined);
+  // both claim ages already passed (Ruth's in 2022, Sam's in March 2025): the top-up started in the past, no event ahead
+  const paid = structuredClone(p); paid.household.people[0].birthDate = "1955-08-15"; paid.household.people[1].birthDate = "1958-03-10";
+  assert.ok(ss(paid, { today }).couple.spousalCounted.s > 0);
+  assert.equal(ev(compute(paid, { today }), "spousal-s"), undefined);
+  // with only Sam's own claim age passed, it starts when Ruth claims (August 15, 2027, Sam 69 and 5 months)
+  const waits = structuredClone(p); waits.household.people[1].birthDate = "1958-03-10";
+  assert.equal(ev(compute(waits, { today }), "spousal-s").date, "2027-08-15");
+  // Review 2026-11-06 (verifier): "once both have claimed" is never listed before the claim it waits for. Sam already gets his
+  // own (an Income line); Ruth claims on August 15, 2027; Sam's top-up was dated August 10 and listed first
+  const paidSam = structuredClone(waits); paidSam.income = [{ id: "ssS", name: "Sam's Social Security", type: "social", personId: "s", amount: 900, period: "monthly", taxable: true }];
+  for (const order of [paidSam, (() => { const q = structuredClone(paidSam); q.household.people.reverse(); q.household.people[0].role = "self"; q.household.people[1].role = "partner"; return q; })()]) {
+    const evs = compute(order, { today }).events, iR = evs.findIndex((x) => x.id === "social-r"), iS = evs.findIndex((x) => x.id === "spousal-s");
+    assert.ok(iR >= 0 && iS > iR, evs.filter((x) => x.kind === "social").map((x) => `${x.date} ${x.title}`).join(" | "));
+    assert.equal(evs[iS].date, "2027-08-15");
+  }
+});

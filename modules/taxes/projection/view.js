@@ -16,10 +16,20 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of the retirement plan, through the real brackets. It needs the same things as the Projection page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
     return;
   }
+  // no retirement year inside the plan (it ends first, or everyone is past its end age): say why, not "failed to render"
+  // (Review 2026-11-06)
+  if (!d.rows.length) {
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"),
+      ui.h("p", { class: "lede" }, `There are no retirement years to tax: ${d.noYears.why}. Check ${d.noYears.check} on the People page, and this page shows the federal tax in each year after work stops.`),
+      ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"))));
+    return;
+  }
   const first = d.rows[0], last = d.rows[d.rows.length - 1];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `About ${money(d.totals.taxes)} of federal tax over retirement`),
-    ui.h("p", { class: "lede" }, `${d.rows.length} years from ${first.year} to ${last.year}, ${d.real ? "in today's dollars" : "in the dollars of each year"}: ${money(d.average)} a year on average, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
+    // one retirement year: "1 year, 2026", with no average and no biggest year (Review 2026-11-06, verifier: "1 years from 2026
+    // to 2026 ... $813 a year on average ... The biggest year is 2026", as the Tax report read before this round)
+    ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in the dollars of each year"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
     ui.h("p", { class: "muted small" }, "Brackets and deductions inflate with the plan's inflation rate; the Social Security thresholds do not, as in the law, so more of the benefit gets taxed over time. State tax is not included."),
   ));
   for (const n of d.notes) root.append(ui.notice("info", n));

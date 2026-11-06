@@ -1,7 +1,7 @@
 // modules/reports/annual-review/view.js -- DOM only. The year in review as a printable sheet: an
 // opening, net worth over the year, the money in and out, where it went, the months reviewed and
 // their notes, the goals, the plan's health, and what next year holds.
-import { reportFrame, figs, rtable, wideTable, section, list } from "../report-kit.js";
+import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
 import { lineChart } from "../../retirement/charts.js";
 import { theCard, monthsWords, shortDate } from "../../transactions/ledger/compute.js";
 
@@ -27,7 +27,7 @@ export function render(page, ctx) {
   const gapSay = (m) => (m.gaps ?? []).slice(0, 2).map((g) => (g.unsure ? ` ${g.why}.` : ` ${g.why}, so ${monthsWords(g.yms)} ${g.yms.length > 1 ? "leave" : "leaves"} out what happened then.`)).join("");
   const host = ui.h("div", {}, ui.notice("info", "Rolling the year up..."));
   page.append(host);
-  ctx.computeRemote("reports/annual-review", { today, year }).then((d) => {
+  settleReport(ctx.computeRemote("reports/annual-review", { today, year }), host, ui, "year in review", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) { host.append(ui.notice("warn", `The review needs ${(d?.missing ?? []).join(", ")}.`)); return; }
     const thisYear = Number(today.slice(0, 4));

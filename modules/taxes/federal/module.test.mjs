@@ -768,3 +768,56 @@ test("Review 2026-11-06 (verifier): a bracket's edge inside the care credit's st
   assert.equal(dz.result.credits.careCredit, 0); assert.equal(dz.careSets, null); near(dz.nextDollar, dz.nextDollarNoCare, 1e-9);
   assert.equal(brackets(zero, { today: TODAY }).careMoves, false);
 });
+
+// --- Review 2026-11-06 (fix round 6) --------------------------------------------------------------------------------------
+test("Review 2026-11-06: pay that ended this year or is one-time is 'not counted for 2026', not 'none is on the Income page' (IRC 21(d))", async () => {
+  const { uncountedEarned, uncountedWords } = await import("./compute.js");
+  const today = "2026-09-15";
+  // H-0221: Dana, head of household, two children, 650 a month of after-school care; her pay (3,300 every two weeks) ended
+  // August 15. The engine counts a year of what is coming in today, so none of her pay is counted: the note said "none is
+  // on the Income page", which is false
+  const dana = emptyPlan(); dana.household.filingStatus = "head_of_household"; dana.household.state = "GA";
+  dana.household.people = [{ id: "d", name: "Dana", role: "self", birthDate: "1985-08-30" }, { id: "l", name: "Leo", role: "dependent", birthDate: "2014-03-12" }, { id: "n", name: "Nia", role: "dependent", birthDate: "2018-11-02" }];
+  dana.income = [{ id: "pay", name: "Dana's pay", type: "salary", personId: "d", amount: 3300, period: "biweekly", growth: 0.03, taxable: true, endDate: "2026-08-15" }];
+  dana.expenses = [{ id: "care", name: "After-school care", category: "childcare", amount: 650, period: "monthly" }];
+  const d = compute(dana, { today });
+  assert.equal(d.result.income.wages, 0, "the engine counts no ended pay (unchanged)"); assert.equal(d.result.credits.careCredit, 0);
+  const care = d.notes.find((n) => /no child care credit/.test(n));
+  assert.equal(care, "Child care counts for the child care credit only up to your earned income (pay or business profit), and none is counted for 2026, so this estimate has no child care credit. To count what was paid this year, type it as Wages this year below.");
+  assert.ok(d.notes.includes("Nothing on the Income page is counted for 2026. Dana's pay ended on August 15, 2026; this estimate counts only pay coming in today. The estimate is built from what you type below."), d.notes.join(" | "));
+  assert.ok(!d.notes.some((n) => /none is on the Income page|Nothing on the Income page yet/.test(n)), d.notes.join(" | "));
+  assert.deepEqual(uncountedEarned({ items: [{ type: "salary", personId: "d", amount: 3300, period: "biweekly", active: false, ended: true, endDate: "2026-08-15" }] }, dana.household.people, 2026),
+    [{ personId: "d", name: "Dana", what: "pay", why: "ended", date: "2026-08-15", amount: 3300, inYear: true }]);
+  // pay that ended in an earlier year (H-0368: Jen's ended 2020-01-01) is still "not counted for 2026", but is not named as
+  // the reason, and no hint to type this year's wages is given for it
+  const gone = structuredClone(dana); gone.income[0].endDate = "2020-01-01";
+  const dg = compute(gone, { today });
+  assert.ok(dg.notes.includes("Child care counts for the child care credit only up to your earned income (pay or business profit), and none is counted for 2026, so this estimate has no child care credit."), dg.notes.join(" | "));
+  assert.ok(dg.notes.includes("Nothing on the Income page is counted for 2026. The estimate is built from what you type below."), dg.notes.join(" | "));
+  // typed wages count for the year: the credit is worked on them and both notes go
+  const typed = structuredClone(dana); typed.taxes.thisYear.wages = 52800;
+  const dt = compute(typed, { today });
+  assert.ok(dt.result.credits.careCredit > 0 && !dt.notes.some((n) => /counted for 2026/.test(n)), dt.notes.join(" | "));
+  // H-0319: Carlos's 119,600 is "once" (no yearly amount); Jen earns 3,900 a month; Ana is 3, 1,300 a month of daycare
+  const cj = emptyPlan(); cj.household.filingStatus = "married_joint"; cj.household.state = "TX";
+  cj.household.people = [{ id: "c", name: "Carlos", role: "self", birthDate: "1987-01-20" }, { id: "j", name: "Jen", role: "partner", birthDate: "1988-07-07" }, { id: "a", name: "Ana", role: "dependent", birthDate: "2023-05-05" }];
+  cj.income = [{ id: "c1", name: "Carlos's pay", type: "salary", personId: "c", amount: 119600, period: "once", taxable: true }, { id: "j1", name: "Jen's pay", type: "salary", personId: "j", amount: 3900, period: "monthly", growth: 0, taxable: true }];
+  cj.expenses = [{ id: "dc", name: "Daycare (Ana)", category: "childcare", amount: 1300, period: "monthly" }];
+  const c = compute(cj, { today });
+  const cn = c.notes.find((n) => /no child care credit/.test(n));
+  assert.ok(cn.startsWith("Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and Carlos has no pay or business income counted for 2026, so this estimate has no child care credit. Carlos's 119,600 of pay is one-time; this estimate counts no one-time pay. (A spouse"), cn);
+  assert.ok(!/Income page/.test(cn) && !/Wages this year/.test(cn), "on a joint return typed wages are shared by pay, so no such hint");
+  // with a 5,000 child care account on Jen's pay: "(Carlos has none counted for 2026)", not "(Carlos has none)"
+  const acct = structuredClone(cj); acct.whatIfs = { benefits: { j: { dcfsaElect: 5000, planYear: 2026 } } };
+  assert.ok(compute(acct, { today }).notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (Carlos has none counted for 2026).")));
+  // pay that starts later, and the words for several lines
+  assert.equal(uncountedWords([{ name: "Sam", what: "pay", why: "starts", date: "2027-01-04" }]), "Sam's pay starts on January 4, 2027; this estimate counts only pay coming in today.");
+  assert.equal(uncountedWords([{ name: "Sam", what: "pay", why: "ended", date: "2026-03-31" }, { name: "Sam", what: "bonus", why: "once", amount: 5000 }]), "Sam's pay ended on March 31, 2026 and Sam's 5,000 of bonus is one-time; this estimate counts only pay coming in today, and no one-time pay.");
+  assert.equal(uncountedWords([]), "");
+  // a single person whose only pay is one-time (H-0019): not "Nothing on the Income page yet"
+  const once = emptyPlan(); once.household.people = [{ id: "m", name: "Maya", role: "self", birthDate: "1997-05-04" }];
+  once.income = [{ id: "m1", name: "Maya's pay", type: "salary", personId: "m", amount: 63700, period: "once", taxable: true }];
+  assert.ok(compute(once, { today }).notes.includes("Nothing on the Income page is counted for 2026. Maya's 63,700 of pay is one-time; this estimate counts no one-time pay. The estimate is built from what you type below."));
+  // truly nothing on the Income page keeps its words (Kim & Lou's "on the Income page" is covered above)
+  assert.ok(compute(emptyPlan(), { today }).notes.includes("Nothing on the Income page yet: the estimate is built from what you type below."));
+});

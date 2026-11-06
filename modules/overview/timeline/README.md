@@ -67,3 +67,21 @@ family plan with a $36,000 Wedding and a $6,000 Boat.
 ## Ideas / not yet
 - A pension's start (once `retirement/pensions` exists), the partner's survivor years (Social Security's `couple.survivorMonthly`), long-term-care odds by age, estate-document reviews.
 - Drag along the line to see the balance sheet in that year.
+
+## Review 2026-11-06
+- **A spouse's benefit starts (fix round 6).** When the Social Security page counts a spouse's top-up on the partner's
+  record (`couple.spousalCounted`, the projection's "<name>'s spouse's benefit" line), the Timeline has "Sam's spouse's
+  benefit starts": "About $150 a month more in today's dollars, on Ruth's record, once both have claimed. It is paid with
+  Sam's own Social Security and rises with inflation every year after." Its date is the birth date plus
+  `couple.spousalStartAge` (the later of their own claim age and their age at the partner's claim, never before 62; the
+  age the top-up is reduced for, SSA Handbook 724 and oact/quickcalc/spouse.html), so its year is the projection's
+  (`spousalFromAge`). Ruth 2,100 and Sam 900, both at 67: 150 from 2031-09-20; Sam at 64: 150 x 0.75 = 112.50 from
+  2028-09-20 (36 months early at 25/36 of 1%); Sam at 62 and Ruth at 70: from Ruth's claim, 2030-08-20. No event for a
+  partner who is not a spouse, or a top-up that already started. Across all plans only the three Social Security
+  verifier plans gain it (no qa household has a Social Security figure). Test: "a spouse's benefit on the partner's
+  record is a Timeline event".
+- **Not before the claim it waits for (verifier, fix round 6).** The spouse's benefit is dated at the later of the month it
+  starts (on the spouse's day of the month) and the partner's own claim day, and on the same day it is listed after the
+  partner's "Social Security starts": Sam, already paid, read "Sam's spouse's benefit starts" on August 10, 2027 above
+  "Ruth's Social Security starts" on August 15 ("once both have claimed"). Now both are August 15, Ruth's first. The month,
+  the amount and the year are unchanged. Test: the same, "a spouse's benefit on the partner's record".

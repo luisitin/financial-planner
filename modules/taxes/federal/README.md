@@ -180,3 +180,27 @@ Not modelled: AMT, the qualified business income deduction, the earned income an
   it the figure is the same as before (Jo at 88,000: 13.5 cents; Jo at 30,000: 0; the family: 22.75). Over 1,407 plans only
   H-0319 and H-0321 move (9 cents back to the 6 they read before the credit, the credit being 0). Test: "a bracket's edge
   inside the care credit's step is not averaged into the next dollar".
+- **Pay that ended, has not started or is one-time (fix round 6, verifier follow-up).** The engine counts a year of what
+  is coming in today (cashflow/income `active`; a one-time amount is none a year), so pay that ended this year is not in
+  the estimate; the notes said "none is on the Income page" (H-0221: Dana's pay ended August 15; H-0228: all income ended
+  January 31; H-0319: Carlos's 119,600 is "once"). `uncountedEarned(inc, people, year)` lists the earned lines (pay, bonus,
+  business, taxed) on the Income page that are not counted (ended, starts later, one-time; `inYear` when it could have
+  paid in the tax year) and `uncountedWords` says them. The 21(d) note now reads "... and none is counted for 2026, so this
+  estimate has no child care credit. Dana's pay ended on August 15, 2026; this estimate counts only pay coming in today.
+  To count what was paid this year, type it as Wages this year below." (the hint on a return with one adult only: typed
+  wages on a joint return are shared by pay); jointly "Carlos has no pay or business income counted for 2026, so this
+  estimate has no child care credit. Carlos's 119,600 of pay is one-time; this estimate counts no one-time pay."; the
+  account note "(Carlos has none counted for 2026)"; and "Nothing on the Income page yet" becomes "Nothing on the Income
+  page is counted for 2026. Dana's pay ended on August 15, 2026; ..." (also when the only lines are one-time, H-0019).
+  Pay that ended before the tax year (H-0368: 2020) gives "counted for 2026" with no reason named. With nothing on the
+  Income page the old words stay. The engine's figures do not change. Across the qa households 26 Federal estimate pages
+  change, all in these notes. Test: "pay that ended this year or is one-time is 'not counted for 2026'".
+- **One threshold for "the child care credit moves the next dollar" (fix round 6).** `careMovesNextDollar(nextDollar,
+  noCare)`: |nextDollar - noCare| >= 0.005 (`CARE_MOVES_BY`, half a cent), worked to the billionth. `careSets` and
+  Brackets' `careMoves` both use it; Brackets used > 0.0005 on the raw difference and this page > 0.005, and on 1,500
+  random households with child care they disagreed on 12 (22.25 cents against 22 without the credit: Brackets said the
+  credit moves it, this page said not). Half a cent counts: 12.5 cents shows as 13 against the 12% bracket, so the
+  bracket alone is not the reason; before, 0.125 against 0.12 fell either side of > 0.005 by floating-point noise. On the
+  1,500 random households one Federal answer changes (10.5 against 10 cents: "the 10% bracket, and the child care credit
+  getting smaller"), 11 Brackets answers change, and the two pages now agree on all; no qa household's page text changes.
+  Test: brackets "one threshold".

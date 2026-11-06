@@ -47,3 +47,8 @@ pulled along".
   1,050 credit) read "17% more than the bracket: the child care credit gets smaller"; H-0319 (the credit 0) "the child care
   credit covers part of the tax on more pay". With the Federal estimate's `nextDollarOf` fixed (its credit part over the
   step, the rest over 1,000) both read the bracket: 12% and 6%. Test: federal "a bracket's edge inside the care credit's step".
+- **One threshold with the Federal estimate (fix round 6).** `careMoves` is the Federal estimate's
+  `careMovesNextDollar(marginal, the 1,000 probe without the credit)`: half a cent or more, to the billionth (it was
+  > 0.0005 here and > 0.005 there; 12 of 1,500 random households disagreed). The words only change where the figure is
+  half a cent or more from the bracket, so no qa household's page text moves. Test: "Brackets and the Federal estimate use
+  one threshold".

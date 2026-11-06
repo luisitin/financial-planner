@@ -69,6 +69,25 @@ export function printSheet(title, sheet) {
   setTimeout(() => w.print(), 250);
 }
 
+/**
+ * What a report says when its figures could not be worked out (the compute failed, `d.error`) or drawing them failed, so the
+ * page never stays on "Putting the ... together" (Review 2026-11-06: the Tax report hung for 17 qa households; three
+ * reports read "The review needs ." or "It needs:" with nothing after it when the plan's figures could not be worked out).
+ */
+export const failedNotice = (ui, what) => ui.notice("error", `The ${what} could not be put together from this plan: something in it stopped the figures being worked out. Check the birth dates and the ages on the People page, then reload the page.`);
+/** True when the page's compute failed (the shell's safeCompute answers { error }). */
+export const computeFailed = (d) => !!(d && typeof d === "object" && d.error && !d.ready);
+/**
+ * Run a report's drawing on its compute's answer, and on any failure show `failedNotice` in `host` instead: a compute that
+ * failed, a drawing that throws, a remote call that rejects. -> the settled promise.
+ */
+export function settleReport(promise, host, ui, what, draw) {
+  return Promise.resolve(promise).then((d) => {
+    if (computeFailed(d)) { host.replaceChildren(failedNotice(ui, what)); return; }
+    draw(d);
+  }).catch((e) => { console.error(`[planner] the ${what} failed`, e); host.replaceChildren(failedNotice(ui, what)); });
+}
+
 /** Small builders for report content. */
 export const figs = (ui, items) => ui.h("div", { class: "rp-figs" }, items.filter(Boolean).map(([label, value, tone]) => ui.h("div", { class: `rp-fig${tone ? ` ${tone}` : ""}` }, ui.h("b", {}, value), ui.h("span", {}, label))));
 /** A wide table that becomes records on a phone: the first column is the record's title, the last its value, the rest a line under. The print copy always uses the table. */

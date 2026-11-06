@@ -1,7 +1,7 @@
 // modules/reports/retirement/view.js -- DOM only. The retirement report as a printable sheet: a
 // plain-words opening, the range of outcomes chart, the plan's figures, history, Social Security,
 // how the money comes out, required withdrawals, the plan every five years, the market stress tests.
-import { reportFrame, figs, rtable, wideTable, section, list } from "../report-kit.js";
+import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
 import { bandChart } from "../../retirement/charts.js";
 
 const lc = (s) => String(s).charAt(0).toLowerCase() + String(s).slice(1);   // "Taxable, then pre-tax, then Roth" -> "taxable, then pre-tax, then Roth"
@@ -15,7 +15,7 @@ export function render(page, ctx) {
   const longDate = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const host = ui.h("div", {}, ui.notice("info", "Putting the retirement report together (this runs the simulations)..."));
   page.append(host);
-  ctx.computeRemote("reports/retirement", { today: fmt.today() }).then((d) => {
+  settleReport(ctx.computeRemote("reports/retirement", { today: fmt.today() }), host, ui, "retirement report", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Retirement report"),

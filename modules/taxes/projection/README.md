@@ -20,3 +20,15 @@ Working years are not taxed by the engine (wages and their tax are outside the p
 
 ## Ideas / not yet
 - Medicare premiums and the IRMAA surcharge as a cost line; state tax.
+
+## Review 2026-11-06
+- **No retirement year in the plan (fix round 6).** `noYears` = `noYearsWhy(people, year)` when `rows` is empty, else
+  null: everyone past the end age (this year - birth year >= end age): "Maya is 126, past the age the plan runs to (95)",
+  check "the birth date"; everyone's end age at or before their retirement age: "the plan runs to 60, and Maya retires at
+  70" (one end age and one retirement age; else "the plan ends before A and B retire"), check the retirement age and
+  "Plan to age"; else "the plan has no years after work stops". The page shows that in its hero, where it threw on
+  `d.rows[0].year` ("This page failed to render") for the same 17 qa households the Tax report hung on; the Tax report
+  says the same words. Test: module.test.mjs "no retirement year in the plan says why".
+- **One retirement year (verifier, fix round 6).** The hero read "1 years from 2026 to 2026, in today's dollars: $813 a year
+  on average ... The biggest year is 2026 at $813"; it reads "1 year, 2026, in today's dollars, filing single." with no
+  average and no biggest year, as the Tax report now says it. Test: "no retirement year in the plan says why".

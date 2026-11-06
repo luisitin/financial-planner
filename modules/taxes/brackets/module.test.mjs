@@ -77,3 +77,52 @@ test("Review 2026-11-06: a 0% next dollar is not 'covers part of the tax'; the c
   assert.ok(!jo.includes("covers part of") && jo.includes("Next dollar 0% less than the bracket: the child care credit covers the tax on more pay"), jo.slice(0, 900));
   assert.ok(!le.includes("covers part of") && le.includes("Next dollar 0% less than the bracket: with the child care credit, the credits cover the tax on more pay"), le.slice(0, 900));
 });
+
+// --- Review 2026-11-06 (fix round 6) --------------------------------------------------------------------------------------
+/** A household with child care (the verifier's random households): `fs`, `kids` under 13, pay for A (and B), daycare a month, a child care account on A. */
+function careHousehold({ fs, kids, pa, pb = 0, care, acct = 0 }) {
+  const p = emptyPlan(); p.household.filingStatus = fs; p.household.state = "TX";
+  p.household.people = [{ id: "a", name: "A", role: "self", birthDate: "1988-01-01" }];
+  if (fs === "married_joint") p.household.people.push({ id: "b", name: "B", role: "partner", birthDate: "1989-01-01" });
+  for (let k = 0; k < kids; k++) p.household.people.push({ id: `k${k}`, name: `K${k}`, role: "dependent", birthDate: `${2015 + k * 3}-05-01` });
+  p.income = [{ id: "i0", name: "pay", type: "salary", personId: "a", amount: pa, period: "annual", growth: 0, taxable: true }];
+  if (pb) p.income.push({ id: "i1", name: "pay", type: "salary", personId: "b", amount: pb, period: "annual", growth: 0, taxable: true });
+  p.expenses = [{ id: "c", name: "Daycare", category: "childcare", amount: care, period: "monthly" }];
+  if (acct) p.whatIfs = { benefits: { a: { dcfsaElect: acct, planYear: 2026 } } };
+  return p;
+}
+
+test("Review 2026-11-06: Brackets and the Federal estimate use one threshold for 'the child care credit moves the next dollar'", async () => {
+  const { compute: federal, careMovesNextDollar, CARE_MOVES_BY } = await import("../federal/compute.js");
+  // the verifier's household 584 (below): the two pages must give one answer
+  { const q = careHousehold({ fs: "married_joint", kids: 3, pa: 124720, pb: 77369, care: 2000, acct: 5000 });
+    assert.equal(compute(q, { today: "2026-11-06" }).careMoves, federal(q, { today: "2026-11-06" }).careSets !== null, "Brackets and the Federal estimate disagree"); }
+  // the rule: half a cent or more against the cost without the credit, to the billionth (12.5 cents shows as 13)
+  assert.equal(CARE_MOVES_BY, 0.005);
+  assert.equal(careMovesNextDollar(0.2225, 0.22), false, "a quarter of a cent: the bracket is the reason");
+  assert.equal(careMovesNextDollar(0.125, 0.12), true, "half a cent: 13 cents shown against the 12% bracket");
+  assert.equal(careMovesNextDollar(0.1 + 0.005, 0.1), true, "floating-point noise below half a cent does not decide it");
+  assert.equal(careMovesNextDollar(0.12 + 0.0049999, 0.12), false);
+  assert.equal(careMovesNextDollar(0, 0.0041), false); assert.equal(careMovesNextDollar(0, 0.12), true);
+  // the verifier's random household 584: joint, 124,720 + 77,369, three children, 2,000 a month of daycare, a 5,000 account.
+  // The next dollar is 22.25 cents against 22 without the credit: Brackets said the credit moves it (0.0005), the Federal
+  // estimate said not (0.005)
+  const p584 = careHousehold({ fs: "married_joint", kids: 3, pa: 124720, pb: 77369, care: 2000, acct: 5000 });
+  const f584 = federal(p584, { today: "2026-11-06" }), b584 = compute(p584, { today: "2026-11-06" });
+  assert.ok(Math.abs(f584.nextDollar - 0.2225) < 1e-9 && Math.abs(f584.nextDollarNoCare - 0.22) < 1e-9, `${f584.nextDollar} ${f584.nextDollarNoCare}`);
+  assert.equal(f584.careSets, null); assert.equal(b584.careMoves, false, "the same answer as the Federal estimate");
+  // household 740: head of household, 44,586, two children, 1,400 a month, a 5,000 account: 10.5 cents against 10 (shown
+  // as 11 against the 10% bracket). Both pages now say the credit getting smaller is the reason
+  const p740 = careHousehold({ fs: "head_of_household", kids: 2, pa: 44586, care: 1400, acct: 5000 });
+  const f740 = federal(p740, { today: "2026-11-06" }), b740 = compute(p740, { today: "2026-11-06" });
+  assert.ok(Math.abs(f740.nextDollar - 0.105) < 1e-9 && Math.abs(f740.nextDollarNoCare - 0.1) < 1e-9, `${f740.nextDollar} ${f740.nextDollarNoCare}`);
+  assert.equal(f740.careSets, "falls"); assert.equal(b740.careMoves, true);
+  // on 300 random households with child care (a Park and Miller generator) the two pages always agree
+  const M = 2 ** 31 - 1; let seed = 7; const rnd = () => (seed = (seed * 16807) % M) / M; const pick = (a) => a[Math.floor(rnd() * a.length)];
+  for (let i = 0; i < 300; i++) {
+    const fs = pick(["married_joint", "head_of_household", "single"]);
+    const p = careHousehold({ fs, kids: 1 + Math.floor(rnd() * 3), pa: Math.round(15000 + rnd() * 250000), pb: fs === "married_joint" && rnd() > 0.2 ? Math.round(rnd() * 120000) : 0, care: pick([200, 500, 900, 1400, 2000]), acct: rnd() < 0.3 ? pick([2000, 5000, 7500]) : 0 });
+    const f = federal(p, { today: "2026-11-06" }), b = compute(p, { today: "2026-11-06" });
+    assert.equal(b.careMoves, f.careSets !== null, `household ${i}: ${f.nextDollar} vs ${f.nextDollarNoCare}`);
+  }
+});

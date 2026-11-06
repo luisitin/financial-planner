@@ -2,8 +2,8 @@
 // federal brackets, how much room is left before the next rate, what more income would cost
 // (the true marginal rate, which can exceed the bracket when benefits or gains get pulled
 // along), and the ladder above you.
-import { taxInputs, nextDollarOf } from "../federal/compute.js";
-import { federalTax, bracketsFor } from "../../../core/math/tax.js";
+import { taxInputs, nextDollarOf, careMovesNextDollar } from "../federal/compute.js";
+import { federalTax, bracketsFor, marginalRate, careStep } from "../../../core/math/tax.js";
 
 /**
  * compute(plan, { today, extra }) -> {
@@ -48,7 +48,9 @@ export function compute(plan, params = {}) {
   // play), so this page and the Federal estimate say the same cents (care fourth pass)
   const marginal = nextDollarOf(b.inputs, b.params);
   // whether the child care credit moves it (it shrinks as income rises, or covers the tax on more pay), so the page says so
-  const careMoves = !!b.inputs.care && Math.abs(marginal - nextDollarOf({ ...b.inputs, care: null }, b.params)) > 0.0005;
+  // by the Federal estimate's own rule (careMovesNextDollar, against the 1,000 probe without the credit), so the two pages
+  // always agree on whether the credit is the reason (Review 2026-11-06: 0.0005 here, 0.005 there)
+  const careMoves = !!b.inputs.care && careStep(b.filingStatus, b.params) > 0 && careMovesNextDollar(marginal, marginalRate({ ...b.inputs, care: undefined }, b.params));
   // the care credit alone covers all the income tax (it is held to the tax), as the Federal estimate words it: at a 0% next
   // dollar the page names it only then, else "the credits" (Review 2026-11-06: "covers part of the tax" was said at 0%)
   const careCoversTax = careMoves && (Number(r.credits?.careCredit) || 0) >= (Number(r.incomeTax) || 0) - 0.5;

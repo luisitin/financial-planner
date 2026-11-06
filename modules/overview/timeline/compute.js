@@ -146,6 +146,17 @@ export function compute(plan, params = {}) {
       const when = Math.round(sp.claimAge * 12) < Math.round(fra.asYears * 12) ? "early, so smaller for life" : Math.round(sp.claimAge * 12) > Math.round(fra.asYears * 12) ? "late, so bigger for life" : "at full retirement age";
       add({ id: `social-${p.id}`, kind: "social", date: claimDate, personId: p.id, title: `${name}'s Social Security starts`, detail: `About ${fmtMoney(sp.monthly, cur)} a month in today's dollars, claimed at ${fmtAge(sp.claimAge)}: ${when}. It rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
     } else add({ id: `social-${p.id}`, kind: "social", date: dateAtAge(p.birthDate, 62), personId: p.id, title: `${name} can claim Social Security`, detail: "62 is the earliest age. There is no estimate in the plan yet: add one so the plan counts it.", tone: "warn", go: ["retirement", "social-security"] });
+    // a spouse's benefit on the partner's record, when the plan counts it (Social Security's couple.spousalCounted, the
+    // projection's "<name>'s spouse's benefit" line), from the month it starts (couple.spousalStartAge: the later of their own
+    // claim and the partner's, never before 62). One already being paid has no start ahead, so no event (Review 2026-11-06)
+    const top = ss.couple?.spousalCounted?.[p.id] ?? 0, startAge = ss.couple?.spousalStartAge?.[p.id];
+    const other = top > 0.5 ? ss.people.find((x) => x.id !== p.id && x.birthYear) : null;
+    // never dated before the partner's own claim day it waits for (verifier: Sam's on the 10th, Ruth's claim on the 15th of
+    // the same month, so "once both have claimed" was listed before Ruth's claim); the month is the same either way
+    const otherBorn = other ? adults.find((q) => q.id === other.id)?.birthDate : null;
+    const otherClaim = other && !other.claimed && otherBorn ? addMonths(otherBorn, Math.round(other.claimAge * 12)) : null;
+    const spousalDate = Number.isFinite(startAge) ? addMonths(p.birthDate, Math.round(startAge * 12)) : null;
+    if (other && spousalDate) add({ id: `spousal-${p.id}`, kind: "social", date: otherClaim && otherClaim > spousalDate ? otherClaim : spousalDate, personId: p.id, title: `${name}'s spouse's benefit starts`, detail: `About ${fmtMoney(Math.round(top), cur)} a month more in today's dollars, on ${other.name || "your partner"}'s record, once both have claimed. It is paid with ${name}'s own Social Security and rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
     add({ id: `medicare-${p.id}`, kind: "medicare", date: dateAtAge(p.birthDate, 65), personId: p.id, title: `${name} joins Medicare`, detail: "Sign up in the three months before the 65th birthday to avoid a lifelong late penalty on Part B.", go: ["retirement", "projection"] });
     if (hasType(p, RMD_ACCOUNT_TYPES)) {
       const startAge = rmdStartAge(p.birthDate), sy = rmdStartYear(p.birthDate);
@@ -226,9 +237,9 @@ export function compute(plan, params = {}) {
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
   }
 
-  // order: by date, then a fixed order of kinds inside a day
-  const rank = Object.keys(KINDS);
-  events.sort((a, b) => (a.date ?? `${a.year}-01-01`).localeCompare(b.date ?? `${b.year}-01-01`) || rank.indexOf(a.kind) - rank.indexOf(b.kind));
+  // order: by date, then a fixed order of kinds inside a day; a spouse's benefit after the claims it waits for on the same day
+  const rank = Object.keys(KINDS), spousal = (e) => (String(e.id).startsWith("spousal-") ? 1 : 0);
+  events.sort((a, b) => (a.date ?? `${a.year}-01-01`).localeCompare(b.date ?? `${b.year}-01-01`) || rank.indexOf(a.kind) - rank.indexOf(b.kind) || spousal(a) - spousal(b));
 
   // years that have something in them, each with everyone's age that year and the quiet years before it
   const byYear = new Map();

@@ -1,6 +1,6 @@
 // modules/reports/tax/view.js -- DOM only. The tax report as a printable sheet: this year's estimate
 // step by step, the rates, the brackets, how it gets paid, gains, the HSA, and the tax in retirement.
-import { reportFrame, figs, rtable, section, list } from "../report-kit.js";
+import { reportFrame, figs, rtable, section, list, settleReport } from "../report-kit.js";
 import { ratePct } from "../../taxes/federal/compute.js";
 
 export function render(page, ctx) {
@@ -12,7 +12,7 @@ export function render(page, ctx) {
   const longDate = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const host = ui.h("div", {}, ui.notice("info", "Putting the tax report together..."));
   page.append(host);
-  ctx.computeRemote("reports/tax", { today: fmt.today() }).then((d) => {
+  settleReport(ctx.computeRemote("reports/tax", { today: fmt.today() }), host, ui, "tax report", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax report"),
@@ -23,14 +23,32 @@ export function render(page, ctx) {
     const { wrap, sheet } = reportFrame(ui, { title: `Tax report ${d.year}` });
     host.append(wrap);
     const t = d.thisYear, pay = d.paying;
+    // filing separately: each return's own bracket, room and next dollar, and its own ladder (compute thisYear.returns), not the
+    // two returns' combined taxable income laid on one return's ladder (Review 2026-11-06)
+    const sepRets = Array.isArray(t.returns) && t.returns.length > 1 ? t.returns : null;
+    const who = (x) => `${x.name ?? "one spouse"}'s`;
+    const roomWords = (x, short = false) => (Number.isFinite(x.roomInBracket) ? `${money(x.roomInBracket)} more ${short ? "" : "taxable income "}fits in the ${pct(x.bracketRate, 0)} bracket before ${pct(x.nextRate, 0)} starts` : `that is the top bracket`);
     sheet.append(ui.h("h1", {}, `Tax report, ${d.year}`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}federal income tax${d.isIndexed ? " (this year's tables are estimated from the latest published)" : ""} · prepared ${longDate(d.today)}`),
-      ui.h("p", { class: "rp-lead" }, `${t.totalTax < -0.5 ? `No federal tax for ${d.year}: the credits are about ${money(-t.totalTax)} more than the tax, and that comes back with the refund.` : `Federal tax for ${d.year} comes to about ${money(t.totalTax)}${t.seTax >= 1 ? ` (${money(t.seTax)} of it self-employment tax)` : ""}: ${ratePct(t.effectiveRate)} of income.`} The next dollar of ordinary income pays ${pct(t.nextDollar ?? t.marginal, 0)}; ${Number.isFinite(t.roomInBracket) ? `${money(t.roomInBracket)} more taxable income fits in the ${pct(t.bracketRate, 0)} bracket before ${pct(t.nextRate, 0)} starts` : `that is the top bracket`}.`));
+      ui.h("p", { class: "rp-lead" }, `${t.totalTax < -0.5 ? `No federal tax for ${d.year}: the credits are about ${money(-t.totalTax)} more than the tax, and that comes back with the refund.` : `Federal tax for ${d.year} comes to about ${money(t.totalTax)}${t.seTax >= 1 ? ` (${money(t.seTax)} of it self-employment tax)` : ""}: ${ratePct(t.effectiveRate)} of income.`} ${sepRets
+        ? `Filing separately, each return has its own brackets: ${sepRets.map((x, i) => (i ? `on ${who(x)}, the next dollar pays ${pct(x.nextDollar, 0)}, and ${roomWords(x, true)}` : `on ${who(x)} return the next dollar of ordinary income pays ${pct(x.nextDollar, 0)}, and ${roomWords(x)}`)).join("; ")}.`
+        : `The next dollar of ordinary income pays ${pct(t.nextDollar ?? t.marginal, 0)}; ${roomWords(t)}.`}`));
     sheet.append(section(ui, `${d.year}, step by step`,
       rtable(ui, [{ label: "", get: (s) => ui.h("span", {}, ui.h("b", {}, s.label), s.sub ? ui.h("span", { class: "rp-sub" }, ` · ${s.sub}`) : null) }, { label: "Amount", num: true, get: (s) => money(s.amount) }], d.thisYear.steps)));
-    sheet.append(section(ui, "The rates",
-      figs(ui, [t.totalTax < -0.5 ? ["Credits back", money(-t.totalTax)] : ["Federal tax", money(t.totalTax)], t.totalTax < -0.5 ? null : ["Of all income", ratePct(t.effectiveRate)], ["The next dollar", pct(t.nextDollar ?? t.marginal, 0)], ["Your bracket", pct(t.bracketRate, 0)], Number.isFinite(t.roomInBracket) ? ["Room left in it", big(t.roomInBracket)] : null])));
-    sheet.append(section(ui, "The brackets",
-      rtable(ui, [{ label: "Rate", get: (l) => ui.h("span", { class: l.current ? "rp-ok" : null }, pct(l.rate, 0)) }, { label: "Taxable income", get: (l) => (Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`) }, { label: "Yours in it", num: true, get: (l) => (l.filled > 0 ? money(l.filled) : "-") }, { label: "Tax", num: true, get: (l) => (l.tax > 0 ? money(l.tax) : "-") }], d.ladder)));
+    const head = [t.totalTax < -0.5 ? ["Credits back", money(-t.totalTax)] : ["Federal tax", money(t.totalTax)], t.totalTax < -0.5 ? null : ["Of all income", ratePct(t.effectiveRate)]];
+    // filing separately: the household's tax and rate, then a row a figure (the next dollar, the bracket, the room) with a
+    // column a return, so the table stays inside a 360 px phone (verifier: a row a return with four columns was 329 px in a
+    // 320 px section, and scrolled sideways at 360 px)
+    const perReturn = [["The next dollar", (x) => pct(x.nextDollar, 0)], ["Bracket", (x) => pct(x.bracketRate, 0)], ["Room left in it", (x) => (Number.isFinite(x.roomInBracket) ? money(x.roomInBracket) : "top rate")]];
+    sheet.append(sepRets
+      ? section(ui, "The rates", figs(ui, head),
+        rtable(ui, [{ label: "", get: ([label]) => ui.h("b", {}, label) }, ...sepRets.map((x) => ({ label: who(x), num: true, get: ([, f]) => f(x) }))], perReturn))
+      : section(ui, "The rates",
+        figs(ui, [...head, ["The next dollar", pct(t.nextDollar ?? t.marginal, 0)], ["Your bracket", pct(t.bracketRate, 0)], Number.isFinite(t.roomInBracket) ? ["Room left in it", big(t.roomInBracket)] : null])));
+    const ladderTable = (rows, mine) => rtable(ui, [{ label: "Rate", get: (l) => ui.h("span", { class: l.current ? "rp-ok" : null }, pct(l.rate, 0)) }, { label: "Taxable income", get: (l) => (Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`) }, { label: mine, num: true, get: (l) => (l.filled > 0 ? money(l.filled) : "-") }, { label: "Tax", num: true, get: (l) => (l.tax > 0 ? money(l.tax) : "-") }], rows);
+    sheet.append(sepRets
+      ? section(ui, "The brackets", ui.h("p", {}, "Filing separately, each of you has your own ladder, on the brackets for a separate return."),
+        ...sepRets.flatMap((x) => [ui.h("h3", {}, `${who(x)} return: ${money(x.ordinaryTaxable)} of ordinary taxable income`), ladderTable(x.ladder, `${who(x)} in it`)]))
+      : section(ui, "The brackets", ladderTable(d.ladder, "Yours in it")));
     const payLines = [];
     // the same answer as Withholding check: typed figures, else withholding estimated from pay
     const took = pay.noPay && pay.from === "none" ? `Nothing is taken out of pay${pay.estimatesPaid > 0 ? `; estimated payments so far come to ${money(pay.estimatesPaid)}` : ""}`
@@ -58,8 +76,12 @@ export function render(page, ctx) {
     if (d.hsa) more.push(`The health savings account saves about ${money(d.hsa.taxSaved)} of tax this year; ${money(d.hsa.room)} of this year's ${money(d.hsa.limit)} limit is left.`);
     if (more.length) sheet.append(section(ui, "Gains and the HSA", list(ui, more)));
     const r = d.retirement;
-    if (r.ready) sheet.append(section(ui, "Tax in retirement",
-      ui.h("p", {}, `Over ${r.years} retirement years the plan pays about ${big(r.total)} of federal tax in today's dollars, ${big(r.average)} a year on average; the most in ${r.peak.year} (${big(r.peak.taxes)}${r.peak.why ? `, ${r.peak.why}` : ""}).${r.bracketsOn ? "" : ` The plan itself uses a flat rate (which would charge ${big(r.flatTaxes)}); these figures run the same years through the real brackets.`}`),
+    // no retirement year inside the plan (it ends before retirement, or everyone is past its end age): there is no peak year,
+    // so the section says why instead of reading r.peak (Review 2026-11-06: 17 qa households never finished)
+    if (r.ready && !(r.years > 0)) sheet.append(section(ui, "Tax in retirement",
+      ui.h("p", {}, `There are no retirement years to tax: ${r.noYears?.why ?? "the plan has no years after work stops"}. Check ${r.noYears?.check ?? 'the retirement age and "Plan to age"'} on the People page.`)));
+    else if (r.ready) sheet.append(section(ui, "Tax in retirement",
+      ui.h("p", {}, `Over ${r.years === 1 ? "1 retirement year" : `${r.years} retirement years`} the plan pays about ${big(r.total)} of federal tax in today's dollars${r.years === 1 ? "" : `, ${big(r.average)} a year on average`}${r.peak && r.years > 1 ? `; the most in ${r.peak.year} (${big(r.peak.taxes)}${r.peak.why ? `, ${r.peak.why}` : ""})` : ""}.${r.bracketsOn ? "" : ` The plan itself uses a flat rate (which would charge ${big(r.flatTaxes)}); these figures run the same years through the real brackets.`}`),
       rtable(ui, [{ label: "Bracket", get: (b) => pct(b.rate, 0) }, { label: "Years in it", num: true, get: (b) => String(b.years) }], r.byBracket)));
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. An estimate of federal income tax from the plan's figures, not a return: state tax, the alternative minimum tax and some credits are not included. Check with the return you file.`));
   });

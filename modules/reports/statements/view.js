@@ -1,7 +1,7 @@
 // modules/reports/statements/view.js -- DOM only. The three statements as a printable sheet: the
 // balance sheet (by kind and by owner), the income statement (a year from the plan, and the last
 // twelve months from the bank files), and the cash-flow statement.
-import { reportFrame, rtable, section, list } from "../report-kit.js";
+import { reportFrame, rtable, section, list, settleReport } from "../report-kit.js";
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -12,7 +12,7 @@ export function render(page, ctx) {
   const monthYear = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const host = ui.h("div", {}, ui.notice("info", "Drawing up the statements..."));
   page.append(host);
-  ctx.computeRemote("reports/statements", { today: fmt.today() }).then((d) => {
+  settleReport(ctx.computeRemote("reports/statements", { today: fmt.today() }), host, ui, "financial statements", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Financial statements"),

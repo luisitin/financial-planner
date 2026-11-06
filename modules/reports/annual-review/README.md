@@ -51,3 +51,12 @@ the Visa card; its July file isn't in, so it counts as one line until you import
 
 ## Ideas / not yet
 - Last year's pack frozen and kept (so a later edit does not rewrite history); the year's tax return beside the estimate; investment returns for the year (Performance).
+
+## Review 2026-11-06
+- **Every report finishes (fix round 6).** The page draws its compute's answer through `settleReport` (report-kit): a
+  compute that failed (the shell's `{ error }`), a drawing that throws or a remote call that rejects shows "The year in review
+  could not be put together from this plan: something in it stopped the figures being worked out. Check the birth dates
+  and the ages on the People page, then reload the page." in place of the loading line. A scan of all 1,406 qa households
+  and the fixtures found no other report that hung; for the four "older than 120" households (born 1900) this page's
+  compute fails inside the retirement projection, and the page read "The review needs .". Test: reports/tax "every report finishes
+  when its figures cannot be worked out (settleReport)".

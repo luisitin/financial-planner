@@ -2,7 +2,7 @@
 // opening paragraph, then where you stand, each month's money, retirement, protection, goals, debts,
 // the milestones ahead, the next steps, the plan's health and the assumptions. "Print or save as PDF"
 // prints the same sheet on its own (report-kit.js). Runs on the PC when connected.
-import { reportFrame, figs, rtable, section, list } from "../report-kit.js";
+import { reportFrame, figs, rtable, section, list, settleReport } from "../report-kit.js";
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -14,7 +14,7 @@ export function render(page, ctx) {
   const monthYear = (iso) => iso ? new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "-";
   const host = ui.h("div", {}, ui.notice("info", "Putting your plan summary together..."));
   page.append(host);
-  ctx.computeRemote("reports/plan-summary", { today: fmt.today() }).then((d) => {
+  settleReport(ctx.computeRemote("reports/plan-summary", { today: fmt.today() }), host, ui, "plan summary", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Plan summary"),

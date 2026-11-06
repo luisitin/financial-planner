@@ -41,3 +41,38 @@ of ordinary income pays 14%" and "4.9% of income" (it said 12% from the 1,000 pr
 - The next dollar is the Federal estimate's, so its fix (verifier, E: a bracket's edge inside the child care credit's step
   is not averaged in) reaches "The next dollar of ordinary income pays ...": Pat & Sam read "pays 17%; $2,000 more taxable
   income fits in the 12% bracket", now 12%. Test: federal "a bracket's edge inside the care credit's step".
+- **No retirement year: the report finishes and says why (fix round 6).** 17 qa households (H-0008, H-0090, H-0091,
+  H-0191, H-0208, H-0290, H-0291, H-0691, H-0891, H-0908, H-0990, H-0991, H-1091, H-1191, H-1308, H-1390, H-1391: a plan
+  that runs to an age before retirement, retirement past the plan's end, or a birth date that puts the person past the
+  end age) have no retired year in the tax projection, so `retirement.peak` is null; the view read `r.peak.year` inside
+  `.then`, threw, and the page stayed on "Putting the tax report together...". `retirement.noYears` (taxes/projection
+  `noYearsWhy`) now says why: "There are no retirement years to tax: the plan runs to 60, and Maya retires at 70. Check the
+  retirement age and "Plan to age" on the People page." / "Maya is 126, past the age the plan runs to (95). Check the
+  birth date on the People page." One retirement year reads "Over 1 retirement year ..." without an average or a peak.
+  Test: "a plan with no retirement year finishes the report and says why".
+- **Filing separately, the rates and brackets per return (fix round 6).** `thisYear.returns`: each return's ordinary
+  taxable income, bracket, room (the top of its own rung less its own ordinary taxable income), next rate, next dollar
+  (`nextDollarOf` with that return as the one more income lands on, `separateTo`; the shown one's is the Federal
+  estimate's) and its own ladder (`bracketsFor` on the separate schedule; filled = min(ordinary, top) - bottom, tax =
+  filled x rate). The opening says "Filing separately, each return has its own brackets: on Rob's return the next dollar
+  of ordinary income pays 24%, and $88,275 more taxable income fits in the 24% bracket before 32% starts; on Kim's, the
+  next dollar pays 22%, and $41,200 more fits in the 22% bracket before 24% starts" (H-0599), "The rates" has a row a
+  return (its next dollar, bracket and room, to the dollar as the opening says it), and "The brackets" one ladder per return. Before, the two returns' combined
+  taxable income (178,000 for H-0599; 119,080 for the family filing separately) sat in the walk beside one return's room
+  ("$36,370 more taxable income fits in the 22% bracket"), with one ladder headed "Yours in it". Joint and single
+  returns: unchanged (`returns` null). Test: "filing separately, the rates and the brackets are each return's own".
+- The next dollar keeps the app's one convention, the next 1,000's cost: a return 650 below its bracket's top reads 16%
+  (650 at 12% and 350 at 22%), as the Federal estimate would say for it.
+- **Every report finishes (fix round 6).** The page draws its compute's answer through `settleReport` (report-kit): a
+  compute that failed (the shell's `{ error }`), a drawing that throws or a remote call that rejects shows "The tax report
+  could not be put together from this plan: something in it stopped the figures being worked out. Check the birth dates
+  and the ages on the People page, then reload the page." in place of the loading line. A scan of all 1,406 qa households
+  and the fixtures found no other report that hung. For the four "older than 120" households (born 1900) this page's
+  compute does not fail (the tax projection says why there is no retirement year); the retirement report, the plan summary
+  and the annual review do, inside the retirement projection, and now show the notice. Test: reports/tax "every report finishes
+  when its figures cannot be worked out (settleReport)".
+- **"The rates" filing separately: a column a return (verifier, fix round 6).** The per-return table had a row a return and
+  four columns ("Return", "Next dollar", "Bracket", "Room left in it"): 329 px wide in a 320 px section on a 390 px phone, and
+  the page scrolled 4 px sideways at 360 px. It is now a row a figure ("The next dollar", "Bracket", "Room left in it") with a
+  column a return ("Ana's", "Bo's"): 290 px at 360, also with long names. Test: "filing separately, the rates and the
+  brackets are each return's own".

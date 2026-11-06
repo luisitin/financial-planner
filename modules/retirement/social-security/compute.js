@@ -264,7 +264,9 @@ export function compute(plan, params = {}) {
  *   the top-up when the person has a figure of their own (with none, their own amount and so the top-up are not known)
  *   and it is not already in the Income line that pays them (SSA pays it with their own once the partner has claimed),
  *   else 0 }, spousalFromAge: { [id]: the age (whole years) the projection counts it from: the later of the two people's
- *   own start years, never before 62 }, survivorMonthly, bothMonthly (both own benefits and the counted top-ups),
+ *   own start years, never before 62 }, spousalStartAge: { [id]: the age, with months, it starts at and is reduced for (the
+ *   later of their own claim age and their age at the partner's claim, never before 62; the Timeline's date) },
+ *   survivorMonthly, bothMonthly (both own benefits and the counted top-ups),
  *   survivorYearly }
  */
 export function couple(people, { married = true } = {}) {
@@ -279,10 +281,12 @@ export function couple(people, { married = true } = {}) {
   const spousalCounted = { [a.id]: counts(a, b) ? spousal[a.id] : 0, [b.id]: counts(b, a) ? spousal[b.id] : 0 };
   const fromAge = (me, other) => Math.max(62, me.fromAge, other.birthYear + other.fromAge - me.birthYear);
   const spousalFromAge = { [a.id]: fromAge(a, b), [b.id]: fromAge(b, a) };
+  // the age (years, months as a fraction) the top-up starts at, as it is reduced for: the Timeline dates its start by it
+  const spousalStartAge = { [a.id]: startAge(a, b), [b.id]: startAge(b, a) };
   // the spousal top-up stops when the partner dies; the survivor amount on their record takes its place when it is larger
   const survivorMonthly = { [a.id]: Math.max(a.monthly, b.survivor), [b.id]: Math.max(b.monthly, a.survivor) };
   const bothMonthly = a.monthly + b.monthly + spousalCounted[a.id] + spousalCounted[b.id];
-  return { spousal, spousalCounted, spousalFromAge, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
+  return { spousal, spousalCounted, spousalFromAge, spousalStartAge, survivorMonthly, bothMonthly, survivorYearly: Math.max(survivorMonthly[a.id], survivorMonthly[b.id]) * 12 };
 }
 
 /** This year, from a person of compute's people (their birth year and age this year), or null without today. */

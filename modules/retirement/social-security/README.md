@@ -208,3 +208,9 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
   takes `{ married }`, and the hero, the folds and the projection follow. My choice: the relation, not the filing status,
   because a new plan's filing status defaults to single and a married couple typed only on People never sets it. The
   survivor figure still assumes marriage for an unmarried partner (older behaviour, a follow-up).
+
+## Review 2026-11-06
+- **`couple.spousalStartAge` (fix round 6).** The age, with months, a spouse's top-up starts at and is reduced for
+  (`startAge` in `couple()`: the later of 62, their own claim age and their age at the partner's claim, the partner's
+  counted as passed when already paid), returned so the Timeline can date "Sam's spouse's benefit starts". No figure
+  changes. Test: overview/timeline "a spouse's benefit on the partner's record is a Timeline event".

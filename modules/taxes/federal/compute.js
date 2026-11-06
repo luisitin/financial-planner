@@ -17,6 +17,39 @@ const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
  */
 export const ratePct = (x, dp = 1) => { const v = Number((Number(x) * 100).toPrecision(12)), f = 10 ** dp; return `${(Math.round(v * f) / f).toFixed(dp)}%`; };
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const dayWords = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? "")); return m ? `${MONTH_NAMES[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : String(iso ?? ""); };
+const EARNED_WORD = { salary: "pay", bonus: "bonus", business: "business income" };
+/**
+ * Earned income (pay, a bonus, business income) on the Income page that this year's estimate does not count, because the
+ * engine counts a year of what is coming in today (cashflow/income `active`, one-time amounts as none a year): a line that
+ * ended before today, one that starts after it, or a one-time amount (Review 2026-11-06, verifier follow-up: H-0221's pay
+ * ended August 15 and H-0319's 119,600 is "once", and the child care note said "none is on the Income page").
+ * `inc`: cashflow/income compute's result; `people`: the household's; `year`: the tax year. -> [{ personId, name, what,
+ * why: "ended" | "starts" | "once", date, amount, inYear (it could have paid in `year`: ended or starts in it, or a one-time
+ * amount undated or dated in it; only these are named as the reason) }]
+ */
+export function uncountedEarned(inc, people = [], year = null) {
+  const nameOf = (id) => people.find((p) => p.id === id)?.name ?? null;
+  const y = year === null || year === undefined ? null : String(year);
+  const inYear = (x) => !y || (x.period === "once" ? !x.startDate || String(x.startDate).slice(0, 4) === y : x.ended ? String(x.endDate).slice(0, 4) >= y : !x.startDate || String(x.startDate).slice(0, 4) <= y);
+  return (inc?.items ?? []).filter((x) => EARNED_WORD[x.type] && x.taxable !== false && (!x.active || x.period === "once") && (Number(x.amount) || 0) > 0)
+    .map((x) => ({ personId: x.personId ?? null, name: nameOf(x.personId), what: EARNED_WORD[x.type], why: x.period === "once" ? "once" : x.ended ? "ended" : "starts", date: x.period === "once" ? null : x.ended ? x.endDate : x.startDate, amount: Number(x.amount) || 0, inYear: inYear(x) }));
+}
+/**
+ * The plain words for `uncountedEarned` lines: "Dana's pay ended on August 15, 2026; this estimate counts only pay coming in
+ * today", "Carlos's 119,600 of pay is one-time; this estimate counts no one-time pay", or "" with none.
+ */
+export function uncountedWords(all) {
+  const list = (all ?? []).filter((x) => x.inYear !== false);
+  if (!list.length) return "";
+  const whose = (x) => (x.name ? `${x.name}'s` : "the");
+  const bits = list.slice(0, 3).map((x) => (x.why === "once" ? `${whose(x)} ${fmtInt(x.amount)} of ${x.what} is one-time` : `${whose(x)} ${x.what} ${x.why === "ended" ? "ended" : "starts"} on ${dayWords(x.date)}`));
+  const said = bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
+  const counts = [list.some((x) => x.why !== "once") ? "only pay coming in today" : null, list.some((x) => x.why === "once") ? "no one-time pay" : null].filter(Boolean).join(", and ");
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}; this estimate counts ${counts}.`;
+}
+
 /**
  * The itemized deductions that count, after the state-and-local cap, the medical floor and (from 2026)
  * the charity floor of 0.5% of income. On a separate return the cap, its floor and the income where
@@ -438,6 +471,12 @@ export function taxInputs(plan, params = {}) {
   const dependentsUnder17 = given(t.dependentsUnder17) ? Number(t.dependentsUnder17) : under17Auto;
   const otherDependents = given(t.otherDependents) ? Number(t.otherDependents) : deps.length - under17Auto;
   const paid = (Number(ty.paid) || 0) + (t.estimated?.paid ?? []).reduce((s, x) => s + (Number(x) || 0), 0);
+  // earned income on the Income page this year's estimate leaves out (ended, not started, one-time), by person: the notes
+  // below say "counted for <year>" and why for those, not "none is on the Income page"
+  const uncounted = uncountedEarned(inc, people, year);
+  // nothing counted at all (no line coming in, or only one-time ones): the note at the end says so once, with the reason
+  const nothingCounted = !typed("wages") && (!active.length || (uncounted.length > 0 && active.every((x) => x.period === "once")));
+  const uncountedOf = (ids) => uncounted.filter((x) => ids.includes(x.personId) || (x.personId === null || !adultOf(x.personId) ? ids.includes(me?.id ?? null) : false));
   // the child care credit's figures (worked above, before the wages): where they came from, and why there is none
   if (care) {
     const c = care, say = (names) => names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
@@ -455,11 +494,19 @@ export function taxInputs(plan, params = {}) {
     // no earned income on the return's lower side: care counts only up to it (21(d)(1)), so there is no credit; say why
     // (Review 2026-11-06, verifier follow-up: Kim & Lou, 70,000 + 0 filing jointly, read a $0 child care credit with no reason).
     // A spouse who is a full-time student or cannot look after themselves counts as earning 250 / 500 a month (21(d)(2)).
+    // Pay on the Income page that the estimate does not count (ended, not started, one-time) is said as "counted for <year>"
+    // with the reason, so the note does not claim none is on the Income page (Review 2026-11-06, verifier follow-up)
     if (c.expenses > 0 && c.persons > 0 && filingStatus !== "married_separate" && !c.spouseUnknown && !(c.earnedLow > 0.5)) {
       const none = c.joint ? c.earnedPeople.filter((x) => !(x.earned > 0.5)) : [];
+      const lost = uncountedOf(c.joint ? none.map((x) => x.id) : [c.filerId]);
+      const where = lost.length ? `counted for ${year}` : "on the Income page";
+      const so = lost.length ? "so this estimate has no child care credit" : "so there is no child care credit";
+      // typed wages go to the filer on a return with one adult; on a joint return they are shared by pay, so the hint is not given
+      const said = nothingCounted ? "" : uncountedWords(lost);
+      const hint = `${said ? ` ${said}` : ""}${!c.joint && lost.some((x) => x.inYear) ? " To count what was paid this year, type it as Wages this year below." : ""}`;
       notes.push(c.joint
-        ? `Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and ${none.length === 1 && none[0].name ? `${none[0].name} has no` : "neither of you has"} pay or business income on the Income page, so there is no child care credit. (A spouse who was a full-time student for five months of the year, or could not look after themselves, counts as earning $250 a month for one child or $500 for two or more; the plan does not track that.)`
-        : "Child care counts for the child care credit only up to your earned income (pay or business profit), and none is on the Income page, so there is no child care credit.");
+        ? `Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and ${none.length === 1 && none[0].name ? `${none[0].name} has no` : "neither of you has"} pay or business income ${where}, ${so}.${hint} (A spouse who was a full-time student for five months of the year, or could not look after themselves, counts as earning $250 a month for one child or $500 for two or more; the plan does not track that.)`
+        : `Child care counts for the child care credit only up to your earned income (pay or business profit), and none is ${where}, ${so}.${hint}`);
     }
     if (!c.elected && c.later.length) notes.push(`The child care account on Benefits elections is chosen for ${c.later[0].planYear}, so it is not counted in ${year}'s tax. (If it is this year's, choose ${year} as the year on that page.)`);
     // the child care account (careAccountRule): over a plan's own limit, lost beyond the care, taxed beyond the limit or the pay
@@ -479,8 +526,10 @@ export function taxInputs(plan, params = {}) {
         const split = many ? ` (${A.people.filter((x) => x.taxedAsPay > 0.5).map((x) => `${x.name ?? "one"} ${fmtInt(x.taxedAsPay)}`).join(", ")}, by what each put in)` : "";
         // none of it out of income (no earned income on the lower side): "None of", not "Only 0 of" (Review 2026-11-06)
         const zero = A.joint ? (c.earnedPeople ?? []).filter((x) => !(x.earned > 0.5)) : [];
+        // "has none counted for <year>" when that pay is on the Income page but ended, has not started or is one-time
+        const tail = uncountedOf(A.joint ? zero.map((x) => x.id) : [c.filerId]).length ? ` counted for ${year}` : "";
         notes.push(A.earnedCapped && A.excluded < 0.5
-          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${zero[0].name} has none` : "there is none"})` : "your earned income (there is none)"}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
+          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${zero[0].name} has none${tail}` : `there is none${tail}`})` : `your earned income (there is none${tail})`}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
           : A.earnedCapped
           ? `Only ${fmtInt(A.excluded)} of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? "the lower earner's earned income" : "your earned income"}. The other ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
           : `The child care account${many ? "s" : ""} pay${many ? "" : "s"} ${fmtInt(A.received)} of care, over this year's limit of ${fmtInt(A.limit)} for the household: ${fmtInt(A.taxedAsPay)} of it is taxed as pay${split}.`);
@@ -563,7 +612,9 @@ export function taxInputs(plan, params = {}) {
     inputs = { ...inputs, ...sums, separate, separateTo: me ? me.id : separate[0].personId };   // an amount another page adds lands on Me's return
     notes.push(`Filing separately is two returns: ${separate.map((x) => x.name).join("'s and ")}'s, each with their own pay, saving and income; income in neither name and the figures typed here are split in half${dependentsUnder17 + otherDependents > 0 ? `, and ${dependentsUnder17 + otherDependents === 1 ? "the child is" : "the children are"} on ${carrier.name}'s return` : ""}.`);
   }
-  if (!active.length && !typed("wages")) notes.push("Nothing on the Income page yet: the estimate is built from what you type below.");
+  // income on the page that is not counted this year (ended, not started, one-time) is not "nothing on the Income page"
+  // (Review 2026-11-06, verifier follow-up: H-0221 and H-0228, whose pay ended this year)
+  if (nothingCounted) notes.push(uncounted.length ? `Nothing on the Income page is counted for ${year}.${uncountedWords(uncounted) ? ` ${uncountedWords(uncounted)}` : ""} The estimate is built from what you type below.` : "Nothing on the Income page yet: the estimate is built from what you type below.");
   if (adults.length >= 2 && filingStatus === "single") notes.push("Two adults but the filing status is Single (People page). Married couples usually file together.");
   if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, tick that under Year and people.");
   return {
@@ -656,6 +707,17 @@ export function businessOn(inputs, owners = []) {
 }
 
 /**
+ * Whether the child care credit moves the next dollar's cost: by half a cent or more against the cost without it (the 1,000
+ * probe, `nextDollarNoCare`), worked to the billionth as nextDollarOf is, so floating-point noise never decides it. Half a
+ * cent counts: 12.5 cents shows as 13, so the bracket alone is not the reason. The one threshold the Federal estimate's
+ * `careSets` and Brackets' `careMoves` share (Review 2026-11-06, verifier: Brackets used more than 0.0005 and the Federal
+ * estimate more than 0.005 on the raw difference, and they disagreed on 12 of 1,500 random households; 0.125 against 0.12
+ * passed or failed by floating-point noise).
+ */
+export const CARE_MOVES_BY = 0.005;
+export const careMovesNextDollar = (nextDollar, noCare) => Math.round(Math.abs(Number(nextDollar) - Number(noCare)) * 1e9) >= Math.round(CARE_MOVES_BY * 1e9);
+
+/**
  * What the next dollar of ordinary income costs, as a rate: the next 1,000 (marginalRate), and, with the child care credit in
  * play, the credit's own effect worked over a whole number of its steps (careStep: 4,000 joint, else 2,000), so the figure
  * does not jump between 12 and 15 cents from one pay to the next. Only the credit's part is worked over the step: the rest is
@@ -729,7 +791,7 @@ export function compute(plan, params = {}) {
   // with it, so more pay costs less than the bracket (down to 0); `falls` when it shrinks (careFalls); null when it does not
   // move it (the cost without the credit, the 1,000 probe nextDollarOf starts from, is the same), so the bracket is the reason
   const noCare = step > 0 ? marginalRate({ ...b.inputs, care: undefined }, b.params) : nextDollar;
-  const careSets = step > 0 && Math.abs(nextDollar - noCare) > 0.005 ? (nextDollar < noCare ? "covers" : "falls") : null;
+  const careSets = step > 0 && careMovesNextDollar(nextDollar, noCare) ? (nextDollar < noCare ? "covers" : "falls") : null;
   const r = result;
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });

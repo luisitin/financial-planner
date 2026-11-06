@@ -74,3 +74,99 @@ test("Review 2026-11-06 (verifier): filing separately, Paying it says each retur
   assert.equal(compute(familyPlan(TODAY), { today: TODAY }).paying.returns, null);
   assert.ok(/left to pay at filing|a refund of about|about right/.test(j) && !j.includes("Filing separately, each return"));
 });
+
+// --- Review 2026-11-06 (fix round 6) --------------------------------------------------------------------------------------
+test("Review 2026-11-06: a plan with no retirement year finishes the report and says why (17 qa households never finished)", async () => {
+  // H-0008: the plan runs to 60 and Maya retires at 70; the tax projection has no retired row, so `peak` is null and the
+  // view threw on r.peak.year inside .then: the page stayed on "Putting the tax report together..."
+  const p = familyPlan(TODAY);
+  for (const x of p.household.people.filter((y) => y.role !== "dependent")) { x.retirementAge = 70; x.lifeExpectancy = 60; }
+  const t = await reportText(p);
+  assert.ok(!t.includes("Putting the tax report together"), t.slice(0, 300));
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.retirement.ready, true); assert.equal(d.retirement.years, 0); assert.equal(d.retirement.peak, null);
+  assert.deepEqual(d.retirement.noYears, { why: "the plan runs to 60, and Ana and Bo retire at 70", check: 'the retirement age and "Plan to age"' });
+  assert.ok(t.includes(`There are no retirement years to tax: the plan runs to 60, and Ana and Bo retire at 70. Check the retirement age and "Plan to age" on the People page.`), t);
+  assert.ok(t.includes("Prepared with Financial Planner on"), "the report reaches its last line");
+  // H-0090: born 1900, past the plan's end age
+  const old = familyPlan(TODAY); old.household.people = old.household.people.filter((y) => y.id !== "p-bo"); old.household.people.find((y) => y.id === "p-ana").birthDate = "1900-01-01";
+  old.household.filingStatus = "single"; old.income = old.income.filter((x) => x.personId !== "p-bo");
+  const to = await reportText(old);
+  assert.ok(to.includes("There are no retirement years to tax: Ana is 126, past the age the plan runs to (95). Check the birth date on the People page."), to.slice(-900));
+  // one retirement year: "1 retirement year", no average and no "the most in"
+  const one = structuredClone(old); one.household.people.find((y) => y.id === "p-ana").birthDate = "1990-05-20";
+  Object.assign(one.household.people.find((y) => y.id === "p-ana"), { retirementAge: 94, lifeExpectancy: 94 });
+  assert.equal(compute(one, { today: TODAY }).retirement.years, 1);
+  const t1 = await reportText(one);
+  assert.ok(t1.includes("Over 1 retirement year the plan pays") && !t1.includes("a year on average") && !t1.includes("the most in"), t1.slice(-900));
+});
+
+test("Review 2026-11-06: filing separately, the rates and the brackets are each return's own, not the two added up on one ladder", async () => {
+  // the family filing separately: the report read "The next dollar of ordinary income pays 22%; $X more taxable income fits
+  // in the 22% bracket" beside the two returns' combined taxable income, with Ana's room on the separate-return ladder
+  const p = familyPlan(TODAY); p.household.filingStatus = "married_separate";
+  const t = await reportText(p);
+  assert.ok(!t.includes("The next dollar of ordinary income pays"), "not the household's one line: " + t.slice(0, 600));
+  const d = compute(p, { today: TODAY });
+  const f = federal(p, { today: TODAY });
+  const rets = d.thisYear.returns;
+  assert.equal(rets.length, 2); assert.deepEqual(rets.map((x) => x.name), f.result.separate.map((x) => x.name));
+  for (const x of rets) {
+    const own = f.result.separate.find((y) => y.personId === x.personId);
+    assert.equal(x.ordinaryTaxable, own.ordinaryTaxable); assert.equal(x.bracketRate, own.bracketRate);
+    // the room is the top of the return's own rung less its own ordinary taxable income
+    const rung = x.ladder.find((l) => l.current);
+    assert.equal(rung.rate, x.bracketRate); assert.ok(Math.abs(x.roomInBracket - (rung.to - x.ordinaryTaxable)) < 0.005);
+    // the ladder fills to the return's own taxable income, and its tax is each slice at its rate
+    assert.ok(Math.abs(x.ladder.reduce((s, l) => s + l.filled, 0) - x.ordinaryTaxable) < 0.005);
+    assert.ok(Math.abs(x.ladder.reduce((s, l) => s + l.tax, 0) - x.ladder.reduce((s, l) => s + l.filled * l.rate, 0)) < 1e-6);
+  }
+  // the shown return's next dollar is the Federal estimate's; the other's is the same probe with more income on that return
+  const shown = rets.find((x) => x.shown);
+  assert.equal(shown.personId, f.result.separateTo); assert.equal(shown.nextDollar, f.nextDollar);
+  const { nextDollarOf } = await import("../../taxes/federal/compute.js");
+  const other = rets.find((x) => !x.shown);
+  assert.equal(other.nextDollar, nextDollarOf({ ...f.inputs, separateTo: other.personId }, f.params));
+  const m = (n) => `$${Math.round(n).toLocaleString("en-US")}`, pc = (r) => `${Math.round(r * 100)}%`;
+  const [a, b] = rets;
+  assert.ok(t.includes(`Filing separately, each return has its own brackets: on ${a.name}'s return the next dollar of ordinary income pays ${pc(a.nextDollar)}, and ${m(a.roomInBracket)} more taxable income fits in the ${pc(a.bracketRate)} bracket before ${pc(a.nextRate)} starts; on ${b.name}'s, the next dollar pays ${pc(b.nextDollar)}, and ${m(b.roomInBracket)} more fits in the ${pc(b.bracketRate)} bracket`), t.slice(0, 900));
+  assert.ok(t.includes(`${a.name}'s return: ${m(a.ordinaryTaxable)} of ordinary taxable income`) && t.includes(`${b.name}'s return: ${m(b.ordinaryTaxable)} of ordinary taxable income`), t);
+  // "The rates": a column a return (a row a figure, so it fits a 360 px phone), with the same room as the opening (to the dollar)
+  assert.ok(t.includes(`${a.name}'s ${b.name}'s The next dollar ${pc(a.nextDollar)} ${pc(b.nextDollar)} Bracket ${pc(a.bracketRate)} ${pc(b.bracketRate)} Room left in it ${m(a.roomInBracket)} ${m(b.roomInBracket)}`) && !t.includes("Your bracket"), t);
+  // filing jointly the report keeps the household's one ladder and line
+  assert.equal(compute(familyPlan(TODAY), { today: TODAY }).thisYear.returns, null);
+  const j = await reportText(familyPlan(TODAY));
+  assert.ok(j.includes("The next dollar of ordinary income pays") && j.includes("Your bracket") && !j.includes("Filing separately, each return has its own brackets"));
+});
+
+test("Review 2026-11-06: every report finishes when its figures cannot be worked out (settleReport)", async () => {
+  const { settleReport } = await import("../report-kit.js");
+  const node = (tag, kids = []) => ({ tag, kids, replaceChildren(...k) { this.kids = k; }, get textContent() { return this.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } });
+  const ui = { notice: (lv, t) => node(`notice:${lv}`, [t]) };
+  const quiet = console.error; console.error = () => {};
+  try {
+    // the compute failed (the shell's safeCompute answers { error }): not "The review needs ." or "It needs:" with nothing after
+    const h1 = node("host", [node("notice:info", ["Rolling the year up..."])]); let drew = false;
+    await settleReport(Promise.resolve({ error: "TypeError: x" }), h1, ui, "year in review", () => { drew = true; });
+    assert.equal(drew, false); assert.equal(h1.kids[0].tag, "notice:error");
+    assert.equal(h1.textContent, "The year in review could not be put together from this plan: something in it stopped the figures being worked out. Check the birth dates and the ages on the People page, then reload the page.");
+    // drawing throws part way (the tax report's r.peak.year): the half-drawn sheet gives way to the notice
+    const h2 = node("host", [node("notice:info", ["Putting the tax report together..."])]);
+    await settleReport(Promise.resolve({ ready: true }), h2, ui, "tax report", () => { h2.kids.push("half"); throw new TypeError("Cannot read properties of null (reading 'year')"); });
+    assert.equal(h2.kids.length, 1); assert.match(h2.textContent, /^The tax report could not be put together/);
+    // the remote compute rejects
+    const h3 = node("host", []);
+    await settleReport(Promise.reject(new Error("offline")), h3, ui, "retirement report", () => {});
+    assert.match(h3.textContent, /^The retirement report could not be put together/);
+    // a good answer is drawn
+    const h4 = node("host", []); let got = null;
+    await settleReport(Promise.resolve({ ready: true, n: 1 }), h4, ui, "tax report", (d) => { got = d.n; });
+    assert.equal(got, 1); assert.equal(h4.kids.length, 0);
+  } finally { console.error = quiet; }
+  // every report page goes through it
+  const fs = await import("node:fs");
+  for (const m of ["tax", "retirement", "plan-summary", "statements", "annual-review"]) {
+    const src = fs.readFileSync(new URL(`../${m}/view.js`, import.meta.url), "utf8");
+    assert.ok(/settleReport\(ctx\.computeRemote\(/.test(src) && !/ctx\.computeRemote\([^)]*\)\.then\(/.test(src), `${m}: its compute's answer is drawn through settleReport`);
+  }
+});

@@ -41,3 +41,12 @@ state's tax came off the month.
 "Can carry a month" reads "Can carry a month if markets do as well as average", and the sentence under it starts "If markets do
 as well as average, the plan can carry about $X a month more than it spends ... less in a bad run of years". The Monte Carlo run
 passes `careful: false` (the careful figure is not shown here).
+
+## Review 2026-11-06
+- **Every report finishes (fix round 6).** The page draws its compute's answer through `settleReport` (report-kit): a
+  compute that failed (the shell's `{ error }`), a drawing that throws or a remote call that rejects shows "The plan summary
+  could not be put together from this plan: something in it stopped the figures being worked out. Check the birth dates
+  and the ages on the People page, then reload the page." in place of the loading line. A scan of all 1,406 qa households
+  and the fixtures found no other report that hung; for the four "older than 120" households (born 1900) this page's
+  compute fails inside the retirement projection, and the page read "It starts from:" with nothing after it. Test: reports/tax "every report finishes
+  when its figures cannot be worked out (settleReport)".

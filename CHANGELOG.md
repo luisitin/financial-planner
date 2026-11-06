@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Every report finishes: the Tax report, Retirement report, Plan summary, Annual review and Statements no longer wait forever when a figure cannot be worked out, and a plan with no retirement years says why ("Ana is 126, past the age the plan runs to (95). Check the birth date on the People page").
+- [builder:claude-b] Filing separately: the bracket page and the Tax report show each return's own bracket, room and tax, one column a return; the child care credit uses one threshold on every tax page; Tax, year by year says "1 year" for a single retirement year.
+- [builder:claude-b] Timeline: a spouse's Social Security top-up gets its own event, dated no earlier than the claim it waits for.
 - [builder:claude-b] Retirement health cover, seventh pass: no premium credit on married-filing-separately returns; Medicare counts a supplement by default (the national Medigap Plan G average, $194 a month in 2025, KFF) unless you enter your own figure or 0; a husband or wife 65 or over is counted on Medicare unless you tick that a working spouse's job still covers them.
 - [builder:claude-b] Will the money last?: someone who reaches their planned stop age this year stops this year; someone 55 or over who said Not working now starts retirement now with a working partner's pay as income, while a parent at home under 55 keeps the household at work until the earning partner stops (my choice, in the README).
 - [builder:claude-b] Financial independence: other income that ends in steps is said step by step ("until 2030, then $14,400 until 2034"), and a parent at home is no longer told to set a retirement age of 35.
