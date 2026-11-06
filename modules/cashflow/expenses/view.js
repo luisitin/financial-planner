@@ -1,8 +1,9 @@
 // modules/cashflow/expenses/view.js -- DOM only. Totals, a breakdown by category with bars,
 // a tappable list of expenses, one form to add or edit.
 import { bankVsPlan } from "../income-statement/compute.js";
-import { compute, CATEGORIES, closeGap } from "./compute.js";
+import { compute, CATEGORIES, closeGap, addFromBank, fromBankWords } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
+import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 
 const FIELDS = [
   { key: "name", label: "What is it", type: "text", required: true, placeholder: "e.g. Rent" },
@@ -35,6 +36,8 @@ export function render(root, ctx) {
     // Income page's amount leaves (review 2026-11-02)
     // (the full-month figure to the nearest $10, as every page says it: Next best action's spare.fullAbout; round 5)
     // within $5 of $0 the full month "only just about breaks even" (spare.fullKind), never "about $0" (round 5)
+    // most of the spending is our guesses (spec 8.1): the figure waits for the real spending, said calmly
+    if (nba?.ready && nba.spare.waits) return linked(ui.stat("Left over", "Depends on your spending", `With our guesses, about ${fmt.money(Math.round(Math.abs(nba.spare.monthly) / 10) * 10, cur)} ${nba.spare.monthly < 0 ? "short" : "spare"} each month. Type yours in the list below.`, { link: true }));
     if (nba?.ready) { const v = nba.spare.monthly, held = nba.spare.held > 0.5, kind = nba.spare.fullKind, about = nba.spare.fullAbout; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}${held ? `, counting uneven pay at what you can count on` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : held ? `in a lean month; when all your uneven pay comes in, ${kind === "ahead" ? `about ${fmt.money(about, cur)} is left` : kind === "even" ? "it only just about breaks even" : `it is still about ${fmt.money(-about, cur)} short`}` : "more goes out than comes in, after tax and saving", { link: true })); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
   };
@@ -42,7 +45,7 @@ export function render(root, ctx) {
   // short each month: say by how much, then the fewest nice-to-haves that close it (tap one to change it), the biggest
   // must-pays when that is not enough, and the goal saving that could pause; Next best action's first step lands here
   const gapCard = () => {
-    if (!(nba?.ready && nba.spare.monthly < 0)) return null;
+    if (!(nba?.ready && nba.spare.monthly < 0) || nba.spare.waits) return null;   // never what to cut on our guesses
     // retired and living on savings as the plan intends: a calm line, not a list of things to cut
     if (nba.drawing) return ui.h("section", { class: "card" }, ui.h("h2", {}, "Drawn from savings"),
       ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. If markets do as well as average, your plan can carry ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less).`),
@@ -89,14 +92,15 @@ export function render(root, ctx) {
     ));
   } else {
     root.append(ui.card(null, ui.row(
-      ui.stat("Per month", fmt.money(d.monthly, cur), `${fmt.money(d.yearly, cur)} a year`),
+      ui.stat("Per month", fmt.money(d.monthly, cur), d.guessedMonthly > 0 ? (d.monthly - d.guessedMonthly < 5 ? "all of it our guesses for now" : `about ${fmt.money(Math.round(d.guessedMonthly / 10) * 10, cur)} of it our guesses for now`) : `${fmt.money(d.yearly, cur)} a year`),
       ui.stat("Must pay", fmt.money(d.essentialMonthly, cur), "per month, the bills that cannot wait"),
       ui.stat("Nice to have", fmt.money(d.optionalMonthly, cur), "per month, could be cut in a pinch"),
       leftTile(),
     ),
     // Next year and one-time amounts as one sentence under the tiles (design log 2026-09-16, pass 3).
     ui.h("p", { class: "muted small", style: { marginTop: "10px" } },
-      `Next year about ${fmt.money(d.nextYear, cur)} after inflation.` +
+      // (with our guesses in the month, to three figures: it is not known to the dollar)
+      `Next year about ${fmt.money(d.guessedMonthly > 0 ? Number(d.nextYear.toPrecision(3)) : d.nextYear, cur)} after inflation.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
     // the bank files show more going out than this page lists (bankVsPlan): each kind the bank shows more of, one tap to add
@@ -118,11 +122,14 @@ export function render(root, ctx) {
         ui.h("p", {}, `Over the last ${bk.months} whole months your bank files show about ${fmt.money(ten(bk.bankOut), cur)} a month going out; this page lists ${fmt.money(ten(bk.planOut), cur)}. Add what is missing, and every figure in the plan follows.${bk.cards >= 1 ? ` Another ${fmt.money(ten(bk.cards), cur)} a month went to cards whose files aren't in; that is not counted here until their files show what it bought.` : ""}`),
         bk.lines.length ? ui.h("ul", { class: "page-list" }, bk.lines.map((x) => ui.h("li", {},
           ui.h("span", { class: "ic" }, x.icon),
-          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.label), ui.h("div", { class: "d" }, x.plan > 0.5 ? `bank about ${fmt.money(ten(x.bank), cur)} a month, listed here ${fmt.money(ten(x.plan), cur)}` : `bank about ${fmt.money(ten(x.bank), cur)} a month, not listed here`)),
-          ui.h("span", { class: "st" }, ui.button(`Add ${fmt.money(ten(x.more), cur)}`, () => {
-            const name = x.plan > 0.5 ? `${x.label}: the rest the bank shows` : x.label;
-            pending = `Added ${name}: ${fmt.money(ten(x.more), cur)} a month.`;
-            store.update((p) => { p.expenses = p.expenses ?? []; p.expenses.push({ id: ui.uid(), name, category: x.category, amount: ten(x.more), period: "monthly", essential: x.essential, inflates: true }); });
+          // a row of ours (x.ours): the bank's figure takes the place of our guess, so the line says "our guess" and "Use"
+          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.label), ui.h("div", { class: "d" }, x.ours ? (x.plan - x.ours.amount > 0.5 ? `bank about ${fmt.money(ten(x.bank), cur)} a month, listed here ${fmt.money(ten(x.plan), cur)}, ${fmt.money(ten(x.ours.amount), cur)} of it our guess` : `bank about ${fmt.money(ten(x.bank), cur)} a month, our guess ${fmt.money(ten(x.plan), cur)}`) : x.plan > 0.5 ? `bank about ${fmt.money(ten(x.bank), cur)} a month, listed here ${fmt.money(ten(x.plan), cur)}` : `bank about ${fmt.money(ten(x.bank), cur)} a month, not listed here`)),
+          ui.h("span", { class: "st" }, ui.button(x.ours ? `Use ${fmt.money(ten(x.bank), cur)}` : `Add ${fmt.money(ten(x.more), cur)}`, () => {
+            // (the words first: the page draws again inside store.update)
+            const id = ui.uid(), said = addFromBank(structuredClone(plan), x, id);
+            if (!said) return;
+            pending = fromBankWords(said, cur);
+            store.update((p) => { addFromBank(p, x, id); });
           }, { class: "secondary small" }))))) : null,
         bk.unfiled >= 50 ? ui.h("p", { class: "muted small" }, `About ${fmt.money(ten(bk.unfiled), cur)} a month of it is not filed under a kind yet. `, ui.h("a", { href: "#/transactions/categorize" }, "File it \u203a")) : null, unsureNote()));
     }
@@ -139,18 +146,26 @@ export function render(root, ctx) {
           store.update((p) => { const e = (p.expenses ?? []).find((z) => z.id === x.id); if (e) e.endDate = before; });
         }), ui.button("It is something else", () => { const e = plan.expenses.find((z) => z.id === x.id); if (!e) return; editing = e; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" }))));
     }
+    // a kind that is only Get started's rows is named as the row ("Eating out and fun", "Home costs"), and one that is only
+    // our guesses says so, its bar in the calm colour (a guess never looks like a figure the person gave)
+    const ofKind = (c) => d.active.filter((x) => (CATEGORIES[x.category] ? x.category : "other") === c.category);
+    const isOurs = (x) => typeof x.id === "string" && isGuess(plan, `expenses[${x.id}].amount`);
+    const barOf = (c) => {
+      const xs = c.virtual ? [] : ofKind(c), setupOnly = xs.length > 0 && xs.every((x) => String(x.id ?? "").startsWith("setup-x-"));
+      return { label: setupOnly ? xs.map((x) => x.name).join(", ") : c.label, ours: xs.length > 0 && xs.every(isOurs) };
+    };
     if (d.byCategory.length) root.append(ui.card("Where it goes",
-      ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", {},
+      ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => { const b = barOf(c); return ui.h("li", {},
         ui.h("span", { class: "ic" }, c.icon),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(c.share * 100)}%` } }))),
-        ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.monthly, cur)), ui.h("div", { class: "muted small" }, `a month \u00b7 ${c.percent}%`)),
-      ))),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, b.label), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(c.share * 100)}%`, ...(b.ours ? { background: "var(--muted)" } : {}) } }))),
+        ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.monthly, cur)), ui.h("div", { class: "muted small" }, b.ours ? `a month \u00b7 our guess` : `a month \u00b7 ${c.percent}%`)),
+      ); })),
       // a payment kept only on the Debts page is counted, and said by name, so the total is never short of it
       d.fromDebts?.length ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, `Counted from the Debts page, as no expense here is ${d.fromDebts.length === 1 ? "its" : "their"} payment: ${d.fromDebts.map((x) => `${x.name} ${fmt.money(x.monthly, cur)} a month`).join(", ")}. `, ui.h("a", { href: "#/balance/liabilities" }, "Debts \u203a")) : null,
     ));
   }
   // the before-tax "you spend more than comes in" gives way to the after-tax figure the tile shows, whichever way it falls
-  for (const w of d.warnings) if (!(nba?.ready && w === d.overspend)) root.append(ui.notice("warn", w));
+  for (const w of d.warnings) if (!(nba?.ready && w === d.overspend) && !(d.guessedShare >= 0.5 && w === d.overspend)) root.append(ui.notice("warn", w));
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   let showForm = d.count === 0;
@@ -164,10 +179,13 @@ export function render(root, ctx) {
     const f = ui.form(FIELDS, values, (v) => {
       const clean = { name: v.name.trim(), category: v.category, amount: v.amount ?? 0, period: v.period, essential: !!v.essential, inflates: !!v.inflates, startDate: v.startDate || "", endDate: v.endDate || "" };
       if (!clean.name) return;
-      pending = editing ? "Changes saved." : `${clean.name} added.`;
+      // our guess typed over: the person's now (said, since the box opened with our figure in it)
+      const wasOurs = editing && typeof editing.id === "string" && isGuess(plan, `expenses[${editing.id}].amount`);
+      pending = editing ? (wasOurs ? `Changes saved: ${clean.name} is your figure now.` : "Changes saved.") : `${clean.name} added.`;
       store.update((p) => {
         p.expenses = p.expenses ?? [];
-        if (editing) { const i = p.expenses.findIndex((x) => x.id === editing.id); if (i >= 0) p.expenses[i] = { ...p.expenses[i], ...clean }; }
+        // saving the form makes its amount the person's, even when it is the figure we guessed (it stops being ours)
+        if (editing) { const i = p.expenses.findIndex((x) => x.id === editing.id); if (i >= 0) { p.expenses[i] = { ...p.expenses[i], ...clean }; clearGuess(p, `expenses[${editing.id}].amount`); } }
         else p.expenses.push({ id: ui.uid(), ...clean });
       });
       editing = null;
@@ -175,8 +193,10 @@ export function render(root, ctx) {
     // picking a category suggests whether it is a must-pay
     const catSel = f.querySelector("select[name=category]"), essBox = f.querySelector("input[name=essential]");
     if (catSel && essBox && !editing) catSel.addEventListener("change", () => { essBox.checked = (CATEGORIES[catSel.value] ?? CATEGORIES.other).essential; });
+    const ours = editing && typeof editing.id === "string" && isGuess(plan, `expenses[${editing.id}].amount`);
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an expense"),
+      ours ? ui.h("p", { class: "muted" }, "This amount is our guess for now: what a household like yours usually spends. Type what you really pay and save, and it is yours.") : null,
       f,
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
         if (!ui.confirm(`Remove ${editing.name}?`)) return;
@@ -190,7 +210,8 @@ export function render(root, ctx) {
 
   if (d.count > 0) {
     const sub = (x) => {
-      const bits = [`${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.categoryLabel, x.essential ? "must pay" : "nice to have"];
+      const ours = typeof x.id === "string" && isGuess(plan, `expenses[${x.id}].amount`);
+      const bits = [...(ours ? ["Our guess for now: tap to type yours"] : []), `${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.categoryLabel, x.essential ? "must pay" : "nice to have"];
       if (x.upcoming) bits.push(`starts ${fmt.date(x.startDate)}`);
       if (x.ended) bits.push(`ended ${fmt.date(x.endDate)}`);
       else if (x.endDate) bits.push(`until ${fmt.date(x.endDate)}`);
@@ -205,7 +226,7 @@ export function render(root, ctx) {
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x))),
         ui.h("span", { class: "st amount" }, !x.active ? ui.h("div", { class: "muted" }, x.upcoming ? "not yet" : "ended") : ui.h("div", {}, x.period === "once" ? fmt.money(x.amount, cur) : fmt.money(x.monthly, cur)), !x.active ? null : ui.h("div", { class: "muted small" }, x.period === "once" ? "one time" : "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a")),
       ))),
-      ui.h("p", { class: "muted small" }, "Tap an expense to change it."),
+      ui.h("p", { class: "muted small" }, d.guessedMonthly > 0 ? "Tap an expense to change it. Our guesses fill in what you haven't typed; as you type yours, the rest may adjust so the month stays near what households like yours spend in all." : "Tap an expense to change it."),
       out, formHost,
     ));
   } else {

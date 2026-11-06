@@ -628,3 +628,19 @@ the supplement in the health line and the words; the business-draw names. Each f
   end age ...", which runs seventeen pages' computes on that plan; each one that read the run threw before this change.
 
 Review 2026-11-06 (round 7): the page says you/your for the unnamed first adult ("Me") and "your spouse" for "My spouse", with the verb to match (core/words.js): the income names built here ("your Social Security", "your spouse's pay", `spousalName`: "your benefit as a spouse"), incomeWords, healthSummary ("You: Medicare from 2055"), onJobWords and spouseWords ("while you still work: your spouse's Medicare is counted"), noYearsWhy ("you are 126"), "Retirement starts in 2055 (you at 65)" and "You: retire at 65". Typed names read exactly as before; stored income names are untouched. Test: "Review 2026-11-06 (round 7): the unnamed first adult reads 'you' and 'your' ...".
+
+## A retirement figure our guesses keep (smart guesses C3, 2026-11-06)
+While `guide.setup.retireAuto` is true and `retirement.spendingMonthly` is a guess in the ledger (`plan.guesses`,
+estimator `overview/setup:retireSpend`), the saved figure is used as it is instead of being worked out again from
+today's bills: settle already refreshes it whenever the bills change, and from 50 it is the 7.F figure (spending as people
+65-74 spend it, with home costs and loans then), not today's bills. Plans without the ledger entry are unchanged.
+Test: `module.test.mjs` "C3 a retirement figure in the guesses' ledger".
+
+After the C3 money review (est/c3/c3-fix.md):
+- `expensesCarried`: our figure from 50 leaves Insurance and health out (spec 7.F), so Get started's `setup-x-insurance`
+  row pays nobody's Medicare: it is not among the lines `carriedHealth` reads while the figure is our ledgered guess and
+  the oldest adult is 50 or over (the setup's own test). A retired spouse's Medicare was priced nowhere (D2). The
+  Medicare page reads the same function.
+- `saveSpendingFigure`: a figure typed here is the household's own, even when it equals our guess: the guess is cleared
+  (spec S2), so a later settle never moves it (D8).
+Tests: setup `module.test.mjs` "C3 review D2", "C3 review D8".

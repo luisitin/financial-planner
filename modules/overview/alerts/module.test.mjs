@@ -471,3 +471,35 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   assert.match(a.detail, /Your spouse's return has about \$[\d,]+ of federal tax and your spouse's pay takes out about/);
   for (const x of compute(s, { today: T }).alerts) assert.doesNotMatch(`${x.title} ${x.detail}`, /\bMe's\b|My spouse/, x.id);
 });
+
+// C3 (spec 8.1): no red "You spend more than comes in" resting on our guesses; one calm line asks for the real spending
+test("C3 spending that is mostly our guesses: a calm 'Type what you really spend', never the red overspend", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = emptyPlan();
+  p.household.people = [{ id: "me", name: "Me", role: "self", birthDate: "1990-01-01" }];
+  p.income = [{ id: "i", name: "Pay", type: "salary", amount: 2500, period: "monthly", personId: "me" }];
+  p.expenses = [{ id: "setup-x-housing", name: "Rent", category: "housing", amount: 1500, period: "monthly", essential: true }, { id: "setup-x-groceries", name: "Groceries", category: "groceries", amount: 1200, period: "monthly", essential: true }];
+  assert.ok(ids(compute(p, { today: TODAY })).includes("overspend"));
+  for (const x of p.expenses) markGuess(p, `expenses[${x.id}].amount`, { key: "spend.x", value: x.amount, unit: "month", sigma: 0.25, dataAsOf: "2026-09-01" }, TODAY);
+  const d = compute(p, { today: TODAY });
+  assert.ok(!ids(d).includes("overspend"));
+  const a = d.alerts.find((x) => x.id === "spend-guessed");
+  assert.deepEqual([a.level, a.title, a.go], ["info", "Type what you really spend", ["cashflow", "expenses"]]);
+  assert.match(a.detail, /with them, about \$[\d,]+ more would go out each month than comes in/);
+});
+
+test("C3 a thin cushion measured against guessed must-pay bills is said by our guesses, never red", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = emptyPlan();
+  p.household.people = [{ id: "me", name: "Me", role: "self", birthDate: "1990-01-01" }];
+  p.income = [{ id: "i", name: "Pay", type: "salary", amount: 6000, period: "monthly", personId: "me" }];
+  p.accounts = [{ id: "c", name: "Checking", type: "checking", balance: 1000 }];
+  p.expenses = [{ id: "setup-x-housing", name: "Rent", category: "housing", amount: 1500, period: "monthly", essential: true }, { id: "setup-x-groceries", name: "Groceries", category: "groceries", amount: 600, period: "monthly", essential: true }];
+  assert.ok(ids(compute(p, { today: TODAY })).includes("emergency-bad"));
+  for (const x of p.expenses) markGuess(p, `expenses[${x.id}].amount`, { key: "spend.x", value: x.amount, unit: "month", sigma: 0.25, dataAsOf: "2026-09-01" }, TODAY);
+  const d = compute(p, { today: TODAY });
+  assert.ok(!ids(d).some((i) => /^emergency-(bad|warn|later)$/.test(i)));
+  const a = d.alerts.find((x) => x.id === "emergency-guessed");
+  assert.deepEqual([a.level, a.title, a.go], ["info", "Emergency fund: by our guesses", ["cashflow", "expenses"]]);
+  assert.match(a.detail, /^By our guesses of your must-pay bills, usable cash covers about 0\.5 months; the plan aims for \d+\. Type your real bills to know for sure\.$/);
+});

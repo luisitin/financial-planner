@@ -150,7 +150,16 @@ export function render(page, ctx) {
   // at most four open at the top (a phone screen or so; C2 review, UX 10): the rest of the big ones fold with the small
   const lead = Math.max(4, d.big.filter((r) => r.frozen || r.stale).length);
   const big = d.big.slice(0, lead), more = [...d.big.slice(lead), ...d.small];
-  if (big.length) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, big.map(record))));
+  // while what is left each month waits on our spending guesses (Next best action's spare.waits, spec 8.1), spending leads:
+  // every other page says it is the figure to type next, so this one does too (C3 UX review 6). It opens question 6, the
+  // screen made for typing it; the rows stay below one by one.
+  let spendLead = null;
+  try { const nba = ctx.computeOf?.("overview/next-best-action", { today }); if (nba?.ready && nba.spare.waits) spendLead = nba.spare; } catch { spendLead = null; }
+  const spendRecord = spendLead ? ui.h("li", {},
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, "Everyday spending"), ui.h("span", { class: "rec-value" }, `about ${fmt.money(Math.round(spendLead.guessedMonthly / 10) * 10, cur)} a month`)),
+    ui.h("div", { class: "gs-why" }, `${spendLead.spending - spendLead.guessedMonthly < 5 ? "All of your spending is" : "Most of your spending is"} our guesses for now, and it decides whether your month works. Type what you really spend, row by row, on one screen.`),
+    ui.h("div", { class: "gs-foot" }, ui.h("a", { class: "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
+  if (big.length || spendRecord) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, spendRecord, ...big.map(record))));
   if (more.length) {
     root.append(ui.h("details", { class: "card fold fold-card", open: big.length ? null : true },
       ui.h("summary", {}, ui.h("h2", {}, d.big.length > lead ? "More of our guesses" : "Matters less"), ui.h("span", { class: "fold-status" }, `${more.length} ${more.length === 1 ? "guess" : "guesses"}`), ui.h("span", { class: "fold-chev" }, "›")),

@@ -29,6 +29,17 @@ under a kind yet. Read by the Dashboard (setup `standing`: headline, an amber le
 bank shows to Expenses"), Expenses (a card with "Add $X" for each kind) and Needs attention (`bank-over`). Before, every
 figure came from the typed Expenses only, so a household whose bank showed it short was told "Your month works".
 
+Rows of ours (smart guesses C3 review, D3, 2026-11-06): one of Get started's spending rows whose amount is still our guess
+holds several kinds at once (Expenses' `ROW_HOLDS`: "Eating out and fun" holds fun, subscriptions and pets), so the bank is
+compared with the row as a whole: one line named as the row (bank = the bank over all the kinds it holds, plan = Expenses
+over the same kinds), with `ours: { id, amount, to, parts }`, where `to` = the row's amount + bank - plan, to $10: the
+figure that makes the plan's kinds what the bank shows, and `parts` = the same kind by kind (the bank's figure for each kind
+less what is typed beside the row in it, never below 0). Expenses' "Use $X" writes `parts` and clears the guess
+(`addFromBank`): the row keeps its own kind and each other kind gets a bill of its own, because once the row is the
+person's this card compares it kind by kind (a whole `to` in the row left the phone in "Utilities and phone" to be offered
+again; C3 verify). Only a plan with such a row gets these lines; every other plan's lines are as before. Tests: setup
+`module.test.mjs` "C3 review D3" and "C3 verify: 'Use' on a row of ours that holds two kinds ...".
+
 ## A card whose file is missing, and holes between files (2026-11-02)
 The sample family's Visa card had no lines and its autopays from checking were filed as transfers, so the page said "Kept
 $26,784, 61%" with about $2,700 a month of card purchases missing; and the typical month averaged August, which is missing

@@ -254,3 +254,53 @@ test("a full month within $5 of $0: the tile and Close the gap say 'only just ab
     assert.doesNotMatch(text, /about \$0\b/);
   }
 });
+
+// C3 (spec 8.1): how much of the month is our guesses, only on a plan that holds guesses
+test("C3 guessedMonthly and guessedShare: the bills and debt payments Get started guessed; nothing on a plan without guesses", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = emptyPlan();
+  p.income = [{ id: "i", name: "Pay", type: "salary", amount: 5000, period: "monthly", personId: "" }];
+  p.expenses = [
+    { id: "setup-x-housing", name: "Rent", category: "housing", amount: 1200, period: "monthly", essential: true },
+    { id: "setup-x-groceries", name: "Groceries", category: "groceries", amount: 400, period: "monthly", essential: true },
+    { id: "setup-x-dining", name: "Eating out and fun", category: "dining", amount: 300, period: "monthly", essential: false },
+  ];
+  p.accounts = [{ id: "cc", name: "Credit cards", type: "credit", balance: -3000 }];
+  p.debts = [{ id: "d-cc", accountId: "cc", rate: 0.224, minPayment: 90 }];
+  const plain = compute(p, {});
+  assert.equal(plain.guessedMonthly, undefined); assert.equal(plain.guessedShare, undefined);
+  const est = (v) => ({ key: "spend.x", value: v, unit: "month", sigma: 0.25, dataAsOf: "2026-11-02" });
+  markGuess(p, "expenses[setup-x-groceries].amount", est(400), "2026-11-02");
+  markGuess(p, "expenses[setup-x-dining].amount", est(300), "2026-11-02");
+  markGuess(p, "debts[d-cc].minPayment", { ...est(90), key: "debt.credit.payment" }, "2026-11-02");
+  const r = compute(p, {});
+  // 400 + 300 + the card's 90 (counted from Debts) of 1,200 + 400 + 300 + 90 = 1,990
+  assert.deepEqual([r.guessedMonthly, r.guessedCount, Math.round(r.guessedShare * 1000) / 1000], [790, 3, 0.397]);
+  // must-pay: groceries 400 + the card's 90 of 1,200 + 400 + 90 = 1,690
+  assert.deepEqual([r.guessedEssential, Math.round(r.guessedEssentialShare * 1000) / 1000], [490, 0.29]);
+  for (const k of ["monthly", "essentialMonthly", "optionalMonthly", "debtFromDebts"]) assert.equal(r[k], plain[k], `${k} unchanged`);
+});
+
+// C3 money review D6 (est/c3/c3-review-money.md): a guessed row that a typed bill covers in full (our rent at $0 under the
+// person's own Apartment bill) is our figure doing its job, not a bill the person forgot to fill in
+test("C3 review D6: a guessed row at $0 is not 'has no amount'; a typed $0 bill still is", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = emptyPlan();
+  p.expenses = [
+    { id: "apt", name: "Apartment", category: "housing", amount: 1350, period: "monthly", essential: true },
+    { id: "setup-x-housing", name: "Rent", category: "housing", amount: 0, period: "monthly", essential: true },
+    { id: "gym", name: "Gym", category: "fun", amount: 0, period: "monthly", essential: false },
+  ];
+  markGuess(p, "expenses[setup-x-housing].amount", { key: "spend.housing", value: 0, unit: "month", sigma: 0.25, dataAsOf: "2026-11-02" }, "2026-11-02");
+  assert.deepEqual(compute(p, {}).warnings.filter((w) => /no amount/.test(w)), ["Gym has no amount."]);
+});
+
+test("C3 verify: the bank card's notice names what was written (one row, a new bill, or a row and the bills split off it)", async () => {
+  const { fromBankWords } = await import("./compute.js");
+  assert.equal(fromBankWords({ name: "Groceries", amount: 1020, row: true, also: [] }), "Groceries is now $1,020 a month, from your bank.");
+  assert.equal(fromBankWords({ name: "Other", amount: 50, row: false, also: [] }), "Added Other: $50 a month.");
+  assert.equal(fromBankWords({ name: "Utilities", amount: 220, row: true, also: [{ name: "Phone and internet", amount: 170 }] }), "From your bank: Utilities $220 and Phone and internet $170 a month.");
+  assert.equal(fromBankWords({ name: "Eating out", amount: 1010, row: true, also: [{ name: "Subscriptions", amount: 30 }, { name: "Pets", amount: 40 }] }), "From your bank: Eating out $1,010, Subscriptions $30 and Pets $40 a month.");
+  // a row whose own kind the bank barely shows goes, and only the bills split off it are named
+  assert.equal(fromBankWords({ name: "Eating out and fun", amount: 0, row: false, also: [{ name: "Subscriptions", amount: 60 }] }), "From your bank: Subscriptions $60 a month.");
+});

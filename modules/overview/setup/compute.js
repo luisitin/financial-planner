@@ -23,6 +23,9 @@ import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { isGuess, markGuess, clearGuess } from "../../../core/estimate/index.js";
+import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
+import { escrowMonthly } from "../guesses/estimators/home.js";
+import { profileOf } from "../guesses/estimators/common.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -113,15 +116,28 @@ export const paymentIsGuess = (d) => typeof d?.paymentGuessed === "number" && Ma
  * `covers`: the Expenses categories a row stands for, so a row is not asked when the plan already has one of them.
  */
 export const SPEND = [
-  { key: "housing", group: "must", label: "Rent", labelMortgage: "Home costs besides the mortgage", help: "Rent, or property tax, insurance and fees if you own", helpMortgage: "Only what the mortgage payment doesn't cover: HOA fees, and tax or insurance you pay yourself", covers: ["housing"] },
+  { key: "housing", group: "must", label: "Rent", labelMortgage: "Home costs besides the mortgage", labelOwn: "Home costs", help: "Rent, or property tax, insurance and fees if you own", helpRent: "What you pay in rent. Power and water go under utilities", helpMortgage: "Repairs and upkeep, plus HOA fees and any tax or insurance not in the mortgage payment", helpOwn: "Property tax, home insurance, HOA fees and upkeep", covers: ["housing"] },
   { key: "utilities", group: "must", label: "Utilities and phone", help: "Power, water, gas, internet, phones", covers: ["utilities", "phone"] },
   { key: "groceries", group: "must", label: "Groceries", help: "Food and household things", covers: ["groceries"] },
   { key: "transport", group: "must", label: "Car, gas and transit", help: "Gas, repairs, car insurance, fares. Not the loan payment", covers: ["transport"] },
-  { key: "insurance", group: "must", label: "Insurance and health", help: "Premiums you pay yourself, medicine", covers: ["insurance", "health"] },
+  { key: "insurance", group: "must", label: "Insurance and health", help: "Health premiums (with what comes out of your pay), medicine, doctor visits", covers: ["insurance", "health"] },
   { key: "childcare", group: "must", label: "Childcare and school", help: "Daycare, fees, activities", kids: true, covers: ["childcare"] },
   { key: "dining", group: "else", label: "Eating out and fun", help: "Restaurants, outings, hobbies", covers: ["dining", "fun"] },
   { key: "shopping", group: "else", label: "Shopping and everything else", help: "Clothes, gifts, subscriptions", covers: ["shopping"] },
 ];
+/**
+ * The housing row as the household has it (the spending guesses' tenure, spendTenure: a mortgage owed; a home and no
+ * mortgage; else renting): its label and help on question 6 and its name on Expenses. An owner with no mortgage is asked for
+ * "Home costs" (property tax, insurance, HOA and upkeep), never "Rent" (C3 UX review 5). -> { kind, label, help, name }
+ */
+export function housingWords(plan) {
+  const t = spendTenure(plan, profileOf(plan, null)), h = SPEND[0];
+  return t === "ownerWithMortgage" ? { kind: "mortgage", label: h.labelMortgage, help: h.helpMortgage, name: "Home costs" }
+    : t === "ownerWithoutMortgage" ? { kind: "own", label: h.labelOwn, help: h.helpOwn, name: "Home costs" }
+    : { kind: "rent", label: h.label, help: h.helpRent, name: h.label };
+}
+/** The spending screen's one line on whose figures the grey ones are (guesses' spendBasis, spec 5.6). */
+export { spendBasis };
 /** What you are working toward. `focus` ones are not saving goals: they put a guide among the first moves instead. */
 export const GOALS = [
   { key: "cushion", icon: "🛟", label: "A safety cushion", line: "For surprises", name: "Emergency fund" },
@@ -709,7 +725,7 @@ export function applyOweAmounts(draft, v, today, { guess = null } = {}) {
 }
 /** The one-tap answers Q5b may show, by debt (one at a time: the mortgage's, else the car loan's; guide.setup.taps). */
 export const OWE_TAPS = { mortgage: "mortgage-start", "car-loan": "car-loan-start" };
-const TAP_VALUES = { "mortgage-start": ["pre2010", "2010s", "2020-21", "2022on", "unsure"], "car-loan-start": ["0", "1-2", "3-4", "5+", "unsure"] };
+const TAP_VALUES = { "mortgage-start": ["pre2010", "2010s", "2020-21", "2022on", "unsure"], "car-loan-start": ["0", "1-2", "3-4", "5+", "unsure"], "health-cover": ["work", "own", "public", "unsure"], childcare: ["yes", "no", "unsure"], hoa: ["yes", "no", "unsure"] };
 /**
  * What Q5b holds for one debt, as the guesses read it (core/estimate `args`): { owed, payment, rate (a fraction), start }
  * and, for a mortgage whose screen asks it, home. A number for a box with a figure, null for a box left blank, so the
@@ -767,7 +783,9 @@ function applyOweGuessed(draft, v, today, guess) {
     // a plan from before the guesses dropped this mortgage, so question 6 asked "Rent" and the person put the home's
     // payment there: named "Rent or mortgage", Expenses files the mortgage under it and counts the payment once
     const housing = o.key === "mortgage" && !old ? byId(draft.expenses, "setup-x-housing") : null;
-    if (housing && housing.name === SPEND.find((r) => r.key === "housing").label) housing.name = "Rent or mortgage";
+    // (a row that is our guess was never the home's payment: it becomes the home's other costs, which settle then works out;
+    // C3 review D1)
+    if (housing && housing.name === SPEND.find((r) => r.key === "housing").label) housing.name = isGuess(draft, "expenses[setup-x-housing].amount") ? "Home costs" : "Rent or mortgage";
     const row0 = byId(draft.debts, did);
     // with no guess (the gate is closed), the rate and payment as before: the row's own, else the typical one, kept in the flag
     const ownRate = row0 && !rateIsGuess(row0) && !isGuess(draft, ratePath);
@@ -810,9 +828,12 @@ export const hasMortgage = (p) => L(p, "accounts").some((a) => a.type === "mortg
  */
 export function spendBase(plan) {
   const own = existingSpend(plan);
-  const ex = own.length ? computeExpenses({ ...plan, expenses: own, debts: [] }, {}) : null;
+  // only amounts are read here, and no amount depends on the guess ledger (Expenses' guessed share and Debts' "by our
+  // guesses" flag do): left out, so settle (which runs this on every update) does not look each bill up in it
+  const bare = { ...plan, guesses: undefined };
+  const ex = own.length ? computeExpenses({ ...bare, expenses: own, debts: [] }, {}) : null;
   const cat = (k) => ex?.byCategory.find((c) => c.category === k)?.monthly ?? 0;
-  const all = L(plan, "debts").length ? computeExpenses({ ...plan, expenses: own }, {}) : null;
+  const all = L(plan, "debts").length ? computeExpenses({ ...bare, expenses: own }, {}) : null;
   return { existing: ex?.monthly ?? 0, existingCount: own.length, existingCore: (ex?.monthly ?? 0) - cat("debt") - cat("childcare"), loanPayments: all?.debtFromDebts ?? 0 };
 }
 /**
@@ -821,26 +842,80 @@ export function spendBase(plan) {
  * nper in core/math/finance.js, past the months until then; a loan that never pays off at its payment counts too).
  * Without birth dates nobody knows when work stops, so no loan is added.
  */
-export function retireDefault(plan, today = null) {
-  const base = spendBase(plan);
+export function retireDefault(plan, today = null, base = spendBase(plan)) {
   const rows = L(plan, "expenses").filter((x) => isSetupId(x.id) && x.category !== "childcare").reduce((s, x) => s + perYear(x.amount, x.period) / 12, 0);
   return Math.round((base.existingCore + rows + loansAfterWork(plan, today)) / 10) * 10;
 }
 /** The loan payments a month still running when the first adult stops work (retireDefault's loan part). */
-export function loansAfterWork(plan, today = null) {
+export const loansAfterWork = (plan, today = null) => loansRunningThen(plan, today).reduce((t, d) => t + (Number(d.minPayment) || 0), 0);
+/** The debts (Liabilities rows) still being paid when the first adult stops work: loansAfterWork's list. */
+export function loansRunningThen(plan, today = null) {
   const planAge = Number(plan?.assumptions?.retirementAge ?? 65);
   const left = today ? adults(plan).filter((p) => p.birthDate && setupOf(plan).status?.[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
   const until = left.length ? Math.min(...left) : null;
-  let loans = 0;
+  const out = [];
   if (until !== null && !L(plan, "expenses").some((x) => x.category === "debt")) {
     for (const d of L(plan, "debts")) {
       const owed = Math.abs(Number(byId(L(plan, "accounts"), d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
       if (!(owed > 0) || !(pay > 0)) continue;
       const months = nper((Number(d.rate) || 0) / 12, pay, owed);
-      if (!Number.isFinite(months) || months > until) loans += pay;
+      if (!Number.isFinite(months) || months > until) out.push(d);
     }
   }
-  return loans;
+  return out;
+}
+/**
+ * Q6's rows a month as saved, or as the screen holds them (`args`, spendArgs: a blank row is our guess for it, worked out
+ * by `lib.estimate`), with "total" for One rough total. -> { rows: { [row | "total"]: monthly }, guessed: true when one is ours }
+ */
+function spendRowValues(plan, { today, args }, lib) {
+  const out = {};
+  let guessed = false;
+  if (args) {
+    if (args.total) out.total = args.total;
+    else for (const [k, v] of Object.entries(args.rows ?? {})) {
+      if (v !== null) { out[k] = v; continue; }
+      const e = lib?.estimate?.(`spend.${k}`, { path: `expenses[setup-x-${k}].amount`, args });
+      if (e && typeof e.value === "number" && e.value > 0) { out[k] = e.value; guessed = true; }
+    }
+  } else {
+    for (const x of L(plan, "expenses")) {
+      if (typeof x.id !== "string" || !x.id.startsWith("setup-x-")) continue;
+      out[x.id.slice(8)] = perYear(x.amount, x.period) / 12;
+      if (isGuess(plan, `expenses[${x.id}].amount`)) guessed = true;
+    }
+  }
+  return { rows: out, guessed };
+}
+/**
+ * Retirement spending a month (spec 7.F), to $10. Under 50 (the oldest adult; no birth dates counts as under): today's
+ * bills without childcare, plus the loans still running then (retireDefault). From 50: the everyday rows (utilities,
+ * groceries, car and transit, eating out, shopping) each times what households 65-74 spend on it over households 55-64
+ * (RETIRE_RATIO, the Consumer Expenditure Surveys by age), plus the home costs that go on (the housing row, and a
+ * mortgage's tax and insurance once it is paid off: home.propertyTax and home.insurance), plus the other bills on Expenses
+ * (as retireDefault counts them) and the loans still running then. Health cover is never in it: before and after 65 it is
+ * the retirement projection's own health line. "One rough total" cannot be split, so it is carried whole.
+ * -> { value, from50, guessed, loans, oldest } | null
+ */
+export function retireSpendFor(plan, { today = null, args = null } = {}, lib = null) {
+  const ages = adults(plan).map((p) => (p.birthDate && today ? ageOn(p.birthDate, today) : null)).filter((a) => a !== null);
+  const oldest = ages.length ? Math.max(...ages) : null;
+  const loans = loansAfterWork(plan, today);
+  const { rows, guessed } = spendRowValues(plan, { today, args }, lib);
+  const base = spendBase(plan), core = base.existingCore;
+  if (!(oldest >= 50)) {
+    if (!args) return { value: retireDefault(plan, today, base), from50: false, guessed, loans, oldest };
+    const sum = Object.entries(rows).filter(([k]) => k !== "childcare").reduce((t, [, v]) => t + v, 0);
+    return { value: Math.round((core + sum + loans) / 10) * 10, from50: false, guessed, loans, oldest };
+  }
+  let v = core + loans + (rows.total ?? 0) + (rows.housing ?? 0);
+  for (const [k, r] of Object.entries(RETIRE_RATIO)) v += (rows[k] ?? 0) * r;
+  // a mortgage's tax and insurance (in its payment today) go on once it is paid off: added for a mortgage paid off before
+  // work stops. One still running then is in `loans` with its whole payment, tax and insurance included, and the figure is
+  // one amount for every year, so they are not added a second time (C3 review D9: they were, about $270 a month for life)
+  const mortgageThen = loansRunningThen(plan, today).some((d) => L(plan, "accounts").find((a) => a.id === d.accountId)?.type === "mortgage");
+  if (hasMortgage(plan) && !mortgageThen && !rows.total && setupOf(plan).taps?.escrow !== "no" && lib) { const esc = escrowMonthly(plan, { today }, lib); if (esc) v += esc.total; }
+  return { value: Math.round(v / 10) * 10, from50: true, guessed, loans, oldest };
 }
 /** Everyone is already retired: the retirement spending question is not asked (today's bills are retirement's). */
 export const allRetired = (p) => adults(p).length > 0 && adults(p).every((a) => setupOf(p).status?.[a.id] === "retired");
@@ -849,7 +924,8 @@ export const allRetired = (p) => adults(p).length > 0 && adults(p).every((a) => 
  * has a bill for are not asked. One rough total is counted as must-pay (safer for the cushion). `retireMonthly` is
  * what you expect to spend a month once you stop working, saved as Retirement's own figure.
  */
-export function applySpend(draft, v) {
+export function applySpend(draft, v, today = null, { guess = null } = {}) {
+  if (typeof guess === "function") return applySpendGuessed(draft, v, today, guess);
   ensure(draft);
   const mode = v.mode === "total" ? "total" : "rows";
   if ((draft.guide.setup.spendMode ?? "rows") !== mode || !draft.guide.setup.spendMode) draft.guide.setup.spendMode = mode;
@@ -880,6 +956,82 @@ export function applySpend(draft, v) {
     const auto = v.retireAuto === true;
     if ((draft.guide.setup.retireAuto ?? null) !== auto) draft.guide.setup.retireAuto = auto;
   }
+}
+/**
+ * What Q6 holds, as the guesses read it (core/estimate `args`): { mode, rows: { [row]: number | null } (null: a box left
+ * blank, which our guess fills; 0: the person's own 0), total (null when blank), taps } for the rows the screen asks
+ * (spendRows). In "One rough total" with the total left blank, every row is ours. The same reading applySpend makes, so a
+ * grey figure is exactly what saving the blank box writes.
+ */
+export function spendArgs(plan, v = {}) {
+  const mode = v?.mode === "total" ? "total" : "rows";
+  // (a total typed as 0 is the person's 0, so nothing is guessed under it; blank is null: C3 review D7)
+  const total = mode === "total" ? nonneg(v?.total) : null;
+  const rows = total !== null ? {} : Object.fromEntries(spendRows(plan).map((s) => [s.key, mode === "total" ? null : nonneg(v?.rows?.[s.key])]));
+  const taps = Object.fromEntries(SPEND_TAPS.map((k) => [k, v?.taps?.[k] ?? null]).filter(([k, x]) => TAP_VALUES[k].includes(x)));
+  return { mode, rows, total, taps };
+}
+/** The one-tap answers Q6 may show (guide.setup.taps): how health cover is had, childcare paid, an HOA fee. */
+export const SPEND_TAPS = ["health-cover", "childcare", "hoa"];
+/** Rows the person typed as 0 on Q6 (guide.setup.spendZero): theirs, never guessed. */
+const zeroRows = (p) => (Array.isArray(setupOf(p).spendZero) ? setupOf(p).spendZero : []);
+/**
+ * Q6 with our guesses (the view passes ctx.guess; spec 10, 7.A): a row typed is the person's (any guess on it goes); a 0
+ * typed is their 0 (no row, remembered in guide.setup.spendZero so it is never guessed); a box left blank gets our guess,
+ * written through markGuess. "One rough total" typed is written as before; left blank, the rows are written as guesses.
+ * The taps answered are kept in guide.setup.taps. Retirement spending: a figure typed is the person's; otherwise our
+ * figure (overview/setup:retireSpend) is written and marked, the line or the box the screen showed. Every guess is worked
+ * out by `guess(key, { path, args })` from the plan as it was before this save plus the screen's answers (spendArgs).
+ */
+function applySpendGuessed(draft, v, today, guess) {
+  ensure(draft);
+  const args = spendArgs(draft, v);
+  const s = draft.guide.setup;
+  const mode = args.mode;
+  if ((s.spendMode ?? "rows") !== mode || !s.spendMode) s.spendMode = mode;
+  const ask = (key, path) => { let e = null; try { e = guess(key, { path, args }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
+  const keep = new Set(), zero = [];
+  const line = { period: "monthly", inflates: true, startDate: "", endDate: "" };
+  const mortgage = hasMortgage(draft);
+  if (args.total) { keep.add("setup-x-total"); put(draft.expenses, "setup-x-total", { amount: args.total }, { name: "Monthly spending (rough)", category: "other", essential: true, ...line }); clearGuess(draft, "expenses[setup-x-total].amount"); }
+  else {
+    for (const row of spendRows(draft)) {
+      const id = `setup-x-${row.key}`, path = `expenses[${id}].amount`, typed = args.rows[row.key];
+      if (typed === 0) { zero.push(row.key); continue; }
+      const e = typed === null ? ask(`spend.${row.key}`, path) : null;
+      const amount = typed ?? (e && e.value > 0 ? e.value : null);
+      if (!amount) continue;
+      keep.add(id);
+      put(draft.expenses, id, { amount }, { name: row.key === "housing" ? (mortgage ? "Home costs" : housingWords(draft).name) : row.label, category: row.key, essential: row.group === "must" && CATEGORIES[row.key]?.essential !== false, ...line });
+      const rec = row.key === "housing" && mortgage ? byId(draft.expenses, id) : null;
+      if (rec && rec.name === "Rent or mortgage") rec.name = "Home costs";
+      // answered as the home's costs (an owner), a row named "Rent" before is named as the screen asked it
+      const own = row.key === "housing" && !mortgage && housingWords(draft).kind !== "rent" ? byId(draft.expenses, id) : null;
+      if (own && own.name === row.label) own.name = "Home costs";
+      if (e && typed === null) markGuess(draft, path, e, today); else clearGuess(draft, path);
+    }
+  }
+  draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
+  if (JSON.stringify(zeroRows(draft)) !== JSON.stringify(zero)) { if (zero.length) s.spendZero = zero; else delete s.spendZero; }
+  for (const [k, x] of Object.entries(args.taps)) if (s.taps?.[k] !== x) s.taps = { ...(s.taps ?? {}), [k]: x };
+  if (allRetired(draft)) return;
+  const typedLater = v.retireAuto === false ? pos(v.retireMonthly) : null;
+  const path = "retirement.spendingMonthly";
+  if (typedLater) {
+    if (Number(draft.retirement.spendingMonthly) !== typedLater) draft.retirement.spendingMonthly = typedLater;
+    clearGuess(draft, path);
+    if ((s.retireAuto ?? null) !== false) s.retireAuto = false;
+    return;
+  }
+  const e = ask("overview/setup:retireSpend", path);
+  if (e && e.value > 0) { if (draft.retirement.spendingMonthly === undefined) draft.retirement.spendingMonthly = null; markGuess(draft, path, e, today); }
+}
+/** The month on Q6 once saved: the rows the screen asks (typed and ours), how many are ours, and their total. */
+export function spendRowsNow(plan) {
+  const rows = L(plan, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
+  const guessed = rows.filter((x) => isGuess(plan, `expenses[${x.id}].amount`));
+  const m = (list) => list.reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
+  return { count: rows.length, guessed: guessed.length, monthly: m(rows), guessedMonthly: m(guessed), typedMonthly: m(rows) - m(guessed) };
 }
 /** Q7. What you are working toward (keys of GOALS; a kind the plan already has is not added). Goals linked from elsewhere stay. */
 export function applyGoalPicks(draft, keys) {
@@ -1018,7 +1170,10 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   }
   if (screen === "spend") {
     const rt = Number(plan?.retirement?.spendingMonthly);
-    return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, byId(L(plan, "expenses"), `setup-x-${x.key}`)?.amount ?? ""])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 ? rt : "", retireTyped: rt > 0 && !s.retireAuto };
+    // a row that is one of our guesses reopens empty (the screen shows it grey); a row typed as 0 reopens as 0
+    const rowOf = (key) => { const x = byId(L(plan, "expenses"), `setup-x-${key}`); return x ? (isGuess(plan, `expenses[${x.id}].amount`) ? "" : x.amount) : zeroRows(plan).includes(key) ? 0 : ""; };
+    const ours = !!plan?.guesses?.["retirement.spendingMonthly"] && isGuess(plan, "retirement.spendingMonthly");
+    return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOf(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
   }
   if (screen === "goals") return picks(plan, "goals");
   if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => { const x = byId(L(plan, "goals"), `setup-goal-${g.key}`); return [g.key, { target: x?.target || "", date: x?.targetDate ?? "", years: x ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: Number(plan?.assumptions?.emergencyMonths ?? 6) }]; }));
@@ -1048,7 +1203,13 @@ export function reflect(plan, screen, { today = null } = {}) {
     const guessed = owe.filter((a) => isGuess(plan, `accounts[${a.id}].balance`)).length;
     return t > 0 ? { kind: "owe", total: t, ...(guessed ? { guessed, of: owe.length } : {}) } : setupOf(plan).paidInFull ? { kind: "paid-in-full" } : null;
   }
-  if (screen === "spend") { const e = L(plan, "expenses").length || L(plan, "debts").length ? computeExpenses(plan, {}) : null; return e && e.monthly > 0 ? { kind: "spend", monthly: e.monthly, essential: e.essentialMonthly } : null; }
+  if (screen === "spend") {
+    const e = L(plan, "expenses").length || L(plan, "debts").length ? computeExpenses(plan, {}) : null;
+    if (!e || !(e.monthly > 0)) return null;
+    // with our guesses among the rows: the screen's rows (typed and ours) and how many are ours ("7 of these are our guesses")
+    const r = spendRowsNow(plan);
+    return { kind: "spend", monthly: e.monthly, essential: e.essentialMonthly, ...(r.guessed ? { guessed: r.guessed, count: r.count, rows: r.monthly } : {}) };
+  }
   return null;
 }
 
@@ -1115,7 +1276,9 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     return `${words}${list.some((d) => d.guess) ? ` (a typical rate: type yours on ${where(list)})` : ""}`;
   };
   switch (step.id) {
-    case "bills": return retired
+    // the spending is mostly our guesses: typing it is the move (Next best action's waiting step, spec 8.1)
+    case "bills": if (step.waits) return { title: "Type what you really spend", detail: step.detail };
+      return retired
       ? { title: "See how long your savings last", detail: `About ${money(-(step.spare ?? 0))} a month comes from savings. The retirement check shows how many years that covers.` }
       : { title: "Spend less than comes in", detail: step.detail };
     case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
@@ -1170,7 +1333,17 @@ export function standing(plan, { today }) {
   const runwayStatus = runway !== null ? liq?.status ?? "unknown" : "unknown";
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
   const retired = allRetired(plan);
-  const drawing = retired && spare !== null && spare < 0;
+  // the spending is mostly our guesses (spec 8.1): the left-over figure, the cushion and the retirement verdict wait for it
+  const spareWaits = !!(nba?.ready && nba.spare.waits);
+  const runwayWaits = runway !== null && liq?.waits === true;
+  // (with no pay on file the left-over figure is not worked out at all, so the share of the month that is ours decides it
+  // for the retirement verdict and the headline: C3 review D4)
+  let spendShare = 0;
+  if (!spareWaits && plan?.guesses) { try { spendShare = computeExpenses(plan, { today }).guessedShare ?? 0; } catch { spendShare = 0; } }
+  const spendOurs = spareWaits || spendShare >= 0.5;
+  const retireGuessed = !!retire && spendOurs && (isGuess(plan, "retirement.spendingMonthly") || !(Number(plan?.retirement?.spendingMonthly) > 0));
+  const spendNow = spendRowsNow(plan);
+  const drawing = retired && spare !== null && spare < 0 && !spareWaits;
   // short only on the careful month (Side income's "count on" holds part of uneven pay back): what a month that brings the
   // Income page's amount leaves, so the sentence and the left-over line say a lean month, not a plain overspend (review
   // 2026-11-02, round 5: the done screen said "More goes out than comes in" above a move card saying good months make up)
@@ -1180,7 +1353,7 @@ export function standing(plan, { today }) {
   const steps = (nba?.ready ? nba.steps : []).filter((s) => s.status !== "done" && s.status !== "skip" && s.status !== "underway" && s.id !== "rest");
   const debtExtra = nba?.ready ? nba.spare.debtExtra ?? 0 : 0;
   const debtNames = nba?.debtPlan?.names ?? [];
-  const open = steps.map((s) => ({ id: s.id, ...revealWords({ ...s, spare }, plan, { today, retired: drawing }), href: `#/${s.go.join("/")}` }));
+  const open = steps.map((s) => ({ id: s.id, ...revealWords({ ...s, spare }, plan, { today, retired: drawing }), href: s.id === "bills" && s.waits ? "#/overview/setup/spend?back=done" : `#/${s.go.join("/")}` }));
   const focus = [...(drawing ? ["retire"] : []), ...(setupOf(plan).focus ?? []), ...(picks(plan, "goals").includes("home") ? ["home"] : [])];
   const debtStep = open.slice(0, 1).some((m) => m.id === "high-debt" || m.id === "mid-debt");   // the debt guide would repeat it
   const guides = focus.filter((f, i) => FOCUS_GUIDE[f] && focus.indexOf(f) === i && !(f === "debt" && debtStep)).map((f) => ({ id: `guide-${f}`, title: FOCUS_GUIDE[f].title, detail: null, href: FOCUS_GUIDE[f].href }));
@@ -1205,6 +1378,13 @@ export function standing(plan, { today }) {
   // the State page); until then, say so: a missing state is asked for, a graduated state's rate is asked for
   const st0 = plan?.household?.state;
   if (L(plan, "income").length && !NO_WAGE_TAX[st0] && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State page, and the left-over figure takes it off` : "Your state: pick it on the State page, so its income tax comes off the left-over figure", href: "#/taxes/state", key: "state" });
+  // childcare is never guessed without its tap (spec E06): with our spending guesses in, a child under 13 and the tap not
+  // answered Yes or No (skipped, or Not sure), say it is not counted, and where to tell us (C3 UX review 4)
+  const careAsk = setupOf(plan).taps?.childcare ?? null;
+  const young = dependents(plan).some((k) => !k.birthDate || !today || ageOn(k.birthDate, today) < 13);
+  const childcareMissing = spendNow.guessed > 0 && young && careAsk !== "no" && careAsk !== "yes" && !zeroRows(plan).includes("childcare")
+    && !L(plan, "expenses").some((x) => x.category === "childcare" && (!today || activeOn(x, today)));
+  if (childcareMissing) later.push({ label: "Childcare: do you pay for it, or for after-school care? Tell us and it's counted", href: "#/overview/setup/spend?back=done", key: "childcare" });
   const couple = adults(plan).length >= 2 && (plan?.household?.filingStatus ?? "single") === "single" && adults(plan).some((p) => p.relation === "partner");
   if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the left-over figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
@@ -1220,6 +1400,7 @@ export function standing(plan, { today }) {
   const cur = plan?.meta?.currency ?? "USD";
   const headline = bank ? `Your bank shows about ${fmtMoney(Math.round(bank.gap / 10) * 10, cur)} a month more going out than your plan lists, so the figures below may be too rosy. The first move fixes that.`
     : bankCard ? `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, cur)} a month went to ${bankCard.the}, whose ${bankCard.plural ? "files aren't" : "file isn't"} in, so your bank can't be checked against your plan yet. The first move fixes that.`
+    : spareWaits || (spare === null && spendOurs) ? "Your real spending decides whether your month works, so it's the best figure to type next."
     : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months."
     : lean?.kind === "even" ? "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there."
@@ -1245,6 +1426,12 @@ export function standing(plan, { today }) {
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
+    // only when true (every other plan's standing is exactly as before): the tiles say "by our guesses" and wait
+    ...(spareWaits ? { spareWaits: true, spareGuessedShare: nba.spare.guessedShare } : {}),
+    ...(childcareMissing ? { childcareMissing: true } : {}),
+    ...(runwayWaits ? { runwayWaits: true } : {}),
+    ...(retireGuessed ? { retireGuessed: true } : {}),
+    ...(spendNow.guessed ? { spendGuessed: { monthly: spendNow.guessedMonthly, count: spendNow.guessed, rows: spendNow.monthly, typed: spendNow.typedMonthly } } : {}),
   };
 }
 
@@ -1270,9 +1457,12 @@ export const estimators = {
   "overview/setup:retireSpend": {
     tier: 4, order: 4, label: "Spending a month once work stops", unit: "month", weight: "big", basis: "yours", reads: [],
     page: () => "#/retirement/projection",
-    fn(plan, { today }) {
-      const v = retireDefault(plan, today);
-      return v > 0 ? { value: v, rounded: true, why: "today's bills without childcare, plus loans still running then", uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+    fn(plan, { today, args }, lib) {
+      const r = retireSpendFor(plan, { today, args }, lib);
+      if (!r || !(r.value > 0)) return null;
+      return r.from50
+        ? { value: r.value, rounded: true, why: "everyday costs as people 65-74 spend them, home costs and loans then", uses: { spending: r.guessed ? "guess" : "typed" }, sharperWith: [], tables: ["ce2025_spend_by_ageOfReferencePerson"], basis: "yours" }
+        : { value: r.value, rounded: true, why: "today's bills without childcare, plus loans still running then", uses: { spending: r.guessed ? "guess" : "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" };
     },
   },
   "overview/setup:cushionTarget": {

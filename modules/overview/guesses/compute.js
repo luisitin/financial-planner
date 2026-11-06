@@ -165,6 +165,9 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
     label = `${record}: ${DEBT_FIELD[ledgerDebt[1]]}`;
   } else if (e.k === "overview/setup:ss") {
     label = `${possessive(record)} Social Security at full retirement age`;
+  } else if (record && /^spend\./.test(e.k)) {
+    // a spending row reads as its row on Expenses: "Rent", "Home costs", "Groceries"
+    label = record;
   } else if (record && def && !def.label.toLowerCase().includes(record.toLowerCase())) {
     label = `${record}: ${def.label.charAt(0).toLowerCase()}${def.label.slice(1)}`;
   } else if (record && !def && !known) {

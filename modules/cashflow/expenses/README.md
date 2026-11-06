@@ -64,3 +64,44 @@ are offered, as for a short month. Test: `module.test.mjs`.
 The "Bring in ... before adding more here" card reads `bankVsPlan`'s `cardFile` words: its title ("Bring in the card files"
 for two cards at one bank with no file for either, as for several cards standing in), "over the last 2 months" (not "whole"
 when the months are whole but for those payments) and "their own files aren't in, so what they bought" for several cards.
+
+## Our guesses in the month (smart guesses C3, 2026-11-06)
+Get started can leave a bill blank and let the guesses fill it (`plan.guesses`, `core/estimate`; the figures and their
+sources are in `modules/overview/guesses/README.md`, "Spending"). Only when the plan holds a guess ledger, `compute()`
+adds:
+- `guessedMonthly` = the monthly amount of every active bill whose `expenses[id].amount` is a guess, plus every Debts
+  payment counted here whose `debts[id].minPayment` is a guess;
+- `guessedShare` = guessedMonthly / monthly; `guessedEssential` = the must-pay part of it (a guessed debt payment counts
+  at its required payment); `guessedEssentialShare` = guessedEssential / essentialMonthly; `guessedCount`.
+A plan with no ledger (every plan made before C3) gets none of these keys, so it computes exactly as before. The view
+(designer lane, words only) says "Depends on your spending" in the left-over tile and drops the over-spending warning
+while half or more of the month is ours, shows "about $X of it our guesses for now" under Per month, marks each guessed
+row "Our guess for now: tap to type yours", and saving a row makes it the person's (`clearGuess`). Tests:
+`module.test.mjs` "C3 guessedMonthly and guessedShare".
+
+After the C3 reviews (est/c3/c3-fix.md):
+- `ROW_HOLDS`: what each of Get started's rows holds, by category. A row's own categories (setup's `covers`) plus what the
+  Consumer Expenditure Surveys put inside it: entertainment (streaming and other subscriptions, pets) in "Eating out and
+  fun", personal care in "Shopping and everything else". A bill typed under one of them comes off that row's guess
+  (overview/guesses spend.js), and the bank card compares the row with all of them at once (D3, D5). Gifts, travel and
+  "other" are in no row.
+- `guessedSetupRow(plan, x)`: a `setup-x-*` row whose amount is still our guess (only a path the ledger holds). Such a row
+  is never taken for the mortgage's payment, whatever its name or amount, so the mortgage counts from Debts (D1, D1b), and
+  at $0 (a typed bill took its place) it is not "has no amount" (D6).
+- `addFromBank(draft, line, id)`: the bank card's tap. A line for a row of ours (`line.ours`, from income-statement's
+  `bankVsPlan`) makes the plan list what the bank shows for everything the row holds, less what is typed beside it (each
+  kind to $10), and clears the guess: the figures are the person's, from their own bank. Before, a bill was added beside
+  our guess and the next save took it back off the guess (D3). Each kind is written on its own (`line.ours.parts`): the
+  row keeps its own kind, and each other kind it held that the bank shows gets a bill of its own named as the kind
+  ("Phone and internet"; the row is then named for its own kind, "Utilities", so nothing reads as the phone twice). A row
+  with nothing of its own kind gives way to those bills. The card compares a row of the person's kind by kind, so writing
+  the row's whole figure into it made the card offer "Add $170" for the phone the "$390" already held (C3 verify).
+  `fromBankWords(said)` is the notice: "Groceries is now $1,020 a month, from your bank." or "From your bank: Utilities
+  $220 and Phone and internet $170 a month." Any other line adds "the rest the bank shows" as before.
+- The view: "Where it goes" names a kind that is only Get started's rows as the row ("Eating out and fun", "Home
+  costs") and draws a kind that is only our guesses with the calm bar and "our guess" (UX 9); "all of it our guesses for
+  now" when the whole month is ours; next year to three figures while our guesses are in it; saving a row of ours says
+  "Changes saved: Groceries is your figure now."; the list's help line says our other guesses may adjust as you type yours
+  (R10).
+Tests: setup `module.test.mjs` "C3 review D1", "D1b", "D3", "C3 verify: 'Use' on a row of ours that holds two kinds ..."; this
+module's "C3 review D6" and "C3 verify: the bank card's notice names what was written ...".

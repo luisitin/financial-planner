@@ -1340,3 +1340,399 @@ test("C2 fix: a mortgage payment typed that fits the typical balance says so (it
   const low = estimate(jordan(), "debt.mortgage.owed", { ...GO, path: "accounts[setup-owe-mortgage].balance", args: S.oweArgs(jordan(), { payment: 300 }, "mortgage", { askHome: true }) });
   assert.match(low.why, /worked back from your \$300 payment/);
 });
+
+// ---- C3: Q6 with our guesses (spec 10, 14.4). The screen's grey figures are estimate(plan before the save, key, { path,
+// args: spendArgs }); saving applies them through markGuess; the settle that follows must move nothing.
+const { markGuess } = await import("../../../core/estimate/index.js");
+const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+const ROWS = ["housing", "utilities", "groceries", "transport", "insurance", "childcare", "dining", "shopping"];
+const owe7H = { sam: { "car-loan": { payment: 420 }, credit: { owed: "3,000" } }, jordan: { mortgage: { payment: 1100 } }, patLee: { mortgage: { payment: 1600 } } };
+const persona = (name) => { const p = { sam, jordan, patLee }[name](); oweWithGuesses(p, owe7H[name]); settle(p, GO); return p; };
+/** Q6 saved as the screen saves it; returns the grey figures shown (row -> value) and the retirement figure shown. */
+function spendWithGuesses(p, v, today = PERSONA_TODAY) {
+  const before = structuredClone(p);
+  const guess = (k, o = {}) => estimate(before, k, { ...GO, today, ...o });
+  const args = S.spendArgs(before, v);
+  const grey = Object.fromEntries(Object.entries(args.rows).filter(([, x]) => x === null).map(([k]) => [k, guess(`spend.${k}`, { path: `expenses[setup-x-${k}].amount`, args })?.value ?? null]));
+  const later = guess("overview/setup:retireSpend", { path: "retirement.spendingMonthly", args })?.value ?? null;
+  S.applySpend(p, v, today, { guess });
+  return { grey, later, settled: settle(p, { ...GO, today }) };
+}
+const row = (p, k) => p.expenses.find((x) => x.id === `setup-x-${k}`) ?? null;
+
+test("C3 blank rows are saved as our guesses, the Got it line counts them, and the settle after moves nothing (preview = written)", () => {
+  for (const name of ["sam", "jordan", "patLee"]) {
+    const p = persona(name);
+    const typed = name === "jordan" ? { childcare: 900 } : {};
+    const { grey, later, settled } = spendWithGuesses(p, { mode: "rows", rows: typed, taps: {} });
+    assert.deepEqual(settled, { changed: [], dropped: [] }, `${name}: nothing moves`);
+    for (const [k, v] of Object.entries(grey)) {
+      if (v === null) { assert.equal(row(p, k), null, `${name} ${k}: no figure, nothing written`); continue; }
+      assert.equal(row(p, k).amount, v, `${name} ${k}: written = shown`);
+      assert.equal(isGuess(p, `expenses[setup-x-${k}].amount`), true);
+      assert.equal(p.guesses[`expenses[setup-x-${k}].amount`].k, `spend.${k}`);
+    }
+    assert.equal(p.retirement.spendingMonthly, later, `${name}: the retirement figure shown is written`);
+    assert.equal(isGuess(p, "retirement.spendingMonthly"), true);
+    // valuesFor reopens our guesses empty (grey), the typed row as typed
+    const v = S.valuesFor(p, "spend");
+    for (const k of Object.keys(grey)) assert.equal(v.rows[k], "", `${name} ${k} reopens grey`);
+    if (typed.childcare) assert.equal(v.rows.childcare, 900);
+    assert.equal(v.retireMonthly, "", "our retirement figure reopens grey");
+  }
+  // "Got it: about $2,680 a month. 7 of these are our guesses for now." (Sam; 7.H $2,690, see the guesses tests on R11)
+  const s = persona("sam"); spendWithGuesses(s, { mode: "rows", rows: {} });
+  assert.deepEqual(S.reflect(s, "spend"), { kind: "spend", monthly: 2680 + 420 + 90, essential: 2680 - 220 - 290 + 420 + 90, guessed: 7, count: 7, rows: 2680 });
+  // Jordan: "about $3,900 a month, 7 are our guesses": $900 typed + $3,000 ours
+  const j = persona("jordan"); spendWithGuesses(j, { mode: "rows", rows: { childcare: "900" } });
+  assert.deepEqual([S.reflect(j, "spend").rows, S.reflect(j, "spend").guessed], [3900, 7]);
+});
+
+test("C3 \"Skip: use our guesses\" and a blank One rough total write the rows as guesses; a typed total writes no guess", () => {
+  const a = persona("sam"), b = persona("sam"), c = persona("sam");
+  spendWithGuesses(a, { mode: "rows", rows: {} });
+  spendWithGuesses(b, S.valuesFor(b, "spend"));            // the screen as it opens: every box blank, then Skip
+  spendWithGuesses(c, { mode: "total", total: "" });
+  const amounts = (p) => ROWS.map((k) => row(p, k)?.amount ?? null);
+  assert.deepEqual(amounts(b), amounts(a)); assert.deepEqual(amounts(c), amounts(a));
+  assert.equal(c.guide.setup.spendMode, "total");
+  const d = persona("sam"); spendWithGuesses(d, { mode: "total", total: "3,000" });
+  assert.deepEqual([row(d, "housing"), d.expenses.find((x) => x.id === "setup-x-total").amount, Object.keys(d.guesses).some((k) => k.startsWith("expenses["))], [null, 3000, false]);
+});
+
+test("C3 typing one row keeps the others our guesses and the total is their sum; a 0 typed stays the person's 0; saving the guessed figure typed makes it theirs", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const groceries = row(p, "groceries").amount;
+  // back on Q6, the rent typed: the other boxes stay grey and are rewritten as our guesses (k moves them a little)
+  const { grey } = spendWithGuesses(p, { ...S.valuesFor(p, "spend"), rows: { ...S.valuesFor(p, "spend").rows, housing: "1,000" } });
+  assert.equal(row(p, "housing").amount, 1000); assert.equal(isGuess(p, "expenses[setup-x-housing].amount"), false);
+  for (const k of ["utilities", "groceries", "transport", "insurance", "dining", "shopping"]) { assert.equal(isGuess(p, `expenses[setup-x-${k}].amount`), true, k); assert.equal(row(p, k).amount, grey[k]); }
+  assert.ok(row(p, "groceries").amount >= groceries, "less rent leaves more room in the envelope");
+  const r = S.reflect(p, "spend");
+  assert.equal(r.rows, 1000 + Object.values(grey).reduce((t, v) => t + v, 0), "the total is the sum of the rows");
+  // Got it says the month in all, as the screen's "In all" does: the rows plus the loan payments from question 5 (Sam's
+  // car $420 and the card's $90)
+  assert.equal(Math.round(r.monthly - r.rows), 510);
+  // a 0 typed: no row, remembered, never guessed again (not by the settle, not when the screen reopens)
+  spendWithGuesses(p, { ...S.valuesFor(p, "spend"), rows: { ...S.valuesFor(p, "spend").rows, dining: "0" } });
+  assert.equal(row(p, "dining"), null); assert.deepEqual(p.guide.setup.spendZero, ["dining"]);
+  assert.equal(S.valuesFor(p, "spend").rows.dining, 0);
+  settle(p, GO); assert.equal(row(p, "dining"), null);
+  spendWithGuesses(p, S.valuesFor(p, "spend"));
+  assert.equal(row(p, "dining"), null, "reopened and saved again: still 0");
+  // the grey figure typed in as it is: the person's now
+  const g = row(p, "groceries").amount;
+  spendWithGuesses(p, { ...S.valuesFor(p, "spend"), rows: { ...S.valuesFor(p, "spend").rows, groceries: String(g) } });
+  assert.deepEqual([row(p, "groceries").amount, isGuess(p, "expenses[setup-x-groceries].amount")], [g, false]);
+  // the 0 typed over again: a figure, and spendZero goes
+  spendWithGuesses(p, { ...S.valuesFor(p, "spend"), rows: { ...S.valuesFor(p, "spend").rows, dining: "150" } });
+  assert.deepEqual([row(p, "dining").amount, p.guide.setup.spendZero], [150, undefined]);
+});
+
+test("C3 retirement spending: under 50 one line, written as our guess; from 50 the box's grey figure; a figure typed stays typed", () => {
+  const s = persona("sam");
+  const { later } = spendWithGuesses(s, { mode: "rows", rows: {} });
+  // under 50: today's rows without childcare (and loans still running then: none for Sam): $2,680
+  assert.deepEqual([later, s.retirement.spendingMonthly, s.guide.setup.retireAuto, s.guesses["retirement.spendingMonthly"].k], [2680, 2680, true, "overview/setup:retireSpend"]);
+  const n = persona("patLee");
+  spendWithGuesses(n, { mode: "rows", rows: {} });
+  // from 50 (spec 7.F): about $3,790 of costs + the $1,600 mortgage still running at 65, whose payment holds the home's tax
+  // and insurance = $5,390 (7.H "$4,100 + mortgage" counted those two twice; C3 review D9)
+  assert.equal(n.retirement.spendingMonthly, 5390); assert.equal(isGuess(n, "retirement.spendingMonthly"), true);
+  // typed: theirs, and it stays when the rows change
+  spendWithGuesses(n, { ...S.valuesFor(n, "spend"), retireMonthly: "4,500", retireAuto: false });
+  assert.deepEqual([n.retirement.spendingMonthly, isGuess(n, "retirement.spendingMonthly"), n.guide.setup.retireAuto], [4500, false, false]);
+  spendWithGuesses(n, { ...S.valuesFor(n, "spend"), rows: { ...S.valuesFor(n, "spend").rows, groceries: "500" }, retireMonthly: S.valuesFor(n, "spend").retireMonthly, retireAuto: !S.valuesFor(n, "spend").retireTyped });
+  assert.equal(n.retirement.spendingMonthly, 4500);
+});
+
+test("C3 the verdict waits while spending is mostly our guesses (8.1) and speaks plainly once it is typed", () => {
+  const s = persona("sam"); spendWithGuesses(s, { mode: "rows", rows: {} });
+  const st = S.standing(s, { today: PERSONA_TODAY });
+  assert.equal(st.spareWaits, true); assert.equal(st.runwayWaits, true); assert.equal(st.headline, "Your real spending decides whether your month works, so it's the best figure to type next.");
+  assert.deepEqual(st.spendGuessed, { monthly: 2680, count: 7, rows: 2680, typed: 0 });
+  assert.deepEqual([st.moves[0].title, st.moves[0].href], ["Type what you really spend", "#/overview/setup/spend?back=done"]);
+  const n = nextBest(s, { today: PERSONA_TODAY });
+  assert.deepEqual([n.spare.waits, n.next.id, n.next.status], [true, "bills", "now"]);
+  assert.ok(n.steps.every((x) => x.startDate === null && x.monthly === null && (x.doneDate === null || x.doneDate === PERSONA_TODAY)), "no step is dated from guessed spending");
+  // every row typed: no waiting, the plain verdict
+  spendWithGuesses(s, { mode: "rows", rows: { housing: 1200, utilities: 170, groceries: 240, transport: 300, insurance: 260, dining: 220, shopping: 290 } });
+  const st2 = S.standing(s, { today: PERSONA_TODAY });
+  assert.equal(st2.spareWaits, undefined); assert.equal(st2.spendGuessed, undefined);
+  assert.notEqual(st2.headline, st.headline);
+  assert.equal(nextBest(s, { today: PERSONA_TODAY }).spare.waits, false, "the card payment is still our guess: 3% of the month");
+});
+
+/** C4's contribution guesses stood in (a 401(k) contribution a month, marked as ours, so take-home for spending leaves it out). */
+function contribution(p, pid, monthly) {
+  const aid = `setup-have-retire-${pid}`;
+  if (!p.accounts.some((a) => a.id === aid)) p.accounts.push({ id: aid, name: "401(k)", type: "401k", balance: 0, asOf: PERSONA_TODAY, ownerId: pid, history: [], institution: "", notes: "" });
+  const id = `setup-contrib-${pid}`;
+  p.retirement.contributions.push({ id, accountId: aid, personId: pid, amount: monthly, period: "monthly", employerMatch: 0 });
+  markGuess(p, `retirement.contributions[${id}].amount`, { key: "contrib.amount", value: monthly, unit: "month", sigma: null, dataAsOf: PERSONA_TODAY }, PERSONA_TODAY);
+}
+test("C3 walk replays (14.4): left over by our guesses within $100 of 7.H, and every verdict waits", () => {
+  // 7.H's left-over figures count C4's pre-tax saving: S $200 a month, J $3,190 a year, N 8.4% of $85,000 + 6.3% of $40,000
+  const cases = [
+    ["sam", {}, [["setup-self", 200]], 20],
+    // J: 7.H's -$780 (proto3) leaves out the child and dependent care credit the app's tax engine counts since R5-3a: federal
+    // -$3,175 with the $900 a month of childcare against -$1,075 without, $175 a month: -780 + 175 = -605
+    ["jordan", { childcare: 900 }, [["setup-self", 3190 / 12]], -780 + 175],
+    ["patLee", {}, [["setup-self", 85000 * 0.084 / 12], ["setup-partner", 40000 * 0.063 / 12]], 990],
+  ];
+  for (const [name, rows, cs, want] of cases) {
+    const p = persona(name);
+    for (const [pid, m] of cs) contribution(p, pid, m);
+    spendWithGuesses(p, { mode: "rows", rows });
+    const n = nextBest(p, { today: PERSONA_TODAY });
+    near(n.spare.monthly, want, 100, `${name} left over`);
+    assert.equal(n.spare.waits, true, name);
+    assert.equal(S.standing(p, { today: PERSONA_TODAY }).spareWaits, true);
+  }
+  // Pat and Lee owe more than $100,000; Jordan's match step is open (C2's keys still hold with spending in)
+  const n = persona("patLee"); spendWithGuesses(n, { mode: "rows", rows: {} });
+  assert.ok(netWorth(n, { today: PERSONA_TODAY }).liabilities > 100000);
+});
+
+test("C3 without our guesses (outside the U.S., or no guess given) Q6 saves exactly as before", () => {
+  const a = persona("sam"), b = persona("sam");
+  S.applySpend(a, { mode: "rows", rows: { housing: 1200, groceries: 300 } });
+  spendWithGuesses(b, { mode: "rows", rows: { housing: 1200, groceries: 300 } });
+  assert.deepEqual(a.expenses.map((x) => [x.id, x.amount]), [["setup-x-housing", 1200], ["setup-x-groceries", 300]], "no guess: only what was typed");
+  assert.ok(b.expenses.length > 2, "with our guesses the blank rows are filled");
+  const eur = persona("sam"); eur.meta.currency = "EUR";
+  const before = structuredClone(eur);
+  S.applySpend(eur, { mode: "rows", rows: { housing: 1200 } }, PERSONA_TODAY, { guess: (k, o = {}) => estimate(before, k, { ...GO, ...o }) });
+  assert.deepEqual(eur.expenses.map((x) => x.id), ["setup-x-housing"], "the gate is closed: blank rows write nothing");
+});
+
+// ---- C3 money review (est/c3/c3-review-money.md): one test per defect, each failing on C3 as first built
+const { buildInputs, saveSpendingFigure } = await import("../../retirement/projection/compute.js");
+/** Sam at question 6: the car loan's payment and the card's balance typed on Q5b, the rest ours. */
+const samAtQ6 = () => persona("sam");
+const bill = (id, name, category, amount, essential = false) => ({ id, name, category, amount, period: "monthly", essential, inflates: true, startDate: "", endDate: "" });
+
+test("C3 review D1: a renter's guessed rent never stands for a mortgage added later on Q5b (the payment counts once)", () => {
+  const p = samAtQ6();
+  spendWithGuesses(p, { mode: "rows", rows: {} });                // Skip: use our guesses ("Rent" is our $1,200)
+  S.applyHavePicks(p, ["checking", "savings", "home"]); S.applyOwePicks(p, ["car-loan", "credit", "mortgage"]);
+  oweWithGuesses(p, { "car-loan": { payment: 420 }, credit: { owed: "3,000" }, mortgage: { payment: 1600 } }); settle(p, GO);
+  const rows = p.expenses.reduce((t, x) => t + x.amount, 0), debts = p.debts.reduce((t, d) => t + d.minPayment, 0);
+  assert.equal(expenses(p, { today: PERSONA_TODAY }).monthly, rows + debts, "every row and every payment once");
+  assert.equal(row(p, "housing").name, "Home costs", "our guess is the home's other costs now, never 'Rent or mortgage'");
+});
+
+test("C3 review D1b: a guessed Home costs row within 10% of the mortgage payment does not hide the payment", () => {
+  const p = patLee();
+  S.applyHaveAmounts(p, { checking: 28000, home: 1500000, "retire-setup-self": 500000 }, PERSONA_TODAY);
+  oweWithGuesses(p, { mortgage: { payment: 400, owed: 30000 } }); settle(p, GO);
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  near(row(p, "housing").amount, 400, 40, "home costs sit near the payment");
+  assert.equal(expenses(p, { today: PERSONA_TODAY }).monthly, p.expenses.reduce((t, x) => t + x.amount, 0) + 400);
+});
+
+test("C3 review D2: from 50, Insurance and health is not in our figure, so it pays nobody's Medicare on Will the money last?", () => {
+  const p = empty();
+  S.applyYou(p, { name: "A", who: "spouse", partnerName: "B", kids: 0, state: "OH" });
+  S.applyMoney(p, { people: { "setup-self": { status: "retired", pension: "1200" }, "setup-partner": { status: "work", amount: "70000", period: "annual" } } });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1959, retired: true, ss: { mode: "getting", amount: "2100" } }, "setup-partner": { month: 3, year: 1966, stopAge: 67, ss: { mode: "estimate" } } } }, PERSONA_TODAY);
+  S.applyHavePicks(p, ["checking", "retire"]); S.applyHaveAmounts(p, { checking: 20000, "retire-setup-self": 300000, "retire-setup-partner": 200000 }, PERSONA_TODAY);
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  assert.equal(isGuess(p, "retirement.spendingMonthly"), true);
+  const b = buildInputs(p, { today: PERSONA_TODAY });
+  assert.equal(b.health?.paidBy ?? null, null, "A's Medicare is priced by the plan");
+  assert.ok(b.inputs.events.some((e) => e.kind === "health" && e.year === 2026), "from this year, A's Medicare");
+});
+
+test("C3 review D4: with no pay on file and every bill our guess, the retirement verdict waits and the headline does not call the month good", () => {
+  const p = empty();
+  S.applyYou(p, { name: "A", who: "me", kids: 0, state: "TX" });
+  S.applyMoney(p, { people: { "setup-self": { status: "none" } } });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1968, stopAge: 65, ss: { mode: "statement", amount: "1900" } } } }, PERSONA_TODAY);
+  S.applyHavePicks(p, ["checking", "retire"]); S.applyHaveAmounts(p, { checking: 30000, "retire-setup-self": 150000 }, PERSONA_TODAY);
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.ok(st.retire, "the retirement check runs");
+  assert.equal(st.retireGuessed, true);
+  assert.equal(st.headline, "Your real spending decides whether your month works, so it's the best figure to type next.", "not 'Your month and your cushion look good'");
+});
+
+test("C3 review D7: One rough total typed as 0 is the person's 0 (nothing guessed, nothing written), as before C3", () => {
+  const p = samAtQ6();
+  const { grey } = spendWithGuesses(p, { mode: "total", total: "0" });
+  assert.deepEqual(grey, {}, "no grey figure is drawn under a typed total");
+  assert.deepEqual(p.expenses.filter((x) => x.id.startsWith("setup-x-")), []);
+  assert.deepEqual(Object.keys(p.guesses ?? {}).filter((k) => k.startsWith("expenses")), []);
+});
+
+test("C3 review D8: a retirement figure typed on Will the money last? is the person's, even when it equals our guess", () => {
+  const p = samAtQ6();
+  p.expenses.push(bill("hi", "Health insurance premium", "health", 250, true));
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const v = p.retirement.spendingMonthly, shown = buildInputs(p, { today: PERSONA_TODAY }).figureMonthly;
+  assert.notEqual(v, shown, "the box shows the figure less the premium");
+  saveSpendingFigure(p, v, shown); settle(p, GO);
+  p.expenses.push(bill("gym", "Gym", "fun", 60)); settle(p, GO);
+  assert.deepEqual([p.retirement.spendingMonthly, isGuess(p, "retirement.spendingMonthly")], [v, false]);
+});
+
+test("C3 review D9: from 50, a mortgage still running when work stops carries its tax and insurance once (in its payment), not twice", () => {
+  const lib = (p) => { const m = new Map(); return { today: PERSONA_TODAY, memo: (n, f) => { if (!m.has(n)) m.set(n, f()); return m.get(n); }, estimate: (k, o = {}) => estimate(p, k, { ...GO, ...o }) }; };
+  const figure = (p, escrow) => { const q = structuredClone(p); if (escrow) q.guide.setup.taps = { ...(q.guide.setup.taps ?? {}), escrow }; return S.retireSpendFor(q, { today: PERSONA_TODAY, args: S.spendArgs(q, { mode: "rows", rows: {} }) }, lib(q)); };
+  // Pat and Lee: the $1,600 payment still runs when Pat stops at 65, and it holds the home's tax and insurance (E22)
+  const n = persona("patLee");
+  const running = figure(n, null), apart = figure(n, "no");
+  assert.equal(running.loans, 1600);
+  assert.equal(running.value, apart.value - (apart.value - running.value), "sanity");
+  // "no" (tax and insurance paid apart from the payment) adds them; in the payment they are not added again
+  assert.ok(apart.value - running.value >= 200, `escrow added only when paid apart: ${apart.value} vs ${running.value}`);
+  // a mortgage paid off before work stops: its tax and insurance go on, so they are added
+  const short = patLee(); oweWithGuesses(short, { mortgage: { payment: 1600, owed: "20,000" } }); settle(short, GO);
+  const done = figure(short, null), doneApart = figure(short, "no");
+  assert.deepEqual([done.loans, done.value], [0, doneApart.value]);
+});
+
+test("C3 review D3: the bank card's one tap beside a guessed row makes the plan's figure what the bank shows, once", async () => {
+  const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { bankVsPlan } = await import("../../cashflow/income-statement/compute.js");
+  const { addFromBank } = await import("../../cashflow/expenses/compute.js");
+  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-08-20", "2026-10-31");
+  p.expenses = p.expenses.filter((x) => ["housing", "childcare", "debt"].includes(x.category));
+  // a smaller pay, so our guesses sit under what the bank shows; question 6 skipped
+  p.income = p.income.filter((x) => x.type === "salary").map((x) => ({ ...x, amount: x.period === "biweekly" ? 1200 : 1500 }));
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const lines = bankVsPlan(p, { today: PERSONA_TODAY }).lines;
+  const kinds = (l) => (l.ours ? { dining: ["dining", "fun", "subscriptions", "pets"], groceries: ["groceries"], transport: ["transport"], utilities: ["utilities", "phone"] }[l.category] ?? [l.category] : [l.category]);
+  const listed = (cats) => expenses(p, { today: PERSONA_TODAY }).byCategory.filter((c) => cats.includes(c.category)).reduce((t, c) => t + c.monthly, 0);
+  const tapped = lines.filter((l) => ["dining", "groceries", "transport"].includes(l.category));
+  assert.equal(tapped.length, 3, "the card offers eating out, groceries and the car");
+  for (const l of tapped) {
+    const before = expenses(p, { today: PERSONA_TODAY }).monthly;
+    addFromBank(p, l, `bank-${l.category}`); settle(p, GO);
+    near(listed(kinds(l)), l.bank, 10, `${l.category}: listed now what the bank shows`);
+    near(expenses(p, { today: PERSONA_TODAY }).monthly - before, l.more, 10, `${l.category}: the month grows by what the line said`);
+  }
+  const again = bankVsPlan(p, { today: PERSONA_TODAY }).lines.filter((l) => ["dining", "groceries", "transport"].includes(l.category));
+  assert.deepEqual(again, [], "no second card for the same kinds");
+});
+
+test("C3 verify: 'Use' on a row of ours that holds two kinds writes each kind once; the card never offers the other kind again", async () => {
+  const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { bankVsPlan } = await import("../../cashflow/income-statement/compute.js");
+  const { addFromBank, fromBankWords } = await import("../../cashflow/expenses/compute.js");
+  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-08-20", "2026-10-31");
+  p.expenses = p.expenses.filter((x) => ["housing", "childcare", "debt"].includes(x.category));
+  p.income = p.income.filter((x) => x.type === "salary").map((x) => ({ ...x, amount: x.period === "biweekly" ? 1200 : 1500 }));
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const card = () => bankVsPlan(p, { today: PERSONA_TODAY });
+  const u = card().lines.find((l) => l.category === "utilities");
+  const listed = (cats) => expenses(p, { today: PERSONA_TODAY }).byCategory.filter((c) => cats.includes(c.category)).reduce((t, c) => t + c.monthly, 0);
+  assert.ok(u?.ours, "a line for our Utilities and phone");
+  assert.equal(card().over, true, "the card is on screen");
+  const said = addFromBank(p, u, "bank-u"); settle(p, GO);
+  // the card, still on screen for the other kinds, never offers the phone again (C3b offered "Add $170" here: the phone,
+  // already inside the $390, counted twice)
+  assert.equal(card().over, true);
+  assert.deepEqual(card().lines.filter((l) => ["utilities", "phone"].includes(l.category)).map((l) => [l.label, Math.round(l.more)]), [], "no line for utilities or the phone");
+  near(listed(["utilities", "phone"]), u.bank, 10, "listed for both kinds: what the bank shows");
+  // each kind on its own, to $10: the bank's utilities (about $223) in the row, now named for its kind, and its phone and
+  // internet (about $165) in a bill of its own; the person's figures from now on
+  assert.deepEqual([row(p, "utilities").name, row(p, "utilities").amount, p.expenses.find((x) => x.id === "bank-u")?.category], ["Utilities", Math.round(u.ours.parts.utilities / 10) * 10, "phone"]);
+  assert.equal(isGuess(p, "expenses[setup-x-utilities].amount"), false, "the person's figure now");
+  assert.equal(fromBankWords(said), `From your bank: Utilities $${row(p, "utilities").amount} and Phone and internet $${p.expenses.find((x) => x.id === "bank-u").amount} a month.`);
+  // a row of ours that holds only its own kind keeps its name and its one bill (the C3 review D3 path is unchanged)
+  const g = card().lines.find((l) => l.category === "groceries");
+  assert.deepEqual(addFromBank(p, g, "bank-g"), { name: "Groceries", amount: g.ours.to, row: true, also: [] });
+  assert.equal(p.expenses.some((x) => x.id === "bank-g"), false, "no second bill");
+});
+
+test("C3 verify: a mortgage removed after Get started (paid off) brings its property tax and insurance back into our home costs", () => {
+  // Pat and Lee skip question 6 with the $1,600 payment: Home costs is the upkeep only (tax and insurance are in the payment)
+  const p = persona("patLee"); spendWithGuesses(p, { mode: "rows", rows: {} });
+  const before = row(p, "housing").amount, month = expenses(p, { today: PERSONA_TODAY }).monthly;
+  assert.equal(before, 120, "7.H: upkeep $120 (HOA Not sure = No in Arizona)");
+  // the mortgage paid off and removed on Debts and Net worth; the pick on question 5 stays in guide.setup
+  p.debts = p.debts.filter((d) => d.id !== "setup-debt-mortgage"); p.accounts = p.accounts.filter((a) => a.type !== "mortgage");
+  const moved = settle(p, GO).changed.map((c) => c.path);
+  assert.ok(moved.includes("expenses[setup-x-housing].amount"), "our home costs follow");
+  // upkeep 450,000 x 0.293% x 1.057 / 12 = $116, plus the property tax ($166) and home insurance ($105) the payment held
+  // (E23, E24: home.js escrowMonthly on the $450,000 home) = $387, to $10 (R11): $390. C3b kept $120: they were counted nowhere
+  assert.equal(row(p, "housing").amount, 390, "Home costs now hold the tax and insurance");
+  assert.equal(S.housingWords(p).label, "Home costs", "question 6 asks for the home's costs, not 'besides the mortgage'");
+  near(expenses(p, { today: PERSONA_TODAY }).monthly, month - 1600 + (390 - 120), 1, "the month: less the payment, plus the costs it held");
+});
+
+// ---- C3 UX review (est/c3/c3-review-ux.md): the words and waits a person sees, as the computes give them
+test("C3 UX 5: an owner with no mortgage is asked for Home costs, never Rent, and the row is named so", () => {
+  assert.deepEqual([S.housingWords(sam()).label, S.housingWords(persona("patLee")).label], ["Rent", "Home costs besides the mortgage"]);
+  const p = patLee(); S.applyOwePicks(p, ["none"]); settle(p, GO);
+  const w = S.housingWords(p);
+  assert.deepEqual([w.kind, w.label, w.help], ["own", "Home costs", "Property tax, home insurance, HOA fees and upkeep"]);
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  assert.equal(row(p, "housing").name, "Home costs");
+  // our guess there is what the help says: upkeep, property tax and insurance (no mortgage payment holds them)
+  assert.match(estimate(p, "spend.housing", { ...GO, path: "expenses[setup-x-housing].amount" }).why, /property tax and insurance/);
+});
+
+test("C3 UX 4: a parent who skips with the childcare tap unanswered is told childcare is not counted, until it is answered", () => {
+  const j = persona("jordan"); spendWithGuesses(j, { mode: "rows", rows: {} });
+  const st = S.standing(j, { today: PERSONA_TODAY });
+  assert.equal(st.childcareMissing, true);
+  assert.deepEqual(st.later.filter((l) => l.key === "childcare").map((l) => l.href), ["#/overview/setup/spend?back=done"]);
+  const no = persona("jordan"); spendWithGuesses(no, { mode: "rows", rows: {}, taps: { childcare: "no" } });
+  assert.equal(S.standing(no, { today: PERSONA_TODAY }).childcareMissing, undefined, "No: nothing to say");
+  const yes = persona("jordan"); spendWithGuesses(yes, { mode: "rows", rows: { childcare: "900" } });
+  assert.equal(S.standing(yes, { today: PERSONA_TODAY }).childcareMissing, undefined, "typed: counted");
+  const s = persona("sam"); spendWithGuesses(s, { mode: "rows", rows: {} });
+  assert.equal(S.standing(s, { today: PERSONA_TODAY }).childcareMissing, undefined, "no children");
+});
+
+test("C3 UX 3: on must-pay bills that are mostly our guesses, no cushion step is ticked and no money moves out of the cushion", () => {
+  // Sam with $40,000 in savings and the $3,000 card at 22.4%: on typed bills the card is paid from savings above the cushion
+  const p = persona("sam");
+  S.applyHaveAmounts(p, { checking: 1200, savings: 40000 }, PERSONA_TODAY); settle(p, GO);
+  spendWithGuesses(p, { mode: "rows", rows: {} });
+  const n = nextBest(p, { today: PERSONA_TODAY });
+  assert.equal(liquidity(p, { today: PERSONA_TODAY }).waits, true);
+  const full = n.steps.find((x) => x.id === "full-fund"), starter = n.steps.find((x) => x.id === "starter"), high = n.steps.find((x) => x.id === "high-debt");
+  assert.deepEqual([starter.status, starter.waits, full.status, full.waits], ["done", true, "done", true]);
+  assert.match(full.detail, /^Usable cash covers about [\d.]+ months, by our guesses of your bills; the plan aims for 6\.$/);
+  assert.equal(high.fromSavings, 0, "no 'pay it from savings' on guessed bills");
+  // typed bills: the same household is told to pay the card from savings, as before
+  const t = persona("sam"); S.applyHaveAmounts(t, { checking: 1200, savings: 40000 }, PERSONA_TODAY); settle(t, GO);
+  spendWithGuesses(t, { mode: "rows", rows: { housing: 1200, utilities: 170, groceries: 240, transport: 300, insurance: 260, dining: 220, shopping: 290 } });
+  assert.ok(nextBest(t, { today: PERSONA_TODAY }).steps.find((x) => x.id === "high-debt").fromSavings > 0);
+});
+
+test("C3 UX 7 and 12: life cover and the shortfall alert, resting on our spending guesses, are said roughly and say so", async () => {
+  const { protectionGaps, twoFigures } = await import("../../insurance/life-needs/compute.js");
+  const { compute: alerts } = await import("../alerts/compute.js");
+  assert.deepEqual([twoFigures(187400), twoFigures(497500), twoFigures(209800), twoFigures(8300), twoFigures(0)], [190000, 500000, 210000, 8300, 0]);
+  const j = persona("jordan"); spendWithGuesses(j, { mode: "rows", rows: {} });
+  const g = protectionGaps(j, { today: PERSONA_TODAY });
+  assert.ok(g.length && g.every((x) => x.rough === true && /rests on our guesses of your spending/.test(x.sentence)));
+  for (const x of g) for (const m of `${x.title} ${x.sentence}`.matchAll(/\$([\d,]+)/g)) { const v = Number(m[1].replace(/,/g, "")); assert.equal(v, twoFigures(v), `${m[0]} is said to two figures`); }
+  // typed spending: to the dollar, as before
+  const t = persona("jordan"); spendWithGuesses(t, { mode: "rows", rows: { housing: 50, utilities: 460, groceries: 550, transport: 470, insurance: 340, childcare: 900, dining: 470, shopping: 660 } });
+  assert.ok(protectionGaps(t, { today: PERSONA_TODAY }).every((x) => x.rough === undefined && !/our guesses/.test(x.sentence)));
+  // Needs attention's calm line: the shortfall by our guesses to the $10, as every other page says it
+  const short = -nextBest(j, { today: PERSONA_TODAY }).spare.monthly;
+  const a = alerts(j, { today: PERSONA_TODAY }).alerts.find((x) => x.id === "spend-guessed");
+  assert.ok(a, "the calm line is there");
+  if (short > 0) assert.ok(a.detail.includes(`about $${(Math.round(short / 10) * 10).toLocaleString("en-US")} more`), a.detail);
+  // two earners with children, spending all ours: the next move says what the answer rests on once, after both people
+  const { RESTS_ON } = await import("../../insurance/life-needs/compute.js");
+  const c = empty();
+  S.applyYou(c, { name: "Morgan", who: "spouse", partnerName: "Casey", kids: 2, state: "PA" });
+  S.applyMoney(c, { people: { "setup-self": { status: "work", amount: "78000", period: "annual" }, "setup-partner": { status: "work", amount: "46000", period: "annual" } } });
+  S.applyAges(c, { people: { "setup-self": { month: 5, year: 1982, stopAge: 65, ss: { mode: "estimate" } }, "setup-partner": { month: 9, year: 1984, stopAge: 65, ss: { mode: "estimate" } } }, kids: { "setup-kid-1": 2016, "setup-kid-2": 2021 } }, PERSONA_TODAY);
+  S.applyHavePicks(c, ["checking", "home"]); S.applyHaveAmounts(c, { checking: 9000, home: 320000 }, PERSONA_TODAY);
+  S.applyOwePicks(c, ["mortgage"]); S.applyOweAmounts(c, { mortgage: { owed: 210000, payment: 1850, rate: 5.25 } }, PERSONA_TODAY);
+  settle(c, GO); spendWithGuesses(c, { mode: "rows", rows: {} });
+  const two = protectionGaps(c, { today: PERSONA_TODAY });
+  assert.equal(two.length, 2);
+  const move = nextBest(c, { today: PERSONA_TODAY }).steps.find((x) => x.id === "protect");
+  assert.equal(move.detail.split(RESTS_ON).length - 1, 1, move.detail);
+  assert.ok(move.detail.endsWith(`${RESTS_ON} Cover you already have, through work too, goes on Policies.`));
+});

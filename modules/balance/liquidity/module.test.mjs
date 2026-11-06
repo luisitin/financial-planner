@@ -87,3 +87,16 @@ test("usable cash leaves out a freelancer's unpaid tax on the year's earnings (t
   // without a date (or for a salaried household) nothing changes
   assert.equal(compute(plan, {}).taxOwed, 0);
 });
+
+// C3 (spec 8.1): the cushion waits while the must-pay bills are mostly our guesses
+test("C3 waits: half or more of the must-pay bills are our guesses; no key on a plan without guesses", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = emptyPlan();
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 3000 }];
+  p.expenses = [{ id: "setup-x-housing", name: "Rent", category: "housing", amount: 1200, period: "monthly", essential: true }, { id: "setup-x-groceries", name: "Groceries", category: "groceries", amount: 400, period: "monthly", essential: true }];
+  assert.equal(compute(p, {}).waits, undefined);
+  markGuess(p, "expenses[setup-x-groceries].amount", { key: "spend.groceries", value: 400, unit: "month", sigma: 0.25, dataAsOf: "2026-11-02" }, "2026-11-02");
+  assert.deepEqual([compute(p, {}).waits, compute(p, {}).guessedShare], [false, 0.25]);
+  markGuess(p, "expenses[setup-x-housing].amount", { key: "spend.housing", value: 1200, unit: "month", sigma: 0.25, dataAsOf: "2026-11-02" }, "2026-11-02");
+  assert.equal(compute(p, {}).waits, true);
+});

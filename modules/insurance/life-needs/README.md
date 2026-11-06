@@ -343,6 +343,14 @@ parent, 1,304 plans with the review's cases; the 99 single-parent adults in qa/h
   child under 18 because Mia's birth date is missing on People"); twossrich's "Today Social Security and savings would cover
   it" (now "If Jo died today, Social Security and savings would pay for everything the children would need").
 
+## Spending that is mostly our guesses (smart guesses C3 UX review, item 7, 2026-11-06)
+The needs are worked out from Expenses' spending. When half or more of it is our guesses (Expenses' `guessedShare`, only
+on a plan that holds guesses), `protectionGaps` says the needs, gaps and the single parent's parts to two significant
+figures (`twoFigures`: $187,400 -> $190,000, $497,500 -> $500,000) and ends the sentence "That rests on our guesses of
+your spending: type what you spend first and it firms up." (`RESTS_ON`, `rough: true`; Next best action says it once
+for two people). The move and its order stay: the gap is large
+either way. Every plan without guesses says exactly what it said before. Test: setup `module.test.mjs` "C3 UX 7 and 12".
+
 ## Review 2026-11-06
 Fixes for the verifier's report on the sixth pass (life-verm #1 and #2). The couple's method, figures and words are
 unchanged (endsSoon stays "by next year" for them), apart from the figure without the job (follow-ups, below); the

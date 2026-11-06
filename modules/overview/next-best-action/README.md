@@ -198,3 +198,21 @@ separately the month's federal tax is Budget's two returns (each owner's busines
   screen add up to the spare money".
 
 Review 2026-11-06 (round 7): the match step ("You put money in with a match", "Your spouse has a 401(k) and pay", "Your spouse's 401(k) is from a job left") and the room left on the IRA and 401(k) steps (`roomWords`: "You have $7,500 of room left this year", "Room left this year: you $7,500, Bo $3,900") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Ana $7,500, Bo $3,900 of room left this year"; core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."
+
+## Spending that is mostly our guesses (smart guesses C3, 2026-11-06)
+`spare.guessedShare`, `spare.guessedMonthly` = Expenses' figures (only when the plan holds guesses); `spare.waits` =
+guessedShare >= 0.5 (spec 8.1). While it waits, the left-over figure is still worked out but carries no verdict: the
+bills step becomes "Type what you really spend" (status now, `waits: true`, goes to Expenses) and says what the guesses
+alone give ("with our guesses it would be about $780 short"), and no step is dated or given a monthly figure from the
+spare money (`startDate`, `monthly`, `capacity` null; a `doneDate` other than today dropped; `waits: true` on the step).
+What savings or cash already pay today stays. Below half, the steps read as before. Test: `module.test.mjs` "C3 spare.waits".
+
+After the C3 reviews (est/c3/c3-fix.md): while the must-pay bills are mostly our guesses (liquidity `waits`), the starter
+and full emergency fund steps carry `waits: true` and say "by our guesses of your bills" (amounts to $100, as Get started's
+cushion says them), the view never ticks them (UX 3), and no "pay it from savings above the cushion" is offered on them
+(`above` is 0: money is not moved out of the cushion on our guesses). The bills step says "All $2,960 a month of your
+spending is our guesses for now" when it is all ours, and ends "Type what you really spend to see what's really left."
+The view's "Each month's money" says "Spending (about $3,000 of it our guesses)", its last line "With our guesses: about
+$380 short" in the calm colour (never red), and links to question 6; the step is numbered ✎, not 0 (UX 1, 12). Life cover for two people whose answer
+rests on our guesses of the spending (Life insurance needs' `RESTS_ON`) says that once, after both sentences. Tests: setup
+`module.test.mjs` "C3 UX 3", "C3 UX 7 and 12".

@@ -4,7 +4,8 @@
 import { isTransfer, monthOf, monthLabel, coverage, monthCover, COVER_SLACK, shortDate, coverageByAccount, monthGaps, gapIssues, wholeMonth, allUnimportedCardLines, unimportedCardLines, cardLineLabel, beforeLabel, monthsWords, unsureCardPayments, unsureWords, bringWords, theCard } from "../../transactions/ledger/compute.js";
 import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { compute as computeIncome } from "../income/compute.js";
-import { compute as computeExpenses, CATEGORIES } from "../expenses/compute.js";
+import { perMonth, activeOn } from "../../../core/math/periods.js";
+import { compute as computeExpenses, CATEGORIES, ROW_HOLDS, guessedSetupRow } from "../expenses/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { takeHome } from "../paycheck/compute.js";
 
@@ -111,7 +112,7 @@ export function compute(plan, params = {}) {
 /** Bank versus plan: the bank shows more going out than Expenses lists by at least this much a month, and this share of it. */
 export const BANK_OVER = { dollars: 200, share: 0.1, minMonths: 2, maxMonths: 6, lineAtLeast: 50 };
 /**
- * bankVsPlan(plan, { today }) -> null | { months, bankOut, planOut, gap, over, lines: [{ category, label, icon, essential, bank, plan, more }],
+ * bankVsPlan(plan, { today }) -> null | { months, bankOut, planOut, gap, over, lines: [{ category, label, icon, essential, bank, plan, more, ours? }],
  *   unfiled, cards, cardsUnfiled: [{ accountId, name, monthly }], gapWithCards, cardsGap, cardFile, unsure: [{ ym, text }] } (all a month)
  * What the bank files show going out, on average over the whole months they cover (the last BANK_OVER.maxMonths, at least
  * minMonths; ledger's wholeMonth: a month with a hole in an account's files, an account stopping early or starting late, or a
@@ -197,10 +198,25 @@ export function bankVsPlan(plan, params = {}) {
   const planOut = exp.monthly - (planCat.get("taxes") ?? 0) + extra;
   const bankOut = out / n;
   const gap = bankOut - planOut;
-  const lines = [...byCat].map(([category, total]) => {
-    const bank = total / n, planned = (planCat.get(category) ?? 0) + (category === "debt" ? extra : 0);
-    return { category, label: CATEGORIES[category].label, icon: CATEGORIES[category].icon, essential: CATEGORIES[category].essential, bank, plan: planned, more: bank - planned };
-  }).filter((x) => x.more >= BANK_OVER.lineAtLeast).sort((a, b) => b.more - a.more);
+  // one of Get started's rows that is still our guess holds several kinds at once ("Eating out and fun" holds fun,
+  // subscriptions and pets: Expenses' ROW_HOLDS), so the bank is compared with the row as a whole: one line, named as the row,
+  // whose `ours` says which row "Add" sets to what the bank shows (addFromBank). A bill added beside our guess came off it
+  // again at the next save (C3 review D3). Only for a plan with such a row; every other plan's lines are as before.
+  const ourRows = (plan.expenses ?? []).filter((x) => ROW_HOLDS[x.category] && x.id === `setup-x-${x.category}` && (!today || activeOn(x, today)) && guessedSetupRow(plan, x));
+  const grouped = new Map(ourRows.flatMap((r) => ROW_HOLDS[r.category].map((c) => [c, r])));
+  const lineOf = (category, bank, planned) => ({ category, label: CATEGORIES[category].label, icon: CATEGORIES[category].icon, essential: CATEGORIES[category].essential, bank, plan: planned, more: bank - planned });
+  const lines = [
+    ...[...byCat].filter(([category]) => !grouped.has(category)).map(([category, total]) => lineOf(category, total / n, (planCat.get(category) ?? 0) + (category === "debt" ? extra : 0))),
+    ...ourRows.map((r) => {
+      const holds = ROW_HOLDS[r.category], bank = holds.reduce((t, c) => t + (byCat.get(c) ?? 0), 0) / n, planned = holds.reduce((t, c) => t + (planCat.get(c) ?? 0), 0);
+      const amount = perMonth(r.amount, r.period);
+      // kind by kind, what the bank shows less what is typed beside our row (the row is in its own kind's figure): "Use" writes
+      // each kind on its own, as the card compares them once the row is the person's (C3 verify: "Use $390" on Utilities and
+      // phone, then "Add $170" Phone and internet, counted the phone twice)
+      const parts = Object.fromEntries(holds.map((c) => [c, Math.max(0, (byCat.get(c) ?? 0) / n - ((planCat.get(c) ?? 0) - (c === r.category ? amount : 0)))]));
+      return { ...lineOf(r.category, bank, planned), label: r.name || CATEGORIES[r.category].label, essential: r.essential ?? CATEGORIES[r.category].essential, ours: { id: r.id, amount, to: Math.max(0, Math.round((amount + bank - planned) / 10) * 10), parts } };
+    }),
+  ].filter((x) => x.more >= BANK_OVER.lineAtLeast).sort((a, b) => b.more - a.more);
   const overBy = (g) => g >= Math.max(BANK_OVER.dollars, BANK_OVER.share * planOut);
   const cardsUnfiled = [...perCard.values()].map((c) => ({ ...c, monthly: c.monthly / n })).sort((a, b) => b.monthly - a.monthly);
   // in a month whole but for payments counted for neither card, the bank's own lines are a floor: what the cards bought only

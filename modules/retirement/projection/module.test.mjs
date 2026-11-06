@@ -1470,3 +1470,17 @@ test("Review 2026-11-06 (round 7): the unnamed first adult reads 'you' and 'your
   assert.ok(row.incomeLines.some((l) => l.name === "your spouse's pay" && Math.abs(l.amount - 18000) < 1), "was: My spouse's pay");
   assert.ok(row.incomeLines.some((l) => l.name === "your Social Security" && l.amount > 30000), "was: Me's Social Security");
 });
+
+// C3 (spec 7.F): Get started's retirement figure kept by our guesses' ledger (overview/setup:retireSpend, which settle works
+// out again whenever what it reads changes) is used as saved; from 50 it is not today's bills, so it is not worked out again here
+test("C3 a retirement figure in the guesses' ledger is used as saved; the same figure without a ledger entry follows today's bills as before", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const p = await at62();
+  p.guide = { ...(p.guide ?? {}), setup: { ...(p.guide?.setup ?? {}), retireAuto: true } };
+  p.retirement.spendingMonthly = 4100;
+  const live = buildInputs(p, { today: H });
+  assert.notEqual(live.setupMonthly, 4100, "worked out from today's bills (setupFigure)");
+  markGuess(p, "retirement.spendingMonthly", { key: "overview/setup:retireSpend", value: 4100, unit: "month", sigma: null, dataAsOf: "2026-11-02" }, H);
+  const kept = buildInputs(p, { today: H });
+  assert.equal(kept.setupMonthly, 4100); assert.equal(kept.health.fromSetup, live.health.fromSetup);
+});

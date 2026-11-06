@@ -23,6 +23,7 @@ const tierOf = (type) => TIERS.now.types.includes(type) ? "now" : TIERS.week.typ
  *   expenses: { monthly, essentialMonthly } | null,
  *   runwayMonths (now / essential monthly), fullRunwayMonths (now / total monthly), targetMonths, target (money),
  *   gap (target - now, 0 when covered), fundedShare (now / target, capped at 1), status: "ok"|"warn"|"bad"|"unknown",
+ *   waits?, guessedShare? (only when the plan holds guesses: the share of the must-pay bills that is ours; waits when half or more),
  *   warnings: [text]
  * }
  */
@@ -63,5 +64,8 @@ export function compute(plan, params = {}) {
   const warnings = [];
   if (accounts.length && !expenses) warnings.push("Add your expenses to see how many months your cash covers.");
   if (expenses && essential === 0) warnings.push("None of your expenses is marked as must-pay, so the emergency-fund target is zero. Mark the bills you cannot skip.");
-  return { now, nowAll, earmarked, taxOwed, tax, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings };
+  // the must-pay bills are mostly our guesses (Expenses' guessedEssentialShare, only when the plan holds guesses): the months
+  // the cash covers wait for the real bills (spec 8.1), said calmly, never "thin" on guesses alone
+  const waits = ex && ex.guessedEssentialShare !== undefined ? { waits: ex.guessedEssentialShare >= 0.5, guessedShare: ex.guessedEssentialShare } : {};
+  return { now, nowAll, earmarked, taxOwed, tax, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings, ...waits };
 }

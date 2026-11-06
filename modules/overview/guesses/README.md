@@ -1,7 +1,8 @@
 # overview/guesses: Our guesses for you
 
-**Status:** usable (C1 and C2 of the smart-guesses build plan: plumbing, data, this page; C2: the home and every debt
-Get started asks about, so a picked debt is never dropped, and the "Better guesses are ready" card).
+**Status:** usable (C1 to C3 of the smart-guesses build plan: plumbing, data, this page; C2: the home and every debt
+Get started asks about, so a picked debt is never dropped, and the "Better guesses are ready" card; C3: a month's
+spending, row by row, so spending is never $0, and the verdicts that wait while it is mostly ours).
 
 ## Purpose
 A layperson should get through the app without knowing every number. Where a box is left empty, the plan fills in a
@@ -106,7 +107,7 @@ until C7.
 | `debt.student.rate` (6.52%) | same | the federal rate on new undergraduate student loans | `student_loan_rates_federal` | small |
 | `debt.<kind>.payment` | "<account>: payment a month" | what pays off what you owe over 30 / 5 / 10 / 3 years at our rate guess (the rate is still a guess) or at your rate (it is the person's); cards: the month's interest plus 1% of what you owe, a usual minimum | the rate's sources while the rate is still a guess (+ `card_minimum_payment_rule_cfpb` for cards) | big |
 | `overview/setup:ss` | "<name>'s Social Security at full retirement age" | worked out from the pay on file with Social Security's formula | (your own answers) | big |
-| `overview/setup:retireSpend` | Spending a month once work stops | today's bills without childcare, plus loans still running then | (your own answers) | big |
+| `overview/setup:retireSpend` | Spending a month once work stops | today's bills without childcare, plus loans still running then (from 50, C3: everyday costs as people 65-74 spend them, home costs and loans then) | (your own answers) | big |
 | `overview/setup:cushionTarget` | Safety cushion to aim for | N months of your must-pay bills | (your own answers) | small |
 | `overview/setup:cushionFunds` | Accounts that hold the cushion | your checking, savings and cash accounts | (your own answers) | small |
 
@@ -218,6 +219,95 @@ typed on Get started stays. "No, two loans" stores `guide.setup.twins[<our id>][
 is not asked again for that pair; a loan or home of the same kind added later is asked about (a HELOC answered "No",
 then the real home loan added: asked, so it is not counted twice in silence).
 
+## Spending (estimators/spend.js; spec 7.0, 7.A, R10, 7.F)
+Tier 3, one key per row of Get started's spending screen (setup's `SPEND`, whose `covers` must equal `COVERS` here; a
+test checks): `spend.housing`, `spend.utilities`, `spend.groceries`, `spend.transport`, `spend.insurance`,
+`spend.childcare`, `spend.dining`, `spend.shopping`, each a guess at `expenses[setup-x-<row>].amount`, a month, declared
+spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `spendModel` works out every row at once
+(memoised per pass) and is what keeps the screen and the plan in step:
+
+- **What is typed** (`args` = the screen's `{ mode, rows: { [row]: number | null }, total, taps }`, setup's `spendArgs`;
+  else the plan): a setup row whose amount is our guess is ours; every other bill is typed; a row typed as 0 is the
+  person's 0 (`guide.setup.spendZero`). The model never reads a guessed row's own figure, so refreshing one row moves no
+  other. A bill typed elsewhere (Expenses) in a row's categories (Expenses' `ROW_HOLDS`: the row's own categories, plus
+  subscriptions and pets in eating out and fun and personal care in shopping, which the survey's entertainment and
+  personal care put there; C3 money review D5) comes off that row's guess, so it is never counted
+  twice; a housing bill that is the mortgage's own payment does not.
+- **Take-home a (7.0, `takeHome`).** Every income line coming in today (pay as wages, Social Security as such, the rest
+  as other income; a line marked untaxed is added as it is), less federal income tax (`core/math/tax` `federalTax` with
+  the filing status, children under 17 (a child of unknown age counts as one), adults 65 or over, and typed pre-tax
+  saving to a 401(k), traditional IRA or HSA: a contribution that is our guess is tier 4 and left out; refundable credits
+  in), less the state's income tax: the State page's typed rate x AGI, else none in a state with no wage tax
+  (`NO_WAGE_TAX`), else the flat rule (`FLAT`, `flatTax`), else (a graduated state, or no state) a = income x the
+  survey's own after-tax ratio at that income (`taxRatio2023`, log-log between the fifths). The spec's 7.0 counts pay
+  only; every line is counted here so a retired household's pension and Social Security are not $0 (the personas are
+  unchanged). S $44,420 (federal $3,580), J $57,813 (federal -$692, Ohio $879), N $112,040.
+- **Flexible rows** (utilities, groceries, car and transit, insurance and health, eating out, shopping):
+  `sQ_r(a) x r_hh x r_reg x a / 12`. `sQ_r` is the share of after-tax income the survey's second to fifth income fifths
+  spend on the row (items below), against `A(fifth) = 2025 income before taxes x the 2023 after/before ratio`, log-log
+  between them and flat outside (the lowest fifth, retirees spending savings, is left out; no extrapolation above the
+  top fifth). `r_d(cell) = [share(cell)/share(all)] / [sQ(A(cell))/sQ(A(all))]` (cells with no 2023 after-tax column take
+  the ratio at their income). Household type (spec 5.4): one person, one parent (a child under 18), a married couple by
+  the oldest child (unknown ages: all couples with children), three adults or more: all households. Region: the
+  state's Census region (`STATE_REGION`). No income: the household type's own share at its own income (income
+  integrated out), with "your pay" as a sharper. Utilities use the tenure ratio and `1 + energyShare (0.523) x (the
+  state's EIA electric + gas bill / the U.S. one - 1)` in place of the region; car and transit scale the insurance part
+  (`vehicleInsShare` 0.269) by the state's NAIC average car insurance over the U.S. average.
+  The home as the spending rows price it (`spendTenure`): the profile's tenure, except that a mortgage counts only while one
+  is owed (an account of type mortgage with a balance, Get started's `hasMortgage`). A mortgage picked on question 5 and
+  later removed or paid off is not one any more, so the home's property tax and insurance (in its payment before) come back
+  into "Home costs" at the next save; question 6 then asks for "Home costs" (C3 verify: with the pick alone they stayed out,
+  about $271 a month for Pat and Lee, counted nowhere). Test: setup "C3 verify: a mortgage removed after Get started ...".
+  Items: groceries = foodAtHome + housekeepingSupplies; car and transit = gasoline, maintenance and repairs, rentals
+  and licences, vehicle insurance, public transport (purchases and loan interest are on What you owe); insurance and
+  health = healthcare + life and other personal insurance; eating out and fun = food away, entertainment, alcohol;
+  shopping = apparel, personal care, furnishings, reading, tobacco, miscellaneous, other household expenses (education
+  and cash gifts have goal pages).
+- **Rent (E01).** `ACS median gross rent (state, else U.S. $1,557) x contractShare 0.897 x [sQ_rent(a) x a / rent per
+  renter (all)] x r_hh,rent`, rent per renter = rentedDwellings / share renting; no region ratio (the state anchor is
+  local). S: 1,515 x 0.897 x 0.867 x 1.038 = $1,223 -> $1,200.
+- **Home costs besides the mortgage (E01).** Upkeep `value x 0.293% (AHS 2023 aggregate maintenance / value) x CPI
+  since 2023 / 12` (the home's value typed or our `home.value`; none: the AHS mean $1,363 x CPI / 12), plus the HOA fee
+  by the share of the state's owners who pay one (ACS 2025; U.S. with no state): under 35% left out, over 65% the state's
+  median fee (with or without a mortgage), in between asked ("Do you pay an HOA or condo fee?"; unanswered or Not sure
+  takes the likelier side; the spec has the box wait for the answer, but a box with no grey figure would save nothing,
+  so the likelier side is shown while it asks), plus property tax and insurance (`home.propertyTax`, `home.insurance`,
+  or the Home page's typed ones) when there is no mortgage or the escrow tap says they are not in the payment. J $50,
+  N $120 (Arizona 48.8%: asked; No is the likelier side).
+- **Insurance and health (E05)**, by the `health-cover` tap (asked once): through work, KFF's worker contribution
+  ($139 a month single for one adult and no children, else $623 family) plus the out-of-pocket share (medical services,
+  drugs, supplies); Medicaid or Medicare, for each adult 65 or over Part B $202.90 + the Part D base premium ($38.99 in
+  2026, $41.33 in 2027) + the state's Medigap Plan G average, plus out of pocket (under 65: out of pocket only); own,
+  Not sure or unanswered, the survey's healthcare + life insurance share. The Marketplace price before help is not used:
+  the help depends on income (retirement/healthcare works that out). The premium is a price (not scaled by R10); the
+  out-of-pocket part is a share and is. So through work S is $139 + 90 x 0.794 = $210 and J $623 + 120 x 0.783 = $720,
+  where the spec's E05 text ($230, $740) adds the share before R10.
+- **Childcare (E06)**, always asked ("Do you pay for childcare or after-school care?"): Yes prices each child under 13
+  whose age is known at Child Care Aware 2025's full-time center price for the state (under 1 infant, 1-2 toddler, 3-5
+  the "four-year-old" figure, 6-12 before and after school), / 12; a state it has no figure for, NDCP 2022's weekly
+  price x 52 x CPI since 2022, then NDCP's last earlier year x CPI since then; no state (or New Mexico, in neither), the
+  middle of the states' Child Care Aware figures. No and Not sure write nothing. J Yes: (10,552 + 6,162) / 12 = 1,392.8
+  -> $1,400 (R11's $50 steps; the spec writes $1,390).
+- **R10, the envelope.** Households like this spend `sQ_env(a) x r_hh x r_reg x a / 12` a month in all (the survey's
+  total less personal insurance and pensions, cash gifts and education, plus the mortgage principal it reports as a
+  negative). The flexible rows ours are scaled by `k = clamp((envelope - typed bills and loan payments - our prices) /
+  our flexible rows, 0.5, 1)`. S: envelope $3,221, typed loans $510 (the car's $420 and our card minimum, R11-rounded to
+  $90 in C2; the spec's 0.764 used $86), k 0.762, eating out 295 x 0.762 = 224.8 -> $220 where 7.H says $230 (R11 wins),
+  total $2,680 (7.H $2,690). J: $4,986, k 0.918, $3,000. N: $7,763, k 1, $5,260.
+- **Bias, stated.** The survey's lower-income and one-parent cells report spending above their after-tax income (the
+  second fifth spends $51,405 on $46,080 before tax; one-parent outlays are 103% of after-tax income), so spending
+  guesses lean high for households under about $60,000 after tax and left-over guesses lean low. The envelope and the
+  waiting verdict (Next best action's `spare.waits`, Expenses' `guessedShare`) contain it; nothing hides it.
+- **Retirement (7.F; `RETIRE_RATIO`, used by setup's `overview/setup:retireSpend`).** What households 65-74 spend on a
+  row over households 55-64 (CE 2025 by age): utilities 0.880, groceries 0.953, car and transit 0.792, eating out 0.876,
+  shopping 0.859. A mortgage still running when work stops is counted in setup's figure with its whole payment, which
+  holds the home's property tax and insurance (E22), so those two are added on top only when the mortgage ends before
+  work stops (C3 money review D9). Pat and Lee: about $3,790 of costs plus the $1,600 payment, $5,390 (spec 7.H's "$4,100
+  + mortgage" counted the $280 of tax and insurance twice; the figure is one amount for every year of retirement).
+- **The basis line (`spendBasis`)**: "The grey figures are what a household like yours usually spends: one adult
+  renting in Texas on about $48,000 a year." **E10 (`missingSpend`)**: every row typed and the month under exp(-2.33 x
+  0.25) = 0.56 of the household's guessed total; shown in C7. R12 (bank files) stays off until C7.
+
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
   spending rows survey means as shares of after-tax income; rates the published average; choices the mode; ages and
@@ -235,8 +325,8 @@ then the real home loan added: asked, so it is not counted twice in silence).
 - **R9** `typoCheck`: only when `|ln(typed/guess)|/s > 2.33` and a common slip maps the figure inside `|z| <= 0.674`.
 - **R11** `roundGuess`: flows to $10 under $1,000 else $50 (2 significant figures when a measured s > 0.5); balances 3
   significant figures when s <= 0.15 else 2; rates 0.1 point; ages and years whole.
-- R7 (couples split by pay), R8 (totals are sums), R10 (the household envelope) and R12 (bank files) are the spending
-  and saving commits' (C3, C4, C7).
+- **R10** the household envelope (C3, "Spending" above). R7 (couples split by pay), R8 (totals are sums) and R12 (bank
+  files) are the saving and bank commits' (C4, C7).
 
 ## Data (data/*.js, built by tools/build-guess-data.mjs)
 Built from the research step's files (`est/data/*.json`, read 2026-11-02; a copy is kept in the git-ignored
@@ -365,7 +455,9 @@ Every input the 2026-11-02 inventory marked "a layperson does not know this" (19
 "roughly / no" 401(k) balance on Get started and the "no (until quoted)" refinance rate included; the spec counted 188), with how a blank is handled: `guess:<key>`, `compute:`, `fallback:`, `example`, `ask`, `other-builder`
 (claude-a's pages) or `later:C<n>`. `npm run check` validates it and prints "guess coverage: N of 191 unknown inputs
 handled (M later)"; a `later:` row whose commit is built fails. C1: 48 handled, 143 later. C2: the six Get started
-rate boxes are `guess:debt.<kind>.rate` (54 handled, 137 later).
+rate boxes are `guess:debt.<kind>.rate` (54 handled, 137 later). C3: Get started's insurance and shopping rows
+(`guess:spend.insurance`, `guess:spend.shopping`) and its retirement spending question
+(`guess:overview/setup:retireSpend`): 57 handled, 134 later.
 
 ## Tests (module.test.mjs)
 Data: every table has publisher, https URL, vintage and read date; every row's length equals `cols`; spot values (CE
@@ -394,11 +486,19 @@ C2: the 7.H answer keys for the home and every debt (Jordan, Pat and Lee, Sam fr
 built with Get started's apply functions up to Q5b), the purchase-price case (FHFA HPI), the start taps, the card
 floor and bound, student and other loans, no state (national figures, "your state"), the gate, the profile, and the
 "Better guesses are ready" card (offers, both buttons, drawn with the stand-in kit).
+C3: take-home a for S, J and N (and the C4 pre-tax case, a guessed contribution left out, a graduated state, no
+income); every 7.H spending cell (rows, envelope, k, totals, R11 noted); the envelope holds for the personas and every
+qa household archetype, spending is never $0, S's living share 0.70-0.85, J's flexible rows scaled and housing not,
+flat above the top fifth; monotone at a bucket edge and in the spread; the HOA hurdle (Ohio left out, Arizona asked,
+Yes adds the fee), childcare always asked (Yes $1,400 for J, No and Not sure nothing, the NDCP and no-state
+fallbacks), health cover asked once; E05 by tap (work, Medicare, Medicaid); a bill typed later on Expenses comes off
+its row (and comes back when removed); the 7.F ratios and N's figure from 50; the $15,000 rent slip; the rows agree with
+setup's; the basis line and E10.
 `qa/fixtures/guessed-plan.mjs` is a household made through Get started with the unknown boxes left empty (the older
 guesses in place): the tests and the screenshots use it.
 
 ## Next (spec 15)
-C2 (built) debts are never dropped; C3 spending; C4 retirement
+C2 (built) debts are never dropped; C3 (built) spending; C4 retirement
 saving; C5 the questions and the reveal (pay, goal targets); C6 the form kit and the pages outside setup (`restsOn`);
 C7 existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
 C10 plain words.

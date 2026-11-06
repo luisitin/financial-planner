@@ -726,6 +726,12 @@ export const sayWhose = nameOf;
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
 const dollars = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const plainDollars = dollars;
+/** To two significant figures ($187,000 -> $190,000; $497,500 -> $500,000): a figure that rests on our spending guesses. */
+// what a rough answer rests on (protectionGaps' sentence ends with it; Next best action says it once for several people)
+export const RESTS_ON = " That rests on our guesses of your spending: type what you spend first and it firms up.";
+export const twoFigures = (n) => { const v = Math.abs(Number(n) || 0); if (!v) return 0; const step = 10 ** (Math.floor(Math.log10(v)) - 1); return Math.sign(n) * Math.round(v / step) * step; };
+const roughDollars = (n) => dollars(twoFigures(n));
 /** "Cy turns 22", "your spouse retires", "you retire": termUntil's reason with the setup's names said plainly. */
 const whyWords = (t) => (t.who === undefined ? t.why : t.event === "retires" && sayName(t.who) === "you" ? "you retire" : t.event === "college ends" ? `${sayWhose(t.who)} college ends` : `${sayName(t.who)} ${t.event}`);
 const usDate = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return `${m}/${d}/${y}`; };
@@ -754,8 +760,10 @@ export function collegeWords(c) {
  * college). When it covers them: "Social Security for the children covers their costs until 18 and college; that leaves
  * debts ($4,000) and a funeral ($8,300), less the $1,900 Jo has saved".
  */
-export function childParts(c, who = "you") {
+export function childParts(c, who = "you", rough = false) {
   const s = c.shown ?? shownChild(c);
+  // (rough: the costs rest on spending that is mostly our guesses, so they are said to two figures, as protectionGaps says them)
+  const dollars = rough ? roughDollars : plainDollars;
   const one = (c.children?.length ?? 0) <= 1;
   const kids = one && c.children?.length ? sayName(c.children[0]) : "the children";
   // whose college is counted: "college" when every child's is, else "Child 1's college" (never a college left out)
@@ -791,6 +799,12 @@ export function protectionGaps(plan, params = {}) {
   let d = null;
   try { d = compute(plan, params); } catch { d = null; }
   if (!d?.ready) return [];
+  // the spending these needs are worked out from is mostly our guesses (Expenses' guessedShare, only on a plan that holds
+  // guesses; spec 8.1): the needs and gaps are said to two figures and the sentence says what they rest on (C3 UX review 7)
+  let rough = false;
+  if (plan.guesses) { try { rough = (computeExpenses(plan, { today: params.today ?? null }).guessedShare ?? 0) >= 0.5; } catch { rough = false; } }
+  const big = rough ? roughDollars : dollars;
+  const restsOn = rough ? RESTS_ON : "";
   return d.people.filter((p) => p.raise).map((p) => {
     const ending = p.endsSoon.length > 0 && p.gapAfterEnd > p.gap;
     const gap = ending ? p.gapAfterEnd : p.gap;
@@ -815,10 +829,10 @@ export function protectionGaps(plan, params = {}) {
       // the children under 18 the answer is for ("Child 1 counts on Jo", "Child 1 and Child 2 count on Jo")
       const kids = (p.child.children ?? []).map(sayName), kw = listOf(kids);
       const then = `the most, if ${who} died in ${ae.year}${inDollars(ae)}`;
-      title = `${cap(whose)} term life cover ends ${listOf(steps.map((s) => usDate(s.endDate)))}: ${kw} would then ${left > 0 || ae.most === false ? `be up to about ${dollars(gap)} short` : `need up to about ${dollars(gap)}`} (if ${who} died in ${ae.year})`;
+      title = `${cap(whose)} term life cover ends ${listOf(steps.map((s) => usDate(s.endDate)))}: ${kw} would then ${left > 0 || ae.most === false ? `be up to about ${big(gap)} short` : `need up to about ${big(gap)}`} (if ${who} died in ${ae.year})`;
       const after = ae.most === false
-        ? `After it ends they would be up to about ${dollars(gap)} short, if ${who} died in ${ae.year}${inDollars(ae)}${left > 0 ? `, with ${leftWords} against ${dollars(ae.need)} needed` : ""}`
-        : `After it ends they would need up to about ${dollars(ae.need)}: ${then}${left > 0 ? `; with ${leftWords}, about ${dollars(gap)} short` : ""}`;
+        ? `After it ends they would be up to about ${big(gap)} short, if ${who} died in ${ae.year}${inDollars(ae)}${left > 0 ? `, with ${leftWords} against ${big(ae.need)} needed` : ""}`
+        : `After it ends they would need up to about ${big(ae.need)}: ${then}${left > 0 ? `; with ${leftWords}, about ${big(gap)} short` : ""}`;
       sentence = `${cap(whose)} ${ends}, and ${kw} ${kids.length > 1 ? "count" : "counts"} on ${who}${p.termUntil ? ` until about ${p.termUntil.year}` : ""}. ${after}. New term cover on ${who} from then closes it.`;
     } else if (ending) {
       // a couple's or the rule of thumb's: every policy ending by next year, by date (`endSteps`, the same day added up),
@@ -828,8 +842,8 @@ export function protectionGaps(plan, params = {}) {
       const ends = steps.length > 1
         ? `term cover ends in steps, ${listOf(steps.map((s) => `${dollars(s.benefit)} on ${usDate(s.endDate)}`))}`
         : `${dollars(end.benefit)} ${(end.policies ?? 1) > 1 ? "of term cover" : "term policy"} ends on ${usDate(end.endDate)}`;
-      title = `${cap(whose)} term life cover ends ${listOf(steps.map((s) => usDate(s.endDate)))}: ${dw} would then be about ${dollars(gap)} short`;
-      sentence = `${cap(whose)} ${ends}, and ${dw} count on ${who}${p.termUntil ? ` until about ${p.termUntil.year}` : ""}: ${steps.length > 1 ? "once it has ended" : "without it"} they would be about ${dollars(gap)} short. New term cover on ${who} from then closes it.`;
+      title = `${cap(whose)} term life cover ends ${listOf(steps.map((s) => usDate(s.endDate)))}: ${dw} would then be about ${big(gap)} short`;
+      sentence = `${cap(whose)} ${ends}, and ${dw} count on ${who}${p.termUntil ? ` until about ${p.termUntil.year}` : ""}: ${steps.length > 1 ? "once it has ended" : "without it"} they would be about ${big(gap)} short. New term cover on ${who} from then closes it.`;
     } else if (p.method === "child") {
       // a single parent: what the children would need, part by part (only the parts above zero), and the cover to buy
       const kw = listOf(p.child.children.map(sayName));
@@ -838,25 +852,26 @@ export function protectionGaps(plan, params = {}) {
       const sized = p.child.sized ?? { year: d.startYear, need: p.need, priceLevel: 1 };
       const later = sized.year > d.startYear;
       const today = p.child.today ?? p.need;
-      title = p.cover > 0 ? `${cap(whose)} life cover is about ${dollars(gap)} short` : `No life insurance on ${who}: ${kw} would need ${later ? "up to " : ""}about ${dollars(p.need)}`;
+      title = p.cover > 0 ? `${cap(whose)} life cover is about ${big(gap)} short` : `No life insurance on ${who}: ${kw} would need ${later ? "up to " : ""}about ${big(p.need)}`;
       sentence = (later
-        ? `If ${who} died in ${sized.year}, ${kw} would need about ${dollars(p.need)}${inDollars(sized)}, the most in any year; if ${who} died today, ${today > 0 ? `about ${dollars(today)}` : "nothing more"}: ${childParts(p.child, who)}.`
-        : `If ${who} died, ${kw} would need about ${dollars(p.need)}: ${childParts(p.child, who)}.`)
-        + `${p.cover > 0 ? ` With the ${dollars(p.cover)} of cover on file, that is about ${dollars(gap)} short.` : ""} ${p.cover > 0 ? "More term" : "Term"} life cover on ${who}${term} is the usual way to buy it.`;
+        ? `If ${who} died in ${sized.year}, ${kw} would need about ${big(p.need)}${inDollars(sized)}, the most in any year; if ${who} died today, ${today > 0 ? `about ${big(today)}` : "nothing more"}: ${childParts(p.child, who, rough)}.`
+        : `If ${who} died, ${kw} would need about ${big(p.need)}: ${childParts(p.child, who, rough)}.`)
+        + `${p.cover > 0 ? ` With the ${dollars(p.cover)} of cover on file, that is about ${big(gap)} short.` : ""} ${p.cover > 0 ? "More term" : "Term"} life cover on ${who}${term} is the usual way to buy it.`;
     } else if (p.method === "dime") {
       // the rule of thumb's parts, only those above zero (no mortgage for a renter, no college with none planned)
       const di = p.dime;
       const parts = listOf([di.debts > 0 ? "debts" : null, di.income > 0 ? `${whose} pay until the youngest is 18` : null, di.mortgage > 0 ? "the mortgage" : null, di.education > 0 ? "college" : null, "a funeral"].filter(Boolean));
-      title = p.cover > 0 ? `${cap(whose)} life cover is about ${dollars(gap)} under the rule of thumb` : `No life insurance on ${who}: ${dw} would need about ${dollars(p.need)} by a common rule of thumb`;
-      sentence = `If ${who} died, a common rule of thumb (${parts} added up) puts what ${dw} would need at about ${dollars(p.need)}${p.cover > 0 ? `, ${dollars(gap)} more than the ${dollars(p.cover)} of cover on file` : ""}. Term life cover on ${who}${term} is the usual way to buy it.`;
+      title = p.cover > 0 ? `${cap(whose)} life cover is about ${big(gap)} under the rule of thumb` : `No life insurance on ${who}: ${dw} would need about ${big(p.need)} by a common rule of thumb`;
+      sentence = `If ${who} died, a common rule of thumb (${parts} added up) puts what ${dw} would need at about ${big(p.need)}${p.cover > 0 ? `, ${big(gap)} more than the ${dollars(p.cover)} of cover on file` : ""}. Term life cover on ${who}${term} is the usual way to buy it.`;
     } else {
-      title = p.cover > 0 ? `${cap(whose)} life cover is about ${dollars(gap)} short` : `No life insurance on ${who}: ${dw} would be about ${dollars(gap)} short`;
-      sentence = `If ${who} died this year, ${dw} would be about ${dollars(gap)} short${p.cover > 0 ? ` even with the ${dollars(p.cover)} of cover on file` : ""}. ${p.cover > 0 ? "More" : "Term life"} cover on ${who}${term} closes it.`;
+      title = p.cover > 0 ? `${cap(whose)} life cover is about ${big(gap)} short` : `No life insurance on ${who}: ${dw} would be about ${big(gap)} short`;
+      sentence = `If ${who} died this year, ${dw} would be about ${big(gap)} short${p.cover > 0 ? ` even with the ${dollars(p.cover)} of cover on file` : ""}. ${p.cover > 0 ? "More" : "Term life"} cover on ${who}${term} closes it.`;
     }
     return {
       id: p.id, personId: p.id, name: p.name, who, whose, need: p.need, cover: p.cover, gap, depends, dependsWords: dw,
       termUntil: p.termUntil, until: p.termUntil?.year ?? null, method: p.method, endsSoon: p.endsSoon, unassignedCover: d.unassignedCover,
-      title: title + (d.unassignedCover > 0 ? ` (a ${dollars(d.unassignedCover)} policy names nobody)` : ""), sentence: sentence + unassigned,
+      title: title + (d.unassignedCover > 0 ? ` (a ${dollars(d.unassignedCover)} policy names nobody)` : ""), sentence: sentence + restsOn + unassigned,
+      ...(rough ? { rough: true } : {}),
     };
   });
 }

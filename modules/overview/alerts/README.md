@@ -160,3 +160,15 @@ several cards: two Chase cards with no files now get "Bring in the card files" (
 - Test: "the tax bill alert reads each separate return".
 
 Review 2026-11-06 (round 7): "You retire this year", "Your required withdrawal: ..." and the separate-return tax bill ("on your spouse's return", "Your spouse's return has ... your spouse's pay takes out") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."
+
+## Spending that is mostly our guesses (smart guesses C3, 2026-11-06)
+- `spend-guessed` (info): Next best action's `spare.waits` (half or more of the month's spending is our guesses). Replaces
+  the over-spending alerts: "Most of the spending in your plan is our guesses for now; with them, about $X more would go
+  out each month than comes in. Your real figures decide whether your month works." Goes to Expenses.
+- `emergency-guessed` (info): Emergency fund's `waits` with a thin or getting-there cushion. Replaces `emergency-bad`,
+  `emergency-warn` and `emergency-later`: "By our guesses of your must-pay bills, usable cash covers N months; the plan
+  aims for 3. Type your real bills to know for sure."
+No red or amber verdict rests mostly on guesses (spec 8.1). Tests: `module.test.mjs` "C3 spending that is mostly our guesses", "C3 a thin cushion measured against guessed must-pay bills".
+After the C3 UX review (item 12): `spend-guessed` says the shortfall to the $10, as the Dashboard and the done screen say
+it, and `emergency-guessed` says the months as "about" (whole months, one decimal under 2, as Emergency fund says them). The life-cover alerts take Life insurance
+needs' words, which are rough while the spending is mostly ours (see that README).

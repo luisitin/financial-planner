@@ -195,6 +195,9 @@ const PLANS = (() => {
   const blank = guessedPlan(); blank.household.state = ""; out.push(["guessed (no state)", blank]);
   const recent = guessedPlan(); recent.guide.setup.taps = { "mortgage-start": "2022on" }; out.push(["guessed (mortgage from 2022)", recent]);
   const recentUS = guessedPlan(); recentUS.household.state = ""; recentUS.guide.setup.taps = { "mortgage-start": "2022on" }; out.push(["guessed (mortgage from 2022, no state)", recentUS]);
+  // C3: the spending taps answered (childcare paid, cover through work; Medicare)
+  const care = guessedPlan(); care.guide.setup.taps = { childcare: "yes", "health-cover": "work" }; out.push(["guessed (childcare, cover at work)", care]);
+  const careUS = guessedPlan(); careUS.household.state = ""; careUS.guide.setup.taps = { childcare: "yes", "health-cover": "public", hoa: "yes" }; out.push(["guessed (childcare, public cover, no state)", careUS]);
   return out;
 })();
 const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`) : [undefined]);
@@ -206,13 +209,17 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     "debt.car-loan.owed", "debt.car-loan.payment", "debt.car-loan.rate", "debt.credit.owed", "debt.credit.payment", "debt.credit.rate",
     "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.insurance", "home.propertyTax", "home.value",
-    "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss"]);
+    "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss",
+    // C3: the eight rows of a month's spending (spec 7.A)
+    "spend.childcare", "spend.dining", "spend.groceries", "spend.housing", "spend.insurance", "spend.shopping", "spend.transport", "spend.utilities"]);
   assert.deepEqual(REG.problems, []);
   assert.deepEqual(checkEstimators([estimators, setupEstimators]), []);
   const seen = new Set();
   for (const [name, plan] of PLANS) for (const key of keys) for (const p of pathsFor(plan, key)) {
     const e = estimate(plan, key, { ...OPTS, path: p });
     if (e === null) continue;
+    // a tap still to answer (spec 5.8: childcare is always asked): no figure yet, only the question
+    if (e.value === null) { assert.ok(e.ask?.key && e.ask.question && e.ask.options.length >= 2, `${name} ${key}: ask`); continue; }
     seen.add(key);
     const where = `${name} ${key} ${p ?? ""}`;
     assert.equal(e.key, key);
@@ -309,7 +316,7 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 2);
+  assert.equal(BUILT, 3);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   assert.equal(COVERAGE.length, 191);
@@ -324,9 +331,10 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
     const later = /^later:C(\d+)$/.exec(r.how);
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
-  // C1 handled 48; C2 the six rate boxes of Get started's debt screen
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 54);
-  assert.equal(COVERAGE.filter((r) => r.how === "later:C2").length, 0);
+  // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 57);
+  assert.equal(COVERAGE.filter((r) => r.how === "later:C2" || r.how === "later:C3").length, 0);
+  assert.equal(row("overview/setup", "retirement.spendingMonthly (+ guide.setup.retireAuto)")?.how, "guess:overview/setup:retireSpend");
 });
 
 // ---- the page
@@ -909,3 +917,227 @@ test("C2 fix (D2, the home): a home added on Net worth beside the one Q5b guesse
   assert.deepEqual(pg.all(card, (x) => x.tag === "button").map((b) => pg.text(b).trim()), ["Yes, the same home", "No, two homes"]);
 });
 const isGuessIn = (p, path) => Object.prototype.hasOwnProperty.call(p.guesses ?? {}, path);
+
+// ---- C3: spending (spec 7.0, 7.A, R10, 7.F; tests 14.3). The three walks of 7.H answer Q5b and Q6 through Get started's
+// own apply functions, with the grey figures the screen shows (estimate with the screen's args, on the plan before the save)
+import * as SP from "./estimators/spend.js";
+const C3 = await import("../setup/compute.js");
+const { settle } = await import("../../../core/estimate/index.js");
+const { compute: nextBest } = await import("../next-best-action/compute.js");
+const { federalTax, paramsFor } = await import("../../../core/math/tax.js");
+const { FEDERAL } = await import("../../taxes/federal/data/federal.js");
+const { typoCheck } = await import("../../../core/math/estimate.js");
+const ROWS7H = ["housing", "utilities", "groceries", "transport", "insurance", "dining", "shopping"];
+const viaGuess = (p, fn) => { const before = structuredClone(p); fn(p, (k, o = {}) => estimate(before, k, { ...OPTS, ...o })); return settle(p, OPTS); };
+const OWE7H = { sam: { "car-loan": { payment: 420 }, credit: { owed: "3,000" } }, jordan: { mortgage: { payment: 1100 } }, patLee: { mortgage: { payment: 1600 } } };
+const atQ6 = (name) => { const p = { sam, jordan, patLee }[name](); viaGuess(p, (d, g) => C3.applyOweAmounts(d, OWE7H[name], T0, { guess: g })); return p; };
+const lib0 = (p) => { const m = new Map(); return { today: T0, memo: (n, f) => { if (!m.has(n)) m.set(n, f()); return m.get(n); }, estimate: (k, o = {}) => estimate(p, k, { ...OPTS, ...o }) }; };
+/** Q6's grey figures as the screen shows them: every asked row blank except `typed`, with `taps`. */
+function greys(p, typed = {}, taps = {}) {
+  const args = C3.spendArgs(p, { mode: "rows", rows: typed, taps });
+  return { args, rows: Object.fromEntries(Object.entries(args.rows).filter(([, v]) => v === null).map(([k]) => [k, estimate(p, `spend.${k}`, { ...OPTS, path: SP.spendPath(k), args })])) };
+}
+
+test("C3 7.0 take-home a: S $44,420 (federal $3,580, Texas none), J $57,813 (refundable credits, Ohio 2.75% over $26,050), N $112,040", () => {
+  // S: 48,000 single; federal = 3,580 (2026 tables); Texas has no wage tax: 48,000 - 3,580 = 44,420
+  const s = SP.takeHome(sam(), T0);
+  assert.deepEqual([Math.round(s.a), Math.round(s.federal), s.state, s.how], [44420, 3580, 0, "none"]);
+  // J: 58,000 head of household, two children under 17: federal -692 (the refundable child credit; 7.0 says -1,075 with C4's
+  // $3,190 of pre-tax saving, which spending is worked out without, 5.3); Ohio (58,000 - 26,050) x 2.75% = 878.6
+  const j = SP.takeHome(jordan(), T0);
+  assert.deepEqual([Math.round(j.a), Math.round(j.federal), Math.round(j.state), j.how], [57813, -692, 879, "flat"]);
+  // the 7.0 example's Ohio $791 is with C4's $3,190 of pre-tax saving: typed, it counts here too ((58,000 - 3,190 - 26,050) x 2.75% = 790.9)
+  const jp = jordan(); jp.accounts.push({ id: "k1", name: "401(k)", type: "401k", balance: 0 }); jp.retirement.contributions.push({ id: "c1", accountId: "k1", personId: "setup-self", amount: 3190 / 12, period: "monthly", employerMatch: 0 });
+  assert.equal(Math.round(SP.takeHome(jp, T0).state), 791);
+  // ...but a contribution that is our guess (C4, tier 4) does not: spending is worked out before saving (5.3)
+  markGuess(jp, "retirement.contributions[c1].amount", { key: "contrib.amount", value: 3190 / 12, unit: "month", sigma: null, dataAsOf: T0 }, T0);
+  assert.equal(Math.round(SP.takeHome(jp, T0).state), 879);
+  // N: 125,000 joint, Arizona 2.5% after the federal standard deduction
+  assert.equal(Math.round(SP.takeHome(patLee(), T0).a), 112040);
+  // a graduated state with no rate typed: the survey's own after-tax ratio at that income (taxRatio2023), labelled
+  const ga = sam(); ga.household.state = "GA";
+  const g = SP.takeHome(ga, T0);
+  assert.equal(g.how, "survey"); assert.ok(g.a > 0.85 * 48000 && g.a < 1.0 * 48000, `${g.a}`);
+  // no income at all: no a (the household type's own share is used instead)
+  const none = sam(); none.income = []; assert.equal(SP.takeHome(none, T0), null);
+});
+
+test("C3 7.H spending (health cover Not sure): every row, the envelope, k, and the total from the rounded rows", () => {
+  // proto3 (spec-tools): S raw 1,215 / 227 / 319 / 398 / 346 / 295 / 379, envelope 3,221, typed loans 420 + card 86 -> k 0.764.
+  // Here the card payment is our R11-rounded $90 (C2), so k = (3,221 - 510 - 1,215) / 1,964 = 0.762 and eating out is
+  // 295 x 0.762 = 224.8 -> $220 (7.H $230, which used 0.764: 225.4 -> $230); R11 wins, the total is $2,680 (7.H $2,690)
+  const want = {
+    sam: { rows: [1200, 170, 240, 300, 260, 220, 290], env: 3221, k: 0.762, total: 2680 },
+    // J: childcare typed $900; mortgage $1,100 typed on Q5b. k = (4,986 - 2,000 - 54) / 3,192 = 0.918
+    jordan: { rows: [50, 460, 550, 470, 340, 470, 660], env: 4986, k: 0.918, total: 3000, typed: { childcare: 900 } },
+    // N: room 7,763 - 1,600 - 116 = 6,047 > 5,146 of flexible rows: k = 1
+    patLee: { rows: [120, 560, 780, 960, 910, 1000, 930], env: 7763, k: 1, total: 5260 },
+  };
+  for (const [name, w] of Object.entries(want)) {
+    const p = atQ6(name);
+    const { args, rows } = greys(p, w.typed ?? {});
+    assert.deepEqual(ROWS7H.map((r) => rows[r]?.value), w.rows, name);
+    const m = SP.spendModel(p, { today: T0, args }, lib0(p));
+    near(m.envelope, w.env, 1, `${name} envelope`); near(m.k, w.k, 0.001, `${name} k`);
+    assert.equal(ROWS7H.reduce((t, r) => t + rows[r].value, 0), w.total, `${name} total`);
+    for (const r of ROWS7H) { assert.ok(rows[r].why.length <= 70, rows[r].why); assert.equal(rows[r].unit, "month"); assert.deepEqual([rows[r].sigma, rows[r].measured], [0.25, false]); }
+  }
+  const s = greys(atQ6("sam")).rows;
+  assert.equal(s.housing.why, "typical rent before utilities for one person in Texas on your pay");
+  assert.equal(greys(atQ6("jordan"), { childcare: 900 }).rows.housing.why, "upkeep on a home like yours; few Ohio owners pay an HOA fee");
+});
+
+test("C3 the envelope holds (R10); the bias is stated: S spends 70-85% of a; J's flexible rows give way, housing does not; flat above $250,000", () => {
+  for (const name of ["sam", "jordan", "patLee"]) {
+    const p = atQ6(name), { args } = greys(p);
+    const m = SP.spendModel(p, { today: T0, args }, lib0(p));
+    const guessed = m.guessed.reduce((t, r) => t + m.rows[r].value, 0);
+    if (m.k > 0.5) assert.ok(guessed + m.typed <= m.envelope + 10, `${name}: ${guessed} + ${m.typed} <= ${m.envelope}`);
+  }
+  // every household archetype with every row left blank
+  for (const a of ARCHETYPES) {
+    const p = migrate(a.build());
+    const args = { mode: "rows", rows: Object.fromEntries(SP.ROWS.map((r) => [r, null])), taps: {} };
+    const m = SP.spendModel(p, { today: T0, args }, lib0(p));
+    const guessed = m.guessed.reduce((t, r) => t + (m.rows[r].value ?? 0), 0);
+    if (m.k > 0.5) assert.ok(guessed + m.typed <= m.envelope + 10, `${a.id}`);
+    assert.ok(guessed > 0, `${a.id}: spending is never $0`);
+  }
+  // S's living share of a: 2,680 x 12 / 44,420 = 0.72
+  const s = atQ6("sam"), gs = greys(s).rows, share = ROWS7H.reduce((t, r) => t + gs[r].value, 0) * 12 / SP.takeHome(s, T0).a;
+  assert.ok(share >= 0.7 && share <= 0.85, `${share}`);
+  const j = atQ6("jordan"), jm = SP.spendModel(j, { today: T0, args: greys(j, { childcare: 900 }).args }, lib0(j));
+  assert.ok(jm.k < 1); near(jm.rows.housing.value, jm.rows.housing.fixed, 1e-9, "housing is a price, not scaled");
+  // above the top fifth's after-tax income the shares are flat (no extrapolation)
+  for (const r of ["utilities", "groceries", "dining", "envelope"]) assert.equal(SP.sQ(r, 300000), SP.sQ(r, 500000), r);
+});
+
+test("C3 monotone: a dollar of pay at a bucket edge moves a guess under 0.1%; typing pay never widens a row's spread", () => {
+  const edge = SP.afterTax("incomeQuintile", "fourth20");
+  for (const r of ["groceries", "dining", "envelope"]) { const a = SP.sQ(r, edge) * edge, b = SP.sQ(r, edge + 1) * (edge + 1); assert.ok(Math.abs(b - a) / a < 0.001, r); }
+  const p = atQ6("sam"), noPay = atQ6("sam"); noPay.income = [];
+  for (const r of ROWS7H) assert.ok(greys(p).rows[r].sigma <= greys(noPay).rows[r].sigma, r);
+  // no pay: the household type's own share at its income, with "your pay" as a sharper
+  const n = greys(noPay).rows;
+  assert.ok(n.groceries.value > 0 && n.groceries.sharperWith.some((x) => x.label === "your pay"));
+});
+
+test("C3 hurdles: Ohio's HOA left out, Arizona's asked (Not sure takes the likelier side, No); childcare always asked; health cover asked once", () => {
+  const j = greys(atQ6("jordan"), { childcare: 900 }).rows;
+  assert.equal(j.housing.ask, undefined, "17.8% of Ohio owners: no question");
+  const n = greys(atQ6("patLee")).rows;
+  assert.equal(n.housing.ask?.key, "hoa", "48.8% of Arizona owners: asked");
+  assert.equal(n.housing.value, 120, "unanswered or Not sure: 48.8% is under half, so no fee");
+  const nYes = greys(atQ6("patLee"), {}, { hoa: "yes" }).rows.housing.value;
+  // Yes adds Arizona's median fee for owners with a mortgage: 116.2 upkeep + the fee, to $10
+  const fee = cell(HOME.acs2025_hoa_condo_fee_by_state, "median fee, with a mortgage", "AZ");
+  assert.equal(nYes, Math.round((450000 * D_HOME.upkeepRatio.value * 1.0574 / 12 + fee) / 10) * 10, "Yes adds the state's median fee");
+  assert.equal(greys(atQ6("patLee"), {}, { hoa: "no" }).rows.housing.value, 120);
+  // childcare: asked with no figure until answered; Yes prices a 3-year-old and a 7-year-old in Ohio: (10,552 + 6,162) / 12 =
+  // 1,392.8 -> $1,400 (R11: $50 steps from $1,000; 7.H says $1,390); No and Not sure write nothing
+  const jb = greys(atQ6("jordan")).rows;
+  assert.deepEqual([jb.childcare.value, jb.childcare.ask.key], [null, "childcare"]);
+  assert.equal(cell(SPEND.ccaoa2025_childcare_annual_price_by_state, "center:fourYearOld", "OH"), 10552);
+  assert.equal(greys(atQ6("jordan"), {}, { childcare: "yes" }).rows.childcare.value, 1400);
+  assert.equal(greys(atQ6("jordan"), {}, { childcare: "yes" }).rows.childcare.why, "full-time center care in Ohio for a 3-year-old, after school for a 7");
+  for (const no of ["no", "unsure"]) assert.equal(greys(atQ6("jordan"), {}, { childcare: no }).rows.childcare, null);
+  // a state Child Care Aware has no figure for (Colorado): NDCP 2022 x CPI to 2025
+  assert.equal(SP.careYear("CO", "infant").table, "ndcp2022_childcare_weekly_price_by_state");
+  assert.equal(SP.careYear(null, "infant").middle, true, "no state: the middle of the states' prices");
+  // health cover: asked while unanswered, then gone
+  assert.equal(greys(atQ6("sam")).rows.insurance.ask.key, "health-cover");
+  assert.equal(greys(atQ6("sam"), {}, { "health-cover": "unsure" }).rows.insurance.ask, undefined);
+});
+
+test("C3 E05 by how cover is had: work (KFF worker share + out of pocket), Medicare, Medicaid, Not sure", () => {
+  // through work: S single $139 + out of pocket 90 x k (0.794) = 210; 7.H's $230 adds the out-of-pocket share before R10 scales
+  // it, as the flexible part of the row it is; J family $623 + 120 x 0.783 = 717 -> $720 (7.H $740 before R10)
+  assert.equal(greys(atQ6("sam"), {}, { "health-cover": "work" }).rows.insurance.value, 210);
+  assert.equal(greys(atQ6("jordan"), { childcare: 900 }, { "health-cover": "work" }).rows.insurance.value, 720);
+  const s = atQ6("sam"), m = SP.spendModel(s, { today: T0, args: greys(s, {}, { "health-cover": "work" }).args }, lib0(s));
+  assert.deepEqual([m.rows.insurance.premium, Math.round(m.rows.insurance.flex)], [139, 90]);
+  // Medicare: a 66-year-old in Arizona: Part B 202.90 + Part D base 38.99 + Arizona's Plan G average, plus out of pocket
+  const old = atQ6("sam"); old.household.people[0].birthDate = "1960-01-15"; old.household.state = "AZ";
+  const om = SP.spendModel(old, { today: T0, args: greys(old, {}, { "health-cover": "public" }).args }, lib0(old));
+  near(om.rows.insurance.premium, 202.9 + 38.99 + cell(HEALTH_T.kff_medigap_average_premium_2025, "G", "AZ"), 1e-9, "Medicare");
+  // Medicaid (under 65): out of pocket only
+  const young = SP.spendModel(s, { today: T0, args: greys(s, {}, { "health-cover": "public" }).args }, lib0(s));
+  assert.equal(young.rows.insurance.fixed, 0);
+});
+import { T as HEALTH_T } from "./data/health.js";
+
+test("C3 a bill typed later on Expenses comes off its row's guess (never counted twice); the rest stay ours", () => {
+  const p = atQ6("patLee");
+  viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: {} }, T0, { guess: g }));
+  const before = Object.fromEntries(p.expenses.map((x) => [x.id, x.amount]));
+  assert.equal(before["setup-x-groceries"], 780);
+  // the person adds a Costco run on Expenses: $300 a month of groceries
+  p.expenses.push({ id: "costco", name: "Costco", category: "groceries", amount: 300, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+  const r = settle(p, OPTS);
+  // groceries: 784 - 300 = 484 -> $480 (k stays 1); the retirement figure (from 50) follows: the $300 bill counts whole, as
+  // every bill on Expenses does, and the row it came off counted 95.3%: 5,390 + 300 - 300 x 0.953 = 5,404 -> $5,400
+  assert.deepEqual(r.changed.map((c) => [c.path, c.from, c.to]), [["expenses[setup-x-groceries].amount", 780, 480], ["retirement.spendingMonthly", 5390, 5400]]);
+  assert.equal(p.expenses.filter((x) => x.category === "groceries").reduce((t, x) => t + x.amount, 0), 780, "the month's groceries are counted once");
+  // removed again: our guess comes back
+  p.expenses = p.expenses.filter((x) => x.id !== "costco");
+  settle(p, OPTS);
+  assert.equal(p.expenses.find((x) => x.id === "setup-x-groceries").amount, 780);
+});
+
+test("C3 7.F retirement ratios from the survey by age, and Pat and Lee's figure from 50: $3,790 of costs besides the mortgage, plus its payment", () => {
+  assert.deepEqual(Object.fromEntries(Object.entries(SP.RETIRE_RATIO).map(([k, v]) => [k, Math.round(v * 1000) / 1000])), { utilities: 0.88, groceries: 0.953, transport: 0.792, dining: 0.876, shopping: 0.859 });
+  const p = atQ6("patLee");
+  const { args } = greys(p);
+  const e = estimate(p, "overview/setup:retireSpend", { ...OPTS, path: "retirement.spendingMonthly", args });
+  // 560 x .880 + 780 x .953 + 960 x .792 + 1,000 x .876 + 930 x .859 = 3,671; + upkeep 120 = about 3,790; + the $1,600
+  // mortgage still running when Pat stops at 65 (about 13 years left at its payment), which holds the home's tax and insurance
+  // (E22), so they are not added again (C3 review D9: 7.H's "$4,100 + mortgage" adds tax 170-ish and insurance 110-ish on top
+  // of the payment that already pays them; the figure is one amount for every year, so that counted them twice for life)
+  const r = C3.retireSpendFor(p, { today: T0, args }, lib0(p));
+  assert.equal(r.from50, true); assert.equal(r.loans, 1600);
+  near(r.value - r.loans, 3790, 30, "7.H $4,100 less the tax and insurance in the payment"); assert.equal(e.value, r.value);
+  assert.ok(!/health/i.test(e.why) && e.why.length <= 70);
+  // under 50: today's rows without childcare, plus loans then (Sam: the car loan and card are paid off by then)
+  const s = atQ6("sam"), sr = C3.retireSpendFor(s, { today: T0, args: greys(s).args }, lib0(s));
+  assert.deepEqual([sr.from50, sr.value], [false, 2680]);
+});
+
+test("C3 a $15,000 rent is asked about (year-as-month), a $1,500 one is not; the screen's rows cover what the guesses' rows cover", () => {
+  const p = atQ6("sam"), g = greys(p).rows.housing;
+  const slips = [{ id: "year-as-month", map: (x) => x / 12, words: "" }];
+  assert.equal(typoCheck(15000, g, slips)?.slip, "year-as-month");
+  assert.equal(typoCheck(1500, g, slips), null);
+  assert.deepEqual(Object.fromEntries(C3.SPEND.map((s) => [s.key, s.covers])), SP.COVERS);
+  assert.deepEqual(C3.SPEND.map((s) => s.key), SP.ROWS);
+});
+
+test("C3 the basis line and E10 (a typed list far below the household's usual total)", () => {
+  assert.equal(SP.spendBasis(sam(), { today: T0 }), "The grey figures are what a household like yours usually spends: one adult renting in Texas on about $48,000 a year.");
+  assert.equal(SP.spendBasis(atQ6("jordan"), { today: T0 }), "The grey figures are what a household like yours usually spends: one parent of two paying a mortgage in Ohio on about $58,000 a year.");
+  const p = atQ6("patLee");
+  C3.applySpend(p, { mode: "rows", rows: { housing: 100, groceries: 600, utilities: 300 } });
+  const low = SP.missingSpend(p, { today: T0 }, lib0(p));
+  assert.ok(low && low.typed < 0.56 * low.guessedTotal, "about $2,600 typed of about $6,900");
+  C3.applySpend(p, { mode: "rows", rows: { housing: 120, utilities: 560, groceries: 780, transport: 960, insurance: 910, dining: 1000, shopping: 930 } });
+  assert.equal(SP.missingSpend(p, { today: T0 }, lib0(p)), null);
+});
+
+// C3 money review D5 (est/c3/c3-review-money.md): the survey's entertainment (streaming and other subscriptions, pets) is in
+// "Eating out and fun", its personal care in "Shopping and everything else": a bill typed under those on Expenses comes off
+// the row that already holds it, as a groceries bill does (never counted twice)
+test("C3 review D5: streaming, pets and personal care typed on Expenses come off the guessed rows that hold them", () => {
+  const p = atQ6("patLee");
+  viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: {} }, T0, { guess: g }));
+  const month = () => p.expenses.reduce((t, x) => t + x.amount, 0);
+  const before = month(), dining = p.expenses.find((x) => x.id === "setup-x-dining").amount, shopping = p.expenses.find((x) => x.id === "setup-x-shopping").amount;
+  const bill = (id, name, category, amount) => ({ id, name, category, amount, period: "monthly", essential: false, inflates: true, startDate: "", endDate: "" });
+  p.expenses.push(bill("x1", "Streaming", "subscriptions", 45), bill("x2", "Haircuts", "personal", 60), bill("x3", "Dog", "pets", 120));
+  settle(p, OPTS);
+  // dining 1,000 - 45 - 120 = 835 -> $840 and shopping 930 - 60 = 870 (k stays 1): the month moves by rounding only
+  assert.ok(Math.abs(month() - before) <= 15, `counted once (to R11 rounding): ${before} -> ${month()}`);
+  assert.ok(p.expenses.find((x) => x.id === "setup-x-dining").amount <= dining - 160);
+  assert.ok(p.expenses.find((x) => x.id === "setup-x-shopping").amount <= shopping - 50);
+  // a gift or a trip is not inside a row: it adds to the month
+  p.expenses.push(bill("x4", "Birthday gifts", "giving", 50)); const m = month(); settle(p, OPTS);
+  assert.equal(month(), m, "a gift moves no guess");
+});

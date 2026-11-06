@@ -45,3 +45,13 @@ Usable today = cash, checking and savings - what goals claim (`earmarked`) - `ta
 ## Ideas / not yet
 - Count available credit (cards' limits minus balances) as a separate "backstop" line.
 - Daily cash forecast (phase 4 `cashflow/forecast`) to show the lowest balance in the next 90 days.
+
+## Must-pay bills that are mostly our guesses (smart guesses C3, 2026-11-06)
+`waits` = Expenses' `guessedEssentialShare` >= 0.5 and `guessedShare` = that share, only when the plan holds guesses
+(spec 8.1). The months the cash covers are still worked out; Alerts and the Dashboard say them "by our guesses" instead
+of "thin". Plans without guesses get neither key. Test: `module.test.mjs` "C3 waits".
+The view (after the C3 UX review, item 3): while `waits`, the fund card says "About 8.8 months, by our guesses of your
+must-pay bills" (whole months, one decimal under 2, the owner's rule for this page), with no pill, a calm bar and no "could work harder elsewhere": "Type
+your bills on Expenses › and we'll tell you whether you have more than you need." The tiles and the move card say "by our
+guesses" too, with the target and the amounts to $100 ($15,660 -> $15,700), as Next best action and Get started's cushion
+say them.

@@ -10,8 +10,9 @@ import {
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
-  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow, oweArgs, haveId,
+  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
 } from "./compute.js";
+import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, guessesInUse, isGuess } from "../../../core/estimate/index.js";
 import { guessTwins } from "../guesses/compute.js";
 import { dayWords } from "../next-best-action/compute.js";
@@ -113,6 +114,14 @@ select.su-in { font-size: var(--fs-md); }
 .su-parts:empty { margin-bottom: 20px; }
 .su-have { background: var(--panel-2); border-radius: var(--radius-sm); padding: 12px 14px; margin: 0 0 16px; color: var(--text-2); line-height: 1.45; }
 .su-have b { color: var(--text); font-weight: 600; }
+.su-basis { margin: 4px 0 12px; font-size: var(--fs-sm); }
+.su-first { margin: 0 0 8px; font-weight: 600; color: var(--text); font-size: var(--fs-sm); }
+.su-basis[hidden], .su-first[hidden], .su-tap[hidden], .su-adjust[hidden] { display: none; }
+.su-tap { padding: 0 0 12px; }
+.su-tap .su-field { margin: 0; }
+.su-tap .su-label { font-size: var(--fs-sm); font-weight: 600; }
+.su-laterline { border-top: 1px solid var(--line); padding: 16px 0 0; margin: 0 0 8px; font-size: var(--fs-sm); }
+.su-laterline:empty { display: none; }
 .su-actions { display: flex; gap: 10px; margin: 22px 0 0; }
 .su-root .su-actions .su-backbtn { flex: 0 0 auto; min-height: 52px; padding: 0 18px; }
 .su-root .su-actions .su-go { flex: 1; min-height: 52px; font-size: var(--fs-md); }
@@ -152,6 +161,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-stand .su-fig.warn .st { color: var(--warn); }
 .su-stand .su-fig.open .stat-value { color: var(--text-2); font-size: var(--fs-lg); }
 .su-stand a.su-fig .st { color: var(--accent-ink); }
+.su-stand a.su-fig.calm .st { color: var(--text-2); }
 .su-stand a.su-fig:hover { border-color: var(--accent); }
 .su-h2 { font-size: var(--fs-lg); margin: 0 0 12px; }
 .su-moves { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
@@ -802,7 +812,7 @@ export function render(page, ctx) {
       actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: skipGuessing } : {});
     },
 
-    spend() {
+    spendPlain() {
       const v = draft(() => valuesFor(plan, "spend"));
       const base = spendBase(plan), rows = spendRows(plan), mortgage = hasMortgage(plan), loansLater = loansAfterWork(plan, today);
       head("🛒", "What do you spend in a typical month?", "Guesses are fine. Leave out what you save.");
@@ -828,7 +838,7 @@ export function render(page, ctx) {
         }
       };
       const row = (s) => {
-        const name = s.key === "housing" && mortgage ? s.labelMortgage : s.label, help = s.key === "housing" && mortgage ? s.helpMortgage : s.help;
+        const hw = s.key === "housing" ? housingWords(plan) : null, name = hw ? hw.label : s.label, help = hw ? hw.help : s.help;
         const box = moneyIn(v.rows[s.key], (val) => { v.rows[s.key] = val; upd(); });
         const input = box.querySelector("input"), id = `su-i-${++uid}`;
         input.id = id;
@@ -860,6 +870,192 @@ export function render(page, ctx) {
       drawBody();
       current = { apply: (d) => applySpend(d, { ...v, retireMonthly: later.value, retireAuto: !later.typed }), words: (p2) => { const r = reflect(p2, "spend"); return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; } };
       actions();
+    },
+
+    // Q6 with our guesses (U.S. plans): each box shows its grey figure (core/estimate, spec 7.A), the group sums and the
+    // total add them up with their parts, and a box left blank saves that figure as one of our guesses
+    spend() {
+      if (!applies(plan)) { UI.spendPlain(); return; }
+      const v = draft(() => valuesFor(plan, "spend"));
+      v.taps = v.taps ?? {};
+      const base = spendBase(plan), rows = spendRows(plan), mortgage = hasMortgage(plan), loansLater = loansAfterWork(plan, today);
+      head("🛒", "What do you spend in a typical month?", "Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone like you.");
+      if (base.existingCount) add(card, ui.h("p", { class: "su-have" }, "Already in your plan: ", ui.h("b", {}, `${money(base.existing)} a month`), ` in ${base.existingCount} bill${base.existingCount === 1 ? "" : "s"}. Add only what's missing.`));
+      if (base.loanPayments > 0) add(card, ui.h("p", { class: "su-have" }, "Leave out loan and card payments: we already have them (", ui.h("b", {}, `${money(base.loanPayments)} a month`), ") and add them to the total below."));
+      const basis = ui.h("p", { class: "su-sub su-basis" });
+      const first = ui.h("p", { class: "su-sub su-first", hidden: true }, "Type your rent first: it's the biggest one.");
+      const renting = housingWords(plan).kind === "rent";
+      const body = ui.h("div", {});
+      const totalEl = ui.h("b", {}), partsEl = ui.h("p", { class: "su-parts", "aria-live": "polite" });
+      // R10 (spec 2.2): a box typed moves the other grey figures so the month stays near what households like this spend in
+      // all; when it does, one line says so (C3 UX review 2: the figures moved and nothing said why)
+      // (su-adjust: .su-sub's display would otherwise override [hidden], and the line showed before anything was typed; C3 verify)
+      const adjustEl = ui.h("p", { class: "su-sub su-adjust", hidden: true },"As you type, our other figures adjust, so the month stays near what households like yours usually spend in all.");
+      let blankBase = null, blankKey = null;
+      const baseGrey = (args) => {
+        const key = JSON.stringify(args.taps ?? {});
+        if (blankBase && blankKey === key) return blankBase;
+        const all = { ...args, mode: "rows", total: null, rows: Object.fromEntries(rows.map((s) => [s.key, null])) };
+        blankBase = Object.fromEntries(rows.map((s) => { const g = ctx.guess(`spend.${s.key}`, { path: `expenses[setup-x-${s.key}].amount`, args: all }); return [s.key, g && typeof g.value === "number" ? g.value : 0]; }));
+        blankKey = key;
+        return blankBase;
+      };
+      const later = v.later ?? (v.later = { typed: v.retireTyped, value: v.retireMonthly });
+      const num = (x) => parseMoney(x) ?? 0;
+      const sums = {};
+      const boxes = {};      // row key -> { input, tap, tapBuilt }
+      let grey = {};         // row key -> the grey figure shown (a blank box), 0 when there is none
+      let totalInput = null, laterInput = null, laterSub = null, laterLine = null;
+      // under 50 (or no birth dates) the retirement figure is one line, written as our guess; from 50, or once typed, a box
+      const ages = ad.map((p) => (p.birthDate ? ageOn(p.birthDate, today) : null)).filter((a) => a !== null);
+      const laterBox = !allRetired(plan) && (later.typed || (ages.length && Math.max(...ages) >= 50));
+      const rowArgs = () => spendArgs(plan, v);
+      const refresh = () => {
+        const args = rowArgs();
+        grey = {};
+        for (const s of rows) {
+          const b = boxes[s.key];
+          const blank = v.mode === "total" ? args.total === null : args.rows[s.key] === null;
+          const g = blank ? ctx.guess(`spend.${s.key}`, { path: `expenses[setup-x-${s.key}].amount`, args }) : null;
+          grey[s.key] = g && typeof g.value === "number" ? g.value : 0;
+          if (b?.input) {
+            const shown = grey[s.key] > 0 ? groupDigits(String(Math.round(grey[s.key]))) : "";
+            b.input.placeholder = shown;
+            b.input.setAttribute("aria-label", `${b.name}${shown ? `, blank uses our guess of about ${symbol}${shown}` : ""}`);
+          }
+          // a tap the row's guess asks (how health cover is had, childcare, an HOA fee), kept on screen once answered
+          if (b?.tap) {
+            const q = g?.ask ?? null, said = v.taps[b.tapKey] ?? null;
+            // at most two "does this exist" taps on the screen (spec P9): with childcare asked, the HOA fee is not asked
+            // (blank takes the likelier side, as Not sure does)
+            const room = b.tapKey !== "hoa" || !rows.some((r) => r.key === "childcare") || !!said;
+            const want = v.mode !== "total" && blank && (!!q || !!said) && room;
+            if (want && !b.tapBuilt && (q || b.ask)) {
+              const ask = q ?? b.ask;
+              b.ask = ask;
+              swap(b.tap, fieldset(ask.question, seg(ask.options, said, (val) => { v.taps[ask.key] = val; refresh(); }, ask.question)));
+              b.tapBuilt = true;
+            }
+            b.tap.hidden = !(want && b.tapBuilt);
+            if (said) b.tap.querySelector(".su-care-again")?.remove();
+          }
+        }
+        const typedOf = (s) => (v.mode === "total" ? 0 : num(v.rows[s.key]));
+        const rowFig = (s) => typedOf(s) || (args.rows?.[s.key] === 0 ? 0 : grey[s.key] ?? 0);
+        const typedSum = v.mode === "total" ? (args.total ?? 0) : rows.reduce((t, s) => t + typedOf(s), 0);
+        const ours = v.mode === "total" && args.total !== null ? 0 : rows.reduce((t, s) => t + (typedOf(s) || args.rows?.[s.key] === 0 ? 0 : grey[s.key] ?? 0), 0);
+        if (totalInput) { const t = rows.reduce((x, s) => x + (grey[s.key] ?? 0), 0); totalInput.placeholder = t > 0 ? groupDigits(String(Math.round(t))) : ""; totalInput.setAttribute("aria-label", `All your spending in a month${t > 0 ? `, blank uses our guess of about ${symbol}${groupDigits(String(Math.round(t)))}` : ""}`); }
+        totalEl.textContent = money(typedSum + ours + base.existing + base.loanPayments);
+        partsEl.textContent = ours > 0 || base.loanPayments > 0 || base.existing > 0
+          ? [typedSum > 0 ? `${money(typedSum)} you typed` : null, ours > 0 ? `${money(ours)} our guesses` : null, base.existing > 0 ? `${money(base.existing)} already in your plan` : null, base.loanPayments > 0 ? `${money(base.loanPayments)} loan payments` : null].filter(Boolean).join(" + ") : "";
+        if (sums.must) sums.must.textContent = money(rows.filter((s) => s.group === "must").reduce((t, s) => t + rowFig(s), 0) + base.loanPayments);
+        if (sums.else) sums.else.textContent = money(rows.filter((s) => s.group === "else").reduce((t, s) => t + rowFig(s), 0));
+        // the one basis line (spec 5.6), and the rent first while rent is ours
+        const typedAny = v.mode !== "total" && rows.some((s) => args.rows?.[s.key] !== null && args.rows?.[s.key] !== undefined);
+        adjustEl.hidden = !(typedAny && rows.some((s) => args.rows?.[s.key] === null && Math.abs((grey[s.key] ?? 0) - (baseGrey(args)[s.key] ?? 0)) >= 10));
+        const anyGrey = Object.values(grey).some((x) => x > 0);
+        basis.textContent = anyGrey ? spendBasis(plan, { today }) : "";
+        basis.hidden = !basis.textContent;
+        first.hidden = !(v.mode !== "total" && renting && rows.some((s) => s.key === "housing") && args.rows?.housing === null && grey.housing > 0);
+        // retirement: our figure follows the rows until it is typed
+        if (!allRetired(plan)) {
+          const g = later.typed ? null : ctx.guess("overview/setup:retireSpend", { path: "retirement.spendingMonthly", args });
+          const fig = g && g.value > 0 ? g.value : null;
+          if (laterInput) {
+            laterInput.placeholder = fig ? groupDigits(String(Math.round(fig))) : "";
+            laterInput.setAttribute("aria-label", `Once you stop working, about how much a month${fig ? `, blank uses our guess of about ${symbol}${groupDigits(String(Math.round(fig)))}` : ""}`);
+            if (laterSub) laterSub.textContent = later.typed ? "Your figure. Health cover is added on Will the money last?" : fig ? (loansLater > 0 ? `Our guess: about ${money(Math.round((fig - loansLater) / 10) * 10)} a month of costs, plus the ${money(loansLater)} of loan payments still running then. Health cover is added on Will the money last?` : "Our guess: everyday costs as people 65 to 74 usually spend them, plus your home costs. Health cover is added on Will the money last?") : "";
+          }
+          // (only what applies: childcare left out when there is any, the loans that run on or end by then when there are any)
+          const care = rows.some((r) => r.key === "childcare") || (plan.expenses ?? []).some((x) => x.category === "childcare");
+          const loanBit = loansLater > 0 ? `, plus the ${money(loansLater)} of loan payments still running then` : base.loanPayments > 0 ? `${care ? " and" : ""} without the loans that end by then` : "";
+          if (laterLine) laterLine.textContent = fig ? `We'll plan on about ${money(fig)} a month once you stop working: today's costs${care ? " without childcare" : ""}${loanBit}. Change it on the "Will the money last?" page.` : "";
+          later.guess = fig;
+        }
+      };
+      const row = (s) => {
+        const hw = s.key === "housing" ? housingWords(plan) : null, name = hw ? hw.label : s.label, help = hw ? hw.help : s.help;
+        const box = moneyIn(v.rows[s.key], (val) => { v.rows[s.key] = val; refresh(); });
+        const input = box.querySelector("input"), id = `su-i-${++uid}`;
+        input.id = id;
+        const tapKey = s.key === "insurance" ? "health-cover" : s.key === "childcare" ? "childcare" : s.key === "housing" ? "hoa" : null;
+        const tap = tapKey ? ui.h("div", { class: "su-tap", hidden: true }) : null;
+        boxes[s.key] = { input, name, tap, tapKey, tapBuilt: false, ask: null };
+        return [ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("label", { class: "su-label", for: id }, name), describe(input, help)), box), tap];
+      };
+      const mode = tileGroup("How to answer", [{ key: "rows", icon: "📋", label: "A few groups", line: "Rent, food, car..." }, { key: "total", icon: "✏️", label: "One rough total", line: "If you're not sure" }],
+        { radio: true, isOn: (o) => (o.key === "total") === (v.mode === "total"), onPick: (o) => { v.mode = o.key; drawBody(); } });
+      const drawBody = () => {
+        for (const k of Object.keys(boxes)) delete boxes[k];
+        totalInput = null;
+        if (v.mode === "total") {
+          const box = moneyIn(v.total, (val) => { v.total = val; refresh(); });
+          totalInput = box.querySelector("input");
+          swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", box, "Home, food, car, fun: everything. It counts as must-pay, to be safe. Leave it empty and we'll use the grey figure, our guesses for each group added up."));
+        } else {
+          sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
+          const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
+          const loanRow = base.loanPayments > 0 ? ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("span", { class: "su-label" }, "Loan and card payments"), ui.h("span", { class: "su-sub" }, "From question 5, already counted")), ui.h("span", { class: "su-fixed" }, money(base.loanPayments))) : null;
+          swap(body,
+            must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Must-pay bills", sums.must), ...must.flatMap(row), loanRow) : null,
+            other.length ? ui.h("div", { class: "su-group" }, ui.h("div", { class: "su-gh" }, "Everything else", sums.else), ...other.flatMap(row)) : null,
+            rows.length ? null : ui.h("p", { class: "su-sub" }, "Every kind of bill is already in your plan."));
+        }
+        refresh();
+      };
+      add(card, mode, basis, first, body, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl, adjustEl);
+      if (!allRetired(plan)) {
+        if (laterBox) {
+          const box = moneyIn(later.typed ? later.value : "", (val) => { later.value = val; later.typed = parseMoney(val) !== null; refresh(); });
+          laterInput = box.querySelector("input");
+          laterSub = ui.h("span", { class: "su-sub", "aria-live": "polite" });
+          const id = `su-h-${++uid}`; laterSub.id = id; laterInput.setAttribute("aria-describedby", id);
+          add(card, group(null, ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, "Once you stop working, about how much a month?"), box), laterSub)));
+        } else {
+          laterLine = ui.h("p", { class: "su-sub su-laterline", "aria-live": "polite" });
+          add(card, laterLine);
+        }
+      }
+      drawBody();
+      const words = (p2) => {
+        const r = reflect(p2, "spend");
+        if (!r) return null;
+        // the month in all, as the screen's "In all" says it (loan and card payments from question 5 included)
+        // (how many of the screen's amounts are ours, said against how many there are: "6 of the 7 amounts", "All 7 amounts")
+        const ours = r.guessed === r.count ? (r.count === 1 ? "The amount is our guess" : `All ${r.count} amounts are our guesses`) : `${r.guessed} of the ${r.count} amounts ${r.guessed === 1 ? "is our guess" : "are our guesses"}`;
+        return r.guessed ? `Got it: about ${money(about(r.monthly))} a month. ${ours} for now.` : `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.`;
+      };
+      const apply = (d) => applySpend(d, { ...v, retireMonthly: later.typed ? later.value : "", retireAuto: !later.typed }, today, { guess: ctx.guess });
+      // a typed row far from what households like this spend that a slip explains ($15,000 a month: a year's rent?): asked once
+      const check = () => {
+        const args = rowArgs();
+        for (const s of rows) {
+          const t = args.rows?.[s.key];
+          if (!(t > 0)) continue;
+          const g = ctx.guess(`spend.${s.key}`, { path: `expenses[setup-x-${s.key}].amount`, args: { ...args, rows: { ...args.rows, [s.key]: null } } });
+          const slip = typoCheck(t, g ? { value: g.value, sigma: g.sigma } : null, [{ id: "year-as-month", map: (x) => x / 12, words: (x, m) => `${money(x)} a month for ${(s.key === "housing" ? housingWords(plan).label : s.label).toLowerCase()}? Did you mean ${money(x)} a year (${money(m)} a month)? Continue keeps what you typed.` }]);
+          if (slip) return slip.words;
+        }
+        return null;
+      };
+      current = { apply, words, check };
+      // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess.
+      // Childcare is never guessed without its tap (spec E06), so a Skip with the childcare tap unanswered asks it once more
+      // first (C3 UX review 4: a parent who skipped had no childcare counted, and nothing said so); a second Skip goes on.
+      let askedCare = false;
+      const careOpen = () => { const b = boxes.childcare; return !!b?.tap && !b.tap.hidden && !(v.taps.childcare) && v.mode !== "total"; };
+      actions("Continue", { skipLabel: "Skip: use our guesses", onSkip: () => {
+        if (careOpen() && !askedCare) {
+          askedCare = true;
+          const b = boxes.childcare;
+          b.tap.querySelector(".su-care-again")?.remove();
+          b.tap.prepend(ui.h("p", { class: "su-sub su-care-again", role: "status" }, "One thing first: we never guess childcare. Do you pay for it? Tap Yes, No or Not sure, or Skip again to leave it out."));
+          b.tap.scrollIntoView({ behavior: "smooth", block: "center" });
+          b.tap.querySelector("button")?.focus({ preventScroll: true });
+          return;
+        }
+        current = { apply, words }; forward();
+      } });
     },
 
     goals() {
@@ -941,14 +1137,19 @@ export function render(page, ctx) {
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
     const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", "Needs your pay and spending.", "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
+      // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
+      : st.spareWaits ? fig("calm", "Left over each month", "Depends on your spending", `With our spending guesses: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} Type yours ›`, "● Our guesses for now", setupHref("spend"))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
         : st.bank ? fig("warn", "Left over each month", st.spare, `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, "Check Expenses ›", "#/cashflow/expenses")
         : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.${st.lean ? ` That is a lean month: when all your uneven pay comes in, ${st.lean.kind === "ahead" ? `about ${money(st.lean.about)} is left` : st.lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-st.lean.about)} short`}.` : ""}`,
           // short only in a lean month (Side income's "count on"; review 2026-11-02, round 5)
           st.spare >= 0 ? "● Money to put to work" : st.lean?.kind === "ahead" ? "● Short in a lean month" : "● More goes out than comes in");
     const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
+      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `By our guesses of your must-pay bills. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up");
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
+      // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
+      : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", "Partly our guesses. Type what you spend ›", "● Our guesses for now", setupHref("spend"))
       : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection");
     add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
     if (!reduced() && counters.length) {
@@ -973,7 +1174,9 @@ export function render(page, ctx) {
     // debt on one row, with the page that lists every guess (and where to type the real figures)
     const homes = (plan.accounts ?? []).filter((a) => a.type === "property" && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`))
       .map((a) => rowLink("#/overview/guesses", null, `${a.name}: worth about ${money(a.balance)}`));
-    const ours = [...guessTwins(plan).map((t) => rowLink("#/overview/guesses", null, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once`)), ...homes, ...st.guessed.map((g) => {
+    // the month's spending we filled in comes first: it moves the most
+    const spendRow = st.spendGuessed ? [rowLink(setupHref("spend"), null, `Spending: about ${money(about(st.spendGuessed.monthly))} a month${st.spendGuessed.typed > 0 ? `, besides the ${money(st.spendGuessed.typed)} you typed` : ""}`)] : [];
+    const ours = [...spendRow, ...guessTwins(plan).map((t) => rowLink("#/overview/guesses", null, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once`)), ...homes, ...st.guessed.map((g) => {
       const parts = [g.owed !== undefined ? `still owed about ${money(g.owed)}` : null, g.rate !== null ? `rate ${pctOf(g.rate)}` : null, g.payment !== null ? `${money(g.payment)} a month` : null].filter(Boolean);
       return rowLink("#/overview/guesses", null, `${g.name}: ${parts.join(", ")}`);
     }), ...(ssLine ? [rowLink(ssLine.href, null, ssLine.label)] : [])];

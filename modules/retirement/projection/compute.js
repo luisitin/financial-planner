@@ -1,6 +1,7 @@
 // modules/retirement/projection/compute.js -- PURE. Turns the plan into the engine's inputs
 // (people, buckets, contributions, guaranteed income, spending, rates) and runs the expected-
 // return projection. Every other retirement page starts from buildInputs() so they all agree.
+import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { project, affordableSpending, STRATEGIES } from "../../../core/math/retirement.js";
 import { rmdStartAge, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
@@ -545,7 +546,13 @@ export function expensesCarried(plan, people, today, works, ex = undefined) {
   const typed = Number(rt.spendingMonthly) > 0;
   const fromSetup = typed && plan.guide?.setup?.retireAuto === true && !!e;
   const year = today ? Number(String(today).slice(0, 4)) : new Date().getFullYear();
-  return e && (fromSetup || (!typed && e.monthly > 0)) ? carriedHealth(e.active, people, year, works) : null;
+  // our figure from 50 (overview/setup:retireSpend, spec 7.F) leaves Insurance and health out (health after work is this
+  // page's own line), so that row pays nobody's Medicare: it is not among the lines carried (C3 review D2). Only a figure
+  // the guesses' ledger keeps; the oldest adult's age is the setup's own test (50 or over today).
+  const ages = (plan.household?.people ?? []).filter((p) => p?.role !== "dependent" && p?.birthDate && today).map((p) => ageOn(p.birthDate, today));
+  const from50 = fromSetup && !!plan.guesses?.["retirement.spendingMonthly"] && isGuess(plan, "retirement.spendingMonthly") && ages.length > 0 && Math.max(...ages) >= 50;
+  const active = from50 ? e.active.filter((x) => x.id !== "setup-x-insurance") : e?.active;
+  return e && (fromSetup || (!typed && e.monthly > 0)) ? carriedHealth(active, people, year, works) : null;
 }
 
 /**
@@ -726,7 +733,10 @@ export function buildInputs(plan, params = {}) {
   // childcare and loans, while `retireAuto`, and worked out from them now): cover paid today before Medicare gives way to the
   // health line; Medicare lines stay
   const fromSetup = typed && plan.guide?.setup?.retireAuto === true && !!ex;
-  const live = fromSetup ? setupFigure(plan, today) : 0;
+  // a figure our guesses keep (core/estimate's ledger: overview/setup:retireSpend, which settle works out again whenever
+  // what it reads changes, so it already follows the bills) is used as saved: from 50 it is not today's bills (spec 7.F)
+  const ledgered = fromSetup && !!plan.guesses?.["retirement.spendingMonthly"] && isGuess(plan, "retirement.spendingMonthly");
+  const live = fromSetup && !ledgered ? setupFigure(plan, today) : 0;
   const setupMonthly = fromSetup ? (live > 0 ? live : Number(rt.spendingMonthly)) : null;
   const baseMonthly = typed ? setupMonthly ?? Number(rt.spendingMonthly) : ex?.monthly ?? 0;
   let spendingSource;
@@ -1032,6 +1042,8 @@ export function saveSpendingFigure(draft, typed, shown) {
   if (auto && v !== null && shown !== null && shown !== undefined && Math.abs(Number(v) - Number(shown)) < 0.005) return;
   if (auto) draft.guide.setup.retireAuto = false;
   draft.retirement.spendingMonthly = v;
+  // typed here, it is the household's own figure even when it equals our guess: it stops being ours (spec S2; C3 review D8)
+  clearGuess(draft, "retirement.spendingMonthly");
 }
 
 /** The health line the plan would add, for the page to say with the box ticked (the engine never sees it). */

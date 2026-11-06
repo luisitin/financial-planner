@@ -127,7 +127,10 @@ export function compute(plan, params = {}) {
   // short on the careful month (Side income's "count on"): said so, with what a month that brings the Income page's amount
   // leaves (Next best action's spare.full, said to the nearest $10 as every page says it), review 2026-11-02. When a full
   // month leaves money it is a lean month to plan for, not a plain overspend: amber ("warn"), not red (round 5)
-  if (short > 0 && !nba?.drawing) {
+  // the spending is mostly our guesses (Next best action's spare.waits, spec 8.1): no red verdict on guesses, one calm line
+  const waits = !!(nba?.ready && nba.spare.waits);
+  if (waits) add("spend-guessed", "info", "Type what you really spend", `Most of the spending in your plan is our guesses for now${short > 0 ? `; with them, about ${money(Math.round(short / 10) * 10)} more would go out each month than comes in` : ""}. Your real figures decide whether your month works.`, ["cashflow", "expenses"]);
+  else if (short > 0 && !nba?.drawing) {
     // a full month within $5 of $0 "only just about breaks even" (spare.fullKind "even"): no "about $0", and red, as good
     // months do not make up for lean ones then (round 5)
     const held = nba?.ready && nba.spare.held > 0.5, kind = held ? nba.spare.fullKind : null, about = held ? nba.spare.fullAbout : null, lean = held && kind === "ahead";
@@ -168,7 +171,8 @@ export function compute(plan, params = {}) {
   const later = (liq.status === "bad" || liq.status === "warn") ? cushionLater(nba) : null;
   // whole months, one decimal under 2 (the Emergency fund page's rule, design log 2026-09-15)
   const wholeMonths = (m) => { const v = m < 2 ? Math.round(m * 10) / 10 : Math.round(m); return `${v} month${v === 1 ? "" : "s"}`; };
-  if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of must-pay bills: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"]);
+  if (liq.waits && (liq.status === "bad" || liq.status === "warn")) add("emergency-guessed", "info", "Emergency fund: by our guesses", `By our guesses of your must-pay bills, usable cash covers about ${liq.runwayMonths === null ? "0 months" : wholeMonths(liq.runwayMonths)}; the plan aims for ${liq.targetMonths}. Type your real bills to know for sure.`, ["cashflow", "expenses"]);
+  else if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of must-pay bills: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"]);
   else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${liq.runwayMonths === null ? "0" : (Math.round(liq.runwayMonths * 10) / 10)} months of must-pay bills; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of must-pay bills.`, ["balance", "liquidity"]);
   // a debt the saved debt plan already pays off (Next best action's step under way) is in hand: no alert for its rate

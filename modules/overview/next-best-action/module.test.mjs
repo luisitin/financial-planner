@@ -492,3 +492,19 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   for (const a of left.accounts) if (ask.includes(a.id)) a.formerJob = true;
   assert.match(step(compute(left, { today: T }), "match").detail, /^Your spouse's 401\(k\) is from a job left: check whether the job now has a plan with a match\./);
 });
+
+// C3 (spec 8.1): spending that is mostly our guesses -- the left-over figure is worked out, but it is no verdict
+test("C3 spare.waits: the bills step asks for the real spending, no step is dated from guessed spending; no key without guesses", async () => {
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const plain = compute(familyPlan(), { today: TODAY });
+  assert.equal(plain.spare.waits, undefined); assert.equal(plain.spare.guessedShare, undefined);
+  const p = familyPlan();
+  for (const x of p.expenses) markGuess(p, `expenses[${x.id}].amount`, { key: "spend.x", value: x.amount, unit: "month", sigma: 0.25, dataAsOf: "2026-09-01" }, TODAY);
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.spare.waits, true); assert.ok(d.spare.guessedShare >= 0.5);
+  near(d.spare.monthly, plain.spare.monthly, 1e-9, "the figure itself is the same");
+  assert.deepEqual([d.next.id, d.next.title, d.next.status, d.next.waits], ["bills", "Type what you really spend", "now", true]);
+  assert.match(d.next.detail, /is our guesses, so what is left each month is not known yet\. With our guesses it would be about \$[\d,]+ (spare|short)\./);
+  assert.ok(d.steps.every((s) => s.startDate === null && s.monthly === null && s.capacity === null && (s.doneDate === null || s.doneDate === TODAY)));
+  assert.ok(plain.steps.some((s) => s.startDate || s.doneDate), "the same plan typed has dated steps");
+});

@@ -62,7 +62,10 @@ export function render(page, ctx) {
   const COLOURS = { businessCosts: "var(--panel-2)", federalTax: "var(--muted)", payrollTax: "var(--line-2)", stateTax: "repeating-linear-gradient(135deg, var(--muted) 0 3px, var(--line-2) 3px 6px)",
     careLost: "repeating-linear-gradient(45deg, var(--warn) 0 3px, var(--line-2) 3px 6px)", spending: "var(--text-2)", retirementSaving: "var(--ok)", goalSaving: "var(--accent)",
     debtExtra: "repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px)", held: "var(--line)" };
-  const parts = monthLines(s, d.debtPlan).map((x) => [x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
+  // most of the spending is our guesses (spare.waits, spec 8.1): the Spending line says how much is ours, and the last line is
+  // what our guesses give, in the calm colour, never red (P7)
+  const waits = s.waits === true;
+  const parts = monthLines(s, d.debtPlan).map((x) => [x.key === "spending" && waits ? `Spending (${s.spending - s.guessedMonthly < 5 ? "all" : `about ${money(s.guessedMonthly)}`} of it our guesses)` : x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
@@ -70,18 +73,23 @@ export function render(page, ctx) {
       ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, d.drawing ? "Income before tax" : "Pay and other income, before tax"), ui.h("span", {}, money(s.gross))),
       // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
       parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`))),
-      ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
+      waits ? ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, "With our guesses"), ui.h("span", { class: "muted" }, `about ${money(Math.abs(s.monthly))} ${s.monthly < 0 ? "short" : "spare"}`))
+        : ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
+    waits ? ui.h("p", {}, "Type what you really spend and this becomes your real figure.") : null,
+    waits ? ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/setup/spend?back=done" }, "Type what you spend \u203a")) : null,
     ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is the State page's rate on this income; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State page."} Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
 
   // the order
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The order"),
     ui.h("ol", { class: "nb-steps" }, d.steps.map((st, i) => {
-      const body = [ui.h("span", { class: "nb-num", "aria-hidden": "true" }, st.status === "done" ? "✓" : st.status === "check" ? "?" : String(i)), ui.h("span", { class: "nb-body" },
+      // a step resting on our guesses is never ticked (a cushion counted on guessed bills), and "type what you spend" is ✎
+      const ticked = st.status === "done" && !st.waits;
+      const body = [ui.h("span", { class: "nb-num", "aria-hidden": "true" }, ticked ? "✓" : st.id === "bills" && st.waits ? "✎" : st.status === "check" ? "?" : String(i)), ui.h("span", { class: "nb-body" },
         ui.h("div", { class: "nb-t" }, st.title, st.status === "check" ? ui.h("span", { class: "pill warn" }, "check") : st.status === "underway" ? ui.h("span", { class: "pill ok" }, "under way") : st === n ? ui.h("span", { class: "pill accent" }, "next") : null),
         ui.h("div", { class: "nb-d" }, st.detail),
         st.status !== "done" && when(st) ? ui.h("div", { class: "nb-when" }, when(st)) : null,
         ui.h("div", { class: "nb-why" }, st.why)), ui.h("span", { class: "nb-chev", "aria-hidden": "true" }, "›")];
-      return ui.h("li", { class: `nb-step ${st === n ? "now" : st.status}` }, ui.h("a", { href: `#/${st.go[0]}/${st.go[1]}` }, ...body));
+      return ui.h("li", { class: `nb-step ${st === n ? "now" : st.status === "done" && !ticked ? "waits" : st.status}` }, ui.h("a", { href: `#/${st.go[0]}/${st.go[1]}` }, ...body));
     }))));
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Why this order"), ui.h("span", { class: "fold-chev" }, "›")),

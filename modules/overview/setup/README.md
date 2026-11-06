@@ -212,7 +212,7 @@ as "statement", so going through the ages screen again keeps it.
 ## The guide state (`plan.guide.setup`)
 `{ at (furthest screen), startedAt, finishedAt?, picks: { have, owe, goals }, focus, who, status: { [personId]: work |
 retired | none }, ss: { [personId]: estimate | statement | getting | none | unsure }, ssWrote: { [personId]: amount },
-spendMode, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, optional, documented in
+spendMode, spendZero, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, optional, documented in
 `docs/DATA_MODEL.md` under `guide`.
 
 ## Choices made (the owner said: decide and note it here)
@@ -445,3 +445,98 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
   "Is this the same loan?"); the market fold is titled "What the plan assumes about prices and markets", as on the
   guesses page. The first moves say "type yours on Our guesses for you" for a rate in the guesses' ledger (older plans
   keep "What you owe").
+
+## Spending with our guesses (smart guesses C3, 2026-11-06; spec 7.0, 7.A, 7.F, 8.1, 10, 14.4)
+Before C3 a spending box left empty was $0: someone who knew only the rent had a month of rent alone, and the left-over
+figure, the cushion and the retirement check rested on it. Now every row of Q6 shows our guess grey
+(modules/overview/guesses/estimators/spend.js, formulas and sources in that README) and saving a blank box writes it.
+- **The screen (view.js `spend()`, U.S. plans; `spendPlain()` keeps the old screen when the guesses' gate is closed).**
+  The screen line "Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone
+  like you." One basis line for the grey figures ("The grey figures are what a household like yours usually spends: one
+  adult renting in Texas on about $48,000 a year.", `spendBasis`), in place of a why-line per box. A renter whose rent is
+  ours reads "Type your rent first: it decides most of the total." Each blank box's placeholder is
+  `ctx.guess("spend.<row>", { path, args: spendArgs(plan, v) })` and its accessible name ends ", blank uses our guess
+  of about $X"; the group sums, "In all, about a month" and its parts ("$1,100 you typed + $4,710 our guesses + $1,850
+  loan payments") add the grey figures, so the total is the sum of the rows. Taps under their rows, shown while the
+  row's guess asks and kept once answered: "How do you get health cover?" (insurance and health), "Do you pay for
+  childcare or after-school care?" (childcare: no grey figure until Yes), "Do you pay an HOA or condo fee?" (home costs,
+  only where 35-65% of the state's owners pay one). "One rough total" left empty shows the rows' guesses added up and
+  saves them as rows. Retirement: under 50 (the oldest adult; no birth dates counts as under), one muted line "We'll
+  plan on about $1,900 a month once you stop working: today's costs without childcare and loans that end by then.
+  Change it on Will the money last?"; from 50, or once typed, the box with our grey figure and "Our guess: about $4,070
+  a month of costs, plus the $1,600 of loan payments still running then. Health cover is added on Will the money
+  last?". A typed row far from what households like this spend that a slip explains is asked about once ("$15,000 a
+  month for rent? Did you mean $15,000 a year ($1,250 a month)? Continue keeps what you typed.", R9 `year-as-month`).
+  "Got it: about $3,190 a month. All 7 amounts are our guesses for now." ("6 of the 7 amounts are our guesses" when some
+  are typed; spec 9.6's "7 of these" had nothing to point to) (the month in all, as the screen's "In all" says
+  it: Sam's $2,680 of rows plus the $510 of loan payments from question 5). "Skip: use our guesses" saves the screen as it
+  stands with every empty box guessed.
+- **`applySpend(draft, values, today, { guess })`.** Without `guess` (every older caller and test) it is exactly the old
+  function. With it: `spendArgs(draft, values)` reads the screen (`{ mode, rows: { [row]: number | null }, total, taps }`,
+  `nonneg`: a box left empty is null, a 0 typed is 0); a typed row is written and any guess on it cleared (even when it is
+  the figure we guessed: saving it makes it the person's); a 0 typed writes no row and is remembered in
+  `guide.setup.spendZero` (never guessed again; `valuesFor` reopens it as 0); a blank row gets
+  `guess("spend.<row>", { path, args })`, written with `markGuess` (no figure, as for childcare without a Yes: no row).
+  A typed rough total is written as before, with no guess. The taps answered go to `guide.setup.taps`. Retirement: a
+  typed figure is the person's (`retireAuto` false, any guess cleared); otherwise `guess("overview/setup:retireSpend",
+  { path: "retirement.spendingMonthly", args })` is written and marked (the ledger mirrors `retireAuto` true).
+- **`overview/setup:retireSpend` (`retireSpendFor`).** Under 50: `retireDefault` (with the screen's rows when it has
+  them). From 50 (spec 7.F): each everyday row x what households 65-74 spend on it over households 55-64 (utilities
+  0.880, groceries 0.953, car and transit 0.792, eating out 0.876, shopping 0.859), plus the home costs that go on (the
+  housing row, and a mortgage's property tax and insurance when it is paid off before work stops), the other bills on
+  Expenses (as retireDefault counts them) and the loans still running then; never health cover (the projection's health
+  line). A mortgage still running when work stops is in the loans with its whole payment, which holds the home's tax and
+  insurance (E22), and the figure is one amount for every year, so they are not added a second time (C3 money review D9;
+  `loansRunningThen`). Pat and Lee: about $3,790 + the $1,600 mortgage = $5,390 (7.H's "$4,100 + mortgage while it lasts"
+  added the $280 of tax and insurance on top of the payment that pays them: about $280 a month too much for life). Will the money last?
+  uses a figure in the ledger as saved (settle keeps it in step with the rows), instead of working today's bills out
+  again (`setupFigure`), which is the under-50 formula.
+- **`valuesFor("spend")`**: a guessed row reopens blank (grey), a 0 typed as 0, our retirement figure blank; `taps`.
+  **`reflect("spend")`** adds `{ guessed, count, rows }` (how many rows are ours, of how many, and the screen's rows a
+  month) when one is.
+- **The waiting verdict (8.1; `standing()`).** Next best action's `spare.waits` (half or more of the month is our
+  guesses: Expenses' `guessedShare`), Emergency fund's `waits` (half or more of the must-pay bills) and the retirement
+  verdict resting on our spending add `spareWaits`, `runwayWaits`, `retireGuessed` (only when true), and `spendGuessed`
+  (`{ monthly, count, rows, typed }`). Then the headline is "Your real spending decides whether your month works, so it's
+  the best figure to type next."; the left-over tile reads "Depends on your spending" with "With our spending guesses:
+  about $780 short. Type yours ›" and the muted "● Our guesses for now" (no green or amber); the cushion "About 0.6
+  months" "By our guesses of your must-pay bills"; retirement the verdict word (never "Short at 65") with "Partly our
+  guesses. Type what you spend ›"; the first move "Type what you really spend" goes back to this screen; "Our guesses for
+  now" starts with "Spending: about $3,000 a month, besides the $900 you typed". The Dashboard's three rows say the same
+  (its view, the designer's lane, claimed for C3).
+- **Answer keys** (module.test.mjs): blank rows saved as marked rows equal to the grey figures, the settle after moving
+  nothing, for the three walks; Got it's rows ($2,680, 7 ours; Jordan $3,900) and its month in all ($3,190 for Sam);
+  Skip and a blank rough total write the rows; a
+  typed total writes no guess; one row typed keeps the others ours and the total is their sum; a 0 stays 0 through a
+  settle and a second save; the grey figure typed in is the person's; under 50 the line ($2,680 for Sam), from 50 the
+  box ($5,390 for Pat and Lee), a typed figure stays; the verdict waits and speaks plainly once every row is typed; the
+  walk replays' left-over figures within $100 of 7.H (with C4's contributions stood in; Jordan's 7.H -$780 is -$605 here
+  because the app's tax engine counts the child and dependent care credit on her $900 of childcare, $175 a month, which
+  the spec's prototype left out); outside the U.S. Q6 saves exactly as before.
+- **After the C3 reviews (est/c3/c3-fix.md).**
+  - *A guess is never the mortgage's payment* (D1). A renter's "Rent" that is our guess, when a mortgage is added later on
+    question 5b, is renamed "Home costs" (never "Rent or mortgage"), and settle prices it as the home's other costs. Expenses
+    never takes a row of ours for the mortgage's payment (`guessedSetupRow`), so the payment counts from Debts.
+  - *The retirement verdict and the headline wait with no pay on file* (D4): with no left-over figure, half or more of the
+    month being ours (Expenses' `guessedShare`) is enough for `retireGuessed` and the waiting headline.
+  - *A rough total typed as 0 is the person's 0* (D7): `spendArgs` reads it with `nonneg`; nothing is guessed under it.
+  - *The housing row is named for the household* (UX 5; `housingWords`, the guesses' own tenure): a renter "Rent" (help:
+    "What you pay in rent. Power and water go under utilities"); an owner with a mortgage "Home costs besides the mortgage"
+    ("Repairs and upkeep, plus HOA fees and any tax or insurance not in the mortgage payment"); an owner with none "Home
+    costs" ("Property tax, home insurance, HOA fees and upkeep"), saved as "Home costs". "Type your rent first: it's the
+    biggest one." shows to renters only. Insurance and health's help: "Health premiums (with what comes out of your pay),
+    medicine, doctor visits", which is what the through-work figure holds (UX 8).
+  - *At most two "does this exist" taps* (P9; UX 10): with childcare asked, the HOA fee is not asked on question 6 (left
+    blank it takes the likelier side, as Not sure does).
+  - *Childcare is never dropped in silence* (UX 4): a Skip with the childcare tap unanswered asks it once more ("we never
+    guess childcare"; a second Skip goes on); and with our spending in, a child under 13 and the tap not answered Yes or No,
+    `standing()` adds `childcareMissing` and a "Not counted yet" row "Childcare: do you pay for it, or for after-school
+    care? Tell us and it's counted", and the left-over tile adds "Childcare is not counted yet."
+  - *When typing moves our other figures, the screen says so* (UX 2; R10 as the spec has it): "As you type, our other
+    figures adjust, so the month stays near what households like yours usually spend in all."
+  - *The under-50 line says only what applies* (UX 12): "today's costs" with "without childcare" only when there is any,
+    and the loans that run on or end by then only when there are any; "on the "Will the money last?" page".
+- **Speed.** Settle works the retirement figure out again on every update, so `retireSpendFor` works out `spendBase`
+  once and hands it to `retireDefault`, and `spendBase` reads Expenses without the guess ledger (it reads amounts only,
+  and no amount depends on the ledger). tests/estimate-perf.test.mjs (200 settles of the largest qa plan with 40 guesses
+  under 600 ms) takes about as long as before C3.

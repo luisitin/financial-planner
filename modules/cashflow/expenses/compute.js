@@ -6,6 +6,7 @@ import { compute as computeIncome } from "../income/compute.js";
 import { money } from "../../../core/format.js";
 import { roundShares } from "../../../core/math/shares.js";
 import { compute as computeDebts } from "../../balance/liabilities/compute.js";
+import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 
 // essential: the default for "I must pay this" when a category is picked in the form.
 export const CATEGORIES = {
@@ -31,12 +32,27 @@ export const CATEGORIES = {
 };
 
 /**
+ * What each of Get started's spending rows (`setup-x-<row>`) holds, by Expenses category: its own categories (setup's SPEND
+ * `covers`, which decide what question 6 asks) plus what the survey puts inside the row (spec 7.A E07, E08: entertainment,
+ * which holds streaming and other subscriptions and pets, is in "Eating out and fun"; personal care is in "Shopping and
+ * everything else"). A bill typed under one of them comes off that row's guess (overview/guesses spend.js), and the bank
+ * card compares the row with all of them at once (income-statement bankVsPlan). Gifts, travel and "other" are in no row.
+ */
+export const ROW_HOLDS = { housing: ["housing"], utilities: ["utilities", "phone"], groceries: ["groceries"], transport: ["transport"], insurance: ["insurance", "health"], childcare: ["childcare"], dining: ["dining", "fun", "subscriptions", "pets"], shopping: ["shopping", "personal"] };
+/** A bill is one of Get started's spending rows whose amount is still our guess (only a plan whose ledger holds its path). */
+export const guessedSetupRow = (plan, x) => typeof x?.id === "string" && x.id.startsWith("setup-x-") && !!plan?.guesses && typeof plan.guesses === "object"
+  && Object.prototype.hasOwnProperty.call(plan.guesses, `expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`);
+
+/**
  * compute(plan, { today }) -> {
  *   items: [{ ...expense, categoryLabel, icon, periodLabel, monthly, yearly, active, upcoming, ended, essential, inflates }],
  *   active, count, monthly, yearly, essentialMonthly, optionalMonthly, inflatingMonthly,
  *   byCategory: [{ category, label, icon, monthly, share }] (active, largest first),
  *   income: { monthly, yearly } | null, leftOver (income monthly - expenses monthly) | null, savingsRate | null,
- *   warnings: [text]
+ *   warnings: [text],
+ *   guessedMonthly, guessedShare, guessedEssential, guessedEssentialShare, guessedCount (only when the plan holds guesses and
+ *   some of the month is ours: the bills and debt payments Get started guessed, a month, and their share of the month and of
+ *   the must-pay part; spec 8.1)
  * }
  */
 export function compute(plan, params = {}) {
@@ -65,7 +81,9 @@ export function compute(plan, params = {}) {
   // mortgage is not added again from Debts. Set up my plan files "Home costs" besides the mortgage under housing, so
   // there the mortgage still comes from Debts. The check below accepts either way of filing it.
   const mortgagePay = debts ? (debts.rows ?? []).filter((r) => r.type === "mortgage").reduce((s, r) => s + (Number(r.payment) || 0), 0) : 0;
-  const mortgageFiled = mortgagePay > 0 && active.some((x) => x.category === "housing" && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1));
+  // (Get started's housing row while it is our guess is never the mortgage's payment: it is the home's other costs, worked
+  // out by our guesses, whatever its name or amount; C3 review D1)
+  const mortgageFiled = mortgagePay > 0 && active.some((x) => x.category === "housing" && !guessedSetupRow(plan, x) && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1));
   const allDebtPayments = debts ? debts.payments : 0;
   const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);
   const filedDebt = sum(active.filter((x) => x.category === "debt"), "monthly");
@@ -106,13 +124,32 @@ export function compute(plan, params = {}) {
   const off = (want) => want <= 0 || Math.abs(filedDebt - want) / want > 0.1;
   if (covered > 0 && filedDebt > 0 && off(covered)) warnings.push(`Loan and card payments here add up to ${money(filedDebt, plan.meta?.currency ?? "USD")} a month; the Debts page has ${money(covered, plan.meta?.currency ?? "USD")}${mortgageFiled ? " (not counting the mortgage, which is under housing)" : ""}${debtFromDebts ? ` for the same debts (${money(debtFromDebts, plan.meta?.currency ?? "USD")} more is counted from Debts)` : ""}. ${filedDebt < covered ? "A payment may be missing here" : "One may be out of date"}: check both.`);
   for (const x of items) {
-    if (!(Number(x.amount) > 0)) warnings.push(`${x.name || "An expense"} has no amount.`);
+    // (a row of ours at $0 is our guess giving way to a bill typed in its place, not an amount the person forgot; C3 review D6)
+    if (!(Number(x.amount) > 0) && !guessedSetupRow(plan, x)) warnings.push(`${x.name || "An expense"} has no amount.`);
     if (x.startDate && x.endDate && String(x.endDate) < String(x.startDate)) warnings.push(`${x.name || "An expense"} ends before it starts.`);
   }
   // pay before tax minus spending: a view that can work out the after-tax figure (Next best action) shows that instead
   const overspend = leftOver !== null && leftOver < 0 ? `You spend ${money(-leftOver, plan.meta?.currency ?? "USD")} more each month than comes in. Check the amounts, or this is the first thing the plan should fix.` : null;
   if (overspend) warnings.push(overspend);
+  // how much of the month is our guesses (core/estimate: a bill Get started guessed, and a debt payment it guessed counted
+  // from Debts), so a verdict resting mostly on them can wait (spec 8.1). Only for a plan that holds guesses: every other
+  // plan computes exactly as before.
+  const led = !!plan.guesses && typeof plan.guesses === "object" && !Array.isArray(plan.guesses) && Object.keys(plan.guesses).length > 0;
+  let guessedKeys = {};
+  if (led) {
+    // isGuess walks the plan (and the older flags), which settle would otherwise do for every bill on every update, so
+    // only a path that can be a guess is looked at: a bill only through the ledger (no older flag covers expenses), a
+    // debt payment through the ledger or its older `paymentGuessed` flag
+    const inLedger = (path) => Object.prototype.hasOwnProperty.call(plan.guesses, path);
+    const g = active.filter((x) => typeof x.id === "string" && inLedger(`expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`));
+    const gDebts = fromDebts.filter((f) => { const d = rows.find((r) => r.id === f.id)?.detail; return typeof d?.id === "string" && (inLedger(`debts[${d.id}].minPayment`) || typeof d.paymentGuessed === "number") && isGuess(plan, `debts[${d.id}].minPayment`); });
+    const guessedMonthly = sum(g, "monthly") + gDebts.reduce((t, x) => t + x.monthly, 0);
+    const guessedEssential = sum(g.filter((x) => x.essential), "monthly") + gDebts.reduce((t, x) => t + x.required, 0);
+    const essentialAll = sum(active.filter((x) => x.essential), "monthly") + debtRequired;
+    if (guessedMonthly > 0) guessedKeys = { guessedMonthly, guessedShare: monthly > 0 ? guessedMonthly / monthly : 0, guessedEssential, guessedEssentialShare: essentialAll > 0 ? guessedEssential / essentialAll : 0, guessedCount: g.length + gDebts.length };
+  }
   return {
+    ...guessedKeys,
     items, active, count: items.length, monthly, yearly,
     essentialMonthly: sum(active.filter((x) => x.essential), "monthly") + debtRequired,
     // an extra paid on a debt kept on Debts alone could be cut in a pinch: it is a nice-to-have, so the two add up to the total
@@ -123,6 +160,45 @@ export function compute(plan, params = {}) {
     byCategory, income, leftOver, savingsRate: income && income.monthly > 0 ? leftOver / income.monthly : null,
     warnings, overspend,
   };
+}
+
+/**
+ * The bank card's "Add" (income-statement bankVsPlan's `lines`), written into the draft: a line for one of Get started's rows
+ * that is our guess (`line.ours`) makes the plan list what the bank shows for everything the row holds, less what is typed
+ * beside it, and the figures are the person's from then on (their own bank, not ours: the guess goes). The bank card compares
+ * a row of the person's kind by kind, so each kind is written on its own: the row keeps its own kind (`parts`), and each other
+ * kind it held that the bank shows gets a bill of its own, named as the kind ("Phone and internet" beside "Utilities"; the row
+ * then takes its kind's name, so no line reads as the phone twice). A row with nothing of its own kind gives way to those
+ * bills. Any other line adds a bill of the rest the bank shows, as before.
+ * -> { name, amount, row: true | false, also: [{ name, amount }] } (the notice's words), or null when nothing changed.
+ */
+export function addFromBank(draft, line, newId) {
+  draft.expenses = draft.expenses ?? [];
+  const ten = (v) => Math.round(v / 10) * 10;
+  if (line?.ours) {
+    const x = draft.expenses.find((e) => e.id === line.ours.id);
+    if (!x) return null;
+    const parts = line.ours.parts ?? { [x.category]: line.ours.to };
+    const own = ten(parts[x.category] ?? 0);
+    const also = Object.entries(parts).filter(([c, v]) => c !== x.category && CATEGORIES[c] && ten(v) >= 10)
+      .map(([c, v], i) => ({ id: i ? `${newId}-${i}` : newId, name: CATEGORIES[c].label, category: c, amount: ten(v), period: "monthly", essential: CATEGORIES[c].essential, inflates: true }));
+    clearGuess(draft, `expenses[${x.id}].amount`);
+    const keep = own >= 10 || !also.length;
+    if (keep) { x.amount = own; x.period = "monthly"; if (also.length && CATEGORIES[x.category]) x.name = CATEGORIES[x.category].label; }
+    else draft.expenses = draft.expenses.filter((e) => e.id !== x.id);
+    draft.expenses.push(...also);
+    return { name: x.name, amount: keep ? own : 0, row: keep, also: also.map((b) => ({ name: b.name, amount: b.amount })) };
+  }
+  const name = line.plan > 0.5 ? `${line.label}: the rest the bank shows` : line.label;
+  draft.expenses.push({ id: newId, name, category: line.category, amount: ten(line.more), period: "monthly", essential: line.essential, inflates: true });
+  return { name, amount: ten(line.more), row: false, also: [] };
+}
+/** The notice for addFromBank's answer, in plain words with the plan's currency ("Groceries is now $1,020 a month, from your bank."). */
+export function fromBankWords(said, cur = "USD") {
+  const m = (v) => money(v, cur);
+  if (!said.also?.length) return said.row ? `${said.name} is now ${m(said.amount)} a month, from your bank.` : `Added ${said.name}: ${m(said.amount)} a month.`;
+  const list = [...(said.row ? [`${said.name} ${m(said.amount)}`] : []), ...said.also.map((b) => `${b.name} ${m(b.amount)}`)];
+  return `From your bank: ${list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0]} a month.`;
 }
 
 /**
