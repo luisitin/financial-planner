@@ -75,6 +75,8 @@ export function compute(plan, params = {}) {
     hsa: hs.hasHsa ? { taxSaved: hs.hsa.savedTotal, room: hs.hsa.room, limit: hs.hsa.limit } : null,
     // no retirement year inside the plan: peak is null and `noYears` says why (Review 2026-11-06: the view read r.peak.year
     // and never finished for 17 qa households)
-    retirement: tp.ready ? { ready: true, years: tp.rows.length, total: tp.totals.taxes, average: tp.average, peak: tp.peak, byBracket: tp.byBracket, firstZero: tp.firstZero, flatTaxes: tp.flatTaxes, bracketsOn: tp.bracketsOn, noYears: tp.noYears ?? null } : { ready: false },
+    retirement: tp.ready ? { ready: true, years: tp.rows.length, total: tp.totals.taxes, average: tp.average, peak: tp.peak, byBracket: tp.byBracket, firstZero: tp.firstZero, flatTaxes: tp.flatTaxes, bracketsOn: tp.bracketsOn, noYears: tp.noYears ?? null }
+      // everyone past the plan's end age: the projection has no year to run (round 7), and the report still says why
+      : tp.noYears ? { ready: true, years: 0, total: 0, average: 0, peak: null, byBracket: [], firstZero: null, flatTaxes: 0, bracketsOn: (plan.retirement?.taxMode ?? "flat") === "brackets", noYears: tp.noYears } : { ready: false },
   };
 }

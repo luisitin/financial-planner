@@ -38,3 +38,7 @@ unchanged.)
 
 ## Ideas / not yet
 - Percentiles (not only the median) and income groups from the SCF tables; the trend from the net-worth history; a couple's own age gap.
+
+## Round 7 (2026-11-06)
+- A birth date after today (a typo: 2031 for 1931) has no age group, and the page failed reading the group's median. It now
+  waits: "a birth date before today on the People page". Test: "round 7 (2026-11-06): a birth date after today ...".

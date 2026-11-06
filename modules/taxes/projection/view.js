@@ -12,7 +12,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today(), real: state.real });
   const money = (n) => fmt.money(n, cur);
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
-  if (!d.ready) {
+  if (!d.ready && !d.noYears) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of the retirement plan, through the real brackets. It needs the same things as the Projection page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
     return;
   }

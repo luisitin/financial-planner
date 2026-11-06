@@ -4,7 +4,10 @@
 // the rate; totals in today's dollars; the years that hurt most; and how the flat-rate
 // setting compares.
 import { project } from "../../../core/math/retirement.js";
-import { buildInputs, taxSettings } from "../../retirement/projection/compute.js";
+import { buildInputs, taxSettings, noYearsWhy } from "../../retirement/projection/compute.js";
+
+// noYearsWhy lives with the projection since round 7 (buildInputs uses it); kept importable from here
+export { noYearsWhy };
 
 /**
  * compute(plan, { today, real }) -> {
@@ -16,7 +19,8 @@ import { buildInputs, taxSettings } from "../../retirement/projection/compute.js
  */
 export function compute(plan, params = {}) {
   const b = buildInputs(plan, params);
-  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, rows: [] };
+  // everyone past the age the plan runs to: buildInputs has no year to run and says why (`noYears`, round 7)
+  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, rows: [], noYears: b.noYears ?? null };
   const real = params.real !== false;
   const tax = taxSettings(plan, { mode: "brackets" });
   const r = project({ ...b.inputs, tax });
@@ -38,30 +42,4 @@ export function compute(plan, params = {}) {
   if ((plan.retirement?.taxMode ?? "flat") !== "brackets") notes.push(`The projection pages still use the flat ${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% setting, which comes to ${Math.round(flatTaxes).toLocaleString("en-US")} over the same years; switch the Projection page to the federal brackets to use these figures.`);
   return { ready: true, missing: [], rows, totals, average: rows.length ? totals.taxes / rows.length : 0, peak: peak ? { year: peak.year, taxes: peak.taxes, why: peakWhy } : null, byBracket, flatTaxes, bracketsOn: (plan.retirement?.taxMode ?? "flat") === "brackets", notes, people: b.people, filingStatus: tax.filingStatus, zeroYears: rows.filter((x) => x.taxes < 1).length, real, retireYear: b.inputs.retireYear, success: r.success, failYear: r.failYear,
     noYears: rows.length ? null : noYearsWhy(b.people, b.inputs.startYear ?? (params.today ? Number(String(params.today).slice(0, 4)) : null)) };
-}
-
-const listNames = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
-/**
- * Why a plan has no retirement year to tax, in plain words, and what to check on the People page (Review 2026-11-06: 17 qa
- * households, a plan that ends before retirement or a person already past the plan's end age, left the Tax report on
- * "Putting the tax report together..." and this page on "This page failed to render"). `people`: buildInputs'
- * [{ name, birthYear, retireAge, endAge }]; `year`: this year. -> { why, check }:
- *   everyone already past the end age: "Maya is 126, past the age the plan runs to (95)", check "the birth date";
- *   everyone's plan ending at or before their retirement: "the plan runs to 60, and Maya retires at 70", check the ages;
- *   else "the plan has no years after work stops".
- */
-export function noYearsWhy(people = [], year = null) {
-  const ps = (people ?? []).filter((p) => p && Number.isFinite(p.birthYear));
-  const named = (xs) => listNames(xs.map((p) => p.name || "you"));
-  const verb = (xs, one, many) => (xs.length === 1 && xs[0].name ? one : many);
-  const ages = 'the retirement age and "Plan to age"';
-  if (ps.length && Number.isFinite(year) && ps.every((p) => year - p.birthYear >= p.endAge)) {
-    return ps.length === 1 ? { why: `${named(ps)} ${verb(ps, "is", "are")} ${year - ps[0].birthYear}, past the age the plan runs to (${ps[0].endAge})`, check: "the birth date" }
-      : { why: `${named(ps)} are ${ps.length === 2 ? "both" : "all"} past the age the plan runs to`, check: "the birth dates" };
-  }
-  if (ps.length && ps.every((p) => p.endAge <= p.retireAge)) {
-    const ends = [...new Set(ps.map((p) => p.endAge))], retires = [...new Set(ps.map((p) => p.retireAge))];
-    return { why: ends.length === 1 && retires.length === 1 ? `the plan runs to ${ends[0]}, and ${named(ps)} ${verb(ps, "retires", "retire")} at ${retires[0]}` : `the plan ends before ${named(ps)} ${verb(ps, "retires", "retire")}`, check: ages };
-  }
-  return { why: "the plan has no years after work stops", check: ages };
 }

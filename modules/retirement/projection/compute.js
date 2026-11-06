@@ -657,8 +657,36 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, spouseOnJob, jobPlan, jobCoversSpouse };
 }
 
+const listNames = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
 /**
- * buildInputs(plan, { today, health = true }) -> { inputs, notes: [text], people, spendingSource, spendingYearly, setupMonthly, figureMonthly, health } or { inputs: null, missing: [text], setupMonthly, figureMonthly }
+ * Why a plan has no retirement year (to tax, or at all), in plain words, and what to check on the People page (Review 2026-11-06: 17 qa
+ * households, a plan that ends before retirement or a person already past the plan's end age, left the Tax report on
+ * "Putting the tax report together..." and Tax, year by year on "This page failed to render"; round 7: with everyone past the
+ * end age buildInputs returns no inputs with this as `noYears`, and fourteen pages that failed now wait and say it). `people`: buildInputs'
+ * [{ name, birthYear, retireAge, endAge }]; `year`: this year. -> { why, check }:
+ *   everyone already past the end age: "Maya is 126, past the age the plan runs to (95)", check "the birth date";
+ *   everyone's plan ending at or before their retirement: "the plan runs to 60, and Maya retires at 70", check the ages;
+ *   else "the plan has no years after work stops".
+ */
+export function noYearsWhy(people = [], year = null) {
+  const ps = (people ?? []).filter((p) => p && Number.isFinite(p.birthYear));
+  const named = (xs) => listNames(xs.map((p) => p.name || "you"));
+  const verb = (xs, one, many) => (xs.length === 1 && xs[0].name ? one : many);
+  const ages = 'the retirement age and "Plan to age"';
+  if (ps.length && Number.isFinite(year) && ps.every((p) => year - p.birthYear >= p.endAge)) {
+    return ps.length === 1 ? { why: `${named(ps)} ${verb(ps, "is", "are")} ${year - ps[0].birthYear}, past the age the plan runs to (${ps[0].endAge})`, check: "the birth date" }
+      : { why: `${named(ps)} are ${ps.length === 2 ? "both" : "all"} past the age the plan runs to`, check: "the birth dates" };
+  }
+  if (ps.length && ps.every((p) => p.endAge <= p.retireAge)) {
+    const ends = [...new Set(ps.map((p) => p.endAge))], retires = [...new Set(ps.map((p) => p.retireAge))];
+    return { why: ends.length === 1 && retires.length === 1 ? `the plan runs to ${ends[0]}, and ${named(ps)} ${verb(ps, "retires", "retire")} at ${retires[0]}` : `the plan ends before ${named(ps)} ${verb(ps, "retires", "retire")}`, check: ages };
+  }
+  return { why: "the plan has no years after work stops", check: ages };
+}
+
+/**
+ * buildInputs(plan, { today, health = true }) -> { inputs, notes: [text], people, spendingSource, spendingYearly, setupMonthly, figureMonthly, health } or { inputs: null, missing: [text], setupMonthly, figureMonthly, noYears: { why, check } | null (everyone past the plan's end age: noYearsWhy) }
  * health: false leaves the health line out (healthcare and medicare price it from that run); `retirement.healthIncluded`
  * ("my spending figure already includes health cover") leaves it out too (`health.included`). Spending carried from today's
  * bills (today's expenses, or Get started's own starting figure, `guide.setup.retireAuto`: today's bills less childcare and
@@ -713,7 +741,12 @@ export function buildInputs(plan, params = {}) {
   // cent: a typed figure as it is, or Get started's own less the cover lines that give way to the health line (it showed Get
   // started's figure with a premium still in it, so typing a lower one raised spending); null with no figure (today's expenses)
   const figureMonthly = typed ? Math.round((baseMonthly - removedMonthly) * 100) / 100 : null;
-  if (missing.length) return { inputs: null, missing, people, notes, setupMonthly, figureMonthly };
+  // no year left to plan (round 7, 2026-11-06): everyone already past the age the plan runs to (a birth year typed 1926 for
+  // 1962) left the run with no rows, and fourteen pages that read its last row failed ("This page failed to render"): Will the
+  // money last?, the Timeline, the reports, Chance the money lasts and more. Now nothing runs and the page says what to check.
+  const noYears = people.length && Math.max(...people.map((p) => p.birthYear + p.endAge)) < year ? noYearsWhy(people, year) : null;
+  if (noYears) missing.push(`${noYears.why.charAt(0).toUpperCase()}${noYears.why.slice(1)}: check ${noYears.check} on the People page`);
+  if (missing.length) return { inputs: null, missing, people, notes, setupMonthly, figureMonthly, noYears };
   const personIndex = (id) => Math.max(0, people.findIndex((p) => p.id === id));
   // a contribution to a plan at work (a 401(k) or 403(b) account, or one with an employer match: workRule's test) stops with its
   // owner's last pay line on Income when every one of them has an end date (verify 2026-11-06, seventh pass: the pay stopped
@@ -829,7 +862,7 @@ export const incomeIn = (I, x, year) => {
  */
 export function compute(plan, params = {}) {
   const b = buildInputs(plan, params);
-  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, people: b.people, rows: [], setupMonthly: b.setupMonthly ?? null, figureMonthly: b.figureMonthly ?? null };
+  if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, people: b.people, rows: [], setupMonthly: b.setupMonthly ?? null, figureMonthly: b.figureMonthly ?? null, noYears: b.noYears ?? null };
   const result = project(b.inputs);
   const rows = result.rows;
   const rRow = rows.find((r) => r.year === b.inputs.retireYear) ?? rows[0];

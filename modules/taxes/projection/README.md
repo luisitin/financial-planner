@@ -32,3 +32,9 @@ Working years are not taxed by the engine (wages and their tax are outside the p
 - **One retirement year (verifier, fix round 6).** The hero read "1 years from 2026 to 2026, in today's dollars: $813 a year
   on average ... The biggest year is 2026 at $813"; it reads "1 year, 2026, in today's dollars, filing single." with no
   average and no biggest year, as the Tax report now says it. Test: "no retirement year in the plan says why".
+
+## Round 7 (2026-11-06)
+- `noYearsWhy` moved to `retirement/projection/compute.js` (buildInputs uses it) and is re-exported here. With everyone past
+  the plan's end age `buildInputs` returns no inputs, so `compute` returns `ready: false` with `noYears`; the page and the
+  Tax report still say "There are no retirement years to tax: Ana is 126, past the age the plan runs to (95). Check the
+  birth date on the People page".

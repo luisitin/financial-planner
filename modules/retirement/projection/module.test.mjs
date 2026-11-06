@@ -1414,3 +1414,22 @@ test("verify of the seventh pass: a parent at home under 55 is a one-earner fami
   const r = structuredClone(p); r.guide.setup.status.elena = "retired";
   assert.equal(compute(r, { today: T }).inputs.retireYear, 2026);
 });
+
+test("round 7 (2026-11-06): everyone past the plan's end age (a birth year typo) waits and says why; no page that runs the plan fails", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  // Ana alone, born 1900 (1926 typed for 1962 does the same): the run had no rows, and fourteen pages read its last row and
+  // showed "This page failed to render" (this one, the Timeline, the reports, Chance the money lasts, ...)
+  const old = familyPlan("2026-11-06"); old.household.people = old.household.people.filter((y) => y.id !== "p-bo"); old.household.people.find((y) => y.id === "p-ana").birthDate = "1900-01-01";
+  const d = compute(old, { today: "2026-11-06" });
+  assert.equal(d.ready, false);
+  assert.deepEqual(d.noYears, { why: "Ana is 126, past the age the plan runs to (95)", check: "the birth date" });
+  assert.ok(d.missing.includes("Ana is 126, past the age the plan runs to (95): check the birth date on the People page"), d.missing.join(" | "));
+  for (const id of ["retirement/monte-carlo", "retirement/historical", "retirement/fire", "retirement/rmd", "retirement/buckets", "retirement/cash-flow", "scenarios/goal-seek", "overview/timeline", "overview/health-score", "overview/next-best-action", "career/human-capital", "reports/plan-summary", "reports/retirement", "reports/annual-review", "reports/export", "reports/tax", "taxes/projection"]) {
+    const m = await import(`../../${id}/compute.js`);
+    try { await m.compute(structuredClone(old), { today: "2026-11-06", paths: 100, quick: true }); } catch (e) { assert.fail(`${id}: ${e.message}`); }
+  }
+  // one of a couple past the end age: the other's years still run
+  const one = familyPlan("2026-11-06"); one.household.people.find((y) => y.id === "p-bo").birthDate = "1900-01-01";
+  assert.equal(compute(one, { today: "2026-11-06" }).ready, true);
+  assert.equal(compute(familyPlan("2026-11-06"), { today: "2026-11-06" }).noYears ?? null, null);
+});

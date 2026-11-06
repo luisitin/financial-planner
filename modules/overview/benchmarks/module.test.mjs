@@ -47,3 +47,10 @@ test("the retirement rules of thumb read against the plan's own answer: behind b
   assert.equal(savingVerdict(p, T), null);
   assert.equal(compute(p, T).items.find((y) => y.id === "saving-rate").verdict, "behind");
 });
+
+test("round 7 (2026-11-06): a birth date after today (a typo) waits for a real one instead of failing", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-06"); p.household.people.find((y) => y.id === "p-ana").birthDate = "2031-01-01";
+  const d = compute(p, { today: "2026-11-06" });
+  assert.equal(d.ready, false); assert.deepEqual(d.missing, ["a birth date before today on the People page"]);
+});

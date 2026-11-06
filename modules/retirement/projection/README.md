@@ -616,3 +616,13 @@ the supplement in the health line and the words; the business-draw names. Each f
   stop, 2050, as before the seventh pass). 55 is the age a 401(k) can pay out without the 10% penalty after leaving a job
   (IRC 72(t)(2)(A)(v)), a common line for an early retirement; under it, "not working now" is read as at home.
 - Saying "retired" at any age still starts retirement now: someone who has truly retired early draws from savings.
+
+## Round 7 (2026-11-06): no year left to plan
+- **Everyone past the age the plan runs to** (a birth year typed 1926 for 1962, or 1900): the run had no rows, and fourteen
+  pages that read its last row failed with "This page failed to render" (this page, the Timeline, Chance the money lasts,
+  Market history, Required withdrawals, the reports, Financial independence and more). `buildInputs` now returns no inputs
+  with `noYears` = `noYearsWhy(people, year)` (moved here from Tax, year by year, which re-exports it) when the last
+  person's end year is before this year, and adds "Ana is 126, past the age the plan runs to (95): check the birth date on
+  the People page" to `missing`; `compute` passes `noYears` on. Every page that runs the plan already waits on `missing`.
+  One of a couple past the end age still runs on the other's years. Test: "round 7 (2026-11-06): everyone past the plan's
+  end age ...", which runs seventeen pages' computes on that plan; each one that read the run threw before this change.

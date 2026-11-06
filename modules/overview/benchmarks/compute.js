@@ -41,6 +41,8 @@ export function compute(plan, params = {}) {
   const head = ppl.self ?? ppl.people.find((p) => p.role !== "dependent");
   if (!today || !head || head.age === null) return { ready: false, missing: ["your birth date on the People page"] };
   const age = head.age, group = ageGroup(age);
+  // a birth date after today (a typo: 2031 for 1931) has no age group: wait for it rather than fail (round 7, 2026-11-06)
+  if (!group) return { ready: false, missing: ["a birth date before today on the People page"] };
   const money = (n) => fmtMoney(Math.round(n), plan.meta?.currency ?? "USD");
   const nw = computeNetWorth(plan, { today }), inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
   const items = [];
