@@ -212,7 +212,10 @@ test("recheck 2026-11-05: help from parents with no end date does not change H-0
   // "Health premiums" gives way to Medicare for both from 2030 ($5,805 a year), so the plan carries more (review 2026-11-06)
   const inc = JSON.parse(JSON.stringify(p)); inc.retirement = { ...(inc.retirement ?? {}), healthIncluded: true };
   assert.equal(figures(inc).verdict, "short"); assert.equal(figures(inc).shortYear, 2059); assert.equal(figures(inc).carries, 59612);
-  assert.deepEqual([figures(p).verdict, figures(p).carries], ["tight", 53936], "was short in 2059 with no health line");
+  // seventh pass (2026-11-06): Medicare now holds a supplement (the national Medigap Plan G average, $194 a month each, $4,656 a year for the two) and Frank's
+  // 2029 Medicare, with Gloria still at work, is counted (a job's plan is no longer taken to cover him): short in 2057,
+  // carries $49,149; with the supplement set to $0 it is tight, $53,806
+  assert.deepEqual([figures(p).verdict, figures(p).carries, figures(p).shortYear], ["short", 49149, 2057], "was short in 2059 with no health line, tight at $53,936 with no supplement");
   const b = buildInputs(p, { today: T5 });
   assert.equal(b.inputs.incomes.some((x) => x.name === "Monthly help from parents"), false);
   assert.deepEqual(b.otherLeft.map((x) => [x.name, x.yearly, x.why]), [["Monthly help from parents", 4800, "work"]]);
@@ -389,7 +392,8 @@ test("health line: marketplace years 2052-2054 from Healthcare before 65, Medica
   near(ev.find((e) => e.year === 2054).amount, cost(2054) + med(2054), 0.01);
   near(ev.find((e) => e.year === 2055).amount, med(2055), 0.01); assert.equal(cost(2055), 0);
   assert.equal(ev.length, b.inputs.endYear - 2052 + 1, "one event a year from 2052 to the end");
-  near(med(2053), 12 * (202.9 + md.partD), 0.01);   // Bo alone, standard Part B and the base drug plan, no surcharge
+  near(med(2053), 12 * (202.9 + md.partD + md.supplement), 0.01);   // Bo alone, standard Part B, the base drug plan and a supplement, no surcharge
+  assert.equal(md.supplement, 194, "no supplement entered: the national Medigap Plan G average (seventh pass; it was $0)");
   near(med(2055), 2 * med(2053), 0.01);
   const h = b.health;
   assert.equal(h.included, false);
@@ -414,12 +418,18 @@ test("health line: Medicare years while someone still works are left to the job'
   const { compute: medicare } = await import("../medicare/compute.js");
   const b = buildInputs(familyPlan(H), { today: H });
   assert.equal(b.health.bridge, null, "Ana retires at 65: no marketplace years");
-  assert.equal(b.health.medicare.fromYear, 2055);
-  assert.equal(healthOf(b.inputs)[0].year, 2055);
-  // the two years left out are named, with who works and the amount the Medicare page counts for them
+  // seventh pass (2026-11-06): Bo, 65 in 2053, has stopped while Ana works: his Medicare is counted unless the plan says her
+  // job's plan covers him (retirement.medicare.jobCoversSpouse); it was taken for granted
   const md = medicare(familyPlan(H), { today: H });
-  assert.deepEqual([b.health.onJob.fromYear, b.health.onJob.untilYear, b.health.onJob.names, b.health.onJob.worker], [2053, 2054, ["Bo"], "Ana"]);
-  near(b.health.medicare.total + b.health.onJob.total, md.lifetime, 0.01, "the Medicare page's lifetime is the added years plus the job's years");
+  assert.equal(b.health.medicare.fromYear, 2053); assert.equal(healthOf(b.inputs)[0].year, 2053); assert.equal(b.health.onJob, null);
+  assert.deepEqual([b.health.spouseOnJob.fromYear, b.health.spouseOnJob.untilYear, b.health.spouseOnJob.names, b.health.spouseOnJob.parts[0].worker], [2053, 2054, ["Bo"], "Ana"]);
+  near(b.health.medicare.total, md.lifetime, 0.01, "every year the Medicare page counts");
+  // with the tick, as before: the two years are left to Ana's plan, named with who works and the amount the Medicare page counts
+  const t = familyPlan(H); t.retirement.medicare = { jobCoversSpouse: true };
+  const bt = buildInputs(t, { today: H });
+  assert.equal(bt.health.medicare.fromYear, 2055); assert.equal(healthOf(bt.inputs)[0].year, 2055); assert.equal(bt.health.spouseOnJob, null);
+  assert.deepEqual([bt.health.onJob.fromYear, bt.health.onJob.untilYear, bt.health.onJob.names, bt.health.onJob.worker], [2053, 2054, ["Bo"], "Ana"]);
+  near(bt.health.medicare.total + bt.health.onJob.total, md.lifetime, 0.01, "the Medicare page's lifetime is the added years plus the job's years");
   // Bo listed first: the same rule gives the same Medicare (it was 179,970 against 174,161 before the review)
   const sw = familyPlan(H); sw.household.people.find((x) => x.id === "p-bo").role = "self"; sw.household.people.find((x) => x.id === "p-ana").role = "partner";
   const bs = buildInputs(sw, { today: H });
@@ -441,7 +451,7 @@ test("health line: a premium taken out of today's expenses goes back in while a 
   const ev = (y) => healthOf(b.inputs).find((e) => e.year === y)?.amount ?? 0;
   // 2050-2054: Ana on Bo's plan at work, so its $600 a month goes on (and Bo's own Medicare in 2053-2054 is not added); 2055 on: Medicare for both
   for (const y of [2050, 2051, 2052, 2053, 2054]) near(ev(y), 7200, 0.01);
-  near(ev(2055), 2 * 12 * (202.9 + 38.99), 0.01);
+  near(ev(2055), 2 * 12 * (202.9 + 38.99 + 194), 0.01);   // with the Medigap Plan G default (seventh pass)
   assert.deepEqual([b.health.jobPlan.fromYear, b.health.jobPlan.untilYear, b.health.jobPlan.worker], [2050, 2054, "Bo"]);
   // so the years someone still works carry today's whole spending, premium included: 69,916 + 7,200 = 77,116
   const d = compute(p, { today: H });
@@ -624,7 +634,8 @@ test("health line: a partner with no pay does not work, so the retired one's Med
   // was: 2033-2039 left to "Lee's job" (no Medicare for Sam, $199,841 against the Medicare page's $220,160), Lee's cover never priced
   const md = medicare(p, { today: H }), hc = healthcare(p, { today: H });
   assert.equal(b.health.onJob, null);
-  near(b.health.medicare.total, md.lifetime, 0.01, "every Medicare year of the Medicare page"); near(b.health.medicare.total, 220160.16, 0.05);
+  // (220,160.16 before the seventh pass's supplement: + $2,328 a person-year over 62 person-years)
+  near(b.health.medicare.total, md.lifetime, 0.01, "every Medicare year of the Medicare page"); near(b.health.medicare.total, 220160.16 + 2328 * 62, 0.05);
   assert.equal(b.health.medicare.fromYear, 2033);
   // Lee on the marketplace from Sam's retirement to 65 (2033-2039), Lee covered through Sam's job before that
   assert.deepEqual(hc.years.map((y) => y.year), [2033, 2034, 2035, 2036, 2037, 2038, 2039]); assert.deepEqual(hc.years[0].covered, ["Lee"]);
@@ -638,7 +649,10 @@ test("health line: a partner with no pay does not work, so the retired one's Med
   assert.equal(workRule(q, bq.inputs.people, { today: H, incomes: bq.inputs.incomes })(bq.inputs.people[1], 2034), false);
   const r = buildInputs(retirementPlan(), { today: H });
   assert.equal(workRule(retirementPlan(), r.inputs.people, { today: H, incomes: r.inputs.incomes })(r.inputs.people[1], 2034), true, "Lee's salary, under 67");
-  assert.deepEqual([r.health.onJob.fromYear, r.health.onJob.untilYear], [2033, 2036], "the fixture as before: 2033-2036 on Lee's job");
+  // the fixture: Sam's 2033-2036, while Lee works, were on Lee's job; since the seventh pass they are counted (no tick), and only
+  // Lee's own 2035-2036, while she works, are left to her job
+  assert.deepEqual(r.health.spouseOnJob.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2033, 2036, "Lee", "Sam"]]);
+  assert.deepEqual(r.health.onJob.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2035, 2036, "Lee", "Lee"]]);
 });
 
 test("health line: Get started's own figure is worked out from today's bills, so a premium added or changed later comes out only once", async () => {
@@ -734,7 +748,7 @@ test("health line: the words' data: the work premium kept apart from the total, 
   const b = buildInputs(p, { today: H });
   near(b.health.jobPlan.total, 600 * 12 * 5, 0.01);
   near(b.health.total - b.health.jobPlan.total, b.health.medicare.total, 0.01, "'in all' without the premium: Medicare only");
-  near(b.health.medicare.total, 174160.8, 0.05);
+  near(b.health.medicare.total, 174160.8 + 2328 * 60, 0.05);   // + the supplement over 60 person-years (seventh pass)
   // the couple at 62: credits in the marketplace years, none under the poverty line
   const c = buildInputs(await at62(), { today: H });
   assert.ok(c.health.bridge.credit > 0); assert.deepEqual(c.health.bridge.underLine, []);
@@ -777,10 +791,11 @@ test("fourth pass: rent, dividends, pensions and other income never make anyone 
   // merged with the FIRE answer (round 5): the rent is its own line from 2033 for life (it stopped at Lee's 66 inside "Lee's
   // pay"), so the plan's income is $18,000 higher every year and Medicare's income surcharge applies in 21 years (2045-2065):
   // Medicare $264,103 -> $295,353, the marketplace 2033 $602 -> $588 and 2034 $4,220 -> $4,227, the line $268,924 -> $300,168
-  assert.equal(b.health.medicare.fromYear, 2033); near(b.health.medicare.total, md.lifetime, 0.01); near(b.health.medicare.total, 295353, 1);
+  // (seventh pass: + the Medigap Plan G default, $2,328 a person-year over 62 person-years: 295,353 -> 439,689; the line 300,168 -> 444,504)
+  assert.equal(b.health.medicare.fromYear, 2033); near(b.health.medicare.total, md.lifetime, 0.01); near(b.health.medicare.total, 295353 + 2328 * 62, 1);
   assert.equal(b.health.medicare.surchargeYears, 21);
   assert.deepEqual(hc.years.map((y) => y.year), [2033, 2034]); near(hc.years[0].cost, 588, 1); near(hc.years[1].cost, 4227, 1);
-  near(b.health.bridge.total, hc.total, 0.01); near(b.health.total, 300168, 1);
+  near(b.health.bridge.total, hc.total, 0.01); near(b.health.total, 300168 + 2328 * 62, 1);
   assert.equal(hc.noBridge, false, "was: \"no one needs marketplace cover: everyone works until 65\"");
   // $400 a month of dividends, other income and a pension owned by Lee: the same
   for (const line of [{ id: "div", name: "Dividends", type: "investment", amount: 400 }, { id: "oth", name: "Royalties", type: "other", amount: 400 }, { id: "pen", name: "Lee's small pension", type: "pension", amount: 400 }]) {
@@ -788,9 +803,11 @@ test("fourth pass: rent, dividends, pensions and other income never make anyone 
     assert.equal(workRule(q, bq.inputs.people, { today: H })(bq.inputs.people[1], 2034), false, line.type);
     assert.equal(bq.health.onJob, null, line.type); assert.equal(bq.health.medicare.fromYear, 2033, line.type);
   }
-  // Lee's salary back: she works to 67 and 2033-2036 are on her job's plan, as before
+  // Lee's salary back: she works to 67; Sam's 2033-2036 were on her job's plan, and are counted since the seventh pass (no tick)
   const r = buildInputs(retirementPlan(), { today: H });
-  assert.deepEqual([r.health.onJob.fromYear, r.health.onJob.untilYear], [2033, 2036]);
+  assert.deepEqual([r.health.spouseOnJob.fromYear, r.health.spouseOnJob.untilYear], [2033, 2036]);
+  const rt = retirementPlan(); rt.retirement.medicare = { jobCoversSpouse: true };
+  assert.deepEqual([buildInputs(rt, { today: H }).health.onJob.fromYear, buildInputs(rt, { today: H }).health.onJob.untilYear], [2033, 2036], "with the tick, as before");
 });
 
 test("fourth pass: a retired couple's rental is not a job: Medicare from this year for both, no 'still works' year", async () => {
@@ -856,7 +873,9 @@ test("fourth pass: the Healthcare page and the health line price the same years 
   p.income = p.income.filter((x) => x.personId !== "p-ana"); p.retirement.contributions = p.retirement.contributions.filter((c) => c.personId !== "p-ana");
   p.guide = { setup: { status: { "p-ana": "none" } } };
   const b = buildInputs(p, { today: H }), hc = healthcare(p, { today: H }), md = medicare(p, { today: H });
-  // fifth pass: the household retires when Bo, the one who works, stops (was 2055, Ana's 65th, with 2050-2054 at income $0)
+  // fifth pass: the household retires when Bo, the one who works, stops (was 2055, Ana's 65th, with 2050-2054 at income $0);
+  // (the seventh pass made it this year; its verify: Ana is 36, a parent at home under 55, so Bo's work holds the household at
+  // work until he stops, as the fifth pass had it)
   assert.equal(b.inputs.retireYear, 2050);
   assert.deepEqual([hc.onWorkPlan[0].year, hc.onWorkPlan.at(-1).year, hc.onWorkPlan[0].worker], [2026, 2049, "Bo"], "Ana on Bo's plan while he works");
   // 2050 on: nobody works, so the marketplace (Ana to 2054, Bo to 2052) and Bo's Medicare from 2053
@@ -935,18 +954,20 @@ test("fifth pass: a first adult with no pay and no Get started answer is presume
   const { compute: healthcare } = await import("../healthcare/compute.js");
   const { workRule } = await import("./compute.js");
   const family = buildInputs(familyPlan(H), { today: H }).health;
-  near(family.total, 174161, 1); assert.equal(family.onJob.presumedUntil, null, "Ana's salary: nothing presumed");
+  // seventh pass: 174,161 + the Medigap Plan G default (+139,680) + Bo's 2053-2054 Medicare while Ana works (+10,461.36)
+  near(family.total, 324302, 1); assert.equal(family.spouseOnJob.parts[0].presumedUntil, null, "Ana's salary: nothing presumed");
   const noIncome = familyPlan(H); noIncome.income = []; noIncome.retirement.contributions = [];
   // with their saving kept, Ana's 401(k) at work and Bo's Roth (nobody has pay) are work: the same health line, nothing presumed
   const saving = familyPlan(H); saving.income = [];
   const bs = buildInputs(saving, { today: H }).health;
-  near(bs.total, family.total, 0.01); assert.equal(bs.onJob.presumedUntil, null);
+  near(bs.total, family.total, 0.01); assert.equal(bs.spouseOnJob.parts[0].presumedUntil, null);
   for (const p of [await fifth.childJob(), noIncome]) {
     const b = buildInputs(p, { today: H }), hc = healthcare(p, { today: H });
     // was: $231,756, Bo's marketplace 2050-2052 at an income of $0 ("under the poverty line") and nothing for Ana, who has no job either
     near(b.health.total, family.total, 0.01); assert.equal(b.health.bridge, null);
-    assert.deepEqual([b.health.onJob.fromYear, b.health.onJob.untilYear, b.health.onJob.worker], [2053, 2054, "Ana"], "Bo's Medicare left to Ana's plan, as with her salary");
-    assert.equal(b.health.onJob.presumedUntil, 2055, "the page says the plan takes Ana as working until 2055");
+    // (seventh pass: Bo's 2053-2054 counted while Ana works, as with her salary; it was left to her plan)
+    assert.deepEqual([b.health.spouseOnJob.fromYear, b.health.spouseOnJob.untilYear, b.health.spouseOnJob.parts[0].worker], [2053, 2054, "Ana"], "Bo's Medicare counted while Ana works, as with her salary");
+    assert.equal(b.health.spouseOnJob.parts[0].presumedUntil, 2055, "the page says the plan takes Ana as working until 2055");
     assert.equal(hc.noBridge, true); assert.deepEqual([hc.onWorkPlan[0].year, hc.onWorkPlan.at(-1).year, hc.onWorkPlan[0].worker], [2050, 2052, "Ana"]);
     assert.deepEqual(hc.presumed, [{ name: "Ana", untilYear: 2055 }], "the page says the plan takes Ana as working until 2055");
     const [ana, bo] = b.inputs.people, w = workRule(p, b.inputs.people, { today: H, retireYear: b.inputs.retireYear });
@@ -970,7 +991,8 @@ test("fifth pass: no cover after the end of someone's plan (Lee with a plan to 6
   const lee = b.inputs.people[1];
   assert.equal(coverRule(p, b.inputs.people, { today: H, retireYear: b.inputs.retireYear })(lee, 2033), false, "was: true");
   assert.deepEqual(hc.years, [], "was: 2033 Lee $394, 2034 Lee $3,828"); assert.equal(b.health.bridge, null);
-  near(b.health.total, medicare(p, { today: H }).lifetime, 0.01); near(b.health.total, 115275, 1);
+  // (115,275 before the seventh pass's Medigap Plan G default: + $2,328 a year over Sam's 31 Medicare years, 2033-2063)
+  near(b.health.total, medicare(p, { today: H }).lifetime, 0.01); near(b.health.total, 115275 + 2328 * 31, 1);
 });
 
 test("fifth pass: someone not working does not hold the household at work: retirement starts when the last working adult stops, or now", async () => {
@@ -978,13 +1000,21 @@ test("fifth pass: someone not working does not hold the household at work: retir
   const { householdRetireYear, workRule } = await import("./compute.js");
   const p = await fifth.anaNone();
   const d = compute(p, { today: H }), hc = healthcare(p, { today: H });
-  // was 2055 (Ana's 65th): 2050-2054 had no spending and no withdrawals, the marketplace priced on an income of $0
-  assert.equal(d.inputs.retireYear, 2050); assert.deepEqual(d.retireBy, { id: "p-bo", name: "Bo", age: 62, first: false });
+  // was 2055 (Ana's 65th): 2050-2054 had no spending and no withdrawals, the marketplace priced on an income of $0; the fifth
+  // pass made it 2050 (Bo's stop: nothing drawn before, his pay taken to cover all $84,000 a year). Seventh pass (2026-11-06):
+  // this year, Bo's pay as income. Its verify (2026-11-06): Ana is 36, a parent at home under 55 (STOP_NOW_FROM_AGE), so Bo's
+  // work holds the household at work until he stops, as the fifth pass had it; starting now put the savings in the retired mix
+  // for 28 years and drew the tax on his pay from savings (short in 2045 instead of 2054)
+  assert.equal(d.inputs.retireYear, 2050);
+  assert.deepEqual(d.retireBy, { id: "p-bo", name: "Bo", age: 62, first: false });
+  const r26 = d.rows.find((r) => r.year === 2026);
+  assert.ok(!r26.retired && r26.spending === 0, "a working year: Bo's pay carries it, nothing drawn");
   for (const y of hc.years) assert.ok(d.rows.find((r) => r.year === y.year).spending > 0, `${y.year}: priced in a year with living costs`);
-  assert.deepEqual(hc.years.slice(0, 4).map((y) => y.magi > 0), [true, true, true, true], "2050-2053 on the plan's own withdrawals");
-  near(d.health.total, 272417, 1); assert.equal(d.verdict, "short");
-  // the first year with income $0 is 2054, when the plan lives on Roth money (no taxable income): a real one, with spending
+  assert.equal(d.verdict, "short"); assert.equal(d.shortYear, 2054);
   assert.deepEqual(d.health.bridge.underLine, [2054]);
+  // Bo working by a Get started answer alone (no pay on Income) still holds the household at work until he stops, as before
+  const ans = await fifth.anaNone(); ans.income = ans.income.filter((x) => x.personId !== "p-bo"); ans.guide.setup.status["p-bo"] = "work";
+  assert.equal(buildInputs(ans, { today: H }).inputs.retireYear, 2050);
   // nobody works: retirement is now
   const q = await fifth.anaNone(); q.guide.setup.status["p-bo"] = "retired";
   const bq = buildInputs(q, { today: H });
@@ -1025,14 +1055,16 @@ test("fifth pass: the health words name the person and the years for each part, 
   const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
   const say = async (p) => { const h = buildInputs(await p, { today: H }).health; return healthSummary(h.bridge, h.medicare, { money }); };
   // was: "About $210 to $1,440 a month from 2026 until 65 (marketplace; ...), then Medicare about $240 a month for Ana from 2026"
-  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $630 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $240 a month from 2028.");
-  assert.equal(await say(at62()), "Ana and Bo: about $400 a month, 2052 (marketplace, after the credit). Ana: about $1,440 a month, 2053 and 2054 (marketplace, no credit). Bo: Medicare, about $240 a month from 2053. Ana: Medicare from 2055 (about $480 a month for the two of you).");
+  // (seventh pass: Medicare with the Medigap Plan G default, $194 a month each: about $440 a month each, $870 for two; it read $240 and $480)
+  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $630 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $440 a month from 2028.");
+  assert.equal(await say(at62()), "Ana and Bo: about $400 a month, 2052 (marketplace, after the credit). Ana: about $1,440 a month, 2053 and 2054 (marketplace, no credit). Bo: Medicare, about $440 a month from 2053. Ana: Medicare from 2055 (about $870 a month for the two of you).");
   const lee = await say(rentLee({ id: "rent", name: "Rental condo", type: "rental", amount: 1500, growth: 0.02 }));
-  assert.ok(lee.startsWith("Lee: about $50 to $350 a month, 2033 and 2034 (marketplace, after the credit). Sam: Medicare, about $240 a month from 2033. Lee: Medicare from 2035"), lee);
+  assert.ok(lee.startsWith("Lee: about $50 to $350 a month, 2033 and 2034 (marketplace, after the credit). Sam: Medicare, about $440 a month from 2033. Lee: Medicare from 2035"), lee);
   assert.ok(lee.endsWith("including an income surcharge in 21 of those years (Medicare page)."), lee);
   for (const s of [await say(fifth.c6863()), await say(at62()), lee, await say(fifth.anaNone())]) assert.ok(!/\bthen\b/.test(s), s);
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
-  assert.equal(await say(familyPlan(H)), "Ana and Bo: Medicare, about $480 a month for the two of you from 2055.");
+  // (seventh pass: Bo's Medicare from 2053, while Ana still works, is counted: no tick says her job's plan covers him)
+  assert.equal(await say(familyPlan(H)), "Bo: Medicare, about $440 a month from 2053. Ana: Medicare from 2055 (about $870 a month for the two of you).");
   assert.equal(healthSummary(null, null), "");
 });
 
@@ -1051,10 +1083,13 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   const a = compute(said, { today: H }), b = compute(none, { today: H });
   // was 2029 ("when Bo stops work at 66"): 2026-2028 had no spending, nothing drawn and Ana's Social Security dropped
   assert.equal(a.inputs.retireYear, 2026, "was 2029"); assert.equal(b.inputs.retireYear, 2026);
-  assert.deepEqual(a.retireBy, { id: "p-ana", name: "Ana", age: 68, first: true }, "the year is her own (this year), so she is named");
-  // the two plans give one answer: "Runs out in 2041 (age 83)", carries $68,896 (was "Runs out in 2054", $71,564 with the answer)
+  // the year is her own (this year), so she is named; seventh pass: as having stopped, with Bo's pay coming in until 2028
+  assert.deepEqual(a.retireBy, { id: "p-ana", name: "Ana", age: 68, first: true, stopped: true, notWorking: false, working: [{ id: "p-bo", name: "Bo", stopAge: 66, untilYear: 2028 }] });
+  assert.deepEqual(b.retireBy, { id: "p-ana", name: "Ana", age: 68, first: true });
+  // the two plans give one answer: "Runs out in 2041 (age 83)", carries $68,896 (was "Runs out in 2054", $71,564 with the answer);
+  // seventh pass: "Runs out in 2038 (age 80)", carries $66,863, Medicare holding the Medigap Plan G default ($87,080 -> $156,920)
   const fig = (d) => [d.verdict, d.shortYear, d.shortAge, Math.round(d.affordable), Math.round(d.health.total)];
-  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a).slice(0, 4), ["short", 2041, 83, 68896]);
+  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a), ["short", 2038, 80, 66863, 156920]);
   // 2026 is a year of retirement: spending, Ana's Social Security and Bo's pay ($18,000) all in it
   const row = a.rows.find((r) => r.year === 2026);
   assert.ok(row.retired && row.spending > 0);
@@ -1067,8 +1102,9 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   const lever = (p) => goalSeek(p, { today: H }).levers.find((l) => l.id === "retire");
   assert.equal(lever(said).title, "When Bo can retire"); assert.equal(lever(none).title, "When Bo can retire");
   assert.equal(lever(said).value, null); assert.equal(lever(none).value, null);
-  // the fifth pass's own cases hold: Ana "not working now" at 40 keeps Bo's 2050 (her own year is 2055), nobody working is now
-  assert.equal(buildInputs(await fifth.anaNone(), { today: H }).inputs.retireYear, 2050);
+  // the fifth pass's own cases: Ana "not working now" at 36 kept Bo's 2050 (her own year is 2055); seventh pass: now, Bo's pay
+  // as income (the "someone not working" test); nobody working is now
+  assert.equal(buildInputs(await fifth.anaNone(), { today: H }).inputs.retireYear, 2050, "a parent at home at 36: Bo's stop (verify of the seventh pass)");
   assert.equal(buildInputs(await sixth.noPay(true), { today: H }).inputs.retireYear, 2026);
 });
 
@@ -1077,13 +1113,19 @@ test("review 2026-11-06: householdRetireYear is capped at the first adult's own 
   const people = [{ id: "a", name: "Ana", birthYear: 1971, retireAge: 65, endAge: 95 }, { id: "b", name: "Bo", birthYear: 1968, retireAge: 70, endAge: 95 }];
   const plan = { household: { people: [{ id: "a", role: "self" }, { id: "b", role: "partner" }] }, income: [{ id: "j", type: "salary", personId: "b", amount: 5000, period: "monthly" }], guide: { setup: { status: { a: "retired" } } } };
   const w = workRule(plan, people, { today: "2026-11-06" });
-  // Ana (55) said "retired" with 65 on file (2036); Bo works to 70 (2038): the household's year is Ana's own 2036, not Bo's 2038
-  assert.equal(householdRetireYear(plan, people, 2026, w), 2036);
-  assert.deepEqual(retireStarter(people, 2026, 2036, w), { id: "a", name: "Ana", age: 65, first: true });
+  // Ana (55) said "retired" with 65 on file (2036); Bo works to 70 (2038) with pay on Income: seventh pass (2026-11-06), this
+  // year, his pay coming in as income until 2037 (it was Ana's own 2036, nothing drawn before)
+  assert.equal(householdRetireYear(plan, people, 2026, w), 2026);
+  assert.deepEqual(retireStarter(people, 2026, 2026, w), { id: "a", name: "Ana", age: 55, first: true, stopped: true, notWorking: false, working: [{ id: "b", name: "Bo", stopAge: 70, untilYear: 2037 }] });
+  // Bo working by a Get started answer alone (no pay the plan can count): he holds the household at work until he stops, never
+  // later than Ana's own 2036, as before
+  const said = { ...plan, income: [], guide: { setup: { status: { a: "retired", b: "work" } } } };
+  assert.equal(householdRetireYear(said, people, 2026, workRule(said, people, { today: "2026-11-06" })), 2036);
+  assert.deepEqual(retireStarter(people, 2026, 2036, workRule(said, people, { today: "2026-11-06" })), { id: "a", name: "Ana", age: 65, first: true });
   // Bo stopping at 62 (2030), before Ana's own year: his stop starts it
   const early = people.map((p) => (p.id === "b" ? { ...p, retireAge: 62 } : p));
-  assert.equal(householdRetireYear(plan, early, 2026, workRule(plan, early, { today: "2026-11-06" })), 2030);
-  assert.deepEqual(retireStarter(early, 2026, 2030, workRule(plan, early, { today: "2026-11-06" })), { id: "b", name: "Bo", age: 62, first: false });
+  assert.equal(householdRetireYear(said, early, 2026, workRule(said, early, { today: "2026-11-06" })), 2030);
+  assert.deepEqual(retireStarter(early, 2026, 2030, workRule(said, early, { today: "2026-11-06" })), { id: "b", name: "Bo", age: 62, first: false });
   // Ana's own year already past (born 1958, 60 on file): this year, and it is hers
   const past = [{ ...people[0], birthYear: 1958, retireAge: 60 }, people[1]];
   assert.equal(householdRetireYear(plan, past, 2026, workRule(plan, past, { today: "2026-11-06" })), 2026);
@@ -1116,11 +1158,12 @@ test("review 2026-11-06: one work rule: a contribution at work is work; any othe
 });
 
 test("review 2026-11-06: support with no end date of someone who has stopped, or of the first adult, never counts from the household's retirement", async () => {
-  // Ana "not working now" (the household retires in 2050, when Bo stops): her help from parents with no end date stops with her
-  // work, which has stopped, so 2050-2054 (before her own 65) are not counted; it is named as not counted (why "work")
+  // Ana "not working now" (the household retired in 2050, when Bo stopped; this year since the seventh pass, Bo's pay as income):
+  // her help from parents with no end date stops with her work, which has stopped, so no year from the household's retirement
+  // (before her own 65) is counted; it is named as not counted (why "work")
   const p = await fifth.anaNone(); p.income.push({ id: "h", name: "Help from parents", type: "support", personId: "p-ana", amount: 400, period: "monthly" });
   const b = buildInputs(p, { today: H });
-  assert.equal(b.inputs.retireYear, 2050);
+  assert.equal(b.inputs.retireYear, 2050, "Ana at home at 36: Bo's stop (verify of the seventh pass)");
   assert.deepEqual(yearsOf(b.inputs, "Help from parents"), [], "was counted 2050-2054");
   assert.deepEqual(b.otherLeft.map((x) => [x.name, x.why]), [["Help from parents", "work"]]);
   // Bo's, who works to 62: his until he stops, as before (none after the household's 2050 either, his stop)
@@ -1153,17 +1196,221 @@ test("verify 2026-11-06: the Medicare years left to a job are worded per worker 
   p.retirement.socialSecurity = { a: { claimAge: 67, monthlyAtFRA: 2400 }, b: { claimAge: 70, monthlyAtFRA: 2600 } };
   const d = compute(p, { today: "2026-11-06" });
   assert.equal(d.inputs.retireYear, 2031);
+  // seventh pass (2026-11-06): Bo, who works himself in 2028-2032, is on his own job's plan (it named Ana's, listed first), and
+  // Ana, 65 in 2031 after she stops, has her Medicare counted while Bo works (no tick on the Medicare page)
+  const { spouseWords } = await import("./compute.js");
   const j = d.health.onJob;
   assert.deepEqual([j.fromYear, j.untilYear, j.years], [2028, 2032, 5], "the whole span, as before");
-  assert.deepEqual(j.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2028, 2030, "Ana", "Bo"], [2031, 2032, "Bo", "Ana+Bo"]]);
-  const words = onJobWords(j);
-  assert.equal(words[0], "In 2028 to 2030 Bo is 65 or over while Ana still works: a plan through Ana's job can cover Bo, so Medicare those years is not added (the Medicare page counts them).");
-  assert.equal(words[1], "In 2031 and 2032 Ana is 65 or over while Bo still works: a plan through Bo's job can cover Ana and Bo, so Medicare those years is not added (the Medicare page counts them).");
-  assert.ok(!words.join(" ").includes("2032 Bo is 65 or over while Ana"), "was: one sentence naming Ana's job to 2032");
-  // the money is unchanged: no Medicare while either works, both from 2033
-  assert.deepEqual(d.inputs.events.filter((e) => e.label === "Health cover").map((e) => e.year).slice(0, 2), [2033, 2034]);
-  near(j.total, 20318.76, 0.01);
-  // one worker throughout keeps one sentence, as before (the family: Bo's 2053-2054 on Ana's job)
-  const fam = compute((await import("../../../qa/fixtures/family-plan.mjs")).familyPlan("2026-11-06"), { today: "2026-11-06" });
-  assert.deepEqual(onJobWords(fam.health.onJob), ["In 2053 and 2054 Bo is 65 or over while Ana still works: a plan through Ana's job can cover Bo, so Medicare those years is not added (the Medicare page counts them)."]);
+  assert.deepEqual(j.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2028, 2032, "Bo", "Bo"]]);
+  assert.deepEqual(onJobWords(j), ["In 2028 to 2032 Bo is 65 or over but still works: cover comes through the job, so Medicare those years is not added (the Medicare page counts them)."]);
+  assert.deepEqual(spouseWords(d.health.spouseOnJob), ["In 2031 and 2032 Ana is 65 or over while Bo still works: Ana's Medicare is counted. If a plan through Bo's job covers Ana, tick the box on the Medicare page."]);
+  assert.ok(!onJobWords(j).join(" ").includes("while Ana"), "was: Ana's job named for Bo's own years");
+  // the money: Bo's own Medicare is left to his job while he works; Ana's from 2031; both from 2033
+  assert.deepEqual(d.inputs.events.filter((e) => e.label === "Health cover").map((e) => e.year).slice(0, 2), [2031, 2032]);
+  near(j.total, 5 * 12 * (202.9 + 38.99 + 194), 0.01); near(d.health.spouseOnJob.total, 2 * 12 * (202.9 + 38.99 + 194), 0.01);
+  // with the tick, Ana's 2031-2032 are on Bo's job too, a sentence for each run of the same people
+  const t = JSON.parse(JSON.stringify(p)); t.retirement.medicare = { jobCoversSpouse: true };
+  const dt = compute(t, { today: "2026-11-06" });
+  assert.deepEqual(dt.health.onJob.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2028, 2030, "Bo", "Bo"], [2031, 2032, "Bo", "Bo+Ana"]]);
+  assert.equal(onJobWords(dt.health.onJob)[1], "In 2031 and 2032 Ana is 65 or over while Bo still works: you said a plan through Bo's job covers Ana (Medicare page), so Medicare those years is not added (the Medicare page counts them).");
+  assert.deepEqual(dt.inputs.events.filter((e) => e.label === "Health cover").map((e) => e.year).slice(0, 2), [2033, 2034]);
+  // one worker throughout keeps one sentence (the family: Bo's 2053-2054, counted, or with the tick on Ana's job)
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const fam = compute(familyPlan("2026-11-06"), { today: "2026-11-06" });
+  assert.equal(fam.health.onJob, null);
+  assert.deepEqual(spouseWords(fam.health.spouseOnJob), ["In 2053 and 2054 Bo is 65 or over while Ana still works: Bo's Medicare is counted. If a plan through Ana's job covers Bo, tick the box on the Medicare page."]);
+  const ft = familyPlan("2026-11-06"); ft.retirement.medicare = { jobCoversSpouse: true };
+  assert.deepEqual(onJobWords(compute(ft, { today: "2026-11-06" }).health.onJob), ["In 2053 and 2054 Bo is 65 or over while Ana still works: you said a plan through Ana's job covers Bo (Medicare page), so Medicare those years is not added (the Medicare page counts them)."]);
+});
+
+// ---- review 2026-11-06, seventh pass (health-ver6 follow-ups 1-6, fire-ver8b): the years a pay line is paid, a husband's or
+// wife's Medicare while the other works, retirement starting now when the first adult has stopped, and the words
+const seventh = {
+  T: "2026-11-06",
+  // Rae (62, "not working now", 67 on file) and Jo (62, part-time $2,200 a month to 66), the health-ver6 example
+  rae: () => {
+    const p = emptyPlan();
+    p.household.people.push({ id: "rae", name: "Rae", role: "self", birthDate: "1964-01-15", retirementAge: 67 }, { id: "jo", name: "Jo", role: "partner", birthDate: "1964-10-01", retirementAge: 66 });
+    p.household.filingStatus = "married_joint"; p.guide = { setup: { status: { rae: "none", jo: "work" } } };
+    p.accounts.push({ id: "ira", name: "Rae's IRA", type: "ira", balance: 380000, ownerId: "rae" }, { id: "brk", name: "Brokerage", type: "brokerage", balance: 70000 }, { id: "sav", name: "Savings", type: "savings", balance: 30000 });
+    p.income.push({ id: "jo", name: "Jo's part-time job", type: "salary", personId: "jo", amount: 2200, period: "monthly", growth: 0.02, taxable: true });
+    p.retirement.socialSecurity = { rae: { claimAge: 67, monthlyAtFRA: 2100 }, jo: { claimAge: 67, monthlyAtFRA: 1600 } };
+    p.expenses.push({ id: "h", name: "Home costs", category: "housing", amount: 1700, period: "monthly", essential: true, inflates: true }, { id: "f", name: "Food", category: "groceries", amount: 800, period: "monthly", essential: true, inflates: true }, { id: "c", name: "Car and gas", category: "transport", amount: 450, period: "monthly", essential: true, inflates: true }, { id: "o", name: "Everything else", category: "other", amount: 1400, period: "monthly", essential: false, inflates: true });
+    return p;
+  },
+  // Rae 66 retired on Social Security ($2,400 a month), Jo part-time to 66: Rae on Medicare while Jo works (health-ver6 follow-up 2)
+  partTime: () => {
+    const p = seventh.rae();
+    p.household.people[0].birthDate = "1960-01-15"; p.household.people[0].retirementAge = 63; p.guide.setup.status.rae = "retired";
+    p.income.push({ id: "ss", name: "Rae's Social Security", type: "social", personId: "rae", amount: 2400, period: "monthly", growth: 0.025, taxable: true });
+    p.retirement.socialSecurity = { jo: { claimAge: 67, monthlyAtFRA: 1600 } };
+    return p;
+  },
+};
+
+test("seventh pass: payYears counts a pay line in the years it is paid for more than half of, this year when paid today", async () => {
+  const { payYears } = await import("./compute.js");
+  const T = seventh.T, line = (x) => ({ amount: 1000, period: "monthly", ...x });
+  assert.deepEqual(payYears(line({}), T), { from: 2026, until: Infinity });
+  // a job ending 2027-06-30 (181 of 365 days) counts to 2026; one ending 2027-07-03 (184 days) counts 2027 too
+  assert.deepEqual(payYears(line({ endDate: "2027-06-30" }), T), { from: 2026, until: 2026 });
+  assert.deepEqual(payYears(line({ endDate: "2027-07-03" }), T), { from: 2026, until: 2027 });
+  // ending later this year while paid today: this year counts
+  assert.deepEqual(payYears(line({ endDate: "2026-11-30" }), T), { from: 2026, until: 2026 });
+  // a job starting 2027-01-01 counts from 2027; one starting 2027-09-01 from 2028; one starting next month, from 2027
+  assert.deepEqual(payYears(line({ startDate: "2027-01-01" }), T), { from: 2027, until: Infinity });
+  assert.deepEqual(payYears(line({ startDate: "2027-09-01" }), T), { from: 2028, until: Infinity });
+  assert.deepEqual(payYears(line({ startDate: "2026-12-01" }), T), { from: 2027, until: Infinity });
+  // ended, a one-off, no amount, or a stint shorter than half of any year: none
+  assert.equal(payYears(line({ endDate: "2026-06-30" }), T), null); assert.equal(payYears(line({ period: "once" }), T), null);
+  assert.equal(payYears(line({ amount: 0 }), T), null); assert.equal(payYears(line({ startDate: "2027-03-01", endDate: "2027-05-31" }), T), null);
+  // a raise from a later date splits a line in two (cashflow/income splitRaise): the boundary year counts once
+  const old = payYears(line({ endDate: "2027-02-28" }), T), next = payYears(line({ startDate: "2027-03-01", amount: 1100 }), T);
+  assert.deepEqual([old, next], [{ from: 2026, until: 2026 }, { from: 2027, until: Infinity }]);
+  // with no date given, every line is taken as paid now
+  assert.deepEqual(payYears(line({}), null), { from: -Infinity, until: Infinity });
+});
+
+test("seventh pass: the work rule and a partner's pay use the pay line's dates (a job ending 2027-06-30 counted to 66; one starting 2027 as no work)", async () => {
+  const { workRule } = await import("./compute.js");
+  const T = seventh.T;
+  const yrs = (p) => { const d = compute(p, { today: T }), W = workRule(p, d.inputs.people, { today: T, retireYear: d.inputs.retireYear }), jo = d.inputs.people[1]; return { d, works: [2026, 2027, 2028, 2029, 2030].filter((y) => W(jo, y)), pay: d.inputs.incomes.filter((x) => x.type === "pay").map((x) => [x.yearly, 1964 + x.startAge, 1964 + x.endAge]) }; };
+  const all = yrs(seventh.rae());
+  assert.deepEqual(all.works, [2026, 2027, 2028, 2029]); assert.deepEqual(all.pay, [[26400, 2026, 2029]]);
+  // ending 2027-06-30: Jo works and is paid in 2026 only (was: to 2029, and Rae's 2029 Medicare left to the job)
+  const ends = seventh.rae(); ends.income[0].endDate = "2027-06-30";
+  const e = yrs(ends);
+  assert.deepEqual(e.works, [2026]); assert.deepEqual(e.pay, [[26400, 2026, 2026]]);
+  assert.equal(e.d.health.onJob, null); assert.equal(e.d.health.spouseOnJob, null);
+  assert.deepEqual(e.d.health.bridge.parts.map((x) => [x.fromYear, x.untilYear, x.names.join("+")]), [[2027, 2028, "Rae+Jo"]], "both on the marketplace once the job ends (Jo, born 1964-10-01, is on Medicare from 2029)");
+  // starting 2027-01-01: Jo works and is paid 2027-2029 (was: no work and no pay at all); 2026 on the marketplace
+  const starts = seventh.rae(); starts.income[0].startDate = "2027-01-01";
+  const s = yrs(starts);
+  assert.deepEqual(s.works, [2027, 2028, 2029]); assert.deepEqual(s.pay, [[26400, 2027, 2029]]);
+  assert.deepEqual(s.d.health.bridge.parts.map((x) => [x.fromYear, x.untilYear, x.names.join("+")]), [[2026, 2026, "Rae+Jo"]]);
+  // Financial independence keeps the job that starts next year in its "you have stopped" answer: the projection's year
+  const { incomeAnswer } = await import("../fire/compute.js");
+  const w = incomeAnswer(starts, T);
+  assert.equal(w.retired, true); assert.equal(w.failYear, s.d.shortYear);
+  // Medicare's working-year income counts the pay of that year only: Jo alone, at work to 66, a raise from 2027-03-01 (a line
+  // ending 2027-02-28 at $2,200 a month and one from 2027-03-01 at $2,500, as cashflow/income splitRaise writes it) is $26,400
+  // in 2026 and $30,000 from 2027 (was $26,400 every year, the raise left out)
+  const { planIncome } = await import("../medicare/compute.js");
+  const one = seventh.rae(); one.household.people = [one.household.people[1]]; one.household.filingStatus = "single";
+  one.guide = { setup: { status: { jo: "work" } } }; one.retirement.socialSecurity = { jo: one.retirement.socialSecurity.jo };
+  one.income = [{ ...one.income[0], endDate: "2027-02-28" }, { ...one.income[0], id: "jo2", amount: 2500, startDate: "2027-03-01" }];
+  const pi = planIncome(one, { today: T }), agi = (y) => Math.round(pi.partsOf(pi.run.rows.find((r) => r.year === y)).agi);
+  assert.equal(pi.inputs.retireYear, 2030); assert.deepEqual([2026, 2027, 2028, 2029].map(agi), [26400, 30000, 30000, 30000]);
+});
+
+test("seventh pass: a first adult who has stopped with a partner on pay starts retirement now, the partner's pay as income (Rae: as with her age set to 62)", async () => {
+  const T = seventh.T;
+  const p = seventh.rae(), at62 = seventh.rae(); at62.household.people[0].retirementAge = 62;
+  const d = compute(p, { today: T }), d62 = compute(at62, { today: T });
+  // was: 2030 (min of Rae's own 2031 and Jo's stop), nothing drawn 2026-2029 and Jo's $26,400 taken to cover all $55,200 ("on
+  // track"); with Rae's age set to 62 it started in 2026 ("tight"). Now both start in 2026, with the same figures
+  assert.equal(d.inputs.retireYear, 2026); assert.equal(d62.inputs.retireYear, 2026);
+  const fig = (x) => [x.verdict, x.shortYear ?? null, Math.round(x.affordable), Math.round(x.atEnd.totalReal), Math.round(x.health.total)];
+  assert.deepEqual(fig(d), fig(d62));
+  const r26 = d.rows.find((r) => r.year === 2026);
+  assert.ok(r26.retired && r26.spending > 0 && r26.incomeLines.some((l) => l.name === "Jo's pay" && Math.abs(l.amount - 26400) < 1));
+  // who starts it: Rae, not working, with Jo's pay coming in until 2029
+  assert.deepEqual(d.retireBy, { id: "rae", name: "Rae", age: 62, first: true, stopped: true, notWorking: true, working: [{ id: "jo", name: "Jo", stopAge: 66, untilYear: 2029 }] });
+  // Financial independence has nothing left to explain (it read "Your plan still has Rae working until 67 ... only in 2030")
+  const { incomeAnswer } = await import("../fire/compute.js");
+  assert.equal(incomeAnswer(p, T).plannedStop, null);
+});
+
+test("seventh pass: a spouse 65 or over is not taken as covered by the other's job: Medicare counted unless the Medicare page's tick says so", async () => {
+  const { spouseWords, onJobWords } = await import("./compute.js");
+  const { compute: medicare } = await import("../medicare/compute.js");
+  const T = seventh.T, p = seventh.partTime();
+  const d = compute(p, { today: T }), md = medicare(p, { today: T });
+  // Rae (66) on Social Security, Jo part-time to 66 (2029): Rae's Medicare 2026-2029 was left to "Jo's job" ($11,612 before the
+  // supplement); now counted, Jo's own 2029 still on his job
+  assert.deepEqual(d.health.spouseOnJob.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2026, 2029, "Jo", "Rae"]]);
+  near(d.health.spouseOnJob.total, 4 * 12 * (202.9 + 38.99 + 194), 0.01);
+  assert.deepEqual(d.health.onJob.parts.map((x) => [x.fromYear, x.untilYear, x.worker, x.names.join("+")]), [[2029, 2029, "Jo", "Jo"]]);
+  assert.equal(d.health.medicare.fromYear, 2026);
+  assert.deepEqual(spouseWords(d.health.spouseOnJob), ["In 2026 to 2029 Rae is 65 or over while Jo still works: Rae's Medicare is counted. If a plan through Jo's job covers Rae, tick the box on the Medicare page."]);
+  assert.deepEqual(md.spouseYears.map((y) => y.year), [2026, 2027, 2028, 2029]);
+  // with the tick (retirement.medicare.jobCoversSpouse) her 2026-2029 are left to Jo's job, as before, and said so
+  const t = seventh.partTime(); t.retirement.medicare = { jobCoversSpouse: true };
+  const dt = compute(t, { today: T });
+  assert.equal(dt.health.spouseOnJob, null); assert.equal(dt.health.medicare.fromYear, 2030);
+  near(d.health.total - dt.health.total, d.health.spouseOnJob.total, 0.01);
+  assert.match(onJobWords(dt.health.onJob)[0], /^In 2026 to 2028 Rae is 65 or over while Jo still works: you said a plan through Jo's job covers Rae \(Medicare page\)/);
+  // a presumed worker (no pay, no answer) is said with the spouse's years, as onJobWords says it
+  assert.deepEqual(spouseWords({ parts: [{ fromYear: 2053, untilYear: 2054, years: 2, names: ["Bo"], worker: "Ana", presumedUntil: 2055 }] }).slice(1), ["No pay is listed for Ana and Get started does not say Ana has stopped work, so the plan takes Ana as working until 2055."]);
+});
+
+test("seventh pass: Medicare in the health line holds the national Medigap Plan G average when no supplement is entered, and the words say what it leaves out", async () => {
+  const { healthSummary } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const p = retiredCouplePlan(); p.expenses = p.expenses.filter((x) => x.id !== "e-med");
+  const h = buildInputs(p, { today: seventh.T }).health;
+  assert.equal(h.medicare.supplementMonthly, 194); assert.equal(h.medicare.supplementDefault, true);
+  near(h.medicare.monthlyAll, 2 * (202.9 + 38.99 + 194), 0.01);
+  const own = retiredCouplePlan(); own.expenses = own.expenses.filter((x) => x.id !== "e-med"); own.retirement.medicare = { supplementPremium: 0 };
+  const h0 = buildInputs(own, { today: seventh.T }).health;
+  assert.equal(h0.medicare.supplementMonthly, 0); assert.equal(h0.medicare.supplementDefault, false);
+  // $2,328 a person-year over 51 person-years (Ruth 2026-2049, Sam 2026-2052, to the plan's end age)
+  near(h.total - h0.total, 2328 * 51, 1);
+  assert.equal(healthSummary(null, h.medicare), "Ruth and Sam: Medicare, about $870 a month for the two of you from 2026.");
+  // married filing separately: the marketplace years say why there is no credit
+  assert.equal(healthSummary({ parts: [{ names: ["Lou"], fromYear: 2026, untilYear: 2027, years: 2, monthlyLow: 1400, monthlyHigh: 1800, creditYears: 0, separate: true }] }, null), "Lou: about $1,400 to $1,800 a month, 2026 and 2027 (marketplace, no credit on separate returns).");
+});
+
+test("seventh pass (fire-ver8b): a business word leaves a name out of the household's own accounts only when the business is the source", async () => {
+  const { ownAccountMoney } = await import("./compute.js");
+  // the household's own accounts, which the plan already draws on (were counted on top of them)
+  for (const n of ["Withdrawals from my brokerage firm account", "Draws from company stock account", "Savings account draws for the business", "Withdrawals from the investment firm"]) assert.equal(ownAccountMoney(n), true, n);
+  // money from a business or against pay, as before
+  for (const n of ["Owner's draw from business account", "Account manager bonus draws", "Draws against commissions account", "Partnership draws from capital account", "Draws from the firm", "Company account draws", "LLC distributions"]) assert.equal(ownAccountMoney(n), false, n);
+  for (const n of ["Withdrawals from savings", "Brokerage account draws", "IRA withdrawals", "Business owner's 401(k) withdrawals", "Roth IRA withdrawals"]) assert.equal(ownAccountMoney(n), true, n);
+});
+
+// ---- verify 2026-11-06 (seventh pass): a job's 401(k) saving stops with the job, as its pay does
+test("verify 2026-11-06: a contribution to a plan at work stops with its owner's last pay line when every one has an end date", () => {
+  // Dee (60) said "retired", 66 on file; Sam (58) on salary to 2028-03-31 (65 on file, 2033), saving $400 a month in his 401(k)
+  // with a $1,800 match. The patch stopped his pay at the end date (2027: more than half of 2028 unpaid) but the saving and the
+  // match went on to 2032: $6,600 a year from a job that has ended, short in 2049 instead of 2046
+  const p = emptyPlan();
+  p.household.people.push({ id: "dee", name: "Dee", role: "self", birthDate: "1966-02-14", retirementAge: 66 }, { id: "sam", name: "Sam", role: "partner", birthDate: "1968-05-01", retirementAge: 65 });
+  p.household.filingStatus = "married_joint"; p.guide = { setup: { status: { dee: "retired", sam: "work" } } };
+  p.accounts.push({ id: "dira", name: "Dee's IRA", type: "ira", balance: 300000, ownerId: "dee" }, { id: "s401", name: "Sam's 401(k)", type: "401k", balance: 180000, ownerId: "sam" }, { id: "sav", name: "Savings", type: "savings", balance: 25000 });
+  p.income.push({ id: "sj", name: "Sam's job", type: "salary", personId: "sam", amount: 5000, period: "monthly", growth: 0.02, taxable: true, endDate: "2028-03-31" });
+  p.retirement.contributions.push({ id: "c1", accountId: "s401", personId: "sam", amount: 400, period: "monthly", employerMatch: 1800 });
+  p.retirement.socialSecurity = { dee: { claimAge: 67, monthlyAtFRA: 1800 }, sam: { claimAge: 67, monthlyAtFRA: 2200 } };
+  p.expenses.push({ id: "h", name: "Rent", category: "housing", amount: 4300, period: "monthly", essential: true, inflates: true });
+  const T = "2026-11-06";
+  const I = buildInputs(p, { today: T }).inputs;
+  assert.deepEqual(I.contributions.map((c) => [c.name, c.yearly, c.untilYear]), [["Sam's 401(k)", 6600, 2027]]);
+  const rows = project(I).rows, put = (y) => Math.round(rows.find((r) => r.year === y).contributions);
+  assert.ok(put(2027) > 0); assert.equal(put(2028), 0);
+  // with no end date it goes on to his retirement age, as before; an IRA saving (not a plan at work) is not cut either
+  delete p.income[0].endDate;
+  assert.equal(buildInputs(p, { today: T }).inputs.contributions[0].untilYear, undefined);
+  p.income[0].endDate = "2028-03-31"; p.retirement.contributions = [{ id: "c2", accountId: "dira", personId: "sam", amount: 300, period: "monthly" }];
+  assert.equal(buildInputs(p, { today: T }).inputs.contributions[0].untilYear, undefined);
+});
+
+test("verify of the seventh pass: a parent at home under 55 is a one-earner family, not retired: the partner's work holds the household at work", () => {
+  const T = seventh.T;
+  // Elena (35, "not working now", 65 on file) at home, Marcus (37) earning $90,000 to 62
+  const p = emptyPlan();
+  p.household.people.push({ id: "elena", name: "Elena", role: "self", birthDate: "1991-03-01", retirementAge: 65 }, { id: "marcus", name: "Marcus", role: "partner", birthDate: "1989-05-01", retirementAge: 62 });
+  p.household.filingStatus = "married_joint"; p.guide = { setup: { status: { elena: "none", marcus: "work" } } };
+  p.accounts.push({ id: "k", name: "Marcus's 401(k)", type: "401k", balance: 120000, ownerId: "marcus" }, { id: "sav", name: "Savings", type: "savings", balance: 20000 });
+  p.income.push({ id: "m", name: "Marcus's pay", type: "salary", personId: "marcus", amount: 90000, period: "annual", growth: 0.02, taxable: true });
+  p.expenses.push({ id: "h", name: "Home costs", category: "housing", amount: 2400, period: "monthly", essential: true, inflates: true }, { id: "o", name: "Everything else", category: "other", amount: 2200, period: "monthly", essential: false, inflates: true });
+  const d = compute(p, { today: T });
+  // was (seventh pass): 2026, the savings in the retired mix from 35 and the tax on Marcus's pay drawn from savings
+  assert.equal(d.inputs.retireYear, 2051, "the earlier of Elena's own 2056 and Marcus stopping at 62 (2051)");
+  assert.equal(d.retireBy.stopped, undefined);
+  // 55 or over keeps the seventh pass: Rae (62) starts now
+  assert.equal(compute(seventh.rae(), { today: T }).inputs.retireYear, 2026);
+  // "retired" at any age is retired: Elena saying so starts retirement now, Marcus's pay as income
+  const r = structuredClone(p); r.guide.setup.status.elena = "retired";
+  assert.equal(compute(r, { today: T }).inputs.retireYear, 2026);
 });

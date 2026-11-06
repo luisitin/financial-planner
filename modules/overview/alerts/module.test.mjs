@@ -180,14 +180,14 @@ test("protection: no life cover on an earner others depend on, and no guardian f
   const p = familyPlan("2026-11-02");
   const a = compute(p, { today: "2026-11-02" }).alerts;
   const life = a.find((x) => x.id === "life-cover-p-ana");
-  assert.equal(life.level, "warn"); assert.equal(life.title, "No life insurance on Ana: Bo and Cy would be about $287,000 short");   // 2026-11-02, the health line (Bo alone pays his cover): was 235,000
+  assert.equal(life.level, "warn"); assert.equal(life.title, "No life insurance on Ana: Bo and Cy would be about $312,000 short");   // 2026-11-02, the health line (Bo alone pays his cover): was 235,000; 287,000 before the seventh pass's Medigap Plan G default ($194 a month)
   assert.deepEqual(life.go, ["insurance", "life-needs"]);
   assert.ok(!a.some((x) => x.id === "life-cover-p-bo"), "the plan holds if Bo died");
   const g = a.find((x) => x.id === "guardian");
   assert.equal(g.level, "info"); assert.equal(g.title, "No one is named to raise Cy if you both died"); assert.deepEqual(g.go, ["estate", "documents"]);
   p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 100000, premium: 20, period: "monthly" }] };
-  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $187,000 short");   // the health line: was 135,000
-  p.insurance.policies[0].benefit = 300000;
+  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $212,000 short");   // the health line: was 135,000, then 187,000 before the seventh pass's Medigap Plan G default
+  p.insurance.policies[0].benefit = 350000;   // 300,000 before the seventh pass (the need is 312,000 with the Medigap Plan G default)
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id.startsWith("life-cover")), "covered: nothing");
 });
 

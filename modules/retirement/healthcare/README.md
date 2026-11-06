@@ -85,3 +85,15 @@ Who works is the projection's one work rule, now shared with Financial independe
 one with a match) or nobody else has pay, and the household's retirement year is never after the first adult's own. No
 fixture's marketplace years move: Lee with her IRA saving kept and Sam working is still priced 2033-2034 (a spousal IRA is not a
 job), and the 68/63 couple's Bo 2026-2027.
+
+## Review 2026-11-06 (seventh pass: no credit on separate returns)
+- `creditAllowed(filingStatus)`: false for `married_separate`. A married couple must file jointly to get the premium tax credit
+  (26 U.S.C. 36B(c)(1)(C), read 2026-11-06); the exception, a spouse living apart who cannot file jointly because of domestic
+  abuse or abandonment (26 CFR 1.36B-2(b)(2)(ii)-(v), eCFR as of 2026-11-04), is said on the page, not assumed.
+- Filing separately: every year's credit is $0, its cost the full benchmark, no cliff (`cliffIncome` null, no "years over the
+  cliff" stat, no poverty-line notice); `separate: true` in the result. The page leads with a notice: "You file separate
+  returns. A married couple filing separately gets no marketplace tax credit, so the full premium is counted here. Only someone
+  living apart from a spouse who abused or abandoned them can still get it; the instructions for IRS Form 8962 say how."
+- H-1395 (separated, not divorced): credits $15,893 -> $0, the year's cost $1,712 -> $17,606. The 68/63 couple filing
+  separately (Lou on the marketplace 2026-2027): $5,036 after $29,893 of credits -> $34,930 (filing jointly: $4,975 as before).
+- Test: "seventh pass: married filing separately gets no marketplace credit"; it failed on the base.

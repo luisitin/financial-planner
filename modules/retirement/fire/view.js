@@ -3,7 +3,7 @@
 // if markets do as well as average: compute's withIncome); then the 25-times rule as a quick
 // check, folded: the number, how far along you are, the years to get there at the current pace, and the coast figure.
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
-import { compute, carefulAgeSteps, ruleWords, plannedStopWords } from "./compute.js";
+import { compute, carefulAgeSteps, ruleWords, plannedStopWords, otherEndWords } from "./compute.js";
 import { whenWorked, slot, RULE_WORDS, leftWords } from "../careful.js";
 
 const STYLE = `
@@ -63,13 +63,15 @@ export function render(root, ctx) {
   const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
   // someone under their retirement age with no pay who did not say "retired" is "not working", never "already retired" (a
   // parent at home; recheck 2026-11-05, second pass)
-  const others = (w.others ?? []).map((o) => (o.notWorking ? `${sayName(o.name)} not working` : o.retired ? `${sayName(o.name)} already retired` : `${sayName(o.name)} stopping at ${o.retireAge} as planned`));
+  // reaching the planned age this year while still on pay: "stopping this year, as planned" (seventh pass; it read "already retired")
+  const others = (w.others ?? []).map((o) => (o.notWorking ? `${sayName(o.name)} not working` : o.stoppingNow ? `${sayName(o.name)} stopping this year, as planned` : o.retired ? `${sayName(o.name)} already retired` : `${sayName(o.name)} stopping at ${o.retireAge} as planned`));
   // named in one fixed order (pensions, rent, dividends, other income), whatever order the plan lists them in
   const KINDS = { pension: "pensions", rent: "rent", dividends: "dividends", other: "other income" };
   const kinds = Object.keys(KINDS).filter((k) => (w.otherKinds?.length ? w.otherKinds : ["pension"]).includes(k));
   // what of it stops, and when (review 2026-11-06: "plus $14,400 a year of other income" for child support that ends in 2034)
   const ends = w.otherYearly > 0 ? w.otherEnding : null;
-  const endWords = !ends ? "" : ends.all ? ` until ${ends.by}` : ` (${money(ends.yearly)} of it only until ${ends.by})`;
+  // each step when parts stop in different years (seventh pass): "until 2030, then $14,400 until 2034"
+  const endWords = otherEndWords(ends, w.otherYearly, money);
   const otherWords = w.otherYearly > 0 ? `${money(w.otherYearly)} a year of ${listOf((kinds.length ? kinds : ["other"]).map((k) => KINDS[k]))}${endWords}` : "";
   // Social Security already being paid says so (review: "from 2020" for someone who claimed in 2020; recheck 2026-11-05: and
   // for Social Security typed on the Income page, which starts this year in the plan)

@@ -40,6 +40,14 @@ export function credit({ magi, size, benchmarkYearly, rules = "law", year = FIRS
   const c = share === null ? 0 : Math.max(0, benchmarkYearly - contribution);
   return { multiple, share, contribution, credit: c, cost: benchmarkYearly - c };
 }
+/**
+ * Whether a household can have the credit at all, by its filing status (review 2026-11-06, seventh pass): a married couple must
+ * file a joint return (26 U.S.C. 36B(c)(1)(C)), so married filing separately gets none. The one exception, a spouse living apart
+ * who cannot file jointly because of domestic abuse or abandonment and says so on the return (26 CFR 1.36B-2(b)(2)(ii)-(v), for
+ * at most three years running), is said on the page, not assumed. creditAllowed(filingStatus) -> boolean
+ */
+export const creditAllowed = (filingStatus) => filingStatus !== "married_separate";
+
 /** The ages a family's benchmark counts: every adult and child 21 to 25, and only the three oldest children under 21. */
 export function countedAges(ages) {
   const young = ages.filter((a) => a < 21).sort((x, y) => y - x);
@@ -50,7 +58,8 @@ export function countedAges(ages) {
  * compute(plan, { today }) -> {
  *   ready, missing, rules, rulesLabel, benchmark40, size, cliffIncome (the household's income at the cliff), people: [{ name, retireAge, bridgeYears }],
  *   years: [{ year, covered: [names], magi, multiple, underLine (under the poverty line), benchmark, credit, cost, overCliff (income over the cliff), lostCredit (the credit at an income just at the cliff, lost by going over), room (income still under the cliff) }],
- *   total, totalCredit, cliffYears, underLineYears (years under the poverty line: no credit), onWorkPlan: [{ year, covered, worker }] (years a working partner's job plan can cover the retired one), noBridge (no marketplace years)
+ *   total, totalCredit, cliffYears, underLineYears (years under the poverty line: no credit), onWorkPlan: [{ year, covered, worker }] (years a working partner's job plan can cover the retired one), noBridge (no marketplace years),
+ *   separate (married filing separately: no credit in any year, creditAllowed; no cliff)
  * }
  */
 export function compute(plan, params = {}) {
@@ -59,7 +68,9 @@ export function compute(plan, params = {}) {
   const rules = SCHEDULES[set.rules] ? set.rules : "law";
   const household = plan.household?.people ?? [];
   const size = Math.max(1, household.length);
-  const base = { rules, rulesLabel: SCHEDULES[rules].label, size, cliffIncome: SCHEDULES[rules].cliff === Infinity ? null : povertyLine(size) * SCHEDULES[rules].cliff };
+  // married filing separately: no credit (creditAllowed), so no cliff either; the full benchmark is the cost
+  const separate = !creditAllowed(plan.household?.filingStatus);
+  const base = { rules, rulesLabel: SCHEDULES[rules].label, size, separate, cliffIncome: separate || SCHEDULES[rules].cliff === Infinity ? null : povertyLine(size) * SCHEDULES[rules].cliff };
   const pi = params.planIncome ?? planIncome(plan, { today });   // the projection's health line passes the run it already made
   if (!pi.inputs) return { ...base, ready: false, missing: pi.missing, years: [] };
   // the marketplace's own income: AGI plus untaxed Social Security plus tax-exempt interest (fifth pass; Medicare's surcharge
@@ -92,8 +103,8 @@ export function compute(plan, params = {}) {
     const magi = acaMagiOf(row);
     const famSize = I.people.filter((p, k) => row.ages[k] <= p.endAge).length + kids.filter((k) => k.age < 19).length;
     const year = row.year;   // that year's poverty line and table, the newest held for later years
-    const c = credit({ magi, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules, year });
-    const cliff = SCHEDULES[rules].cliff === Infinity ? null : povertyLine(Math.max(1, famSize), year) * SCHEDULES[rules].cliff;
+    const c = separate ? { multiple: magi / povertyLine(Math.max(1, famSize), year), share: null, contribution: Infinity, credit: 0, cost: benchmark } : credit({ magi, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules, year });
+    const cliff = separate || SCHEDULES[rules].cliff === Infinity ? null : povertyLine(Math.max(1, famSize), year) * SCHEDULES[rules].cliff;
     years.push({ year: row.year, covered: [...adults.map((a) => a.p.name), ...kids.map((k) => k.name)], magi, size: famSize, multiple: c.multiple, underLine: c.multiple < 1, benchmark, credit: c.credit, cost: c.cost, cliff, overCliff: cliff !== null && magi > cliff ? magi - cliff : 0, lostCredit: cliff !== null && magi > cliff ? credit({ magi: cliff, size: Math.max(1, famSize), benchmarkYearly: benchmark, rules, year }).credit : 0, room: cliff !== null && magi <= cliff ? cliff - magi : null, conversion: (row.conversion ?? 0) / row.priceLevel });
   }
   const people = I.people.map((p) => ({ name: p.name, retireAge: p.retireAge, bridgeYears: Math.max(0, 65 - p.retireAge) }));

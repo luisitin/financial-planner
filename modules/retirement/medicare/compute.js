@@ -2,10 +2,10 @@
 // Part B, a drug plan and any supplement cost, and the income surcharge (IRMAA) each year, from the plan's
 // own income two years before (Roth conversions and required withdrawals included): which years it bites,
 // how much it adds over retirement, and how much room is left under the first threshold.
-import { buildInputs, workRule } from "../projection/compute.js";
+import { buildInputs, workRule, payYears, expensesCarried } from "../projection/compute.js";
 import { project } from "../../../core/math/retirement.js";
 import { ageOn } from "../../../core/math/dates.js";
-import { YEAR, PART_B, PART_B_DEDUCTIBLE, PART_D_BASE, tiersFor, LATE_PENALTY } from "./data/medicare.js";
+import { YEAR, PART_B, PART_B_DEDUCTIBLE, PART_D_BASE, tiersFor, LATE_PENALTY, MEDIGAP_G } from "./data/medicare.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
 
@@ -64,7 +64,8 @@ export function planIncome(plan, { today } = {}) {
   const I = b.inputs;
   const run = project(I);
   const inc = computeIncome(plan, { today }), con = computeContributions(plan, { today });
-  const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
+  // the pay of a year: the lines paid that year (payYears; review 2026-11-06, seventh pass: it was the lines paid today, every year)
+  const payOf = (id, year) => inc.items.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).filter((x) => { const r = payYears(x, today); return r && year >= r.from && year <= r.until; }).reduce((s, x) => s + x.yearly, 0);
   const preTaxOf = (id) => (con.items ?? []).filter((c) => c.personId === id && ["401k", "ira"].includes(c.accountType)).reduce((s, c) => s + c.yearly, 0);
   // each engine income line's kind, by the income it comes from
   const works = workRule(plan, I.people, { today, retireYear: I.retireYear });
@@ -77,7 +78,7 @@ export function planIncome(plan, { today } = {}) {
       const t = row.taxInfo;
       return { agi: (t.ordinary + t.qualified + t.taxableSocialSecurity) / row.priceLevel, exemptInterest, untaxedSocialSecurity: Math.max(0, social - t.taxableSocialSecurity / row.priceLevel) };
     }
-    const working = I.people.reduce((s, p) => s + (works(p, row.year) ? Math.max(0, payOf(p.id) - preTaxOf(p.id)) : 0), 0);
+    const working = I.people.reduce((s, p) => s + (works(p, row.year) ? Math.max(0, payOf(p.id, row.year) - preTaxOf(p.id)) : 0), 0);
     return { agi: working + sum("taxed"), exemptInterest, untaxedSocialSecurity: social };
   };
   const magiOf = (row) => irmaaIncome(partsOf(row));
@@ -87,7 +88,11 @@ export function planIncome(plan, { today } = {}) {
 
 /**
  * compute(plan, { today }) -> {
- *   ready, missing, year (of the figures), partB, deductible, partD, supplement, status,
+ *   ready, missing, year (of the figures), partB, deductible, partD, supplement (a month: the one entered, else MEDIGAP_G),
+ *   supplementDefault (none entered: the national Plan G average), supplementYear, status, jobCoversSpouse (the tick),
+ *   spouseYears: [{ year, names, worker }] (years someone 65 or over has stopped while a husband or wife still works: the tick's
+ *   question; not someone whose Medicare a line on Expenses pays), healthIncluded (Will the money last? adds no health cover:
+ *   "my spending figure already includes health cover"),
  *   people: [{ id, name, medicareYear, signup: { from, month, to } }],
  *   years: [{ year, enrolled, magiYear, magiReal, tier, partBEach, partDAddEach, surchargeYearly, totalYearly, conversion }],
  *   lifetime (all premiums, today's dollars), surcharge (the IRMAA part of it), surchargeYears, firstSurcharge: { year, magiYear, over } | null, roomNow: { year, room } | null
@@ -97,11 +102,14 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const m = plan.retirement?.medicare ?? {};
   const partD = Number(m.partDPremium) >= 0 && m.partDPremium !== null && m.partDPremium !== "" && m.partDPremium !== undefined ? Number(m.partDPremium) : PART_D_BASE;
-  const supplement = Number(m.supplementPremium) > 0 ? Number(m.supplementPremium) : 0;
+  // a supplement (Medigap) or Advantage plan premium: the household's own figure (0 for none), else the national average for
+  // Medigap Plan G (review 2026-11-06, seventh pass: it was $0, so Medicare counted only Part B and the drug plan)
+  const typedSupplement = m.supplementPremium !== null && m.supplementPremium !== undefined && m.supplementPremium !== "" && Number(m.supplementPremium) >= 0;
+  const supplement = typedSupplement ? Number(m.supplementPremium) : MEDIGAP_G.monthly;
   const status = plan.household?.filingStatus || "single";
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const people = adults.map((p) => ({ id: p.id, name: p.name, medicareYear: Number(p.birthDate.slice(0, 4)) + 65, signup: enrollmentWindow(p.birthDate), age: today ? ageOn(p.birthDate, today) : null }));
-  const base = { year: YEAR, partB: PART_B, deductible: PART_B_DEDUCTIBLE, partD, supplement, status, people, latePenalty: LATE_PENALTY };
+  const base = { year: YEAR, partB: PART_B, deductible: PART_B_DEDUCTIBLE, partD, supplement, supplementDefault: !typedSupplement, supplementYear: typedSupplement ? null : MEDIGAP_G.year, status, people, latePenalty: LATE_PENALTY, jobCoversSpouse: m.jobCoversSpouse === true, healthIncluded: plan.retirement?.healthIncluded === true };
   const pi = params.planIncome ?? planIncome(plan, { today });   // the projection's health line passes the run it already made
   if (!pi.inputs) return { ...base, ready: false, missing: pi.missing };
   const { inputs: I, run: r, magiOf } = pi;
@@ -116,6 +124,18 @@ export function compute(plan, params = {}) {
     const each = (t.partB + partD + t.partDAdd + supplement) * 12;
     years.push({ year: row.year, enrolled, magiYear: src.year, magiReal, tier: t.index, partBEach: t.partB, partDAddEach: t.partDAdd, surchargeYearly: ((t.partB - PART_B) + t.partDAdd) * 12 * enrolled, totalYearly: each * enrolled, conversion: (src.conversion ?? 0) / src.priceLevel });
   }
+  // the years someone 65 or over has stopped work while a husband or wife still works (the projection's one work rule): the
+  // years the tick "a plan through their job covers them" is about (seventh pass)
+  const works = workRule(plan, I.people, { today, retireYear: I.retireYear });
+  // (verify 2026-11-06: not someone whose Medicare a line on Expenses already pays: the plan keeps that line, so the tick would
+  // change nothing; the projection's own rule, expensesCarried)
+  const paidIds = new Set(expensesCarried(plan, I.people, today, works)?.paidBy?.ids ?? []);
+  const spouseYears = [];
+  for (const row of r.rows) {
+    const off = I.people.filter((p, k) => row.ages[k] >= 65 && row.ages[k] <= p.endAge && !works(p, row.year) && !paidIds.has(p.id));
+    const w = I.people.filter((p) => works(p, row.year));
+    if (off.length && w.length) spouseYears.push({ year: row.year, names: off.map((p) => p.name), worker: w[0].name });
+  }
   const sum = (k) => years.reduce((s, y) => s + y[k], 0);
   const hit = years.filter((y) => y.tier > 0);
   const first = hit[0] ?? null;
@@ -123,7 +143,7 @@ export function compute(plan, params = {}) {
   const firstY = years[0];
   const firstTier = firstY ? tierFor(firstY.magiReal, status) : null;
   return {
-    ...base, ready: true, missing: [], years,
+    ...base, ready: true, missing: [], years, spouseYears,
     lifetime: sum("totalYearly"), surcharge: sum("surchargeYearly"), surchargeYears: hit.length,
     firstSurcharge: first ? { year: first.year, magiYear: first.magiYear, over: first.magiReal - tierFor(0, status).upTo, conversion: first.conversion } : null,
     roomNow: firstY ? { year: firstY.magiYear, premiumYear: firstY.year, room: firstTier.first - firstY.magiReal } : null,

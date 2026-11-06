@@ -116,6 +116,9 @@ const yearOf = (d) => Number(String(d).slice(0, 4));
  * ("Unit 401B", "457 Elm St" are not), "Roth" only next to an account or a withdrawal word ("Grandma Roth" is not), and a
  * draw from a business or against pay is not one. Rent is never checked (otherIncome).
  */
+const BUSINESS_SOURCE = /\bowner['’]?s\b|\bcommissions?\b|\bbonus(es)?\b|\bpartnership\b|\bLLC\b/i;
+const FROM_BUSINESS = /\bfrom\s+(?:the\s+|my\s+|our\s+|a\s+)?(?:business|company|firm)\b(?!\s+stock)/i;
+const OWN_WORD = /\b(brokerage|savings|investments?|portfolio|nest egg|stock)\b/i;
 export function ownAccountMoney(name) {
   const n = String(name ?? "");
   if (/\btrust\b|\bannuit/i.test(n)) return false;
@@ -124,8 +127,12 @@ export function ownAccountMoney(name) {
   const ROTH = /\broth\b[\s\S]*\b(ira|401|403|457|accounts?|withdrawals?|distributions?|conversions?|draws?)\b|\b(withdrawals?|distributions?|draws?)\b[\s\S]*\broth\b/i;
   if (/\b(IRA|RMD|TSP|HSA)s?\b/.test(n) || /\b401\s*\(?\s*k\b|\b403\s*\(?\s*b\b|\b457\s*(\(b\)|b\b|plan\b)|required minimum/i.test(n) || ROTH.test(n)) return true;
   // draws from a business or against pay are not the household's savings ("Owner's draw from business account", "Account
-  // manager bonus draws": review 2026-11-06)
-  if (/\b(business|company|firm|LLC|partnership|owner['’]?s|commissions?|bonus(es)?)\b/i.test(n)) return false;
+  // manager bonus draws": review 2026-11-06), but only when the business is the source (seventh pass, fire-ver8b: "Withdrawals
+  // from my brokerage firm account", "Draws from company stock account", "Savings account draws for the business" and
+  // "Withdrawals from the investment firm" are the household's own accounts, and were counted on top of them): an owner's
+  // draw, a commission, a bonus, a partnership or an LLC; money "from the business / company / firm" (not company stock); or a
+  // business word with no word for the household's own account (brokerage, savings, investments, a portfolio, stock)
+  if (BUSINESS_SOURCE.test(n) || FROM_BUSINESS.test(n) || (/\b(business|company|firm)\b/i.test(n) && !OWN_WORD.test(n))) return false;
   return /\b(withdrawals?|draws?|drawdowns?)\b[\s\S]*\b(savings|brokerage|portfolio|investments?|accounts?|nest egg)\b|\b(savings|brokerage|portfolio|investments?|accounts?|nest egg)\b[\s\S]*\b(withdrawals?|draws?|drawdowns?)\b/i.test(n);
 }
 
@@ -304,33 +311,45 @@ export function setupFigure(plan, today = null) {
  */
 export function workRule(plan, people, { today = null, retireYear = null } = {}) {
   const said = plan?.guide?.setup?.status ?? {};
-  let active = [];
-  try { active = (plan?.income ?? []).length ? computeIncome(plan, { today }).active : []; } catch { active = []; }
   const household = plan?.household?.people ?? [];
-  const paid = new Set();
-  for (const x of active) {
-    if (!PAY_TYPES.includes(x.type) || !(Number(x.yearly) > 0)) continue;
+  // each adult's pay lines and the years each is paid (payYears; review 2026-11-06, seventh pass: it was the lines paid today,
+  // so a job ending 2027-06-30 counted to the retirement age and a job starting in 2027 counted as no work)
+  const ranges = new Map();
+  for (const x of Array.isArray(plan?.income) ? plan.income : []) {
+    if (!PAY_TYPES.includes(x.type)) continue;
+    const yrs = payYears(x, today);
+    if (!yrs) continue;
     // theirs; someone else in the household (a child, an adult with no birth date) never makes another adult work; no owner (or one gone): the first adult
     const owner = people.some((p) => p.id === x.personId) ? x.personId : household.some((q) => q.id && q.id === x.personId) ? null : people[0]?.id;
-    if (owner) paid.add(owner);
+    if (owner) ranges.set(owner, [...(ranges.get(owner) ?? []), { ...yrs, yearly: perYear(x.amount, x.period) }]);
   }
+  const paid = new Set(ranges.keys());
+  // paid in a year by one of their pay lines (a line paid today, or one that starts later: a job that starts next year)
+  const payIn = (p, year) => (ranges.get(p.id) ?? []).some((r) => year >= r.from && year <= r.until);
   // a retirement contribution still going in, theirs (one that names nobody in the plan is the first adult's, as buildInputs adds
   // it): one to a plan at work (a 401(k) or 403(b) account, or any with an employer match) is that person's work; any other (an
   // IRA, a Roth, an HSA, a brokerage) only when nobody else in the plan has pay, since a husband's or wife's pay can fund it (a
   // spousal IRA: the fourth pass's Lee, salary taken out and IRA saving kept, does not work while Sam does)
   const payOwners = [...paid];
+  // (paid this year: a job that starts later funds nothing yet; seventh pass)
+  const nowYear = today ? yearOf(today) : null;
+  const payNow = payOwners.filter((id) => nowYear === null || ranges.get(id).some((r) => nowYear >= r.from && nowYear <= r.until));
   for (const c of plan?.retirement?.contributions ?? []) {
     if (!(perYear(c.amount, c.period) + (Number(c.employerMatch) || 0) > 0)) continue;
     const owner = people.some((p) => p.id === c.personId) ? c.personId : people[0]?.id;
     if (!owner) continue;
     const atWork = (plan.accounts ?? []).find((x) => x.id === c.accountId)?.type === "401k" || Number(c.employerMatch) > 0;
-    if (atWork || !payOwners.some((id) => id !== owner)) paid.add(owner);
+    if (atWork || !payNow.some((id) => id !== owner)) paid.add(owner);
   }
   const status = (p) => (said[p.id] === "retired" || said[p.id] === "none" ? "stopped" : said[p.id] === "work" || paid.has(p.id) ? "work" : "unknown");
-  // only the first adult: their retirement year is the household's, so the household is at work until then; a partner with no
+  // at work in a year by what the plan holds: someone with pay lines in the years a line is paid (seventh pass), anyone else by
+  // a "work" answer or a contribution (no dates: until their retirement age)
+  const own = (p, year) => status(p) !== "stopped" && (ranges.has(p.id) ? payIn(p, year) : status(p) === "work");
+  // only the first adult: their retirement year is the household's, so the household is at work until then (with nothing said
+  // and no pay; seventh pass: also a year between their pay lines, a job that ends or one that starts later); a partner with no
   // pay and no answer is covered by that plan in those years (no marketplace is priced while anyone works) without working
-  const presumed = (p, year) => retireYear !== null && p.id === people[0]?.id && status(p) === "unknown" && year < retireYear && year - p.birthYear <= p.endAge;
-  const holds = (p, year) => status(p) === "work" || presumed(p, year);
+  const presumed = (p, year) => retireYear !== null && p.id === people[0]?.id && status(p) !== "stopped" && !own(p, year) && year < retireYear && year - p.birthYear <= p.endAge;
+  const holds = (p, year) => own(p, year) || presumed(p, year);
   const rule = (p, year) => {
     const age = year - p.birthYear;
     if (age > p.endAge) return false;
@@ -340,7 +359,38 @@ export function workRule(plan, people, { today = null, retireYear = null } = {})
   rule.holds = holds;
   rule.status = status;
   rule.hasPay = (p) => payOwners.includes(p.id);
+  // pay lines on Income, with the years each is paid ([{ from, until, yearly }]; the page says a gap between them), and the pay
+  // of a year (the lines paid that year)
+  rule.said = (p) => said[p.id] ?? null;
+  rule.payLines = (p) => ranges.get(p.id) ?? [];
+  rule.payOf = (p, year) => (ranges.get(p.id) ?? []).filter((r) => year >= r.from && year <= r.until).reduce((s, r) => s + r.yearly, 0);
   return rule;
+}
+
+/**
+ * The calendar years a pay line on Income is counted in (review 2026-11-06, seventh pass): this year when it is paid today, a
+ * later year when it is paid for more than half of it (so a line split by a raise from a later date never counts one year
+ * twice, and a job ending on 2027-06-30 counts to 2026), and for good with no end date. A one-off, a line with no amount and a
+ * line that has ended are not counted. Without `today` every line is taken as paid now.
+ * payYears(line, today) -> { from, until (Infinity: no end) } | null
+ */
+export function payYears(x, today = null) {
+  if (!x || x.period === "once" || !(perYear(x.amount, x.period) > 0)) return null;
+  const t = today ? String(today).slice(0, 10) : null;
+  if (t && x.endDate && String(x.endDate) < t) return null;
+  const days = (y) => (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 366 : 365);
+  const dayOf = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 864e5) + 1; };
+  const now = t ? yearOf(t) : null;
+  const later = !!(x.startDate && (!t || String(x.startDate) > t) && /^\d{4}-\d{2}-\d{2}/.test(String(x.startDate)));
+  let from = now ?? -Infinity;
+  if (later) { const s = String(x.startDate), y = yearOf(s); from = days(y) - dayOf(s) + 1 > days(y) / 2 ? y : y + 1; }
+  let until = Infinity;
+  if (x.endDate && /^\d{4}-\d{2}-\d{2}/.test(String(x.endDate))) {
+    const e = String(x.endDate), y = yearOf(e);
+    // paid today and ending this year: this year counts (the plan's first year is this one)
+    until = !later && y === now ? now : dayOf(e) > days(y) / 2 ? y : y - 1;
+  }
+  return from > until ? null : { from, until };
 }
 
 /**
@@ -355,8 +405,21 @@ export function workRule(plan, people, { today = null, retireYear = null } = {})
  * part-time partner's job hold the whole household at work: the 68/63 couple with Ana (68, past her 60) saying "retired" and
  * Bo working to 66 for $1,500 a month read 2026-2028 as working years (no spending, nothing drawn, Ana's Social Security
  * dropped) and "Runs out in 2054", where the same plan with no answer read "Runs out in 2041".
+ * Review 2026-11-06, seventh pass (follow-up 3 of the sixth pass's verify): a partner who works with pay on Income no longer
+ * holds the household at work either: retirement starts this year, and their pay comes in as income ("<name>'s pay") to
+ * their own stop, as Financial independence already searched it (stopNow). Rae, 62, "not working now" with 67 on file and Jo
+ * part-time ($26,400 to 66) read "on track" with nothing drawn until 2030; with Rae's age set to 62 it read "tight". Only a
+ * partner who works by a Get started answer or a contribution alone, whose pay the plan cannot count, still holds it until
+ * they stop (never later than the first adult's own year).
+ * Review 2026-11-06, the seventh pass's verify (my choice, README "Not working now before 55"): that applies when the first
+ * adult said "retired", is past their own retirement age, or said "not working now" at 55 or over (STOP_NOW_FROM_AGE). A parent
+ * at home under 55 with a partner on pay is a one-earner family, not a retired one: the partner's work still holds the
+ * household at work until the earlier of the first adult's own year and the partner's stop, as before the seventh pass. Starting
+ * retirement now for Elena (35, "not working now", Marcus on $90,000) moved the savings to the retired mix for 28 years and drew
+ * the tax on Marcus's pay from savings: short in 2062 instead of 2072.
  * householdRetireYear(plan, people, year, works = workRule(...)) -> year
  */
+export const STOP_NOW_FROM_AGE = 55;
 export function householdRetireYear(plan, people, year, works = null) {
   if (!people.length) return year;
   const first = people[0];
@@ -364,8 +427,9 @@ export function householdRetireYear(plan, people, year, works = null) {
   const w = works ?? workRule(plan, people, { today: `${year}-01-01` });
   if (w.status(first) !== "stopped") return own;
   const stop = (p) => Math.min(p.birthYear + p.retireAge, p.birthYear + p.endAge + 1);
-  const working = people.filter((p) => w(p, year));
-  return working.length ? Math.max(year, Math.min(own, Math.max(...working.map(stop)))) : year;
+  const atHome = w.said?.(first) === "none" && year - first.birthYear < STOP_NOW_FROM_AGE && own > year;
+  const holding = people.filter((p) => p !== first && w(p, year) && (atHome || !w.hasPay(p)));
+  return holding.length ? Math.max(year, Math.min(own, Math.max(...holding.map(stop)))) : year;
 }
 
 /**
@@ -378,6 +442,10 @@ export function retireStarter(people, year, retireYear, works) {
   const first = people[0];
   const stop = (p) => Math.min(p.birthYear + p.retireAge, p.birthYear + p.endAge + 1);
   const working = people.filter((p) => p !== first && works(p, year));
+  // seventh pass: the first adult has stopped and retirement starts this year while partners with pay work on (their pay is
+  // income): the first adult starts it, `stopped`, with those partners and the last year each is paid (`untilYear`)
+  const paidOn = works.status(first) === "stopped" && retireYear === year ? working.filter((p) => works.hasPay(p)) : [];
+  if (paidOn.length) return { id: first.id, name: first.name, age: year - first.birthYear, first: true, stopped: true, notWorking: works.said?.(first) === "none", working: paidOn.map((p) => ({ id: p.id, name: p.name, stopAge: stop(p) - p.birthYear, untilYear: Math.min(stop(p) - 1, Math.max(...works.payLines(p).map((r) => r.until))) })) };
   const by = works.status(first) !== "stopped" || (working.length && retireYear === Math.max(year, first.birthYear + first.retireAge)) ? first
     : working.find((p) => Math.max(year, stop(p)) === retireYear) ?? working.sort((x, y) => stop(y) - stop(x))[0] ?? null;
   return by ? { id: by.id, name: by.name, age: retireYear - by.birthYear, first: by === first } : { id: null, name: null, age: null, first: false, nobody: true };
@@ -394,7 +462,7 @@ export function retireStarter(people, year, retireYear, works) {
  * in as "<name>'s pay"; only when that pay is on Income: a partner who works by a Get started answer or a contribution alone
  * has no pay the plan can count, so their age is searched on the plan as it is, where the household's retirement year moves
  * with their stop (householdRetireYear; review 2026-11-06: with the first adult stopping now it moved only their saving).
- * workingNow(plan, inputs, today) -> { ageNow(p), underAge(p), holds(p), stillWorks(p), status(p), lead (an engine person or null), stopNow: [{ personId, age }] }
+ * workingNow(plan, inputs, today) -> { ageNow(p), underAge(p), holds(p), stillWorks(p), status(p), lead (an engine person or null), stopNow: [{ personId, age }], payLines(p) (workRule's) }
  */
 export function workingNow(plan, I, today) {
   const birth = Object.fromEntries((plan?.household?.people ?? []).map((p) => [p.id, p.birthDate]));
@@ -407,7 +475,7 @@ export function workingNow(plan, I, today) {
   const working = I.people.filter(stillWorks);
   const lead = working.find((q) => q.id === self.id) ?? working[0] ?? null;
   const stopNow = lead && lead.id !== self.id && W.hasPay(lead) && underAge(self) && !holds(self) ? [{ personId: self.id, age: ageNow(self) }] : [];
-  return { ageNow, underAge, holds, stillWorks, status: W.status, lead, stopNow };
+  return { ageNow, underAge, holds, stillWorks, status: W.status, lead, stopNow, payLines: W.payLines };
 }
 
 /** withStops(plan, stopNow) -> the plan with each of those adults' retirement age set to the age given (their age today); the
@@ -463,6 +531,22 @@ function carriedHealth(active, people, year, works) {
 }
 
 /**
+ * The health lines among the bills the plan carries into retirement (carriedHealth), when it carries them: spending taken from
+ * Expenses (no figure typed), or Get started's own figure built from them (`retireAuto`); null otherwise (a typed figure is
+ * taken as it is). One rule for buildInputs and the Medicare page (verify 2026-11-06, seventh pass: that page asked about a
+ * husband's or wife's Medicare that a line on Expenses already pays, and its tick said "left out" while the line stayed in).
+ * expensesCarried(plan, people, today, works, ex?) -> { cover, line, mixed, paidBy } | null
+ */
+export function expensesCarried(plan, people, today, works, ex = undefined) {
+  const rt = plan.retirement ?? {};
+  const e = ex !== undefined ? ex : (plan.expenses ?? []).length ? computeExpenses(plan, { today }) : null;
+  const typed = Number(rt.spendingMonthly) > 0;
+  const fromSetup = typed && plan.guide?.setup?.retireAuto === true && !!e;
+  const year = today ? Number(String(today).slice(0, 4)) : new Date().getFullYear();
+  return e && (fromSetup || (!typed && e.monthly > 0)) ? carriedHealth(e.active, people, year, works) : null;
+}
+
+/**
  * The plan's health line (2026-11-02): what cover costs, in today's dollars, as engine events marked `spending` (guaranteed
  * income pays them first), one a year, "Health cover". One rule for every person and year, whoever is listed first: while
  * anyone in the household still works (`works`, workRule: pay or a "work" answer, and under their retirement age), a plan
@@ -482,6 +566,7 @@ function carriedHealth(active, people, year, works) {
  * -> { events, total, bridge, medicare, onJob, jobPlan }
  */
 function healthCover(plan, { today, retireYear, endYear, people, works, paidIds = [], workPremium = 0 }) {
+  const jobCoversSpouse = plan.retirement?.medicare?.jobCoversSpouse === true;
   const pi = planIncome(plan, { today });
   const hc = computeHealthcare(plan, { today, planIncome: pi });
   const md = computeMedicare(plan, { today, planIncome: pi });
@@ -493,19 +578,30 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   // 1. the marketplace (healthcare's years: nobody works, someone who has stopped is under 65; the years that page prices)
   const bYears = hc.ready ? hc.years.filter((y) => y.year <= endYear && y.cost > 0) : [];
   for (const y of bYears) add(y.year, y.cost);
-  // 2. Medicare: the years nobody works, for those 65 or over whose Medicare no line on Expenses already pays
-  const mYears = [], jobYears = [];
+  // 2. Medicare, for those 65 or over whose Medicare no line on Expenses already pays: not for someone who still works (their
+  // job's plan), and for a husband or wife who has stopped while the other still works only when the plan says that job's plan
+  // covers them (`jobCoversSpouse`, retirement.medicare; review 2026-11-06, seventh pass: it was taken for granted, so a
+  // part-time job "covered" a spouse of 68 and their Medicare was left out)
+  const mYears = [], jobYears = [], spouseYears = [];
   for (const y of md.ready ? md.years : []) {
     if (y.year > endYear || !(y.totalYearly > 0)) continue;
     const on = people.filter((p) => age(p, y.year) >= 65 && age(p, y.year) <= p.endAge);
     // those whose Medicare no line on Expenses already pays: a year left to a job's plan names only them (one reason a year)
     const left = on.filter((p) => !paid.has(p.id));
-    const share = left.length / Math.max(1, y.enrolled);
+    const each = y.totalYearly / Math.max(1, y.enrolled), eachSurcharge = y.surchargeYearly / Math.max(1, y.enrolled);
     const w = workers(y.year);
-    if (w.length) { if (left.length) jobYears.push({ year: y.year, names: left.map((p) => p.name), worker: w[0].name, presumed: !!works.presumed?.(w[0], y.year), amount: y.totalYearly * share }); continue; }
-    if (!left.length) continue;
-    mYears.push({ year: y.year, enrolled: left.length, names: left.map((p) => p.name), totalYearly: y.totalYearly * share, surchargeYearly: y.surchargeYearly * share });
-    add(y.year, y.totalYearly * share);
+    // left to a job's plan: someone who still works, on their own job's plan (seventh pass: named as their own worker, it named
+    // the first worker listed), and with the tick a husband or wife who has stopped, on the first worker's
+    const own = left.filter((p) => w.includes(p));
+    const byTick = w.length && jobCoversSpouse ? left.filter((p) => !w.includes(p)) : [];
+    const priced = left.filter((p) => !own.includes(p) && !byTick.includes(p));
+    const toJob = (worker, ps) => { if (!ps.length) return; const e = jobYears.find((j) => j.year === y.year && j.worker === worker.name); if (e) { for (const q of ps) if (!e.names.includes(q.name)) e.names.push(q.name); e.amount += each * ps.length; } else jobYears.push({ year: y.year, names: ps.map((q) => q.name), worker: worker.name, presumed: !!works.presumed?.(worker, y.year), amount: each * ps.length }); };
+    for (const q of own) toJob(q, [q]);
+    if (byTick.length) toJob(w[0], byTick);
+    if (w.length && priced.length) spouseYears.push({ year: y.year, names: priced.map((q) => q.name), worker: w[0].name, presumed: !!works.presumed?.(w[0], y.year), amount: each * priced.length });
+    if (!priced.length) continue;
+    mYears.push({ year: y.year, enrolled: priced.length, names: priced.map((p) => p.name), totalYearly: each * priced.length, surchargeYearly: eachSurcharge * priced.length });
+    add(y.year, each * priced.length);
   }
   // 3. a premium taken out of the carried spending, back in the retirement years while someone still works
   const premiumYears = [];
@@ -518,7 +614,8 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
     fromYear: bYears[0].year, untilYear: bYears.at(-1).year, years: bYears.length, total: sum(bYears, "cost"), credit: sum(bYears, "credit"), creditYears: bYears.filter((y) => y.credit > 0.5).length, underLine: bYears.filter((y) => y.underLine).map((y) => y.year),
     monthlyFirst: bYears[0].cost / 12, monthlyLow: Math.min(...bYears.map((y) => y.cost)) / 12, monthlyHigh: Math.max(...bYears.map((y) => y.cost)) / 12,
     cliff: over.length ? { income: over[0].cliff, year: over[0].year, lost: over[0].lostCredit, lostTotal: sum(over, "lostCredit"), years: over.length, yearsList: over.map((y) => y.year), overBy: Math.min(...over.map((y) => y.overCliff)) } : null,
-    parts: bridgeParts(bYears),
+    parts: bridgeParts(bYears).map((p) => (hc.separate ? { ...p, separate: true } : p)),
+    separate: !!hc.separate,
   } : null;
   const most = mYears.length ? Math.max(...mYears.map((y) => y.enrolled)) : 0;
   const all = mYears.find((y) => y.enrolled === most);
@@ -534,18 +631,30 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
     ...lowHigh(full), allNames: all.names,
     early: early.length ? { fromYear: early[0].year, untilYear: early.at(-1).year, names: [...new Set(early.flatMap((y) => y.names))], ...lowHigh(early) } : null,
     total: sum(mYears, "totalYearly"), surcharge: sum(mYears, "surchargeYearly"), surchargeYears: mYears.filter((y) => y.surchargeYearly > 0.5).length,
+    // what each person's Medicare holds beyond Part B and the drug plan (seventh pass): the supplement, the household's own figure
+    // or the national average for Medigap Plan G (medicare/data: MEDIGAP_G)
+    supplementMonthly: md.supplement, supplementDefault: !!md.supplementDefault,
   } : null;
   // in runs of the same worker (verify 2026-11-06, sixth pass: Ana working to 2030 and Bo to 2032 read "In 2028 to 2032 Bo is
   // 65 or over while Ana still works", one worker named for every year, also those after Ana stopped)
-  const jobParts = [];
-  for (const y of jobYears) {
-    const last = jobParts.at(-1);
-    if (last && last.worker === y.worker && last.untilYear === y.year - 1) { last.untilYear = y.year; last.years++; for (const n of y.names) if (!last.names.includes(n)) last.names.push(n); }
-    else jobParts.push({ fromYear: y.year, untilYear: y.year, years: 1, names: [...y.names], worker: y.worker, presumedUntil: y.presumed ? retireYear : null });
-  }
-  const onJob = jobYears.length ? { fromYear: jobYears[0].year, untilYear: jobYears.at(-1).year, years: jobYears.length, names: [...new Set(jobYears.flatMap((y) => y.names))], worker: jobYears[0].worker, presumedUntil: jobYears[0].presumed ? retireYear : null, total: sum(jobYears, "amount"), parts: jobParts } : null;
+  // (seventh pass: a year can hold two workers, each with their own run; and a run is the same people, so a year is never said
+  // for someone who is not 65 yet)
+  const runs = (ys) => {
+    const parts = [];
+    for (const y of ys) {
+      const last = parts.find((q) => q.worker === y.worker && q.untilYear === y.year - 1 && q.names.join("|") === y.names.join("|"));
+      if (last) { last.untilYear = y.year; last.years++; }
+      else parts.push({ fromYear: y.year, untilYear: y.year, years: 1, names: [...y.names], worker: y.worker, presumedUntil: y.presumed ? retireYear : null });
+    }
+    return parts.sort((a, b) => a.fromYear - b.fromYear);
+  };
+  const jobParts = runs(jobYears);
+  // the plan's tick (jobCoversSpouse) is said with the years it leaves a husband's or wife's Medicare to the job (`byTick`)
+  const onJob = jobYears.length ? { fromYear: jobYears[0].year, untilYear: jobYears.at(-1).year, years: new Set(jobYears.map((y) => y.year)).size, names: [...new Set(jobYears.flatMap((y) => y.names))], worker: jobYears[0].worker, presumedUntil: jobYears[0].presumed ? retireYear : null, total: sum(jobYears, "amount"), parts: jobParts.map((p) => ({ ...p, byTick: jobCoversSpouse && p.names.some((n) => n !== p.worker) })) } : null;
+  // a husband's or wife's Medicare counted while the other still works (no tick): said, with how to leave it out (seventh pass)
+  const spouseOnJob = spouseYears.length ? { fromYear: spouseYears[0].year, untilYear: spouseYears.at(-1).year, years: spouseYears.length, names: [...new Set(spouseYears.flatMap((y) => y.names))], total: sum(spouseYears, "amount"), parts: runs(spouseYears) } : null;
   const jobPlan = premiumYears.length ? { fromYear: premiumYears[0], untilYear: premiumYears.at(-1), years: premiumYears.length, monthly: workPremium, total: workPremium * 12 * premiumYears.length, worker: workers(premiumYears[0])[0].name } : null;
-  return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, jobPlan };
+  return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, spouseOnJob, jobPlan, jobCoversSpouse };
 }
 
 /**
@@ -597,7 +706,7 @@ export function buildInputs(plan, params = {}) {
   // the health lines among the carried bills and what comes out of the figure
   const retireYear = householdRetireYear(plan, people, year, workRule(plan, people, { today }));
   const works = workRule(plan, people, { today, retireYear });
-  const carried = params.health !== false && ex && (fromSetup || (!typed && ex.monthly > 0)) ? carriedHealth(ex.active, people, year, works) : null;
+  const carried = params.health !== false ? expensesCarried(plan, people, today, works, ex) : null;
   const coverLines = withHealth && carried ? carried.cover : [];
   const removedMonthly = Math.min(baseMonthly, coverLines.reduce((t, x) => t + x.monthly, 0));
   // the figure Retirement settings' box shows (fourth pass, 2026-11-02): what the plan counts a month before health cover, to the
@@ -606,10 +715,17 @@ export function buildInputs(plan, params = {}) {
   const figureMonthly = typed ? Math.round((baseMonthly - removedMonthly) * 100) / 100 : null;
   if (missing.length) return { inputs: null, missing, people, notes, setupMonthly, figureMonthly };
   const personIndex = (id) => Math.max(0, people.findIndex((p) => p.id === id));
+  // a contribution to a plan at work (a 401(k) or 403(b) account, or one with an employer match: workRule's test) stops with its
+  // owner's last pay line on Income when every one of them has an end date (verify 2026-11-06, seventh pass: the pay stopped
+  // at the line's end date, the job's 401(k) saving and match went on to the retirement age)
   const contributions = (rt.contributions ?? []).map((c) => {
     const acct = (plan.accounts ?? []).find((x) => x.id === c.accountId);
     const bucket = BUCKET_OF[acct?.type] ?? "taxable";
-    return { bucket, yearly: perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}) };
+    const owner = people[personIndex(c.personId)];
+    const atWork = acct?.type === "401k" || Number(c.employerMatch) > 0;
+    const lines = owner && atWork ? works.payLines(owner) : [];
+    const lastPay = lines.length ? Math.max(...lines.map((r) => r.until)) : Infinity;
+    return { bucket, yearly: perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}), ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) };
   }).filter((c) => c.yearly > 0);
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });
@@ -622,15 +738,28 @@ export function buildInputs(plan, params = {}) {
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension" });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
-  // a partner who keeps working after the household retires brings their pay in as income (pay only: salary, bonus, business)
-  const inc = (plan.income ?? []).length ? computeIncome(plan, { today }) : null;
+  // a partner who keeps working after the household retires brings their pay in as income (pay only: salary, bonus, business),
+  // in the years each pay line is paid (payYears; review 2026-11-06, seventh pass: it was the lines paid today, to the
+  // retirement age, so a job ending 2027-06-30 was counted to 66 and one starting in 2027 not at all); lines paid in the same
+  // years are one income, as before
   for (let i = 1; i < people.length; i++) {
     const p = people[i];
-    const theirs = inc ? inc.active.filter((x) => x.personId === p.id && PAY_TYPES.includes(x.type)).reduce((s, x) => s + x.yearly, 0) : 0;
-    const ageNow = year - p.birthYear;
     // type "pay" (recheck 2026-11-05; the fifth pass called it kind "pay"): the pages tell it from rent and the like by type,
     // never by its name; a partner Get started says is retired or not working brings none in, whatever Income still holds (workRule)
-    if (theirs > 0 && works.status(p) !== "stopped" && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true, type: "pay" });
+    if (works.status(p) === "stopped" || !(p.birthYear + p.retireAge > retireYear)) continue;
+    const groups = new Map();
+    for (const x of plan.income ?? []) {
+      if (x.personId !== p.id || !PAY_TYPES.includes(x.type)) continue;
+      const r = payYears(x, today ?? `${year}-01-01`);
+      if (!r) continue;
+      const from = Math.max(year, r.from), until = Math.min(p.birthYear + p.retireAge - 1, r.until);
+      if (until < from) continue;
+      const key = `${from}-${until}`;
+      groups.set(key, { from, until, yearly: (groups.get(key)?.yearly ?? 0) + perYear(x.amount, x.period) });
+    }
+    for (const g of [...groups.values()].sort((a, b) => a.from - b.from || a.until - b.until)) {
+      if (g.yearly > 0) incomes.push({ name: `${p.name}'s pay`, yearly: g.yearly, personIndex: i, startAge: g.from - p.birthYear, endAge: g.until - p.birthYear, cola: true, taxable: true, type: "pay" });
+    }
   }
   // rent after work stops; support and other to their end date (else while their owner works, by the work rule); never dividends (otherIncome)
   const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`, works);
@@ -653,11 +782,11 @@ export function buildInputs(plan, params = {}) {
   // paidBy: whose Medicare a Medicare (or mixed) line on Expenses already pays; otherLine: a Medicare line that is nobody's here yet
   const paidBy = carried?.paidBy ?? null;
   const said = { coverLines, removedMonthly, fromSetup: fromSetup && !!carried, paidBy, medicareLine: paidBy?.line ?? null, otherLine: carried?.line && !paidBy ? carried.line : null };
-  let health = params.health === false ? null : { included: true, total: 0, bridge: null, medicare: null, onJob: null, jobPlan: null, ...said };
+  let health = params.health === false ? null : { included: true, total: 0, bridge: null, medicare: null, onJob: null, spouseOnJob: null, jobPlan: null, ...said };
   if (withHealth) {
     const h = healthCover(plan, { today, retireYear, endYear, people, works, paidIds: paidBy?.ids ?? [], workPremium: removedMonthly });
     inputs.events = [...(inputs.events ?? []), ...h.events];
-    health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, jobPlan: h.jobPlan, ...said };
+    health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
   if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (Contributions page), so nothing is added until retirement.");
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
@@ -734,6 +863,8 @@ export const healthAdded = (h) => !!(h && !h.included && (h.bridge || h.medicare
  * creditWords(bridge: { years, creditYears }) -> text
  */
 export function creditWords(b) {
+  // married filing separately (seventh pass): no credit in any year, and why
+  if (b?.separate) return "marketplace, no credit on separate returns";
   const n = Number(b?.creditYears) || 0;
   return n >= (Number(b?.years) || 0) && n > 0 ? "marketplace, after the credit" : n > 0 ? "marketplace; with the credit in the years it applies" : "marketplace, no credit";
 }
@@ -813,12 +944,26 @@ export function onJobWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${x
   for (const p of j.parts ?? [j]) {
     const yrs = span(p.fromYear, p.untilYear, p.years), others = p.names.filter((n) => n !== p.worker), those = p.years === 1 ? "that year" : "those years", it = p.years === 1 ? "it" : "them";
     out.push(others.length
-      ? `In ${yrs} ${list(others)} ${others.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: a plan through ${p.worker}'s job can cover ${list(p.names)}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
+      ? `In ${yrs} ${list(others)} ${others.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: ${p.byTick ? `you said a plan through ${p.worker}'s job covers ${list(others)} (Medicare page)` : `a plan through ${p.worker}'s job can cover ${list(p.names)}`}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
       : `In ${yrs} ${p.worker} is 65 or over but still works: cover comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
     // the worker is presumed (no pay and no Get started answer; fifth pass): said, so "Ana's job" is not read as a fact
     if (p.presumedUntil) out.push(`No pay is listed for ${p.worker} and Get started does not say ${p.worker} has stopped work, so the plan takes ${p.worker} as working until ${p.presumedUntil}.`);
   }
   return out;
+}
+
+/**
+ * A husband's or wife's Medicare counted while the other still works (review 2026-11-06, seventh pass: a job's plan was taken
+ * to cover them, a part-time job too), one sentence for each run of years with the same worker: "In 2026 to 2029 Rae is 65 or
+ * over while Jo still works: Rae's Medicare is counted. If a plan through Jo's job covers Rae, tick the box on the Medicare
+ * page." spouseWords(spouseOnJob, list?) -> [text]
+ */
+export function spouseWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)) {
+  if (!j) return [];
+  const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
+  return (j.parts ?? []).flatMap((p) => [`In ${span(p.fromYear, p.untilYear, p.years)} ${list(p.names)} ${p.names.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: ${p.names.length > 1 ? "their" : `${p.names[0]}'s`} Medicare is counted. If a plan through ${p.worker}'s job covers ${p.names.length > 1 ? "them" : p.names[0]}, tick the box on the Medicare page.`,
+    // the worker is presumed (no pay and no Get started answer; fifth pass): said, as onJobWords does
+    ...(p.presumedUntil ? [`No pay is listed for ${p.worker} and Get started does not say ${p.worker} has stopped work, so the plan takes ${p.worker} as working until ${p.presumedUntil}.`] : [])]);
 }
 
 /**

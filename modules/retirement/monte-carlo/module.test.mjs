@@ -113,7 +113,9 @@ test("a slice at a time: carefulSteps yields between runs and ends on the same a
     const c = spendingAtChance(I);
     assert.deepEqual(r.value, c);
     assert.ok(yields > 40, `${yields} slices`);
-    assert.ok(c.runs < 5000, `${c.runs} runs of the projection`);
+    // (seventh pass, 2026-11-06: the family's search takes 5,176 runs, its Medicare now holding the Medigap Plan G default: the
+    // first guess on the first paths lands one settling step further from the figure on all 2,000; it was 3,849)
+    assert.ok(c.runs < 6000, `${c.runs} runs of the projection`);
   }
 });
 

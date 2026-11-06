@@ -63,3 +63,32 @@ This page's figures do not move for any fixture (none holds tax-exempt interest)
 - An interest and dividends line on Income is never an engine income (the base's other-income rule: the accounts' growth holds
   it, and the brackets count that growth as dividends in AGI), so `exemptInterest` comes to $0 for every plan and nothing is
   added on top of AGI for a muni line (was $3,000 in both incomes in the fifth pass's test). The two formulas stay as they are.
+
+## Review 2026-11-06 (seventh pass: a supplement by default; a husband's or wife's job)
+- **Supplement.** `supplementPremium` empty (missing, null or "") is the national average premium for Medigap Plan G, $194 a
+  month in 2025 (`MEDIGAP_G = { monthly: 194, year: 2025, read: "2026-11-06" }`): KFF, "Key Facts About Medigap Enrollment and
+  Premiums for Medicare Beneficiaries" (October 13, 2026, NAIC data from Mark Farrah Associates), read 2026-11-06; the most common
+  supplement, 46% of Medigap policyholders; MedPAC's June 2026 report uses the same series. 0 is no supplement; any other
+  figure is taken as typed. It was $0, so Medicare looked cheaper than any cover before 65. Result: `supplement`,
+  `supplementDefault`, `supplementYear`. The surcharge is Part B's and the drug plan's alone. Update in October, when KFF
+  publishes the next year.
+- The page says each person's monthly figure with "(no supplement entered: the national average for Medigap Plan G in 2025;
+  yours may differ, below)" and, in one sentence, what is not counted: what you pay at the pharmacy, dental care, glasses,
+  hearing aids and long-term care. The fold's help says what an empty box means.
+- **Cover through a job.** `spouseYears: [{ year, names, worker }]`: the years someone 65 or over has stopped (by the
+  projection's work rule) while a husband or wife still works. A card "Cover through a job" asks it with one tick, "A plan
+  through Jo's job covers Rae", saved as `retirement.medicare.jobCoversSpouse` (docs/DATA_MODEL.md); with it the projection's
+  health line leaves those years out, without it they are counted. This page's lifetime counts every year either way. Help:
+  "Check with the plan first: when the employer has fewer than 20 workers, Medicare usually has to pay first" (Medicare.gov,
+  "Who pays first", read 2026-11-06). Saving the drug or supplement figure keeps the tick (the fold merges).
+- Working-year income counts each year's own pay (`payOf(id, year)`, the projection's `payYears`).
+- Figures: the family's lifetime $179,966 -> $324,302 (+$2,328 a person-year over 62 person-years); the retired couple's
+  $148,037 -> $266,765.
+- Tests: "seventh pass: no supplement entered counts the national Medigap Plan G average ..." and "seventh pass: spouseYears
+  ..."; both failed on the base.
+- Verify of the seventh pass (2026-11-06): `spouseYears` leaves out someone whose Medicare a line on Expenses already pays (the
+  projection's `expensesCarried`: Will the money last? keeps that line, so the tick changed nothing while its notice said
+  "Pat's Medicare is left out"), and `healthIncluded` (the plan's "my spending figure already includes health cover") hides the
+  "Cover through a job" card, or says "Will the money last? adds no health cover now" while the tick is on: the card said that
+  page counted the Medicare it does not add. Test: "verify 2026-11-06: no tick question for someone whose Medicare a line on
+  Expenses pays ..." (failed on the seventh pass's patch).

@@ -34,7 +34,8 @@ test("the family: each enrolled person pays, from the income two years before; w
   const y = d.years[0];
   assert.equal(y.year, 2053); assert.equal(y.enrolled, 1); assert.equal(y.magiYear, 2051);
   near(y.magiReal, 3900 * 26 - 470 * 26, 1e-6);
-  near(y.totalYearly, (PART_B + PART_D_BASE) * 12);
+  // with no supplement entered, the national Medigap Plan G average ($194 a month in 2025; seventh pass, 2026-11-06: it was $0)
+  near(y.totalYearly, (PART_B + PART_D_BASE + 194) * 12); assert.equal(d.supplement, 194); assert.equal(d.supplementDefault, true);
   assert.equal(d.years.find((x) => x.year === 2055).enrolled, 2);
   near(d.lifetime, d.years.reduce((s, x) => s + x.totalYearly, 0));
   assert.equal(d.surcharge, 0); assert.equal(d.firstSurcharge, null);
@@ -95,4 +96,59 @@ test("fifth pass: Medicare's surcharge income is AGI plus tax-exempt interest; t
   const d = compute(couple6863(), { today: "2026-11-02" });
   const y = d.years.find((x) => x.year === 2028);
   near(y.magiReal, pi.magiOf(pi.run.rows.find((r) => r.year === 2026)), 1e-6);
+});
+
+// ---- review 2026-11-06, seventh pass: a supplement's premium when none is entered (it was $0, so Medicare counted only Part B
+// and the drug plan): the national average for Medigap Plan G, $194 a month in 2025 (KFF, October 13, 2026, from NAIC data;
+// the series MedPAC's June 2026 report uses), read 2026-11-06
+test("seventh pass: no supplement entered counts the national Medigap Plan G average; 0 or a figure of your own is taken as typed", async () => {
+  const at = (supplementPremium) => { const p = familyPlan(TODAY); if (supplementPremium !== undefined) p.retirement.medicare = { supplementPremium }; return compute(p, { today: TODAY }); };
+  for (const blank of [undefined, null, ""]) {
+    const d = at(blank);
+    assert.equal(d.supplement, 194, String(blank)); assert.equal(d.supplementDefault, true); assert.equal(d.supplementYear, 2025);
+    near(d.years[0].totalYearly, (PART_B + PART_D_BASE + 194) * 12);
+  }
+  const none = at(0);
+  assert.equal(none.supplement, 0); assert.equal(none.supplementDefault, false); near(none.years[0].totalYearly, (PART_B + PART_D_BASE) * 12, 1e-6);
+  const own = at(150);
+  assert.equal(own.supplement, 150); assert.equal(own.supplementDefault, false); near(own.years[0].totalYearly, (PART_B + PART_D_BASE + 150) * 12, 1e-6);
+  // the surcharge is Part B's and the drug plan's alone: a supplement never moves it
+  assert.equal(at(undefined).surcharge, none.surcharge);
+  // the figure, its year and the date it was read (KFF, NAIC data: the national Plan G average for 2025)
+  const { MEDIGAP_G } = await import("./data/medicare.js");
+  assert.deepEqual(MEDIGAP_G, { monthly: 194, year: 2025, read: "2026-11-06" });
+});
+
+// ---- seventh pass: the years someone 65 or over has stopped while a husband or wife still works (the tick's question)
+test("seventh pass: spouseYears names the years someone 65 or over has stopped while the other works, and the tick is read", () => {
+  const d = compute(familyPlan(TODAY), { today: TODAY });
+  // Bo (1988) is 65 in 2053; Ana works to 65 (2055)
+  assert.deepEqual(d.spouseYears.map((y) => [y.year, y.names.join("+"), y.worker]), [[2053, "Bo", "Ana"], [2054, "Bo", "Ana"]]);
+  assert.equal(d.jobCoversSpouse, false);
+  const t = familyPlan(TODAY); t.retirement.medicare = { jobCoversSpouse: true };
+  assert.equal(compute(t, { today: TODAY }).jobCoversSpouse, true);
+  // the Medicare page itself counts every year either way (its lifetime does not move with the tick)
+  near(compute(t, { today: TODAY }).lifetime, d.lifetime);
+});
+
+test("verify 2026-11-06: no tick question for someone whose Medicare a line on Expenses pays, and the page knows when health cover is not added", () => {
+  // Pat (67) has stopped, Lou (60) works part-time to 66; Expenses list "Pat's Medicare premiums". Will the money last? keeps that
+  // line and adds no Medicare for Pat, but this page said it "counts Pat's Medicare" in 2026-2031 unless the box was ticked, and
+  // ticking it said "Pat's Medicare is left out" while the line stayed in the spending
+  const p = emptyPlan();
+  p.household.people.push({ id: "pat", name: "Pat", role: "self", birthDate: "1959-03-03", retirementAge: 64 }, { id: "lou", name: "Lou", role: "partner", birthDate: "1966-09-09", retirementAge: 66 });
+  p.household.filingStatus = "married_joint"; p.guide = { setup: { status: { pat: "retired", lou: "work" } } };
+  p.accounts.push({ id: "ira", name: "Pat's IRA", type: "ira", balance: 450000, ownerId: "pat" }, { id: "sav", name: "Savings", type: "savings", balance: 35000 });
+  p.income.push({ id: "ss", name: "Pat's Social Security", type: "social", personId: "pat", amount: 2600, period: "monthly", growth: 0.025, taxable: true },
+    { id: "lj", name: "Lou's shop job", type: "salary", personId: "lou", amount: 1800, period: "monthly", growth: 0.02, taxable: true });
+  p.retirement.socialSecurity = { lou: { claimAge: 67, monthlyAtFRA: 1500 } };
+  p.expenses.push({ id: "h", name: "Home", category: "housing", amount: 4150, period: "monthly", essential: true, inflates: true });
+  const T = "2026-11-06";
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.spouseYears.map((y) => y.year), [2026, 2027, 2028, 2029, 2030, 2031]);
+  assert.equal(d.healthIncluded, false);
+  p.expenses.push({ id: "mp", name: "Pat's Medicare premiums", category: "health", amount: 420, period: "monthly", essential: true, inflates: true });
+  assert.deepEqual(compute(p, { today: T }).spouseYears, []);
+  p.expenses.pop(); p.retirement.healthIncluded = true;
+  assert.equal(compute(p, { today: T }).healthIncluded, true);
 });

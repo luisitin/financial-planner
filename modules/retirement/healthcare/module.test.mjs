@@ -130,3 +130,31 @@ test("fifth pass: why no one needs marketplace cover names the real reason, neve
   const lw = compute(l, { today: H }).noBridgeWhy.find((w) => w.name === "Lee");
   assert.deepEqual([lw.why, lw.worker, lw.endsBefore65], ["partner", "Sam", true]);
 });
+
+// ---- review 2026-11-06, seventh pass: married filing separately gets no premium tax credit (26 U.S.C. 36B(c)(1)(C): a married
+// taxpayer is an applicable taxpayer only on a joint return; the exception for a spouse living apart after domestic abuse or
+// abandonment, 26 CFR 1.36B-2(b)(2)(ii)-(v), is said on the page, not assumed)
+test("seventh pass: married filing separately gets no marketplace credit (H-1395 got $15,893 of credits)", async () => {
+  const fs = await import("node:fs");
+  const md = fs.readFileSync(new URL("../../../qa/households/14-unusual-structures/special/H-1395-separated-not-divorced.md", import.meta.url), "utf8");
+  const plan = JSON.parse(md.match(/```json\s*([\s\S]*?)```/)[1]);
+  const T = "2026-11-06";
+  assert.equal(plan.household.filingStatus, "married_separate");
+  const d = compute(plan, { today: T });
+  // Grace stops at 64 in 2031, her one marketplace year: the full benchmark, $17,606, with no credit
+  assert.equal(d.separate, true); assert.equal(d.totalCredit, 0, "was $15,893"); assert.equal(d.cliffIncome, null); assert.equal(d.cliffYears, 0);
+  assert.ok(d.years.length > 0 && d.years.every((y) => y.credit === 0 && Math.abs(y.cost - y.benchmark) < 1e-9 && y.cliff === null && y.lostCredit === 0));
+  assert.equal(Math.round(d.total), 17606);
+  // the same household filing jointly keeps the credit, as before
+  const joint = JSON.parse(JSON.stringify(plan)); joint.household.filingStatus = "married_joint";
+  const dj = compute(joint, { today: T });
+  assert.equal(dj.separate, false); assert.equal(Math.round(dj.totalCredit), 15893); assert.equal(Math.round(dj.total), 1712);
+  // the projection's health line prices the full premium and says why
+  const { compute: projection, creditWords } = await import("../projection/compute.js");
+  const pr = projection(plan, { today: T });
+  assert.equal(pr.health.bridge.separate, true); assert.equal(Math.round(pr.health.bridge.total), 17606); assert.equal(pr.health.bridge.credit, 0);
+  assert.equal(creditWords(pr.health.bridge), "marketplace, no credit on separate returns");
+  // the rule itself (26 U.S.C. 36B(c)(1)(C)): every status but married filing separately
+  const { creditAllowed } = await import("./compute.js");
+  assert.equal(creditAllowed("married_separate"), false); assert.equal(creditAllowed("married_joint"), true); assert.equal(creditAllowed("single"), true); assert.equal(creditAllowed("head_of_household"), true);
+});

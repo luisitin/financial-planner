@@ -5,7 +5,7 @@
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
-import { buildInputs, healthAdded, workingNow, withStops } from "../projection/compute.js";
+import { buildInputs, healthAdded, workingNow, withStops, STOP_NOW_FROM_AGE } from "../projection/compute.js";
 import { realRate } from "../../../core/math/finance.js";
 import { project } from "../../../core/math/retirement.js";
 import { earliestRetireAge } from "../../scenarios/goal-seek/compute.js";
@@ -98,7 +98,9 @@ function withCareful(plan, today, careful) {
  * money last? starts spending savings later (their age on file; or, with `by`, review 2026-11-06 sixth pass, the household
  * living on another adult's pay until that adult stops: the projection's household retirement year), and what to change.
  * "Not working now" (`notWorking`) reads "not working" and "does not go back to work". sayName(name) -> the name as the page
- * says it ("you" for "Me"). plannedStopWords(plannedStop, sayName) -> text ("" with none)
+ * says it ("you" for "Me"). A parent at home under 55 (`by`, `notWorking`, age under STOP_NOW_FROM_AGE: the household is a
+ * one-earner family, verify of the seventh pass) is not told to set a retirement age of 35: setting it would count the household
+ * as retired now; the words end "Who works, and until what age, is on the ". plannedStopWords(plannedStop, sayName) -> text ("" with none)
  */
 export function plannedStopWords(ps, sayName = (n) => (n === "Me" || !n ? "you" : String(n))) {
   if (!ps) return "";
@@ -106,9 +108,26 @@ export function plannedStopWords(ps, sayName = (n) => (n === "Me" || !n ? "you" 
   const why = ps.by ? `Will the money last? counts the household as living on ${sayName(ps.by.name)}'s pay until ${sayName(ps.by.name)} stops work at ${ps.by.age}, so it starts spending savings only in ${ps.plannedYear}.`
     : ps.notWorking ? `Your plan still has ${who} working until ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}.`
     : `Your plan still has ${who} stopping work at ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}.`;
+  if (ps.by && ps.notWorking && ps.age < STOP_NOW_FROM_AGE) return `This counts ${who} as not working now. ${why} Who works, and until what age, is on the `;
   return ps.notWorking
     ? `This counts ${who} as not working from this year on. ${why} If ${who} ${you ? "do" : "does"} not go back to work, set ${you ? "your" : `${who}'s`} retirement age to ${ps.age} on the `
     : `This counts ${who} as stopped from this year. ${why} If ${who} ${you ? "have" : "has"} stopped, set ${you ? "your" : `${who}'s`} retirement age to ${ps.age} on the `;
+}
+
+/**
+ * What of the other income stops, and when, in words after its total (review 2026-11-06, seventh pass: each step, not one year
+ * for all of it): all of it stopping, " until 2030, then $14,400 until 2034"; part of it, " ($18,000 of it only until 2030 and
+ * $14,400 only until 2034)". otherEndWords(otherEnding, total, money) -> text ("" with none)
+ */
+export function otherEndWords(ends, total, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`) {
+  if (!ends) return "";
+  const steps = ends.steps?.length ? ends.steps : [{ until: ends.by, yearly: ends.yearly }];
+  if (ends.all) {
+    let left = total;
+    return steps.map((st, i) => { const t = i === 0 ? ` until ${st.until}` : `, then ${money(left)} until ${st.until}`; left -= st.yearly; return t; }).join("");
+  }
+  const parts = steps.map((st, i) => `${money(st.yearly)}${i === 0 ? " of it" : ""} only until ${st.until}`);
+  return ` (${parts.length < 2 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`})`;
 }
 
 /**
@@ -129,8 +148,9 @@ export function plannedStopWords(ps, sayName = (n) => (n === "Me" || !n ? "you" 
  *   counted only while its owner works), otherKinds (["pension", "rent", "other"], the kinds in otherYearly),
  *   left (buildInputs' otherLeft: [{ name, yearly, why: "work" | "growth" | "accounts" }], income not counted after work stops),
  *   strategy (the plan's withdrawal rule; both ages spend the plan's amount the same every year whatever it is), spendingYearly,
- *   others: [{ name, retireAge, retired, notWorking }] (the other adults: stopping as planned, already retired, or under their
- *   retirement age with no pay and not said retired: "not working", a parent at home), lasts, failYear (the plan as it
+ *   others: [{ name, retireAge, retired, notWorking, stoppingNow? }] (the other adults: stopping as planned, already retired, or
+ *   under their retirement age with no pay and not said retired: "not working", a parent at home; stoppingNow: at work by the
+ *   plan and reaching their planned age this year, seventh pass), lasts, failYear (the plan as it
  *   stands; when everyone has stopped, with each who stopped before their planned age stopping this year),
  *   stopNow: [{ personId, age }] (the adults this answer has stopping now rather than at the age on file: see below; [] for
  *   most plans; carefulAgeSteps takes it so the 9-in-10 age is searched on the same plan),
@@ -138,8 +158,9 @@ export function plannedStopWords(ps, sayName = (n) => (n === "Me" || !n ? "you" 
  *   stopNow while the plan still has them stopping at plannedAge, in plannedYear, the year Will the money last? starts spending
  *   savings; notWorking: true when they said "Not working now" rather than "retired"; by: { name, age } when that year is
  *   another adult's stop, the projection's retireBy: review 2026-11-06, the household lives on that adult's pay until then),
- *   otherEnding: { yearly, by, all } | null (review 2026-11-06: the part of otherYearly that stops, the last year any of it is
- *   paid, and whether all of it stops)
+ *   otherEnding: { yearly, by, all, steps: [{ until, yearly }] } | null (review 2026-11-06: the part of otherYearly that stops, the
+ *   last year any of it is paid, and whether all of it stops; seventh pass: `steps`, each last year a part is paid and how much
+ *   of it stops after that year, earliest first; otherEndWords says them)
  * }
  * Who still works (recheck 2026-11-05): an adult under their retirement age by exact age today, with pay coming in (salary,
  * bonus or business on the Income page; one with no owner is the first adult's) or a retirement contribution, or who said
@@ -207,7 +228,12 @@ export function incomeAnswer(plan, today) {
   // paid (review 2026-11-06: "plus $14,400 a year of other income" for child support that ends in 2034)
   const endOf = (x) => (x.endAge === undefined || x.endAge === null ? null : (I.people[x.personIndex ?? 0]?.birthYear ?? I.startYear) + x.endAge);
   const ending = other.filter((x) => endOf(x) !== null);
-  out.otherEnding = ending.length ? { yearly: ending.reduce((s, x) => s + x.yearly, 0), by: Math.max(...ending.map(endOf)), all: ending.length === other.length } : null;
+  // each year a part stops, with what stops then (review 2026-11-06, seventh pass: child support to 2034 with alimony to 2030 read
+  // "$32,400 a year of other income until 2034", while from 2031 only $14,400 is paid)
+  const steps = [];
+  for (const x of ending) { const y = endOf(x), st = steps.find((t) => t.until === y); if (st) st.yearly += x.yearly; else steps.push({ until: y, yearly: x.yearly }); }
+  steps.sort((a, b) => a.until - b.until);
+  out.otherEnding = ending.length ? { yearly: ending.reduce((s, x) => s + x.yearly, 0), by: Math.max(...ending.map(endOf)), all: ending.length === other.length, steps } : null;
   // who the question is about: the adult marked self while they still work, else the next adult who still works (wn.lead)
   const self = I.people[0];
   // the first adult is counted as stopped now while the plan still has them stopping later: Will the money last? starts
@@ -217,7 +243,8 @@ export function incomeAnswer(plan, today) {
   const who = wn.lead;
   if (!who) {
     // everyone has stopped: an adult who stopped before their planned age spends from savings from this year, not from that age
-    const early = I.people.filter(underAge);
+    // (seventh pass: not one whose job starts later, a pay line from next year: the plan counts that pay, so their age stays)
+    const early = I.people.filter(underAge).filter((q) => !wn.payLines(q).some((r) => r.from > I.startYear));
     if (early.length) {
       const J = buildInputs(withStops(plan, stopping(early)), { today }).inputs;
       if (J) { const r = project(J); Object.assign(out, { lasts: !!r.success, failYear: r.failYear ?? null, stopNow: stopping(early), plannedStop: plannedStop(stopping(early)) }); }
@@ -231,7 +258,10 @@ export function incomeAnswer(plan, today) {
   let e = null;
   try { e = earliestRetireAge(P, { today, legacy: out.legacy, personId: who.id }); } catch { e = null; }
   if (!e) return { ...out, retired: true };
-  Object.assign(out, { stopNow, plannedStop: plannedStop(stopNow), earliestAge: e.age, now: e.now, upTo: e.upTo, plannedAge: e.planned, ageNow: e.ageNow, personId: e.personId, name: e.name, plannedStopYear: e.plannedStopYear, others: I.people.filter((q) => q.id !== e.personId).map((q) => ({ name: q.name, retireAge: q.retireAge, retired: !stillWorks(q), notWorking: underAge(q) && !works(q) && status[q.id] !== "retired" })) });
+  Object.assign(out, { stopNow, plannedStop: plannedStop(stopNow), earliestAge: e.age, now: e.now, upTo: e.upTo, plannedAge: e.planned, ageNow: e.ageNow, personId: e.personId, name: e.name, plannedStopYear: e.plannedStopYear, others: I.people.filter((q) => q.id !== e.personId).map((q) => ({ name: q.name, retireAge: q.retireAge, retired: !stillWorks(q), notWorking: underAge(q) && !works(q) && status[q.id] !== "retired",
+    // reaching their planned age this year while still at work by the plan (pay, an answer): stopping this year, not "already
+    // retired" (fire-ver8b: Ray, 64, on salary, with 64 on file; seventh pass)
+    ...(!underAge(q) && works(q) && q.birthYear + q.retireAge === I.startYear ? { stoppingNow: true } : {}) })) });
   if (e.age === null) return out;
   Object.assign(out, atRetirement(P, today, e.personId, e.age) ?? {}, { yearsSooner: e.yearsSooner });
   return out;

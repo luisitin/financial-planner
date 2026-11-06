@@ -35,9 +35,11 @@ test("cash-flow table: real by default, nominal on request, totals add up", () =
   const d = cashFlow(retirementPlan(), { today: TODAY });
   assert.equal(d.ready, true); assert.equal(d.rows.length, 40); assert.equal(d.real, true);
   const r = d.rows.find((x) => x.year === 2040);
-  // 2026-11-02, the health line: spending is all of it now, 78,000 + Medicare for both (2 x ($202.90 + $38.99) x 12 = 5,805.36): 78,000 -> 83,805.36
-  near(r.out.spending, 78000 + 5805.36, 0.5, "real spending stays at today's figure");
-  near(r.out.health, 5805.36, 0.5, "of which health cover");
+  // 2026-11-02, the health line: spending is all of it now, 78,000 + Medicare for both (2 x ($202.90 + $38.99) x 12 = 5,805.36): 78,000 -> 83,805.36;
+  // review 2026-11-06 (seventh pass): Medicare holds the national Medigap Plan G average when no supplement is entered, $194 a month
+  // each (2 x ($202.90 + $38.99 + $194) x 12 = 10,461.36): 83,805.36 -> 88,461.36
+  near(r.out.spending, 78000 + 10461.36, 0.5, "real spending stays at today's figure");
+  near(r.out.health, 10461.36, 0.5, "of which health cover");
   const n = cashFlow(retirementPlan(), { today: TODAY, real: false }).rows.find((x) => x.year === 2040);
   assert.ok(n.out.spending > 78000 * 1.4, "nominal spending has 14 years of inflation in it");
   assert.ok(d.totals.withdrawn > 0 && d.totals.income > 0);

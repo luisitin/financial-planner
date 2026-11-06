@@ -1,6 +1,6 @@
 // modules/retirement/projection/view.js -- DOM only. The verdict, the money over time, what the
 // plan assumes, and the settings that every retirement page shares (folded, saved with a green line).
-import { compute, healthAdded, healthSummary, incomeWords, onJobWords, saveSpendingFigure } from "./compute.js";
+import { compute, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
@@ -70,7 +70,9 @@ export function render(root, ctx) {
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,
   // or nobody ("nobody in the plan works now")
   const rb = d.retireBy ?? { name: d.people[0].name, age: d.atRetirement.age, first: true };
-  const startWho = rb.nobody ? "nobody in the plan works now" : rb.first ? `${rb.name} at ${rb.age}` : `when ${rb.name} stops work at ${rb.age}`;
+  // the first adult has stopped while a partner with pay works on (seventh pass): retirement starts now, the pay counted as income
+  const paidOn = rb.stopped && rb.working?.length ? `${rb.name} ${rb.notWorking ? "is not working" : "has stopped work"}; ${listOf(rb.working.map((w) => `${w.name}'s pay comes in until ${w.untilYear}`))}` : null;
+  const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${rb.name} at ${rb.age}` : `when ${rb.name} stops work at ${rb.age}`);
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
     ui.h("p", { class: "lede" }, verdictText),
@@ -96,7 +98,8 @@ export function render(root, ctx) {
   ));
   root.append(ui.card("What goes into this",
     ui.h("ul", { class: "records" }, [
-      ["People", d.people.map((p) => `${p.name}: retires at ${p.retireAge}, plan to ${p.endAge}`).join("; ")],
+      // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
+      ["People", d.people.map((p) => (rb.stopped && rb.id === p.id ? `${p.name}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : `${p.name}: retires at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
       ["Retirement money today", `${money(d.inputs.balances.cash + d.inputs.balances.taxable + d.inputs.balances.deferred + d.inputs.balances.free)}: ${money(d.inputs.balances.cash)} cash, ${money(d.inputs.balances.taxable)} taxable, ${money(d.inputs.balances.deferred)} pre-tax, ${money(d.inputs.balances.free)} tax-free`],
       ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (Contributions page)` : "nothing entered (Contributions page)"],
       // each line by its own name, with its ages or years (incomeWords: rent says "from 2033", never its owner's age)
@@ -141,6 +144,10 @@ function healthRecord(ctx, d) {
     // the total names what it holds; a work premium kept while a partner works is said on its own line, with its own amount
     const jobTotal = h.jobPlan?.total ?? 0;
     if (b || m) words.push(`${say(b, m, true)} About ${around(h.total - jobTotal)} in all for ${list([b ? "the marketplace" : null, m ? "Medicare" : null].filter(Boolean))}, in today's dollars, added to what you spend.`);
+    // married filing separately: no marketplace credit (26 U.S.C. 36B(c)(1)(C); seventh pass), said once
+    if (b?.separate) words.push("You file separate returns, and a married couple filing separately gets no marketplace tax credit, so the full premium is counted. Only someone living apart from a spouse who abused or abandoned them can still get it (the instructions for IRS Form 8962 say how).");
+    // what Medicare holds beyond Part B and the drug plan, and what it leaves out (seventh pass)
+    if (m) words.push(`Medicare here is Part B, a drug plan and a supplement (${m.supplementDefault ? `about ${fmt.money(Math.round(m.supplementMonthly), plan.meta.currency)} a month each, the national average for Medigap Plan G; yours on the Medicare page` : m.supplementMonthly > 0 ? `${fmt.money(Math.round(m.supplementMonthly), plan.meta.currency)} a month each, as you entered on the Medicare page` : "none: you entered $0 on the Medicare page"}). Not counted: what you pay at the pharmacy, dental care, glasses, hearing aids and long-term care.`);
     if (b?.underLine?.length) words.push(`In ${yearsOf(b.underLine)} the plan's income is under the poverty line, where the marketplace gives no credit: Medicaid may cover people with that income instead (your state's marketplace site will say).`);
     if (h.paidBy) words.push(h.paidBy.era
       ? `Your expenses list "${h.paidBy.line}": with ${list(h.paidBy.names)} 65 or over and retired, that counts as ${h.paidBy.names.length > 1 ? "their" : `${h.paidBy.names[0]}'s`} Medicare and any supplement, so it stays in your spending and Medicare is not added again.`
@@ -148,6 +155,8 @@ function healthRecord(ctx, d) {
     if (h.otherLine) words.push(`Your expenses list "${h.otherLine}": nobody here is 65 yet, so it stays in your spending as it is, and your own Medicare is added from 65.`);
     // the Medicare years left to a job's plan, a sentence for each worker's run of years (onJobWords; verify 2026-11-06)
     if (h.onJob) words.push(...onJobWords(h.onJob, list));
+    // a husband's or wife's Medicare counted while the other still works, and how to leave it out (spouseWords; seventh pass)
+    if (h.spouseOnJob) words.push(...spouseWords(h.spouseOnJob, list));
     if (h.coverLines?.length) words.push(`${list(h.coverLines.map((x) => `"${x.name}"`))} on Expenses ${h.coverLines.length === 1 ? "is" : "are"} left out of retirement spending: cover from retirement on is worked out here instead.`);
     if (h.jobPlan) words.push(`While ${h.jobPlan.worker} still works (${span(h.jobPlan.fromYear, h.jobPlan.untilYear, h.jobPlan.years)}), the ${around(h.jobPlan.monthly)} a month stays in, for the plan at work: about ${around(h.jobPlan.total)}${b || m ? " more" : ""} over ${h.jobPlan.years === 1 ? "that year" : "those years"}.`);
     if (!words.length) return null;

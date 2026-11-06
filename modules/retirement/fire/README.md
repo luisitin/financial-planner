@@ -208,6 +208,13 @@ the age on file matches, for the sample couple and the retired couple. Each fail
   retirement age to 35 on the People page." Someone who said "retired" reads as before. Test (`module.test.mjs`, "review
   2026-11-06 (verify)"): Elena's `plannedStop` is `{ e, Elena, 35, 65, 2056, notWorking: true }`, and has no `notWorking` once
   she says "retired". It failed before this change.
+- **A parent at home under 55** (verify of the seventh pass, 2026-11-06; my choice): Will the money last? counts the
+  household at work until the earning partner stops (projection README, "Not working now before 55"), so Elena (35, at home)
+  with Marcus earning to 65 has `plannedStop` `{ e, Elena, 35, 65, 2054, notWorking: true, by: { Marcus, 65 } }` again. The
+  words no longer end "set Elena's retirement age to 35": that would count the household as retired now, at 35. They read
+  "This counts Elena as not working now. Will the money last? counts the household as living on Marcus's pay until Marcus
+  stops work at 65, so it starts spending savings only in 2054. Who works, and until what age, is on the People page." At 55
+  or over the old words stay. Tests: the two "review 2026-11-06" Elena tests.
 
 ## Health cover (review 2026-11-02)
 The spending figure is `spending.yearly + health.removedMonthly x 12`: Will the money last? takes a health premium out of today's
@@ -258,3 +265,21 @@ the family's Expenses: $77,116 and $1,927,900, as before the health line; the pa
 Tests (`module.test.mjs`, "review 2026-11-06"): defect 2 with and without the answer, Lee "not working"; one adult and one age
 with Goal seek (Pat and Tom, Sam past his age); a partner with saving alone; `plannedStop.by` and its words. Each failed
 without its fix.
+
+## Review 2026-11-06 (seventh pass, fire-ver8b)
+- **Other income in steps.** `otherEnding.steps: [{ until, yearly }]`, each last year a part is paid and how much of it stops
+  after that year; `otherEndWords` says them: all of it stopping, "$32,400 a year of other income until 2030, then $14,400 until
+  2034" (it read "until 2034" for all of it); part of it, "($18,000 of it only until 2030 and $14,400 only until 2034)".
+- **Stopping this year.** An adult the plan has at work (pay, an answer) who reaches their planned age this year is
+  `stoppingNow`, said "Ray stopping this year, as planned" (it read "already retired").
+- **The business-draw rule** (projection `ownAccountMoney`): a name is left out of the household's own accounts only when a
+  business is the source; "Draws from company stock account" is the household's own.
+- With everyone stopped, an adult whose job starts later (a pay line from next year) keeps their age on file (the plan counts
+  that pay).
+- What moved with the projection: Medicare now holds the Medigap Plan G default and a spouse's Medicare while the other works
+  (projection README, seventh pass), and the household starts spending this year when the first adult has stopped and a partner
+  is on pay. The family's "hard" plan: 74 -> 75; the condo couple: carries $88,504 -> $84,000, lasts in 9 of 10 markets from 65
+  (63); the family with Bo saving: 63 -> 64; Tom's and Elena's "starts spending only in ..." notes are gone (their pay is income
+  from this year). Rae: Jo could stop at 66 -> 71 (66 with no supplement).
+- Tests: "seventh pass (fire-ver8b): other income that stops in steps ..." and the condo couple's Ray `stoppingNow`; both failed
+  on the base.

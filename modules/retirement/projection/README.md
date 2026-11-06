@@ -533,3 +533,86 @@ Tests (`module.test.mjs`, "review 2026-11-06"): the part-time couple with and wi
   cover Bo and Ana", Ana's job named for 2031 and 2032 after she stopped. It now reads "In 2028 to 2030 Bo is 65 or over while
   Ana still works: a plan through Ana's job can cover Bo, ..." and "In 2031 and 2032 Ana is 65 or over while Bo still works: a
   plan through Bo's job can cover Ana and Bo, ...". No figure moves (no Medicare is added while either works; both from 2033).
+
+## Review 2026-11-06 (seventh pass: money items in the health line and the work rule)
+Six defects, in order of harm. Every figure below is today's dollars, the plan as of 2026-11-06.
+
+**1. Married filing separately got the marketplace credit.** A married couple must file a joint return to get the premium
+tax credit (26 U.S.C. 36B(c)(1)(C), read 2026-11-06 at uscode.house.gov and law.cornell.edu); the one exception is a spouse who
+lives apart and cannot file jointly because of domestic abuse or abandonment (26 CFR 1.36B-2(b)(2)(ii)-(v), eCFR as of
+2026-11-04, at most three years running). Healthcare before 65 (`creditAllowed`) now gives `filingStatus: "married_separate"`
+no credit in any year, the full benchmark as the cost and no cliff; the health line's marketplace parts carry `separate`, and
+`creditWords` says "marketplace, no credit on separate returns". The page and Will the money last? say so in one sentence
+with the exception and the law. H-1395 (separated, not divorced): credits $15,893 -> $0, marketplace $1,712 -> $17,606.
+
+**2. Medicare held nothing beyond Part B and the drug plan.** With no supplement entered the Medicare page (and so the health
+line) now counts the national average premium for Medigap Plan G, the most common supplement (46% of Medigap policyholders):
+$194 a month in 2025 (`MEDIGAP_G`, modules/retirement/medicare/data/medicare.js). Source: KFF, "Key Facts About Medigap
+Enrollment and Premiums for Medicare Beneficiaries" (Freed, Ochieng and Cubanski, published October 13, 2026, from NAIC filings
+compiled by Mark Farrah Associates), read 2026-11-06; MedPAC's June 2026 Report to the Congress, chapter 2, uses the same
+series ($164 for Plan G in 2023). It varies by state ($164 in New Mexico to $257 in New York), age and insurer, so the Medicare
+page asks for your own figure; 0 means none. Per person on Medicare a year: (202.90 + 38.99 + 194) x 12 = $5,230.68, so each
+person-year adds 194 x 12 = $2,328. Will the money last? says what Medicare holds and, in one sentence, what is not counted:
+what you pay at the pharmacy, dental care, glasses, hearing aids and long-term care.
+
+**3. A partner's job was taken to cover a husband or wife 65 or over.** The years someone 65 or over has stopped while the
+other still works (`spouseYears`, by the one work rule) were left out of the health line as "on the job's plan". Now their
+Medicare is counted (`health.spouseOnJob`: `{ total, fromYear, untilYear, names, parts: [{ fromYear, untilYear, years, names,
+worker, presumedUntil }] }`, said by `spouseWords`) unless the Medicare page's tick says a plan through that job covers them
+(`retirement.medicare.jobCoversSpouse`, docs/DATA_MODEL.md). With the tick they are left out as before and said so
+(`onJob.parts[].byTick`: "you said a plan through Jo's job covers Rae (Medicare page)"). A worker 65 or over on their own job's
+plan is still left out (their own years: `onJob`). The tick's help says to check with the plan first: with fewer than 20
+workers at the employer, Medicare usually pays first (Medicare.gov, "Who pays first", read 2026-11-06).
+
+**4. The work rule and a partner's pay ignored the pay line's dates.** `payYears(line, today)` gives the years a salary, bonus
+or business line is paid: this year when it is paid today; a later year when it is paid for more than half of it (so a raise
+split at 2027-03-01 by cashflow/income counts once); none for a one-off, an ended line or a stint shorter than half of any year.
+`workRule` takes a person with pay as working only in those years, and the partner's pay after the household retires runs
+over them (Jo's job ending 2027-06-30: works and is paid 2026 only, was to 2029; one starting 2027-01-01: 2027-2029, was never).
+Medicare's working-year income (`planIncome`) counts each year's own pay (a raise from 2027 counted from 2027).
+
+**5. A first adult who had stopped, with a partner on pay, started retirement at their own later age.** Rae, 62, "Not working
+now", 67 on file, Jo part-time $2,200 a month to 66: retirement started in 2030 (`min(Rae's 2031, Jo's stop)`), nothing was drawn
+2026-2029 and Jo's $26,400 was taken to cover $55,200 of spending. `householdRetireYear` no longer holds the household for a
+partner whose pay is on Income (their pay comes in as income instead): Rae's plan starts in 2026, with the same figures as with
+her age set to 62. `retireStarter` returns `{ first: true, stopped: true, notWorking, working: [{ name, stopAge, untilYear }] }`
+and the page says "Rae is not working; Jo's pay comes in until 2029". A partner with no pay and no answer still holds it (the
+presumed worker, fifth pass).
+
+**6. fire-ver8b (Financial independence's words, the business-draw rule).** `ownAccountMoney` leaves a name out of the
+household's own accounts only when a business is the source ("Owner's draw", "Draw from the business", "LLC distributions",
+"Commission"); "Withdrawals from my brokerage firm account", "Draws from company stock account" and "Savings account draws for
+the business" are the household's own accounts, which the plan already draws on.
+
+Before and after (base 1d1037e against this change, `scratchpad/r6/sweep.mjs` and `cmp.mjs`): of 1,410 qa/households and
+fixture plans, 1,372 run; 395 are unchanged (111 have no Medicare years, 284 were already at $0 carried with nothing left at
+the end); 977 move, every one explained: the supplement alone 521, the supplement and a spouse's Medicare while the other works
+447, the spouse's Medicare alone 7, H-0493 (a new job from 2027-01-05 now counted: her pay after Marcus stops, her job's cover,
+no marketplace years) and H-1395 (no credit on separate returns). Verdicts: tight -> short 78 (74 by the supplement, 4 by the
+spouse's years), on track -> tight 4 (the supplement). Every health line rise from the supplement is a whole number of $2,328
+person-years (1,261 plans); every rise from the spouse's years is exactly `spouseOnJob.total` (454 plans). The family: carries
+$106,221 -> $101,203, ends with $1,116,236 -> $871,107, health line $174,161 -> $324,302 (+$139,680 supplement over 60
+person-years, +$10,461 Bo's 2053-2054 while Ana works). Rae: tight, carries $58,144, starting 2030 -> short in 2051, carries
+$48,748, starting 2026 (tight, $52,853, without the supplement and with the tick: as with her age set to 62).
+Tests (`module.test.mjs`, "seventh pass"): payYears; the work rule and pay with dates; Rae; the spouse's Medicare and the tick;
+the supplement in the health line and the words; the business-draw names. Each failed on the base.
+- **Verify of the seventh pass (2026-11-06).** (1) A contribution to a plan at work (a 401(k) or 403(b) account, or one with
+  an employer match: the work rule's test) stops with its owner's last pay line on Income when every one of their pay lines has
+  an end date (`contributions[].untilYear`, the engine's own bound): Sam's job ending 2028-03-31 stopped his pay after 2027 but
+  his $400 a month and the $1,800 match went on to 2032, short in 2049 instead of 2046. A line with no end date, and saving that
+  is not at work (an IRA), keep going to the retirement age, as before. (2) `expensesCarried(plan, people, today, works, ex?)`:
+  the health lines among the carried bills (carriedHealth, when spending comes from Expenses or Get started's own figure),
+  shared with the Medicare page. Tests: "verify 2026-11-06: a contribution to a plan at work stops ..." (failed on the seventh
+  pass's patch).
+
+### Not working now before 55 (verify of the seventh pass, 2026-11-06; my choice)
+- Starting retirement this year when the first adult has stopped and a partner is on pay (seventh pass, follow-up 5) applies
+  when the first adult said "retired" (any age), is past their own retirement age, or said "not working now" at 55 or over
+  (`STOP_NOW_FROM_AGE`). Rae, 62, "not working now" with 67 on file and Jo part-time: retirement starts now, Jo's pay as income.
+- A parent at home under 55 is a one-earner family, not a retired one: the partner's work holds the household at work until the
+  earlier of the first adult's own year and the partner's stop, as the fifth pass had it. Elena (35, "not working now") with
+  Marcus on $90,000: starting now moved the savings to the retired investment mix for 28 years and drew the tax on Marcus's pay
+  from savings (short in 2062 instead of 2072); the family fixture with Ana at home at 36 read short in 2045, now 2054 (Bo's
+  stop, 2050, as before the seventh pass). 55 is the age a 401(k) can pay out without the 10% penalty after leaving a job
+  (IRC 72(t)(2)(A)(v)), a common line for an early retirement; under it, "not working now" is read as at home.
+- Saying "retired" at any age still starts retirement now: someone who has truly retired early draws from savings.

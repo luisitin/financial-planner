@@ -28,6 +28,8 @@ export function render(page, ctx) {
     ui.h("h1", {}, "Before Medicare"),
     ui.h("p", { class: "lede" }, "Retire before 65 and you need health cover until Medicare starts. Most people buy it on the marketplace (healthcare.gov or the state's site), where a tax credit lowers the premium based on your income. Your income in retirement is partly your choice: which accounts you draw from."),
     d.cliffIncome ? ui.h("p", { class: "muted small" }, `Under the law as it stands, a household of ${d.size} with income over ${money(d.cliffIncome)} (four times the poverty line) gets no credit at all: a dollar over can cost thousands.`) : null));
+  // married filing separately: no credit (seventh pass), said first, with the one exception and the law
+  if (d.separate) root.append(ui.notice("warn", "You file separate returns. A married couple filing separately gets no marketplace tax credit, so the full premium is counted here. Only someone living apart from a spouse who abused or abandoned them can still get it; the instructions for IRS Form 8962 say how. (Federal tax law: 26 U.S.C. 36B(c)(1)(C).)"));
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the years before Medicare, the plan needs: ${d.missing.join("; ")}.`))); return; }
 
   // someone with no pay and no Get started answer is taken as working until the household retires (fifth pass): say so
@@ -51,18 +53,18 @@ export function render(page, ctx) {
   }
 
   root.append(ui.card(null, ui.row(
-    ui.stat("Cover until 65 costs", money(d.total), `${d.years.length} year${d.years.length === 1 ? "" : "s"}, after ${money(d.totalCredit)} of credits`),
-    ui.stat("Years over the cliff", String(d.cliffYears), d.cliffYears ? "no credit those years" : "income stays under it"),
+    ui.stat("Cover until 65 costs", money(d.total), `${d.years.length} year${d.years.length === 1 ? "" : "s"}, ${d.separate ? "no credit on separate returns" : `after ${money(d.totalCredit)} of credits`}`),
+    d.separate ? null : ui.stat("Years over the cliff", String(d.cliffYears), d.cliffYears ? "no credit those years" : "income stays under it"),
   )));
   if (d.cliffYears) {
     const over = d.years.filter((y) => y.overCliff > 0);
     const lost = over.reduce((s, y) => s + y.lostCredit, 0);
     root.append(ui.notice("warn", `In ${over.length} year${over.length === 1 ? "" : "s"} the plan's income is over the cliff by as little as ${money(Math.min(...over.map((y) => y.overCliff)))}, which costs about ${money(lost)} of credits in all. Drawing more from Roth, cash or an ordinary investment account (only the gains count as income) and less from a 401(k) or IRA in those years could keep income under the line.`));
   }
-  if (d.underLineYears) root.append(ui.notice("info", `In ${d.underLineYears} year${d.underLineYears === 1 ? "" : "s"} the plan's income is under the poverty line, where the marketplace gives no tax credit. Medicaid may cover people with that income instead; your state's marketplace site will say. Drawing a little more taxable income in those years can also bring the credit back.`));
+  if (d.underLineYears && !d.separate) root.append(ui.notice("info", `In ${d.underLineYears} year${d.underLineYears === 1 ? "" : "s"} the plan's income is under the poverty line, where the marketplace gives no tax credit. Medicaid may cover people with that income instead; your state's marketplace site will say. Drawing a little more taxable income in those years can also bring the credit back.`));
   root.append(ui.card("Year by year", ui.h("ul", { class: "hc-list" }, d.years.map((y) => ui.h("li", {},
     ui.h("span", {}, `${y.year}: ${y.covered.join(", ")}`, ui.h("span", { class: "hc-s" }, `income ${money(y.magi)}${y.room !== null ? `, ${money(y.room)} under the cliff` : y.overCliff ? `, ${money(y.overCliff)} over the cliff` : ""}${y.conversion > 1 ? ` (a Roth conversion of ${money(y.conversion)})` : ""}`)),
-    ui.h("b", { class: y.overCliff ? "hc-bad" : null }, money(y.cost), ui.h("span", { class: "hc-s" }, y.credit > 0 ? `after ${money(y.credit)} credit` : y.underLine ? "no credit: under the poverty line" : "no credit"))))),
+    ui.h("b", { class: y.overCliff ? "hc-bad" : null }, money(y.cost), ui.h("span", { class: "hc-s" }, y.credit > 0 ? `after ${money(y.credit)} credit` : d.separate ? "no credit: separate returns" : y.underLine ? "no credit: under the poverty line" : "no credit"))))),
     ui.h("p", { class: "muted small" }, "The cost is the benchmark plan (the second-cheapest silver plan) for the people covered that year, less the credit, in today's dollars. Income is the plan's own: what it draws and earns that year. Cheaper bronze plans cost less up front and more when you are ill.")));
   settingsCard(d);
 
