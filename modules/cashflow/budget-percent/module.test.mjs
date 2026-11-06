@@ -5,6 +5,8 @@ import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { compute as computeSE, seTax } from "../../taxes/self-employment/compute.js";
 import { compute as computePaycheck } from "../paycheck/compute.js";
+import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -34,8 +36,16 @@ test("income after tax by hand: federal income tax, each person's Social Securit
   const se = seTax(7200, { wages: 62400, wageBase: 184500 }).total;
   const payroll = FICA.ss * 101400 + FICA.medicare * 101400 + FICA.ss * 62400 + FICA.medicare * 62400 + se;
   near(d.month.gross, 171000 / 12); near(d.month.payroll, payroll / 12);
-  // the federal tax with half the self-employment tax off and the 20% deduction: the Self-employment page's "with" figure
-  near(d.month.federal * 12 + se, computeSE(p, { today: TODAY }).taxWith, 0.01);
+  // the federal tax with half the self-employment tax off and the 20% deduction, by hand in the 1040's order:
+  // self-employment tax 7,200 x 92.35% x 15.3% = 1,017.33, half 508.66; AGI 158,780 - 508.66 = 158,271.34; the 20% deduction
+  // after AGI (line 13): 20% x (7,200 - 508.66) = 1,338.27; taxable 158,271.34 - 32,200 - 1,338.27 = 124,733.07; tax
+  // 11,600 + 22% x 23,933.07 = 16,865.27; less the child care credit on Cy's care (35% less a point per 4,000 of joint AGI
+  // over 150,000, or part: 32% of 3,000 = 960) and the child tax credit 2,200: 13,705.27; with the self-employment tax 14,722.60.
+  // (The Self-employment page takes the 20% deduction off AGI instead, which puts its AGI at 156,933 and its credit at 33%:
+  // its total is 30 lower. That is taxes/self-employment's lane; this page follows the 1040.)
+  const half = seTax(7200, { wages: 62400, wageBase: 184500 }).half;
+  near(half, 0.5 * 7200 * 0.9235 * 0.153, 1e-9);
+  near(d.month.federal * 12, 13705.27, 0.02); near(d.month.federal * 12 + se, 14722.60, 0.02);
   assert.equal(d.month.state, 0, "Texas"); near(d.month.afterTax, (171000 - d.month.federal * 12 - payroll) / 12);
 });
 
@@ -275,4 +285,88 @@ test("fullKind: a full month within $5 of $0 just about breaks even (no 'about $
   assert.equal(EVEN_WITHIN, 5);
   assert.deepEqual([4.99, 0, -4.99, 5, 1200, -5, -770].map(fullKind), ["even", "even", "even", "ahead", "ahead", "short", "short"]);
   assert.equal(fullKind(null), "even");
+});
+
+/** Jo, the single parent (the reviewer's plan): head of household in Ohio, 62,000 of pay, a child born 2022-07-15, 900 a
+ * month of daycare; `acct` a child care account for 2026 on Benefits elections. */
+function jo({ pay = 62000, acct = 0, care = 900, kids = 1 } = {}) {
+  const p = emptyPlan();
+  p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+  p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+  if (kids > 1) p.household.people.push({ id: "kid2", name: "Lou", role: "dependent", birthDate: "2019-09-01" });
+  p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: pay, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1300, period: "monthly", essential: true }];
+  if (care) p.expenses.push({ id: "care", name: "Childcare and school", category: "childcare", amount: care, period: "monthly", essential: true });
+  if (acct) p.whatIfs = { benefits: { jo: { dcfsaElect: acct, planYear: 2026 } } };
+  return p;
+}
+
+test("yearTaxes: the child care account is the Federal estimate's (its own wages), not taxed as pay or the credit lost twice", () => {
+  const NOV = "2026-11-02";
+  // Jo with a 5,000 account for 2026: wages 57,000, no credit, 3,588 - 2,200 = 1,388 (the reviewer: Budget said 166 a month,
+  // 1,988 a year, the account back in wages and the credit gone); the state on 57,000 of income
+  for (const [plan, fed] of [[jo({ acct: 5000 }), 1388], [jo({ acct: 2000 }), 1398], [jo({ pay: 88000, acct: 5000 }), 4508], [jo({ acct: 5000, kids: 2 }), -1162], [jo(), 938]]) {
+    const T = yearTaxes(plan, { today: NOV });
+    const f = computeFederal(plan, { today: NOV }).result;
+    near(T.federal, fed, 1e-6); near(T.federal, f.totalTax - f.additionalMedicare, 1e-6); near(T.agi, f.agi, 1e-6);
+  }
+  near(yearTaxes(jo({ acct: 5000 }), { today: NOV }).agi, 57000);
+  // a health FSA comes off the wages too, as the Federal estimate has it
+  const h = jo(); h.taxes.hsa = { fsa: 2000 };
+  near(yearTaxes(h, { today: NOV }).federal, computeFederal(h, { today: NOV }).result.totalTax, 1e-6);
+});
+
+test("Next best action's month takes the same federal tax with a child care account (1,388 a year for Jo, not 2,040)", () => {
+  const NOV = "2026-11-02";
+  for (const [plan, fed] of [[jo({ acct: 5000 }), 1388], [jo({ pay: 30000 }), -1700], [jo(), 938]]) {
+    const d = computeNext(plan, { today: NOV });
+    near(d.spare.federalTax * 12, fed, 1e-6);
+    near(d.spare.federalTax * 12, computeFederal(plan, { today: NOV }).result.totalTax, 1e-6);
+  }
+});
+
+test("the child care account's money it would lose comes off the month after tax, as Next best action takes it (care fourth pass)", async () => {
+  const NOV = "2026-11-02";
+  // Jo with a 5,000 account for 2026 and no care on Expenses: all 5,000 is lost (Form 2441 line 14: "You forfeited an amount
+  // if you didn't receive it because you didn't incur the expense"); the tax falls 1,120 (600 federal, 382.50 Social Security
+  // and Medicare, 137.50 Ohio), so the month has 3,880 / 12 = 323.33 LESS after tax (it showed 6 more)
+  const none = compute(jo({ care: 0 }), { today: NOV }), acct = compute(jo({ care: 0, acct: 5000 }), { today: NOV });
+  near(acct.month.careLost, 5000 / 12, 1e-9); assert.equal(none.month.careLost, 0);
+  near(acct.month.afterTax - none.month.afterTax, -3880 / 12, 0.005);
+  near(yearTaxes(jo({ care: 0, acct: 5000 }), { today: NOV }).careLost, 5000, 1e-9);
+  // Next best action leaves the same money: the same 323.33 less
+  const n0 = computeNext(jo({ care: 0 }), { today: NOV }).spare, n1 = computeNext(jo({ care: 0, acct: 5000 }), { today: NOV }).spare;
+  near(n1.monthly - n0.monthly, acct.month.afterTax - none.month.afterTax, 0.005);
+  // 1,800 of care (150 a month): 3,200 of the 5,000 is lost
+  near(compute(jo({ care: 150, acct: 5000 }), { today: NOV }).month.careLost, 3200 / 12, 1e-9);
+  // and the page says so, under the month's taxes
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = []) => { const x = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, querySelector() { return null; }, scrollIntoView() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form") };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan: jo({ care: 0, acct: 5000 }), store: { update() {} } });
+  assert.ok(root.textContent.replace(/\s+/g, " ").includes("The child care account would lose $417 a month"));
+});
+
+test("filing separately: each return's own business, half its self-employment tax, its 20% deduction and its 0.9% (care fourth pass)", () => {
+  const NOV = "2026-11-02";
+  // the family filing separately with a 3,750 child care account each: the law's figure (scratchpad mfs-law oracle) is Ana's
+  // return 7,764.60 + Bo's 5,500.37 (his photography with half its self-employment tax off his own income and its 20%
+  // deduction on his own return) + 1,017.33 of self-employment tax = 14,282.30, with no 0.9% (each return's own Medicare wages
+  // are under 125,000). The page said 14,439.15: Bo's deductions on Ana's 22% return and 341.54 of 0.9% on the household's pay
+  const p = familyPlan(NOV); p.household.filingStatus = "married_separate";
+  p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } } };
+  const T = yearTaxes(p, { today: NOV });
+  near(T.extraMedicare, 0, 1e-9); near(T.se, 1017.33, 0.01);
+  near(T.federal, 7764.60 + 5500.37, 0.02); near(T.federal + T.se + T.extraMedicare, 14282.30, 0.02);
+  // the same figure as the Withholding check's year (separateBusiness) and Next best action's month
+  near(computeNext(p, { today: NOV }).spare.federalTax * 12, T.federal, 1e-6);
+  // no accounts: 8,589.60 + 6,075.68 + 1,017.33 = 15,682.61, still no 0.9%
+  const q = familyPlan(NOV); q.household.filingStatus = "married_separate";
+  const U = yearTaxes(q, { today: NOV });
+  near(U.extraMedicare, 0, 1e-9); near(U.federal + U.se, 15682.61, 0.02);
+  // filing jointly nothing moves: 14,722.60 as before
+  near(yearTaxes(familyPlan(NOV), { today: NOV }).federal + yearTaxes(familyPlan(NOV), { today: NOV }).se, 14722.60, 0.02);
 });

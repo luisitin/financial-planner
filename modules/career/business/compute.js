@@ -4,7 +4,7 @@
 // the state's rate) against an S corporation paying the owner a reasonable salary; what the owner can safely take out
 // each month; and the self-employed retirement plans (SEP-IRA, solo 401(k), SIMPLE IRA) with the tax each would save.
 import { compute as computeIncome, chainId } from "../../cashflow/income/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { compute as computeSelfEmployment, seTax, SE, QBI, TOTAL_ADDITIONS } from "../../taxes/self-employment/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
@@ -73,11 +73,15 @@ export function planRooms({ profit, seHalf, age = null, deferralLeft, year }) {
  * federal engine limits it to 20% of taxable income less net capital gain), at least $400 from 2026 when that profit is
  * $1,000 or more (IRC 199A(i)); a loss comes off other income; the 0.9% extra Medicare tax on wages + earnings above
  * the line. `inputs` is the household without this business; `otherSE` its other self-employment earnings (for the
- * refundable child tax credit's earned income).
+ * refundable child tax credit's earned income). `careAt({ business, wagesAdd })` (optional) gives the child and dependent
+ * care credit's inputs with the owner earning that from the business (and that much more pay): its cap is the lower
+ * earner's earned income on a joint return, as is the child care account's exclusion (federal careInputsWith, the
+ * account's one rule; the wages move by its `wagesChange`).
  */
-export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOrdinary, otherSE = 0, wages = 0, medicareWages = 0, wageBase, health = 0, retirement = 0, qbiMinimum = null }) {
+export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOrdinary, otherSE = 0, wages = 0, medicareWages = 0, wageBase, health = 0, retirement = 0, qbiMinimum = null, careAt = null }) {
   const P = Number(profit) || 0;
   const se = seTax(Math.max(0, P), { wages, wageBase });
+  const care = inputs.care && careAt ? careAt({ business: P - se.half }) : null;
   const healthOff = Math.min(pos(health), Math.max(0, P - se.half - retirement));
   const adj = (Number(inputs.adjustments) || 0) + se.half + healthOff + retirement + Math.max(0, -P);
   const qbiBase = Math.max(0, P - se.half - healthOff - retirement);
@@ -86,6 +90,7 @@ export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOr
     ...inputs, otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + Math.max(0, P)), adjustments: adj,
     selfEmployment: otherSE + P - se.half,   // a loss lowers the earned income for the refundable child tax credit
     qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
+    ...(care ? { care, wages: Math.max(0, (Number(inputs.wages) || 0) + (Number(care.wagesChange) || 0)) } : {}),
   }, params);
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
   const extra = SE.addlMedicare * (Math.max(0, medicareWages + se.base - th) - Math.max(0, medicareWages - th));
@@ -100,7 +105,7 @@ export function soleTax(profit, { inputs, params, otherOrdinary = inputs.otherOr
  * with the 20% deduction on what is left less that health insurance deduction; a loss passed through comes off other
  * income.
  */
-export function scorpTax(profit, salary, costs, { inputs, params, otherOrdinary = inputs.otherOrdinary, otherSE = 0, wages = 0, medicareWages = 0, wageBase, health = 0, retirement = 0, qbiMinimum = null }) {
+export function scorpTax(profit, salary, costs, { inputs, params, otherOrdinary = inputs.otherOrdinary, otherSE = 0, wages = 0, medicareWages = 0, wageBase, health = 0, retirement = 0, qbiMinimum = null, careAt = null }) {
   const W = Math.max(0, Math.min(salary, profit));
   const ssRoom = Math.max(0, wageBase - wages);
   const employer = Math.min(W, wageBase) * PAYROLL.ss + W * PAYROLL.medicare;   // each employer pays to the full wage base
@@ -111,9 +116,11 @@ export function scorpTax(profit, salary, costs, { inputs, params, otherOrdinary 
   // too (Treas. Reg. 1.199A-3(b)(1)(vi); IRS section 199A FAQ 39: QBI can be reduced at the corporation and again here)
   const qbiBase = Math.max(0, passed - healthOff);
   const M = qbiMinimum ?? { amount: 0, from: Infinity };
+  const care = inputs.care && careAt ? careAt({ business: 0, wagesAdd: W + premiums }) : null;   // the salary is earned income, what passes through is not
   const r = federalTax({
-    ...inputs, wages: (Number(inputs.wages) || 0) + W + premiums, otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + Math.max(0, passed)), adjustments: adj,
+    ...inputs, wages: (Number(inputs.wages) || 0) + W + premiums + (Number(care?.wagesChange) || 0), otherOrdinary: Math.max(0, (Number(otherOrdinary) || 0) + Math.max(0, passed)), adjustments: adj,
     selfEmployment: otherSE, qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
+    ...(care ? { care } : {}),
   }, params);
   // the owner's share: Social Security only to the wage base after other wages (the excess comes back on the return), Medicare, the 0.9%
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
@@ -175,12 +182,24 @@ export function compute(plan, params = {}) {
   if (st.rate === null) notes.push("Your state's income tax is not counted: set its rate on the State tax page.");
   const wageBase = maximumEarnings(year);
   const ownerWages = inc.active.filter((x) => x.personId === (person?.id ?? "") && ["salary", "bonus"].includes(x.type) && x.period !== "once").reduce((t, x) => t + x.yearly, 0);
-  const medicareWages = Number(ti.inputs.medicareWages ?? ti.inputs.wages) || 0;
-  const inputs = { ...ti.inputs, otherOrdinary: Math.max(0, (Number(ti.inputs.otherOrdinary) || 0) - (item ? item.yearly : 0)) };
+  // filing separately, the business is on its owner's own return (IRS Pub. 501; IRC 164(f), 199A): every change here (the
+  // Income page's amount out, the profit, half the self-employment tax, the 20% deduction, an S corporation's salary) lands
+  // on that return (the engine's `separateTo`), and the 0.9% is worked on that return's own Medicare wages against its own
+  // threshold (care fourth pass: the family filing separately showed -406 of income tax and 60 of extra Medicare, the
+  // business taken off Ana's return; Bo's own is +642.37 and none)
+  const ownReturn = person && Array.isArray(ti.inputs.separate) ? ti.inputs.separate.find((x) => x.personId === person.id) ?? null : null;
+  const medicareWages = Number(ownReturn ? ownReturn.medicareWages ?? ownReturn.wages : ti.inputs.medicareWages ?? ti.inputs.wages) || 0;
+  const inputs = { ...ti.inputs, otherOrdinary: Math.max(0, (Number(ti.inputs.otherOrdinary) || 0) - (item ? item.yearly : 0)), ...(ownReturn ? { separateTo: person.id } : {}) };
   const otherSE = Math.max(0, (Number(ti.inputs.selfEmployment) || 0) - (item ? item.yearly : 0));
   const health = pos(s.healthPremiums);
-  const T = { inputs, params: ti.params, otherSE, wages: ownerWages, medicareWages, wageBase, health, qbiMinimum: forYear(QBI_MINIMUM, year) };
-  const none = federalTax({ ...inputs, selfEmployment: otherSE }, ti.params);
+  // the child care credit's earned-income cap with the owner's earnings from this business as worked here, not as the plan
+  // has them (the owner's other business income, at its yearly amount, stays)
+  const ep = ti.care?.earnedPeople?.find((x) => x.id === (person?.id ?? null)) ?? null;
+  const ownerOther = biz.filter((x) => x !== item && (x.personId || person?.id) === person?.id).reduce((t, x) => t + x.yearly, 0);
+  const careAt = ep ? ({ business = 0, wagesAdd = 0 }) => careInputsWith(ti, { [ep.id]: { business: ownerOther + business, pay: ep.pay + wagesAdd } }) : null;
+  const T = { inputs, params: ti.params, otherSE, wages: ownerWages, medicareWages, wageBase, health, qbiMinimum: forYear(QBI_MINIMUM, year), careAt };
+  const careNone = inputs.care && careAt ? careAt({}) : null;
+  const none = federalTax({ ...inputs, selfEmployment: otherSE, ...(careNone ? { care: careNone, wages: Math.max(0, (Number(inputs.wages) || 0) + (Number(careNone.wagesChange) || 0)) } : {}) }, ti.params);
   const noneIncome = none.totalTax - none.additionalMedicare;
   const sole = soleTax(profit, T);
   const stateOf = (w, retirement = 0) => (Math.max(0, profit) - w.se.half - w.healthOff - retirement - Math.max(0, -profit)) * stateRate;   // a loss saves state tax too

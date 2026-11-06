@@ -129,7 +129,8 @@ test("the tax on a sale: pay as income, long-term gains at their rates and in th
   const t = ti();
   const T = { inputs: t.inputs, params: t.params, stateRate: 0 };
   near(saleTax({ ordinary: 1100, longGain: 500 }, T).federal, 1100 * 0.22 + 500 * 0.15, 0.01);
-  near(saleTax({ shortGain: -5000 }, T).federal, -3000 * 0.22, 0.01);
+  // the 3,000 loss also takes AGI from 158,780 to 155,780: the child care credit on Cy's care from 32% to 33% of 3,000 (-30)
+  near(saleTax({ shortGain: -5000 }, T).federal, -3000 * 0.22 - 30, 0.01);
   near(saleTax({ shortGain: -5000 }, { ...T, inputs: { ...t.inputs, capitalLoss: -3000 } }).federal, 0, 0.01);
   near(saleTax({ ordinary: 1000 }, { ...T, stateRate: 0.05 }).state, 50);
   const rich = { ...t.inputs, wages: 480000 };

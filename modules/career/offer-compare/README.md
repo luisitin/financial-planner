@@ -34,6 +34,15 @@ perHour, overYears: { gross, afterTax, commute, net }, stockYears, stockShare, i
 - **Tax** (`taxYear`), each year: the wages taxed = salary + bonus + stock (+ the sign-on in year one) − premiums (paid
   before tax through the employer's cafeteria plan, IRC 125, so free of income tax and of Social Security and Medicare,
   IRC 3121(a)(5)(G)).
+  - The child and dependent care credit's cap is the lower earner's earned income on a joint return (IRC 21(d)(1)(B)): each
+    year's tax works it again with this person on the job's pay (`taxYear`'s `careAt`, federal `careInputsWith`), so a
+    job for a spouse with no pay counts the credit it unlocks, and the job now counts the credit it keeps (2026-11-02:
+    the plan's figure was kept, so the family with Bo earning nothing and a 50,000 offer for Bo showed 1,050 more federal
+    tax than the Federal estimate adds with that pay in the plan). The person's earned income is their pay before the child
+    care account (after the plan's pre-tax 401(k)) moved by the job's pay against the plan's; the other adult's account
+    stays out of income only up to the lower earner's earned income (the account's one rule), and the wages move by
+    `careInputsWith`'s `wagesChange` (Bo at no pay, Ana's 5,000 account, a 50,000 offer for Bo: the 5,000 stays out of
+    income, as the Federal estimate has it with that pay in the plan; review of 2026-11-02).
   - Federal = the household's `federalTax` with the rest of the household's wages (the plan's wages less this person's
     pay as the Income page has it, so everyone's pre-tax 401(k) saving stays as it is; it may be negative, the sum is
     floored at 0) + this job's, less the same without this job; the engine's own 0.9% extra Medicare figure is left out
@@ -88,3 +97,28 @@ whose job, offers taking the job now's blanks, the HSA money's owner, a state ra
 - The match's vesting schedule (cliff or graded) against the years you would stay; the pension's value.
 - Cost of living in another city (rent and prices), and the household's other earner moving too.
 - A refresher grant a year for the job now; stock options' value beyond their spread.
+
+## Child care account and separate returns, fourth pass (2026-11-02)
+- `taxYear(pay, { ..., personId, account })`: the person's own child care account leaves the job's pay before Social Security
+  and Medicare, all of the election up to a plan's limit (IRC 3121(a)(18); W-2 box 10 instructions), and before the state's tax
+  the part that stays out of income (excluded and lost: `off`). Jo with 5,000 (Ohio): the job now keeps 70 more with the
+  account (54,684 against 54,614), the 382.50 of payroll and 137.50 of Ohio tax it saves counted, as Benefits says (it kept
+  450 less: the federal part only). The other adults' accounts are out of the household's Medicare wages for the 0.9%.
+- Filing separately the job's pay is on this person's own return (`separateTo` = the person; IRS Pub. 501), and the 0.9% is
+  worked on their own Medicare wages against the separate return's 125,000. Bo in the family filing separately with 3,750
+  each: the job now's federal 5,722 (his own return with his pay against without it); it said 9,109.87, his pay taken off
+  Ana's return.
+
+## Review 2026-11-06
+- **Money the child care account would lose is not kept.** `taxYear` returns `lost`, the account's money beyond the care it
+  pays back (`own.forfeited`, Form 2441 line 14, at most the pay): `afterTax = gross - tax - lost - moving`, the steady year
+  too. The year's lines show "Child care account money lost". Jo, a 5,000 account: with 900 a month of care she keeps
+  54,684; with no care all 5,000 is lost: 49,684 (the page said 54,684, the account looking 1,120 better than none); with
+  1,800 of care, 3,200 lost: 51,484.
+- **The business on its owner's return.** The year's tax starts from the Federal estimate's inputs with the business at
+  its profit, half its self-employment tax and its 20% deduction off (withholding `withBusiness`): Bo's job now, filing
+  separately with 3,750 each, 5,500.37 of federal tax (5,722 with the business counted in full); Ana's job now in the
+  family's joint test follows the same inputs.
+- "1 years" reads "1 year".
+- Tests: "the money the child care account would lose is not kept", "filing separately, Bo's job is on his own return
+  with his business at its profit and its deductions".

@@ -144,3 +144,17 @@ The `bank-card` alert names the months looked at from `cardFile` ("over the last
 payments counted for neither card; "2 whole months" for one card as before) and says "their own files aren't in" for
 several cards: two Chase cards with no files now get "Bring in the card files" (they got nothing). Test in
 `cashflow/income-statement/module.test.mjs`.
+
+## Review 2026-11-06
+- **The tax bill, filing separately.** Each return settles on its own (withholding `byReturn` through `taxAnswer` `returns`):
+  a return that owes 1,000 or more is an alert, "About $1,660 of tax to pay in April on Bo's return", even when the two
+  returns added up come to a refund (the family filing separately with 3,750 each: Ana 2,200 back, Bo owes 1,659.70; the
+  alert said nothing). Filing jointly, nothing changes.
+- **The self-employment tax said is the tax itself** (`taxAnswer` `seOwn`, the Federal estimate's figure): "$1,017 of it
+  self-employment tax" for the family, where it said $581 (the business's whole effect, its deductions taken off).
+- **The goals test's figures moved** with the child and dependent care credit, which now counts in the spare money (the
+  family's $960 a year): the goals step gets 1,910.89 a month (1,830.89 before), so the largest December 2029 wedding the
+  family can reach is about $21,100 (about $19,100 before), and the goals step starts on December 2, 2027 (January 2, 2028
+  before). The test checks $21,000 waits and $22,000 cannot be reached, and the holiday due 3 days after the turn is now
+  due December 5, 2027.
+- Test: "the tax bill alert reads each separate return".

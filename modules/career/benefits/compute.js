@@ -4,7 +4,9 @@
 // spending accounts and commuter benefits with the tax each saves; the employer stock purchase plan's discount after
 // tax; and the tax on life cover through work above $50,000. The limits are the plan year's (next year from October).
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
+import { compute as computePaycheck, w4StatusFor } from "../../cashflow/paycheck/compute.js";
+import { withBusiness } from "../../taxes/withholding/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
@@ -80,17 +82,132 @@ export function taxSaved(amount, { inputs, params, personPay, wageBase, stateRat
 }
 
 /**
+ * The child care account's worth for `person`: the plan's own federal tax for the plan year (taxInputs and federalTax, the
+ * Federal estimate's one rule for the account: careAccountRule) with this election and with none, everything else as the
+ * plan has it: the other adult's account counted once, a separate return with its own 3,750, care too small for the
+ * account shown as money lost. federal = the tax without - the tax with (the 0.9% extra Medicare tax left out), the child
+ * care credit the account costs counted in it; payroll = Social Security (to the wage base) and Medicare on the whole
+ * election, up to a plan's own limit (IRC 3121(a)(18): out of Social Security and Medicare wages; W-2 box 10 instructions:
+ * only an amount over the plan's limit goes in boxes 3 and 5; the part over the household's limit is added back for income
+ * tax only, Form 2441 line 26; the Paycheck page takes all of it out); state = the state's rate on the change in income (AGI).
+ * saved = federal + payroll + state - the money the accounts would lose (forfeited: pay you never get back).
+ * -> { saved, taxSaved, federal, payroll, state, creditLost, care, forfeited (the household's, what this election adds),
+ * excluded, taxedAsPay (what this election adds), own: { elected, forfeited, excluded, taxedAsPay } (this adult's share, as
+ * every page splits the household's excess: by the elections), householdTaxed (the household's part taxed as pay), others
+ * (the other adults' accounts for the plan year), separate, limit, overLimit, earnedCapped, low }
+ */
+export function dcWorth(plan, { today, planYear, person, settings = {}, elect = 0, stateRate = 0, wageBase = Infinity }) {
+  const all = plan.whatIfs?.benefits ?? {};
+  const at = (amount) => {
+    const p = { ...plan, taxes: { ...(plan.taxes ?? {}), year: planYear }, whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...all, [person.id]: { ...settings, dcfsaElect: amount, planYear } } } };
+    const t = taxInputs(p, { today });
+    // a business at its profit on its owner's return, half its self-employment tax and its 20% deduction off (withholding
+    // withBusiness), as the Federal estimate's year tax and Budget work it (Review 2026-11-06: Bo's separate return counted his
+    // photography in full, across the 12%/22% line, so his 3,750 looked worth 760 of federal tax, not 575.31)
+    return { t, r: federalTax(withBusiness(p, t.inputs, { today, year: planYear }), t.params), a: t.care?.account ?? null };
+  };
+  const W = at(elect), O = at(0);
+  const fed = (x) => x.r.totalTax - x.r.additionalMedicare;
+  const federal = fed(O) - fed(W);
+  const creditLost = Math.max(0, (O.r.credits.careCredit || 0) - (W.r.credits.careCredit || 0));
+  // Social Security and Medicare: the whole election leaves payroll wages (3121(a)(18)), as the paycheck takes it out
+  let payroll = 0;
+  for (const x of W.a?.people ?? []) {
+    const o = O.a?.people.find((y) => y.id === x.id) ?? { elected: 0 };
+    const d = x.elected - o.elected;
+    if (Math.abs(d) < 0.005) continue;
+    const gross = W.t.k401?.people?.find((y) => y.id === x.id)?.pay ?? 0;
+    payroll += PAYROLL.ss * (Math.min(Math.max(0, gross - o.elected), wageBase) - Math.min(Math.max(0, gross - x.elected), wageBase)) + PAYROLL.medicare * d;
+  }
+  const state = (stateRate || 0) * ((O.r.agi || 0) - (W.r.agi || 0));
+  const A = W.a, A0 = O.a;
+  // the money the account would lose (elected beyond the care it can pay back) is pay you never get: it counts against it
+  const lost = Math.max(0, (A?.forfeited ?? 0) - (A0?.forfeited ?? 0));
+  const me = A?.people.find((y) => y.id === person.id) ?? null;
+  const care = A ? A.care : 0;
+  const low = A?.earnedCapped ? (A.separate || A.joint ? Math.min(...A.people.map((y) => y.earned18)) : me?.earned18 ?? null) : null;
+  return {
+    saved: federal + payroll + state - lost, taxSaved: federal + payroll + state, federal, payroll, state, creditLost, care,
+    forfeited: lost, excluded: Math.max(0, (A?.excluded ?? 0) - (A0?.excluded ?? 0)), taxedAsPay: Math.max(0, (A?.taxedAsPay ?? 0) - (A0?.taxedAsPay ?? 0)),
+    own: { elected: me?.elected ?? 0, forfeited: me?.forfeited ?? 0, excluded: me?.excluded ?? 0, taxedAsPay: me?.taxedAsPay ?? 0 }, householdTaxed: A?.taxedAsPay ?? 0,
+    split: (A?.people ?? []).filter((y) => y.taxedAsPay > 0.5).map((y) => ({ id: y.id, name: y.name, taxedAsPay: y.taxedAsPay })), separate: !!A?.separate, limit: A?.limit ?? null,
+    others: (A?.people ?? []).filter((y) => y.id !== person.id).reduce((t, y) => t + y.elected, 0), joint: !!A?.joint,
+    overLimit: !!A?.overLimit && (A?.taxedAsPay ?? 0) > (A0?.taxedAsPay ?? 0) + 0.5, earnedCapped: !!A?.earnedCapped && (A?.taxedAsPay ?? 0) > (A0?.taxedAsPay ?? 0) + 0.5, low,
+  };
+}
+
+/**
+ * What take-home falls by each paycheck, from the Paycheck page's own figures (cashflow/paycheck compute): `person`'s
+ * paycheck with these yearly choices ({ hsa, fsa, dcfsa, commuter, espp }) typed in as a paycheck's amounts, against the same
+ * paycheck with none of them and no 401(k) (the 401(k) now is part of "taken from each paycheck"), and against all of them
+ * but the child care account. The withholding is the IRS table's on the W-4 (the household's filing status unless one is
+ * typed there), so it moves with the choices; a typed stub figure would not. `k401` (optional, [{ key, yearly, roth }]): each
+ * 401(k) choice alone (pre-tax `yearly - roth`, the Roth catch-up after tax) against no 401(k) and none of the other choices,
+ * so a 401(k) choice's "takes X from take-home pay" is the same figure as "taken from each paycheck" when it is all there is.
+ * -> { all, dcfsa, k401: { [key]: a paycheck } } | null when the Paycheck page does not see this person's pay.
+ */
+export function paycheckChange(plan, { today, person, paychecks, filingStatus, taxYear, yearly, k401 = [] }) {
+  const pw = plan.whatIfs?.paycheck?.[person.id] ?? {};
+  const n = Math.max(1, paychecks);
+  const base = { ...pw, federal: null, state: null, w4Status: pw.w4Status ?? w4StatusFor(filingStatus), paychecks: n };
+  const s = plan.whatIfs?.benefits?.[person.id] ?? {};
+  const isK = (c) => c.personId === person.id && (plan.accounts ?? []).find((a) => a.id === c.accountId)?.type === "401k";
+  const at = (typed, no401k = false, k401Yearly = null) => {
+    // the child care election in force for the Paycheck page's year when its amount is in, else none, so the tax and the
+    // state's share that page works from follow it as they would on the real paycheck
+    const ben = { ...s, esppOffered: false, dcfsaElect: typed.dcfsa > 0 ? yearly.dcfsa : 0, planYear: taxYear ?? s.planYear ?? null };
+    // a 401(k) choice: this person's 401(k) as one yearly amount (an account made up for it when there is none yet)
+    const kAcct = (plan.accounts ?? []).find((a) => a.type === "401k" && a.ownerId === person.id) ?? { id: "__benefits-401k", name: "401(k)", type: "401k", ownerId: person.id, balance: 0 };
+    const others = (plan.retirement?.contributions ?? []).filter((c) => !isK(c));
+    const contributions = no401k ? others : k401Yearly !== null ? [...others, ...(k401Yearly > 0 ? [{ id: "__benefits-401k-c", personId: person.id, accountId: kAcct.id, amount: k401Yearly, period: "annual" }] : [])] : plan.retirement?.contributions ?? [];
+    const p = {
+      ...plan,
+      accounts: k401Yearly !== null && !(plan.accounts ?? []).includes(kAcct) ? [...(plan.accounts ?? []), kAcct] : plan.accounts,
+      retirement: { ...(plan.retirement ?? {}), contributions },
+      whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...(plan.whatIfs?.benefits ?? {}), [person.id]: ben }, paycheck: { ...(plan.whatIfs?.paycheck ?? {}), [person.id]: { ...base, ...typed } } },
+    };
+    let pc = null;
+    try { pc = computePaycheck(p, { today }); } catch { pc = null; }
+    return pc?.ready ? pc.people.find((x) => x.id === person.id) ?? null : null;
+  };
+  const per = (v) => (Number(v) || 0) / n;
+  const choices = { hsa: per(yearly.hsa), fsa: per(yearly.fsa), dcfsa: per(yearly.dcfsa), commuter: per(yearly.commuter), afterTax: (Number(pw.afterTax) || 0) + per(yearly.espp) };
+  const zero = { hsa: 0, fsa: 0, dcfsa: 0, commuter: 0, afterTax: Number(pw.afterTax) || 0 };
+  const withAll = at(choices), none = at(zero, true), noDc = at({ ...choices, dcfsa: 0 });
+  if (!withAll || !none || !noDc) return null;
+  // each 401(k) choice alone: the 401(k) now exactly as the plan has it (so with nothing else chosen it is `all`), the
+  // others at their yearly amount, the Roth catch-up taken after tax
+  const kOut = {};
+  for (const o of k401 ?? []) {
+    const roth = Math.max(0, Number(o.roth) || 0);
+    const one = o.key === "now" ? at(zero) : at({ ...zero, roth: (Number(pw.roth) || 0) + roth / n }, false, Math.max(0, (Number(o.yearly) || 0) - roth));
+    if (one) kOut[o.key] = none.net - one.net;
+  }
+  return { all: none.net - withAll.net, dcfsa: noDc.net - withAll.net, k401: kOut };
+}
+
+/**
  * compute(plan, { today }) -> {
  *   ready, why ("no-pay"|"no-person"), year, planYear, limitsYear, person: { id, name, age }, people (adults with pay), pay, paychecks, settings, notes,
  *   k401: { tiers, tiersAssumed, nowPct, nowYearly, nowMatch, nowMatchPlan, fullPct, fullMatch, leftBehind, limit, baseLimit, catchUp, maxPct, hasAccount,
- *     options: [{ key: "now"|"match"|"max", pct, yearly, perCheck, match, roth, cost, costPerCheck, saved }], rothCatchUp, rothCatchUpWages, stateTaxed },
+ *     options: [{ key: "now"|"match"|"max", pct, yearly, perCheck, match, roth, cost, costPerCheck (the Paycheck page's change when
+ *     it sees the pay: costFrom "paycheck"), saved }], rothCatchUp, rothCatchUpWages, stateTaxed },
  *   hsa: { eligible, coverage, limit, employer, room, typed, elect, saved, maxSaved, stateTaxed } | null,
- *   fsa: { limit, typed, elect, saved, carryover, withHsa }, dependentCare: { kids, limit, others, typed, elect, saved },
+ *   fsa: { limit, typed, elect, saved, carryover, withHsa },
+ *   dependentCare: { kids, limit (the household's, or each separate return's), planMax, separate, others, typed, elect, care (the care for the
+ *     plan year), saved (federal + payroll + state: the plan's tax for the plan year without the account less with it, the
+ *     credit it costs counted), federal, payroll, state, creditLost, savedBeforeCredit, forfeited, excluded, taxedAsPay (what this
+ *     election adds to each), overLimit, earnedCapped, low (the earned income that caps it), perCheck (the paycheck's own change),
+ *     own ({ elected, forfeited, excluded, taxedAsPay }: this adult's share), householdTaxed, split (each adult's part taxed as pay),
+ *     best ({ elect, saved } | null: the amount the account is worth most at, when this one costs more than it saves) },
  *   commuter: { typed, transit, parking, limit, parkingLimit, saved },
  *   espp: { offered, pct, discount, lookback, yearly, perCheck, cap, capped, gain, taxOnGain, afterTax } | null,
  *   life: { cover, imputed, tax, ageKnown } | null,
- *   total: { pretaxYearly, savedYearly (worked together, the 401(k) first), perCheck (taken from each paycheck after the tax saved, with the stock plan's) }
+ *   total: { pretaxYearly, savedYearly (worked together, the 401(k) first; the child care account's own difference), perCheck (what
+ *     take-home falls by each paycheck, from the Paycheck page's own figures with and without the choices), perCheckFrom ("paycheck" | "tax") }
  * }
+ * `{ paycheck: false }` (the Paycheck page's own call) leaves out the parts that run the Paycheck page and the child care
+ * account's tax runs, which that page does not read.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? `${new Date().getFullYear()}-01-01`;
@@ -132,8 +249,15 @@ export function compute(plan, params = {}) {
   const code = String(plan.household?.state ?? "").toUpperCase();
   if (st.rate === null) notes.push("Your state's income tax is not counted in the savings: set its rate on the State tax page.");
   const wageBase = maximumEarnings(year);
-  // the plan's tax position with the health FSA put back in wages: each choice below is worked from no election
-  const T = { inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + (ti.fsa?.offWages ?? 0) }, params: ti.params, personPay: pay, wageBase, stateRate };
+  // the plan's tax position with the health FSA and the child care account put back in wages: each choice below is worked
+  // from no election. The Federal estimate takes the child care account chosen here for its tax year off wages and off the
+  // child care credit's limit; here the credit is worked with no account (benefits 0), each adult's earned income with it back
+  // the base for the choices below (the health FSA, the HSA, commuting, the 401(k)): the plan's tax with the health FSA and
+  // the child care account put back in wages and no child care account (careInputsWith with no elections), so each choice is
+  // worked from none; the child care account itself is worked on its own (`dcWorth`)
+  const careT = careInputsWith(ti, {}, {});
+  const T = { inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + (ti.fsa?.offWages ?? 0) + (ti.wagesTyped ? 0 : ti.care?.offWages ?? 0), ...(careT ? { care: careT } : {}) }, params: ti.params, personPay: pay, wageBase, stateRate };
+  const light = params.paycheck === false;
   const L = LF.kinds;
   const B = yearTable(BENEFITS, planYear);
 
@@ -198,13 +322,32 @@ export function compute(plan, params = {}) {
   const fsaTyped = num(s.fsaElect) ?? pos(hs.fsa);
   const fsaElect = Math.min(L.fsa.limit, fsaTyped);
   const fsa = { limit: L.fsa.limit, typed: fsaTyped, carryover: L.fsa.carryover, elect: fsaElect, saved: taxSaved(fsaElect, T).total, withHsa: !!hsa && fsaElect > 0 };
-  // child care: a household limit, shared with the other adults' elections
+  // child care: each employee's own account, up to a plan's limit (7,500 from 2026); the household's limit (or each separate
+  // return's) is the Federal estimate's one rule, so the account's worth is the plan's own tax for the plan year with this
+  // election and without it, everything else as the plan has it (the other adult's account, the filing status, the care)
   const kids = people.filter((p) => p.role === "dependent" && p.birthDate && (ageOn(p.birthDate, today) ?? 99) < B.dependentCare.childUnder);
-  const dcLimit = ti.filingStatus === "married_separate" ? B.dependentCare.separate : B.dependentCare.limit;
-  const others = adults.filter((p) => p.id !== person.id).reduce((t, p) => t + pos(all[p.id]?.dcfsaElect), 0);
+  const separate = ti.filingStatus === "married_separate";
+  const dcLimit = separate ? B.dependentCare.separate : B.dependentCare.limit;
+  const planMax = B.dependentCare.limit;
   const dcTyped = pos(s.dcfsaElect);
-  const dcElect = Math.min(Math.max(0, dcLimit - others), dcTyped);
-  const dependentCare = { kids: kids.map((k) => k.name), limit: dcLimit, others, typed: dcTyped, elect: dcElect, saved: taxSaved(dcElect, T).total };
+  const dcElect = Math.min(planMax, dcTyped);
+  const dcW = light ? null : dcWorth(plan, { today, planYear, person, settings: s, elect: dcElect, stateRate, wageBase });
+  const others = dcW ? dcW.others : adults.filter((p) => p.id !== person.id && (num(all[p.id]?.planYear) ?? planYear) === planYear).reduce((t, p) => t + Math.min(planMax, pos(all[p.id]?.dcfsaElect)), 0);
+  // the amount the account is worth most at (the room left under the limit, at most the care no other account pays): worked
+  // only when this amount costs more than it saves for the credit it costs, so the page says "think about skipping the
+  // account" only when no amount is worth it, and names the amount that is otherwise (care fourth pass)
+  let best = null;
+  if (dcW && dcElect > 0 && dcW.saved <= -0.5 && dcW.creditLost > 0.5 && !(dcW.forfeited > 0.5)) {
+    const room = Math.max(0, Math.min(planMax, separate ? dcLimit : dcLimit - others, (dcW.care ?? 0) - (separate ? 0 : others)));
+    if (room > 0.5 && Math.abs(room - dcElect) > 0.5) { const b = dcWorth(plan, { today, planYear, person, settings: s, elect: room, stateRate, wageBase }); best = { elect: room, saved: b.saved }; }
+  }
+  const dependentCare = {
+    kids: kids.map((k) => k.name), limit: dcLimit, planMax, separate, others, typed: dcTyped, elect: dcElect,
+    saved: dcW?.saved ?? 0, taxSaved: dcW?.taxSaved ?? 0, federal: dcW?.federal ?? 0, payroll: dcW?.payroll ?? 0, state: dcW?.state ?? 0, creditLost: dcW?.creditLost ?? 0, savedBeforeCredit: (dcW?.saved ?? 0) + (dcW?.creditLost ?? 0),
+    care: dcW?.care ?? null, forfeited: dcW?.forfeited ?? 0, excluded: dcW?.excluded ?? 0, taxedAsPay: dcW?.taxedAsPay ?? 0, overLimit: !!dcW?.overLimit, earnedCapped: !!dcW?.earnedCapped, low: dcW?.low ?? null, joint: !!dcW?.joint,
+    own: dcW?.own ?? { elected: dcElect, forfeited: 0, excluded: 0, taxedAsPay: 0 }, householdTaxed: dcW?.householdTaxed ?? 0, split: dcW?.split ?? [], best,
+    perCheck: null,
+  };
   const transitTyped = pos(s.transitMonthly), parkingTyped = pos(s.parkingMonthly);
   const transit = Math.min(B.commuter.transitMonthly, transitTyped), parking = Math.min(B.commuter.parkingMonthly, parkingTyped);
   const commuter = { typed: { transit: transitTyped, parking: parkingTyped }, transit, parking, limit: B.commuter.transitMonthly, parkingLimit: B.commuter.parkingMonthly, saved: taxSaved((transit + parking) * 12, T).total };
@@ -232,18 +375,34 @@ export function compute(plan, params = {}) {
     life = { cover, imputed, tax: (b.totalTax - b.additionalMedicare) - (a.totalTax - a.additionalMedicare) + ss + imputed * (PAYROLL.medicare + stateRate), ageKnown: age !== null };
   }
 
-  // the paycheck: the 401(k) now first, then the cafeteria-plan choices together on the wages it leaves
+  // the paycheck: the 401(k) now first, then the cafeteria-plan choices together on the wages it leaves; the child care
+  // account by its own difference (dcWorth), the credit it costs counted there
   const k = options.find((o) => o.key === "now");
-  const cafeteria = (hsa?.elect ?? 0) + fsaElect + dcElect + (transit + parking) * 12;
+  const cafeteriaNoDc = (hsa?.elect ?? 0) + fsaElect + (transit + parking) * 12;
+  const cafeteria = cafeteriaNoDc + dcElect;
   const afterK = { ...hsaBase, inputs: { ...hsaBase.inputs, wages: Math.max(0, (Number(T.inputs.wages) || 0) + kOff - (k ? k.yearly - k.roth : 0)) } };
-  const together = taxSaved(cafeteria, { ...afterK, state: false });
-  const cafeteriaState = (cafeteria - (hsa?.stateTaxed ? hsa.elect : 0)) * stateRate;
+  const together = taxSaved(cafeteriaNoDc, { ...afterK, state: false });
+  const cafeteriaState = (cafeteriaNoDc - (hsa?.stateTaxed ? hsa.elect : 0)) * stateRate;
   const pretaxYearly = (k?.yearly ?? 0) + cafeteria;
-  const savedYearly = (k?.saved ?? 0) + together.total + cafeteriaState;
+  const savedYearly = (k?.saved ?? 0) + together.total + cafeteriaState + dependentCare.saved;
+  // what each paycheck loses: the Paycheck page's own take-home with these choices against without them (its withholding
+  // table, Social Security and Medicare, the state's share), so it is what the pay stub will show; the child care credit the
+  // account costs is not in it (it shows as a smaller refund when you file). Worked out from the tax only when the Paycheck
+  // page cannot say (pay it does not see).
+  let perCheck = (pretaxYearly - savedYearly + (espp?.yearly ?? 0)) / paychecks, perCheckFrom = "tax";
+  if (!light) {
+    const pc = paycheckChange(plan, { today, person, paychecks, filingStatus: ti.filingStatus, taxYear: ti.year, yearly: { hsa: hsa?.elect ?? 0, fsa: fsaElect, dcfsa: dcElect, commuter: (transit + parking) * 12, espp: espp?.yearly ?? 0 }, k401: options.map((o) => ({ key: o.key, yearly: o.yearly, roth: o.roth })) });
+    if (pc) {
+      perCheck = pc.all; perCheckFrom = "paycheck"; dependentCare.perCheck = pc.dcfsa;
+      // one take-home figure for a 401(k) choice: the Paycheck page's, as "taken from each paycheck" is (care fourth pass:
+      // the family's 12.1% said 363 on its row and 414 a paycheck below)
+      for (const o of options) if (Number.isFinite(pc.k401?.[o.key])) { o.costPerCheck = pc.k401[o.key]; o.costFrom = "paycheck"; }
+    }
+  }
   return {
     ready: true, year, planYear, limitsYear, person: { id: person.id, name: person.name, age }, people: withPay.map((p) => ({ id: p.id, name: p.name })),
     pay, paychecks, settings: s, notes,
     k401, hsa, fsa, dependentCare, commuter, espp, life,
-    total: { pretaxYearly, savedYearly, perCheck: (pretaxYearly - savedYearly + (espp?.yearly ?? 0)) / paychecks, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
+    total: { pretaxYearly, savedYearly, perCheck, perCheckFrom, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
   };
 }

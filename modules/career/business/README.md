@@ -30,6 +30,16 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   each rate by the days it was in force, the miles taken as spread evenly: 2026 = (181 × 72.5¢ + 184 × 76¢) ÷ 365 ≈
   74.26¢ (Notice 2026-10; Announcement 2026-11 from July 1, `side-income/data/rules.js`); 2025 = 70¢. Margin = profit ÷
   revenue; costs a month = (expenses counted + the half of meals not counted) ÷ 12.
+- **The child and dependent care credit** (2026-11-02): its cap is the lower earner's earned income on a joint return (IRC
+  21(d)(1)(B)), so the household without the business, the sole proprietor and the S corporation each work it again with
+  the owner's earnings as worked here (`careAt`, federal `careInputsWith`): without the business only the owner's pay and
+  other business income at its yearly amount; as a sole proprietor plus the profit less half the self-employment tax;
+  through an S corporation plus the salary (and the health insurance in it), what passes through not being earned income.
+  A business that is a spouse's only work then counts the credit it unlocks (Bo with no salary and 30,000 of profit).
+  The same earnings decide how much of the other adult's child care account stays out of income (the account's one rule,
+  `careAccountRule`): `careInputsWith` gives `wagesChange`, which each of the three adds to the wages it works (Bo with
+  no salary and Ana's 5,000 account: without the business none of it stays out, 5,000 more wages; with 30,000 of profit
+  all of it does; review of 2026-11-02).
 - **As a sole proprietor** (`soleTax`): self-employment tax = 92.35% of profit × (12.4% to the wage base after the
   owner's wages + 2.9%), none under $400 (`taxes/self-employment` `seTax`). Half of it, the self-employed health
   insurance (up to the profit less half the tax and the retirement contribution, IRC 162(l)) and any retirement
@@ -115,3 +125,11 @@ deduction; a loss did not lower the child tax credit's earned income; the solo 4
 ## Ideas / not yet
 - Expenses read from the ledger (transactions in a business category); a quarter-by-quarter profit and loss.
 - The 20% deduction's wage and property limits above the line; the business's own retirement plan deadlines in the calendar.
+
+## Separate returns, fourth pass (2026-11-02)
+Filing separately the business is on its owner's own return (IRS Pub. 501; IRC 164(f), 199A): every change the page works
+(the Income page's amount out, the profit, half the self-employment tax, the 20% deduction, an S corporation's salary) lands
+on that return (the engine's `separateTo` = the owner), and the 0.9% is worked on that return's own Medicare wages against
+125,000. The family filing separately with 3,750 each, Bo's photography: income tax +642.37, no 0.9%, 1,659.70 in all with
+the 1,017.33 of self-employment tax (it said -406.32, 60 and 670.85: the business taken off Ana's return, where it was clamped).
+Filing jointly nothing changed (2,255.01).

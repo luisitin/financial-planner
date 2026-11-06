@@ -80,6 +80,19 @@ export function answerFor(guide, plan, params = {}) {
       if (e?.needsEstimates && e.remaining > 0) return { headline: `About ${m(e.remaining)} left to pay in estimates for ${a.year}`, line: `About ${m(a.totalTax)} of federal tax (${rate}) and no paycheck takes it out${e.behind > 0 ? `; ${m(e.behind)} of it is past due` : ""}. The Estimated payments page splits it into four payments.`, status: e.behind > 0 ? "warn" : "ok" };
       return { headline: `About ${m(a.totalTax)} of federal tax for ${a.year}`, line: `${rate} overall. Type what a paycheck withholds to see the refund or bill.`, status: "ok" };
     }
+    // filing separately, each return settles on its own: one return's refund cannot pay the other's bill (withholding
+    // byReturn; Review 2026-11-06: "About $540 back in April" while Bo's own return owed 1,660)
+    const rets = Array.isArray(a.returns) && a.returns.length > 1 ? a.returns : null;
+    if (rets) {
+      const owe = rets.filter((x) => x.verdict === "owe"), back = rets.filter((x) => x.verdict === "refund");
+      const sum = (xs) => xs.reduce((t, x) => t + x.balance, 0);
+      return {
+        headline: owe.length && back.length ? `${owe[0].name} owes about ${m(owe[0].balance)}; ${back[0].name} gets about ${m(-back[0].balance)} back`
+          : owe.length ? `${owe.length > 1 ? "Owe" : `${owe[0].name} owes`} about ${m(sum(owe))} in April` : back.length ? `${back.length > 1 ? "About" : `${back[0].name} gets about`} ${m(-sum(back))} back in April` : "About right: no big bill or refund",
+        line: `Filing separately, each return settles on its own. About ${m(a.totalTax)} of federal tax for ${a.year} in all (${a.seTax >= 1 ? `self-employment tax included` : rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
+        status: owe.length ? "warn" : "ok",
+      };
+    }
     return {
       headline: a.verdict === "owe" ? `Owe about ${m(a.balance)} in April` : a.verdict === "refund" ? `About ${m(-a.balance)} back in April` : "About right: no big bill or refund",
       line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${a.seTax >= 1 ? `self-employment tax included` : rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,

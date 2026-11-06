@@ -23,3 +23,21 @@ pay): about $6,213 left to pay at filing", where it used to say "No withholding 
 
 ## Ideas / not yet
 - State tax (once `taxes/state` exists); last year's return beside this year's; the Roth conversion and withdrawal-order savings (they are in the Retirement report).
+
+## One next dollar, one rounding (care fourth pass, 2026-11-02)
+`thisYear.nextDollar` (and `marginal`, the same) is the Federal estimate's `nextDollar` (over whole steps of the child care
+credit), the figure its walk says; the effective rate goes through `ratePct`. Jo at 88,000 with daycare: "the next dollar
+of ordinary income pays 14%" and "4.9% of income" (it said 12% from the 1,000 probe and 4.8%).
+
+## Review 2026-11-06
+- **Filing separately, each return's own bill or refund (verifier).** `paying.returns` (withholding `byReturn` through the
+  estimate, each return's own estimated payments from Estimated payments' `returns`): "Paying it" says the household's tax,
+  then each return's own line, as Withholding check, the Federal estimate, Quick answers and Needs attention do. The family
+  filing separately with 3,750 each: "Ana's return: a refund of about $2,200 next spring. Bo's return: about $1,660 left to
+  pay at filing, enough to risk the underpayment penalty", with Bo's own estimated payments; it said "a refund of about $540
+  next spring", the two netted, though one return's refund cannot pay the other's bill. A return with no paycheck figure is
+  read by its balance (no pay: nothing withheld). Joint and single returns: unchanged (`returns` null).
+- Test: "Review 2026-11-06 (verifier): filing separately, Paying it says each return's own bill or refund".
+- The next dollar is the Federal estimate's, so its fix (verifier, E: a bracket's edge inside the child care credit's step
+  is not averaged in) reaches "The next dollar of ordinary income pays ...": Pat & Sam read "pays 17%; $2,000 more taxable
+  income fits in the 12% bracket", now 12%. Test: federal "a bracket's edge inside the care credit's step".

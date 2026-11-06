@@ -57,8 +57,11 @@ test("tax if sold: the federal tax with the lots sold less without; the loss to 
   // BTC: 0.08 long (+5,740), 0.04 short (+1,820); ETH short (-1,500); IBIT long (+600); USDC long (0)
   near(d.tax.longGain, 0.08 * 98000 - 2100 + 600); near(d.tax.shortGain, 0.04 * 98000 - 2100 - 1500);
   near(d.tax.marginal, 0.22, 1e-9); near(d.tax.gainsRate, 0.15, 1e-9);
-  near(d.tax.total, 320 * 0.22 + 6340 * 0.15);   // the short net 320 like pay, the long 6,340 at 15%: 1,021.40
-  assert.deepEqual(d.harvest.map((h) => h.symbol), ["ETH"]); near(d.harvest[0].saved, 1500 * 0.22); near(d.harvestSaved, 330);
+  // the short net 320 like pay, the long 6,340 at 15%: 1,021.40; and the 6,660 of gains take AGI from 158,780 to 165,440,
+  // one 4,000 step of the child care credit's phase-down: 31% instead of 32% of 3,000, 30 more
+  near(d.tax.total, 320 * 0.22 + 6340 * 0.15 + 30);
+  // the 1,500 loss banked alone: 22%, and AGI 158,780 -> 157,280 crosses a 4,000 step of the care credit (+30)
+  assert.deepEqual(d.harvest.map((h) => h.symbol), ["ETH"]); near(d.harvest[0].saved, 1500 * 0.22 + 30); near(d.harvestSaved, 360);
   assert.equal(d.waitLong.length, 1); assert.equal(d.waitLong[0].symbol, "BTC");
   assert.equal(d.waitLong[0].longOn, "2026-12-05", "the day after a year is up");
   near(d.waitLong[0].saved, 1820 * (0.22 - 0.15));
@@ -68,10 +71,11 @@ test("a big loss: only $3,000 of a net loss comes off pay this year, the rest ca
   const p = withCoins();
   p.holdings.find((h) => h.symbol === "ETH").lots[0].cost = 16300; p.holdings.find((h) => h.symbol === "ETH").costBasis = 16300;   // an 11,500 short-term loss
   const d = compute(p, { today: TODAY });
-  // banked alone: 3,000 off pay at 22% = 660 this year; 8,500 carries to next year
-  near(d.harvestSaved, 660); near(d.harvestCarry, 8500);
+  // banked alone: 3,000 off pay at 22% = 660 this year, and AGI 158,780 -> 155,780 lifts the child care credit from 32% to
+  // 33% of 3,000 (+30): 690; 8,500 carries to next year
+  near(d.harvestSaved, 690); near(d.harvestCarry, 8500);
   // sold with everything: the short loss first cancels the short gain (1,820), then the long gains (6,340); 3,340 net loss: 3,000 off pay, 340 carries
-  near(d.tax.total, -3000 * 0.22); near(d.tax.carry, 340);
+  near(d.tax.total, -3000 * 0.22 - 30); near(d.tax.carry, 340);
 });
 
 test("a fund bought again within 30 days, an IRA included, cancels the loss on that many shares; a coin does not (IRC 1091; Rev. Rul. 2008-5)", () => {

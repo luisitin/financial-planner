@@ -36,14 +36,14 @@ export function render(page, ctx) {
     ui.h("p", { class: "lede" }, "Put your job now next to up to three offers. The page adds up everything each one pays (salary, bonus, stock, the retirement match, health costs), takes off tax and the commute, and shows what you keep over the years you would stay and for each hour of your time."),
     ui.h("p", { class: "muted small" }, d.ready ? "Your job now comes from the Income page and your retirement saving. Add the first offer below." : "Add your pay on the Income page first, or type your job now below.")));
   for (const n of d.notes ?? []) root.append(ui.notice("info", n));
-  if (d.forfeit > 0.5) root.append(ui.notice("info", `Leaving gives up stock still to vest at your employer: about ${big(d.forfeit)} at today's price. The comparison counts only the part that would vest in the ${d.years} years.`));
+  if (d.forfeit > 0.5) root.append(ui.notice("info", `Leaving gives up stock still to vest at your employer: about ${big(d.forfeit)} at today's price. The comparison counts only the part that would vest in the ${d.years === 1 ? "year" : `${d.years} years`}.`));
 
   // the verdict
   if (d.ready && d.options.length > 1) {
     const best = d.options.find((o) => o.id === d.best), second = d.options.find((o) => o.id === d.runnerUp);
     const now = d.options[0];
     const against = d.hasJob ? "your job now" : "having no job";
-    root.append(ui.card(`Over ${d.years} years, after tax and commuting`, ui.row(
+    root.append(ui.card(`Over ${d.years === 1 ? "1 year" : `${d.years} years`}, after tax and commuting`, ui.row(
       best.current ? ui.stat("Your job now comes out ahead by", big(best.overYears.net - second.overYears.net), `against ${second.name}; ${big(best.overYears.net)} kept in all`)
         : ui.stat(`${best.name} comes out ahead by`, big(best.vsCurrent), `against ${against}; ${big(best.overYears.net)} kept in all`),
       best.perHour !== null ? ui.stat(`An hour of your time ${best.current ? "in your job now" : `at ${best.name}`}`, fmt.money(best.perHour, cur), now.perHour !== null && !best.current ? `${fmt.money(now.perHour, cur)} in your job now, with the commute counted` : "after tax, with the commute counted") : null,
@@ -51,7 +51,7 @@ export function render(page, ctx) {
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.name, o.id === d.best ? " " : null, o.id === d.best ? ui.h("span", { class: "pill ok" }, "best") : null), ui.h("span", { class: "rec-value" }, big(o.overYears.net))),
       ui.h("div", { class: "rec-sub" }, [`${money(o.yearly.total)} a year in pay and benefits`, o.perHour !== null ? `${fmt.money(o.perHour, cur)} an hour` : null, o.current ? null : `${signed(o.vsCurrent)} against ${d.hasJob ? "now" : "no job"}`].filter(Boolean).join("; ")),
       o.stockYears > 0 ? ui.h("div", { class: "rec-sub" }, `${Math.round(o.stockShare * 100)}% of it is stock; if the stock halved: ${big(o.ifStockHalves)}`) : null))),
-    ui.h("p", { class: "muted small" }, "Kept means pay and benefits, less tax, the health premiums you pay, moving and the commute. The retirement match and health-account money count as yours now, though you may have to stay a while to keep the match. Stock counts at today's value. Later years use that year's tax brackets and Social Security limit.")));
+    ui.h("p", { class: "muted small" }, `Kept means pay and benefits, less tax, the health premiums you pay${d.options.some((x) => x.lost > 0.5) ? ", child care account money there is no care to pay back for" : ""}, moving and the commute. The retirement match and health-account money count as yours now, though you may have to stay a while to keep the match. Stock counts at today's value. Later years use that year's tax brackets and Social Security limit.`)));
   }
 
   // each option's year
@@ -96,7 +96,7 @@ export function render(page, ctx) {
     adults.length > 1 ? { key: "personId", label: "Whose job", type: "select", options: adults.map((p) => ({ value: p.id, label: p.name || "Someone" })) } : null,
     { key: "years", label: "Years to compare", type: "number", min: 1, max: 10, step: "1", help: "how long you would stay; stock grants often vest over 4" },
   ].filter(Boolean);
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How it compares"), ui.h("span", { class: "fold-status" }, `${d.years} years${d.person ? `, ${d.person.name}` : ""}`), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How it compares"), ui.h("span", { class: "fold-status" }, `${d.years === 1 ? "1 year" : `${d.years} years`}${d.person ? `, ${d.person.name}` : ""}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form(setFields, { personId: d.person?.id ?? "", years: d.years }, (v) => save("Saved.", (w) => { if (v.personId !== undefined) w.personId = v.personId; w.years = v.years ?? DEFAULTS.years; }), { submitLabel: "Save" })));
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/salary" }, "Salary and raises"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Benefits"), ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"))));
 
@@ -107,7 +107,7 @@ export function render(page, ctx) {
     return ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, `${o.name}: the first year`), ui.h("span", { class: "fold-status" }, `${money(kept)} kept`), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("ul", { class: "oc-lines" }, [
         line("Salary", y.salary), line("Bonus", y.bonus), line("Sign-on bonus", o.signOn), line("Stock", y.stock), line("Retirement match", y.match), line("Health account money", y.hsa), line("Other benefits", y.other),
-        line("Health premiums you pay", y.premium, true), line("Federal income tax", t.federal, true), line("Social Security and Medicare", t.payroll, true), line("State tax", t.state, true), line("Moving", o.moving, true), line("Commute", o.time.commuteCost, true),
+        line("Health premiums you pay", y.premium, true), line("Federal income tax", t.federal, true), line("Social Security and Medicare", t.payroll, true), line("State tax", t.state, true), line("Child care account money lost", o.lost, true), line("Moving", o.moving, true), line("Commute", o.time.commuteCost, true),
         ui.h("li", { class: "oc-tot" }, ui.h("span", {}, "Kept the first year"), ui.h("span", {}, money(kept))),
       ]),
       o.time.work > 0 ? ui.h("p", { class: "muted small" }, [

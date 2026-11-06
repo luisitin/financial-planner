@@ -4,13 +4,18 @@
 // itemized deductions). Every other tax page starts from taxInputs() so they all agree.
 import { FEDERAL, TAX_YEARS } from "./data/federal.js";
 import { MAXIMUM_EARNINGS } from "../../retirement/social-security/data/ssa.js";
-import { federalTax, marginalRate, paramsFor, standardDeduction, SEPARATE_FIELDS } from "../../../core/math/tax.js";
+import { federalTax, marginalRate, careStep, paramsFor, standardDeduction, SEPARATE_FIELDS } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { limitsFor, catchUpFor, hsaPicture, limitKind } from "../../retirement/contributions/compute.js";
 
 export { TAX_YEARS };
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+/**
+ * A rate as a percent to `dp` places, rounded half up on its decimal value (4,268 of 88,000 is 4.85%: "4.9%"). The one
+ * rounding for a rate this page shows in more than one place (the hero, the stat, the walk; Withholding check's walk).
+ */
+export const ratePct = (x, dp = 1) => { const v = Number((Number(x) * 100).toPrecision(12)), f = 10 ** dp; return `${(Math.round(v * f) / f).toFixed(dp)}%`; };
 
 /**
  * The itemized deductions that count, after the state-and-local cap, the medical floor and (from 2026)
@@ -108,6 +113,127 @@ export function lossCarryover(b, r) {
 }
 
 /**
+ * Care for a child, for the child and dependent care credit (IRC 21), by the Expenses line's name:
+ * - care named outright, in any category: day care, child care, a child minder, a nanny, a babysitter, an au pair,
+ *   preschool, pre-K or nursery school, before- or after-school care (any spelling: "after school", "afterschool",
+ *   "after-school"), a day camp (Pub. 503: "nursery school, preschool, or similar programs for children below the level
+ *   of kindergarten are expenses for care"; "before- or after-school care of a child in kindergarten or a higher grade may
+ *   be"; a day camp "even if the camp specializes in a particular activity, such as computers or soccer");
+ * - in the "Childcare and school" category, also a line whose name only says care, a sitter, a nursery or a camp, unless
+ *   it says schooling (tuition, school, kindergarten, college: "Expenses to attend kindergarten or a higher grade aren't
+ *   expenses for care");
+ * - never: a line in the Pets category or naming a pet ("Doggy daycare"), care for an adult ("Adult day care for Mom":
+ *   21(b)(1)(B) and (C) cover a dependent or spouse who cannot care for themselves, which People does not record), child
+ *   support ("Child support payments aren't for care"), tutoring, lessons and summer school ("Summer school and tutoring
+ *   programs aren't for care"), an overnight camp (21(b)(2)(A); "The cost of sending your child to an overnight camp isn't
+ *   considered a work-related expense").
+ * A name that only names a kind of spending ("Diapers and formula", "Soccer and activities") is not care. Set up my plan's
+ * "Childcare and school" row counts (its name says child care). Quotes: 2026 Pub. 503 draft, read 2026-11-02.
+ */
+export const CARE_NAME = /day[- ]?care|child[- ]?care|child[- ]?minder|nann(?:y|ies)|baby[- ]?sit|au[- ]?pair|pre[- ]?school|pre[- ]?k\b|pre[- ]?kindergarten|nursery school|(?:after|before)[- ]?school|day[- ]?camps?/i;
+/** In the "Childcare and school" category: a name that only says care, a sitter, a nursery or a camp. */
+export const CARE_WORD = /\bcare\b|\bsitters?\b|\bnursery\b|\bcamps?\b/i;
+/** Never care, whatever else the name says. */
+export const NEVER_CARE = /\bsupport\b|overnight|sleep[- ]?away|residential|boarding|tutor|lesson|summer school/i;
+/** Schooling: not care unless the name names care outright ("Childcare and school", "Preschool tuition"). */
+export const SCHOOLING = /tuition|\bschool\b|kindergarten|college|universit/i;
+/** Not a child's care: a pet, or an adult. */
+export const NOT_CHILD = /\b(?:dogs?|doggy|doggie|pupp(?:y|ies)|pets?|cats?|kennel|adults?|elder|elderly|seniors?|aging)\b|\bfor (?:my |our )?(?:mom|mum|dad|mother|father|parents?|grand(?:ma|pa|mother|father|parents?))\b/i;
+export function isCare(x) {
+  if (!x || x.category === "pets") return false;
+  const name = String(x.name ?? "");
+  if (NOT_CHILD.test(name) || NEVER_CARE.test(name)) return false;
+  if (CARE_NAME.test(name)) return true;
+  return x.category === "childcare" && CARE_WORD.test(name) && !SCHOOLING.test(name);
+}
+
+const DAYS_IN = (y, m) => [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+/**
+ * What an expense line costs in calendar `year`: a recurring line its yearly amount for each month of the year it runs
+ * (a month counts when the line runs on any day of it: Daycare ending August 31 is 8 months), a one-time line its amount
+ * when its start date falls in the year. With `before` (an ISO date), only what falls before that day: the months before
+ * its month, and that month's days before it (a child's 13th birthday: Form 2441 instructions, "the part of the year they
+ * were under age 13"); a one-time line when its start date is before it.
+ */
+export function paidInYear(x, year, before = null) {
+  const start = x?.startDate ? String(x.startDate) : "", end = x?.endDate ? String(x.endDate) : "";
+  const cut = before ? String(before) : null;
+  if (x?.period === "once") return start.slice(0, 4) === String(year) && (!cut || start < cut) ? Math.max(0, Number(x.amount) || 0) : 0;
+  let months = 0;
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, "0");
+    if (!((!start || start <= `${year}-${mm}-31`) && (!end || end >= `${year}-${mm}-01`))) continue;
+    if (!cut || cut > `${year}-${mm}-31`) months++;
+    else if (cut.slice(0, 7) === `${year}-${mm}`) months += (Number(cut.slice(8, 10)) - 1) / DAYS_IN(year, m);
+  }
+  return Math.max(0, perYear(x?.amount, x?.period)) * months / 12;
+}
+
+/** The care for a child on the Expenses page paid in `year` (before `before` when given) -> { lines: [{ id, name, amount }], total }. */
+export function careExpenses(plan, year, before = null) {
+  const lines = (plan.expenses ?? []).filter(isCare).map((x) => ({ id: x.id, name: x.name || "Child care", amount: paidInYear(x, year, before) })).filter((x) => x.amount > 0);
+  return { lines, total: lines.reduce((s, x) => s + x.amount, 0) };
+}
+
+/** The month Benefits elections opens next year's choices (career/benefits DEFAULTS.enrollFromMonth; a test keeps the two equal). */
+export const ENROLL_FROM_MONTH = 10;
+
+/**
+ * THE rule for the child care account (a dependent care FSA, IRC 129; Form 2441 Part III), used by every page through
+ * taxInputs (`care.account`), careAccount and careInputsWith. Pure.
+ *   people: [{ id, name, typed (the yearly amount chosen), earned (lines 18 and 19 before the account: pay as the return
+ *     has it, after pre-tax 401(k), health FSA and HSA money, plus business income less half its self-employment tax),
+ *     filer (the adult whose own earned income counts when not filing jointly) }]
+ *   care: the care for a qualifying person incurred in the year (line 16); joint, separate: the filing status;
+ *   limit: 7,500 from 2026 (5,000 before), 3,750 (2,500) on each separate return (129(a)(2)(A)); planMax: the most one
+ *   employee's plan takes (the joint figure); typedWages: wages typed as W-2 box 1, which already leave the account out.
+ * Each adult: elected = min(typed, planMax) (box 10 / line 12, what leaves the pay); the care is shared out in proportion to
+ * the elections (so two accounts never pay the same care twice); forfeited = what is elected beyond that care (line 14:
+ * "You forfeited an amount if you didn't receive it because you didn't incur the expense"): lost, so neither paid nor
+ * taxed; received = elected - forfeited (line 15). Excluded (line 25) = received, at most the limit and the earned income
+ * (lines 20 and 21: the lower earner's on a joint or separate return, the filer's otherwise; earned income here leaves the
+ * account's money out); a joint (or single) return caps the household's total and shares it by what each received, a
+ * separate return caps its own. taxedAsPay = received - excluded (line 26, Form 1040 line 1e). Wages and Medicare wages
+ * come down by excluded + forfeited (`off`): the forfeited money is never paid, the taxed part stays pay.
+ * -> { people: [{ id, name, typed, elected, care, forfeited, received, excluded, taxedAsPay, off, earned18 }], elected,
+ *    forfeited, received, excluded, taxedAsPay, off, care, limit, planMax, joint, separate, overLimit, earnedCapped }
+ */
+export function careAccountRule({ people = [], care = 0, joint = false, separate = false, limit = 0, planMax = Infinity, typedWages = false } = {}) {
+  const C = Math.max(0, Number(care) || 0);
+  const rows = people.map((p) => ({ id: p.id ?? null, name: p.name ?? null, filer: !!p.filer, typed: Math.max(0, Number(p.typed) || 0), earnedBefore: Number(p.earned) || 0 }));
+  for (const x of rows) { x.elected = Math.min(x.typed, planMax); x.earned18 = Math.max(0, x.earnedBefore - (typedWages ? 0 : x.elected)); }
+  const E = rows.reduce((s, x) => s + x.elected, 0);
+  for (const x of rows) {
+    x.care = E > 0 ? C * x.elected / E : 0;
+    x.forfeited = Math.max(0, x.elected - x.care);
+    x.received = x.elected - x.forfeited;
+  }
+  const received = rows.reduce((s, x) => s + x.received, 0);
+  let overLimit = false, earnedCapped = false;
+  if (separate) {
+    const low = rows.length ? Math.min(...rows.map((x) => x.earned18)) : 0;
+    for (const x of rows) {
+      x.excluded = Math.min(x.received, limit, low);
+      if (x.received > limit + 0.005) overLimit = true;
+      if (low < Math.min(x.received, limit) - 0.005) earnedCapped = true;
+    }
+  } else {
+    const filer = rows.find((x) => x.filer) ?? rows[0];
+    const cap = joint && rows.length >= 2 ? Math.min(...rows.map((x) => x.earned18)) : filer ? filer.earned18 : 0;
+    const total = Math.min(received, limit, cap);
+    overLimit = received > limit + 0.005;
+    earnedCapped = cap < Math.min(received, limit) - 0.005;
+    for (const x of rows) x.excluded = received > 0 ? total * x.received / received : 0;
+  }
+  for (const x of rows) { x.taxedAsPay = Math.max(0, x.received - x.excluded); x.off = x.excluded + x.forfeited; }
+  const sum = (k) => rows.reduce((s, x) => s + x[k], 0);
+  return {
+    people: rows.map(({ earnedBefore, ...x }) => x), elected: E, forfeited: sum("forfeited"), received, excluded: sum("excluded"), taxedAsPay: sum("taxedAsPay"), off: sum("off"),
+    care: C, limit, planMax, joint: !!joint, separate: !!separate, overLimit, earnedCapped,
+  };
+}
+
+/**
  * taxInputs(plan, { today }) -> { year, params, filingStatus, inputs (for federalTax), sources: [{ key, label, amount, from: "plan" | "typed", detail }],
  *   notes: [text], itemized: { total, lines, saltCap }, people: { ages65plus, dependentsUnder17, otherDependents, adults }, pretax401k, standard, gains }
  * `inputs.itemized` is the total after caps, worked out against the AGI the plan implies.
@@ -188,10 +314,92 @@ export function taxInputs(plan, params = {}) {
   // typed wages are W-2 box 1, which already leaves out the HSA money from pay within the limit (and has any excess in it):
   // nothing more comes off for the HSA then (Pub. 969: "excluded from your income"; box 12 code W)
   const hsaContrib = wagesTyped ? 0 : Math.max(0, hsaPayroll - hsaExcess), hsaEmployerTaxed = Math.max(0, hsaExcess - hsaPayroll);
-  const wagesAuto = Math.max(0, payTotal - pretax401k - fsaExcluded) + hsaEmployerTaxed;
-  const wages = wagesTyped ? Number(ty.wages) : wagesAuto;
-  const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null, hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
-  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA and FSA money from pay are already left out)` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
+  // the child and dependent care credit (IRC 21, Form 2441) and the child care account (dependent care FSA, IRC 129), worked
+  // before the wages because the account's money is not wages: W-2 box 1 leaves it out and Form 2441 line 26 adds back only
+  // what is over the exclusion (line 25), so wages = pay less the excluded part (the research spec's example B: 62,000 of pay
+  // with a 5,000 account is 57,000 of AGI). README "Child and dependent care credit".
+  const deps = people.filter((p) => p.role === "dependent");
+  const CC = P.careCredit ?? null;
+  let care = null, dcOff = 0;
+  const dcOwn = new Map();   // adult id -> the child care account money left out of their wages
+  if (CC) {
+    // qualifying persons (21(b)(1)(A)): dependents under 13 at the end of the year, and a child who turns 13 during it for the
+    // part of the year before the birthday (Form 2441 instructions); the 3,000 / 6,000 limit is not prorated (Pub. 503)
+    const ageEnd = (p) => p?.birthDate && /^\d{4}/.test(String(p.birthDate)) ? year - Number(String(p.birthDate).slice(0, 4)) : null;
+    const careKids = deps.filter((p) => ageEnd(p) !== null && ageEnd(p) >= 0 && ageEnd(p) < 13);
+    const turning13 = deps.filter((p) => ageEnd(p) === 13 && /^\d{4}-\d{2}-\d{2}/.test(String(p.birthDate)) && String(p.birthDate).slice(5, 10) > "01-01")
+      .map((p) => ({ id: p.id, name: p.name, until: `${year}-${String(p.birthDate).slice(5, 10)}` }));
+    const undatedKids = deps.filter((p) => ageEnd(p) === null);
+    const persons = careKids.length + turning13.length;
+    // with no child under 13 all year, only the care paid before the last 13th birthday counts
+    const until = careKids.length ? null : turning13.map((x) => x.until).sort().pop() ?? null;
+    const careAll = careExpenses(plan, year);
+    const careLines = until ? careExpenses(plan, year, until) : careAll;
+    const careCounted = persons > 0 ? careLines.total : 0;
+    // earned income (21(d)(1); Form 2441 instructions, "Earned income") per adult, as the return has it: pay less what stays
+    // out of income (pre-tax 401(k), the health FSA, HSA money from pay within the limit; typed wages, W-2 box 1, shared by
+    // pay), plus their business income less half its self-employment tax (15.3% of 92.35% of the profit, the 12.4% part only
+    // up to the wage base left after pay; none under 400 of earnings, IRC 1402(b)); the child care account comes off below
+    const two = adults.slice(0, 2);
+    const rows = (two.length ? two : [null]).map((p) => {
+      const i = p ? adults.indexOf(p) : 0, k = k401People[i], h = hsa.people?.[i] ?? { payroll: hsaPayroll, excess: hsaExcess };
+      const pay = !p ? (wagesTyped ? Number(ty.wages) : Math.max(0, payTotal - pretax401k - fsaExcluded - hsaContrib) + hsaEmployerTaxed)
+        : wagesTyped ? Number(ty.wages) * (payTotal > 0 ? (k?.pay ?? 0) / payTotal : 1 / Math.max(1, two.length))
+        : Math.max(0, (k?.pay ?? 0) - (k?.excluded ?? 0) - fsaOf(p) - Math.max(0, h.payroll - h.excess)) + Math.max(0, h.excess - h.payroll);
+      const biz = businessItems.filter((x) => !p || (adultOf(x.personId) ?? me) === p).reduce((s, x) => s + x.yearly, 0);
+      const se = biz * 0.9235;
+      const halfSe = se >= 400 ? 0.5 * (0.124 * Math.min(se, Math.max(0, (P.ssWageBase ?? Infinity) - (k?.pay ?? 0))) + 0.029 * se) : 0;
+      return { id: p?.id ?? null, name: p?.name ?? "You", pay, business: biz - halfSe };
+    });
+    // the child care account chosen on Benefits elections (`whatIfs.benefits[adultId].dcfsaElect`) for this tax year: its plan
+    // year as that page has it (typed, else next year's from October, `ENROLL_FROM_MONTH`), as the Paycheck page counts it
+    const all = plan.whatIfs?.benefits ?? {};
+    const tY = today ? Number(String(today).slice(0, 4)) : year, tM = today ? Number(String(today).slice(5, 7)) : 1;
+    const openYear = tM >= ENROLL_FROM_MONTH ? tY + 1 : tY;
+    const planYearOf = (b) => (b?.planYear === null || b?.planYear === undefined || b?.planYear === "" || !Number.isFinite(Number(b?.planYear)) ? openYear : Number(b.planYear));
+    const electOf = (id) => { const b = all[id] ?? {}; return id !== null && planYearOf(b) === year ? Math.max(0, Number(b.dcfsaElect) || 0) : 0; };
+    const later = adults.filter((p) => Number(all[p.id]?.dcfsaElect) > 0 && planYearOf(all[p.id]) !== year).map((p) => ({ id: p.id, name: p.name, planYear: planYearOf(all[p.id]) }));
+    const separateReturn = filingStatus === "married_separate";
+    const benefitLimit = separateReturn ? CC.benefitLimitSeparate : CC.benefitLimit;
+    const joint = filingStatus === "married_joint" && rows.length >= 2;
+    const spouseUnknown = filingStatus === "married_joint" && rows.length < 2;
+    const filer = rows.find((x) => x.id !== null && x.id === me?.id) ?? rows[0];
+    // the one rule (careAccountRule): forfeited beyond the care, excluded up to the limit and the earned income, the rest
+    // taxed as pay; the care is the qualifying care (careCounted: none without a child under 13)
+    const account = careAccountRule({
+      people: rows.map((x) => ({ id: x.id, name: x.name, typed: electOf(x.id), earned: x.pay + x.business, filer: x === filer })),
+      care: careCounted, joint, separate: separateReturn, limit: benefitLimit, planMax: CC.benefitLimit, typedWages: wagesTyped,
+    });
+    account.year = year; account.later = later;
+    rows.forEach((x, i) => Object.assign(x, { acct: account.people[i] }));
+    const benefits = account.excluded;
+    // lines 4 and 5: the earned income on the return, the account's taxable rest (line 1e) still in it; typed wages (box 1)
+    // already leave the account's money out, so only its taxable rest is added
+    for (const x of rows) { x.wages = Math.max(0, wagesTyped ? x.pay + x.acct.taxedAsPay : x.pay - x.acct.off); x.earned = Math.max(0, x.wages + x.business); }
+    // a joint return with one adult on People: the spouse's earned income is not known, so no credit (21(d)(1)(B)), with a note
+    const earnedLow = spouseUnknown ? 0 : joint ? Math.min(...rows.map((x) => x.earned)) : filer.earned;
+    dcOff = wagesTyped ? -account.taxedAsPay : account.off;
+    for (const x of rows) if (x.id !== null) dcOwn.set(x.id, wagesTyped ? -x.acct.taxedAsPay : x.acct.off);
+    care = {
+      expenses: careLines.total, persons, benefits, earnedLow, lines: careLines.lines, expensesAll: careAll.total, linesAll: careAll.lines,
+      kids: careKids.map((p) => p.name), turning13, undated: undatedKids.map((p) => p.name), elected: account.elected, later, benefitLimit, offWages: dcOff,
+      forfeited: account.forfeited, taxedAsPay: account.taxedAsPay, account,
+      earnedPeople: rows.map((x) => ({ id: x.id, name: x.name, pay: x.pay, wages: x.wages, business: x.business, earned: x.earned, typed: x.acct.typed, elected: x.acct.elected, excluded: x.acct.excluded, forfeited: x.acct.forfeited, taxedAsPay: x.acct.taxedAsPay })),
+      joint, spouseUnknown, filerId: filer.id, wagesTyped,
+    };
+  }
+  // the wages the Income page implies (what Budget and Next best action tax: yearTaxes), the child care account's money off
+  // as the one rule has it even when box 1 is typed here
+  const dcOffPlan = care ? care.account.off : 0;
+  const wagesPlan = Math.max(0, payTotal - pretax401k - fsaExcluded - dcOffPlan) + hsaEmployerTaxed;
+  const wagesAuto = Math.max(0, payTotal - pretax401k - fsaExcluded - dcOff) + hsaEmployerTaxed;
+  // typed wages are box 1, which leaves the account's money out; its taxable rest (Form 2441 line 26) is added (line 1e)
+  const wages = wagesTyped ? Number(ty.wages) - dcOff : wagesAuto;
+  const dcTaxed = care ? care.account.taxedAsPay : 0, dcLost = care ? care.account.forfeited : 0, dcKept = care ? care.account.excluded : 0;
+  const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null,
+    dcKept > 0.5 ? `less the ${fmtInt(dcKept)} child care account${dcTaxed > 0.5 ? ` that stays out of income` : ""}` : null, dcLost > 0.5 ? `less ${fmtInt(dcLost)} of it that would be lost (no care to pay)` : null,
+    hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
+  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA, FSA and child care account money from pay are already left out)${dcTaxed > 0.5 ? `, plus ${fmtInt(dcTaxed)} of the child care account taxed as pay` : ""}` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
   if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
   for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${x.name}'s health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? `${x.name}'s` : "your"} pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
@@ -225,18 +433,73 @@ export function taxInputs(plan, params = {}) {
   if (adjustmentsTyped) sources.push({ key: "adjustments", label: "Other adjustments", amount: -adjustmentsTyped, from: "typed" });
   // the people: age allowances and dependents by age at the end of the tax year
   const ages65plus = adults.filter((p) => ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65).length;
-  const deps = people.filter((p) => p.role === "dependent");
   const under17Auto = deps.filter((p) => ageAtYearEnd(p) === null || ageAtYearEnd(p) < 17).length;
   const given = (v) => v !== null && v !== undefined && v !== "";
   const dependentsUnder17 = given(t.dependentsUnder17) ? Number(t.dependentsUnder17) : under17Auto;
   const otherDependents = given(t.otherDependents) ? Number(t.otherDependents) : deps.length - under17Auto;
   const paid = (Number(ty.paid) || 0) + (t.estimated?.paid ?? []).reduce((s, x) => s + (Number(x) || 0), 0);
+  // the child care credit's figures (worked above, before the wages): where they came from, and why there is none
+  if (care) {
+    const c = care, say = (names) => names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    // a separate return gets no child care credit (21(e)(2)): the care is the child care account's only, never "for the credit"
+    const forWhat = filingStatus === "married_separate" ? (c.elected > 0 ? "for the child care account (a separate return gets no child care credit)" : "a separate return gets no child care credit for it") : "for the child care credit";
+    if (c.expensesAll > 0) sources.push({ key: "care", label: "Child care paid", amount: c.expensesAll, from: "plan", detail: `Expenses page (${c.linesAll.map((x) => `${x.name} ${fmtInt(x.amount)}`).join(", ")})${c.persons > 0 ? `; ${forWhat}${c.expenses < c.expensesAll - 0.5 ? `, ${fmtInt(c.expenses)} of it before the 13th birthday` : ""}` : "; it does not count here: the note above says why"}` });
+    if (c.expensesAll > 0 && !c.persons) {
+      if (!deps.length) notes.push("Child care is on the Expenses page, but no child is on the People page, so the child care credit is not counted. Add your child there, with their birth date, and the credit comes off your tax.");
+      else if (c.undated.length) notes.push(`Child care is on the Expenses page, but ${c.undated.length === 1 ? `${c.undated[0]} has` : `${say(c.undated)} have`} no birth date on the People page, so the child care credit is not counted. Add ${c.undated.length === 1 ? "it" : "them"} and the credit comes off your tax.`);
+      else notes.push(`Child care is on the Expenses page, but no child on the People page is under 13 in ${year}, so it does not count for the child care credit. (Care for an older child or an adult who cannot look after themselves can count; the plan does not track that.)`);
+    }
+    if (c.persons > 0 && c.turning13.length && c.expenses < c.expensesAll - 0.5) notes.push(`${say(c.turning13.map((x) => x.name))} ${c.turning13.length === 1 ? "turns" : "turn"} 13 in ${year}, so only the care paid before the birthday counts for the child care credit: ${fmtInt(c.expenses)} of the ${fmtInt(c.expensesAll)}.`);
+    if (c.expenses > 0 && c.persons > 0 && filingStatus === "married_separate") notes.push("Filing separately, the child care credit is not allowed, so it is not counted. A married parent who lived apart from their spouse for the last six months of the year and paid most of the cost of the home can usually file as head of household instead, which gets it; the Which way to file page compares the ways to file.");
+    if (c.expenses > 0 && c.persons > 0 && c.spouseUnknown) notes.push("Filing jointly, the child care credit is worked on the lower of the two pays, and the People page lists only one adult, so the credit is not counted. Add your spouse there, with their pay on the Income page, and it is.");
+    // no earned income on the return's lower side: care counts only up to it (21(d)(1)), so there is no credit; say why
+    // (Review 2026-11-06, verifier follow-up: Kim & Lou, 70,000 + 0 filing jointly, read a $0 child care credit with no reason).
+    // A spouse who is a full-time student or cannot look after themselves counts as earning 250 / 500 a month (21(d)(2)).
+    if (c.expenses > 0 && c.persons > 0 && filingStatus !== "married_separate" && !c.spouseUnknown && !(c.earnedLow > 0.5)) {
+      const none = c.joint ? c.earnedPeople.filter((x) => !(x.earned > 0.5)) : [];
+      notes.push(c.joint
+        ? `Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and ${none.length === 1 && none[0].name ? `${none[0].name} has no` : "neither of you has"} pay or business income on the Income page, so there is no child care credit. (A spouse who was a full-time student for five months of the year, or could not look after themselves, counts as earning $250 a month for one child or $500 for two or more; the plan does not track that.)`
+        : "Child care counts for the child care credit only up to your earned income (pay or business profit), and none is on the Income page, so there is no child care credit.");
+    }
+    if (!c.elected && c.later.length) notes.push(`The child care account on Benefits elections is chosen for ${c.later[0].planYear}, so it is not counted in ${year}'s tax. (If it is this year's, choose ${year} as the year on that page.)`);
+    // the child care account (careAccountRule): over a plan's own limit, lost beyond the care, taxed beyond the limit or the pay
+    const A = c.account, many = A.people.filter((x) => x.typed > 0).length > 1;
+    const whose = (x) => (many && x.name ? `${x.name}'s` : "The");
+    for (const x of A.people) if (x.typed > A.planMax + 0.5) notes.push(`${whose(x)} child care account is set to ${fmtInt(x.typed)} on Benefits elections; a plan takes at most ${fmtInt(A.planMax)} a year, so ${fmtInt(A.planMax)} is counted.`);
+    if (A.forfeited > 0.5) notes.push(A.care <= 0.5
+      ? `A child care account of ${fmtInt(A.elected)} is chosen on Benefits elections, but ${!c.persons ? `no child on the People page is under 13 in ${year}, so it has no care to pay for` : "no care for a child is on the Expenses page"}. The account only pays back care, so you would lose the ${fmtInt(A.forfeited)}: it is not paid to you, and it is not taxed. ${!c.persons ? "Check the birth dates on People" : "Add the care on Expenses"}, or choose less on Benefits elections.`
+      : `You would lose ${fmtInt(A.forfeited)} of the ${fmtInt(A.elected)} in the child care account${many ? "s" : ""}: only ${fmtInt(A.care)} of care for a child is on the Expenses page, and the account only pays back care. The money lost is not paid to you, and it is not taxed.`);
+    if (A.taxedAsPay > 0.5) {
+      if (A.separate) {
+        for (const x of A.people.filter((y) => y.taxedAsPay > 0.5)) notes.push(x.received > A.limit + 0.005
+          ? `${x.name ? `${x.name}'s` : "The"} child care account pays ${fmtInt(x.received)} of care, over the ${fmtInt(A.limit)} a separate return can keep out of income: ${fmtInt(x.taxedAsPay)} of it is taxed as pay${x.name ? ` on ${x.name}'s return` : ""}.`
+          : `Only ${fmtInt(x.excluded)} of ${x.name ? `${x.name}'s` : "the"} child care account stays out of income on a separate return: no more than the lower earner's earned income. The other ${fmtInt(x.taxedAsPay)} is taxed as pay.`);
+      } else {
+        // two accounts: the part taxed as pay is shared by what each put in, the split every page says (Benefits, Paycheck)
+        const split = many ? ` (${A.people.filter((x) => x.taxedAsPay > 0.5).map((x) => `${x.name ?? "one"} ${fmtInt(x.taxedAsPay)}`).join(", ")}, by what each put in)` : "";
+        // none of it out of income (no earned income on the lower side): "None of", not "Only 0 of" (Review 2026-11-06)
+        const zero = A.joint ? (c.earnedPeople ?? []).filter((x) => !(x.earned > 0.5)) : [];
+        notes.push(A.earnedCapped && A.excluded < 0.5
+          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${zero[0].name} has none` : "there is none"})` : "your earned income (there is none)"}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
+          : A.earnedCapped
+          ? `Only ${fmtInt(A.excluded)} of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? "the lower earner's earned income" : "your earned income"}. The other ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
+          : `The child care account${many ? "s" : ""} pay${many ? "" : "s"} ${fmtInt(A.received)} of care, over this year's limit of ${fmtInt(A.limit)} for the household: ${fmtInt(A.taxedAsPay)} of it is taxed as pay${split}.`);
+      }
+    }
+  }
   // net investment income for the 3.8% tax (Form 8960): dividends and interest, the typed qualified dividends and the year's net gain or allowed loss; rent is left out (only its gross is known)
   const investmentIncome = Math.max(0, investment + qualifiedTyped + gains.netShort + gains.netLong + gains.lossAllowed);
-  // Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving (IRC 3121(v)(1)(A)), less the
-  // health FSA and the HSA payroll money within the limit (3121(a)(5)(G)); typed wages are taken as they are
-  const medicareWages = wagesTyped ? wages : Math.max(0, payTotal - fsaExcluded - hsaPayroll + hsaExcess);
+  // Medicare wages for the 0.9% additional Medicare tax (W-2 box 5, Form 8959 line 1): pay before pre-tax 401(k) saving
+  // (IRC 3121(v)(1)(A)), less the health FSA, the HSA payroll money within the limit (3121(a)(5)(G)) and the child care
+  // account's whole election up to a plan's own limit (3121(a)(18): out of Social Security and Medicare wages when it is
+  // reasonable to believe it can be excluded; W-2 box 10 instructions: only an amount over the plan's limit goes in boxes 1,
+  // 3 and 5). The part over the household's limit is added back for income tax only (Form 2441 line 26), and money lost
+  // beyond the care is never paid. Typed wages (box 1) are taken as they are, without that income-tax add-back
+  const dcPayroll = care ? care.account.elected : 0;
+  const medicareWages = wagesTyped ? Number(ty.wages) : Math.max(0, payTotal - fsaExcluded - dcPayroll - hsaPayroll + hsaExcess);
   const base = { filingStatus, wages, medicareWages, otherOrdinary, qualifiedIncome, capitalLoss: gains.lossAllowed, socialSecurity, taxExemptInterest, adjustments, ages65plus, blind: Number(t.blind) || 0, dependentsUnder17, otherDependents, withheld: Number(ty.withheld) || 0, paid, selfEmployment: business, investmentIncome, charitableCash: Math.max(0, Number(t.itemized?.charitable) || 0) };
+  // only when there is care to count, so a plan without it gives the same inputs (and results) as before
+  if (care && care.expenses > 0 && care.persons > 0) base.care = { expenses: care.expenses, persons: care.persons, benefits: care.benefits, earnedLow: care.earnedLow };
   const agi = federalTax({ ...base, itemized: 0 }, P).agi;
   const itemized = itemizedTotal(t.itemized, agi, filingStatus, P);
   let inputs = { ...base, itemized: itemized.total };
@@ -262,11 +525,16 @@ export function taxInputs(plan, params = {}) {
       const i = adults.indexOf(p), k = k401People[i], ira = iraPeople[i], h = hsa.people[i];
       const fsaOwn = fsaOf(p);
       const hsaDeducted = Math.max(0, h.payroll - h.excess), hsaTaxed = Math.max(0, h.excess - h.payroll);
-      const ownWages = wagesTyped ? wages * (payTotal > 0 ? k.pay / payTotal : 1 / two.length) : Math.max(0, k.pay - k.excluded - fsaOwn) + hsaTaxed;
+      const dcOut = dcOwn.get(p.id) ?? 0;   // the child care account on this return, up to 3,750 (5,000 / 2,500 before 2026)
+      const acctOwn = care?.account?.people?.find((x) => x.id === p.id) ?? null;
+      // typed wages (box 1) shared by pay, plus this spouse's own part of the account taxed as pay (line 1e)
+      const typedShare = wagesTyped ? Number(ty.wages) * (payTotal > 0 ? k.pay / payTotal : 1 / two.length) : 0;
+      const ownWages = wagesTyped ? typedShare - dcOut : Math.max(0, k.pay - k.excluded - fsaOwn - dcOut) + hsaTaxed;
       const ownBusiness = sumFor(p, ["business"]);
       const halfGains = gainsOf(p);
       const part = {
-        filingStatus, wages: ownWages, medicareWages: wagesTyped ? ownWages : Math.max(0, k.pay - fsaOwn - h.payroll + h.excess),
+        // Medicare wages (box 5): the whole election up to a plan's limit is out of them (3121(a)(18)), as on a joint return
+        filingStatus, wages: ownWages, medicareWages: wagesTyped ? typedShare : Math.max(0, k.pay - fsaOwn - (acctOwn?.elected ?? 0) - h.payroll + h.excess),
         otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort),
         qualifiedIncome: Math.max(0, qualifiedTyped / 2 + halfGains.netLong), capitalLoss: halfGains.lossAllowed,
         socialSecurity: typed("socialSecurity") ? socialSecurity / 2 : sumFor(p, ["social"]), taxExemptInterest: taxExemptInterest / 2,
@@ -278,7 +546,9 @@ export function taxInputs(plan, params = {}) {
         charitableCash: base.charitableCash / 2,
       };
       const partAgi = federalTax({ ...part, itemized: 0 }, P).agi;
-      return { personId: p.id, name: p.name, ...part, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal }, gains: { netShort: halfGains.netShort, netLong: halfGains.netLong, netLoss: halfGains.netLoss, lossAllowed: halfGains.lossAllowed } };
+      // the Income page's money on this return alone (no typed figures, no sales): what Budget and Next best action tax
+      const fromIncome = { wages: Math.max(0, k.pay - k.excluded - fsaOwn - (acctOwn?.off ?? 0)) + hsaTaxed, otherOrdinary: sumFor(p, ["rental", "pension", "investment", "other"]), socialSecurity: sumFor(p, ["social"]), investmentIncome: sumFor(p, ["investment"]), business: ownBusiness, pay: k.pay };
+      return { personId: p.id, name: p.name, ...part, fromIncome, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal }, gains: { netShort: halfGains.netShort, netLong: halfGains.netLong, netLoss: halfGains.netLoss, lossAllowed: halfGains.lossAllowed } };
     });
     // the household's gains figures (the sources, the steps, the carryover, Capital gains, Tax lots, Crypto) as the two returns
     // have them: each return nets its own sales, so a gain on one return and a loss on the other do not cancel
@@ -303,14 +573,139 @@ export function taxInputs(plan, params = {}) {
     ira: { people: iraPeople, deductible: iraDeductible, over: iraOver, year: L.kindYear.ira },
     fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null, people: fsaPeople.map((x) => ({ ...x, offWages: wagesTyped ? 0 : x.excluded })) },
     hsa: { picture: hsa, payroll: hsaPayroll, employer: hsa.household.employer, excess: hsaExcess, deducted: hsaContrib, employerTaxed: wagesTyped ? 0 : hsaEmployerTaxed },
-    payTotal, wagesTyped,
+    payTotal, wagesTyped, wagesPlan,
+    care,   // last: the AI explain digest sends the figures breadth first, and this detail must not crowd out the result
   };
 }
 
 /**
+ * `inputs.care` for a what-if on `ti` (taxInputs), worked by the one rule (careAccountRule): some adults' earnings changed,
+ * `changes` = { [adultId]: { pay, business } } (each the new yearly figure as the return has it before the child care
+ * account: pay after pre-tax 401(k), health FSA and HSA money; business income less half its self-employment tax), and
+ * (optional) `elections` = { [adultId]: yearly amount } in place of the plan's child care accounts for the year. The
+ * account's exclusion (the lower earner's earned income caps it) and the credit's earned-income cap (21(d)(1): the lower of
+ * the two on a joint return, else the filer's) are worked again, so a page that adds pay for a spouse with none (a job
+ * offer, a business) sees the exclusion and the credit it unlocks. -> the care inputs ({ expenses, persons, benefits,
+ * earnedLow }) plus `wagesChange` (what the household's wages, and Medicare wages, move by from the account alone: add it to
+ * the wages the page works) and `account` (careAccountRule); the plan's figure when there is nothing to change; null when the
+ * plan has no care to count.
+ */
+export function careInputsWith(ti, changes = {}, elections = null) {
+  const c = ti?.inputs?.care ?? null, d = ti?.care;
+  if (!c || !d?.earnedPeople?.length) return c;
+  const given = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+  const rows = d.earnedPeople.map((x) => {
+    const ch = changes?.[x.id] ?? {};
+    return { ...x, pay: given(ch.pay) ? Math.max(0, Number(ch.pay)) : x.pay, business: given(ch.business) ? Number(ch.business) : x.business, typed: elections ? Math.max(0, Number(elections[x.id]) || 0) : x.typed };
+  });
+  const A = d.account;
+  const acct = careAccountRule({ people: rows.map((x) => ({ id: x.id, name: x.name, typed: x.typed, earned: x.pay + x.business, filer: x.id === d.filerId })), care: A.care, joint: A.joint, separate: A.separate, limit: A.limit, planMax: A.planMax, typedWages: d.wagesTyped });
+  const earned = rows.map((x, i) => Math.max(0, (d.wagesTyped ? x.pay + acct.people[i].taxedAsPay : x.pay - acct.people[i].off) + x.business));
+  const at = Math.max(0, rows.findIndex((x) => x.id === d.filerId));
+  const earnedLow = d.spouseUnknown ? 0 : d.joint ? Math.min(...earned) : earned[at];
+  const wagesChange = d.wagesTyped ? acct.taxedAsPay - A.taxedAsPay : A.off - acct.off;
+  return { ...c, benefits: acct.excluded, earnedLow, wagesChange, account: acct };
+}
+
+/**
+ * careAccount(plan, { year, today }) -> the child care account for tax year `year` (default: the Federal estimate's), by
+ * the one rule (careAccountRule), as the Federal estimate counts it: { year, people: [{ id, name, typed, elected, care,
+ * forfeited, received, excluded, taxedAsPay, off }], elected, forfeited, excluded, taxedAsPay, off, care, limit, planMax,
+ * joint, separate, overLimit, earnedCapped, later }; null when the year has no figures for it. The Paycheck page takes each
+ * adult's `elected` out of pay; Benefits elections, Budget and Next best action read the same figures through taxInputs.
+ */
+export function careAccount(plan, { year = null, today = null } = {}) {
+  const set = Number(plan?.taxes?.year) || null;
+  const p = year && Number(year) !== set ? { ...plan, taxes: { ...(plan.taxes ?? {}), year: Number(year) } } : plan;
+  return taxInputs(p, { today }).care?.account ?? null;
+}
+
+/**
+ * `inputs` whose separate returns are `parts` (filing separately), the amounts that add up across returns (SEPARATE_FIELDS)
+ * set to the parts' sums, so the engine's top-up rule (core/math/tax.js separateTax) moves nothing between them.
+ */
+export function withReturns(inputs, parts) {
+  const sums = Object.fromEntries(SEPARATE_FIELDS.map((f) => [f, parts.reduce((s, x) => s + (Number(x[f]) || 0), 0)]));
+  return { ...inputs, ...sums, separate: parts };
+}
+
+/**
+ * A business at its profit, on the return of the adult who runs it (IRS Pub. 501: separate filers "report only your own
+ * income, credits, and deductions"; half the self-employment tax, IRC 164(f), and the 20% deduction, IRC 199A, are that
+ * adult's). `inputs` counts the Income page's business amounts (`selfEmployment`, in `otherOrdinary`); `owners` = [{ personId,
+ * profit (after expenses), half (half the self-employment tax on it), qbi (20% of profit less the half, before the engine's
+ * limit), qbiMinimum (199A(i)'s floor, or 0) }]. A joint (or single) return: the totals move. Filing separately (`inputs.separate`):
+ * each return drops its own Income-page business and takes its owner's figures (an owner with no return of their own lands on
+ * `separateTo`'s, as the business with no one named does on the Self-employment page), and the totals are the returns added
+ * up (withReturns). The 20% goes in as `qbiDeduction`, taken after AGI (Form 1040 line 13), not as an adjustment.
+ */
+export function businessOn(inputs, owners = []) {
+  const n = (v) => Number(v) || 0;
+  const take = (x, list) => {
+    const profit = list.reduce((t, o) => t + Math.max(0, n(o.profit)), 0), half = list.reduce((t, o) => t + n(o.half), 0);
+    return {
+      ...x, otherOrdinary: Math.max(0, n(x.otherOrdinary) - n(x.selfEmployment) + profit), adjustments: n(x.adjustments) + half, selfEmployment: profit - half,
+      qbiDeduction: n(x.qbiDeduction) + list.reduce((t, o) => t + n(o.qbi), 0), qbiMinimum: Math.max(n(x.qbiMinimum), ...list.map((o) => n(o.qbiMinimum))),
+    };
+  };
+  if (!Array.isArray(inputs.separate) || !inputs.separate.length) return take(inputs, owners);
+  const parts = inputs.separate, ids = parts.map((x) => x.personId);
+  const to = Math.max(0, parts.findIndex((x) => x.personId != null && x.personId === inputs.separateTo));
+  const at = (o) => (ids.includes(o.personId) ? ids.indexOf(o.personId) : to);
+  return withReturns(inputs, parts.map((x, i) => take(x, owners.filter((o) => at(o) === i))));
+}
+
+/**
+ * What the next dollar of ordinary income costs, as a rate: the next 1,000 (marginalRate), and, with the child care credit in
+ * play, the credit's own effect worked over a whole number of its steps (careStep: 4,000 joint, else 2,000), so the figure
+ * does not jump between 12 and 15 cents from one pay to the next. Only the credit's part is worked over the step: the rest is
+ * the 1,000 probe without it, so a bracket's edge inside the step is not averaged in (Review 2026-11-06, verifier: 2,000 below
+ * the 22% bracket with a flat 1,050 credit read 17 cents, not 12). The one next-dollar figure every page shows (the Federal
+ * estimate, Brackets, the Tax report).
+ */
+export function nextDollarOf(inputs, params) {
+  const step = inputs?.care ? careStep(inputs.filingStatus, params) : 0;
+  if (!(step > 0)) return marginalRate(inputs, params);
+  const n = Math.ceil(1000 / step) * step, noCare = { ...inputs, care: undefined };
+  // to the billionth, so a figure on a half cent (23.5) rounds the same way every time, not by floating-point noise
+  return Math.max(0, Math.round((marginalRate(noCare, params) + marginalRate(inputs, params, n) - marginalRate(noCare, params, n)) * 1e9) / 1e9);
+}
+
+/**
+ * The walk's line under the child and dependent care credit, in plain words: the rate, the care it is worked on, and what
+ * held it there (the limit for one child or more, the child care account, the pay, the tax).
+ */
+function careSub(c, care) {
+  const n = fmtInt, pct = Math.round(c.rate * 100);
+  const who = c.persons >= 2 ? "two or more children" : "one child";
+  const why = c.base < c.qualified ? `no more than ${care?.joint ? "the lower of your two pays" : "your pay"}`
+    : c.benefits > 0 ? `${n(c.cap)} for ${who}, less the ${n(c.benefits)} ${accountsSay(care).pay}${accountsSay(care).many ? " free of tax" : ""}`
+    : c.qualified < c.expenses ? `the most for ${who}` : null;
+  const counts = c.base < c.expenses ? `${n(c.base)} of your ${n(c.expenses)} of child care counts` : `all ${n(c.expenses)} of your child care counts`;
+  const capped = c.credit < c.tentative - 0.5 ? `; only ${n(c.credit)} fits under the tax, and none of it comes back as a refund` : "";
+  return `${counts}${why ? ` (${why})` : ""}, at ${pct}% for your income${capped}`;
+}
+
+/**
+ * Who pays the care from a child care account, for the walk: one account ("your child care account pays"), or two named
+ * ("Ana's and Bo's child care accounts pay"). -> { pay, many }
+ */
+function accountsSay(care) {
+  const list = (care?.account?.people ?? []).filter((x) => x.received > 0.5);
+  if (list.length < 2) return { pay: "your child care account pays", many: false };
+  const names = list.map((x) => (x.name ? `${x.name}'s` : "a"));
+  return { pay: `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} child care accounts pay`, many: true };
+}
+
+/** No income tax left for the care credit to come off (Form 2441 line 10 is zero). */
+const incomeTaxZero = (r) => !(r.incomeTax > 0.5);
+
+/**
  * compute(plan, { today }) -> {
- *   ...taxInputs, years (with tables), result (federalTax), marginal, steps: [{ label, amount, sub }] the walk from income to tax,
- *   isIndexed (a year past the last table, figures inflated), hasIncome
+ *   ...taxInputs, years (with tables), result (federalTax), marginal (the next 1,000's cost), nextDollar (what the page shows: over
+ *   whole steps of the child care credit when it is in play), steps: [{ label, amount, sub }] the walk from income to tax,
+ *   isIndexed (a year past the last table, figures inflated), hasIncome, careFalls (the child care credit shrinks as income rises),
+ *   careSets ("covers" | "falls" | null: the child care credit, not the bracket, sets the next dollar's cost), nextDollarNoCare, care
  * }
  */
 export function compute(plan, params = {}) {
@@ -322,7 +717,19 @@ export function compute(plan, params = {}) {
     b.gains = { ...b.gains, carryForward: -carry.total, carryover: carry };
     b.sources = b.sources.map((x) => x.key === "loss" ? { ...x, detail: carry.total > 0.5 ? `${fmtInt(-b.gains.netLoss)} lost in all; ${fmtInt(carry.total)} carries forward` : "Capital gains page" } : x);
   }
+  // `marginal`: the next 1,000's cost, as before (other pages and their tests read it). `nextDollar`, what this page says the
+  // next dollar costs: with the child care credit, worked over a whole number of its steps (careStep: 4,000 joint, else
+  // 2,000), so the figure does not jump between 12 and 15 cents from one pay to the next; else the same as `marginal`
   const marginal = marginalRate(b.inputs, b.params);
+  const step = b.inputs.care ? careStep(b.inputs.filingStatus, b.params) : 0;
+  const nextDollar = nextDollarOf(b.inputs, b.params);
+  // the child care credit getting smaller as income rises (its phase-down), which the next dollar's cost counts
+  const careFalls = step > 0 && result.credits.careCredit - federalTax({ ...b.inputs, otherOrdinary: (Number(b.inputs.otherOrdinary) || 0) + step }, b.params).credits.careCredit > 0.5;
+  // what sets the next dollar's cost when the care credit moves it: `covers` when the credit is bigger than the tax and grows
+  // with it, so more pay costs less than the bracket (down to 0); `falls` when it shrinks (careFalls); null when it does not
+  // move it (the cost without the credit, the 1,000 probe nextDollarOf starts from, is the same), so the bracket is the reason
+  const noCare = step > 0 ? marginalRate({ ...b.inputs, care: undefined }, b.params) : nextDollar;
+  const careSets = step > 0 && Math.abs(nextDollar - noCare) > 0.005 ? (nextDollar < noCare ? "covers" : "falls") : null;
   const r = result;
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });
@@ -337,9 +744,24 @@ export function compute(plan, params = {}) {
   steps.push({ label: "Taxable income", amount: r.taxableIncome, sub: r.qualifiedTaxable > 0 ? `${fmtInt(r.ordinaryTaxable)} ordinary, ${fmtInt(r.qualifiedTaxable)} at the gains rates` : "" });
   steps.push({ label: "Income tax", amount: r.incomeTax, sub: r.qualifiedTax > 0 ? `${fmtInt(r.ordinaryTax)} through the brackets, ${fmtInt(r.qualifiedTax)} on dividends and gains` : "through the brackets" });
   if (r.credits.childTaxCredit > 0 || r.credits.refundable > 0) steps.push({ label: "Child tax credit", amount: -(r.credits.childTaxCredit + r.credits.refundable), sub: r.credits.refundable > 0 ? `${fmtInt(r.credits.refundable)} of it comes back as a refund` : `${b.people.dependentsUnder17} under 17` });
+  if (r.credits.careCredit > 0 && r.credits.care) steps.push({ label: "Child and dependent care credit", amount: -r.credits.careCredit, sub: careSub(r.credits.care, b.care) });
+  // no credit where one could be expected: the walk says why at 0, so a missing row is not a puzzle (an account that uses up
+  // the whole 3,000 / 6,000, an account that pays all the care, no tax for the credit to come off)
+  else if (r.credits.care) {
+    const k = r.credits.care, who = k.persons >= 2 ? "two or more children" : "one child";
+    // two accounts are named, with what both pay and the part of it that skips tax (the household's limit)
+    const A = b.care?.account, acc = accountsSay(b.care);
+    const paid = acc.many ? `${acc.pay} ${fmtInt(A.received)} of the care${A.excluded < A.received - 0.5 ? ` (${fmtInt(A.excluded)} of it free of tax)` : ""}` : null;
+    const why = k.benefits > 0 && k.limit <= 0 ? (acc.many ? `none: ${paid}, more than the ${fmtInt(k.cap)} limit for ${who}` : `none: the ${fmtInt(k.benefits)} your child care account pays is more than the ${fmtInt(k.cap)} limit for ${who}, and that money already skips tax`)
+      : k.benefits > 0 && k.qualified <= 0 ? (acc.many ? `none: ${paid}, all ${fmtInt(k.expenses)} of it; care an account pays cannot count again` : `none: your child care account pays all ${fmtInt(k.expenses)} of the care, and that money already skips tax; care the account pays cannot count again`)
+      : k.tentative > 0.5 && incomeTaxZero(r) ? "none: there is no income tax for it to come off, and none of it comes back as a refund"
+      : null;
+    if (why) steps.push({ label: "Child and dependent care credit", amount: 0, sub: why });
+  }
   if (r.niit > 0) steps.push({ label: "Net investment income tax", amount: r.niit, sub: "3.8% on investment income over the threshold" });
   if (r.additionalMedicare > 0) steps.push({ label: "Additional Medicare tax", amount: r.additionalMedicare, sub: "0.9% on wages over the threshold" });
-  steps.push({ label: "Federal tax", amount: r.totalTax, sub: `${(r.effectiveRate * 100).toFixed(1)}% of income; the next dollar costs ${(marginal * 100).toFixed(0)}¢` });
+  steps.push({ label: "Federal tax", amount: r.totalTax, sub: `${r.totalTax < -0.5 ? `the credits are more than the tax: ${fmtInt(-r.totalTax)} comes back as a refund` : `${ratePct(r.effectiveRate)} of income`}; the next dollar costs ${(nextDollar * 100).toFixed(0)}¢` });
   if (r.withheld > 0 || r.paid > 0) steps.push({ label: "Already paid", amount: -(r.withheld + r.paid), sub: [r.withheld > 0 ? `${fmtInt(r.withheld)} withheld` : null, r.paid > 0 ? `${fmtInt(r.paid)} estimated payments` : null].filter(Boolean).join(", ") });
-  return { ...b, years: TAX_YEARS, result, marginal, steps, isIndexed: !!b.params.indexed, hasIncome: r.income.gross > 0 };
+  const { care, ...rest } = b;   // the care detail after the result, so a digest sent breadth first keeps the tax
+  return { ...rest, years: TAX_YEARS, result, marginal, nextDollar, steps, isIndexed: !!b.params.indexed, hasIncome: r.income.gross > 0, careFalls, careSets, nextDollarNoCare: noCare, care };
 }

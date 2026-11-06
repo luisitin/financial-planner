@@ -11,7 +11,7 @@
 
 ## Formulas
 - Out of pocket with bills m = min(oopMax, min(m, deductible) + coinsurance x max(0, m - deductible)).
-- Tax rate = the federal marginal rate (the tax on $1,000 more of income, from the federal page's inputs) + `FICA` 7.65% (HSA money taken from pay skips payroll tax).
+- Tax rate = the federal marginal rate (the federal tax the year's HSA limit taken off income saves, per dollar, from the federal page's inputs) + `FICA` 7.65% (HSA money taken from pay skips payroll tax). Worked over the HSA limit since 2026-11-02 (before: over $1,000): the child and dependent care credit falls one point per $4,000 of joint income over $150,000 (IRC 21(a)(2)), so a $1,000 probe could land on a step and take 3 points too many, or none. The family fixture: 22% + $60 of credit over $8,750, 22.7%.
 - Tax saved (HSA plans) = min(out of pocket, HSA limit - employer's HSA money) x tax rate: the care paid through the account with pre-tax money.
 - A year's cost = premium x 12 - employer HSA money + out of pocket - tax saved. Quiet year `QUIET` $1,000 of bills; usual year: entered (5,000 when not); bad year `BAD` $100,000 (every plan at its maximum).
 - Best = the lowest cost in the usual year. Crossovers: on a $250 grid from $0 to $200,000 of bills, the ranges where another plan costs less than the best (by more than 50 cents).

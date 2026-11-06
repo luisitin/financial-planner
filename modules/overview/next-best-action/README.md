@@ -183,3 +183,16 @@ $5 of $0) or "short", the one reading every page words the full month by. "even"
 Income page's amount only just about breaks even" (no "about $0"), with the usual way out. The saved debt plan's extra is
 read with Pay off debts' `savedPlan` (this page's own code, moved there), so Budget (50/30/20) takes the same extra. Tests:
 `module.test.mjs`.
+
+## Money a child care account would lose (care fourth pass, 2026-11-02)
+`spare.careLost` (a month): Budget's `yearTaxes` `careLost`, the child care account's election beyond the care it can pay back
+(Form 2441 line 14), is taken off the spare money as Budget takes it off the month after tax. Jo with a 5,000 account and no
+care on Expenses: 323.33 a month less spare (5,000 lost - 1,120 of tax saved, over 12); it showed 93.33 more. Filing
+separately the month's federal tax is Budget's two returns (each owner's business on their own return).
+
+## Review 2026-11-06
+- "Each month's money" adds up again: the lines come from `monthLines(spare, debtPlan)`, so pay less the lines is the
+  spare money, and the child care account's money it would lose (`careLost`, taken off the spare money in the fourth pass)
+  has a line of its own, "Child care account money it would lose". Jo with a 5,000 account and no care: 5,170 - 120 - 360 -
+  70 - 417 - 3,070 = about 1,130 a month spare, as "Spare each month" says (the lines added up to 1,550). Test: "the lines on
+  screen add up to the spare money".

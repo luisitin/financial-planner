@@ -41,8 +41,10 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
   adult's, as on the Self-employment page.
 - **The 0.9% extra Medicare tax** = 0.9% × (pay for Medicare + self-employment earnings − the filing status's line,
   $250,000 joint, $125,000 separate, $200,000 others), never below 0 (Form 8959 Parts I and II; IRC 3101(b)(2), 1401(b)(2)).
-- **Federal income tax** (`core/math/tax.js` `federalTax`) on the Income page's income only: pay less pre-tax 401(k)
-  contributions, rent, pensions, dividends and interest (as ordinary), other income and the profit; Social Security
+- **Federal income tax** (`core/math/tax.js` `federalTax`) on the Income page's income only: the Federal estimate's own
+  wages from the Income page (`taxInputs` `wagesPlan`: pay less pre-tax 401(k) contributions, the health FSA and the child
+  care account by its one rule, `careAccountRule`; never rebuilt here, review of 2026-11-02: with a 5,000 account Jo's
+  Budget said 1,988 a year, the account back in wages and the credit gone, where the Federal estimate said 1,388), rent, pensions, dividends and interest (as ordinary), other income and the profit; Social Security
   benefits; half the self-employment tax off income (IRC 164(f)); the 20% business deduction = 20% × (profit − half the
   tax), at least $400 from 2026 when that is $1,000 or more (IRC 199A(a), (i)); the minimum is for a business you
   materially participate in (an "active" one, IRC 199A(i) and 469(h)), which the page assumes for a side business you
@@ -120,3 +122,17 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
 - Keep a property tax filed under taxes on Expenses among the needs (only income tax is taken off here), so the left over
   is always the app's left-over figure (review 2026-11-02, round 5; tested as a known gap in `module.test.mjs`). The saved
   debt plan's extra, the other gap, is counted since the second review of round 5.
+
+## Child care account and separate returns, fourth pass (2026-11-02)
+- **Money the account would lose** (`yearTaxes` `careLost`, `month.careLost`): the election beyond the care it can pay back
+  (Form 2441 line 14: "You forfeited an amount if you didn't receive it because you didn't incur the expense") leaves the pay
+  and never comes back, so it comes off the month after tax like a tax (the care it does pay back is on Expenses already).
+  Jo (head of household in Ohio, 62,000) with a 5,000 account for 2026 and no care on Expenses: the tax falls 1,120, the
+  5,000 is lost, so the month has 3,880 / 12 = 323.33 less (it showed 6 more). The page says "The child care account would
+  lose $417 a month ..., so that is taken off too". Next best action takes the same.
+- **Separate returns**: two returns, each with its own Income-page money (the Federal estimate's part `fromIncome`) and its
+  owner's business at its profit, half its self-employment tax off that return's income (IRC 164(f)) and its 20% deduction
+  (IRC 199A, 199A(i)'s floor), not the household's on the return of the adult marked "Me"; the 0.9% Additional Medicare tax
+  on each return's own pay and self-employment earnings against 125,000 (Form 8959). The family with 3,750 each: 7,764.60 +
+  5,500.37 + 1,017.33 = 14,282.30, no 0.9% (it said 14,439.15 with 341.54 of 0.9%); no accounts: 15,682.61. Pay or a
+  business linked to no one is on Me's return. Filing jointly nothing changed.

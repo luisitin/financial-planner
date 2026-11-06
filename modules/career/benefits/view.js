@@ -60,7 +60,7 @@ export function render(page, ctx) {
   const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now")?.key;
   k401.append(ui.h("ul", { class: "records" }, k.options.map((o) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct(o.pct)} of pay: ${label[o.key]}`), ui.h("span", { class: "rec-value" }, money(o.perCheck))),
-    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k) and takes ${money(o.costPerCheck)} from take-home pay, after the tax it saves; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k) and takes ${money(o.costPerCheck)} from take-home pay, ${o.costFrom === "paycheck" ? "less the tax the paycheck stops taking out" : "after the tax it saves"}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}`),
     o.key !== "now" && k.hasAccount ? ui.h("div", { class: "rec-foot" }, ui.button(`Use ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
   k401.append(ui.h("p", { class: "muted small" }, [
     `The ${d.limitsYear} limit for you is ${money(k.limit)}${k.catchUp ? `, with ${money(k.catchUp)} of catch-up for your age` : ""}. Pre-tax money skips income tax now but not Social Security or Medicare; it is taxed when you take it out.`,
@@ -90,14 +90,16 @@ export function render(page, ctx) {
     capped((c.typed.transit + c.typed.parking) * 12, commuteYear, "transit and parking a year"),
     ui.h("ul", { class: "bn-lines" },
       ui.h("li", {}, ui.h("span", {}, f.elect ? `Health flexible spending account (FSA): ${money(f.elect)}` : `Health flexible spending account (FSA), up to ${money(f.limit)}`), ui.h("span", {}, f.elect ? `saves ${money(f.saved)}` : "none chosen")),
-      dc.kids.length || dc.elect ? ui.h("li", {}, ui.h("span", {}, dc.elect ? `Child care FSA: ${money(dc.elect)}` : `Child care FSA, up to ${money(dc.limit)}`), ui.h("span", {}, dc.elect ? `saves ${money(dc.saved)}` : "none chosen")) : null,
+      dc.kids.length || dc.elect ? ui.h("li", {}, ui.h("span", {}, dc.elect ? `Child care FSA: ${money(dc.elect)}` : `Child care FSA, up to ${money(dc.separate ? dc.limit : dc.planMax)}`), ui.h("span", {}, dc.elect ? (dc.saved >= 0.5 ? `saves ${money(dc.saved)}` : dc.saved <= -0.5 ? `costs ${money(-dc.saved)} a year more than it saves` : "saves nothing") : "none chosen")) : null,
       ui.h("li", {}, ui.h("span", {}, commuteYear ? `Transit and parking: ${money(commuteYear)} a year` : "Transit and parking"), ui.h("span", {}, commuteYear ? `saves ${money(c.saved)}` : "none chosen"))),
     ui.h("p", { class: "muted small" }, [
       `A health FSA is use-it-or-lose-it: set aside only what you are sure to spend (some plans let ${money(f.carryover)} carry over).`,
       f.withHsa ? " With a health savings account, it has to be the limited-purpose kind (dental and vision only)." : "",
-      dc.kids.length ? ` The child care account pays day care, after-school care and summer day camp for ${dc.kids.join(" and ")} while under 13; ${money(dc.limit)} a year is the whole household's limit${dc.others ? ` (${money(dc.others)} already chosen by others in the household)` : ""}, and your employer must offer it.` : "",
       ` Transit passes and parking at work can each be paid before tax, up to ${money(c.limit)} a month.`,
-    ].join(""))));
+    ].join("")),
+    // the child care account in its own paragraph, each sentence naming it (care fourth pass: added to the health FSA's
+    // paragraph, "it" read as the health FSA)
+    dc.kids.length || dc.elect ? ui.h("p", { class: "muted small" }, dcWords(dc)) : null));
 
   // the stock purchase plan
   if (d.espp) {
@@ -115,10 +117,15 @@ export function render(page, ctx) {
     ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life insurance needs"))));
 
   // the paycheck in sum
+  // what the choices save in tax, before the money the child care account would lose (saved = tax saved - lost), said the
+  // right way round (care fourth pass: "more than the tax the choices save, less the 3,200 ... would lose" read backwards)
+  const lost = dc.elect && dc.forfeited > 0.5 ? dc.forfeited : 0;
+  const taxPart = d.total.savedYearly + lost;
   root.append(d.total.any ? ui.card("Each paycheck", ui.row(
-    ui.stat("Taken from each paycheck", money(d.total.perCheck), `after the tax the choices save; ${d.paychecks} paychecks a year`),
-    ui.stat("Tax saved a year", money(d.total.savedYearly), `on ${money(d.total.pretaxYearly)} put in before tax`),
-  ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.`))
+    ui.stat("Taken from each paycheck", money(d.total.perCheck), d.total.perCheckFrom === "paycheck" ? `what take-home falls by, as the Paycheck page works it; ${d.paychecks} paychecks a year` : `after the tax the choices save; ${d.paychecks} paychecks a year`),
+    d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly)} put in before tax`)
+      : ui.stat("Costs a year", money(-d.total.savedYearly), lost ? `the ${money(lost)} the child care account would lose, less the ${money(Math.max(0, taxPart))} of tax the choices save` : dc.elect && dc.creditLost > 0.5 ? "the child care credit the account costs is more than the tax the choices save" : "more than the tax the choices save"),
+  ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.${dc.elect && dc.creditLost > 0.5 ? ` The ${money(dc.creditLost)} of child care credit the account costs is not taken from paychecks: it shows up as a smaller refund (or a bigger bill) when you file.` : ""}`))
     : ui.card("Each paycheck", ui.h("p", {}, "Nothing comes out of your pay before tax yet: choose a 401(k) percentage above, and set the health and commuting choices below.")));
 
   // the employer's plan and the choices, in folds
@@ -162,6 +169,41 @@ export function render(page, ctx) {
     ui.form([{ key: "personId", label: "Whose benefits", type: "select", options: d.people.map((p) => ({ value: p.id, label: p.name || "Someone" })) }], { personId: pid }, (v) => { pending = "Saved."; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.benefits = { ...(p.whatIfs.benefits ?? {}), personId: v.personId }; }); }, { submitLabel: "Show" })));
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/health" }, "Pick a health plan"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability cover"), ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Contributions"))));
 
+  /** The child care account in plain words: before an amount, that it shares the care with the credit; after, what it really does. */
+  function dcWords(x) {
+    const out = [];
+    // what it pays for and its limit: a separate return's own 3,750, never used up by another adult's account (care fourth pass)
+    const what = x.kids.length ? `The child care account pays day care, after-school care and summer day camp for ${x.kids.join(" and ")} while under 13; ${x.separate ? `on a separate return at most ${money(x.limit)} of it stays out of income, on each spouse's own return` : `${money(x.limit)} a year is the whole household's limit${x.others ? ` (${money(x.others)} already chosen by others in the household)` : ""}`}, and your employer must offer it.` : "";
+    if (!x.elect) {
+      if (!x.kids.length) return "";
+      // a separate return gets no child care credit (21(e)(2)): nothing for the account to cost
+      out.push(x.separate ? "On a separate return there is no child care credit, so the child care account is the one way to pay for care before tax: type an amount below to see what it saves."
+        : "The child care account and the child care credit pay for the same care, so money put in the account can cost you some or all of the credit: type an amount below to see which is worth more.");
+      out.push(what);
+      return out.join(" ");
+    }
+    if (what) out.push(what);
+    const own = x.own ?? {};
+    if (x.forfeited > 0.5) out.push(x.care > 0.5
+      ? (x.others && x.forfeited > (own.forfeited ?? 0) + 0.5 ? `With this account the household's child care accounts would lose ${money(x.forfeited)}: only ${money(x.care)} of care is on Expenses for ${d.planYear} for all of them, and an account only pays back care.` : `You would lose ${money(x.forfeited)} of the child care account: only ${money(x.care)} of care is on Expenses for ${d.planYear}${x.others ? " for the household's accounts" : ""}, and the account only pays back care.`)
+      : `You would lose all ${money(x.forfeited)} in the child care account: no care for a child is on Expenses for ${d.planYear}, and the account only pays back care.`);
+    // the part taxed as pay is this adult's own share: the household's excess is split by what each put in, as the Paycheck
+    // page and the Federal estimate split it (care fourth pass: each adult's page said all 500)
+    const taxed = own.taxedAsPay ?? x.taxedAsPay;
+    const rest = (x.split ?? []).filter((y) => y.id !== d.person.id);
+    if (taxed > 0.5) out.push(x.earnedCapped && x.low !== null
+      ? `${money(taxed)} of the child care account is taxed as pay: no more than ${x.separate || x.joint ? "the lower earner's" : "your"} earned income (${money(x.low)}) stays out of income.`
+      : x.separate ? `${money(taxed)} of the child care account is taxed as pay: it is over the ${money(x.limit)} a separate return keeps out of income.`
+      : `${money(taxed)} of the child care account is taxed as pay: ${rest.length ? `with the ${money(x.others)} chosen by others, the household's accounts are ${money(x.householdTaxed)} over its limit of ${money(x.limit)}, shared by what each puts in (${rest.map((y) => `${y.name ?? "the other"} ${money(y.taxedAsPay)}`).join(", ")})` : `it is over the household's limit of ${money(x.limit)}`}.`);
+    if (x.creditLost > 0.5) out.push(`The child care account costs ${money(x.creditLost)} of child care credit: care the account pays cannot count for the credit too.`);
+    // "think about skipping the account" only when no amount is worth it (best: the amount it is worth most at)
+    const better = x.best && x.best.saved > 0.5 ? x.best : null;
+    if (x.saved <= -0.5) out.push(`In all the child care account costs ${money(-x.saved)} a year more than it saves${x.creditLost > 0.5 && !(x.forfeited > 0.5) ? (better ? `: at ${money(x.elect)} the credit alone is worth more, but ${money(better.elect)} in the account would save ${money(better.saved)} a year` : ": for you the credit alone is worth more, so think about skipping the account") : ""}.`);
+    else if (x.saved >= 0.5) out.push(`In all the child care account saves ${money(x.saved)} a year${x.creditLost > 0.5 ? ", after the credit it costs" : ""}.`);
+    else out.push("In all the child care account saves nothing.");
+    if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the deduction, less the tax the paycheck stops taking out)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
+    return out.join(" ");
+  }
   function fold(key, title, status, fields, values, apply) {
     return ui.h("details", { class: "card fold fold-card", open: openFold === key || null }, ui.h("summary", {}, ui.h("h2", {}, title), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev" }, "›")),
       ui.form(fields, values, (v) => { openFold = key; save("Saved.", (w) => apply(v, w)); }, { submitLabel: "Save" }));

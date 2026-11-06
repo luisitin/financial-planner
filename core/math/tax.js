@@ -9,9 +9,10 @@
 // dividends stacked on ordinary income at 0/15/20% (the worksheet's last step included), a net
 // capital loss of up to 3,000 against any income, the taxation of Social Security benefits (the IRS
 // worksheet), the net investment income tax, the additional Medicare tax on wages, the child tax
-// credit with its phase-out and refundable part. Married filing separately with `inputs.separate` is worked
-// as two returns, one per spouse, and added up (separateTax). Not modelled: AMT, the qualified business income
-// deduction, the earned income credit, education credits, self-employment tax.
+// credit with its phase-out and refundable part, the child and dependent care credit (careCredit below). Married filing
+// separately with `inputs.separate` is worked as two returns, one per spouse, and added up (separateTax). Not modelled: AMT,
+// the earned income credit, education credits (the 20% business deduction and self-employment tax come from the pages
+// that pass them in: qbiDeduction here, the 15.3% on the Self-employment page).
 
 export const FILING_STATUSES = [
   { id: "single", label: "Single" },
@@ -123,6 +124,59 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
 }
 
 /**
+ * The child and dependent care credit's applicable percentage (IRC 21(a)(2)) for an AGI, as a fraction. Each phase in
+ * `params.careCredit.phaseDowns` takes 1 percentage point off for each `per` dollars "or fraction thereof" of AGI over
+ * `over`, not below `floorPct`; on a joint return a phase's `joint` figures replace them. Sources (read 2026-11-02): 26
+ * U.S.C. 21(a)(2) as rewritten by P.L. 119-21 sec. 70405 for tax years after 2025 (50%, to 35% by 1 point per $2,000 over
+ * $15,000, then to 20% by 1 point per $2,000 over $75,000, $4,000 over $150,000 joint), https://uscode.house.gov/us/usc/t26/s21/;
+ * the prior text (35% to 20% by 1 point per $2,000 over $15,000) in that page's Amendments note, used to 2025; checked
+ * against the 2025 Form 2441 line 8 table and the draft 2026 instructions' "2026 Phaseout Schedule"
+ * (https://www.irs.gov/pub/irs-dft/i2441--dft.pdf). A qualifying surviving spouse is not a joint return: the other column.
+ */
+export function careCreditRate(agi, status, params) {
+  const c = params.careCredit;
+  if (!c) return 0;
+  const a = Math.round((Number(agi) || 0) * 100) / 100;   // to the cent, so a float sum cannot add a step
+  const steps = (x, per) => (x > 0 ? Math.ceil(x / per) : 0);
+  let pts = c.startPct;
+  for (const ph of c.phaseDowns ?? []) {
+    const j = status === "married_joint" && ph.joint ? ph.joint : ph;
+    pts = Math.max(ph.floorPct, pts - steps(a - j.over, j.per));
+  }
+  return pts / 100;
+}
+
+/**
+ * The child and dependent care credit before the limit of the tax (IRC 21; Form 2441 Part II, lines 2 to 9 and Part III
+ * lines 27 to 31). care = { expenses (paid in the year for qualifying persons: children under 13, or a spouse or dependent
+ * who cannot care for themselves), persons (how many qualifying persons), benefits (dependent care benefits excluded from
+ * pay, Form 2441 line 25, e.g. a dependent care FSA), earnedLow (the smaller earned income on a joint return, else the
+ * filer's: lines 4 and 5) }.
+ *   limit    = $3,000 for one person, $6,000 for two or more (21(c)), less the benefits excluded (line 29; 21(c) last sentence)
+ *   expenses = the expenses less the benefits excluded (line 30: what the benefits paid cannot count again), at most the limit
+ *   base     = the smallest of that and earnedLow (line 6; 21(d)(1))
+ *   rate     = careCreditRate(agi) (line 8), credit = base x rate (line 9)
+ * None on a separate return: 21(e)(2) allows it to a married person only on a joint return. A spouse living apart who keeps
+ * the child's home (21(e)(4)) could claim it; the plan does not know that, so it gives none (the safe side).
+ * -> { persons, expenses, benefits, earned, cap, limit, qualified, base, rate, tentative } | null when there is nothing to work
+ */
+export function careCredit(care, agi, status, params) {
+  if (!care || !params.careCredit || status === "married_separate") return null;
+  const persons = Math.max(0, Math.round(Number(care.persons) || 0)), expenses = pos(care.expenses);
+  if (!(persons > 0 && expenses > 0)) return null;
+  const C = params.careCredit;
+  // what is excluded is never more than the year's limit (129(a)(2)(A), Form 2441 line 21): an election passed in before the
+  // limit only takes the limit off (the rest of it is pay, line 26)
+  const benefits = Math.min(pos(care.benefits), C.benefitLimit ?? Infinity), earned = pos(care.earnedLow);
+  const cap = persons >= 2 ? C.expenseLimit.twoOrMore : C.expenseLimit.one;
+  const limit = Math.max(0, cap - benefits);
+  const qualified = Math.min(Math.max(0, expenses - benefits), limit);
+  const base = Math.min(qualified, earned);
+  const rate = careCreditRate(agi, status, params);
+  return { persons, expenses, benefits, earned, cap, limit, qualified, base, rate, tentative: base * rate };
+}
+
+/**
  * federalTax(inputs, params) -> the year's federal income tax.
  * inputs: {
  *   filingStatus, wages, otherOrdinary (interest, pensions, IRA withdrawals, Roth conversions, short-term gains, business),
@@ -134,6 +188,7 @@ export function taxableSocialSecurity(benefits, otherIncome, taxExemptInterest, 
  *   medicareWages (Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving, W-2 box 5; default wages),
  *   qbiDeduction (the 20% business deduction before its taxable-income limit, IRC 199A: taken after AGI, at most 20% of
  *   taxable income less net capital gain), qbiMinimum (the floor on it for an active business, IRC 199A(i); default 0),
+ *   care (the child and dependent care credit: { expenses, persons, benefits, earnedLow }, see careCredit; absent = none),
  *   withheld, paid (estimated payments)
  * }
  */
@@ -183,6 +238,14 @@ export function federalTax(inputs, params) {
   // the gains worksheet's last line: never more than the regular tax on all of taxable income
   const incomeTax = qualifiedTaxable > 0 ? Math.min(ord.tax + qual.tax, taxOnOrdinary(taxableIncome, status, params).tax) : ord.tax;
   const qualifiedTax = incomeTax - ord.tax;
+  // the child and dependent care credit comes first: it is limited to the tax (Form 2441 line 11 and its Credit Limit
+  // Worksheet: Form 1040 line 18, the tax before the extra taxes), nothing of it is refunded (21 has no refundable part
+  // after 2021) and nothing carries forward. The child tax credit's own limit then counts it (Schedule 8812 Credit Limit
+  // Worksheet A: line 18 less Schedule 3 lines 1 to 6, the care credit being line 2), so a care credit can turn some of the
+  // child credit into its refundable part.
+  const care = careCredit(inputs.care, agi, status, params);
+  const careCreditAmount = care ? Math.min(care.tentative, incomeTax) : 0;
+  const taxAfterCare = incomeTax - careCreditAmount;
   // credits: child tax credit, phased out $50 per $1,000 (or part) of income over the threshold; the refundable part needs earned income
   let childTaxCredit = 0, refundable = 0;
   const kids = Math.max(0, Math.round(Number(inputs.dependentsUnder17) || 0)), others = Math.max(0, Math.round(Number(inputs.otherDependents) || 0));
@@ -190,7 +253,7 @@ export function federalTax(inputs, params) {
     const full = kids * (params.childTaxCredit ?? 2000) + others * 500;
     const th = params.childTaxCreditPhaseOut?.[status] ?? 200000;
     const reduced = Math.max(0, full - Math.ceil(Math.max(0, agi - th) / 1000) * 50);
-    childTaxCredit = Math.min(reduced, incomeTax);
+    childTaxCredit = Math.min(reduced, taxAfterCare);
     // earned income (IRC 32(c)(2)(A), Schedule 8812's Earned Income Worksheet): wages + self-employment earnings, a loss included
     const earned = Math.max(0, wages + (Number(inputs.selfEmployment) || 0));
     refundable = Math.min(reduced - childTaxCredit, kids * (params.additionalChildTaxCredit ?? 1700), 0.15 * Math.max(0, earned - 2500));
@@ -203,7 +266,7 @@ export function federalTax(inputs, params) {
   // the 0.9% additional Medicare tax is on Medicare wages, which include 401(k) deferrals (IRC 3101(b)(2), 3121(v)(1)(A))
   const medicareWages = inputs.medicareWages === undefined || inputs.medicareWages === null ? wages : pos(inputs.medicareWages);
   const additionalMedicare = 0.009 * Math.max(0, medicareWages - medTh);
-  const totalTax = Math.max(0, incomeTax - childTaxCredit) + niit + additionalMedicare - refundable;
+  const totalTax = Math.max(0, taxAfterCare - childTaxCredit) + niit + additionalMedicare - refundable;
   const withheld = pos(inputs.withheld), paid = pos(inputs.paid);
   const out = {
     year: params.year ?? null, filingStatus: status,
@@ -212,7 +275,7 @@ export function federalTax(inputs, params) {
     deduction: { standard: std, itemized: itemizedAfter, itemizedBeforeLimit: itemized, itemizedLimit, charity: useItemized ? 0 : nonItemizerCharity, used: useItemized ? "itemized" : "standard", senior, amount: deduction, qbi },
     taxableIncome, ordinaryTaxable, qualifiedTaxable,
     ordinaryTax: ord.tax, qualifiedTax, incomeTax, layers: ord.layers, qualifiedLayers: qual.layers,
-    credits: { childTaxCredit, refundable },
+    credits: { childTaxCredit, refundable, careCredit: careCreditAmount, care: care ? { ...care, credit: careCreditAmount } : null },
     niit, additionalMedicare, totalTax: money(totalTax),
     effectiveRate: gross > 0 ? totalTax / gross : 0,
     bracketRate: ord.bracketRate, roomInBracket: ord.roomInBracket, nextRate: ord.nextRate,
@@ -253,7 +316,7 @@ function separateTax(inputs, params) {
     deduction: { standard: sum((r) => r.deduction.standard), itemized: sum((r) => r.deduction.itemized), itemizedBeforeLimit: sum((r) => r.deduction.itemizedBeforeLimit), itemizedLimit: sum((r) => r.deduction.itemizedLimit), charity: sum((r) => r.deduction.charity), used: results.some((r) => r.deduction.used === "itemized") ? "itemized" : "standard", senior: sum((r) => r.deduction.senior), amount: sum((r) => r.deduction.amount), qbi: sum((r) => r.deduction.qbi) },
     taxableIncome: sum((r) => r.taxableIncome), ordinaryTaxable: sum((r) => r.ordinaryTaxable), qualifiedTaxable: sum((r) => r.qualifiedTaxable),
     ordinaryTax: sum((r) => r.ordinaryTax), qualifiedTax: sum((r) => r.qualifiedTax), incomeTax: sum((r) => r.incomeTax), layers: me.layers, qualifiedLayers: me.qualifiedLayers,
-    credits: { childTaxCredit: sum((r) => r.credits.childTaxCredit), refundable: sum((r) => r.credits.refundable) },
+    credits: { childTaxCredit: sum((r) => r.credits.childTaxCredit), refundable: sum((r) => r.credits.refundable), careCredit: sum((r) => r.credits.careCredit), care: null },
     niit: sum((r) => r.niit), additionalMedicare: sum((r) => r.additionalMedicare), totalTax,
     effectiveRate: gross > 0 ? totalTax / gross : 0,
     bracketRate: me.bracketRate, roomInBracket: me.roomInBracket, nextRate: me.nextRate,
@@ -267,6 +330,20 @@ export function marginalRate(inputs, params, delta = 1000) {
   const a = federalTax(inputs, params).totalTax;
   const b = federalTax({ ...inputs, otherOrdinary: pos(inputs.otherOrdinary) + delta }, params).totalTax;
   return Math.max(0, (b - a) / delta);
+}
+
+/**
+ * The least amount of AGI that is a whole number of every step of the care credit's applicable percentage for `status`
+ * (4,000 on a joint return from 2026, else 2,000; 0 without the credit). A probe of the next dollar's cost this wide always
+ * crosses the same number of steps: over 1,000, a step of 1 point (30 on one child's 3,000) lands in some 1,000s and not
+ * others, so the next dollar would read 12 cents at one pay and 15 at the next.
+ */
+export function careStep(status, params) {
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  return (params?.careCredit?.phaseDowns ?? []).reduce((l, ph) => {
+    const per = status === "married_joint" && ph.joint ? ph.joint.per : ph.per;
+    return per > 0 ? (l ? l * per / gcd(l, per) : per) : l;
+  }, 0);
 }
 
 /**

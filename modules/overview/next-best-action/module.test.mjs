@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, FICA, HIGH_RATE } from "./compute.js";
+import { compute, FICA, HIGH_RATE, monthLines } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -412,4 +412,52 @@ test("a full month within $5 of $0 'only just about breaks even', never 'about $
     assert.doesNotMatch(bills, /\$0\b/);
   }
   assert.equal(at(8).spare.fullKind, "ahead"); assert.equal(at(-8).spare.fullKind, "short");
+});
+
+test("the child care account's money it would lose comes off the spare money (care fourth pass, Form 2441 line 14)", () => {
+  // Jo: head of household in Ohio, 62,000 of pay, one child under 13, no care on Expenses. A 5,000 account for 2026 pays
+  // nothing back, so all 5,000 leaves the pay for good; the tax falls by 600 + 382.50 + 137.50 = 1,120. The month has
+  // 5,000 - 1,120 = 3,880 a year less: 323.33 a month (the page said 93.33 MORE)
+  const NOV = "2026-11-02";
+  const jo = (acct) => {
+    const p = emptyPlan();
+    p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+    p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+    p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: 62000, period: "annual", growth: 0, taxable: true }];
+    p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1300, period: "monthly", essential: true }];
+    if (acct) p.whatIfs = { benefits: { jo: { dcfsaElect: acct, planYear: 2026 } } };
+    return p;
+  };
+  const without = compute(jo(0), { today: NOV }).spare, withAcct = compute(jo(5000), { today: NOV }).spare;
+  assert.equal(without.careLost, 0);
+  assert.ok(Math.abs(withAcct.careLost - 5000 / 12) < 1e-6, `${withAcct.careLost}`);
+  assert.ok(Math.abs((withAcct.monthly - without.monthly) - -3880 / 12) < 0.005, `${withAcct.monthly - without.monthly}`);
+  // with the care on Expenses nothing is lost: the account is worth its 70 a year (5.83 a month)
+  const cared = (acct) => { const p = jo(acct); p.expenses.push({ id: "care", name: "Childcare and school", category: "childcare", amount: 900, period: "monthly", essential: true }); return p; };
+  const c0 = compute(cared(0), { today: NOV }).spare, c1 = compute(cared(5000), { today: NOV }).spare;
+  assert.equal(c1.careLost, 0); assert.ok(Math.abs((c1.monthly - c0.monthly) - 70 / 12) < 0.005, `${c1.monthly - c0.monthly}`);
+});
+
+test("Each month's money: the lines on screen add up to the spare money, the child care account's lost money a line of its own (Review 2026-11-06)", () => {
+  // the verifier's plan: Jo with a 5,000 account and no care showed 5,170 - 120 - 360 - 70 - 3,070 = 1,550 above "Spare
+  // each month $1,130": the 417 a month the account would lose had no line
+  const NOV = "2026-11-02";
+  const p = emptyPlan();
+  p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+  p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+  p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: 62000, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1300, period: "monthly", essential: true }];
+  p.whatIfs = { benefits: { jo: { dcfsaElect: 5000, planYear: 2026 } } };
+  const d = compute(p, { today: NOV });
+  const lines = monthLines(d.spare, d.debtPlan);
+  const lost = lines.find((x) => x.key === "careLost");
+  assert.ok(lost, "a line for the money the account would lose");
+  near(lost.amount, 5000 / 12, 0.005);
+  assert.match(lost.label, /child care account/i);
+  near(lines.reduce((t, x) => t + x.amount, 0), d.spare.gross - d.spare.monthly, 0.005);
+  // with nothing lost there is no such line, and the lines still add up (the family plan: business costs, state tax, goals)
+  const f = compute(familyPlan(TODAY), { today: TODAY });
+  const fl = monthLines(f.spare, f.debtPlan);
+  assert.ok(!fl.some((x) => x.key === "careLost"));
+  near(fl.reduce((t, x) => t + x.amount, 0), f.spare.gross - f.spare.monthly, 0.005);
 });

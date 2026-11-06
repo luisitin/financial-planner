@@ -66,16 +66,19 @@ export function compute(plan, params = {}) {
   const h = plan.insurance?.health ?? {};
   const tier = h.tier === "family" ? "family" : "self";
   const expected = Number(h.expected) >= 0 && h.expected !== null && h.expected !== "" && h.expected !== undefined ? Number(h.expected) : 5000;
-  // the marginal rate: the federal tax on $1,000 more of income, plus payroll tax for contributions from pay
   const b = taxInputs(plan, params);
-  const t0 = federalTax(b.inputs, b.params).totalTax, t1 = federalTax({ ...b.inputs, adjustments: (b.inputs.adjustments ?? 0) + 1000 }, b.params).totalTax;
-  const marginal = Math.max(0, (t0 - t1) / 1000);
-  const taxRate = marginal + FICA;
   // the year's rules: the HSA plan limits and how much can go in (the contributions page's table when it has the year)
   const limitsYear = hdhpYear(b.year);
   const rules = HDHP_BY_YEAR[limitsYear][tier];
   const L = limitsFor(limitsYear).kinds.hsa;
   const hsaLimit = L ? (tier === "family" ? L.family : L.limit) : rules.hsa;
+  // the marginal rate: the federal tax the year's HSA limit taken off income saves, per dollar, plus payroll tax for
+  // contributions from pay. Worked over the limit, not over $1,000, since a credit that falls in steps of income (the
+  // child care credit: a point per 4,000 over 150,000 joint) would make a small probe land on a step or miss it
+  const probe = hsaLimit > 0 ? hsaLimit : 1000;
+  const t0 = federalTax(b.inputs, b.params).totalTax, t1 = federalTax({ ...b.inputs, adjustments: (b.inputs.adjustments ?? 0) + probe }, b.params).totalTax;
+  const marginal = Math.max(0, (t0 - t1) / probe);
+  const taxRate = marginal + FICA;
   const opts = { hsaRoom: hsaLimit, taxRate };
   const warnings = [];
   const $ = (n) => `$${n.toLocaleString("en-US")}`;

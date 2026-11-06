@@ -32,7 +32,7 @@ export const HORIZON_MONTHS = 120;
 /**
  * compute(plan, { today }) -> {
  *   ready, missing,
- *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
+ *   spare: { monthly, gross, businessCosts, federalTax, payrollTax, stateTax, careLost (the child care account's money it would lose), stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
  *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses),
  *     full (monthly + held: what a month that brings the Income page's amount leaves), fullAbout (full to the nearest $10),
  *     fullKind ("ahead" | "even" | "short": Budget (50/30/20)'s fullKind, how every page words the full month) }
@@ -50,6 +50,32 @@ export const HORIZON_MONTHS = 120;
  * }
  * Steps that do not apply to this household (no 401(k), no HSA) are left out.
  */
+/**
+ * monthLines(spare, debtPlan) -> [{ key, label, amount }]: the lines "Each month's money" shows between the pay and what is
+ * spare, in order, so that pay less the lines is the spare money (gross - sum = monthly; `amount` a month, the federal tax
+ * below zero when credits pay back more than it). Lines with nothing in them are left out, except the taxes, spending and
+ * saving. The child care account's money it would lose has its own line (Review 2026-11-06: it came off the spare money with
+ * no line, so the lines added up to $417 more than "Spare each month").
+ */
+export function monthLines(s, debtPlan = null) {
+  const names = debtPlan?.names?.length && debtPlan.names.length <= 2 ? debtPlan.names.join(" and ") : "debts";
+  return [
+    ...(s.businessCosts > 0.5 ? [{ key: "businessCosts", label: "Business costs (Self-employment page)", amount: s.businessCosts }] : []),
+    { key: "federalTax", label: "Federal income tax", amount: s.federalTax },
+    { key: "payrollTax", label: "Social Security and Medicare tax", amount: s.payrollTax },
+    ...(s.stateTax > 0.5 ? [{ key: "stateTax", label: "State income tax", amount: s.stateTax }] : []),
+    // the account's money beyond the care it pays back: taken from pay and never paid back (Form 2441 line 14)
+    ...(s.careLost > 0.005 ? [{ key: "careLost", label: "Child care account money it would lose", amount: s.careLost }] : []),
+    { key: "spending", label: "Spending", amount: s.spending },
+    { key: "retirementSaving", label: "Retirement saving", amount: s.retirementSaving },
+    { key: "goalSaving", label: "Saving for goals", amount: s.goalSaving },
+    // the saved debt plan's extra (Pay off debts) is already spoken for, so it is not spare
+    ...(s.debtExtra > 0 ? [{ key: "debtExtra", label: `Extra on ${names} (Pay off debts)`, amount: s.debtExtra }] : []),
+    // uneven pay above what you count on (Side income): in the pay above, not in the spare, so the lines add up
+    ...(s.held > 0.005 ? [{ key: "held", label: "Side income above what you count on, after its tax", amount: s.held }] : []),
+  ];
+}
+
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   if (!today) return { ready: false, missing: ["today's date"] };
@@ -69,8 +95,10 @@ export function compute(plan, params = {}) {
   // reckoning below is kept only for a plan that tax cannot be worked out for
   let T = null;
   try { T = yearTaxes(plan, { today, inc }); } catch { T = null; }
-  let federalYear, payroll, stateYear = 0, stateKnown = false, businessCosts = 0;
-  if (T) { federalYear = T.federal; payroll = T.payroll; stateYear = T.state; stateKnown = T.stateKnown; businessCosts = T.business?.expenses ?? 0; }
+  let federalYear, payroll, stateYear = 0, stateKnown = false, businessCosts = 0, careLost = 0;
+  // the child care account's money it would lose (no care to pay back, Form 2441 line 14) never reaches the bank: Budget's
+  // yearTaxes `careLost`, taken off as Budget takes it (care fourth pass)
+  if (T) { federalYear = T.federal; payroll = T.payroll; stateYear = T.state; stateKnown = T.stateKnown; businessCosts = T.business?.expenses ?? 0; careLost = T.careLost ?? 0; }
   else {
     const fed = computeFederal(plan, { today });
     const base = fed.params.ssWageBase ?? Infinity;
@@ -85,7 +113,7 @@ export function compute(plan, params = {}) {
   const con = computeContributions(plan, { today });
   const gl = computeGoals(plan, { today });
   const goalSaving = gl.goals.filter((g) => g.status !== "done").reduce((s, g) => s + (Number(g.monthly) || 0), 0);
-  const spare = { gross: inc.monthly, businessCosts: businessCosts / 12, federalTax: federalYear / 12, payrollTax: payroll / 12, stateTax: stateYear / 12, stateKnown, state: plan.household?.state ?? "",
+  const spare = { gross: inc.monthly, businessCosts: businessCosts / 12, federalTax: federalYear / 12, payrollTax: payroll / 12, stateTax: stateYear / 12, careLost: careLost / 12, stateKnown, state: plan.household?.state ?? "",
     spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
   // the saved debt plan (Pay off debts): an extra a month on top of the required payments is money already spoken for, until
   // the debts it is aimed at are gone (all of them, when it is aimed at none: it rolls from one to the next)
@@ -100,7 +128,7 @@ export function compute(plan, params = {}) {
   // tax: the year's taxes worked again with the careful figures, the difference taken off it (Budget's heldAfterTax, beside
   // yearTaxes, so Budget (50/30/20) takes the same careful month; review 2026-11-02)
   { const H = heldAfterTax(plan, { today, inc, T }); spare.heldGross = H.gross; spare.held = H.held; }
-  spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra - spare.held;
+  spare.monthly = spare.gross - spare.businessCosts - spare.federalTax - spare.payrollTax - spare.stateTax - spare.careLost - spare.spending - spare.retirementSaving - spare.goalSaving - spare.debtExtra - spare.held;
   // what a month that brings the Income page's amount leaves (the careful month plus what it holds back), and that figure
   // to the nearest $10 (fullAbout), the one every page that says it shows (review 2026-11-02, round 5: Next best action
   // and Health score said "about $1,200", the Dashboard, Expenses, Budget and Needs attention "$1,197")

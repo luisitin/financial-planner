@@ -3,7 +3,8 @@
 // the health premiums you pay; then after the household's tax (the job's pay swapped into the federal estimate, Social
 // Security and Medicare, the state's rate), less commuting, per hour of your time, and over the years you compare.
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
+import { withBusiness } from "../../taxes/withholding/compute.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
@@ -49,16 +50,32 @@ export function timeFor(o) {
  * in it. Federal: the household's income tax on `otherWages` + pay (`federalTax` without its own 0.9% extra Medicare
  * tax, which it works on wages after 401(k) saving). Payroll: Social Security to the wage base, Medicare 1.45%, and
  * the household's 0.9% on Medicare wages (pay before 401(k) saving: `otherMedicare` + pay) above the filing status's
- * threshold (IRC 3101(b)(2)). State: the job's state rate on its pay.
+ * threshold (IRC 3101(b)(2)). State: the job's state rate on its pay. `careAt(pay)` (optional) gives the child and
+ * dependent care credit's inputs with this person earning `pay` (federal careInputsWith, the child care account's one
+ * rule): its cap and the account's exclusion are the lower earner's pay on a joint return, so a job for a spouse with none
+ * can unlock both; the wages move by the account's own change (`wagesChange`), so the account is never taxed as pay twice.
+ * The person's own child care account (`personId`'s election in it, up to a plan's limit) leaves the job's pay before Social
+ * Security and Medicare, all of it (IRC 3121(a)(18)), and before the state's tax the part that stays out of income (what
+ * the account keeps out of wages: excluded and lost) (care fourth pass: the job now kept 54,160 with Jo's 5,000 account,
+ * not 54,680, the 382.50 of payroll tax and 137.50 of Ohio tax the account saves left out).
  */
-export function taxYear(pay, { inputs, params, otherWages, otherMedicare = otherWages, wageBase, stateRate }) {
+export function taxYear(pay, { inputs, params, otherWages, otherMedicare = otherWages, wageBase, stateRate, careAt = null, personId = null, account = null }) {
   const wages = Math.max(0, pay);
-  const f = federalTax({ ...inputs, wages: Math.max(0, otherWages + wages) }, params);
+  const care = inputs.care && typeof careAt === "function" ? careAt(wages) : inputs.care;
+  const f = federalTax({ ...inputs, wages: Math.max(0, otherWages + wages + (Number(care?.wagesChange) || 0)), ...(care ? { care } : {}) }, params);
+  // the account as the one rule has it at this pay (`care.account`), else the plan's (`account`: no care to count, so all of
+  // it would be lost, which leaves the pay all the same)
+  const own = personId !== null ? (care?.account ?? account)?.people?.find((x) => x.id === personId) ?? null : null;
+  const payrollWages = Math.max(0, wages - Math.min(wages, own?.elected ?? 0));
+  const stateWages = Math.max(0, wages - Math.min(wages, own?.off ?? 0));
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
-  const extraMedicare = PAYROLL.extraMedicare * Math.max(0, otherMedicare + wages - th);
-  const payroll = Math.min(wages, wageBase) * PAYROLL.ss + wages * PAYROLL.medicare + extraMedicare;
-  const state = wages * (stateRate || 0);
-  return { federal: f.totalTax - f.additionalMedicare, payroll, extraMedicare, state };
+  const extraMedicare = PAYROLL.extraMedicare * Math.max(0, otherMedicare + payrollWages - th);
+  const payroll = Math.min(payrollWages, wageBase) * PAYROLL.ss + payrollWages * PAYROLL.medicare + extraMedicare;
+  const state = stateWages * (stateRate || 0);
+  // the account's money beyond the care it pays back (forfeited, Form 2441 line 14) leaves the pay and never comes back: not
+  // a tax, but not kept either (Review 2026-11-06: the job kept 54,684 with Jo's 5,000 and no care; she keeps 49,684)
+  const lost = Math.min(wages, Math.max(0, Number(own?.forfeited) || 0));
+  return { federal: f.totalTax - f.additionalMedicare, payroll, extraMedicare, state, lost };
 }
 
 /**
@@ -130,18 +147,33 @@ export function compute(plan, params = {}) {
   }));
   if (!hasJob && !offersIn.length) return { ready: false, person: person ? { id: pid, name: person.name } : null, years, hasJob, options: [], notes };
 
-  const ti = taxInputs(plan, { today });
+  const tiPlan = taxInputs(plan, { today });
+  // a business at its profit on its owner's return, half its self-employment tax and its 20% deduction off (withholding
+  // withBusiness), as the Federal estimate's year tax and Budget have it (Review 2026-11-06: counted in full as ordinary
+  // income, Bo's job now was 5,722 of federal tax, 5,500.37 on his own return)
+  const ti0 = { ...tiPlan, inputs: withBusiness(plan, tiPlan.inputs, { today }) };
+  // filing separately, the job's pay is on this person's own return (IRS Pub. 501): the engine puts a change to the household's
+  // wages on the return `separateTo` names (care fourth pass: Bo's job now was worked on Ana's return, 9,109.87, not 5,722)
+  const own = ti0.inputs.separate?.find((x) => x.personId === pid) ?? null;
+  const ti = own ? { ...ti0, inputs: { ...ti0.inputs, separateTo: pid } } : ti0;
   const st = computeState(plan, { today });
   const stateNow = st.rate ?? 0;
   if (st.rate === null) notes.push("Your state's income tax is not counted: set its rate on the State tax page, or type each job's state rate.");
   // the rest of the household's wages: the plan's wages (after everyone's pre-tax 401(k) saving, which stays as it is)
-  // less this person's pay; and their Medicare wages (pay before 401(k) saving), for the 0.9% extra Medicare tax
+  // less this person's pay; and their Medicare wages (pay before 401(k) saving), for the 0.9% extra Medicare tax: the
+  // other adults' child care accounts are out of them (3121(a)(18)); filing separately, this person's own other pay only,
+  // against the separate return's own threshold (Form 8959)
   const otherWages = (Number(ti.inputs.wages) || 0) - planSalary - planBonus;
-  const otherMedicare = inc.active.filter((x) => ["salary", "bonus"].includes(x.type) && x.taxable !== false && x.period !== "once").reduce((t, x) => t + x.yearly, 0) - planSalary - planBonus;
+  const careEp = ti.care?.earnedPeople?.find((x) => x.id === pid) ?? null;
+  const othersElected = (ti.care?.account?.people ?? []).filter((x) => x.id !== pid).reduce((t, x) => t + x.elected, 0);
+  const otherMedicare = own ? 0 : inc.active.filter((x) => ["salary", "bonus"].includes(x.type) && x.taxable !== false && x.period !== "once").reduce((t, x) => t + x.yearly, 0) - planSalary - planBonus - othersElected;
   // each year compared uses its own tax tables (indexed past the last published year) and wage base
   const yearTax = Array.from({ length: years }, (_, t) => {
     const P = t === 0 ? ti.params : paramsFor(FEDERAL, year + t, { inflation });
-    const T = { inputs: ti.inputs, params: P, otherWages, otherMedicare, wageBase: maximumEarnings(year + t) };
+    // the child care credit's earned-income cap with this person on each job's pay, not the plan's (careInputsWith)
+    // the person's pay as the return has it before the child care account (the plan's, after pre-tax saving), moved by the
+    // job's pay against the plan's
+    const T = { inputs: ti.inputs, params: P, otherWages, otherMedicare, wageBase: maximumEarnings(year + t), personId: pid, account: ti.care?.account ?? null, careAt: (w) => careInputsWith(ti, { [pid]: { pay: Math.max(0, (careEp?.pay ?? 0) + w - planSalary - planBonus) } }) };
     const base = taxYear(0, { ...T, stateRate: 0 });
     return { T, base, baseTotal: base.federal + base.extraMedicare };
   });
@@ -166,7 +198,7 @@ export function compute(plan, params = {}) {
       const tx = taxYear(cash + stock + signOn - o.premium, { ...Y.T, stateRate });
       const tax = tx.federal + tx.payroll + tx.state - Y.baseTotal;
       const gross = cash + stock + m + o.hsaEmployer + o.otherYearly - o.premium + signOn;
-      return { gross, tax, tx, afterTax: gross - tax - moving };
+      return { gross, tax, tx, lost: tx.lost, afterTax: gross - tax - tx.lost - moving };
     };
     const rows = Array.from({ length: years }, (_, t) => yearAt(t));
     const y1 = rows[0], steady = yearAt(0, false);
@@ -177,7 +209,7 @@ export function compute(plan, params = {}) {
     const b0 = yearTax[0].base;
     return {
       id: current ? "current" : o.id, name: o.name, current, inputs: { ...o, stateRate }, yearly, signOn: o.signOn, moving: o.movingCost,
-      tax: { federal: y1.tx.federal - b0.federal, payroll: y1.tx.payroll - b0.extraMedicare, state: y1.tx.state, total: y1.tax }, afterTax: y1.afterTax,
+      tax: { federal: y1.tx.federal - b0.federal, payroll: y1.tx.payroll - b0.extraMedicare, state: y1.tx.state, total: y1.tax }, lost: y1.lost, afterTax: y1.afterTax,
       steadyAfterTax: steady.afterTax, time, perHour: time.work > 0 ? (steady.afterTax - time.commuteCost) / hours : null,
       overYears, stockYears, stockShare: overYears.gross > 0 ? stockYears / overYears.gross : 0, rows,
     };

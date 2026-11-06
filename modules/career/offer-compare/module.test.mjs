@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, matchFor, timeFor, taxYear, PAYROLL, DEFAULTS } from "./compute.js";
-import { taxInputs, compute as computeFederal } from "../../taxes/federal/compute.js";
+import { taxInputs, careInputsWith, compute as computeFederal } from "../../taxes/federal/compute.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { federalTax, paramsFor } from "../../../core/math/tax.js";
+import { withBusiness } from "../../taxes/withholding/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -45,15 +46,29 @@ test("the family: Ana's job now from the plan, against an offer, by hand", () =>
   const p = withOffers([OFFER]);
   const d = compute(p, { today: TODAY });
   assert.equal(d.ready, true); assert.equal(d.person.id, "p-ana"); assert.equal(d.years, DEFAULTS.years); assert.equal(d.hasJob, true);
-  const ti = taxInputs(p, { today: TODAY });
-  const other = ti.inputs.wages - 101400;
+  // the household's return with Bo's photography at its profit, half its self-employment tax and its 20% deduction off, as
+  // the Federal estimate's year tax has it (Review 2026-11-06: the job's tax was worked with the business in full as ordinary
+  // income; Ana's job now 13,786 of federal tax, 13,571.97 with the business's deductions)
+  const tiPlan = taxInputs(p, { today: TODAY });
+  const ti0 = { ...tiPlan, inputs: withBusiness(p, tiPlan.inputs, { today: TODAY }) };
+  const other = ti0.inputs.wages - 101400;
+  // the child care credit on Cy's care is worked on the lower earner's pay (IRC 21(d)(1)): with no job for Ana there is
+  // none, so each job's tax counts the credit it brings back. Ana's pay here, Bo's from the plan
+  // Ana's pay as the return has it before any child care account (after her 401(k)), moved by the job's pay
+  const anaPay = ti0.care.earnedPeople.find((x) => x.id === "p-ana").pay;
+  const careAt = (w) => careInputsWith(ti0, { "p-ana": { pay: Math.max(0, anaPay + w - 101400) } });
+  const fedJ = (P, w) => { const c = careAt(w); return fedOnly({ ...ti0.inputs, care: c }, P, other + w + c.wagesChange); };
+  const ti = { inputs: ti0.inputs, params: ti0.params };
   const [now, big] = d.options;
   assert.equal(now.current, true); assert.equal(now.yearly.salary, 101400); assert.equal(now.yearly.match, 3050, "the plan's employer match");
-  near(now.tax.federal, fedOnly(ti.inputs, ti.params, other + 101400) - fedOnly(ti.inputs, ti.params, other));
+  near(now.tax.federal, fedJ(ti.params, 101400) - fedJ(ti.params, 0));
+  // by hand: without Ana's pay the household loses the 1,050 credit (35% at AGI 57,380) it would have at that AGI, and with
+  // it gets 960 (32% at 158,780): the job now is 1,050 cheaper in federal tax than with the credit kept frozen at Bo's pay
+  near(fedOnly({ ...ti0.inputs, care: careAt(0) }, ti.params, other) - fedOnly(ti0.inputs, ti.params, other), 1050, 1e-6);
   near(now.tax.payroll, 101400 * 0.0765); assert.equal(now.tax.state, 0, "Texas");
   near(big.yearly.match, 3540); near(big.yearly.total, 118000 + 10000 + 12000 + 3540 - 2400);
   const wages1 = 118000 + 10000 + 12000 + 15000 - 2400;
-  near(big.tax.federal, fedOnly(ti.inputs, ti.params, other + wages1) - fedOnly(ti.inputs, ti.params, other));
+  near(big.tax.federal, fedJ(ti.params, wages1) - fedJ(ti.params, 0));
   near(big.tax.payroll, wages1 * 0.0765);
   near(big.afterTax, big.yearly.total + 15000 - big.tax.total - 3000);
   // later years: salary, bonus and match rise with Ana's 3% raise, each taxed with its own year's tables and wage base
@@ -61,7 +76,7 @@ test("the family: Ana's job now from the plan, against an offer, by hand", () =>
   near(big.rows[2].gross, (128000 + 3540) * g(2) + 12000 - 2400, 1e-6);
   const P2 = paramsFor(FEDERAL, 2028, { inflation: 0.03 });
   const w2 = 128000 * g(2) + 12000 - 2400;
-  near(big.rows[2].tax, fedOnly(ti.inputs, P2, other + w2) - fedOnly(ti.inputs, P2, other) + w2 * 0.0765, 1e-6);
+  near(big.rows[2].tax, fedJ(P2, w2) - fedJ(P2, 0) + w2 * 0.0765, 1e-6);
   const weeks = 52 - DEFAULTS.ptoDays / 5;   // 19 days off: 48.2 weeks
   near(big.overYears.commute, 3 * weeks * 14 * 4);
   near(big.overYears.net, big.rows.reduce((s, r) => s + r.afterTax, 0) - big.overYears.commute);
@@ -147,4 +162,106 @@ test("typed figures for the job now win; whose job; offers take the job now's bl
   const self = withOffers([]); self.taxes.hsa = { employer: 1000 };
   assert.equal(compute(self, { today: TODAY }).options[0].yearly.hsa, 1000, "Ana is the plan's own: the HSA money is hers");
   assert.equal(compute(emptyPlan(), { today: TODAY }).ready, false);
+});
+
+test("a job for a spouse with no pay unlocks the child care credit: the offer's tax is what the Federal estimate adds", () => {
+  // Bo earns nothing (no salary, no photography) and Cy's care is on Expenses: on a joint return the credit is worked on the
+  // lower earner's earned income (IRC 21(d)(1)(B)), so with Bo at 0 there is none, and a 50,000 job for Bo brings it back.
+  // The offer's federal tax is the Federal estimate's change with that pay in the plan (2026-11-02: it was 1,050 more, the
+  // credit missed, because the plan's lower earner was kept at 0)
+  const p = familyPlan(TODAY);
+  p.income = p.income.filter((x) => x.id !== "i-bo" && x.id !== "i-side");
+  p.whatIfs = { offers: { personId: "p-bo", offers: [{ id: "o-bo", name: "Clinic", salary: 50000 }] } };
+  const offer = compute(p, { today: TODAY }).options.find((o) => o.id === "o-bo");
+  const fed = (q) => { const r = computeFederal(q, { today: TODAY }).result; return r.totalTax - r.additionalMedicare; };
+  const withJob = structuredClone(p);
+  withJob.income.push({ id: "i-bo2", name: "Bo's new job", type: "salary", personId: "p-bo", amount: 50000, period: "annual", growth: 0, taxable: true });
+  assert.equal(computeFederal(p, { today: TODAY }).result.credits.careCredit, 0, "no credit with Bo earning nothing");
+  assert.ok(computeFederal(withJob, { today: TODAY }).result.credits.careCredit > 0);
+  near(offer.tax.federal, fed(withJob) - fed(p), 0.01);
+});
+
+test("a job for a spouse with no pay also lets the other's child care account stay out of income (one rule, careInputsWith)", () => {
+  // Bo earns nothing and Ana has a 5,000 account for 2026: on a joint return none of it stays out of income (129(b)(1)(B):
+  // the lower earner's earned income), so the plan taxes it as pay. A 50,000 job for Bo lets all 5,000 stay out, and the
+  // offer's federal tax is the Federal estimate's change with that pay in the plan (the account, the credit, the wages)
+  const p = familyPlan(TODAY);
+  p.income = p.income.filter((x) => x.id !== "i-bo" && x.id !== "i-side");
+  p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 5000, planYear: 2026 } }, offers: { personId: "p-bo", offers: [{ id: "o-bo", name: "Clinic", salary: 50000 }] } };
+  const fed = (q) => { const r = computeFederal(q, { today: TODAY }).result; return r.totalTax - r.additionalMedicare; };
+  const withJob = structuredClone(p);
+  withJob.income.push({ id: "i-bo2", name: "Bo's new job", type: "salary", personId: "p-bo", amount: 50000, period: "annual", growth: 0, taxable: true });
+  assert.equal(computeFederal(p, { today: TODAY }).care.account.excluded, 0);
+  assert.equal(computeFederal(withJob, { today: TODAY }).care.account.excluded, 5000);
+  const offer = compute(p, { today: TODAY }).options.find((o) => o.id === "o-bo");
+  near(offer.tax.federal, fed(withJob) - fed(p), 0.01);
+});
+
+test("care fourth pass: the child care account's payroll and state saving count on the job's pay, as Benefits counts them (+70 for Jo)", () => {
+  const NOV = "2026-11-02";
+  // Jo, head of household in Ohio, 62,000, one child, 900 a month of daycare; a 5,000 account for 2026. Benefits: the account
+  // saves 70 (federal -450, Social Security and Medicare 382.50, Ohio 137.50). The job now kept 450 LESS with it (the federal
+  // part only: payroll and state were worked on the whole pay)
+  const jo = (acct) => {
+    const p = emptyPlan();
+    p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+    p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+    p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: 62000, period: "annual", growth: 0, taxable: true }];
+    p.expenses = [{ id: "care", name: "Daycare", category: "childcare", amount: 900, period: "monthly" }];
+    p.whatIfs = { offers: { years: 1, offers: [] }, ...(acct ? { benefits: { jo: { dcfsaElect: acct, planYear: 2026 } } } : {}) };
+    return p;
+  };
+  const a = compute(jo(0), { today: NOV }).options[0], b = compute(jo(5000), { today: NOV }).options[0];
+  near(b.afterTax - a.afterTax, 70, 0.01);
+  near(a.tax.payroll - b.tax.payroll, 382.5, 1e-6); near(a.tax.state - b.tax.state, 5000 * (a.tax.state / 62000), 1e-6);
+  // no care on Expenses: all 5,000 is lost, but it still leaves the pay before Social Security, Medicare and the state's tax
+  const nc = (acct) => { const p = jo(acct); p.expenses = []; return p; };
+  near(compute(nc(0), { today: NOV }).options[0].tax.payroll - compute(nc(5000), { today: NOV }).options[0].tax.payroll, 382.5, 1e-6);
+});
+
+test("care fourth pass: filing separately, the job's pay is on that person's own return (Bo's job now: 5,500.37)", () => {
+  // the family filing separately, a 3,750 child care account each. Bo's return with his pay is 5,500.37 of income tax (on his
+  // own return, his photography on it too, at its profit with its deductions: Review 2026-11-06, it was 5,722 with the
+  // business in full), without it 0: the job's federal is 5,500.37 (the page said 9,109.87, Bo's pay taken off Ana's return)
+  const p = familyPlan(TODAY); p.household.filingStatus = "married_separate";
+  p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } }, offers: { personId: "p-bo", years: 1, offers: [{ id: "o1", name: "Same", salary: 62400, officeDays: 0, raise: 0 }] } };
+  const d = compute(p, { today: TODAY });
+  near(d.options[0].tax.federal, 5500.37, 0.01); near(d.options[1].tax.federal, 5500.37, 0.01);
+  // Social Security and Medicare on his pay less his whole 3,750 election, and no 0.9%: his own Medicare wages are under the
+  // separate return's 125,000 (the household's pay is not)
+  near(d.options[0].tax.payroll, 0.0765 * (62400 - 3750), 1e-6);
+});
+
+test("Review 2026-11-06: the money the child care account would lose is not kept (Jo with no care keeps 49,684, not 54,684)", () => {
+  const NOV = "2026-11-02";
+  // Jo, head of household in Ohio, 62,000, one child, a 5,000 account for 2026. With 900 a month of care the account pays it
+  // all back and the job keeps 54,684. With no care all 5,000 is lost: pay she never gets back, so she keeps 49,684 (the page
+  // said 54,684, as if the account cost nothing); with 1,800 of care 3,200 is lost: 51,484
+  const jo = (acct, care) => {
+    const p = emptyPlan();
+    p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+    p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+    p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: 62000, period: "annual", growth: 0, taxable: true }];
+    p.expenses = care ? [{ id: "care", name: "Daycare", category: "childcare", amount: care, period: "monthly" }] : [];
+    p.whatIfs = { offers: { years: 1, offers: [] }, ...(acct ? { benefits: { jo: { dcfsaElect: acct, planYear: 2026 } } } : {}) };
+    return p;
+  };
+  const kept = (p) => compute(p, { today: NOV }).options[0];
+  const cared = kept(jo(5000, 900)), none = kept(jo(5000, 0)), some = kept(jo(5000, 150));
+  near(cared.afterTax, 54684, 0.5); near(cared.lost, 0, 1e-9);
+  near(none.lost, 5000, 1e-9); near(none.afterTax, 49684, 0.5); near(none.steadyAfterTax, 49684, 0.5);
+  near(some.lost, 3200, 1e-6); near(some.afterTax, 51484, 0.5);
+  // without the account she keeps more than with an account that loses it all
+  assert.ok(kept(jo(0, 0)).afterTax > none.afterTax);
+  // over the years it is lost every year the election stands
+  near(none.overYears.afterTax, none.afterTax, 1e-6);
+});
+
+test("Review 2026-11-06: filing separately, Bo's job is on his own return with his business at its profit and its deductions (5,500.37)", () => {
+  // the family filing separately, 3,750 each: Bo's return with his pay is 5,500.37 of income tax (his photography at its
+  // profit, half its self-employment tax and its 20% deduction off: IRS Pub. 501; IRC 164(f), 199A), without his pay 0. The
+  // page said 5,722: the business counted in full as ordinary income
+  const p = familyPlan(TODAY); p.household.filingStatus = "married_separate";
+  p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } }, offers: { personId: "p-bo", years: 1, offers: [] } };
+  near(compute(p, { today: TODAY }).options[0].tax.federal, 5500.37, 0.005);
 });

@@ -32,14 +32,24 @@ test("no plans: nothing to compare; the defaults", () => {
 
 test("the family's three plans: the cheapest for the usual year, the three years, where another wins", () => {
   const d = compute(planWith({ tier: "family", expected: 6000, plans: [PPO, HSA, HMO] }), { today: "2026-10-30" });
-  assert.equal(d.hsaLimit, 8750); near(d.marginal, 0.22); near(d.taxRate, 0.22 + FICA);
+  // over the 8,750 HSA limit: 22%, and the child care credit on Cy's care two points higher (AGI 158,780 -> 150,030: from
+  // 32% to 34% of 3,000, +60; IRC 21(a)(2) takes a point per 4,000 over 150,000)
+  const rate = 0.22 + 60 / 8750;
+  assert.equal(d.hsaLimit, 8750); near(d.marginal, rate); near(d.taxRate, rate + FICA);
   assert.equal(d.best, "hsa");
   const x = Object.fromEntries(d.plans.map((p) => [p.id, p]));
   near(x.ppo.usual.total, 7680 + 2000); near(x.hmo.usual.total, 6240 + 500 + 0.1 * 5500);
   near(x.ppo.quiet.total, 7680 + QUIET); near(x.ppo.bad.total, 7680 + 6000); assert.equal(x.ppo.worst, x.ppo.bad.total);
+  // at 22.7% the HSA plan's tax saving keeps it cheapest at every bill; without the child care (22% even) the HMO wins
+  // a narrow band of bills between 20,000 and 30,000
   const cross = Object.fromEntries(d.crossovers.map((c) => [c.id, c.ranges]));
-  assert.deepEqual(cross.ppo, []);
-  assert.equal(cross.hmo.length, 1); assert.ok(cross.hmo[0].from > 20000 && cross.hmo[0].to < 30000);
+  assert.deepEqual(cross.ppo, []); assert.deepEqual(cross.hmo, []);
+  const noCare = planWith({ tier: "family", expected: 6000, plans: [PPO, HSA, HMO] }); noCare.expenses = noCare.expenses.filter((x) => x.category !== "childcare");
+  const e = compute(noCare, { today: "2026-10-30" });
+  near(e.marginal, 0.22);
+  const cross22 = Object.fromEntries(e.crossovers.map((c) => [c.id, c.ranges]));
+  assert.deepEqual(cross22.ppo, []);
+  assert.equal(cross22.hmo.length, 1); assert.ok(cross22.hmo[0].from > 20000 && cross22.hmo[0].to < 30000);
 });
 
 test("HSA eligibility: a plan ticked as HSA with too low a deductible is warned", () => {

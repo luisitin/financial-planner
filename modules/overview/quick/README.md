@@ -73,3 +73,9 @@ and pages in `off` are left out.
 run of years") and points to Will the money last?, which gives the figure that lasts in 9 of 10 markets (too slow to work out
 on every page this line shows on). Review 2026-11-02: "carries $111,897 a year, less in a bad run of years" (the "a year" was
 missing).
+
+## Review 2026-11-06
+- "What will I owe in tax this year?", filing separately: each return settles on its own (withholding `byReturn` through
+  `taxAnswer` `returns`), so the answer names who owes and who gets money back: "Bo owes about $1,660; Ana gets about
+  $2,200 back" for the family with 3,750 each, where it said "About $540 back in April". Filing jointly, nothing changes.
+  Test: "the tax answer, filing separately".

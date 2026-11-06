@@ -1,7 +1,7 @@
 // modules/taxes/federal/view.js -- DOM only. The year's federal tax first (the figure, the
 // refund or bill, the rates), then the walk from income to tax, what the plan already knows,
 // and folded forms for the figures only the owner knows.
-import { compute } from "./compute.js";
+import { compute, ratePct } from "./compute.js";
 import { taxAnswer, fullSteps } from "../withholding/compute.js";
 import { FILING_STATUSES } from "../../../core/math/tax.js";
 
@@ -24,16 +24,36 @@ export function render(root, ctx) {
   // no pay at all (a freelancer): nothing is withheld, so what is still to pay is known from the estimates paid alone
   const noPay = !(r.income.wages > 0);
   const owes = ans && (ans.from !== "none" || noPay) ? ans.balance : null;
+  // filing separately, each return settles on its own: one return's refund cannot pay the other's bill (withholding
+  // byReturn; Review 2026-11-06: "you would get about $540 back" while Bo's own return owed 1,660)
+  const rets = owes !== null && Array.isArray(ans.returns) && ans.returns.length > 1 ? ans.returns : null;
+  // a return with no paycheck figure has the verdict "unknown"; the hero only gets here with withholding known (typed or
+  // estimated) or with no pay at all (nothing withheld), so its balance is known: read it (Review 2026-11-06, verifier: two
+  // self-employed spouses each owing thousands read "Gus's is about right, and Hal's is about right")
+  const verdictOf = (x) => (x.verdict !== "unknown" ? x.verdict : Math.abs(x.balance) < 500 ? "about right" : x.balance > 0 ? "owe" : "refund");
+  const retWords = rets ? rets.map((x) => verdictOf(x) === "owe" ? `${x.name} would owe about ${money(x.balance)}` : verdictOf(x) === "refund" ? `${x.name} would get about ${money(-x.balance)} back` : `${x.name}'s is about right`).join(", and ") : "";
+  const oweMost = rets ? Math.max(...rets.map((x) => x.balance)) : owes;
   const paidBy = !ans ? "" : ans.from === "none" ? (ans.paid > 0 ? `Nothing is taken out of pay; ${money(ans.paid)} is paid in estimates so far` : "Nothing is taken out of pay and no estimated payments are typed yet")
     : `${ans.from === "typed" ? "The paychecks take out" : "Your paychecks take out about"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ans.from === "mixed" ? " (partly estimated from pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is already paid` : ""}`;
   const seNote = full.se ? ` It includes ${money(full.se.tax)} of self-employment tax on the business.` : "";
+  // the next dollar's cost and what sets it: the child care credit when it moves it (careSets), else the bracket
+  const cents = Math.round(d.nextDollar * 100);
+  // the care credit itself covers all the income tax only when it is held to it; otherwise (Lee: 2,100 of care credit on 2,148
+  // of tax) it is the credits together, the child tax credit's refundable part already at its most (Review 2026-11-06, verifier)
+  const careCoversAll = r.credits.careCredit >= r.incomeTax - 0.5;
+  const why = d.careSets === "covers"
+    ? (cents === 0 ? (careCoversAll ? "the child care credit is more than the tax, so it covers the tax on more pay too" : "with the child care credit, your credits are more than the tax, so they cover the tax on more pay too") : `less than the ${fmt.pct(r.bracketRate, 0)} bracket: the child care credit covers part of the tax on more pay`)
+    : d.careSets === "falls" || d.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} bracket, and the child care credit getting smaller`
+    : `the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""}`;
+  // credits worth more than the tax: the tax is below zero and the rest comes back (the walk's last line says the same)
+  const negative = total < -0.5;
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.hasIncome ? `About ${money(total)} of federal tax for ${d.year}` : `Federal tax for ${d.year}`),
+    ui.h("h1", {}, d.hasIncome ? (negative ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back` : `About ${money(total)} of federal tax for ${d.year}`) : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${statusLabel}, ${money(r.income.gross)} of income. That is ${fmt.pct(full.rate, 1)} of it overall; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${Math.round(d.marginal * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left in it` : ""})`}.${owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
+      ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
-    owes !== null ? ui.row(noPay ? ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, owes >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: owes >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, owes >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
-    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice: no AMT, ${full.se ? "" : "business deduction, "}education or earned-income credits, or state tax.`),
+    owes !== null ? ui.row(noPay ? ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, oweMost >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, oweMost >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
+    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}; it leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, care for an adult who cannot look after themselves, and state tax.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -41,28 +61,53 @@ export function render(root, ctx) {
   // the engine's note that self-employment tax is left out is answered by the walk's business rows
   for (const n of d.notes) if (!(full.se && /self-employment tax/i.test(n))) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
-    ui.stat("Federal tax", money(total), owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
-    ui.stat("Of your income", fmt.pct(full.rate, 1), "the effective rate"),
-    noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax`) : ui.stat("On the next dollar", fmt.pct(d.marginal, 0), d.marginal > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
+    negative ? ui.stat("Credits back", money(-total), owes !== null ? `more than the tax; with withholding, about ${money(-owes)} back in April` : "more than the tax: it comes back with the refund")
+      : ui.stat("Federal tax", money(total), rets ? "the two returns added up" : owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
+    negative ? null : ui.stat("Of your income", ratePct(full.rate), "the effective rate"),
+    noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax`)
+      : ui.stat("On the next dollar", fmt.pct(d.nextDollar, 0), d.careSets === "covers" ? (cents === 0 && !careCoversAll ? "the credits cover it" : "the child care credit covers it")
+        : d.careSets === "falls" || d.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} bracket, and a smaller child care credit`
+        : d.nextDollar > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} bracket: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} bracket`),
     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount)} of deductions`),
   )));
-  if (r.separate) root.append(ui.card("Two returns",
-    ui.h("p", { class: "muted small" }, "Filing separately, each of you files your own return. The tax above is the two added up."),
-    ui.h("ul", { class: "records" }, r.separate.map((x) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name ?? "Spouse"}'s return`), ui.h("span", { class: "rec-value" }, money(x.totalTax))),
-      ui.h("div", { class: "rec-sub" }, `${money(x.income.gross)} of income, ${money(x.taxableIncome)} taxed after ${money(x.deduction.amount)} of deductions${x.deduction.used === "itemized" ? " (itemized)" : ""}; the ${fmt.pct(x.bracketRate, 0)} bracket`)))),
-  ));
+  // filing separately: each return's own tax, a business's self-employment tax and deductions on its owner's return
+  // (fullSteps `returns`, withholding separateBusiness), so "the two added up" is exact (care fourth pass: 8,590 + 6,482 was
+  // shown under a tax of 15,742)
+  if (r.separate) {
+    const own = (x) => full.returns?.find((y) => y.personId === x.personId) ?? null;
+    root.append(ui.card("Two returns",
+      ui.h("p", { class: "muted small" }, "Filing separately, each of you files your own return. The tax above is the two added up."),
+      // a return with a business: its own income, taxable income and bracket with the business at its profit and its
+      // deductions (separateBusiness), not the engine's with the business counted in full (Review 2026-11-06: Bo's read
+      // "$50,500 taxed ... the 22% bracket" where his return taxes 48,653 in the 12%)
+      ui.h("ul", { class: "records" }, r.separate.map((x) => { const o = own(x), se = o ? o.se + o.addl : 0, b = o && o.taxableIncome != null ? o : null;
+        const gross = b?.gross ?? x.income.gross, taxable = b ? b.taxableIncome : x.taxableIncome, ded = b ? b.deduction : x.deduction, bracket = b ? b.bracketRate : x.bracketRate, half = Number(b?.half) || 0;
+        return ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name ?? "Spouse"}'s return`), ui.h("span", { class: "rec-value" }, money(o ? o.total : x.totalTax))),
+        ui.h("div", { class: "rec-sub" }, `${money(gross)} of income, ${money(taxable)} taxed after ${money(ded.amount + (ded.qbi || 0) + half)} of deductions${ded.used === "itemized" ? " (itemized)" : ""}${[ded.qbi >= 0.5 ? `the 20% business deduction (${money(ded.qbi)})` : null, half >= 0.5 ? `half the self-employment tax (${money(half)})` : null].filter(Boolean).map((t, i) => `${i ? " and " : ", including "}${t}`).join("")}; the ${fmt.pct(bracket, 0)} bracket${se >= 0.5 ? `; with the business on this return: ${money(o.incomeTax)} of income tax and ${money(se)} of self-employment tax` : ""}`)); })),
+    ));
+  }
+  // children under 13 and no care on Expenses: the credit is there to be had once the care is listed; with a child care
+  // account chosen, what to say first is that its money would be lost (care fourth pass: with a 5,000 account and one child
+  // the page promised a credit that stays 0)
+  const careHint = d.care && d.care.persons > 0 && !(d.care.expensesAll > 0) && (d.filingStatus !== "married_separate" || d.care.elected > 0.5);
+  const acctHint = careHint && d.care.elected > 0.5;
+  const credLeft = d.filingStatus !== "married_separate" && (d.care.persons >= 2 ? 6000 : 3000) > Math.min(d.care.elected, d.care.benefitLimit) + 0.5;
   root.append(ui.card("From income to tax",
     ui.h("ul", { class: "records" }, full.steps.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < 0 ? `−${money(-s.amount)}` : money(s.amount))),
       s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null))),
+    careHint ? ui.h("p", { class: "muted small", style: { marginBottom: "0" } }, acctHint
+      ? `Paying for child care so you can work? Add it on Expenses: the child care account pays it back. With no care to pay, the ${money(d.care.elected)} in the account would be lost.${credLeft ? " Care the account does not pay can still count for the child care credit." : ""}`
+      : "Paying for child care so you can work? Add it on Expenses and the child care credit comes off your tax.") : null,
+    careHint ? ui.h("a", { class: "small", href: "#/cashflow/expenses", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Add child care on Expenses ›") : null,
   ));
   root.append(ui.card("What the plan already knows",
-    ui.h("p", { class: "muted small" }, "Yearly figures from your Income, Contributions and People pages. Blank fields below keep these; a typed figure replaces the plan's."),
+    ui.h("p", { class: "muted small" }, `Yearly figures from your Income, Contributions${d.care?.expensesAll > 0 ? ", Expenses" : ""} and People pages. Blank fields below keep these; a typed figure replaces the plan's.`),
     ui.h("ul", { class: "records" }, d.sources.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label, " ", ui.h("span", { class: s.from === "typed" ? "pill accent" : "pill" }, s.from === "typed" ? "typed" : "from the plan")), ui.h("span", { class: "rec-value" }, s.amount < 0 ? `−${money(-s.amount)}` : money(s.amount))),
       s.detail ? ui.h("div", { class: "rec-sub" }, s.key === "business" && full.se ? "Income page; its self-employment tax and business deduction are in the walk above" : s.detail) : null))),
-    ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
+    ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}${d.care?.persons ? `; ${d.care.persons} under 13 ${d.care.turning13?.length ? "for some or all of the year" : "at the end of the year"}${d.filingStatus === "married_separate" ? "" : ", for the child care credit"}` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
   ));
   root.append(figuresFold(ctx, d), deductionsFold(ctx, d), yearFold(ctx, d));
   root.append(ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
@@ -75,7 +120,7 @@ function figuresFold(ctx, d) {
   const { ui, fmt, store, plan } = ctx;
   const ty = plan.taxes?.thisYear ?? {};
   const FIELDS = [
-    { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) money and the health FSA)" },
+    { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) money, the health FSA and the child care account)" },
     { key: "otherOrdinary", label: "Other ordinary income", type: "money", min: 0, help: "interest, non-qualified dividends, IRA withdrawals, Roth conversions" },
     { key: "qualifiedIncome", label: "Qualified dividends", type: "money", min: 0, help: "taxed at the lower gains rates; long-term gains come from the Capital gains page" },
     { key: "taxExemptInterest", label: "Tax-exempt interest", type: "money", min: 0, help: "municipal bonds; counts toward Social Security taxation only" },

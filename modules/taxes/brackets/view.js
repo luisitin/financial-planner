@@ -1,6 +1,7 @@
 // modules/taxes/brackets/view.js -- DOM only. Your bracket and the room left in it first,
 // then what more income would cost, then the whole ladder with your part of each rung filled.
 import { compute } from "./compute.js";
+import { ratePct } from "../federal/compute.js";
 import { statusLabel } from "../../../core/math/tax.js";
 
 let extra = 10000;
@@ -13,13 +14,14 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? `${d.whose ? `${d.whose} is` : "You are"} in the ${fmt.pct(d.bracketRate, 0)} bracket` : "Which bracket are you in?"),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${d.whose ? `Filing separately, each of you has your own ladder; this is ${d.whose}'s return. ` : ""}${money(d.ordinaryTaxable)} of ordinary taxable income in ${d.year}${Number.isFinite(d.roomInBracket) ? `, with ${money(d.roomInBracket)} of room before the ${fmt.pct(d.nextRate, 0)} rate starts` : ", the top rate"}. Only the dollars inside each rung pay that rung's rate: overall ${d.whose ? "the two of you pay" : "you pay"} ${fmt.pct(d.effectiveRate, 1)}.${d.qualifiedNote ? ` ${d.qualifiedNote}` : ""}`
+      ? `${d.whose ? `Filing separately, each of you has your own ladder; this is ${d.whose}'s return. ` : ""}${money(d.ordinaryTaxable)} of ordinary taxable income in ${d.year}${Number.isFinite(d.roomInBracket) ? `, with ${money(d.roomInBracket)} of room before the ${fmt.pct(d.nextRate, 0)} rate starts` : ", the top rate"}. Only the dollars inside each rung pay that rung's rate: ${d.totalTax < -0.5 ? `the credits are more than the tax, so ${d.whose ? "the two of you pay" : "you pay"} no federal income tax and about ${money(-d.totalTax)} of credits come back` : d.totalTax < 0.5 ? `the credits cover the tax, so ${d.whose ? "the two of you pay" : "you pay"} no federal income tax` : `overall ${d.whose ? "the two of you pay" : "you pay"} ${ratePct(d.effectiveRate)}`}.${d.qualifiedNote ? ` ${d.qualifiedNote}` : ""}`
       : "Brackets are steps: each slice of income pays its own rate, so moving up a bracket never costs you money on the dollars below it. Add income on the Income page or the Federal estimate page to see where you stand."),
   ));
   if (d.hasIncome) root.append(ui.card(null, ui.row(
     ui.stat("Bracket", fmt.pct(d.bracketRate, 0), `${statusLabel(d.filingStatus).toLowerCase()}, ${d.year}`),
     ui.stat("Room left", Number.isFinite(d.roomInBracket) ? money(d.roomInBracket) : "no limit", Number.isFinite(d.roomInBracket) ? `before ${fmt.pct(d.nextRate, 0)}` : "the top rate"),
-    ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? "more than the bracket: benefits or gains get pulled along" : "what it really costs"),
+    ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? (d.careMoves ? "more than the bracket: the child care credit gets smaller" : "more than the bracket: benefits or gains get pulled along")
+      : d.marginal < d.bracketRate - 0.005 && d.careMoves ? (Math.round(d.marginal * 100) === 0 ? (d.careCoversTax ? "less than the bracket: the child care credit covers the tax on more pay" : "less than the bracket: with the child care credit, the credits cover the tax on more pay") : "less than the bracket: the child care credit covers part of the tax on more pay") : "what it really costs"),
     ui.stat("Deductions", money(d.deduction), "come off before the ladder"),
   )));
   if (d.hasIncome && d.separate) root.append(ui.card("Two returns",

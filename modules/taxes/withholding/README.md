@@ -46,6 +46,18 @@ self-employment tax and the 20% deduction off income (taxes/self-employment `tax
 the engine's `totalTax`), then the self-employment tax; "Federal tax" becomes `yearTax`'s total. The Federal estimate and
 the Tax report both show it.
 
+## A refund counts the credits past the tax (review of 2026-11-02)
+`yearTax` and `fullSteps` no longer stop the year's tax at 0: when refundable credits (the refundable child tax credit,
+up to 1,700 a child) are more than the tax, the total is below zero, as the walk's last line has it, and the refund is
+what was withheld plus that (`yearTax` -> `{ total, income, se, owed (at least 0), back (the credits past the tax) }`;
+`compute` -> `totalTax` = `owed`, `creditsBack`, and the balances on the signed total). Jo at 30,000 (head of household,
+one child, 10,800 of daycare): income tax 585, the care credit takes all of it, 1,700 of the child credit comes back: the
+walk ends at -1,700, the paychecks withhold about 585, so the refund is about 2,285 (the page said 585; the Federal
+estimate's headline said "About $0", its walk -1,700 and Next best action +140 a month). The headline, the walk, this
+page, Estimated payments, the Tax report and Next best action now say the same; the words say "no federal tax, and about
+$1,700 of credits come back" instead of a tax below zero. The rate in the walk goes through the Federal estimate's
+`ratePct`, one rounding for the same figure.
+
 ## Edge cases
 "About right" is within 500 either way. Without a paycheck figure the verdict is unknown. The paychecks-left count is by calendar days, not the employer's actual pay dates.
 
@@ -54,3 +66,57 @@ the Tax report both show it.
 
 ## Ideas / not yet
 - Read the withholding line from an imported paystub; state withholding.
+
+## Care fourth pass (2026-11-02)
+- **Could take home more per paycheck** (`takeHomeMore(over, person)`): only what the paychecks and payments take out beyond
+  the year's tax (`over` = withheld + paid - the tax at 0 or more: refundable credits come back whatever the W-4 says), spread
+  over the paychecks left, and never more than each paycheck withholds (a W-4 can only take it to nothing); Step 3 is that
+  cut over a year's paychecks. Jo at 30,000: 22 a paycheck, all each withholds (it said 571, counting 1,700 of credit); two
+  children and a 5,000 account: 138 (was 1,187); Jo with no account: 161 (was 812, 3,250 over 4 paychecks). The words say
+  when it is all of what each paycheck takes out, and that the credits come back anyway.
+- **Separate returns** (`separateBusiness(plan, fed, params)`): the Self-employment page works one household return, so on
+  separate returns this page works each owner's business on their own return (federal `businessOn`): the profit, half its
+  self-employment tax off that return's income, its 20% deduction after that return's AGI (199A(i)'s floor), the 0.9% on that
+  return's own Medicare wages and earnings against 125,000. `yearTax`, `fullSteps` (and so Estimated payments, the Federal
+  estimate and the Tax report) take it; `fullSteps.returns` gives each return's own total, so the Federal estimate's two
+  returns add up. The family with 3,750 each: 14,282.30 (the Self-employment page's 14,157.45); no accounts: 15,682.61
+  (15,742.45 with 59.84 of 0.9%). Filing jointly the Self-employment page's figures stay (its 30 gap is that page's: the
+  20% deduction in `adjustments` instead of `qbiDeduction`).
+- **Rates** go through the Federal estimate's `ratePct`: "Tax for the year ... 4.9% of income" for 4,268 of 88,000 (it said
+  4.8% with `fmt.pct`).
+
+## Review 2026-11-06
+- **The W-4 figure for next year too.** A W-4 stays in force until it is changed. The Step 3 amount sized for the
+  paychecks left this year (`takeHomeMore` `step3` = the cut a paycheck x the paychecks a year) would take next year's
+  withholding far below the tax: Jo, 161 a paycheck typed, 4 paychecks left, was told 4,186, which leaves next year 938
+  short. `takeHomeMore(over, person, full)` now also gives `january` = floor(min(over, full, perPaycheck x paychecks a
+  year)), never below 0, where `full` is what a whole year of paychecks at today's rates takes out beyond the year's tax
+  (estimated payments left out: next year's are not known; next year's tax taken as this year's, so "about").
+  `one` is true when January's figure, kept for the paychecks left, already leaves under 500 of refund this year
+  (over - min(perPaycheck, january / paychecks a year) x paychecks left < 500, the page's "about right"): then the page gives
+  that one figure "this year and next". Otherwise `step3Words` says both: "For the 4 paychecks left this year, about 4,186 in
+  Step 3 ... In January 2027, change Step 3 to about 3,248, or next year's paychecks would take out too little (a W-4 stays
+  until you change it)." The estimate from pay now gives the figures too (it said "an amount in Step 3").
+- **More withheld, the same root.** Asking for more on the paychecks left (Step 4(c)) comes with January's extra:
+  `addJanuary(short, person, perPaycheck)` = ceil(short / paychecks a year), short = the year's tax less a whole year of
+  paychecks at today's rates (0 when they cover it: "take the extra off again"); none said when within 500 a year of the
+  rest-of-year figure. The answer key's `suggestion.perPaycheck` is unchanged.
+- **Separate returns settle on their own.** `byReturn(plan, fed, est, { paid, priorTax, priorAgi })` works each return's
+  balance: its own tax (`fullSteps` returns: a business on its owner's return), its own filer's withholding (IRC 31(a): the
+  credit is on the return of the person it was withheld from; the household's typed "so far" shared by each earner's
+  paycheck rate: about), and the payments divided as the couple may agree (IRS Pub. 505, "Separate returns": "One of you can
+  claim all of the estimated tax paid and the other none, or you can divide it in any other way you agree on"): to the
+  returns that owe, by what each owes, any beyond that by each return's tax. Each return's safe amount is its own
+  (`safeHarbour` on its tax; last year's tax shared by this year's, Pub. 505's share of a joint return's tax with this year's
+  returns standing in), with the $1,000 test on its own withholding, and a W-4 change on its own earner. The family filing
+  separately with 3,750 each: Ana 7,764.60 of tax, 9,964.60 withheld, 2,200 back; Bo 6,517.70, 4,858 withheld, owes
+  1,659.70 and is under 90% of his own tax (5,866): his own penalty test. The page said "You would likely get about $540
+  back"; it now leads with "Bo would likely owe about $1,660 in April; Ana would likely get about $2,200 back" and an
+  "Each return" card. The household's `balance`, `verdict`, `suggestion` and `estimate.balance` stay as they were: the
+  answer key keeps withholding and estimates the household's (tests/golden/estimated RULES.md section 1).
+- **The self-employment tax said is the tax itself.** `yearTax` adds `seOwn` (`separateBusiness` seTotal + Additional
+  Medicare on it, the Federal estimate walk's figure): 1,017 for the family, joint or separate. `seTax` stays the business's
+  whole effect on the tax, its deductions taken off (581 joint, 796 separate), which alerts and the answer keys read.
+- Tests: "the W-4 Step 3 figure for the paychecks left, and the whole year's figure for January", "more withheld ... the
+  figure for January too", "filing separately, each return settles on its own", "Estimated payments, filing separately",
+  "the self-employment tax itself", "credits more than the tax" (Estimated payments' words).

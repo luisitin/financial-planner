@@ -112,3 +112,47 @@ test("taxOwedNow: a freelancer's tax on the year's earnings so far, less what is
   assert.equal(taxOwedNow(plan, {}), null);
   const jan = taxOwedNow(plan, { today: "2027-02-01" }); assert.ok(jan === null || (jan.year === 2027 && jan.earnedShare === 1 / 12));
 });
+
+// --- Review 2026-11-06 (verifier) ------------------------------------------------------------------------------------------
+test("Review 2026-11-06 (verifier): filing separately, both returns behind on their payments: the line starts with a capital", async () => {
+  // Gus 90,000 and Hal 30,000 of business profit, filing separately, no pay, 3,000 paid in the 1st quarter: both returns need
+  // estimates and both are behind; the page's line read "... other's bill. payments from the 1st quarter ..."
+  const p = emptyPlan();
+  p.household.filingStatus = "married_separate"; p.household.state = "TX";
+  p.household.people = [{ id: "g", name: "Gus", role: "self", birthDate: "1984-04-04" }, { id: "h", name: "Hal", role: "partner", birthDate: "1986-06-06" }, { id: "k", name: "Bea", role: "dependent", birthDate: "2025-03-03" }];
+  p.income = [{ id: "b1", name: "Gus's design work", type: "business", personId: "g", amount: 90000, period: "annual", growth: 0, taxable: true }, { id: "b2", name: "Hal's tutoring", type: "business", personId: "h", amount: 30000, period: "annual", growth: 0, taxable: true }];
+  p.taxes = { ...(p.taxes ?? {}), year: 2026, estimated: { paid: [3000, 0, 0, 0], typedAt: "2026-04-10" } };
+  const d = compute(p, { today: "2026-11-06" });
+  assert.equal(d.returns.filter((x) => x.needsEstimates).length, 2);
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = []) => { const x = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, querySelector() { return null; }, addEventListener() {}, setAttribute() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const base = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form") };
+  const ui = new Proxy(base, { get: (t, k) => t[k] ?? ((...a) => node(String(k), a.filter((x) => typeof x !== "object" || x === null || Array.isArray(x) || "kids" in x))) });
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, store: { update() {} } });
+  const t = root.textContent.replace(/\s+/g, " ");
+  assert.ok(t.includes("Both returns need estimated payments"), t.slice(0, 600));
+  assert.ok(t.includes("Payments from the 1st quarter") && !t.includes("payments from the 1st quarter"), t.slice(0, 600));
+});
+
+test("Review 2026-11-06: filing separately, the safe-amount words say 75,000 of last year's income, not 150,000 (IRC 6654(d)(1)(C))", async () => {
+  // the math (safeHarbour) already used 75,000 for a married person filing separately; the help and the fold said 150,000
+  const page = async (status) => {
+    const p = taxPlan(); p.household.filingStatus = status;
+    const { render } = await import("./view.js");
+    const fmt = await import("../../../core/format.js");
+    const node = (tag, kids = []) => { const x = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, querySelector() { return null; }, addEventListener() {}, setAttribute() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+    const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+    const base = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: (fields) => node("form", fields.map((f) => `${f.label} ${f.help ?? ""}`)) };
+    const ui = new Proxy(base, { get: (t, k) => t[k] ?? ((...a) => node(String(k), a.filter((x) => typeof x !== "object" || x === null || Array.isArray(x) || "kids" in x))) });
+    const root = node("root");
+    render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, store: { update() {} } });
+    return root.textContent.replace(/\s+/g, " ");
+  };
+  const sep = await page("married_separate"), joint = await page("married_joint");
+  assert.equal(compute((() => { const p = taxPlan(); p.household.filingStatus = "married_separate"; p.taxes.priorYear = { tax: 10000, agi: 80000 }; return p; })(), { today: "2026-11-06" }).harbour.priorShare, 1.1);
+  assert.ok(sep.includes("110% if last year's income was over 75,000") && sep.includes("over 75,000 raises") && !sep.includes("150,000"), sep);
+  assert.ok(joint.includes("110% if last year's income was over 150,000") && joint.includes("over 150,000 raises") && !joint.includes("75,000"), joint);
+});

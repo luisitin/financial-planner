@@ -7,8 +7,9 @@
 // allowance for age 65+ or blindness, long-term capital gains bracket tops, Social Security benefit
 // taxation thresholds (base = where up to half becomes taxable; base + extra = where up to 85% does),
 // the Social Security wage base, NIIT and additional-Medicare thresholds, the child tax credit, and
-// the 2025-2028 senior deduction (joint and unmarried returns only), and from 2026 the charity rules and
-// the limit on itemized deductions in the 37% bracket.
+// the 2025-2028 senior deduction (joint and unmarried returns only), from 2026 the charity rules and
+// the limit on itemized deductions in the 37% bracket, and the child and dependent care credit (IRC 21; the
+// dependent care benefits limit of IRC 129), typed from the statute every year (sources in the tool).
 export const FEDERAL = {
  "2024": {
   "year": 2024,
@@ -156,6 +157,22 @@ export const FEDERAL = {
    "married_separate": 125000,
    "head_of_household": 200000,
    "qualifying_surviving": 200000
+  },
+  "careCredit": {
+   "expenseLimit": {
+    "one": 3000,
+    "twoOrMore": 6000
+   },
+   "startPct": 35,
+   "phaseDowns": [
+    {
+     "over": 15000,
+     "per": 2000,
+     "floorPct": 20
+    }
+   ],
+   "benefitLimit": 5000,
+   "benefitLimitSeparate": 2500
   }
  },
  "2025": {
@@ -317,6 +334,22 @@ export const FEDERAL = {
     "qualifying_surviving": 75000
    },
    "phaseOutRate": 0.06
+  },
+  "careCredit": {
+   "expenseLimit": {
+    "one": 3000,
+    "twoOrMore": 6000
+   },
+   "startPct": 35,
+   "phaseDowns": [
+    {
+     "over": 15000,
+     "per": 2000,
+     "floorPct": 20
+    }
+   ],
+   "benefitLimit": 5000,
+   "benefitLimitSeparate": 2500
   }
  },
  "2026": {
@@ -494,6 +527,31 @@ export const FEDERAL = {
     2,
     37
    ]
+  },
+  "careCredit": {
+   "expenseLimit": {
+    "one": 3000,
+    "twoOrMore": 6000
+   },
+   "startPct": 50,
+   "phaseDowns": [
+    {
+     "over": 15000,
+     "per": 2000,
+     "floorPct": 35
+    },
+    {
+     "over": 75000,
+     "per": 2000,
+     "floorPct": 20,
+     "joint": {
+      "over": 150000,
+      "per": 4000
+     }
+    }
+   ],
+   "benefitLimit": 7500,
+   "benefitLimitSeparate": 3750
   }
  }
 };

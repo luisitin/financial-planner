@@ -79,3 +79,16 @@ test("the retirement answer names its figure as the average-market one, a year a
   const by = Object.fromEntries(compute(familyPlan("2026-11-02"), { today: "2026-11-02" }).answers.map((a) => [a.guide, a]));
   assert.match(by.retire.line, /^You plan on \$[\d,]+ a year; if markets do as well as average the plan carries (about )?\$[\d,]+ a year, less in a bad run of years/);
 });
+
+test("Review 2026-11-06: the tax answer, filing separately, says each return's own bill or refund (not \"About $540 back in April\")", async () => {
+  const { answerFor } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  const p = familyPlan(T); p.household.filingStatus = "married_separate";
+  p.whatIfs = { ...(p.whatIfs ?? {}), benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } } };
+  const a = answerFor("taxes", p, { today: T });
+  assert.equal(a.headline, "Bo owes about $1,660; Ana gets about $2,200 back");
+  assert.equal(a.status, "warn"); assert.match(a.line, /^Filing separately, each return settles on its own\./);
+  // filing jointly the household's answer stays
+  assert.match(answerFor("taxes", familyPlan(T), { today: T }).headline, /^Owe about \$5,223 in April$/);
+});

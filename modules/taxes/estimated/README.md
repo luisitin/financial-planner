@@ -49,3 +49,24 @@ The annualised-income method (uneven income through the year) is not modelled; n
 save) or any payment is on file. Until then Needs attention ("Estimated tax: type what you have paid this year"), Next best
 action ("Type or pay this year's estimated tax"), Emergency fund's liquidity line and the Forecast say what was due *if none
 were made*, instead of "$0 is paid so far" for someone who may have paid every quarter.
+
+## Review 2026-11-06
+- **Separate returns, each on its own.** Filing separately, each return has its own tax, withholding, safe amount and
+  $1,000 test (withholding `byReturn`: IRC 31(a), Pub. 505 "Separate returns"). `returns` gives each return's figures with its
+  own four payments (`schedule`, the household's schedule code taken out into a function): the payments typed here go to
+  the return that owes, box by box in the same shares (Pub. 505: the couple divides joint payments as they agree). The
+  family filing separately with 3,750 each: the household's figures said "No estimated payments needed" (14,282 of tax,
+  14,823 withheld), but Bo's own return has 6,517.70 of tax and 4,858 withheld: it needs 5,866 paid in (90% of its tax), so
+  1,007.93 in four payments of 251.98, 755.95 of it behind. The page now leads with "Bo: about $1,008 more withheld this
+  year", an "Each return" card, and the four payments on Bo's return. The household's figures (needsEstimates, the
+  schedule, balanceAtFiling) stay as the answer key has them (tests/golden/estimated RULES.md section 1).
+- **Credits more than the tax.** `creditsBack` (yearTax `back`): the words say "no federal tax, and about $1,700 of credits
+  come back on top of the $585 withheld from pay" where they said "about $0 of federal tax, $585 of it withheld".
+- Tests: in modules/taxes/withholding/module.test.mjs, "Estimated payments, filing separately" and "credits more than the tax".
+- **Verifier: both returns behind.** With both returns needing payments the behind line has no name before it and read
+  "... other's bill. payments from the 1st quarter ..."; it now starts "Payments". Test: "Review 2026-11-06 (verifier):
+  filing separately, both returns behind" (this folder's module.test.mjs).
+- **The 110% line filing separately (follow-up to the verifier).** `safeHarbour` already used 75,000 of last year's income
+  for a married person filing separately (IRC 6654(d)(1)(C): "$75,000 in the case of a married individual filing a separate
+  return"); the help under last year's income and the fold's words said 150,000 for everyone. They now say 75,000 filing
+  separately (compute gives `filingStatus`). Test: "filing separately, the safe-amount words say 75,000".

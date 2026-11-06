@@ -127,7 +127,9 @@ export function compute(plan, params = {}) {
       const share = (p) => (ti.payTotal > 0 ? (ti.k401.people.find((x) => x.id === p.id)?.pay ?? 0) / ti.payTotal : 0.5);
       for (const p of who) {
         const k = ti.k401.people.find((x) => x.id === p.id), h = ti.hsa.picture.people.find((x) => x.id === p.id);
-        const wages = ti.wagesTyped ? ti.inputs.wages * share(p) : (k?.pay ?? 0) - (k?.excluded ?? 0) - (ti.fsa.people?.find((x) => x.id !== null && x.id === p.id)?.offWages ?? (p === me ? ti.fsa.offWages : 0));
+        // ... and their own child care account, which the Federal estimate takes off their wages (IRC 129; its care section)
+        const dcOwn = ti.wagesTyped || !(ti.care?.offWages > 0) ? 0 : (() => { const e = ti.care.earnedPeople?.find((x) => x.id !== null && x.id === p.id); return (e?.excluded ?? 0) + (e?.forfeited ?? 0); })();   // excluded + forfeited: the one rule (careAccountRule)
+        const wages = ti.wagesTyped ? ti.inputs.wages * share(p) : (k?.pay ?? 0) - (k?.excluded ?? 0) - (ti.fsa.people?.find((x) => x.id !== null && x.id === p.id)?.offWages ?? (p === me ? ti.fsa.offWages : 0)) - dcOwn;
         const income = named.filter((x) => x.personId === p.id).reduce((s, x) => s + x.yearly, 0);
         own.set(p, wages - (ti.wagesTyped ? 0 : (h?.payroll ?? 0) - (h?.excess ?? 0)) + income);   // typed wages are box 1: the HSA money is already out
       }

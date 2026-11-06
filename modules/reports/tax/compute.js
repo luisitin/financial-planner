@@ -13,7 +13,7 @@ import { compute as computeTaxProjection } from "../../taxes/projection/compute.
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, today, year, filing, isIndexed,
- *   thisYear: { steps: [{ label, amount, sub }], totalTax, agi, taxableIncome, effectiveRate, marginal, bracketRate, roomInBracket, nextRate },
+ *   thisYear: { steps: [{ label, amount, sub }], totalTax, agi, taxableIncome, effectiveRate, marginal (= nextDollar, the Federal estimate's next dollar), nextDollar, bracketRate, roomInBracket, nextRate },
  *   ladder: [{ rate, from, to, filled, tax, current }],
  *   paying: { verdict, balance, withheld, estimatesPaid, needsEstimates, nextDue (the next quarter not yet past), overdue (past quarters not paid), penaltyRisk } ,
  *   gains: { hasSales, taxOnGains, zeroRoom, netLoss, carryForward } , hsa: { taxSaved, room, limit } | null,
@@ -39,11 +39,22 @@ export function compute(plan, params = {}) {
   const est = wh.estimate ?? {};
   const noPay = !(r.income.wages > 0);
   const known = est.from && (est.from !== "none" || noPay);
+  // filing separately, each return settles on its own (withholding byReturn), as Withholding check, the Federal estimate,
+  // Quick answers and Needs attention say it (Review 2026-11-06, verifier: the report said "a refund of about $540" while Bo's
+  // return owed 1,660 and Ana's got 2,200 back). A return with no paycheck figure ("unknown") is known here only with no pay
+  // at all, where nothing is withheld: its balance says it. Its own estimated payments are Estimated payments' `returns`.
+  const verdictOf = (x) => (x.verdict !== "unknown" ? x.verdict : Math.abs(x.balance) < 500 ? "about right" : x.balance > 0 ? "owe" : "refund");
+  const retEst = (name) => (es.returns ?? []).find((y) => y.name === name) ?? null;
+  const returns = known && Array.isArray(est.returns) && est.returns.length > 1
+    ? est.returns.map((x) => { const e = retEst(x.name); return { name: x.name, owed: x.owed, back: x.back, withheld: x.withheld, paid: x.paid, balance: x.balance, verdict: verdictOf(x), penaltyRisk: !!x.penaltyRisk || !!e?.penaltyRisk, needsEstimates: !!e?.needsEstimates, nextDue: e?.nextDue ?? null, overdue: e?.overdue ?? null }; })
+    : null;
   return {
     ready: true, missing: [], today, year: fed.year, filing: fed.filingStatus, isIndexed: fed.isIndexed,
-    thisYear: { steps: full.steps, totalTax: full.total, seTax: full.se?.tax ?? 0, incomeTax: r.totalTax, agi: r.agi, taxableIncome: r.taxableIncome, effectiveRate: full.rate, marginal: fed.marginal, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate },
+    // the next dollar is the Federal estimate's own (nextDollar: over whole steps of the child care credit), the figure its
+    // walk says, not the 1,000 probe (care fourth pass: the report said 12% where its walk said 14 cents)
+    thisYear: { steps: full.steps, totalTax: full.total, seTax: full.se?.tax ?? 0, incomeTax: r.totalTax, agi: r.agi, taxableIncome: r.taxableIncome, effectiveRate: full.rate, marginal: fed.nextDollar, nextDollar: fed.nextDollar, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate },
     ladder: br.ladder.map((l) => ({ rate: l.rate, from: l.from, to: l.to, filled: l.filled, tax: l.tax, current: l.current })),
-    paying: { verdict: known ? (Math.abs(est.balance) < 500 ? "about right" : est.balance > 0 ? "owe" : "refund") : "unknown", balance: known ? est.balance : wh.balance, withheld: known ? est.projected : (wh.withholding?.projected ?? 0), from: est.from ?? "none", noPay, estimatesPaid: (wh.estimatedPaid ?? 0) + (est.otherPaid ?? 0), totalTax: wh.totalTax, needsEstimates: es.needsEstimates, nextDue: es.nextDue, overdue: es.overdue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk },
+    paying: { verdict: known ? (Math.abs(est.balance) < 500 ? "about right" : est.balance > 0 ? "owe" : "refund") : "unknown", balance: known ? est.balance : wh.balance, withheld: known ? est.projected : (wh.withholding?.projected ?? 0), from: est.from ?? "none", noPay, estimatesPaid: (wh.estimatedPaid ?? 0) + (est.otherPaid ?? 0), totalTax: wh.totalTax, needsEstimates: es.needsEstimates, nextDue: es.nextDue, overdue: es.overdue, penaltyRisk: wh.penaltyRisk || es.penaltyRisk, returns },
     gains: { hasSales: cg.hasSales, taxOnGains: cg.taxOnGains, zeroRoom: cg.zeroRoom, netLoss: cg.gains?.netLoss ?? 0, carryForward: cg.gains?.carryForward ?? 0 },
     hsa: hs.hasHsa ? { taxSaved: hs.hsa.savedTotal, room: hs.hsa.room, limit: hs.hsa.limit } : null,
     retirement: tp.ready ? { ready: true, years: tp.rows.length, total: tp.totals.taxes, average: tp.average, peak: tp.peak, byBracket: tp.byBracket, firstZero: tp.firstZero, flatTaxes: tp.flatTaxes, bracketsOn: tp.bracketsOn } : { ready: false },

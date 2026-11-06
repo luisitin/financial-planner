@@ -38,8 +38,11 @@ and the Income page's tile read it, so take-home pay is worked out in one place.
 - **Pay a paycheck** = the person's salaries a year ÷ paychecks.
 - **Before tax**: the 401(k) (the plan's contributions ÷ paychecks); health, dental and vision cover (typed); the HSA
   (typed, else the HSA and FSA page's, else the plan's HSA saving, else Benefits elections), the health FSA (typed, else
-  the HSA and FSA page's, else Benefits elections), the child care FSA and transit/parking (typed, else Benefits
-  elections), each a year ÷ paychecks.
+  the HSA and FSA page's, else Benefits elections), the child care FSA (typed, else the Federal estimate's one rule for the
+  account, `taxInputs` `care.account`: what is chosen on Benefits elections for this year, at most a plan's 7,500; a note
+  when part of it would be lost for want of care on Expenses, or taxed when you file) and transit/parking (typed, else
+  Benefits elections), each a year ÷ paychecks. Benefits elections is run with `{ paycheck: false }` (it runs this page
+  for its own "taken from each paycheck", review of 2026-11-02).
 - **Taxable pay**: for income tax = pay − everything before tax; for Social Security and Medicare = pay − everything
   except the 401(k) (a 401(k) deferral is still wages for them, IRC 3121(v)(1)(A); cafeteria-plan items, IRC 125 and
   3121(a)(5)(G), and commuting, IRC 132(f) and 3121(a)(20), are not); for the state = income-tax pay, + the 401(k) in Pennsylvania, + the
@@ -109,3 +112,12 @@ the key both follow the printed table, as payroll software does.
 ## Ideas / not yet
 - A W-4 from 2019 or earlier (allowances, $4,300 each in 2026), supplemental pay, local taxes, the year-to-date view
   from a real pay stub, the state's own withholding tables.
+
+## Review 2026-11-06
+- The child care account's note says both things when both are true: the money it would lose and the part of what it
+  pays back that is taxed as pay (the `else` dropped the second). With another adult's account the care on Expenses is
+  shared by what each puts in, so the note says the whole and this account's share: the family with 7,500 each and 11,000 of
+  care: "Ana's child care account takes 7,500 out of pay this year. The 11,000 of care on Expenses is shared with Bo's
+  account by what each puts in, so Ana's pays back 5,500 and about 2,000 would be lost. Of the 5,500 it pays back, 1,750 is
+  more than can stay out of income, so it is taxed when you file" (it said "only 5,500 of care is on Expenses"). One
+  account keeps its words. Test: "the child care account's note says the part taxed as pay too".

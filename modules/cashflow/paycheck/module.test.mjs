@@ -225,3 +225,55 @@ test("takeHome: an adult with no pay today gets their own share from the day the
   near(th.ratio["i-bo"], later.yearly.net / later.yearly.gross);
   assert.notEqual(th.ratio["i-bo"], th.household, "not the household's (Ana's) share");
 });
+
+/** Jo, the single parent (the reviewer's plan): head of household in Ohio, 62,000 of pay, a child born 2022-07-15, 900 a
+ * month of daycare; `acct` a child care account for 2026 on Benefits elections. */
+function jo({ pay = 62000, acct = 0, care = 900, kids = 1 } = {}) {
+  const p = emptyPlan();
+  p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+  p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+  if (kids > 1) p.household.people.push({ id: "kid2", name: "Lou", role: "dependent", birthDate: "2019-09-01" });
+  p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: pay, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1300, period: "monthly", essential: true }];
+  if (care) p.expenses.push({ id: "care", name: "Childcare and school", category: "childcare", amount: care, period: "monthly", essential: true });
+  if (acct) p.whatIfs = { benefits: { jo: { dcfsaElect: acct, planYear: 2026 } } };
+  return p;
+}
+
+test("the child care account comes out of each paycheck as the Federal estimate's one rule counts it", () => {
+  const NOV = "2026-11-02";
+  const with5 = compute(jo({ acct: 5000 }), { today: NOV }).people[0], none = compute(jo(), { today: NOV }).people[0];
+  const dc = with5.pretax.find((x) => x.key === "dcfsa");
+  near(dc.amount, 5000 / 26); assert.equal(dc.from, "plan");
+  // take-home falls by the deduction less the tax it no longer takes: 2,003.09 to 1,853.86 (Benefits elections says the same)
+  near(none.net, 2003.09); near(with5.net, 1853.86);
+  // no care on Expenses: the paycheck still loses it, and a note says it would all be lost
+  const lost = compute(jo({ acct: 5000, care: 0 }), { today: NOV });
+  near(lost.people[0].pretax.find((x) => x.key === "dcfsa").amount, 5000 / 26);
+  assert.ok(lost.notes.some((n) => n === "Jo's child care account takes 5,000 out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost."));
+  // 150 a month of care: 3,200 lost
+  assert.ok(compute(jo({ acct: 5000, care: 150 }), { today: NOV }).notes.some((n) => /only 1,800 of care is on Expenses for it to pay back, so about 3,200 would be lost/.test(n)));
+  // the account for 2027 (no plan year, November): not in this year's paychecks
+  const p27 = jo(); p27.whatIfs = { benefits: { jo: { dcfsaElect: 5000 } } };
+  assert.equal(compute(p27, { today: NOV }).people[0].pretax.find((x) => x.key === "dcfsa"), undefined);
+});
+
+test("the child care account's note says the part taxed as pay too when money is also lost, and whose share of the care it is (Review 2026-11-06)", () => {
+  // the family with 7,500 in each spouse's account and 11,000 of care in 2026 (8 months of daycare at 1,150, 4 of after-school
+  // care at 450): the care is shared by the elections, 5,500 each; each loses 2,000, and of the 5,500 paid back 3,750 stays
+  // out of income (the household's 7,500 split by the elections), so 1,750 each is taxed as pay. The note said only "only
+  // 5,500 of care is on Expenses ... about 2,000 would be lost": Expenses has 11,000, and the 1,750 was left out
+  const NOV = "2026-11-02";
+  const p = familyPlan(NOV);
+  p.whatIfs = { ...(p.whatIfs ?? {}), benefits: { "p-ana": { dcfsaElect: 7500, planYear: 2026 }, "p-bo": { dcfsaElect: 7500, planYear: 2026 } } };
+  const d = compute(p, { today: NOV });
+  for (const [name, other] of [["Ana", "Bo"], ["Bo", "Ana"]]) {
+    const note = d.notes.find((n) => n.startsWith(`${name}'s child care account`));
+    assert.ok(note, `${name}'s note`);
+    assert.match(note, new RegExp(`takes 7,500 out of pay this year\\. The 11,000 of care on Expenses is shared with ${other}'s account by what each puts in, so ${name}'s pays back 5,500 and about 2,000 would be lost\\.`));
+    assert.match(note, /Of the 5,500 it pays back, 1,750 is more than can stay out of income, so it is taxed when you file \(the Federal estimate counts it\)\./);
+  }
+  // one account: the wording stays as it was (Jo with 1,800 of care), no "shared"
+  const one = compute(jo({ acct: 5000, care: 150 }), { today: NOV }).notes.find((n) => n.startsWith("Jo's child care account"));
+  assert.match(one, /only 1,800 of care is on Expenses for it to pay back, so about 3,200 would be lost/); assert.doesNotMatch(one, /shared/);
+});

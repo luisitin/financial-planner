@@ -4,7 +4,7 @@
 import { compute as computeIncome, countedOn } from "../income/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computePaycheck, PAYROLL } from "../paycheck/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, withReturns } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { seTax, SE, QBI } from "../../taxes/self-employment/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
@@ -46,8 +46,10 @@ export function targetsFor(s = {}) {
  * income tax after credits (negative when the refundable child tax credit is more than the tax), Social Security and
  * Medicare on each earner's pay (less the pre-tax benefits the Paycheck page takes out) to the wage base, self-employment
  * tax on each owner's business profit after the Self-employment page's expenses, the 0.9% extra Medicare tax on pay and
- * self-employment earnings above the line, and the state's share. -> { gross, federal, ss, medicare, se, extraMedicare,
- * payroll, state, stateKnown, afterTax, business: { gross, expenses, profit }, agi, otherIncomeOnFederal } (all a year)
+ * self-employment earnings above the line (each return's own, filing separately), and the state's share; and the child
+ * care account's money that would be lost (`careLost`: no care to pay back), which never reaches the bank. -> { gross,
+ * federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown, careLost, afterTax, business: { gross, expenses,
+ * profit }, agi, otherIncomeOnFederal } (all a year)
  */
 export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) }) {
   const ti = taxInputs(plan, { today });
@@ -84,22 +86,49 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
     const t = seTax(net, { wages: earners.get(id) ?? 0, wageBase });
     profit += net; se += t.total; seHalf += t.half; seBase += t.base;
   }
-  // the 0.9% on pay plus self-employment earnings above the filing status's line (Form 8959 Parts I and II)
+  // the 0.9% on pay plus self-employment earnings above the filing status's line (Form 8959 Parts I and II); filing
+  // separately, each return's own (the line is each return's, 125,000: care fourth pass, 2026-11-02)
   const th = ti.params.additionalMedicareThreshold?.[status] ?? EXTRA_MEDICARE_LINE[status] ?? EXTRA_MEDICARE_LINE.other;
-  const extraMedicare = SE.addlMedicare * Math.max(0, ficaWages + seBase - th);
+  const parts = status === "married_separate" && Array.isArray(ti.inputs.separate) && ti.inputs.separate.length ? ti.inputs.separate : null;
+  // an earner or owner on no return of their own (pay linked to no one) is on the adult marked "Me"'s, as the Federal estimate has it
+  const meAt = parts ? Math.max(0, parts.findIndex((x) => x.personId != null && x.personId === ti.inputs.separateTo)) : 0;
+  const returnOf = (id) => (parts ? (parts.findIndex((x) => x.personId === id) >= 0 ? parts.findIndex((x) => x.personId === id) : meAt) : 0);
+  const byReturn = (parts ?? [null]).map(() => ({ fica: 0, seBase: 0, profit: 0, half: 0 }));
+  for (const [id, w] of earners) byReturn[returnOf(id)].fica += w;
+  for (const [id, g] of owners) {
+    const net = Math.max(0, g - (bizGross > 0 ? bizExpenses * g / bizGross : 0));
+    const t = seTax(net, { wages: earners.get(id) ?? 0, wageBase });
+    const R = byReturn[returnOf(id)]; R.seBase += t.base; R.profit += net; R.half += t.half;
+  }
+  const extraMedicare = byReturn.reduce((t, R) => t + SE.addlMedicare * Math.max(0, R.fica + R.seBase - th), 0);
 
   // federal income tax: the Federal estimate's household (filing status, people, deductions, contributions) with the
-  // Income page's income; half the self-employment tax off income, the 20% business deduction after AGI
+  // Income page's income; half the self-employment tax off income, the 20% business deduction after AGI. The wages are the
+  // Federal estimate's own from the Income page (`wagesPlan`: pay less pre-tax 401(k) money, the health FSA and the child
+  // care account by its one rule), never rebuilt here, so the account is not taxed as pay and does not cancel the credit
+  // twice (review 2026-11-02: Budget said 1,988 a year where the Federal estimate said 1,388)
   const qbiBase = Math.max(0, profit - seHalf);
   const M = forYear(QBI_MINIMUM, year);
-  const r = federalTax({
+  // filing separately: two returns, each with its own Income-page money (the Federal estimate's part `fromIncome`) and its
+  // owner's business, half its self-employment tax and its 20% deduction (IRS Pub. 501; IRC 164(f), 199A), not the
+  // household's on the return of the adult marked "Me" (care fourth pass: the family with 3,750 each paid 14,439.15 here,
+  // 14,282.30 by the law)
+  const inputs = parts ? withReturns(ti.inputs, parts.map((x, i) => {
+    const F = x.fromIncome ?? {}, R = byReturn[i], qb = Math.max(0, R.profit - R.half);
+    return {
+      ...x, wages: F.wages ?? x.wages, medicareWages: R.fica, otherOrdinary: (F.otherOrdinary ?? 0) + R.profit, qualifiedIncome: 0, capitalLoss: 0,
+      socialSecurity: F.socialSecurity ?? 0, investmentIncome: F.investmentIncome ?? 0, selfEmployment: R.profit - R.half,
+      adjustments: (Number(x.adjustments) || 0) + R.half, qbiDeduction: QBI.rate * qb, qbiMinimum: qb >= M.from ? M.amount : 0,
+    };
+  })) : {
     ...ti.inputs,
-    wages: Math.max(0, sum("salary", "bonus") - ti.pretax401k), medicareWages: ficaWages,
+    wages: ti.wagesPlan, medicareWages: ficaWages,
     otherOrdinary: sum("rental", "pension", "investment", "other") + profit, qualifiedIncome: 0, capitalLoss: 0,
     socialSecurity: sum("social"), investmentIncome: sum("investment"),
     selfEmployment: profit - seHalf, adjustments: (Number(ti.inputs.adjustments) || 0) + seHalf,
     qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
-  }, ti.params);
+  };
+  const r = federalTax(inputs, ti.params);
   const federal = r.totalTax - r.additionalMedicare;
 
   // the state: the State page's tax as a share of its income, on this income (as the Paycheck page does)
@@ -109,7 +138,11 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
   const gross = inc.yearly - bizExpenses;
   const payroll = ss + medicare + se + extraMedicare;
   const otherIncomeOnFederal = ti.sources.some((x) => ["shortGains", "longGains", "loss"].includes(x.key) || (x.from === "typed" && ["wages", "otherTyped", "qualified", "social"].includes(x.key)));
-  return { year, gross, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown: rate !== null, afterTax: gross - federal - payroll - state, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal };
+  // the child care account's money it would lose (elected beyond the care it pays back: Form 2441 line 14) leaves the pay and
+  // never comes back, so it comes off the month like a tax (care fourth pass: Jo with a 5,000 account and no care had 93 a
+  // month MORE spare; she has 323 less). The care it does pay back is on Expenses already.
+  const careLost = ti.care?.account?.forfeited ?? 0;
+  return { year, gross, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown: rate !== null, careLost, afterTax: gross - federal - payroll - state - careLost, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal };
 }
 
 /**
@@ -181,7 +214,7 @@ export function compute(plan, params = {}) {
   const year = T.year;
   if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State page under Taxes.");
   if (T.otherIncomeOnFederal) notes.push("The Federal tax page also counts income that is not on the Income page (investments sold, amounts typed there). Its tax is left out here, as that money is not part of the month.");
-  const month = { gross: T.gross / 12, federal: T.federal / 12, payroll: T.payroll / 12, state: T.state / 12, stateKnown: T.stateKnown, bizExpenses: T.business.expenses / 12 };
+  const month = { gross: T.gross / 12, federal: T.federal / 12, payroll: T.payroll / 12, state: T.state / 12, stateKnown: T.stateKnown, bizExpenses: T.business.expenses / 12, careLost: (T.careLost ?? 0) / 12 };
   // the careful month, as the app's left-over figure (Next best action) has it: side income above what you count on is
   // not planned with, and neither is the tax on it; the taxes stay the whole year's (review 2026-11-02)
   const H = heldAfterTax(plan, { today, inc, T });

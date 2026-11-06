@@ -1,7 +1,7 @@
 // modules/overview/next-best-action/view.js -- DOM only. The next step for the next spare dollar as the
 // hero, where each month's money goes now, then the whole order with what is left on each step and
 // about when the spare money gets it done.
-import { compute, HIGH_RATE, MODERATE_RATE } from "./compute.js";
+import { compute, monthLines, HIGH_RATE, MODERATE_RATE } from "./compute.js";
 
 const STYLE = `
 .nb-root .nb-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); margin: 10px 0 12px; }
@@ -57,12 +57,12 @@ export function render(page, ctx) {
 
   // each month's money
   const s = d.spare;
-  const parts = [...(s.businessCosts > 0.5 ? [["Business costs (Self-employment page)", s.businessCosts, "var(--panel-2)"]] : []), ["Federal income tax", s.federalTax, "var(--muted)"], ["Social Security and Medicare tax", s.payrollTax, "var(--line-2)"],
-    ...(s.stateTax > 0.5 ? [["State income tax", s.stateTax, "repeating-linear-gradient(135deg, var(--muted) 0 3px, var(--line-2) 3px 6px)"]] : []), ["Spending", s.spending, "var(--text-2)"], ["Retirement saving", s.retirementSaving, "var(--ok)"], ["Saving for goals", s.goalSaving, "var(--accent)"],
-    // the saved debt plan's extra (Pay off debts) is already spoken for, so it is not spare
-    ...(s.debtExtra > 0 ? [[`Extra on ${d.debtPlan?.names?.length && d.debtPlan.names.length <= 2 ? d.debtPlan.names.join(" and ") : "debts"} (Pay off debts)`, s.debtExtra, "repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px)"]] : []),
-    // uneven pay above what you count on (Side income): in the pay above, not in the spare, so the lines add up (review 2026-11-02)
-    ...(s.held > 0.5 ? [["Side income above what you count on, after its tax", s.held, "var(--line)"]] : [])];
+  // the lines between the pay and the spare money (monthLines: they add up, the child care account's lost money a line of
+  // its own, Review 2026-11-06), each with its colour in the bar
+  const COLOURS = { businessCosts: "var(--panel-2)", federalTax: "var(--muted)", payrollTax: "var(--line-2)", stateTax: "repeating-linear-gradient(135deg, var(--muted) 0 3px, var(--line-2) 3px 6px)",
+    careLost: "repeating-linear-gradient(45deg, var(--warn) 0 3px, var(--line-2) 3px 6px)", spending: "var(--text-2)", retirementSaving: "var(--ok)", goalSaving: "var(--accent)",
+    debtExtra: "repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px)", held: "var(--line)" };
+  const parts = monthLines(s, d.debtPlan).map((x) => [x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),

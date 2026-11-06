@@ -88,6 +88,10 @@ export function compute(plan, params = {}) {
   // IRS Publication 15 (2026) section 7, Supplemental Wages: 22% flat, 37% on the part over $1 million in a calendar year
   if (bonus.length) notes.push("Bonuses are paid on their own: employers usually withhold a flat 22% of federal tax from them (37% above $1 million in a year), on top of Social Security and Medicare.");
   let benefitsLater = false;
+  // the child care account each adult has for this year, by the Federal estimate's one rule (taxInputs `care.account`,
+  // careAccountRule): what the employer takes out of pay is the election, up to a plan's limit
+  const account = ti.care?.account ?? null;
+  const acctOf = (id) => account?.people?.find((x) => x.id !== null && x.id === id) ?? null;
 
   const out = earners.map((p) => {
     const s = all[p.id] ?? {};
@@ -102,11 +106,12 @@ export function compute(plan, params = {}) {
 
     // the Benefits elections page's choices for this person, capped by its limits, when they are for this year
     // (from October that page plans next year's)
-    const ben = computeBenefits({ ...plan, whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...(plan.whatIfs?.benefits ?? {}), personId: p.id } } }, { today });
+    const ben = computeBenefits({ ...plan, whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...(plan.whatIfs?.benefits ?? {}), personId: p.id } } }, { today, paycheck: false });
     const benOk = ben.ready && ben.person?.id === p.id && ben.planYear === year;
     const typedBen = plan.whatIfs?.benefits?.[p.id];
     if (!benOk && ben.ready && ben.person?.id === p.id && typedBen && Object.keys(typedBen).length) benefitsLater = true;
-    const B = benOk ? { hsa: ben.hsa?.elect ?? 0, hsaEmployer: ben.hsa?.employer ?? 0, fsa: ben.fsa?.elect ?? 0, dcfsa: ben.dependentCare?.elect ?? 0, commuter: ((ben.commuter?.transit ?? 0) + (ben.commuter?.parking ?? 0)) * 12, espp: ben.espp?.yearly ?? 0 } : { hsa: 0, hsaEmployer: 0, fsa: 0, dcfsa: 0, commuter: 0, espp: 0 };
+    const B = benOk ? { hsa: ben.hsa?.elect ?? 0, hsaEmployer: ben.hsa?.employer ?? 0, fsa: ben.fsa?.elect ?? 0, commuter: ((ben.commuter?.transit ?? 0) + (ben.commuter?.parking ?? 0)) * 12, espp: ben.espp?.yearly ?? 0 } : { hsa: 0, hsaEmployer: 0, fsa: 0, commuter: 0, espp: 0 };
+    B.dcfsa = acctOf(p.id)?.elected ?? 0;
 
     // before tax: the 401(k) from the plan's contributions; the rest typed here, else the HSA and FSA page's figures (the
     // household's, for the first adult), the plan's HSA saving, the Benefits elections
@@ -205,6 +210,26 @@ export function compute(plan, params = {}) {
     ? "You both have \"Married filing jointly\" on the W-4 without the box in Step 2 ticked: each paycheck is withheld as if it were the household's only pay, which usually leaves too little withheld. The Withholding check page checks the year."
     : "These paychecks assume both W-4s say \"Married filing jointly\" with the box in Step 2 empty. If so, each is withheld as if it were the household's only pay, which usually leaves too little withheld: the Withholding check page checks the year. Set each W-4 in its fold below.");
   if (benefitsLater) notes.push(`The Benefits elections page is choosing next year's benefits, so this year's paycheck leaves them out: type this year's amounts in each person's fold.`);
+  // the child care account comes out of every paycheck, but only care it pays back is yours again
+  for (const x of out) {
+    const a = acctOf(x.id);
+    if (!a || x.pretax.find((y) => y.key === "dcfsa")?.from !== "plan") continue;
+    const n = (v) => Math.round(v).toLocaleString("en-US");
+    // with another adult's account the care on Expenses is shared by what each puts in (careAccountRule), so this account's
+    // share is said beside the whole; money lost and a part taxed as pay can both be true, so both are said (Review
+    // 2026-11-06: "only 5,500 of care is on Expenses" where Expenses had 11,000, and the 1,750 taxed as pay left out)
+    const others = (account?.people ?? []).filter((y) => y.id !== x.id && y.elected > 0.5);
+    const shared = others.length > 0 && account.care - a.care > 0.5;
+    const lostWords = a.forfeited > 0.5 ? (a.care > 0.5
+      ? shared
+        ? `${x.name}'s child care account takes ${n(a.elected)} out of pay this year. The ${n(account.care)} of care on Expenses is shared with ${others.map((y) => `${y.name ?? "the other"}'s`).join(" and ")} account by what each puts in, so ${x.name}'s pays back ${n(a.care)} and about ${n(a.forfeited)} would be lost.`
+        : `${x.name}'s child care account takes ${n(a.elected)} out of pay this year, but only ${n(a.care)} of care is on Expenses for it to pay back, so about ${n(a.forfeited)} would be lost.`
+      : `${x.name}'s child care account takes ${n(a.elected)} out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost.`) : null;
+    const taxedWords = a.taxedAsPay > 0.5 ? (lostWords
+      ? `Of the ${n(a.received)} it pays back, ${n(a.taxedAsPay)} is more than can stay out of income, so it is taxed when you file (the Federal estimate counts it).`
+      : `${x.name}'s paychecks leave all of the child care account out of tax, but ${n(a.taxedAsPay)} of it is over what can stay out of income, so it is taxed when you file (the Federal estimate counts it).`) : null;
+    if (lostWords || taxedWords) notes.push([lostWords, taxedWords].filter(Boolean).join(" "));
+  }
   if (out.some((x) => x.state.from === "none")) notes.push("Your state's income tax is not counted: set it on the State page under Taxes, or type the figure from your pay stub.");
   return { ready: true, year, people: out, notes, stateMethod: st.method ?? null, w4Default };
 }

@@ -22,3 +22,28 @@ Qualified income is not on the ladder (it stacks above at the gains rates; a not
 
 ## Ideas / not yet
 - Price a Roth conversion here with the Medicare surcharge lines drawn on the ladder.
+
+## One next dollar, one rounding (care fourth pass, 2026-11-02)
+`marginal` is the Federal estimate's next dollar (`nextDollarOf`: over whole steps of the child care credit when it is in
+play), so this page and the Federal estimate say the same cents; the overall rate goes through `ratePct`. Without the care
+credit it is the next 1,000's cost, as before. `careMoves` (the next dollar with the care against without it) lets the
+"Next dollar" stat say why it is off the bracket: "more than the bracket: the child care credit gets smaller" (Jo at 88,000:
+14%), or "less than the bracket: the child care credit covers part of the tax on more pay"; it said "benefits or gains get
+pulled along".
+
+## Review 2026-11-06
+- Credits more than the tax (Jo at 30,000: -1,700; two children: -1,162) read "the credits are more than the tax, so you
+  pay no federal income tax and about $1,700 of credits come back", not "overall you pay -5.7%". Test: "credits more than
+  the tax read as no tax".
+- **A 0% next dollar (follow-up to the verifier).** "Less than the bracket: the child care credit covers part of the tax on
+  more pay" was shown when more pay costs nothing. At 0% the stat now says "the child care credit covers the tax on more
+  pay" when that credit alone covers all the income tax (`careCoversTax`: care credit >= income tax; Jo at 30,000: 585 of
+  credit on 585 of tax), else "with the child care credit, the credits cover the tax on more pay" (Lee, head of household,
+  45,000, two children, 10,800 of care: 2,100 of care credit on 2,148 of tax, the child tax credit the rest), as the Federal
+  estimate says it. Above 0% the words are unchanged. Test: "a 0% next dollar is not 'covers part of the tax'".
+- **The child care credit named only when it moves the next dollar (verifier, E).** `careMoves` compared the next dollar
+  worked over the credit's whole step (4,000 joint) with the 1,000 probe without care, so a bracket's edge or the refundable
+  child tax credit's limit inside the step read as the credit: Pat & Sam (joint, 98,800 taxable, 2,000 below 22%, a flat
+  1,050 credit) read "17% more than the bracket: the child care credit gets smaller"; H-0319 (the credit 0) "the child care
+  credit covers part of the tax on more pay". With the Federal estimate's `nextDollarOf` fixed (its credit part over the
+  step, the rest over 1,000) both read the bracket: 12% and 6%. Test: federal "a bracket's edge inside the care credit's step".

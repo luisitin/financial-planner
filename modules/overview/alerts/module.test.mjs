@@ -303,19 +303,23 @@ test("goalsBehind (round 5, third pass): on the family plan a $12,000 wedding ca
   const run = (...extra) => { const p = familyPlan(T); p.goals = p.goals.filter((x) => x.id !== "g-trip"); p.goals.push(...extra); const nba = nbaOf(p, { today: T }); return goalsBehind(goalsOf(p, { today: T }), { nba, today: T }); };
   const g = (id, target, targetDate, more = {}) => ({ id, name: id, icon: "", target, targetDate, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false, ...more });
   // second pass said "behind": it took the car's extra as lasting until December 2029, but the car is due in March 2029.
-  // Month by month from December 2027 the wedding gets about $405 for 15 months, then about $1,449 for 9: about $19,100
+  // Month by month from December 2027 the wedding gets about $485 for 15 months, then about $1,529 for 9: about $21,100
+  // (Review 2026-11-06: the child and dependent care credit, $960 a year, now counts in the spare money, so the goals step
+  // gets $80 a month more than the $405 and $1,449 it had: 1,910.89 a month, not 1,830.89; the most was about $19,100)
   const w = run(g("g-wed", 12000, "2029-12-01"));
   assert.deepEqual(w.queued.map((x) => x.id), ["g-wed"]); assert.ok(!w.behind.some((x) => x.id === "g-wed"));
-  assert.deepEqual(run(g("g-wed", 20000, "2029-12-01")).queued, [], "about $19,100 is the most it can be");
+  assert.deepEqual(run(g("g-wed", 22000, "2029-12-01")).queued, [], "about $21,100 is the most it can be");
+  assert.deepEqual(run(g("g-wed", 21000, "2029-12-01")).queued.map((x) => x.id), ["g-wed"], "a $21,000 wedding can still be reached");
   // a $36,000 wedding is behind (round 5's first finding stays fixed), and it holds the step: the 2035 boat is not said to
   // start on that money; the boat alone waits
   const big = run(g("g-wed", 36000, "2029-12-01"), g("g-boat", 6000, "2035-06-01"));
   assert.deepEqual(big.queued.map((x) => x.id), []); assert.ok(big.behind.some((x) => x.id === "g-wed")); assert.ok(big.behind.some((x) => x.id === "g-boat"));
   assert.deepEqual(run(g("g-boat", 6000, "2035-06-01")).queued.map((x) => x.id), ["g-boat"]);
-  // a $3,000 holiday getting $100 a month, due 3 days after the turn (January 2, 2028): it draws nothing from the step, so
-  // the boat still waits (second pass: its catch-up came out infinite and every later goal read behind)
-  const hol = run(g("g-boat", 6000, "2035-06-01"), g("g-hol", 3000, "2028-01-05", { monthly: 100 }));
-  assert.equal(hol.turn, "2028-01-02"); assert.deepEqual(hol.queued.map((x) => x.id), ["g-boat"]); assert.ok(hol.behind.some((x) => x.id === "g-hol"));
+  // a $3,000 holiday getting $100 a month, due 3 days after the turn (December 2, 2027; January 2, 2028 before the child care
+  // credit counted in the spare money, Review 2026-11-06): it draws nothing from the step, so the boat still waits (second
+  // pass: its catch-up came out infinite and every later goal read behind)
+  const hol = run(g("g-boat", 6000, "2035-06-01"), g("g-hol", 3000, "2027-12-05", { monthly: 100 }));
+  assert.equal(hol.turn, "2027-12-02"); assert.deepEqual(hol.queued.map((x) => x.id), ["g-boat"]); assert.ok(hol.behind.some((x) => x.id === "g-hol"));
 });
 
 test("goalsBehind (round 5, third pass): month by month from the turn, a goal's catch-up lasts only until its own date", () => {
@@ -425,4 +429,20 @@ test("a full month within $5 of $0 'only just about breaks even' (no 'about $0')
     assert.match(o.detail, /a month that brings the Income page's amount only just about breaks even\. Check the amounts, then find what to cut\.$/);
     assert.doesNotMatch(o.detail, /about \$0\b/);
   }
+});
+
+test("Review 2026-11-06: the tax bill alert reads each separate return, and says the self-employment tax itself", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  // filing jointly: 5,223 to pay; the business's self-employment tax is 1,017 (the alert said 581, the business's whole effect)
+  const j = compute(familyPlan(T), { today: T }).alerts.find((x) => x.id === "tax-bill");
+  assert.match(j.detail, /\(\$1,017 of it self-employment tax\)/);
+  // filing separately with 3,750 each: Ana's return gets 2,200 back and Bo's owes 1,659.70. The two added up are a 540 refund,
+  // so nothing was said; Bo's bill is his own return's
+  const p = familyPlan(T); p.household.filingStatus = "married_separate";
+  p.whatIfs = { ...(p.whatIfs ?? {}), benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } } };
+  const a = compute(p, { today: T }).alerts.find((x) => x.id === "tax-bill");
+  assert.ok(a, "Bo's own bill is an alert");
+  assert.equal(a.title, "About $1,660 of tax to pay in April on Bo's return");
+  assert.match(a.detail, /one return's refund cannot pay the other's bill/);
 });

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, homeOffice, soleTax, scorpTax, mileageYear, planRooms, PAYROLL, DEDUCTIBLE } from "./compute.js";
 import { HOME_OFFICE, SIMPLE, QBI_LINE, SCORP_COSTS_EXAMPLE } from "./data/business.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
 import { SE } from "../../taxes/self-employment/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -16,6 +16,11 @@ const ctx = (p) => { const ti = taxInputs(p, { today: TODAY }); return { inputs:
 const seOf = (profit) => profit * SE.base * (SE.ss + SE.medicare);
 const MILES_2026 = (181 * 0.725 + 184 * 0.76) / 365;   // 72.5 cents to June 30, 76 cents from July 1
 const born = (year) => (p) => { p.household.people.find((x) => x.id === "p-bo").birthDate = `${year}-11-02`; };
+// the child and dependent care credit on Cy's care (taxes/federal README): 3,000 x a rate that falls from 35% one point per
+// 4,000 (or part) of joint AGI over 150,000, to 20% (IRC 21(a)(2), 2026). Without Bo's photography the family's AGI is 151,580.
+const careAt = (agi) => 3000 * Math.max(20, 35 - Math.ceil(Math.max(0, agi - 150000) / 4000)) / 100;
+const AGI0 = 151580;
+const careLost = (more) => careAt(AGI0) - careAt(AGI0 + more);   // the credit lost to `more` of AGI
 
 test("the home office, simplified: $5 a square foot, at most 300, never more than the profit", () => {
   assert.equal(homeOffice(150), 750); assert.equal(homeOffice(500), HOME_OFFICE.maxSqft * HOME_OFFICE.perSqft);
@@ -49,7 +54,10 @@ test("the sole proprietor's tax by hand: self-employment tax, half of it off, th
   const d = compute(withBiz({ revenue: P, drawMonthly: 2500 }), { today: TODAY });
   const se = seOf(P);
   near(d.tax.se, se); near(d.tax.qbi, 0.2 * (P - se / 2));
-  near(d.tax.income, 0.22 * (P - se / 2 - d.tax.qbi), 0.01);
+  // 22% on what is taxed, and the child care credit the profit's AGI (less half the self-employment tax) costs:
+  // 151,580 -> 198,048 takes it from 34% to 22% of 3,000, 360
+  near(d.tax.income, 0.22 * (P - se / 2 - d.tax.qbi) + careLost(P - se / 2), 0.01);
+  near(careLost(P - se / 2), 360, 1e-9);
   near(d.tax.total, d.tax.se + d.tax.income + d.tax.extra + d.tax.state);
   near(d.keepMonthly, (P - d.tax.total) / 12); assert.equal(d.draw, "ok");
   assert.equal(compute(withBiz({ revenue: P, drawMonthly: 3500 }), { today: TODAY }).draw, "over");
@@ -111,7 +119,9 @@ test("the refundable child tax credit counts the business's earnings, which it w
 test("a sole proprietor's loss comes off other income: no self-employment tax, the tax falls", () => {
   const d = compute(withBiz({ revenue: 10000, expenses: [{ id: "e", category: "equipment", amount: 20000, period: "annual" }] }), { today: TODAY });
   assert.equal(d.loss, true); near(d.profit, -10000); assert.equal(d.tax.se, 0); assert.equal(d.tax.qbi, 0);
-  near(d.tax.income, -0.22 * 10000, 0.01); near(d.keepMonthly, (-10000 - d.tax.total) / 12);
+  // the loss takes AGI to 141,580, under the care credit's phase-down: 35% instead of 34% of 3,000, 30 more off
+  near(d.tax.income, -0.22 * 10000 + careLost(-10000), 0.01); near(careLost(-10000), -30, 1e-9);
+  near(d.keepMonthly, (-10000 - d.tax.total) / 12);
   assert.equal(d.scorp, null); assert.equal(d.earned, 0); assert.equal(d.best, null);
   assert.ok(d.plans.every((p) => p.room === 0));
 });
@@ -123,7 +133,7 @@ test("an S corporation by hand: payroll tax on the salary only, the rest passed 
   assert.equal(s.salaryFrom, "typed"); assert.equal(s.costs, 1500);
   near(s.employer, 30000 * (PAYROLL.ss + PAYROLL.medicare)); near(s.employee, 30000 * (PAYROLL.ss + PAYROLL.medicare));
   near(s.passed, d.profit - 30000 - s.employer - 1500); near(s.qbi, 0.2 * s.passed);
-  near(s.federal, 0.22 * (30000 + s.passed - s.qbi), 0.01);
+  near(s.federal, 0.22 * (30000 + s.passed - s.qbi) + careLost(30000 + s.passed), 0.01);   // the salary and what passes through raise AGI: the care credit lost
   near(s.total, s.federal + s.employee + s.employer + s.state);
   near(s.saving, d.tax.total - (s.total + 1500));
   // the example salary and costs when none is typed
@@ -135,7 +145,7 @@ test("an S corporation: a loss passed through comes off other income; it pays of
   const c = scorpTax(10000, 10000, 2000, ctx(withBiz(BIZ)));
   near(c.passed, 10000 - 10000 - 10000 * (PAYROLL.ss + PAYROLL.medicare) - 2000); assert.equal(c.qbi, 0);
   const none = federalTax({ ...ctx(withBiz(BIZ)).inputs, selfEmployment: 0 }, ctx(withBiz(BIZ)).params);
-  near(c.income - (none.totalTax - none.additionalMedicare), 0.22 * (10000 + c.passed), 0.01);
+  near(c.income - (none.totalTax - none.additionalMedicare), 0.22 * (10000 + c.passed) + careLost(10000 + c.passed), 0.01);
   assert.equal(scorpTax(10000, 20000, 0, ctx(withBiz(BIZ))).salary, 10000, "a salary is never more than the profit");
   assert.ok(compute(withBiz({ revenue: 200000, salary: 80000, scorpCosts: 2000 }), { today: TODAY }).scorp.saving > 0);
 });
@@ -151,7 +161,8 @@ test("the retirement plans: SEP 20% of earnings, solo 401(k) with the employee p
   assert.equal(simple.late, false); assert.equal(d.best, "solo");
   assert.ok(sep.saved > 0 && solo.saved > sep.saved && simple.saved > sep.saved);
   // the saving is the tax worked again with the contribution off income (and off the 20% deduction's base)
-  near(sep.saved, sep.room * 0.22 * 0.8, 0.5);
+  // and the child care credit: AGI 151,580 + the earnings, less the SEP money, is two of its 4,000 steps lower (+60)
+  near(sep.saved, sep.room * 0.22 * 0.8 + careLost(earned) - careLost(earned - sep.room), 0.5);
   // after October 1 a new SIMPLE IRA is for next year: no saving counted this year
   const late = compute(withBiz({ revenue: P }), { today: TODAY }).plans.find((x) => x.key === "simple");
   assert.equal(late.late, true); assert.equal(late.saved, 0);
@@ -228,4 +239,56 @@ test("the business chosen stays chosen after a raise from a later date starts th
   // a choice with nothing carrying it on still falls back to the largest business
   p.whatIfs.business.incomeId = "gone";
   assert.equal(compute(p, { today: "2027-02-01" }).incomeId, "i-side");
+});
+
+test("a business that is the lower earner's only work unlocks the child care credit (IRC 21(d)(1)(B))", () => {
+  // Bo has no salary, only the photography: without the business Bo earns nothing, so there is no credit on Cy's care; with
+  // 30,000 of profit Bo's earned income is the profit less half its self-employment tax, and the credit comes back. The
+  // business's income tax counts it (2026-11-02: it kept the plan's figure, with or without the business)
+  const p = withBiz({ revenue: 30000 }, (q) => { q.income = q.income.filter((x) => x.id !== "i-bo"); });
+  const d = compute(p, { today: TODAY });
+  const ti = taxInputs(p, { today: TODAY });
+  const care = (business) => careInputsWith(ti, { "p-bo": { business, pay: 0 } });
+  const se = seOf(30000), inputs = { ...ti.inputs, otherOrdinary: Math.max(0, ti.inputs.otherOrdinary - 7200) };
+  const T = { inputs, params: ti.params, otherSE: 0, wages: 0, medicareWages: 101400, wageBase: 184500 };
+  const none = federalTax({ ...inputs, selfEmployment: 0, care: care(0) }, ti.params);
+  assert.equal(none.credits.careCredit, 0);
+  const sole = soleTax(30000, { ...T, careAt: ({ business }) => care(business) });
+  near(d.tax.income, sole.income - (none.totalTax - none.additionalMedicare), 0.01);
+  const frozen = soleTax(30000, T), frozenNone = federalTax({ ...inputs, selfEmployment: 0 }, ti.params);
+  const unlocked = federalTax({ ...inputs, otherOrdinary: inputs.otherOrdinary + 30000, adjustments: inputs.adjustments + se / 2, selfEmployment: 30000 - se / 2, qbiDeduction: 0.2 * (30000 - se / 2), care: care(30000 - se / 2) }, ti.params).credits.careCredit;
+  assert.ok(unlocked > 0);
+  near((frozen.income - (frozenNone.totalTax - frozenNone.additionalMedicare)) - d.tax.income, unlocked, 0.01);
+});
+
+test("the lower earner's business lets the other's child care account stay out of income (one rule: careInputsWith's wagesChange)", () => {
+  // Bo has no salary, only a business; Ana has a 5,000 account for 2026. Without the business Bo earns nothing: none of the
+  // account stays out of income, it is taxed as pay (wages 5,000 higher); with 30,000 of profit all 5,000 stays out
+  const p = withBiz({ revenue: 30000 }, (q) => { q.income = q.income.filter((x) => x.id !== "i-bo"); q.whatIfs.benefits = { "p-ana": { dcfsaElect: 5000, planYear: 2026 } }; });
+  const ti = taxInputs(p, { today: TODAY });
+  const care = (business) => careInputsWith(ti, { "p-bo": { business, pay: 0 } });
+  near(care(0).wagesChange, 5000, 1e-9); assert.equal(care(0).benefits, 0);
+  const se = seOf(30000);
+  near(care(30000 - se / 2).wagesChange, 0, 1e-9); assert.equal(care(30000 - se / 2).benefits, 5000);
+  // the page's income tax counts it: against the business with the plan's wages kept, 22% of the 5,000 less
+  const d = compute(p, { today: TODAY });
+  const inputs = { ...ti.inputs, otherOrdinary: Math.max(0, ti.inputs.otherOrdinary - 7200) };
+  const T = { inputs, params: ti.params, otherSE: 0, wages: 0, medicareWages: 101400, wageBase: 184500, qbiMinimum: { amount: 400, from: 1000 } };
+  const none = federalTax({ ...inputs, selfEmployment: 0, care: care(0), wages: inputs.wages + 5000 }, ti.params);
+  const sole = soleTax(30000, { ...T, careAt: ({ business }) => care(business) });
+  near(d.tax.income, sole.income - (none.totalTax - none.additionalMedicare), 0.01);
+});
+
+test("care fourth pass: filing separately, the business is on its owner's own return (Bo's photography: +642.37, no 0.9%, 1,659.70)", () => {
+  // the family filing separately, 3,750 each in a child care account. Bo's own return with the 7,200 of profit, half its
+  // self-employment tax off his income and its 20% deduction: 642.37 more income tax than without it (the scratchpad
+  // mfs-law oracle); with the 1,017.33 of self-employment tax, 1,659.70. His own Medicare wages and earnings are under the
+  // separate return's 125,000: no 0.9%. (The page said -406.32 and 60: the business taken off Ana's return)
+  const p = familyPlan(TODAY); p.household.filingStatus = "married_separate";
+  p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } }, business: { incomeId: "i-side" } };
+  const d = compute(p, { today: TODAY });
+  near(d.tax.income, 642.37, 0.01); near(d.tax.extra, 0, 1e-9); near(d.tax.se, seOf(7200), 0.01); near(d.tax.total, 1659.70, 0.01);
+  // filing jointly nothing moves
+  const j = familyPlan(TODAY); j.whatIfs = { ...(j.whatIfs ?? {}), business: { incomeId: "i-side" } };
+  near(compute(j, { today: TODAY }).tax.total, 2255.01, 0.01);
 });
