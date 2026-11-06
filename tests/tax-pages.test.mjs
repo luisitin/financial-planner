@@ -175,8 +175,14 @@ test("roth conversions: a big pre-tax pot with high required withdrawals is help
   const d = roth(p, { today: TODAY });
   assert.equal(d.ready, true); assert.equal(d.options.length, 5); assert.ok(d.best === 0.22 || d.best === 0.24, String(d.best));
   const none = d.options[0], best = d.options.find((o) => o.best);
-  assert.ok(best.endAfterTaxReal > none.endAfterTaxReal + 100000); assert.ok(best.taxesReal < none.taxesReal); assert.ok(best.rmdReal < none.rmdReal);
-  assert.ok(d.options.find((o) => o.fillRate === 0.22).endAfterTaxReal > none.endAfterTaxReal + 100000);
+  // round 8 (2026-11-06, equity-1): each setting now pays its own health bill. Ann is on the marketplace 2026-2030, and any
+  // conversion that fills the 12% bracket or more takes her income over the line where the premium credit stops ($62,228 of
+  // help lost, today's dollars), which every setting used to keep because all were priced on the saved setting (none). 22% is
+  // still best, by about $28,900 instead of $110,700; without the health line (healthIncluded) the gain is over $100,000 as before
+  assert.ok(best.endAfterTaxReal > none.endAfterTaxReal + 20000); assert.ok(best.taxesReal < none.taxesReal); assert.ok(best.rmdReal < none.rmdReal);
+  assert.ok(d.options.find((o) => o.fillRate === 0.22).endAfterTaxReal > none.endAfterTaxReal + 20000);
+  assert.ok(Math.abs(d.options.find((o) => o.fillRate === 0.22).creditLostReal - none.creditReal) < 0.01 && none.creditReal > 60000, "the 22% setting gives up all of the credit");
+  { const q = structuredClone(p); q.retirement.healthIncluded = true; const h = roth(q, { today: TODAY }); assert.ok(h.options.find((o) => o.best).endAfterTaxReal > h.options[0].endAfterTaxReal + 100000); }
   assert.equal(d.span.from, 2026); assert.equal(d.span.to, 2040);   // 60 to 74; required withdrawals from 75
   // every conversion year ends at the top of the shown bracket, and the last ordinary dollar is taxed at that rate.
   // 2026-11-02, the health line (Ann on the marketplace 2026-2030): the best setting moved from 24% (shown 0.24, every year

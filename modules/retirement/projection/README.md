@@ -644,3 +644,10 @@ After the C3 money review (est/c3/c3-fix.md):
 - `saveSpendingFigure`: a figure typed here is the household's own, even when it equals our guess: the guess is cleared
   (spec S2), so a later settle never moves it (D8).
 Tests: setup `module.test.mjs` "C3 review D2", "C3 review D8".
+
+## Round 8 review (2026-11-06): the ways the settings list
+"How much to take out each year" set any of the four ways, so a household could pick here what How much to take out holds
+back (a share of savings or guardrails worked out as if its income were not there). The list is now that page's own
+(`withdrawal-strategy/compute.js` `wayOptionsFor(d.inputs, chosen)`: the ways whose expected run never plans on less than the
+plan's spending in the first year or than the year's guaranteed income in any year, plus the one in use), with a line saying
+how many are left out and where to read why. Test: `withdrawal-strategy/module.test.mjs` (UX 7).

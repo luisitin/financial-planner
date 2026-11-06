@@ -6,6 +6,8 @@ import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, RULE_WORDS, leftWords, leftWhy } from "../careful.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+// the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given)
+import { wayOptionsFor } from "../withdrawal-strategy/compute.js";
 
 /** "a, b and c" */
 const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -194,6 +196,8 @@ function settingsCard(ctx, d) {
   // or Get started's own less the health insurance among today's bills that the health line replaces
   const spendNow = d.figureMonthly ?? (Number(rt.spendingMonthly) > 0 ? Number(rt.spendingMonthly) : null);
   const less = d.health?.fromSetup && d.health.removedMonthly > 0 ? `: Get started's figure from today's bills, less ${fmt.money(Math.round(d.health.removedMonthly), plan.meta.currency)} a month of health insurance` : "";
+  const ways = wayOptionsFor(d.ready ? d.inputs : null, rt.strategy ?? "fixed-real");
+  const waysLeft = Object.keys(STRATEGIES).length - ways.length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
     { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, help: rt.healthIncluded === true ? "today's dollars, health cover included (you said so under Health cover); blank uses today's expenses" : `today's dollars, before health cover (the plan adds it)${less}; blank uses today's expenses` },
@@ -201,7 +205,7 @@ function settingsCard(ctx, d) {
     { key: "stocksRetired", label: "Share in stocks once retired", type: "percent", min: 0, max: 100 },
     { key: "taxMode", label: "How tax is worked out", type: "select", options: [{ value: "flat", label: "A flat rate on pre-tax withdrawals (quick)" }, { value: "brackets", label: "The federal brackets on each year's income" }], help: "the brackets use the filing status from the People page and the rules on the Taxes pages" },
     { key: "taxRate", label: "Flat rate on money taken from pre-tax accounts", type: "percent", min: 0, max: 60, help: "used by the flat setting only" },
-    { key: "strategy", label: "How much to take out each year", type: "select", options: Object.entries(STRATEGIES).map(([value, label]) => ({ value, label })) },
+    { key: "strategy", label: "How much to take out each year", type: "select", options: ways, help: waysLeft ? `${waysLeft === 1 ? "One way is" : `${waysLeft} ways are`} left out: on your plan ${waysLeft === 1 ? "it" : "they"} would plan on less than you spend or than your income (How much to take out says why)` : undefined },
     { key: "withdrawalRate", label: "Starting withdrawal rate", type: "percent", min: 1, max: 15, help: "for the percentage and guardrail methods; 4 is the classic figure" },
   ];
   const values = { spendingMonthly: spendNow, stocksNow: rt.stocksNow ?? 0.7, stocksRetired: rt.stocksRetired ?? 0.5, taxMode: rt.taxMode ?? "flat", taxRate: rt.taxRate ?? 0.15, strategy: rt.strategy ?? "fixed-real", withdrawalRate: rt.withdrawalRate ?? 0.04 };
