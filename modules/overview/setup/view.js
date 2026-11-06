@@ -11,6 +11,8 @@ import {
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
   applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
+  WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
+  ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, guessesInUse, isGuess } from "../../../core/estimate/index.js";
@@ -87,6 +89,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-root .su-seg button:hover { filter: none; border-color: var(--accent); }
 .su-root .su-seg button[aria-checked="true"], .su-root .su-seg button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .su-group { border-top: 1px solid var(--line); padding: 18px 0 16px; }
+.su-root .su-gap { margin-top: 18px; }
 .su-group > :last-child, .su-group > :last-child > :last-child { margin-bottom: 0; }
 .su-group.first { border-top: 0; padding-top: 0; }
 .su-gh { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: var(--fs-md); margin: 0 0 12px; }
@@ -535,8 +538,11 @@ export function render(page, ctx) {
         const mine = p === self || ad.length === 1;
         const STATUS = [{ key: "work", icon: "💼", label: mine ? "I work" : "Works" }, { key: "retired", icon: "🌴", label: mine ? "I'm retired" : "Retired" }, { key: "none", icon: "⏸️", label: "Not working now" }];
         const body = ui.h("div", {});
+        // "Retirement plan at work?" under pay from an employer (round 8): one tap, or none; Yes adds a $0 401(k) so the next
+        // moves ask about the match, No says there is nothing to get, Not sure saves nothing
+        const planQ = () => { const el = fieldset("Retirement plan at work?", seg(WORK_PLAN, x.plan ?? null, (val) => { x.plan = val; }, named(p, "retirement plan at work") ?? "Retirement plan at work?"), "Like a 401(k) or 403(b). Many employers add money when you save in one."); el.classList.add("su-gap"); return el; };
         const drawBody = () => {
-          if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim()))); return; }
+          if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim())), own.some((i) => i.type === "salary") ? planQ() : null); return; }
           if (x.status === "work") {
             const live = ui.h("p", { class: "su-live", "aria-live": "polite" });
             const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
@@ -548,7 +554,8 @@ export function render(page, ctx) {
               : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax") }));
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
-              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live);
+              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live,
+              by === "employer" ? planQ() : null);
             showMo();
             return;
           }
@@ -575,7 +582,9 @@ export function render(page, ctx) {
         }
         return null;
       };
-      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.` : null; } };
+      // a plan at work this Continue added, with its $0 401(k): said back once (round 8; review UX 9)
+      const planWords = (p2) => { const w = workPlanAdded(p2, ad.filter((q) => v.people[q.id]?.plan === "yes" && !workPlanAcct(plan, q.id)).map((q) => q.id)); return w ? ` ${w}` : ""; };
+      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
       actions();
     },
 
@@ -625,7 +634,8 @@ export function render(page, ctx) {
             detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's money. A rough guide; your statement at ssa.gov is exact.`]);
           } else if (s.mode === "statement") detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security at full retirement age") }), "On your statement at ssa.gov/myaccount.");
           else if (s.mode === "getting") {
-            const amount = field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security a month") }), young ? "Before 62 that's disability or survivor benefits. They're paid in full, so it counts as it is." : null);
+            // before Medicare comes out (round 8): the letter's figure, with the Part B premium to add back to a deposit
+            const amount = field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security a month") }), a === null ? null : ssGettingHelp(a));
             if (young) detail = amount;
             else {
               const fra = by >= 1900 ? fullRetirementAge(by).asYears : 67;
@@ -653,8 +663,11 @@ export function render(page, ctx) {
     have() {
       head("🏦", "What do you have?", "Tap all that apply. Amounts come next.");
       const v = draft(() => new Set(valuesFor(plan, "have")));
+      // the $0 401(k) question 2's "Yes" made: said once, so nobody ticks Retirement only to record it (round 8)
+      const workSaid = workPlanLine(plan);
+      const workLine = workSaid ? ui.h("p", { class: "su-have" }, workSaid) : null;
       add(card, tileGroup("What do you have?", HAVE, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => askOwners(plan, o.key).length === 0 }),
-        haveNote(HAVE.flatMap((h) => existingHave(plan, h.key)).map(accLine)));
+        workLine, haveNote(HAVE.flatMap((h) => existingHave(plan, h.key)).map(accLine)));
       current = { apply: (d) => applyHavePicks(d, [...v]) };
       actions();
     },
@@ -682,12 +695,17 @@ export function render(page, ctx) {
           const extra = ui.h("div", {});
           // paid by their own business: no employer, so no pay stub (review 2026-11-02)
           const ownBiz = payLineNow(plan.income ?? [], pid, today)?.type === "business";
+          // which kind of IRA, right under "Where" (round 8): one tap, or none (then as before: an IRA, or the Roth set on Net worth)
+          const iraBox = ui.h("div", {});
+          const drawIra = () => swap(iraBox, v[`kind-${pid}`] === "own" ? fieldset("Which kind of IRA?", seg(IRA_KINDS, v[`iraKind-${pid}`] ?? null, (val) => { v[`iraKind-${pid}`] = val; }, named(p, "which kind of IRA") ?? "Which kind of IRA?"), iraKindHelp(ownBiz)) : "");
+          drawIra();
           const drawExtra = () => swap(extra,
             field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: named(p, "put in a month") }), "From pay, if you save. Leave it blank if not."),
             v[`kind-${pid}`] === "work" ? field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub.") : null);
           drawExtra();
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
-            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA."),
+            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawIra(); drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA."),
+            iraBox,
             (() => { const g = greyOf(haveId(h.key, pid)); return field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far"), placeholder: g?.shown ?? "" }), g ? `${g.line} Add up every account of that kind.` : "Add up every account of that kind."); })(),
             extra));
         }
@@ -1071,20 +1089,56 @@ export function render(page, ctx) {
       head("🗓️", "How much, and by when?", "A rough target is enough to see what it takes each month.");
       const v = draft(() => valuesFor(plan, "goal-details", { today }));
       const loans = spendBase(plan).loanPayments > 0;
+      // the plan as this screen's answers would save it, so the cushion line follows a savings account linked below (round 8)
+      const preview = () => { const d = structuredClone(plan); try { applyGoalDetails(d, v, today); } catch { return plan; } return d; };
+      const choices = goalFundChoices(plan);
+      let redrawCushion = null;
+      const shownGoals = GOALS.filter((x) => !x.focus && x.key !== "cushion" && picks(plan, "goals").includes(x.key) && !goalTaken(plan, x.key));
+      const notes = [];   // each goal's line under its pills, redrawn after any tap (an account ticked for two goals)
+      let tapped = null;
+      /** "Is any of your savings already for this?": the cash accounts as pills (any number), or None of it. */
+      const fundsPick = (g, x) => {
+        const sel = new Set(x.funds ?? []);
+        let none = false;
+        const opts = [...choices.map((a) => ({ id: a.id, label: `${a.name}: ${money(a.balance)}` })), { id: null, label: "None of it" }];
+        const note = ui.h("div", { "aria-live": "polite" });
+        // after a tap, under the pills: what the cushion now counts (its own line may be above the screen; review UX 7), and
+        // an account ticked for another goal too, which fills that goal in date order (Goals' F-013; review UX 8)
+        const drawNote = () => {
+          const also = [...sel].map((id) => { const o = shownGoals.filter((y) => y.key !== g.key && (v[y.key]?.funds ?? []).includes(id)); const a = choices.find((c) => c.id === id); return o.length && a ? `${a.name} is also for ${o.map((y) => goalWords({ id: `setup-goal-${y.key}`, name: v[y.key]?.name || y.label })).join(" and ")}.` : null; }).filter(Boolean);
+          let have = null;
+          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your cushion now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of must-pay bills. Aim for ${c.months}.`; }
+          swap(note, also.length ? ui.h("p", { class: "su-live" }, `${also.join(" ")} The goal due first fills first.`) : null, have ? ui.h("p", { class: "su-live" }, have) : null);
+        };
+        notes.push(drawNote);
+        const btns = opts.map((o) => ui.h("button", { type: "button", onClick: () => {
+          if (o.id === null) { none = !none; sel.clear(); } else { none = false; if (sel.has(o.id)) sel.delete(o.id); else sel.add(o.id); }
+          x.funds = [...sel];
+          tapped = g.key;
+          mark(); notes.forEach((f) => f()); redrawCushion?.();
+        } }, o.label));
+        const mark = () => btns.forEach((b, i) => b.setAttribute("aria-pressed", String(opts[i].id === null ? none : sel.has(opts[i].id))));
+        mark();
+        const el = fieldset("Is any of your savings already for this?", ui.h("div", { class: "su-seg", role: "group", "aria-label": `${g.label}: savings already for it` }, btns), GOAL_FUNDS_HELP);
+        el.classList.add("su-gap");
+        return ui.h("div", {}, el, note);
+      };
       for (const g of GOALS.filter((x) => !x.focus && picks(plan, "goals").includes(x.key) && !goalTaken(plan, x.key))) {
         const x = v[g.key];
         if (g.key === "cushion") {
           const live = ui.h("div", { "aria-live": "polite" });
           const drawC = () => {
-            const c = cushion(plan, x.months, today);
-            const share = c.target > 0 ? Math.min(1, c.now / c.target) : 0;
+            const pv = preview(), c = cushion(pv, x.months, today);
+            // Emergency fund's own target (months x must-pay bills), and why the cash it counts is less than the accounts hold
+            const share = c.exact > 0 ? Math.min(1, c.now / c.exact) : 0;
             swap(live, c.essential > 0
-              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.target)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in must-pay bills${loans ? " and loan payments" : ""}.`)
+              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.exact)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in must-pay bills${loans ? " and loan payments" : ""}.`)
               : ui.h("p", { class: "su-live" }, "Your must-pay bills (question 6) set the amount."),
-              c.essential > 0 ? ui.h("p", { class: "su-live" }, `You already have ${money(c.now)} in checking, savings and cash: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} of ${x.months} months.`) : null,
+              c.essential > 0 ? ui.h("p", { class: "su-live" }, cushionHave(pv, c)) : null,
               c.essential > 0 ? ui.h("div", { class: "su-meter", role: "img", "aria-label": `${Math.round(share * 100)}% of the cushion` }, ui.h("span", { style: { width: `${Math.round(share * 100)}%` } })) : null);
           };
           drawC();
+          redrawCushion = drawC;
           add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of must-pay bills?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of must-pay bills"), "Three to six months is the usual advice; more if your pay goes up and down."), live));
           continue;
         }
@@ -1095,8 +1149,9 @@ export function render(page, ctx) {
         drawDate();
         add(card, group(`${g.icon} ${g.label}`,
           g.key === "other" ? field("What is it?", ui.h("input", { class: "su-in", enterkeyhint: "next", value: x.name, onInput: (e) => { x.name = e.target.value; } }), "For example, a new kitchen.") : null,
-          field("How much", moneyIn(x.target, (val) => { x.target = val; }, { label: `${g.label}: how much` }), g.key === "home" ? "The down payment and closing costs. For example, 60,000." : `For example, ${g.key === "trip" ? "4,000" : "10,000"}.`),
-          fieldset("By when", seg(opts, chip, (val) => { chip = val; if (val !== "date") { x.years = Number(val); x.date = ""; } drawDate(); }, `${g.label}: by when`)), dateBox));
+          field("How much", moneyIn(x.target, (val) => { x.target = val; redrawCushion?.(); }, { label: `${g.label}: how much` }), goalAmountHelp(g.key)),
+          fieldset("By when", seg(opts, chip, (val) => { chip = val; if (val !== "date") { x.years = Number(val); x.date = ""; } drawDate(); }, `${g.label}: by when`)), dateBox,
+          choices.length ? fundsPick(g, x) : null));
       }
       firstGroup();
       current = { apply: (d) => applyGoalDetails(d, v, today) };
@@ -1144,9 +1199,13 @@ export function render(page, ctx) {
         : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.${st.lean ? ` That is a lean month: when all your uneven pay comes in, ${st.lean.kind === "ahead" ? `about ${money(st.lean.about)} is left` : st.lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-st.lean.about)} short`}.` : ""}`,
           // short only in a lean month (Side income's "count on"; review 2026-11-02, round 5)
           st.spare >= 0 ? "● Money to put to work" : st.lean?.kind === "ahead" ? "● Short in a lean month" : "● More goes out than comes in");
+    // cash set aside for a goal, or this year's tax not paid yet, is not cushion: said, so the months read right (round 8)
+    const held = cushionHeldWords(st, plan);
+    // the cash is held for the owner's own "Emergency fund" goal, not ticked as the cushion: where to say it is (F-034)
+    const heldAsk = cushionHeldAsk(st);
     const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
-      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `By our guesses of your must-pay bills. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
-      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up");
+      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `${held ? `${held} ` : ""}By our guesses of your must-pay bills. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
+      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
       : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", "Partly our guesses. Type what you spend ›", "● Our guesses for now", setupHref("spend"))
@@ -1179,7 +1238,8 @@ export function render(page, ctx) {
     const ours = [...spendRow, ...guessTwins(plan).map((t) => rowLink("#/overview/guesses", null, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once`)), ...homes, ...st.guessed.map((g) => {
       const parts = [g.owed !== undefined ? `still owed about ${money(g.owed)}` : null, g.rate !== null ? `rate ${pctOf(g.rate)}` : null, g.payment !== null ? `${money(g.payment)} a month` : null].filter(Boolean);
       return rowLink("#/overview/guesses", null, `${g.name}: ${parts.join(", ")}`);
-    }), ...(ssLine ? [rowLink(ssLine.href, null, ssLine.label)] : [])];
+    }), ...(st.iraGuessed ?? []).map((x) => rowLink(setupHref("have-amounts"), null, `${ad.length > 1 ? x.name : "Your retirement"}: counted as a traditional IRA. A Roth? Tell us which`)),
+    ...(ssLine ? [rowLink(ssLine.href, null, ssLine.label)] : [])];
     if (ours.length) {
       const n = guessesInUse(plan).length;
       add(card, ui.h("h2", { class: "su-h2" }, "Our guesses for now"),

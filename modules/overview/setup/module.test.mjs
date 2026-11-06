@@ -1736,3 +1736,445 @@ test("C3 UX 7 and 12: life cover and the shortfall alert, resting on our spendin
   assert.equal(move.detail.split(RESTS_ON).length - 1, 1, move.detail);
   assert.ok(move.detail.endsWith(`${RESTS_ON} Cover you already have, through work too, goes on Policies.`));
 });
+
+// ---- Round 8, batch 3 (2026-11-06): Get started asks what it needs. Invented households shaped like the round-8 testers'
+// plans (couple-home: two salaried earners, $3,000 checking and $22,000 savings for a house; freelancer: $8,500 that is all
+// this year's tax not paid yet).
+const T6 = "2026-11-06";
+/** Two salaried earners, a student loan, a house goal; `money` overrides Q2 per person, `home` the house goal's answers. */
+function coupleHome({ money = {}, home = {}, picks = ["home", "debt", "retire"] } = {}) {
+  const p = empty();
+  S.applyYou(p, { name: "Priya", who: "spouse", partnerName: "Tom", kids: 0, state: "NC" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 58000, period: "annual", ...(money["setup-self"] ?? {}) }, "setup-partner": { status: "work", by: "employer", amount: 64000, period: "annual", ...(money["setup-partner"] ?? {}) } }, today: T6 });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1997, stopAge: 65, ss: { mode: "estimate" } }, "setup-partner": { month: 8, year: 1995, stopAge: 65, ss: { mode: "estimate" } } } }, T6);
+  S.applyHavePicks(p, ["checking", "savings"]);
+  S.applyHaveAmounts(p, { checking: 3000, savings: 22000 }, T6);
+  S.applyOwePicks(p, ["student"]);
+  S.applyOweAmounts(p, { student: { owed: 64000, payment: 730, rate: 6.5 } }, T6);
+  S.applySpend(p, { mode: "rows", rows: { housing: 1650, utilities: 250, groceries: 700, transport: 400, insurance: 200, dining: 400, shopping: 350 } });
+  S.applyGoalPicks(p, picks);
+  S.applyGoalDetails(p, { home: { target: 60000, years: 3, ...home } }, T6);
+  return p;
+}
+
+test("R8 item 1: after 'An employer', a retirement plan at work: Yes writes plan true and a $0 401(k); No writes no plan and no match; Not sure nothing", () => {
+  const p = coupleHome({ money: { "setup-self": { plan: "yes" }, "setup-partner": { plan: "unsure" } } });
+  assert.deepEqual(p.retirement.workPlans, { "setup-self": { plan: true } }, "Not sure writes nothing");
+  const k = acct(p, "setup-workplan-setup-self");
+  assert.ok(k, "a $0 401(k) for Priya");
+  assert.deepEqual([k.name, k.type, k.balance, k.ownerId], ["Priya's plan at work", "401k", 0, "setup-self"]);
+  assert.equal(acct(p, "setup-workplan-setup-partner"), undefined, "none for Tom (not sure)");
+  assert.equal(p.retirement.contributions.length, 0, "no contribution row: nothing is going in yet");
+  // the screen reads the answer back
+  assert.deepEqual(["setup-self", "setup-partner"].map((id) => S.valuesFor(p, "money", { today: T6 }).people[id].plan), ["yes", null]);
+  // Next best action asks about the match for Priya (a 401(k), pay, nothing going in), in plain words on the done screen
+  const step = nextBest(p, { today: T6 }).steps.find((s) => s.id === "match");
+  assert.ok(step && step.status === "check", "the match step is there, as a question");
+  assert.deepEqual(step.ask.map((a) => a.personId), ["setup-self"]);
+  assert.equal(S.revealWords(step, p, { today: T6 }).title, "Check if Priya's job matches retirement saving");
+  // No: no plan and no match, the $0 401(k) taken back; Not sure: the answer and the 401(k) taken back
+  const v = S.valuesFor(p, "money", { today: T6 });
+  S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "no" } }, today: T6 });
+  assert.deepEqual(p.retirement.workPlans["setup-self"], { plan: false, match: false });
+  assert.equal(acct(p, "setup-workplan-setup-self"), undefined);
+  assert.equal(nextBest(p, { today: T6 }).steps.find((s) => s.id === "match"), undefined);
+  S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "yes" } }, today: T6 });
+  S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "unsure" } }, today: T6 });
+  assert.equal(p.retirement.workPlans?.["setup-self"], undefined);
+  assert.equal(acct(p, "setup-workplan-setup-self"), undefined);
+});
+
+test("R8 item 1: the question is only for pay from an employer, never adds a second 401(k), and an unanswered screen writes nothing", () => {
+  // paid by their own business: no question, so a Yes left in the draft writes nothing
+  const f = coupleHome({ money: { "setup-self": { by: "self", plan: "yes" } } });
+  assert.equal(f.retirement.workPlans, undefined);
+  assert.equal(acct(f, "setup-workplan-setup-self"), undefined);
+  // a 401(k) for this job already on Net worth: Yes is noted, nothing added
+  const q = coupleHome();
+  q.accounts.push({ id: "k-own", name: "Priya's 401(k)", type: "401k", balance: 4000, ownerId: "setup-self" });
+  const v = S.valuesFor(q, "money", { today: T6 });
+  S.applyMoney(q, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "yes" } }, today: T6 });
+  assert.equal(q.retirement.workPlans["setup-self"].plan, true);
+  assert.equal(q.accounts.filter((a) => a.type === "401k").length, 1);
+  // a plan that never answers the question: going through Q2 again changes nothing
+  const r = coupleHome();
+  assert.equal(S.wouldChange(r, (d) => S.applyMoney(d, { ...S.valuesFor(r, "money", { today: T6 }), today: T6 })), false);
+  // an answer given on Contributions ("No plan or no match") is not question 2's, and an unchanged Continue keeps it
+  r.retirement.workPlans = { "setup-partner": { match: false } };
+  assert.equal(S.valuesFor(r, "money", { today: T6 }).people["setup-partner"].plan, null);
+  assert.equal(S.wouldChange(r, (d) => S.applyMoney(d, { ...S.valuesFor(r, "money", { today: T6 }), today: T6 })), false);
+  // stopping work takes back the $0 401(k) Q2 made
+  const s = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  S.applyMoney(s, { people: { "setup-self": { status: "none" }, "setup-partner": { status: "work", amount: 64000, period: "annual" } }, today: T6 });
+  assert.equal(acct(s, "setup-workplan-setup-self"), undefined);
+  assert.equal(s.retirement.workPlans, undefined, "the answer goes with the job");
+});
+
+test("R8 item 1: question 4 keeps the plan at work: unticked or blank it stays at $0; a balance typed goes into it, never a second account", () => {
+  const p = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  // Retirement not ticked on question 4: the $0 401(k) stays
+  S.applyHavePicks(p, ["checking", "savings"]);
+  assert.ok(acct(p, "setup-workplan-setup-self"));
+  // ticked, the box shows blank (not "0") and a blank box keeps it at $0
+  S.applyHavePicks(p, ["checking", "savings", "retire"]);
+  const v = S.valuesFor(p, "have-amounts");
+  assert.deepEqual([v["retire-setup-self"], v["kind-setup-self"]], ["", "work"]);
+  S.applyHaveAmounts(p, { ...v, checking: 3000, savings: 22000 }, T6);
+  assert.deepEqual([acct(p, "setup-workplan-setup-self").balance, acct(p, "setup-workplan-setup-self").type], [0, "401k"]);
+  assert.equal(acct(p, "setup-have-retire-setup-self"), undefined);
+  // a balance typed goes into the same account, and reads back the same
+  S.applyHaveAmounts(p, { ...S.valuesFor(p, "have-amounts"), "retire-setup-self": 8000, "contrib-setup-self": 300, "match-setup-self": 150 }, T6);
+  assert.equal(p.accounts.filter((a) => a.ownerId === "setup-self").length, 1);
+  assert.equal(acct(p, "setup-workplan-setup-self").balance, 8000);
+  assert.equal(p.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").accountId, "setup-workplan-setup-self");
+  assert.equal(S.wouldChange(p, (d) => S.applyHaveAmounts(d, S.valuesFor(p, "have-amounts"), T6)), false);
+  // Retirement unticked after that: what question 4b put in goes; the plan at work stays, at $0
+  S.applyHavePicks(p, ["checking", "savings"]);
+  assert.equal(acct(p, "setup-workplan-setup-self").balance, 0);
+  assert.equal(p.retirement.contributions.some((c) => c.id === "setup-contrib-setup-self"), false);
+  // the person's own answer still: removing the partner removes their answer too
+  const q = coupleHome({ money: { "setup-partner": { plan: "yes" } } });
+  S.applyYou(q, { name: "Priya", who: "me", state: "NC" });
+  assert.equal(q.retirement.workPlans?.["setup-partner"], undefined);
+  assert.equal(acct(q, "setup-workplan-setup-partner"), undefined);
+});
+
+test("R8 item 10: savings already for a goal is linked to it (fundedBy), so it is not counted as the safety cushion", () => {
+  const p = coupleHome({ home: { funds: ["setup-have-savings"] } });
+  const home = p.goals.find((g) => g.id === "setup-goal-home");
+  assert.deepEqual(home.fundedBy, ["setup-have-savings"]);
+  assert.equal(home.saved, 0, "fundedBy, not saved: saved never comes off the cushion");
+  const g = goals(p, { today: T6 }).goals.find((x) => x.id === "setup-goal-home");
+  assert.equal(g.funded, 22000);
+  assert.equal(Math.round(g.neededMonthly), 1068, "the house needs about $1,068 a month");
+  const st = S.standing(p, { today: T6 });
+  assert.equal((Math.round(st.runway * 10) / 10).toFixed(1), "0.8");
+  assert.notEqual(st.runwayStatus, "ok", "not 'Covered'");
+  assert.deepEqual(st.cushionHeld, { all: 25000, earmarked: 22000, taxOwed: 0, now: 3000, goals: ["the home"] });
+  assert.equal(S.cushionHeldWords(st, p), "Your $22,000 is set aside for the home, so your cushion is $3,000.");
+  // before the answer: counted as cushion, as the round-8 tester saw it
+  const before = coupleHome();
+  assert.equal(S.standing(before, { today: T6 }).runwayStatus, "ok");
+  assert.equal(S.standing(before, { today: T6 }).cushionHeld, undefined);
+});
+
+test("R8 item 10: None of it, an answer left alone, only cash accounts, and the cushion goal leaves a claimed account out", () => {
+  const p = coupleHome({ picks: ["cushion", "home"], home: { funds: ["setup-have-savings"] } });
+  const cushionGoal = p.goals.find((g) => g.id === "setup-goal-cushion");
+  assert.deepEqual(cushionGoal.fundedBy, ["setup-have-checking"], "the house's savings is not the cushion's");
+  assert.deepEqual(p.guide.setup.cushionFunds, ["setup-have-checking"]);
+  // the setup's own guess of the cushion's accounts agrees, so "Better guesses are ready" never offers the savings back
+  const est = S.estimators["overview/setup:cushionFunds"].fn(p, { today: T6 });
+  assert.deepEqual(est.value, ["setup-have-checking"]);
+  // the screen reads the answer back; an unchanged Continue writes nothing
+  const v = S.valuesFor(p, "goal-details", { today: T6 });
+  assert.deepEqual(v.home.funds, ["setup-have-savings"]);
+  assert.equal(S.wouldChange(p, (d) => S.applyGoalDetails(d, v, T6)), false);
+  // None of it: unlinked, and the cushion takes the savings back
+  S.applyGoalDetails(p, { ...v, home: { ...v.home, funds: [] } }, T6);
+  assert.deepEqual(p.goals.find((g) => g.id === "setup-goal-home").fundedBy, []);
+  assert.deepEqual(p.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking", "setup-have-savings"]);
+  // not answered (no funds): a link made on Goals stays
+  p.goals.find((g) => g.id === "setup-goal-home").fundedBy = ["setup-have-savings"];
+  S.applyGoalDetails(p, { cushion: { months: 6 }, home: { target: 60000, years: 3 } }, T6);
+  assert.deepEqual(p.goals.find((g) => g.id === "setup-goal-home").fundedBy, ["setup-have-savings"]);
+  // only checking, savings and cash can be ticked
+  const q = coupleHome({ home: { funds: ["setup-owe-student", "nope", "setup-have-checking"] } });
+  assert.deepEqual(q.goals.find((g) => g.id === "setup-goal-home").fundedBy, ["setup-have-checking"]);
+  assert.deepEqual(S.goalFundChoices(q).map((a) => a.id), ["setup-have-checking", "setup-have-savings"]);
+});
+
+test("R8 item 10: a goal of the owner's that looks like the cushion itself is named as a goal, with where to count it", () => {
+  // the family fixture: "Emergency fund" (🛟, $20,000) saves in Ally savings ($11,500) but is not ticked as the emergency
+  // fund, so Liquidity keeps its money apart (F-020 / F-034); the done screen must not read "set aside for Emergency fund"
+  const p = migrate(familyPlan(T6));
+  const st = S.standing(p, { today: T6 });
+  assert.deepEqual(st.cushionHeld, { all: 15700, earmarked: 11500, taxOwed: 0, now: 4200, goals: ['the "Emergency fund" goal'], cushionGoal: "Emergency fund" });
+  assert.equal(S.cushionHeldWords(st, p), '$11,500 more sits in your "Emergency fund" goal.');
+  assert.equal(S.cushionHeldAsk(st), "Count it as your cushion? Say so on Emergency fund ›");
+  // two goals hold cash: the question names the one that looks like the cushion
+  const two = migrate(familyPlan(T6));
+  two.goals.find((g) => g.id === "g-trip").fundedBy = ["a-chk"];
+  const st2 = S.standing(two, { today: T6 });
+  assert.deepEqual(st2.cushionHeld.goals, ['the "Emergency fund" goal', 'the "Japan trip" goal']);
+  assert.equal(S.cushionHeldAsk(st2), 'Is the "Emergency fund" goal your safety cushion? Say so on Emergency fund ›');
+  // ticked as the emergency fund (Emergency fund's checkbox): its money is cushion, nothing to say
+  const ticked = migrate(familyPlan(T6));
+  ticked.goals.find((g) => g.id === "g-ef").isEmergencyFund = true;
+  const st3 = S.standing(ticked, { today: T6 });
+  assert.equal(st3.cushionHeld, undefined);
+  assert.equal(S.cushionHeldAsk(st3), null);
+  // a goal that is not cushion-like (the setup's home): no question
+  const home = coupleHome({ home: { funds: ["setup-have-savings"] } });
+  assert.equal(S.cushionHeldAsk(S.standing(home, { today: T6 })), null);
+});
+
+test("R8 item 29: money that is this year's unpaid tax is said so on question 7b, and the target is Emergency fund's", async () => {
+  const { compute: emergency } = await import("../../goals/emergency-fund/compute.js");
+  const p = empty();
+  S.applyYou(p, { name: "Dani", who: "me", state: "CO" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, today: T6, taxPaid: 4000 });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1995, stopAge: 65, ss: { mode: "estimate" } } } }, T6);
+  S.applyHavePicks(p, ["checking", "savings", "retire"]);
+  S.applyHaveAmounts(p, { checking: 3500, savings: 5000, "kind-setup-self": "own", "retire-setup-self": 14000, "contrib-setup-self": 250 }, T6);
+  S.applyOwePicks(p, ["credit"]);
+  S.applyOweAmounts(p, { credit: { owed: 6000, payment: 200, rate: 24 } }, T6);
+  S.applySpend(p, { mode: "rows", rows: { housing: 1800, utilities: 180, groceries: 450, transport: 350, insurance: 450, dining: 400, shopping: 400 } });
+  S.applyGoalPicks(p, ["cushion", "debt", "retire"]);
+  S.applyGoalDetails(p, { cushion: { months: 6 } }, T6);
+  const c = S.cushion(p, 6, T6);
+  assert.deepEqual([c.all, c.taxOwed, c.now, c.exact], [8500, 8500, 0, 20580]);
+  assert.equal(c.exact, emergency(p, { today: T6 }).target, "the same target as Emergency fund");
+  assert.equal(S.cushionHave(p, c), "You have $8,500 in checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward the cushion: 0.0 of 6 months.");
+  assert.equal(Math.round(c.taxDue * 100) / 100, 9248.7, "owed now: $15,898.44 x 10/12 - $4,000");
+  // part of it: the rest counts
+  acct(p, "setup-have-savings").balance = 15000;
+  const d = S.cushion(p, 6, T6);
+  assert.ok(d.taxOwed > 0 && d.taxOwed < d.all);
+  assert.match(S.cushionHave(p, d), /^You have \$18,500 in checking and savings; \$[\d,]+ of it is this year's tax not paid yet, so \$[\d,]+ counts toward the cushion: \d\.\d of 6 months\.$/);
+  // nothing held back: the sentence is the one it always was
+  const h = family();
+  const e = S.cushion(h, null, T);
+  assert.equal(S.cushionHave(h, e), `You already have $${Math.round(e.now).toLocaleString("en-US")} in checking, savings and cash: ${(Math.round(e.covered * 10) / 10).toFixed(1)} of 4 months.`);
+  // the done screen's cushion tile says it too
+  const st = S.standing(p, { today: T6 });
+  assert.equal(S.cushionHeldWords(st, p), `Your $18,500 includes $${Math.round(st.cushionHeld.taxOwed).toLocaleString("en-US")} of this year's tax not paid yet, so your cushion is $${Math.round(st.cushionHeld.now).toLocaleString("en-US")}.`);
+});
+
+test("R8 item 35: 'On my own' asks which kind of IRA: Roth saves a Roth, Traditional an IRA, Not sure an IRA said to be our guess", () => {
+  const p = empty();
+  S.applyYou(p, { name: "Dani", who: "me", state: "CO" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, today: T6 });
+  S.applyHavePicks(p, ["retire"]);
+  assert.equal(S.valuesFor(p, "have-amounts", { today: T6 })["iraKind-setup-self"], null, "not asked yet: nothing chosen");
+  S.applyHaveAmounts(p, { "kind-setup-self": "own", "iraKind-setup-self": "roth", "retire-setup-self": 14000, "contrib-setup-self": 250 }, T6);
+  assert.equal(acct(p, "setup-have-retire-setup-self").type, "roth");
+  assert.equal(S.valuesFor(p, "have-amounts", { today: T6 })["iraKind-setup-self"], "roth");
+  S.applyHaveAmounts(p, { ...S.valuesFor(p, "have-amounts", { today: T6 }), "iraKind-setup-self": "traditional" }, T6);
+  assert.equal(acct(p, "setup-have-retire-setup-self").type, "ira");
+  S.applyHaveAmounts(p, { ...S.valuesFor(p, "have-amounts", { today: T6 }), "iraKind-setup-self": "unsure" }, T6);
+  assert.equal(acct(p, "setup-have-retire-setup-self").type, "ira", "Not sure: counted as traditional for now");
+  assert.equal(S.valuesFor(p, "have-amounts", { today: T6 })["iraKind-setup-self"], "unsure");
+  assert.ok(S.standing(p, { today: T6 }).iraGuessed?.length === 1, "the done screen lists it among our guesses");
+  // no answer: as before (a Roth set on Net worth stays a Roth; a new one is an IRA)
+  const q = empty(); S.applyYou(q, { who: "me" }); S.applyHavePicks(q, ["retire"]);
+  S.applyHaveAmounts(q, { "kind-setup-self": "own", "retire-setup-self": 5000 }, T6);
+  assert.equal(acct(q, "setup-have-retire-setup-self").type, "ira");
+  assert.equal(q.guide.setup.iraKind, undefined);
+  assert.equal(S.standing(q, { today: T6 }).iraGuessed, undefined);
+});
+
+test("R8 item 37: Social Security already paid is asked before Medicare comes out, with the Part B premium to add back", () => {
+  assert.equal(S.ssGettingHelp(70), "Before Medicare is taken out: the figure on your yearly benefit letter, not what reaches your bank. Only know the deposit? Add about $203.");
+  assert.equal(S.ssGettingHelp(63), "Before anything is taken out: the figure on your yearly benefit letter, not what reaches your bank.");
+  assert.match(S.ssGettingHelp(55), /^Before 62 that's disability or survivor benefits/);
+});
+
+test("R8 item 39: question 7b's home amount says how little down some loans take, and that under 20% adds mortgage insurance", () => {
+  const h = S.goalAmountHelp("home");
+  assert.match(h, /^The down payment and closing costs\. For example, 60,000\./);
+  assert.match(h, /3% down/); assert.match(h, /20%/); assert.match(h, /mortgage insurance/);
+  assert.equal(S.goalAmountHelp("trip"), "For example, 4,000.");
+  assert.equal(S.goalAmountHelp("car"), "For example, 10,000.");
+});
+
+// ---- Round 8, batch 3, review fixes (2026-11-06): the money review (D1-D10) and the UX review (1-9). Invented households.
+/** One salaried adult, $3,000 checking, savings, must-pay bills $2,800 a month (the reviewers' "Sky"). */
+function sky({ checking = 3000, savings = 30000, goals: gk = ["cushion", "trip"], details = {} } = {}) {
+  const p = empty();
+  S.applyYou(p, { name: "Sky", who: "me", kids: 0, state: "TX" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "employer", amount: 60000, period: "annual" } }, today: T6 });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1990, stopAge: 65, ss: { mode: "estimate" } } } }, T6);
+  S.applyHavePicks(p, ["checking", "savings"]);
+  S.applyHaveAmounts(p, { checking, savings }, T6);
+  S.applyOwePicks(p, ["none"]);
+  S.applySpend(p, { mode: "rows", rows: { housing: 1500, utilities: 200, groceries: 600, transport: 300, insurance: 200, dining: 300, shopping: 300 } });
+  S.applyGoalPicks(p, gk);
+  S.applyGoalDetails(p, details, T6);
+  return p;
+}
+const goalOf = (p, id) => goals(p, { today: T6 }).goals.find((g) => g.id === id);
+
+test("R8 B3 review D1: a link made on Goals never takes cash off the setup's cushion goal; only question 7b's own answer does", async () => {
+  const { upgradeOffers } = await import("../guesses/compute.js");
+  // made before this batch: the setup's cushion on checking and savings, then a House on Goals linked to the savings
+  const p = sky({ savings: 22000, goals: ["cushion"], details: { cushion: { months: 6 } } });
+  p.goals.push({ id: "g-house", name: "House", icon: "🏡", target: 60000, targetDate: "2029-11-01", priority: 2, saved: 0, fundedBy: ["setup-have-savings"], monthly: 0, rate: null, inflates: true });
+  assert.deepEqual(S.cushionFundIds(p), ["setup-have-checking", "setup-have-savings"], "as before: every cash account");
+  assert.deepEqual(S.estimators["overview/setup:cushionFunds"].fn(p, { today: T6 }).value, ["setup-have-checking", "setup-have-savings"]);
+  assert.deepEqual(upgradeOffers(p, { estimators: REG.estimators, tables: REG.tables, today: T6 }), [], "no 'Better guesses are ready'");
+  const v = S.valuesFor(p, "goal-details", { today: T6 });
+  assert.equal(S.wouldChange(p, (d) => S.applyGoalDetails(d, v, T6)), false, "an unchanged Continue on 7b saves nothing");
+  assert.equal(goalOf(p, "setup-goal-cushion").funded, 16800, "the cushion is still covered");
+  // the setup's own home goal linked to the savings on Goals: shown ticked on 7b, and an unchanged Continue changes nothing
+  const q = sky({ savings: 22000, goals: ["cushion", "home"], details: { cushion: { months: 6 }, home: { target: 60000, years: 3 } } });
+  q.goals.find((g) => g.id === "setup-goal-home").fundedBy = ["setup-have-savings"];
+  const w = S.valuesFor(q, "goal-details", { today: T6 });
+  assert.deepEqual(w.home.funds, ["setup-have-savings"]);
+  assert.equal(S.wouldChange(q, (d) => S.applyGoalDetails(d, w, T6)), false);
+  assert.deepEqual(S.cushionFundIds(q), ["setup-have-checking", "setup-have-savings"]);
+  // the same link made on 7b (the person's own answer there): the savings is the home's
+  const r = sky({ savings: 22000, goals: ["cushion", "home"], details: { cushion: { months: 6 }, home: { target: 60000, years: 3, funds: ["setup-have-savings"] } } });
+  assert.deepEqual(r.guide.setup.goalFunds, { home: ["setup-have-savings"] });
+  assert.deepEqual(r.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking"]);
+  assert.deepEqual(upgradeOffers(r, { estimators: REG.estimators, tables: REG.tables, today: T6 }), []);
+  // the goal unpicked: its answer goes with it
+  S.applyGoalPicks(r, ["cushion"]);
+  assert.equal(r.guide.setup.goalFunds, undefined);
+});
+
+test("R8 B3 review D3: a ticked account holding more than its goals need stays the cushion's too; a goal with no amount claims nothing", async () => {
+  const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+  // savings $30,000 ticked for a $4,000 trip: the cushion ($16,800) is covered on Goals as on Emergency fund
+  const b = sky({ details: { cushion: { months: 6 }, trip: { target: 4000, years: 1, funds: ["setup-have-savings"] } } });
+  assert.deepEqual(b.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking", "setup-have-savings"]);
+  assert.equal(goalOf(b, "setup-goal-cushion").funded, 16800);
+  assert.equal(goalOf(b, "setup-goal-trip").funded, 4000);
+  assert.equal(liquidity(b, { today: T6 }).now, 29000);
+  assert.equal(S.cushionHeldWords(S.standing(b, { today: T6 }), b), "Your $4,000 is set aside for the trip, so your cushion is $29,000.");
+  // the home with no amount yet and the savings ticked: nothing is held for it, so the cushion uses the savings
+  const c = sky({ goals: ["cushion", "home"], details: { cushion: { months: 6 }, home: { years: 3, funds: ["setup-have-savings"] } } });
+  assert.deepEqual(c.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking", "setup-have-savings"]);
+  assert.equal(goalOf(c, "setup-goal-cushion").funded, 16800);
+  // the home needs more than the savings holds: all of it is the home's (couple-home)
+  const h = sky({ savings: 22000, goals: ["cushion", "home"], details: { cushion: { months: 6 }, home: { target: 60000, years: 3, funds: ["setup-have-savings"] } } });
+  assert.deepEqual(h.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking"]);
+  assert.equal(goalOf(h, "setup-goal-cushion").funded, 3000);
+  assert.equal(liquidity(h, { today: T6 }).now, 3000);
+});
+
+test("R8 B3 verify: an account ticked on 7b never gives its goal's money to the cushion, even with a little left over", async () => {
+  const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
+  // savings $15,000 ticked for a $15,000 car: all of it is the car's; the cushion is the checking ($3,000)
+  const at = (savings) => sky({ savings, goals: ["cushion", "car"], details: { cushion: { months: 6 }, car: { target: 15000, years: 2, funds: ["setup-have-savings"] } } });
+  const even = at(15000);
+  assert.equal(goalOf(even, "setup-goal-car").funded, 15000);
+  assert.equal(liquidity(even, { today: T6 }).now, 3000);
+  // one dollar more must not hand $13,799 of the car's money to the cushion (it was: car $1,201, cushion 6.0 months)
+  for (const savings of [15001, 25000]) {
+    const p = at(savings);
+    assert.equal(goalOf(p, "setup-goal-car").funded, 15000, `savings ${savings}: the car keeps its $15,000`);
+    assert.equal(liquidity(p, { today: T6 }).now, 3000 + savings - 15000, `savings ${savings}: the cushion is what the car leaves`);
+    assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `Your $15,000 is set aside for the next car, so your cushion is $${(3000 + savings - 15000).toLocaleString("en-US")}.`);
+  }
+  // enough left over for the cushion too ($15,000 + $13,800): the cushion is on both accounts, every page one figure
+  const both = at(28800);
+  assert.deepEqual(both.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking", "setup-have-savings"]);
+  assert.equal(goalOf(both, "setup-goal-cushion").funded, 16800);
+  assert.equal(goalOf(both, "setup-goal-car").funded, 15000);
+  assert.equal(liquidity(both, { today: T6 }).now, 16800);
+});
+
+test("R8 B3 review D2, D7 and UX 1: question 2's Yes is its own answer (plan), never a match, and Contributions' 'no match' does not undo it", () => {
+  const p = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  assert.deepEqual(p.retirement.workPlans, { "setup-self": { plan: true } }, "a plan at work, nothing said about a match");
+  assert.ok(S.workPlanAcct(p, "setup-self"));
+  // Contributions: "No plan or no match at Priya's job"
+  p.retirement.workPlans["setup-self"].match = false;
+  const v = S.valuesFor(p, "money", { today: T6 });
+  assert.equal(v.people["setup-self"].plan, "yes", "still Yes on question 2");
+  assert.equal(S.wouldChange(p, (d) => S.applyMoney(d, { ...v, today: T6 })), false, "an unchanged Continue saves nothing");
+  // No: no plan and so no match; Yes again: the match question is open again
+  const no = { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "no" } }, today: T6 };
+  delete p.retirement.workPlans["setup-self"].match;
+  S.applyMoney(p, no);
+  assert.deepEqual(p.retirement.workPlans["setup-self"], { plan: false, match: false });
+  assert.equal(S.workPlanAcct(p, "setup-self"), null, "the $0 401(k) taken back");
+  S.applyMoney(p, { ...no, people: { ...no.people, "setup-self": { ...no.people["setup-self"], plan: "yes" } } });
+  assert.deepEqual(p.retirement.workPlans["setup-self"], { plan: true });
+  S.applyMoney(p, { ...no, people: { ...no.people, "setup-self": { ...no.people["setup-self"], plan: "unsure" } } });
+  assert.equal(p.retirement.workPlans?.["setup-self"], undefined);
+  assert.equal(S.workPlanAcct(p, "setup-self"), null);
+  // only Contributions' answer on file: question 2 shows nothing chosen and a Continue keeps it
+  const q = coupleHome();
+  q.retirement.workPlans = { "setup-partner": { match: false } };
+  assert.equal(S.valuesFor(q, "money", { today: T6 }).people["setup-partner"].plan, null);
+  assert.equal(S.wouldChange(q, (d) => S.applyMoney(d, { ...S.valuesFor(q, "money", { today: T6 }), today: T6 })), false);
+  // the $0 401(k) removed on Net worth: an unchanged Continue does not put it back
+  const r = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  r.accounts = r.accounts.filter((a) => a !== S.workPlanAcct(r, "setup-self"));
+  assert.equal(S.wouldChange(r, (d) => S.applyMoney(d, { ...S.valuesFor(r, "money", { today: T6 }), today: T6 })), false);
+});
+
+test("R8 B3 review UX 4: question 2's $0 401(k) has its own place, so 'On my own' on question 4b adds the IRA beside it", () => {
+  const p = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  S.applyHavePicks(p, ["checking", "savings", "retire"]);
+  S.applyHaveAmounts(p, { ...S.valuesFor(p, "have-amounts", { today: T6 }), checking: 3000, savings: 22000, "kind-setup-self": "own", "retire-setup-self": 5000 }, T6);
+  const mine = p.accounts.filter((a) => a.ownerId === "setup-self");
+  assert.deepEqual(mine.map((a) => [a.type, a.balance]).sort(), [["401k", 0], ["ira", 5000]]);
+  const step = nextBest(p, { today: T6 }).steps.find((s) => s.id === "match");
+  assert.ok(step?.ask?.some((a) => a.personId === "setup-self"), "the match step still asks about Priya's job");
+  // the screen reads it back the same, so a Continue changes nothing
+  assert.equal(S.wouldChange(p, (d) => S.applyHaveAmounts(d, S.valuesFor(p, "have-amounts", { today: T6 }), T6)), false);
+});
+
+test("R8 B3 review D6: a Roth 401(k) at work counts as the plan at work, so Yes adds no second account", () => {
+  const p = coupleHome();
+  p.accounts.push({ id: "k-roth", name: "Roth 401(k) at work", type: "roth", balance: 9000, ownerId: "setup-self" });
+  p.retirement.contributions.push({ id: "c-roth", accountId: "k-roth", personId: "setup-self", amount: 300, period: "monthly", employerMatch: 1800 });
+  const v = S.valuesFor(p, "money", { today: T6 });
+  S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "yes" } }, today: T6 });
+  assert.equal(S.workPlanAcct(p, "setup-self"), null);
+  assert.equal(p.accounts.filter((a) => a.ownerId === "setup-self").length, 1);
+});
+
+test("R8 B3 review D5: question 7b's figure is Emergency fund's when a must-pay bill has ended or not started yet", async () => {
+  const { compute: emergency } = await import("../../goals/emergency-fund/compute.js");
+  const p = sky({ goals: ["cushion"], details: { cushion: { months: 6 } } });
+  const was = p.goals.find((g) => g.id === "setup-goal-cushion").target;
+  p.expenses.push({ id: "x-daycare", name: "Daycare", category: "childcare", amount: 900, period: "monthly", essential: true, endDate: "2026-09-30" });
+  p.expenses.push({ id: "x-loan", name: "New car payment", category: "debt", amount: 450, period: "monthly", essential: true, startDate: "2027-03-01" });
+  const c = S.cushion(p, 6, T6);
+  assert.equal(c.exact, emergency(p, { today: T6 }).target);
+  assert.equal(c.exact, 16800);
+  assert.equal(c.essential, 2800);
+  // the saved goal's amount and the setup's guess of it stay as they were (owner question 1)
+  assert.equal(c.target, 24900);
+  assert.equal(was, 16800);
+});
+
+test("R8 B3 review D4, D8, D9, D10: the help lines say only what is true", () => {
+  assert.doesNotMatch(S.iraKindHelp(true), /SEP/, "a SEP-IRA is not an IRA for the limit or the deduction");
+  assert.equal(S.iraKindHelp(false), "Roth: taxed going in, tax-free coming out. Not sure? We count it as Traditional for now.");
+  assert.match(S.GOAL_FUNDS_HELP, /^Tap an account if money in it is for this\. Up to this goal's amount then counts here, not as your safety cushion\.$/);
+  assert.match(S.goalAmountHelp("home"), /VA and USDA loans can take none/);
+  assert.match(S.goalAmountHelp("home"), /mortgage insurance or a fee/);
+  const young = S.ssGettingHelp(50);
+  assert.match(young, /benefit letter/);
+  assert.doesNotMatch(young, /paid in full/);
+});
+
+test("R8 B3 review UX 3: tax not paid yet that is more than the cash is named, with its own figure", () => {
+  const p = empty();
+  S.applyYou(p, { name: "Dani", who: "me", state: "CO" });
+  S.applyMoney(p, { people: { "setup-self": { status: "work", by: "self", amount: 78000, period: "annual" } }, today: T6, taxPaid: 4000 });
+  S.applyAges(p, { people: { "setup-self": { month: 3, year: 1995, stopAge: 65, ss: { mode: "estimate" } } } }, T6);
+  S.applyHavePicks(p, ["checking", "savings"]);
+  S.applyHaveAmounts(p, { checking: 3500, savings: 5000 }, T6);
+  S.applyOwePicks(p, ["credit"]);
+  S.applyOweAmounts(p, { credit: { owed: 6000, payment: 200, rate: 24 } }, T6);
+  S.applySpend(p, { mode: "rows", rows: { housing: 1800, utilities: 180, groceries: 450, transport: 350, insurance: 450, dining: 400, shopping: 400 } });
+  const c = S.cushion(p, 6, T6);
+  assert.ok(c.taxDue > c.all, `tax ${c.taxDue}`);
+  const about = `$${(Math.round(c.taxDue / 10) * 10).toLocaleString("en-US")}`;
+  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward the cushion: 0.0 of 6 months.`);
+  assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `This year's tax not paid yet (about ${about}) is more than the $8,500 you have, so none of it is cushion yet.`);
+});
+
+test("R8 B3 review UX 5: cash in the owner's own 'Emergency fund' goal is asked about, not called 'set aside'", () => {
+  const p = migrate(familyPlan(T6));
+  const st = S.standing(p, { today: T6 });
+  assert.equal(S.cushionHeldWords(st, p), '$11,500 more sits in your "Emergency fund" goal.');
+  assert.equal(S.cushionHeldAsk(st), "Count it as your cushion? Say so on Emergency fund ›");
+});
+
+test("R8 B3 review UX 9: the plan-at-work lines read as plain words, with Tap", () => {
+  const p = coupleHome({ money: { "setup-self": { plan: "yes" } } });
+  assert.equal(S.workPlanLine(p), "Priya's plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanAdded(p, ["setup-self"]), "We added Priya's plan at work, with $0 in it for now.");
+  const one = empty();
+  S.applyYou(one, { who: "me" });
+  S.applyMoney(one, { people: { "setup-self": { status: "work", by: "employer", amount: 50000, period: "annual", plan: "yes" } }, today: T6 });
+  assert.equal(S.workPlanLine(one), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanAdded(one, ["setup-self"]), "We added your plan at work, with $0 in it for now.");
+});

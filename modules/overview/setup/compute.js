@@ -9,7 +9,7 @@
 import { CATEGORIES, compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { compute as computeNetWorth, ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
+import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
@@ -26,6 +26,8 @@ import { isGuess, markGuess, clearGuess } from "../../../core/estimate/index.js"
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
 import { escrowMonthly } from "../guesses/estimators/home.js";
 import { profileOf } from "../guesses/estimators/common.js";
+import { PART_B } from "../../retirement/medicare/data/medicare.js";
+import { limitKind } from "../../retirement/contributions/compute.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -76,6 +78,11 @@ export const HAVE = [
 ];
 /** The retirement box's two kinds: through work (a 401(k) or 403(b), with an employer match) or on your own (an IRA). */
 export const RETIRE_KINDS = [{ value: "work", label: "Through work", type: "401k", group: ["401k", "roth"] }, { value: "own", label: "On my own", type: "ira", group: ["ira", "roth"] }];
+/**
+ * "Which kind of IRA?" under On my own (round 8, item 35): Traditional saves `ira`, Roth saves `roth`, Not sure saves `ira`
+ * (counted as traditional for now, and listed among our guesses on the done screen). No answer: as before.
+ */
+export const IRA_KINDS = [{ value: "traditional", label: "Traditional" }, { value: "roth", label: "Roth" }, { value: "unsure", label: "Not sure" }];
 /** What you owe. */
 export const OWE = [
   { key: "credit", icon: "💳", label: "Credit cards", type: "credit", name: "Credit cards" },
@@ -162,6 +169,14 @@ export const WHO_PAYS = [
   { value: "employer", label: "An employer" },
   { value: "self", label: "Myself: my business or freelance" },
 ];
+/**
+ * "Retirement plan at work?", asked under pay from an employer (round 8, 2026-11-06). Its own answer,
+ * `retirement.workPlans[personId].plan` (true / false), never the match: a plan says nothing about whether the employer adds
+ * money (review D2). Yes writes `plan: true` and, when the person has no 401(k) or Roth 401(k) at a job they still have, a $0
+ * 401(k) of its own (`setup-workplan-<personId>`), so Next best action, Benefits and Contributions ask about the match; No
+ * writes `plan: false` and `match: false` (no plan, so no match: Next best action stops asking); Not sure writes nothing.
+ */
+export const WORK_PLAN = [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "unsure", label: "Not sure" }];
 export const OTHER_KINDS = [
   { value: "business", label: "Side work", name: "Side work" },
   { value: "rental", label: "Rent I collect", name: "Rent coming in" },
@@ -362,18 +377,92 @@ function dropAccounts(draft, ids) {
     draft.debts = draft.debts.filter((d) => !(isSetupId(d.id) && d.accountId === id));
     draft.retirement.contributions = draft.retirement.contributions.filter((c) => !(isSetupId(c.id) && c.accountId === id));
     for (const g of draft.goals) if (isSetupId(g.id) && Array.isArray(g.fundedBy)) g.fundedBy = g.fundedBy.filter((x) => x !== id);
+    // (question 7b's record of the cash linked to a goal forgets it too)
+    const gf = draft.guide.setup.goalFunds;
+    if (gf) { for (const k of Object.keys(gf)) { if (!gf[k].includes(id)) continue; gf[k] = gf[k].filter((x) => x !== id); if (!gf[k].length) delete gf[k]; } if (!Object.keys(gf).length) delete draft.guide.setup.goalFunds; }
   }
   return kept;
 }
+/** Q2's own $0 401(k): its own id, so question 4b's "On my own" IRA never takes its place (review UX 4). */
+export const workPlanId = (pid) => `setup-workplan-${pid}`;
+export const workPlanAcct = (p, pid) => byId(L(p, "accounts"), workPlanId(pid)) ?? null;
+/** Q2's answer on file for a person: "yes" | "no" | null (`retirement.workPlans[id].plan`; Contributions' `match` alone is not it). */
+export const workPlanAnswer = (p, pid) => { const x = p?.retirement?.workPlans?.[pid]?.plan; return x === true ? "yes" : x === false ? "no" : null; };
+/** The match an account gets from its contribution rows (the largest employerMatch), for Contributions' limitKind. */
+const matchOf = (p, id) => Math.max(0, ...(p?.retirement?.contributions ?? []).filter((c) => c.accountId === id).map((c) => Number(c.employerMatch) || 0));
+/**
+ * A plan at a job the person still has, other than Q2's own: a 401(k), or a Roth 401(k) (Contributions' limitKind: a Roth
+ * account with a match or a 401(k)/403(b)/457/TSP name), theirs or with no owner for the first adult, not `formerJob`.
+ */
+const hasWorkAccount = (p, person) => L(p, "accounts").some((a) => a.id !== workPlanId(person.id) && !a.formerJob && (a.ownerId === person.id || (!a.ownerId && person.role === "self")) && limitKind(a.type, a.name, matchOf(p, a.id)) === "401k");
+/** Q2's account while nothing is in it or going into it (only then is it taken back). */
+const workPlanEmpty = (p, a) => !(Math.abs(Number(a.balance) || 0) > 0) && !(p?.retirement?.contributions ?? []).some((c) => c.accountId === a.id && (Number(c.amount) > 0 || Number(c.employerMatch) > 0));
+/**
+ * Q2's answer to "Retirement plan at work?" for one adult (WORK_PLAN). `job`: the question applies (they work for an
+ * employer). Only an answer that differs from the one on file does anything (review D7: an unchanged Continue saves nothing,
+ * and never takes back or puts back an account). Yes: `plan: true`, and the $0 401(k) when there is no plan account at their
+ * job; a `match: false` the earlier No wrote goes, so the match is asked again. No: `plan: false` and `match: false`. Not
+ * sure: the answer on file goes (with the `match: false` its No wrote). No or Not sure, or no longer working for an
+ * employer, takes back Q2's own $0 401(k) while nothing is in it or going into it. No answer (null): nothing. Returns what
+ * had to be kept.
+ */
+function applyWorkPlan(draft, person, answer, job, today) {
+  const pid = person.id, kept = [], was = workPlanAnswer(draft, pid);
+  const takeBack = () => { const a = workPlanAcct(draft, pid); if (a && workPlanEmpty(draft, a)) kept.push(...dropAccounts(draft, [a.id])); };
+  const write = (fields) => {
+    const wp = { ...(draft.retirement.workPlans?.[pid] ?? {}) };
+    for (const [k, x] of Object.entries(fields)) { if (x === undefined) delete wp[k]; else wp[k] = x; }
+    draft.retirement.workPlans = { ...(draft.retirement.workPlans ?? {}), [pid]: wp };
+    if (!Object.keys(wp).length) delete draft.retirement.workPlans[pid];
+    if (!Object.keys(draft.retirement.workPlans).length) delete draft.retirement.workPlans;
+  };
+  // the match: false that Q2's own No wrote (no plan, so no match) goes with that No
+  const noMatchToo = () => (was === "no" && draft.retirement.workPlans?.[pid]?.match === false ? { match: undefined } : {});
+  if (!job) {
+    // no longer paid by an employer: the answer, and its $0 401(k), go
+    if (was !== null) write({ plan: undefined, ...noMatchToo() });
+    takeBack();
+    return kept;
+  }
+  if (answer === null || answer === was) return kept;
+  if (answer === "yes") {
+    write({ plan: true, ...noMatchToo() });
+    if (!workPlanAcct(draft, pid) && !hasWorkAccount(draft, person)) {
+      const several = adults(draft).length > 1;
+      put(draft.accounts, workPlanId(pid), {}, { name: several || person.name !== "Me" ? `${possessive(person)} plan at work` : "My plan at work", type: "401k", balance: 0, institution: "", asOf: today ?? "", ownerId: pid, history: [], notes: "" });
+    }
+  } else if (answer === "no") { write({ plan: false, match: false }); takeBack(); }
+  else if (answer === "unsure") { write({ plan: undefined, ...noMatchToo() }); takeBack(); }
+  return kept;
+}
+const andAll = (xs) => (xs.length <= 2 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/** "Priya's plan" / "Priya's and Tom's plans" / one adult "your plan": whose plan at work, in words. */
+const plansWords = (plan, ps) => (adults(plan).length > 1 ? `${andAll(ps.map((p) => possessive(p)))} ${ps.length > 1 ? "plans" : "plan"}` : "your plan");
+/**
+ * Question 4's line for a plan at work question 2 added, still $0 (review UX 9): "Priya's plan at work is added with $0.
+ * Money in it already? Tap Retirement." null when there is none.
+ */
+export function workPlanLine(plan) {
+  const ps = adults(plan).filter((p) => { const a = workPlanAcct(plan, p.id); return a && !(Math.abs(Number(a.balance) || 0) > 0); });
+  if (!ps.length) return null;
+  const w = plansWords(plan, ps);
+  return `${w.charAt(0).toUpperCase()}${w.slice(1)} at work ${ps.length > 1 ? "are" : "is"} added with $0. Money in ${ps.length > 1 ? "them" : "it"} already? Tap Retirement.`;
+}
+/** Question 2's "Got it" words for plans at work it just added: "We added Priya's plan at work, with $0 in it for now." */
+export function workPlanAdded(plan, pids) {
+  const ps = adults(plan).filter((p) => pids.includes(p.id) && workPlanAcct(plan, p.id));
+  return ps.length ? `We added ${plansWords(plan, ps)} at work, with $0 in ${ps.length > 1 ? "them" : "it"} for now.` : null;
+}
 /** Everything the setup made for one person (their pay, pension, Social Security, retirement account and saving). */
 function dropPersonRecords(draft, pid) {
-  const kept = dropAccounts(draft, [haveId("retire", pid)]);
+  const kept = dropAccounts(draft, [haveId("retire", pid), workPlanId(pid)]);
   for (const k of kept) { const a = byId(draft.accounts, k.id); if (a) a.ownerId = ""; }   // kept, but its owner is gone
   draft.income = draft.income.filter((x) => ![`setup-pay-${pid}`, `setup-pension-${pid}`, `setup-ss-${pid}`].includes(setupRoot(x)));
   for (const x of draft.income) if (setupRoot(x) === "setup-other" && x.personId === pid) x.personId = "";
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => c.id !== `setup-contrib-${pid}`);
   if (!(draft.retirement.socialSecurity[pid]?.record ?? []).length) delete draft.retirement.socialSecurity[pid];
-  for (const k of ["status", "ss", "ssWrote"]) if (draft.guide.setup[k]) delete draft.guide.setup[k][pid];
+  for (const k of ["status", "ss", "ssWrote", "iraKind"]) if (draft.guide.setup[k]) delete draft.guide.setup[k][pid];
+  if (draft.retirement.workPlans?.[pid]) { delete draft.retirement.workPlans[pid]; if (!Object.keys(draft.retirement.workPlans).length) delete draft.retirement.workPlans; }
   return kept;
 }
 const blankPerson = { birthDate: "", retirementAge: null, lifeExpectancy: null };
@@ -423,7 +512,7 @@ export function applyYou(draft, v) {
  */
 export function applyMoney(draft, v) {
   ensure(draft);
-  const keep = new Set();
+  const keep = new Set(), kept = [];
   draft.guide.setup.status = draft.guide.setup.status ?? {};
   for (const p of adults(draft)) {
     const x = v.people?.[p.id] ?? {};
@@ -464,6 +553,11 @@ export function applyMoney(draft, v) {
         if (old && oldType !== type) for (const y of laterInChain(draft.income, payId, rec)) { const was = y.type; y.type = type; follow(y, was); }
       }
     }
+    // "Retirement plan at work?" (round 8): asked under pay from an employer, the setup's own (`by` not "self") or a salary
+    // already on Income
+    const onIncome = existingPay(draft, p.id);
+    const job = status === "work" && (mine || !onIncome.length ? x.by !== "self" : onIncome.some((i) => i.type === "salary"));
+    kept.push(...applyWorkPlan(draft, p, WORK_PLAN.some((o) => o.value === x.plan) ? x.plan : null, job, v.today));
     if (status === "retired") {
       const pension = pos(x.pension);
       // the line in force today (lineNow), changed in place: after a raise from a later date, the pension coming in now
@@ -496,6 +590,7 @@ export function applyMoney(draft, v) {
     draft.taxes = draft.taxes ?? {};
     draft.taxes.estimated = { ...(draft.taxes.estimated ?? {}), paid, typedAt: v.today };
   }
+  return kept;
 }
 /** This year's pay before tax for a person (Income page, any salary or business pay still going). */
 export const yearlyPay = (plan, pid) => L(plan, "income").filter((x) => x.personId === pid && (x.type === "salary" || x.type === "business") && !x.endDate).reduce((s, x) => s + perYear(x.amount, x.period), 0);
@@ -622,8 +717,18 @@ export function applyAges(draft, v, today) {
 export function applyHavePicks(draft, keys) {
   ensure(draft);
   const ks = keys.filter((k) => HAVE.some((h) => h.key === k) && askOwners(draft, k).length > 0);
+  const hadRetire = picks(draft, "have").includes("retire");
   if (JSON.stringify(picks(draft, "have")) !== JSON.stringify(ks)) draft.guide.setup.picks.have = ks;
   if (!ks.includes("home") && draft.guide.setup.homeFromOwe) delete draft.guide.setup.homeFromOwe;
+  // Q2's own 401(k) is the answer "a plan at work", not a kind of savings: it stays. Retirement unticked here (it was
+  // ticked): what question 4b put in it goes, as the retirement box's own account does (round 8)
+  if (hadRetire && !ks.includes("retire")) for (const p of adults(draft)) {
+    const a = workPlanAcct(draft, p.id);
+    if (!a) continue;
+    if (Number(a.balance) !== 0) a.balance = 0;
+    const cid = `setup-contrib-${p.id}`;
+    if (draft.retirement.contributions.some((c) => c.id === cid && c.accountId === a.id)) draft.retirement.contributions = draft.retirement.contributions.filter((c) => c.id !== cid);
+  }
   return dropAccounts(draft, draft.accounts.filter((a) => isHave(a.id) && !ks.includes(haveKeyOf(a.id))).map((a) => a.id));
 }
 /**
@@ -639,16 +744,30 @@ export function applyHaveAmounts(draft, v, today) {
     if (!picks(draft, "have").includes(h.key)) continue;
     for (const pid of askOwners(draft, h.key)) {
       const amount = nonneg(v[h.perAdult ? `${h.key}-${pid}` : h.key]);
-      const id = haveId(h.key, pid);
       const kind = RETIRE_KINDS.find((k) => k.value === v[`kind-${pid}`]) ?? RETIRE_KINDS[0];
+      // Q2's own 401(k) (a plan at work, round 8): "Through work" goes into it, never a second 401(k), and an IRA the box
+      // held before (On my own, then Through work) goes; "On my own" is an IRA in the box's own place, beside it (review UX 4)
+      const slot = haveId(h.key, pid), q2 = h.perAdult ? workPlanAcct(draft, pid) : null;
+      const intoQ2 = !!q2 && kind.value === "work";
+      const id = intoQ2 ? q2.id : slot;
+      if (intoQ2 && byId(draft.accounts, slot)) gone.push(slot);
       const mine = h.perAdult ? pos(v[`contrib-${pid}`]) : null, match = h.perAdult && kind.value === "work" ? pos(v[`match-${pid}`]) : null;
       // a box left empty over our guess (Q5b guessed the home) keeps it: the screen showed it grey, so it is what is counted
       const ours = isGuess(draft, `accounts[${id}].balance`);
+      // a blank box for the plan at work is $0 in it: it stays, at $0
+      if (amount === null && !mine && !match && intoQ2) { if (Number(q2.balance) !== 0) Object.assign(q2, { balance: 0, asOf: today }); continue; }
       if (amount === null && !mine && !match) { if (!ours) gone.push(id); continue; }
       if (amount !== null && ours) clearGuess(draft, `accounts[${id}].balance`);   // typed, even the same figure: the person's
       const person = pid ? byId(adults(draft), pid) : null;
       const old = byId(draft.accounts, id);
-      const type = h.perAdult ? (old && kind.group.includes(old.type) ? old.type : kind.type) : undefined;   // a Roth set on Net worth stays a Roth
+      // which kind of IRA, when asked and answered (On my own only): Roth a Roth, Traditional or Not sure an IRA (round 8)
+      const ira = h.perAdult && kind.value === "own" && IRA_KINDS.some((k) => k.value === v[`iraKind-${pid}`]) ? v[`iraKind-${pid}`] : null;
+      if (h.perAdult) {
+        const was = draft.guide.setup.iraKind?.[pid];
+        const want = kind.value === "own" ? ira ?? was ?? null : null;
+        if ((was ?? null) !== want) { draft.guide.setup.iraKind = { ...(draft.guide.setup.iraKind ?? {}) }; if (want) draft.guide.setup.iraKind[pid] = want; else delete draft.guide.setup.iraKind[pid]; if (!Object.keys(draft.guide.setup.iraKind).length) delete draft.guide.setup.iraKind; }
+      }
+      const type = h.perAdult ? (ira ? (ira === "roth" ? "roth" : "ira") : old && kind.group.includes(old.type) ? old.type : kind.type) : undefined;   // a Roth set on Net worth stays a Roth
       const asked = { balance: amount ?? old?.balance ?? 0, asOf: today, ...(type ? { type } : {}) };
       if (old && old.balance === asked.balance && (asked.type === undefined || old.type === asked.type)) delete asked.asOf;   // unchanged: keep its date
       put(draft.accounts, id, asked, { name: h.perAdult ? (several || person?.name !== "Me" ? `${possessive(person)} retirement` : "My retirement") : h.name, type: h.type, institution: "", asOf: today, ownerId: pid || "", history: [], notes: "" });
@@ -658,7 +777,7 @@ export function applyHaveAmounts(draft, v, today) {
         // the screen shows the match a month, rounded; a yearly figure typed on Contributions that reads back the same stays
         const yearly = oc && Math.round(Number(oc.employerMatch) / 12) === Math.round(match ?? 0) ? oc.employerMatch : Math.round((match ?? 0) * 12);
         const monthly = oc && Math.round(Number(oc.amount) || 0) === Math.round(mine ?? 0) ? oc.amount : mine ?? 0;
-        put(draft.retirement.contributions, cid, { amount: monthly, employerMatch: yearly }, { accountId: id, personId: pid, period: "monthly" });
+        put(draft.retirement.contributions, cid, { amount: monthly, employerMatch: yearly, ...(oc && oc.accountId !== id ? { accountId: id } : {}) }, { accountId: id, personId: pid, period: "monthly" });
       }
     }
   }
@@ -1043,6 +1162,9 @@ export function applyGoalPicks(draft, keys) {
   if (JSON.stringify(draft.guide.setup.focus ?? []) !== JSON.stringify(focus)) draft.guide.setup.focus = focus;
   const linked = new Set(L(draft, "events").map((e) => e.goalId).filter(Boolean));
   draft.goals = draft.goals.filter((g) => !isSetupId(g.id) || ks.includes(g.id.replace(/^setup-goal-/, "")) || linked.has(g.id));
+  // question 7b's answer for a goal no longer here goes with it
+  const gf = draft.guide.setup.goalFunds;
+  if (gf) { for (const k of Object.keys(gf)) if (!byId(draft.goals, `setup-goal-${k}`)) delete gf[k]; if (!Object.keys(gf).length) delete draft.guide.setup.goalFunds; }
 }
 /**
  * The cushion: months x must-pay bills a month (Expenses, loan payments included), to $100; what cash covers it now.
@@ -1050,10 +1172,166 @@ export function applyGoalPicks(draft, keys) {
  */
 export function cushion(plan, months = null, today = null) {
   const m = Math.round(Number(months ?? plan?.assumptions?.emergencyMonths ?? 6)) || 6;
-  const essential = L(plan, "expenses").length ? computeExpenses(plan, {}).essentialMonthly ?? 0 : 0;
-  let now = 0;
-  try { now = computeLiquidity(plan, { today }).now ?? 0; } catch { now = 0; }
-  return { months: m, essential, target: Math.round((m * essential) / 100) * 100, now, covered: essential > 0 ? now / essential : null };
+  const has = L(plan, "expenses").length > 0;
+  // every must-pay bill on file, dated or not: the cushion goal's amount as saved since the setup began (owner question 1)
+  const essentialAll = has ? computeExpenses(plan, {}).essentialMonthly ?? 0 : 0;
+  // the must-pay bills going today (Emergency fund's and Liquidity's own: a bill that ended or has not started is left out;
+  // review D5); without a day, every one
+  const essential = has && today ? computeExpenses(plan, { today }).essentialMonthly ?? 0 : essentialAll;
+  let liq = null;
+  try { liq = computeLiquidity(plan, { today }); } catch { liq = null; }
+  const now = liq?.now ?? 0;
+  // `target` (to $100, from every must-pay bill on file) is the cushion goal's amount, as saved since the setup began (and the
+  // setup's guess of it); `exact` is Emergency fund's own target, months x the must-pay bills going today, which question 7b
+  // says (round 8: $20,600 against $20,580). `all`: the cash before anything is held back; `earmarked`: what goals claim
+  // (goals[].fundedBy, Liquidity's F-020); `taxOwed`: this year's tax not paid yet that the cash holds (Liquidity's, at most
+  // the cash), `taxDue` all of it (Estimated payments' taxOwedNow), so the sentence can say why `now` is less
+  return { months: m, essential, essentialAll, target: Math.round((m * essentialAll) / 100) * 100, exact: m * essential, now, covered: essential > 0 ? now / essential : null,
+    all: liq?.nowAll ?? 0, earmarked: liq?.earmarked ?? 0, taxOwed: liq?.taxOwed ?? 0, taxDue: liq?.tax?.owedNow ?? 0, goals: heldFor(plan) };
+}
+/** The cash accounts (checking, savings, cash): what question 7b offers to link to a goal, those with money in them. */
+export const goalFundChoices = (plan) => L(plan, "accounts").filter((a) => TIERS.now.types.includes(a.type) && Number(a.balance) > 0);
+const isCash = (plan, id) => L(plan, "accounts").some((a) => a.id === id && TIERS.now.types.includes(a.type));
+/** A goal in words, for "set aside for ...": the setup's own by kind ("the home"), any other by its name ('the "Japan trip" goal'). */
+const GOAL_WORDS = { home: "the home", education: "education", trip: "the trip", car: "the next car" };
+export const goalWords = (g) => { const k = typeof g.id === "string" && g.id.startsWith("setup-goal-") ? g.id.slice(11) : null; return (k && GOAL_WORDS[k]) || (g.name ? `the "${String(g.name)}" goal` : "a goal"); };
+/** The goals that hold cash back from the cushion (Liquidity's earmark: not the emergency fund, an amount, a cash account linked). */
+const heldGoals = (plan) => L(plan, "goals").filter((g) => !g.isEmergencyFund && Number(g.target) > 0 && (Array.isArray(g.fundedBy) ? g.fundedBy : []).some((id) => isCash(plan, id)));
+const heldFor = (plan) => heldGoals(plan).map(goalWords);
+// Liquidity's and Emergency fund's test for a goal that may be the cushion itself, not yet ticked as it (F-034)
+const EMERGENCY = /emergency|rainy ?day|cushion/i;
+/** A held goal that looks like the cushion itself (its name, or 🛟): its name, so the done screen can say where to count it. */
+function cushionLike(plan) {
+  const g = heldGoals(plan).find((x) => EMERGENCY.test(String(x.name ?? "")) || x.icon === "🛟");
+  return g ? String(g.name || "") || null : null;
+}
+/**
+ * Question 7b's own answers still standing: the cash accounts it linked to a setup goal (`guide.setup.goalFunds`) that the
+ * goal still draws on. A link made on Goals is not one (review D1: plans that never answered 7b compute as before).
+ */
+function heldBy7b(plan) {
+  const out = new Set();
+  for (const [k, ids] of Object.entries(setupOf(plan).goalFunds ?? {})) {
+    const g = byId(L(plan, "goals"), `setup-goal-${k}`);
+    if (!g || !Array.isArray(g.fundedBy) || !Array.isArray(ids)) continue;
+    for (const id of ids) if (g.fundedBy.includes(id) && isCash(plan, id)) out.add(id);
+  }
+  return out;
+}
+/**
+ * What is left of each account once every goal but the cushion has taken what it still needs: Goals' own sharing (F-013,
+ * goals/goals: by priority, then by date, each goal takes target less saved from its accounts in order). Goals with no
+ * amount take nothing, as on Liquidity.
+ */
+function leftAfterGoals(plan) {
+  const pool = new Map(L(plan, "accounts").map((a) => [a.id, countedBalance(a)]));
+  const order = L(plan, "goals").map((g, i) => ({ g, i })).filter(({ g }) => !g.isEmergencyFund && g.id !== "setup-goal-cushion")
+    .sort((a, b) => (Number(a.g.priority) || 2) - (Number(b.g.priority) || 2) || String(a.g.targetDate || "9999").localeCompare(String(b.g.targetDate || "9999")) || a.i - b.i);
+  for (const { g } of order) {
+    let need = Math.max(0, (Math.max(0, Number(g.target) || 0)) - (Number(g.saved) || 0));
+    for (const id of Array.isArray(g.fundedBy) ? g.fundedBy : []) {
+      const avail = pool.get(id); if (avail === undefined || need <= 0) continue;
+      const take = Math.max(0, Math.min(avail, need)); pool.set(id, avail - take); need -= take;
+    }
+  }
+  return pool;
+}
+/**
+ * What each goal takes from its accounts under Goals' own sharing (F-013, goals/goals: by priority, then by date, each goal
+ * takes target less saved from its accounts in order), with the setup's cushion goal drawing on `cushionIds`.
+ */
+function sharedOut(plan, cushionIds) {
+  const pool = new Map(L(plan, "accounts").map((a) => [a.id, countedBalance(a)]));
+  const goals = L(plan, "goals").map((g) => (g.id === "setup-goal-cushion" ? { ...g, fundedBy: cushionIds } : g));
+  const order = goals.map((g, i) => ({ g, i })).sort((a, b) => (Number(a.g.priority) || 2) - (Number(b.g.priority) || 2) || String(a.g.targetDate || "9999").localeCompare(String(b.g.targetDate || "9999")) || a.i - b.i);
+  const taken = new Map();
+  for (const { g } of order) {
+    const need = Math.max(0, Math.max(0, Number(g.target) || 0) - (Number(g.saved) || 0));
+    let t = 0;
+    for (const id of Array.isArray(g.fundedBy) ? g.fundedBy : []) {
+      const avail = pool.get(id); if (avail === undefined) continue;
+      const take = Math.max(0, Math.min(avail, need - t)); pool.set(id, avail - take); t += take;
+    }
+    taken.set(g.id, t);
+  }
+  return taken;
+}
+/**
+ * The cushion's accounts: every cash account (checking, savings, cash). An account question 7b linked to a goal is left
+ * out while those goals need all of it (review D3: else it stays, after the others, so Goals, Emergency fund and the done
+ * screen show one cushion), and also while the cushion would take from it more than those goals leave over: Goals gives the
+ * cushion (priority 1) its share first, so a $15,001 savings ticked for a $15,000 car would hand $13,799 of the car's money
+ * to the cushion (verify, round 8: the help says "Up to this goal's amount then counts here, not as your safety cushion").
+ * Then Emergency fund and the done screen count what the goal leaves over (Liquidity's earmark), and Goals' cushion row
+ * counts only the other accounts. No 7b answer: every cash account, as before.
+ */
+export function cushionFundIds(plan) {
+  const cash = L(plan, "accounts").filter((a) => TIERS.now.types.includes(a.type));
+  const held = heldBy7b(plan);
+  if (!held.size) return cash.map((a) => a.id);
+  const left = leftAfterGoals(plan);
+  const ids = cash.filter((a) => !held.has(a.id)).map((a) => a.id);
+  for (const a of cash.filter((x) => held.has(x.id) && (left.get(x.id) ?? 0) > 0.5)) {
+    const was = sharedOut(plan, ids), next = sharedOut(plan, [...ids, a.id]);
+    // added only when no other goal gets less for it
+    if ([...was].every(([gid, t]) => gid === "setup-goal-cushion" || (next.get(gid) ?? 0) >= t - 0.5)) ids.push(a.id);
+  }
+  return ids;
+}
+const and2 = (xs) => (xs.length <= 1 ? xs.join("") : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : "your goals");
+/** The kinds of cash account with money in them, in words ("checking and savings"); none known, all three. */
+function cashKinds(plan) {
+  const has = ["checking", "savings", "cash"].filter((t) => L(plan, "accounts").some((a) => a.type === t && Number(a.balance) !== 0));
+  return has.length ? (has.length === 1 ? has[0] : has.length === 2 ? `${has[0]} and ${has[1]}` : "checking, savings and cash") : "checking, savings and cash";
+}
+/**
+ * Question 7b's line on the cash the cushion counts (round 8, items 10 and 29): what is held back said with the reason (set
+ * aside for a goal, or this year's tax not paid yet), so "$0 in checking, savings and cash" never follows $8,500 typed.
+ * Nothing held back: the line it always was.
+ */
+export function cushionHave(plan, c) {
+  const cur = plan?.meta?.currency ?? "USD";
+  const m = (n) => fmtMoney(Math.round(Number(n) || 0), cur);
+  const cov = (Math.round((c.covered ?? 0) * 10) / 10).toFixed(1);
+  const goalsHeld = c.earmarked > 0.5 ? and2(c.goals?.length ? c.goals : ["your goals"]) : null, tax = c.taxOwed > 0.5;
+  if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${cov} of ${c.months} months.`;
+  // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
+  if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward the cushion: ${cov} of ${c.months} months.`;
+  const allOf = (x) => Math.abs(x - c.all) < 0.5;
+  const parts = goalsHeld && tax ? `${m(c.earmarked)} is set aside for ${goalsHeld} and ${m(c.taxOwed)} is this year's tax not paid yet`
+    : goalsHeld ? `${allOf(c.earmarked) ? "all" : m(c.earmarked)} of it is set aside for ${goalsHeld}`
+    : `${allOf(c.taxOwed) ? "all" : m(c.taxOwed)} of it is this year's tax not paid yet`;
+  return `You have ${m(c.all)} in ${cashKinds(plan)}; ${parts}, so ${c.now > 0.5 ? `${m(c.now)} counts` : "none counts"} toward the cushion: ${cov} of ${c.months} months.`;
+}
+/** A tax figure said "about": to the $10. */
+const about = (n) => Math.round((Number(n) || 0) / 10) * 10;
+/**
+ * The done screen's cushion figure, when cash is held back (standing's `cushionHeld`): "Your $22,000 is set aside for the
+ * home, so your cushion is $3,000." (round 8, items 10 and 29). null when nothing is held back.
+ */
+export function cushionHeldWords(st, plan) {
+  const h = st?.cushionHeld;
+  if (!h) return null;
+  const cur = plan?.meta?.currency ?? "USD";
+  const m = (n) => fmtMoney(Math.round(Number(n) || 0), cur);
+  const goalsHeld = h.earmarked > 0.5 ? and2(h.goals.length ? h.goals : ["your goals"]) : null, tax = h.taxOwed > 0.5;
+  const rest = h.now > 0.5 ? `so your cushion is ${m(h.now)}.` : "so none of it is cushion yet.";
+  if (goalsHeld && tax) return `Your ${m(h.earmarked)} is set aside for ${goalsHeld} and ${m(h.taxOwed)} is this year's tax not paid yet, ${rest}`;
+  // the owner's own goal that looks like the cushion: said as money that may be cushion, and asked (review UX 5)
+  if (goalsHeld && h.cushionGoal && h.goals.length === 1) return `${m(h.earmarked)} more sits in your "${h.cushionGoal}" goal.`;
+  if (goalsHeld) return `Your ${m(h.earmarked)} is set aside for ${goalsHeld}, ${rest}`;
+  if ((h.taxDue ?? 0) > h.all + 0.5) return `This year's tax not paid yet (about ${m(about(h.taxDue))}) is more than the ${m(h.all)} you have, so none of it is cushion yet.`;
+  return Math.abs(h.taxOwed - h.all) < 0.5 ? `Your ${m(h.all)} is this year's tax not paid yet, ${rest}` : `Your ${m(h.all)} includes ${m(h.taxOwed)} of this year's tax not paid yet, ${rest}`;
+}
+/**
+ * The done screen's question when the cash held back is for a goal that looks like the cushion itself ("Emergency fund",
+ * 🛟) but is not ticked as it: Emergency fund's checkbox counts it (F-034). null otherwise.
+ */
+export function cushionHeldAsk(st) {
+  const h = st?.cushionHeld;
+  if (!h?.cushionGoal) return null;
+  if (h.goals.length === 1) return h.taxOwed > 0.5 ? "Is that goal your safety cushion? Say so on Emergency fund ›" : "Count it as your cushion? Say so on Emergency fund ›";
+  return `Is the "${h.cushionGoal}" goal your safety cushion? Say so on Emergency fund ›`;
 }
 const addYears = (iso, years) => { const [y, m, d] = iso.split("-").map(Number); return `${y + years}-${String(m).padStart(2, "0")}-${String(Math.min(d, 28)).padStart(2, "0")}`; };
 /**
@@ -1062,8 +1340,25 @@ const addYears = (iso, years) => { const [y, m, d] = iso.split("-").map(Number);
  * cash accounts, and its months are the plan's emergency months, so Emergency fund and this goal agree. A goal's
  * blank amount saves nothing new (a new goal starts at 0 for the Goals page to ask).
  */
-export function applyGoalDetails(draft, v, today) {
+export function applyGoalDetails(draft, v, today, cushionFunds = null) {
   ensure(draft);
+  // "Is any of your savings already for this?" (round 8, item 10): each answer, cash accounts only; none given, none asked.
+  // An answer the same as the cash the goal already draws on (a link made on Goals, shown ticked) changes nothing, so an
+  // unchanged Continue saves nothing (review D1); a new answer links it and is kept as 7b's own (guide.setup.goalFunds)
+  const asked = (g) => !g.focus && g.key !== "cushion" && picks(draft, "goals").includes(g.key) && !goalTaken(draft, g.key);
+  const cashOf = (g) => (Array.isArray(g?.fundedBy) ? g.fundedBy : []).filter((id) => isCash(draft, id));
+  const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+  const fundsOf = Object.fromEntries(GOALS.filter((g) => asked(g) && Array.isArray(v[g.key]?.funds)).map((g) => [g.key, [...new Set(v[g.key].funds)].filter((id) => isCash(draft, id))])
+    .filter(([k, ans]) => !sameSet(ans, cashOf(byId(draft.goals, `setup-goal-${k}`)))));
+  // a goal's fundedBy with the cash answer: other accounts it draws on (a 529 linked on Goals) stay, in their places
+  const linked = (old, ans) => { const was = Array.isArray(old) ? old : []; return [...was.filter((id) => !isCash(draft, id) || ans.includes(id)), ...ans.filter((id) => !was.includes(id))]; };
+  for (const [k, ans] of Object.entries(fundsOf)) {
+    const g = byId(draft.goals, `setup-goal-${k}`);
+    if (g) { const next = linked(g.fundedBy, ans); if (JSON.stringify(next) !== JSON.stringify(g.fundedBy ?? [])) g.fundedBy = next; }
+    const s = draft.guide.setup, rec = { ...(s.goalFunds ?? {}) };
+    if (ans.length) rec[k] = ans; else delete rec[k];
+    if (Object.keys(rec).length) s.goalFunds = rec; else delete s.goalFunds;
+  }
   for (const g of GOALS) {
     if (g.focus || !picks(draft, "goals").includes(g.key) || goalTaken(draft, g.key)) continue;
     const id = `setup-goal-${g.key}`;
@@ -1074,7 +1369,9 @@ export function applyGoalDetails(draft, v, today) {
       const c = cushion(draft, months, today);
       // its money: what Emergency fund counts as usable today (cash, checking, savings). The list follows the accounts
       // while it is the one this setup wrote (cushionFunds); a choice made on Goals stays. The amount the same way.
-      const funds = draft.accounts.filter((a) => TIERS.now.types.includes(a.type)).map((a) => a.id);
+      // (not the cash 7b gave to a goal that needs all of it: Goals shares an account by priority, and the cushion comes
+      // first, so it would take the house's savings; round 8, item 10. Worked out on the plan with this screen's answers in.)
+      const funds = cushionFunds ?? (() => { const d = structuredClone(draft); applyGoalDetails(d, v, today, []); return cushionFundIds(d); })();
       const old = byId(draft.goals, id), s = draft.guide.setup;
       const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
       const asked = {};
@@ -1082,7 +1379,7 @@ export function applyGoalDetails(draft, v, today) {
       // the amount follows the bills while it is the one this setup wrote; null means the person kept or typed their own
       // ("That's about right" or a figure typed on Our guesses for you), so it stays
       const oursTarget = s.cushionTarget === undefined || (s.cushionTarget !== null && Number(old?.target) === Number(s.cushionTarget));
-      if (c.essential > 0 && (!old || oursTarget)) { asked.target = c.target; if (s.cushionTarget !== c.target) s.cushionTarget = c.target; }
+      if (c.essentialAll > 0 && (!old || oursTarget)) { asked.target = c.target; if (s.cushionTarget !== c.target) s.cushionTarget = c.target; }
       if (old) for (const k of Object.keys(asked)) if (same(old[k], asked[k])) delete asked[k];
       put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: "", priority: 1, saved: 0, fundedBy: funds, monthly: 0, rate: null, inflates: false, isEmergencyFund: true });
       continue;
@@ -1093,9 +1390,44 @@ export function applyGoalDetails(draft, v, today) {
     const old = byId(draft.goals, id);
     const asked = { ...(target ? { target } : {}), ...(old?.targetDate === date ? {} : { targetDate: date }), ...(g.key === "other" && String(x.name ?? "").trim() ? { name: String(x.name).trim() } : {}) };
     if (old && target === old.target) delete asked.target;
-    put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: date, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true });
+    put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: date, priority: 2, saved: 0, fundedBy: fundsOf[g.key] ?? [], monthly: 0, rate: null, inflates: true });
   }
 }
+/**
+ * Question 3's help under "What you get a month" for Social Security already paid (round 8, item 37): the amount before
+ * anything comes out of it. From 65 the Medicare Part B premium usually does: the standard one, PART_B ($202.90 a month in
+ * 2026, CMS fact sheet "2026 Medicare Parts A & B Premiums and Deductibles", November 14, 2025; read 2026-11-06) is the
+ * figure to add back to a deposit. Before 62 it is a disability or survivor benefit, paid in full.
+ */
+export function ssGettingHelp(age) {
+  // before 62: a disability benefit (Medicare, and its Part B premium, after 24 months of it) or a survivor benefit (from
+  // 60, reduced; review D10): the letter's figure, before anything comes out, counted as it is (never as an early claim)
+  if (age !== null && age !== undefined && age < 62) return "Before 62 that's disability or survivor benefits. Use the figure on your benefit letter, before Medicare or anything else is taken out; we count it as it is.";
+  if (age !== null && age !== undefined && age < 65) return "Before anything is taken out: the figure on your yearly benefit letter, not what reaches your bank.";
+  return `Before Medicare is taken out: the figure on your yearly benefit letter, not what reaches your bank. Only know the deposit? Add about ${fmtMoney(Math.round(PART_B), "USD")}.`;
+}
+/**
+ * Question 7b's help under a goal's "How much". The home's (round 8, item 39): some loans take 3% down (CFPB, "How to decide
+ * how much to spend on your down payment", last modified June 25, 2026: "Some lenders may offer conventional loans with 3
+ * percent down payments"; FHA from 3.5%; "Special zero down payment programs exist for veterans, servicemembers, and rural
+ * borrowers. Those programs also require mortgage insurance or other fees."), and under 20% down a conventional loan usually
+ * needs mortgage insurance (CFPB, "What is private mortgage insurance?"); both read 2026-11-06 (review D9).
+ */
+export function goalAmountHelp(key) {
+  if (key === "home") return "The down payment and closing costs. For example, 60,000. Some loans take 3% down or less (VA and USDA loans can take none); under 20% down usually adds mortgage insurance or a fee to the monthly cost.";
+  return `For example, ${key === "trip" ? "4,000" : "10,000"}.`;
+}
+/**
+ * Question 4b's help under "Which kind of IRA?" (item 35). Nothing about a SEP-IRA: the app counts an IRA against the IRA
+ * limit and deduction, and a SEP has its own (review D4; a SEP kind is Batch 1 / Limits work). `ownBiz` kept for that.
+ */
+export function iraKindHelp(ownBiz = false) { return "Roth: taxed going in, tax-free coming out. Not sure? We count it as Traditional for now."; }
+/**
+ * Question 7b's help under "Is any of your savings already for this?" (item 10; review D8 and UX 2): a linked account counts
+ * toward the goal up to what the goal still needs (Goals' F-013 sharing, Liquidity's F-020 earmark min(funded - saved,
+ * targetThen)); the rest stays cushion.
+ */
+export const GOAL_FUNDS_HELP = "Tap an account if money in it is for this. Up to this goal's amount then counts here, not as your safety cushion.";
 /** The plan's guesses looked at (the card at the end): Assumptions counts as reviewed. */
 export function applyGuesses(draft, today) { ensure(draft); draft.assumptions = { ...(draft.assumptions ?? {}), reviewedAt: today }; }
 
@@ -1116,7 +1448,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
       people: Object.fromEntries(ad.map((p) => {
         const pay = payLineNow(L(plan, "income"), p.id, today), pension = now(`setup-pension-${p.id}`);
         const status = s.status?.[p.id] ?? (pay || existingPay(plan, p.id).length ? "work" : pension ? "retired" : null);
-        return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "" }];
+        // "Retirement plan at work?": the answer given here (`plan`); Contributions' "No plan or no match" is not it (review D7)
+        return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "", plan: workPlanAnswer(plan, p.id) }];
       })),
       other: { kind: OTHER_KINDS.some((k) => k.value === o?.type) ? o.type : "", amount: o?.amount ?? "" },
       // the estimated tax paid so far, once it was typed (here or on Estimated payments); blank until then
@@ -1144,13 +1477,17 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   if (screen === "have-amounts") {
     const o = {};
     // a balance that is one of our guesses reopens empty: the screen shows it grey (spec P2), never as typed text
-    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)); o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : ""; }
+    // (no account in the retirement box's place: Q2's plan at work, when something is in it; $0 shows blank)
+    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)), q = h.perAdult && !a ? workPlanAcct(plan, pid) : null; o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : q && Number(q.balance) > 0 ? q.balance : ""; }
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
       // someone paid by their own business has no employer plan: "On my own" first (review 2026-11-02)
       const ownBusiness = payLineNow(L(plan, "income"), p.id, today)?.type === "business";
-      o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a ? "work" : ownBusiness ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
+      o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a || workPlanAcct(plan, p.id) ? "work" : ownBusiness ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
       o[`contrib-${p.id}`] = c?.amount ? Math.round(c.amount) : ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
+      // which kind of IRA: the account's own type when it is a Roth, else the answer given here (never a guess shown as one)
+      const said = s.iraKind?.[p.id];
+      o[`iraKind-${p.id}`] = a?.type === "roth" ? "roth" : a?.type === "ira" && (said === "unsure" || said === "traditional") ? said : null;
     }
     return o;
   }
@@ -1176,7 +1513,12 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOf(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
   }
   if (screen === "goals") return picks(plan, "goals");
-  if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => { const x = byId(L(plan, "goals"), `setup-goal-${g.key}`); return [g.key, { target: x?.target || "", date: x?.targetDate ?? "", years: x ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: Number(plan?.assumptions?.emergencyMonths ?? 6) }]; }));
+  if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => {
+    const x = byId(L(plan, "goals"), `setup-goal-${g.key}`);
+    // the cash accounts linked to it (question 7b's chips); none linked, nothing chosen
+    const cash = g.key === "cushion" || !Array.isArray(x?.fundedBy) ? [] : x.fundedBy.filter((id) => isCash(plan, id));
+    return [g.key, { target: x?.target || "", date: x?.targetDate ?? "", years: x ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: Number(plan?.assumptions?.emergencyMonths ?? 6), ...(g.key === "cushion" ? {} : { funds: cash.length ? cash : null }) }];
+  }));
   return {};
 }
 
@@ -1415,6 +1757,7 @@ export function standing(plan, { today }) {
             : spare !== null && spare >= 0 && runwayStatus === "ok" && (!retire || retire.verdict === "on track") ? "You're in good shape. Here's how to make it even better."
               : "A few more answers will fill this in.";
   const empty = !L(plan, "accounts").length || (nw.assets === 0 && nw.liabilities === 0);
+  const iraGuessed = adults(plan).filter((p) => setupOf(plan).iraKind?.[p.id] === "unsure" && byId(L(plan, "accounts"), haveId("retire", p.id))?.type === "ira").map((p) => ({ personId: p.id, name: byId(L(plan, "accounts"), haveId("retire", p.id)).name }));
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
     // half or more of what you own, or of what you owe, is our guesses (Net worth's partlyGuessed): the tile says so and waits
@@ -1430,6 +1773,11 @@ export function standing(plan, { today }) {
     ...(spareWaits ? { spareWaits: true, spareGuessedShare: nba.spare.guessedShare } : {}),
     ...(childcareMissing ? { childcareMissing: true } : {}),
     ...(runwayWaits ? { runwayWaits: true } : {}),
+    // an IRA answered "Not sure" on question 4b, counted as traditional for now (round 8, item 35)
+    ...(iraGuessed.length ? { iraGuessed } : {}),
+    // cash held back from the cushion, set aside for a goal or this year's tax not paid yet (round 8, items 10 and 29): only
+    // then, so the tile can say why it reads less than the accounts hold
+    ...(runway !== null && ((liq?.earmarked ?? 0) > 0.5 || (liq?.taxOwed ?? 0) > 0.5) ? { cushionHeld: { all: liq.nowAll, earmarked: liq.earmarked, taxOwed: liq.taxOwed, now: liq.now, goals: heldFor(plan), ...(liq.taxOwed > 0.5 ? { taxDue: liq.tax?.owedNow ?? liq.taxOwed } : {}), ...(liq.earmarked > 0.5 && cushionLike(plan) ? { cushionGoal: cushionLike(plan) } : {}) } } : {}),
     ...(retireGuessed ? { retireGuessed: true } : {}),
     ...(spendNow.guessed ? { spendGuessed: { monthly: spendNow.guessedMonthly, count: spendNow.guessed, rows: spendNow.monthly, typed: spendNow.typedMonthly } } : {}),
   };
@@ -1470,14 +1818,14 @@ export const estimators = {
     page: () => "#/goals/goals",
     fn(plan, { today }) {
       const c = cushion(plan, null, today);
-      return c.essential > 0 ? { value: c.target, rounded: true, why: `${c.months} months of your must-pay bills`, uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+      return c.essentialAll > 0 ? { value: c.target, rounded: true, why: `${c.months} months of your must-pay bills`, uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
     },
   },
   "overview/setup:cushionFunds": {
     tier: 4, order: 6, label: "Accounts that hold the cushion", unit: "list", weight: "small", basis: "yours", reads: [],
     page: () => "#/goals/goals",
     fn(plan) {
-      const funds = L(plan, "accounts").filter((a) => TIERS.now.types.includes(a.type)).map((a) => a.id);
+      const funds = cushionFundIds(plan);
       return funds.length ? { value: funds, why: "your checking, savings and cash accounts", uses: { accounts: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
     },
   },

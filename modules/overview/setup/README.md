@@ -18,15 +18,15 @@ Address: `#/overview/setup/<screen>`, so the phone's Back button works. Get star
 |---|---|---|---|
 | | `welcome` | nothing: three things you get, three promises (about 5 minutes, rough numbers, stop any time), the privacy line. Once finished: "Change an answer", a list of the seven questions with what the plan holds for each | |
 | 1 | `you` | first name; just me / me and my spouse / me and my partner; partner's name; children who live with you more than half the year (stepper); state | `household.people` (`setup-self`, `setup-partner` with `relation`, `setup-kid-N`), `filingStatus`, `state` |
-| 2 | `money` | per adult: I work (pay before tax, how often, with "That's about $X a month" as you type) / I'm retired (a pension a month) / not working now; other money a month and its kind | `income` (`setup-pay-<person>`, `setup-pension-<person>`, `setup-other`) |
+| 2 | `money` | per adult: I work (pay before tax, how often, with "That's about $X a month" as you type; under pay from an employer, "Retirement plan at work?" Yes / No / Not sure) / I'm retired (a pension a month) / not working now; other money a month and its kind | `income` (`setup-pay-<person>`, `setup-pension-<person>`, `setup-other`), `retirement.workPlans[<person>].plan` (No: and `match: false`), a $0 401(k) `setup-workplan-<person>` on Yes |
 | 3 | `ages` | per adult: birth month and year, when you'd like to stop working (or already retired), Social Security (estimate it / my statement figure / I already get it / I won't get any; a retiree under 62 sees "Not yet: I have my statement figure" first); children's birth years | `birthDate`, `retirementAge`, `retirement.socialSecurity`, `income` (`setup-ss-<person>`) |
 | 4 | `have` | tiles: checking, savings, retirement, investments, a home, a car | `guide.setup.picks.have` |
-| 4b | `have-amounts` | about how much in each; retirement per adult with through work / on my own, a month from pay, the employer's match | `accounts` (`setup-have-<kind>`, `setup-have-retire-<person>`), `retirement.contributions` (`setup-contrib-<person>`) |
+| 4b | `have-amounts` | about how much in each; retirement per adult with through work / on my own (then "Which kind of IRA?" Traditional / Roth / Not sure), a month from pay, the employer's match | `accounts` (`setup-have-<kind>`, `setup-have-retire-<person>`; "Through work" into question 2's `setup-workplan-<person>` when it is there), `retirement.contributions` (`setup-contrib-<person>`) |
 | 5 | `owe` | tiles: credit cards, car loan, student loans, mortgage, another loan, or "No, I'm debt free" | `guide.setup.picks.owe` |
 | 5b | `owe-amounts` | cards first: "Do you pay the whole bill every month?"; then how much you owe, the payment a month, the rate if you know it; with a mortgage and no home in the plan, what the home would sell for | liability `accounts` (`setup-owe-<kind>`), `debts` (`setup-debt-<kind>`), `setup-have-home` |
 | 6 | `spend` | a typical month in rows (must-pay, with the loan payments shown read-only, and everything else, with subtotals) or one rough total; the total with its parts; then "once you stop working, about how much a month?" | `expenses` (`setup-x-<category>`, `setup-x-total`), `retirement.spendingMonthly` |
 | 7 | `goals` | tiles: a safety cushion, paying off debt, buying a home, retiring well, education, a big trip, a car, something else | `guide.setup.picks.goals`, `guide.setup.focus` |
-| 7b | `goal-details` | how much and by when (1, 2, 3, 5 years or a date); the cushion: how many months (1 to 12) | `goals` (`setup-goal-<kind>`), `assumptions.emergencyMonths` |
+| 7b | `goal-details` | how much and by when (1, 2, 3, 5 years or a date); "Is any of your savings already for this?" (the cash accounts as pills, or None of it); the cushion: how many months (1 to 12), with what counts toward it | `goals` (`setup-goal-<kind>`, `fundedBy`), `assumptions.emergencyMonths` |
 | | `done` | where you stand (four figures; one not known yet links to the question that fills it), your first three moves, what is not counted yet, the plan's guesses | `assumptions.reviewedAt` ("These sound fine") |
 
 Follow-up screens (4b, 5b, 7b) show only when their question needs them (`SCREENS[].show`), and count half a step on the
@@ -212,7 +212,9 @@ as "statement", so going through the ages screen again keeps it.
 ## The guide state (`plan.guide.setup`)
 `{ at (furthest screen), startedAt, finishedAt?, picks: { have, owe, goals }, focus, who, status: { [personId]: work |
 retired | none }, ss: { [personId]: estimate | statement | getting | none | unsure }, ssWrote: { [personId]: amount },
-spendMode, spendZero, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe }`, optional, documented in
+spendMode, spendZero, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe, goalFunds: { [goalKey]: [accountId] }
+(question 7b's own links of cash to a goal), iraKind: { [personId]: traditional | roth | unsure } (question 4b's
+answer) }`, optional, documented in
 `docs/DATA_MODEL.md` under `guide`.
 
 ## Choices made (the owner said: decide and note it here)
@@ -228,6 +230,8 @@ spendMode, spendZero, paidInFull, retireAuto, cushionFunds, cushionTarget, homeF
 - Seven questions, follow-ups only when needed: the critics' newcomer persona gave up past about eight screens.
 - Ages and Social Security share one screen (the stop-working age is what the estimate needs).
 - No "already saved" box on a goal: the money is already in the accounts you typed, so asking again counted it twice.
+  Round 8 asks instead which of those accounts is already for the goal (`fundedBy`, never `saved`): the money is counted
+  once, toward the goal, and Liquidity takes it off the cushion (its F-020 earmark), as it does for a link made on Goals.
 - An unmarried couple is planned as one household with two single returns; the federal estimate today works one
   return for the household, said in "Not counted yet" (a follow-up is posted on the WORKBOARD for taxes/federal).
 - A mortgage's typical rate is today's new-loan rate, which may be higher than an older loan's; the guess is marked
@@ -540,3 +544,121 @@ figure, the cushion and the retirement check rested on it. Now every row of Q6 s
   once and hands it to `retireDefault`, and `spendBase` reads Expenses without the guess ledger (it reads amounts only,
   and no amount depends on the ledger). tests/estimate-perf.test.mjs (200 settles of the largest qa plan with 40 guesses
   under 600 ms) takes about as long as before C3.
+
+## Round 8, batch 3: Get started asks what it needs (2026-11-06)
+Six laypeople went through Get started (round 8). What they hit here, and what changed:
+
+- **The plan at work (item 1, setup part).** Under pay from an employer (`by` not "self", or a salary already on Income),
+  question 2 asks "Retirement plan at work?" Yes / No / Not sure (`WORK_PLAN`). One tap, or none: nothing chosen writes
+  nothing. The answer is its own field, `retirement.workPlans[personId].plan` (review D2: a plan says nothing about a
+  match, and Batch 2's match step reads `match: true` as "with a match"). Yes writes `plan: true` and, when the person has
+  no plan account at a job they still have (a 401(k), or a Roth 401(k) by Contributions' `limitKind`: a Roth account with a
+  match or a 401(k)/403(b)/457/TSP name; theirs, or unowned for the first adult; not `formerJob`; review D6), a $0 401(k)
+  of its own, `setup-workplan-<person>`, "Priya's plan at work" (review UX 4: not the retirement box's place, so "On my
+  own" on question 4b makes the IRA beside it). No contribution row is made (a $0 row would read as "already putting money
+  in"). With the account, Next best action's match step asks ("Check if Priya's job matches retirement saving"), and
+  Contributions and Benefits have an account to work with. No writes `plan: false` and `match: false` (no plan, so no match:
+  Next best action, Benefits and Contributions stop asking); Not sure takes the answer on file away, with the `match: false`
+  its No wrote. Only an answer that differs from the one on file does anything (review D7): Contributions' "No plan or no
+  match" (`match: false` alone) is not read back as No, and an unchanged Continue never takes back or puts back the
+  account. No, Not sure, or no longer working for an employer takes back the $0 401(k) while nothing is in it and nothing
+  is set to go in. Question 4b's "Through work" box goes into it (a typed balance, never a second account; blank keeps it at
+  $0 and shows blank); "On my own" is an IRA in the box's own place; Retirement unticked on question 4 after it was ticked
+  puts it back to $0 and drops the setup's contribution to it. Question 4 says once "Priya's plan at work is added with $0.
+  Money in it already? Tap Retirement." (`workPlanLine`), and question 2's "Got it" says "We added Priya's plan at work,
+  with $0 in it for now." (`workPlanAdded`) on the Continue that adds it. Removing the person removes the answer and the
+  account.
+- **Savings already for a goal (item 10).** Question 7b asks under each saving goal "Is any of your savings already for
+  this?", with the cash accounts (checking, savings, cash with money in them: `goalFundChoices`) as pills plus "None of
+  it". The answer is the goal's `fundedBy` (cash ids only; another account the goal draws on, such as a 529 linked on
+  Goals, stays in its place). `saved` is never written: Liquidity's cushion leaves out what goals claim through `fundedBy`
+  (F-020: `min(funded - saved, targetThen)` for a goal with an amount), and `saved` would not come off it. The help says
+  what happens (`GOAL_FUNDS_HELP`, review D8 and UX 2): "Tap an account if money in it is for this. Up to this goal's amount
+  then counts here, not as your safety cushion." An answer is written only when it differs from the cash the goal already
+  draws on, and is kept as 7b's own in `guide.setup.goalFunds` (review D1). The cushion goal's own accounts
+  (`cushionFundIds`): every cash account, except one 7b linked to a goal while those goals need all of it (Goals' F-013
+  sharing worked over every goal but the cushion: by priority, then date, each taking `target - saved`; a goal with no
+  amount takes nothing). An account with money left over stays in the cushion's list, after the others (review D3), and
+  Goals gives the cushion its share of it first (priority 1), so Goals, Emergency fund and the done screen show one
+  cushion: savings $30,000 ticked for a $4,000 trip gives the cushion $16,800 of $16,800 on Goals, the trip $4,000, and
+  Emergency fund $29,000 (Liquidity: $33,000 less the trip's $4,000). When a ticked account holds more than the goal needs
+  but not enough for both, it stays out of the cushion's list (verify, round 8): Goals gives the cushion (priority 1) its
+  share first, so with it in the list a $15,001 savings ticked for a $15,000 car gave the car $1,201 and the cushion
+  6.0 months "Covered", one dollar after $15,000 gave the car all of it and the cushion 1.1 months; that broke the help's
+  "Up to this goal's amount then counts here". The rule (`sharedOut`, Goals' F-013 over every goal with the cushion on a
+  given list): a ticked account with money left over joins the list only when no other goal then gets less. So the car
+  keeps $15,000 and Emergency fund and the done screen count what it leaves ($3,000 + $10,000 = $13,000 for $25,000 of
+  savings: 4.6 months); Goals' own cushion row then counts only the untouched accounts ($3,000) until the savings covers
+  both ($15,000 + $13,800 = $28,800), an owner question. A link made on Goals does not count
+  (plans that never answered 7b keep every cash account in the cushion, as before). The setup's guess of those accounts
+  (`overview/setup:cushionFunds`) reads the same list, so "Better guesses are ready" never offers it back. Couple-home
+  (checking $3,000, savings $22,000, $3,930 of must-pay bills and loan payments, a $60,000 home in 3 years, Savings
+  ticked): the house holds $22,000 of $60,000 and needs $1,067.63 a month (Goals' `pmtToReach` on $65,563.62 by then at
+  3% inflation, the plan's bond return 4%, since 36 months away is not under 3 years); the cushion is $3,000 / $3,930 = 0.76, "0.8 months", "Worth building up"
+  (before: $25,000 / $3,930 = 6.4, "Covered").
+- **Why the cushion reads less than the accounts hold (items 10 and 29).** `cushion()` now also returns `all` (Liquidity's
+  `nowAll`), `earmarked`, `taxOwed` (Estimated payments' `taxOwedNow`, as Liquidity takes it: at most the cash), `taxDue`
+  (all of it, `owedNow`), the goals in words, and `exact` = months x the must-pay bills going today, Emergency fund's own
+  target (`goals/emergency-fund`: `essentialMonthly x months`, worked out with `today`, so a bill that ended or has not
+  started is left out; review D5). `essential` is that figure too; `essentialAll` (every must-pay bill on file, dated or
+  not) is what the saved cushion goal and its guess still use, rounded to $100 (`target`), so no existing plan moves (owner
+  question 1).
+  Question 7b says "That's $20,580" (exact; it said $20,600, the goal amount rounded to $100, which is still what the
+  cushion goal saves: changing it would move every plan's saved guess) and, through `cushionHave`, "You have $8,500 in
+  checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward the cushion: 0.0
+  of 6 months." (it said "$0 in checking, savings and cash"; review UX 3: the tax has its own figure, $15,898.44 x 10/12 -
+  $4,000 = $9,248.70, said to the $10, when it is more than the cash; the done screen: "This year's tax not paid yet (about
+  $9,250) is more than the $8,500 you have, so none of it is cushion yet."). The line follows a savings account ticked lower on the same screen (worked
+  out on a copy of the plan with the screen's answers). Nothing held back: the line it always was. The done screen's
+  Safety cushion figure says it too (`standing().cushionHeld`, only when something is held back; `cushionHeldWords`):
+  "Your $22,000 is set aside for the home, so your cushion is $3,000. Aim for 6 months." A goal the owner made on Goals
+  is named as a goal ('the "Japan trip" goal'). When the held goal looks like the cushion itself but is not ticked as it
+  (Liquidity's and Emergency fund's test: the name says emergency, rainy day or cushion, or the 🛟 icon; F-034),
+  `standing().cushionHeld.cushionGoal` names it, and the figure says the money may be cushion and asks (review UX 5):
+  '$11,500 more sits in your "Emergency fund" goal. Aim for 6 months. Count it as your cushion? Say so on Emergency fund ›'
+  (with tax held too, or several goals, the "set aside" sentence and "Is that goal your safety cushion?"); it opens
+  Emergency fund, whose "This goal is my emergency fund" counts it (`cushionHeldAsk`). The family fixture: 0.9 months
+  ($4,200 / $4,768.33 of must-pay bills = 0.88); ticked, $15,700 / $4,768.33 = 3.29, "3.3 months". Found by running the done
+  screen on every qa plan: 1,079 of 1,424 hold cash for a goal, 1,075 of them for an unticked goal that looks like
+  the cushion (686 named "Emergency fund"; all 🛟), and Emergency fund's page shows that same goal in all 1,075.
+- **Which kind of IRA (item 35).** Under "On my own", question 4b asks "Which kind of IRA?" Traditional / Roth / Not sure
+  (`IRA_KINDS`). Roth saves type `roth`, Traditional `ira`, Not sure `ira` with `guide.setup.iraKind[personId] = "unsure"`,
+  listed under "Our guesses for now" on the done screen ("Your retirement: counted as a traditional IRA. A Roth? Tell us
+  which", opening question 4b; review UX 9).
+  No answer: as before (a new account is an IRA; a Roth set on Net worth stays a Roth). For the freelancer's $14,000 IRA
+  with $250 a month, Roth stops the $3,000 deduction: federal income tax $7,670 to $8,330 in the app's terms today (single,
+  2026 standard deduction $16,100: taxable $58,900 to $61,900, the extra $3,000 at 22%). Nothing is said about a SEP-IRA
+  (`iraKindHelp`, review D4): the app would count it against the $7,500 IRA limit and deduction, while a SEP has its own
+  (the lesser of 25% of pay or $72,000 for 2026, IRS "SEP contribution limits"; employer SEP money "do[es] not affect the
+  amount you can contribute to an IRA", IRS "Retirement plans FAQs regarding SEPs"; as read by the money review
+  2026-11-06). A SEP kind with its own limit is Batch 1 / Limits work.
+- **Social Security already paid (item 37).** "What you get a month" now says what figure: from 65, "Before Medicare is
+  taken out: the figure on your yearly benefit letter, not what reaches your bank. Only know the deposit? Add about
+  $203." (`ssGettingHelp`; $203 is `PART_B` in `retirement/medicare/data/medicare.js`, $202.90, the 2026 standard Part B
+  premium: CMS fact sheet "2026 Medicare Parts A & B Premiums and Deductibles", November 14, 2025, read 2026-11-06; no 2027
+  figure was published on that day). From 62 to 64, "Before anything is taken out"; before 62: "Before 62 that's disability or survivor
+  benefits. Use the figure on your benefit letter, before Medicare or anything else is taken out; we count it as it is."
+  (review D10: Medicare Part A and B start after 24 months of disability benefits, medicare.gov "How do I sign up for
+  Medicare?", and "Most people get their Medicare Part B premium deducted automatically" from the benefit, medicare.gov
+  "Pay premiums", both read 2026-11-06; a survivor benefit from 60 is reduced, 71.5% at 60, SSA "Receiving survivors
+  benefits early" as quoted by search, the page itself refused the fetcher that day; so not "paid in full".)
+- **The home's down payment (item 39, the Q7 hint).** `goalAmountHelp("home")` adds "Some loans take 3% down or less (VA and
+  USDA loans can take none); under 20% down usually adds mortgage insurance or a fee to the monthly cost." (review D9: the
+  same CFPB page says "Special zero down payment programs exist for veterans, servicemembers, and rural borrowers. Those
+  programs also require mortgage insurance or other fees.") Sources, read 2026-11-06: CFPB, "How to decide how
+  much to spend on your down payment" ("Some lenders may offer conventional loans with 3 percent down payments"; FHA from
+  3.5%; page last modified June 25, 2026), and CFPB, "What is private mortgage insurance?" (required "if you take out a
+  conventional loan with a down payment of less than 20 percent"). The house page's own monthly cost does not count
+  mortgage insurance yet (item 39's house math, in the backlog).
+- **Waiting for other work.** Move 3's IRA words (item 9) wait for Batch 1's `iraDeductible` helper; the escrow default on
+  question 5 (item 17) waits for Batch 4's `debts[].escrowMonthly`; the rental stub for "Rent I collect" (item 5) waits for
+  Batch 6; the city-tax question on question 1 (item 19) waits for claude-a's `taxes.state.localRate`.
+- **Question 7b's pills say what they did** (review UX 7 and 8). After a tap, a line under the pills: "Your cushion now
+  counts $3,000: 0.8 months of must-pay bills. Aim for 6." (worked out on the plan with the screen's answers; the cushion's own
+  line may be above the screen), and, when an account is ticked under another goal too, "Savings is also for the trip.
+  The goal due first fills first." (Goals' F-013: same priority, by date).
+- **Tests** (`R8 item ...` and `R8 B3 review ...` in `module.test.mjs`; the review's ten failing first, saved in
+  `r8/b3/failing/review-fixes-before.txt`): the three answers and what each writes, taking back, the question only
+  for employer pay, no second 401(k), an unanswered screen writes nothing; question 4 keeping the plan at work; the
+  savings link, None of it, an answer left alone, cash only, the cushion's own accounts and its guess agreeing; the unpaid
+  tax sentence and Emergency fund's target; the IRA kinds; the Social Security and down-payment help.
