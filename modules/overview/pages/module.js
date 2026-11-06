@@ -14,7 +14,7 @@ export default {
   needs: ["pageNotes"],
   writes: [],
   heavy: false,
-  purpose: "Searchable directory of every page with its status and build phase.",
+  purpose: "Search every page in the app.",
   aliases: ["all pages", "directory", "everything", "list of pages", "coming soon"],
   compute,
   render,

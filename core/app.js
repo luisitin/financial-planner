@@ -7,7 +7,7 @@
 import { GROUPS } from "./groups.js";
 import registry from "../modules/registry.js";
 import { store } from "./store.js";
-import { api } from "./api.js";
+import { api, conn } from "./api.js";
 import { ai } from "./ai.js";
 import { router } from "./router.js";
 import { features } from "./features.js";
@@ -15,6 +15,7 @@ import * as ui from "./ui/dom.js";
 import * as fmt from "./format.js";
 import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
 import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
+import { view, reach, shown as offeredPage } from "./view.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -30,6 +31,11 @@ const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav))
 let GUESS = { estimators: {}, tables: {}, weights: {} };
 let moved = 0;                      // how many guesses the last save moved (store.takeSettled), said once with its notice
 export const isReady = (m) => m.status !== "planned";
+// The household's view (core/view.js): a page is offered (menu, search, lists) only when it is ready, not a builder's
+// page, and what it needs (the PC, the AI helper) answers. The build view offers everything, as before.
+const isShown = (m) => offeredPage(m, isReady);
+const userView = () => !view.build;
+view.init();
 
 async function loadModules() {
   const loaded = await Promise.all(registry.map(async (entry) => {
@@ -49,7 +55,7 @@ async function loadModules() {
 }
 
 function pagesInGroup(groupId) {
-  return [...modules.values()].filter((m) => m.group === groupId && features.enabled(m)).sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+  return [...modules.values()].filter((m) => m.group === groupId && features.enabled(m) && isShown(m)).sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
 }
 
 // ---------------------------------------------------------------- sidebar
@@ -72,25 +78,26 @@ function buildNav(filter = "") {
   const rank = (m, g) => matchRank(m, g.title, q, { ignore });
 
   if (!q) {
-    const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
+    const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m) && isShown(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
     // "Recent": the 8 ready pages opened last on this device, Dashboard always first; before
     // anything has been opened, the first ready pages in topic order (design log 2026-09-15, pass 2).
     const READY_MAX = 8;
-    const recent = (nav.recent ?? []).map((k) => modules.get(k)).filter((m) => m && isReady(m) && features.enabled(m));
+    const recent = (nav.recent ?? []).map((k) => modules.get(k)).filter((m) => m && isReady(m) && features.enabled(m) && isShown(m));
     const dash = modules.get("overview/dashboard");
     const shown = [];
     for (const m of [dash, ...recent, ...ready]) if (m && !shown.includes(m) && shown.length < READY_MAX) shown.push(m);
-    side.append(ui.h("div", { class: "nav-section" }, recent.length ? "Recent" : "Ready now"));
+    side.append(ui.h("div", { class: "nav-section" }, (recent.length > 2 || (recent.length && !userView())) ? "Recent" : userView() ? "Start with" : "Ready now"));
     for (const m of shown) side.append(link(m, " ready-link"));
-    if (ready.length > READY_MAX) side.append(ui.h("a", { href: "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, `All ${ready.length} ready pages ›`)));
+    if (ready.length > READY_MAX) side.append(ui.h("a", { href: userView() ? "#/overview/pages" : "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, userView() ? `All ${ready.length} pages ›` : `All ${ready.length} ready pages ›`)));
     // The hide/show toggle sits on the topics header, not at the bottom of 18 topics.
-    const toggle = ui.h("button", { type: "button", class: "nav-soon-toggle", onClick: () => { nav.showSoon = !nav.showSoon; saveNav(); buildNav(); } }, nav.showSoon ? "Hide coming soon" : "Show coming soon");
+    // (the household's view has no "coming soon" pages to hide: the toggle is for the build view)
+    const toggle = userView() ? null : ui.h("button", { type: "button", class: "nav-soon-toggle", onClick: () => { nav.showSoon = !nav.showSoon; saveNav(); buildNav(); } }, nav.showSoon ? "Hide coming soon" : "Show coming soon");
     side.append(ui.h("div", { class: "nav-section nav-section-row" }, ui.h("span", {}, "By topic"), toggle));
   }
   const groups = [];
   for (const g of GROUPS) {
     let pages = pagesInGroup(g.id).map((m) => ({ m, r: rank(m, g) })).filter((x) => x.r >= 0);
-    if (!nav.showSoon && !q) pages = pages.filter((x) => isReady(x.m));
+    if (!nav.showSoon && !q && !userView()) pages = pages.filter((x) => isReady(x.m));
     if (!pages.length) continue;
     if (q) pages.sort((a, b) => a.r - b.r);
     groups.push({ g, pages: pages.map((x) => x.m), best: Math.min(...pages.map((x) => x.r)), hits: pages.length, named: q && g.title.toLowerCase().includes(q) ? 0 : 1, total: pagesInGroup(g.id).length });
@@ -100,7 +107,7 @@ function buildNav(filter = "") {
     const readyN = pages.filter(isReady).length;
     const open = q ? true : !!nav.open[g.id];
     const grp = ui.h("div", { class: `nav-group${open ? " open" : ""}` });
-    const count = q ? (readyN ? `${readyN} ready` : `${pages.length} soon`) : (readyN ? `${readyN} of ${total} ready` : `${pages.length} soon`);
+    const count = userView() ? `${pages.length}` : q ? (readyN ? `${readyN} ready` : `${pages.length} soon`) : (readyN ? `${readyN} of ${total} ready` : `${pages.length} soon`);
     const head = ui.h("button", { type: "button", class: "nav-group-head", onClick: () => { nav.open[g.id] = !grp.classList.contains("open"); saveNav(); grp.classList.toggle("open"); } },
       ui.h("span", { class: "ic" }, g.icon), ui.h("span", { class: "t" }, g.title),
       ui.h("span", { class: "n" }, count), ui.h("span", { class: "chev" }, "▶"));
@@ -111,7 +118,7 @@ function buildNav(filter = "") {
   if (q && !groups.length) {
     // no page has every word: the closest few (two or more meaningful words, at least half of them found), ready pages first
     if (queryWords(cleanQuery(q, ignore)).length >= 2) {
-      const close = [...modules.values()].filter((m) => features.enabled(m) && isReady(m))
+      const close = [...modules.values()].filter((m) => features.enabled(m) && isReady(m) && isShown(m))
         .map((m) => ({ m, s: closeShare(m, GROUPS.find((g) => g.id === m.group)?.title ?? "", q, { ignore }) })).filter((x) => x.s >= 0.5)
         .sort((a, b) => b.s - a.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 5);
       if (close.length) { side.append(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) side.append(link(m, " ready-link")); }
@@ -120,7 +127,7 @@ function buildNav(filter = "") {
     side.append(ui.h("div", { class: "nav-empty" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
       ui.h("div", {}, "Try another word, or ", ui.h("a", { href: "#/overview/pages" }, "browse All pages"), ".")));
   }
-  side.append(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
+  if (!userView()) side.append(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
   markActive();
 }
 function markActive() {
@@ -156,6 +163,7 @@ function makeCtx(route) {
   const plan = store.get();
   return {
     route, plan, store, api, ai, ui, fmt, features, modules, GROUPS, isReady,
+    view, live: reach, shown: isShown,   // the household's view and what answers (core/view.js); pages follow them, see docs/CONVENTIONS.md "View"
     computeOf: (key, params) => { const m = modules.get(key); return m ? safeCompute(m, store.get(), params) : null; },
     computeRemote: async (key, params) => {
       const m = modules.get(key); if (!m) return null;
@@ -275,7 +283,11 @@ function echo(text, bad = false) {
 let aiState = "off";
 async function refreshStatus() {
   // the sandbox never reaches out: no AI check (the pill says Sandbox and does not name the AI)
-  if (!store.sandbox()) { try { aiState = await ai.status(); } catch { aiState = "off"; } }
+  // what answers decides what the household is offered (core/view.js): the AI helper only counts through the PC
+  const pc = store.backend() === "server";
+  // (the household's view asks only through the PC: with none, nothing reaches out to look for an AI service)
+  if (!store.sandbox() && (pc || !userView())) { try { aiState = await ai.status(); } catch { aiState = "off"; } }
+  reach.set({ pc, ai: pc && !store.sandbox() && String(aiState).startsWith("on") });
   showPill();
 }
 /**
@@ -291,10 +303,23 @@ function showPill() {
     return;
   }
   const server = store.backend() === "server";
+  // the household's view: no PC set up on this device means nothing to connect to, so the pill just says where it is kept
+  if (userView() && !server && !conn.load().serverUrl) {
+    el.textContent = "Saved on this phone";
+    el.className = "ok";
+    el.title = "Your plan is kept in this browser on this device. Download a copy from Settings to keep one somewhere else. Tap for settings.";
+    return;
+  }
   const { late, conflict } = store.syncState();   // a save on its way for a moment still reads Saved on PC (no flicker)
   const onPc = server && !late && !conflict;
-  el.textContent = onPc ? "Saved on PC" : "Phone only";
+  el.textContent = onPc ? (userView() ? "Saved on your computer" : "Saved on PC") : "Phone only";
   el.className = onPc ? "ok" : "warn";
+  if (userView()) {   // plain words, no machine names (a PC that was set up but cannot be reached is the one case worth a flag)
+    el.title = (conflict ? "Your plan was changed in two places: choose which version to keep, at the top of the page"
+      : late ? "Your latest changes are saved on this device only. They are sent on by themselves as soon as the connection is back"
+      : "Your plan is saved") + ". Tap for settings.";
+    return;
+  }
   el.title = (conflict ? "Your plan was changed in two places: choose which version to keep, at the top of the page"
     : late ? "Your latest changes are saved on this device only. They go to the PC by themselves as soon as it can be reached"
     : server ? `Your plan is saved on the PC (${api.base()})` : "The PC cannot be reached: your plan is saved in this browser only") + `. AI: ${aiState}. Tap for settings.`;
@@ -325,7 +350,7 @@ function onSync() {
   const { conflict, localFull, late } = store.syncState();
   if (store.takeSent() && !conflict) echo("Your changes are now saved on the PC.");
   // the browser's storage is full and the PC cannot take the change either: say so once, in plain words
-  if (localFull && late && !toldFull) { toldFull = true; echo("This device is out of space for your plan, so the latest change is only on screen. Connect to your PC before closing the app.", true); }
+  if (localFull && late && !toldFull) { toldFull = true; echo(userView() && !conn.load().serverUrl && store.backend() !== "server" ? "This device is out of space for your plan, so the latest change is only on screen. Download a copy from Settings before closing the app." : "This device is out of space for your plan, so the latest change is only on screen. Connect to your PC before closing the app.", true); }
   if (!localFull) toldFull = false;
   // a change marked as waiting was not on this device at open (it did not fit, or this device's copy was erased)
   if (store.takeLost()) echo("Your last change on this device could not be found when the app opened, so it did not reach the PC. Please check it and enter it again if it is missing.", true);
@@ -338,6 +363,7 @@ async function boot() {
   store.settleWith((draft) => settle(draft, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today() }));
   await features.init();
   await store.load();
+  reach.set({ pc: store.backend() === "server" });   // the PC is known after the plan loads; the AI helper's answer follows (refreshStatus)
   buildNav();
   const live = document.createElement("div");   // ctx.announce()'s live region, visually hidden
   live.id = "announce"; live.setAttribute("aria-live", "polite");
@@ -362,13 +388,36 @@ async function boot() {
   setInterval(() => { if (store.syncState().pending || store.backend() !== "server") store.resync({ takeNewer: !typing() }); }, 30000);
   onSync();
   addEventListener("planner:features", () => buildNav());
+  // the view switch (Settings, ?view=) or what answers changed: the menu and the page on screen follow it, unless someone is typing
+  const follow = () => { buildNav(document.querySelector("#sidebar .nav-search")?.value ?? ""); if (current && !typing()) show(current, { keepScroll: true }); };
+  addEventListener("planner:view", follow);
+  addEventListener("planner:live", follow);
   addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); onSync(); if (current) show(current, { keepScroll: true }); }); });
   // First visit (an empty plan, "look around" never chosen) or a guide still followed before any account: an address
   // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
   const sm = modules.get("overview/start");
-  if (sm && isReady(sm) && features.enabled(sm) && /^#?\/?$/.test(location.hash) && safeCompute(sm, store.get(), { today: fmt.today() })?.opensHere) history.replaceState(null, "", "#/overview/start");
+  if (sm && isReady(sm) && features.enabled(sm) && /^#?\/?$/.test(location.hash) && safeCompute(sm, store.get(), { today: fmt.today() })?.opensHere) { try { history.replaceState(null, "", "#/overview/start"); } catch { location.hash = "#/overview/start"; } }
   router.start(show);
   refreshStatus();
   setInterval(refreshStatus, 30000);
 }
-boot().catch((e) => { console.error(e); document.getElementById("content").textContent = `Boot failed: ${e}`; });
+/**
+ * A page shown inside a frame (a preview pane, the single-file demo in a sandboxed frame) may be sandboxed without
+ * "allow-forms": the browser then drops every form submit and logs an error, so no Save button would do anything.
+ * Inside a frame a submit button's tap is sent straight to the form's own submit handler (the pages' handlers all
+ * preventDefault; nothing is navigated). No probe is made, so nothing is logged. A normal tab is left alone.
+ */
+function mendBlockedForms() {
+  let framed = false;
+  try { framed = window.top !== window.self; } catch { framed = true; }
+  if (!framed) return;
+  document.addEventListener("click", (e) => {
+    const b = e.target?.closest?.("button, input[type=submit]");
+    const form = b?.form;
+    if (!form || (b.type ?? "submit") !== "submit" || b.disabled) return;
+    e.preventDefault();
+    if (!form.noValidate && !b.formNoValidate && typeof form.reportValidity === "function" && !form.reportValidity()) return;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }, true);
+}
+boot().then(mendBlockedForms).catch((e) => { console.error(e); document.getElementById("content").textContent = `Boot failed: ${e}`; });

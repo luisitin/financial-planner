@@ -9,6 +9,7 @@ export default {
   order: 25,
   version: 1,
   status: "usable",
+  requires: "pc",   // needs the PC: offered only while it answers (core/view.js)
   phase: 3,
   enabledByDefault: true,
   needs: ["accounts", "transactions", "rules", "imports"],

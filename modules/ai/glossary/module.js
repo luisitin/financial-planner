@@ -6,7 +6,7 @@ export default {
   id: "glossary",
   group: "ai",
   title: "Glossary",
-  icon: "🤖",
+  icon: "📖",
   order: 60,
   version: 1,
   status: "usable",

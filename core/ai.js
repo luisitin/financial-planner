@@ -10,6 +10,7 @@
 // (Ollama must then allow the origin: set OLLAMA_ORIGINS=* on the PC).
 import { api, conn } from "./api.js";
 import { store } from "./store.js";
+import { view } from "./view.js";
 
 const DEFAULTS = { provider: "ollama", host: "127.0.0.1", port: 11434, model: "", baseUrl: "", apiKey: "" };
 
@@ -29,6 +30,9 @@ export const ai = {
   },
   async models() {
     if (store.backend() === "server") return (await api.aiModels()).models ?? [];
+    // No PC: the browser reaches for an AI service itself only in the build view or when this device's Settings name one;
+    // otherwise (the household's view) nothing is asked, so a phone or a saved file never looks for a service that is not there.
+    if (!view.build && !conn.load().ai?.provider) throw new Error("No AI helper is set up on this device.");
     const s = await this.settings();
     if (s.provider === "ollama") {
       const r = await fetch(`http://${s.host}:${s.port}/api/tags`); const j = await r.json();

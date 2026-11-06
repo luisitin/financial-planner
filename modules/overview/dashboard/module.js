@@ -14,7 +14,7 @@ export default {
   needs: ["accounts", "goals", "household", "income", "expenses", "transactions"],
   writes: [],
   heavy: false,
-  purpose: "Where you stand today, what to do next, and what the app will do soon.",
+  purpose: "Where you stand today and what to do next.",
   aliases: ["home", "overview", "summary", "start"],
   compute,
   render,

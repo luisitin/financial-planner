@@ -29,7 +29,7 @@ export function render(page, ctx) {
   const d = compute(plan);
   const root = ui.h("div", { class: "hp-root" }, ui.h("style", {}, STYLE));
   page.append(root);
-  const manifests = [...modules.values()].map((m) => ({ group: m.group, id: m.id, title: m.title, purpose: m.purpose, status: m.status, placeholder: m.placeholder, order: m.order, aliases: m.aliases, enabled: features.enabled(m) }));
+  const manifests = [...modules.values()].filter((m) => ctx.shown(m)).map((m) => ({ group: m.group, id: m.id, title: m.title, purpose: m.purpose, status: m.status, placeholder: m.placeholder, order: m.order, aliases: m.aliases, enabled: features.enabled(m) }));
   const link = (g, id) => `#/${g}/${id}`;
 
   root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How this app works"),
@@ -66,5 +66,9 @@ export function render(page, ctx) {
   draw();
 
   // questions
-  root.append(ui.card("Questions people ask", ...d.faq.map((f) => ui.h("details", { class: "hp-q" }, ui.h("summary", {}, f.q), ui.h("p", {}, f.a)))));
+  // The household's view (core/view.js): no "coming soon" answer, no AI helper answer unless it answers, and no PC
+  // while there is none: where the plan is kept is then this device.
+  const faq = ctx.view.build ? d.faq : d.faq.filter((f) => !/Coming soon/.test(f.q) && (ctx.live.ai || !/AI helper/.test(f.q)))
+    .map((f) => (!ctx.live.pc && /^Where is my plan kept/.test(f.q) ? { q: f.q, a: "On this device, in this browser. Nothing is sent to a company and there is no account to sign up for. Settings has a \"Download a copy\" button if you want a copy somewhere else." } : f));
+  root.append(ui.card("Questions people ask", ...faq.map((f) => ui.h("details", { class: "hp-q" }, ui.h("summary", {}, f.q), ui.h("p", {}, f.a)))));
 }

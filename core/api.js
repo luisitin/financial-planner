@@ -20,9 +20,10 @@ function timed(ms = TIMEOUT_MS) {
   const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
 }
 
+let kept = null;   // the settings for this visit when the browser keeps nothing (a sandboxed frame, a private window)
 export const conn = {
-  load() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; } },
-  save(c) { localStorage.setItem(LS_KEY, JSON.stringify(c ?? {})); dispatchEvent(new Event("planner:connection")); },
+  load() { if (kept) return kept; try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; } },
+  save(c) { kept = c ?? {}; try { localStorage.setItem(LS_KEY, JSON.stringify(kept)); kept = null; } catch { } dispatchEvent(new Event("planner:connection")); },
 };
 
 export const api = {

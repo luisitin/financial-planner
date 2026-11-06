@@ -200,7 +200,7 @@ select.su-in { font-size: var(--fs-md); }
 `;
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const FOOT = "🔒 Everything stays on your own computer and phone. No bank logins or account numbers, ever.";
+const FOOT = "🔒 Everything stays on your own devices. No bank logins or account numbers, ever.";
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 /** append / replace children, skipping null, false and "" (the DOM would print "null"). */
 const keep = (kids) => kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false && k !== "");
@@ -490,7 +490,7 @@ export function render(page, ctx) {
       add(card, ui.h("ul", { class: "su-list" }, [["🗂️", "See what you own and owe", "Every account and debt in one place"], ["📅", "Know what's left each month", "After tax, bills and saving"], ["✅", "Get your first three moves", "In the order that helps most"]]
         .map(([i, b, m]) => ui.h("li", {}, ui.h("span", { class: "su-li", "aria-hidden": "true" }, i), ui.h("div", {}, ui.h("b", {}, b), ui.h("span", { class: "m" }, m))))));
       add(card, ui.h("ul", { class: "su-ticks" }, ui.h("li", {}, "About 5 minutes"), ui.h("li", {}, "Rough numbers are fine"), ui.h("li", {}, "Stop any time, pick up later")));
-      if (store.backend() !== "server" && !store.sandbox()) add(card, ui.h("div", { class: "notice info" }, "This device is not connected to your PC, so what you save stays on this device only. To keep one plan on your phone and your PC, ", ui.h("a", { href: "#/system/settings" }, "connect them in Settings"), "."));
+      if (ctx.view.build && store.backend() !== "server" && !store.sandbox()) add(card, ui.h("div", { class: "notice info" }, "This device is not connected to your PC, so what you save stays on this device only. To keep one plan on your phone and your PC, ", ui.h("a", { href: "#/system/settings" }, "connect them in Settings"), "."));
       const resume = prog.started && prog.at && prog.at !== "welcome" && prog.at !== "done";
       const btns = ui.h("div", { class: "su-end" });
       if (resume) add(btns, ui.h("button", { type: "button", onClick: () => go(prog.at) }, `Pick up at question ${SCREENS.find((s) => s.id === prog.at)?.q ?? 1} of ${QUESTIONS}`), ui.h("button", { type: "button", class: "secondary", onClick: () => go("you") }, "Start from the first question"));

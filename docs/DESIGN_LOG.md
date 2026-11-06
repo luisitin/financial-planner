@@ -15,6 +15,13 @@ Changed: core/ui/base.css, modules/x/y/view.js
 Rule (if any): ...
 ```
 
+## 2026-11-06  The household's view (user view) is the default
+Finding: the owner opened the app from GitHub and got the developer screen: the menu shows "soon" pages and "N of M ready", the Dashboard shows build phases, and a phone with no PC is offered "Ask a question" and "connect your device to the PC". Owner, verbatim: "What is the link for the user-facing screen? ... the link that I use with GitHub takes me into more of a developer screen, where if I go on the top left and click the three lines, it shows what's ready and not. And I want a user-friendly screen where I can just view what is user-facing." and "Just make sure a layman can easily understand and use the page." and "things like ask a question or connect your device to PC should not be defaulted on a phone that has no connection to a PC or a way to connect to a PC, right? That's not something a layman would understand."
+Changed: the user view is the default. Menu, search and All pages list only ready pages (no "soon", no "N of M ready", no "Hide coming soon", no phases); builder pages (Diagnostics, Docs) are never listed; pages that need the PC or the AI helper are listed only while it answers; the Dashboard's "What is coming" card is not shown (it is kept exactly as it was in the build view). This is the owner's newer word on Dashboard round 1 Finding 3 ("leave as is for now, once built it won't exist"): that choice still holds for the build view. The build view comes back with Settings > Advanced > "Show what is still being built", or ?view=build (and ?view=user to leave it).
+Do not undo: the household's view never shows build progress, "soon" pages, or PC / AI helper / sync wording; the build view is for whoever builds the app.
+Also (review 2026-11-06): the topic "AI assistant" is now "Helpers"; the pages that work without the AI (Voice notes, Glossary, Document reader) have plain icons, not a robot; the menu's first list says "Start with" until a few pages were opened; the status pill says "Saved on your computer" (not "Saved on PC") in the household's view; footers say "your own devices".
+Changed files: core/view.js (new), core/app.js, core/ui/placeholder.js, modules/overview/dashboard/view.js, modules/overview/pages/view.js, modules/system/settings/view.js, modules/system/help/view.js, modules/overview/start/view.js.
+
 ## Pass 4 summary, 2026-09-16 (after Phase 5), 2 rounds
 The builder's `qa/smoke-all.mjs` now does the mechanical sweep (errors, overflow, tap targets) at the
 start of each pass: 54 usable pages, all clean after this pass. Rounds: the eleven retirement pages

@@ -14,6 +14,17 @@ export function renderPlaceholder(root, ctx) {
   const phase = phaseOf(meta.phase ?? 10);
   const note = plan.pageNotes?.[key] ?? "";
 
+  // The household's view (core/view.js): a page that is not ready is never linked; opened by its address it says so
+  // plainly, with no build phases and no notes box for the builders.
+  if (!ctx.view.build) {
+    root.append(ui.h("section", { class: "card hero" },
+      ui.h("div", { style: { fontSize: "40px", lineHeight: "1", marginBottom: "10px" } }, meta.icon ?? group?.icon ?? "🧩"),
+      ui.h("h1", { style: { marginTop: "10px" } }, meta.title),
+      ui.h("p", { class: "lede" }, sentence(meta.purpose)),
+      ui.h("p", { class: "muted small" }, "This page is not ready yet.")));
+    root.append(ui.row(ui.h("a", { href: "#/overview/dashboard", class: "btn" }, "Back to the dashboard")));
+    return;
+  }
   root.append(ui.h("section", { class: "card hero" },
     ui.h("div", { style: { fontSize: "40px", lineHeight: "1", marginBottom: "10px" } }, meta.icon ?? group?.icon ?? "🧩"),
     ui.h("span", { class: "coming-badge" }, `Coming in phase ${phase.n}`),

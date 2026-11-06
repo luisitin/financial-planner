@@ -23,6 +23,8 @@ const STYLE = `
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store, api, ai } = ctx;
+  // the household's view (core/view.js) offers the PC's PDF reader and the AI only while they answer
+  const pcOk = ctx.view.build || ctx.live.pc, aiOk = ctx.view.build || ctx.live.ai;
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(n, cur);
   const root = ui.h("div", { class: "rd-root" }, ui.h("style", {}, STYLE));
@@ -35,7 +37,7 @@ export function render(page, ctx) {
 
   // 1. the document
   const box = ui.h("textarea", { "aria-label": "The document's text", placeholder: "Paste the text here: open the PDF or the website, select all, copy, paste." }, text);
-  const fileIn = ui.h("input", { type: "file", accept: ".pdf,.txt,application/pdf,text/plain", "aria-label": "A PDF or text file", style: { display: "none" } });
+  const fileIn = ui.h("input", { type: "file", accept: pcOk ? ".pdf,.txt,application/pdf,text/plain" : ".txt,text/plain", "aria-label": pcOk ? "A PDF or text file" : "A text file", style: { display: "none" } });
   const status = ui.h("div");
   fileIn.addEventListener("change", async () => {
     const f = fileIn.files?.[0]; if (!f) return;
@@ -55,9 +57,9 @@ export function render(page, ctx) {
     text ? null : ui.h("h1", {}, "Read a document"),
     ui.h("p", { class: text ? "muted small" : "lede" }, "A pay stub, an account statement, a Social Security statement or an advisor's plan: paste its text and the app finds the figures and shows what each would change. You accept each change yourself."),
     box,
-    ui.row(ui.button("Read it", () => { text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button("Pick a PDF", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
+    ui.row(ui.button("Read it", () => { text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
     fileIn, status,
-    ui.h("p", { class: "muted small" }, "The text stays on this page and is not saved. PDFs are read on your PC.")));
+    ui.h("p", { class: "muted small" }, pcOk ? "The text stays on this page and is not saved. PDFs are read on your PC." : "The text stays on this page and is not saved.")));
   if (!text) return;
 
   // 2. what it is, and whose
@@ -73,7 +75,7 @@ export function render(page, ctx) {
   // 3. what was found
   const found = ui.card(`Found in it (${d.found.length} of ${d.found.length + d.missing.length})`, d.found.length ? ui.h("ul", { class: "rd-found" }, d.found.map((f) => ui.h("li", {}, ui.h("span", {}, f.label, extra[f.key] !== undefined ? ui.h("span", { class: "rd-ai" }, "from the AI: check it") : null), ui.h("b", {}, show(f.unit, f.value))))) : ui.h("p", { class: "muted" }, "None of the usual labels are in the text."),
     d.missing.length ? ui.h("p", { class: "muted small" }, `Not found: ${d.missing.join(", ").toLowerCase()}.`) : null);
-  if (d.missing.length) found.append(ui.row(ui.button("Ask the AI to find the rest", async (e) => {
+  if (d.missing.length && aiOk) found.append(ui.row(ui.button("Ask the AI to find the rest", async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Asking...";
     try {
       const answer = await ai.chat(buildPrompt(d.kind, text));

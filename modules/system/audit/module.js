@@ -10,6 +10,7 @@ export default {
   order: 50,
   version: 1,
   status: "usable",
+  requires: "pc",   // needs the PC: offered only while it answers (core/view.js)
   phase: 10,
   enabledByDefault: true,
   needs: ["*"],

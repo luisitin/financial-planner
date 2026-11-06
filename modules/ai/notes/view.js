@@ -49,6 +49,8 @@ export function render(page, ctx) {
   const me = ++shown;
   const leave = () => { shown++; };
   const { ui, fmt, plan, store, ai } = ctx;
+  // the household's view (core/view.js) says nothing of the AI helper while it does not answer: the simple rules just read the note
+  const aiQuiet = !ctx.view.build && !ctx.live.ai;
   const d = compute(plan);
   const today = fmt.today();
   const cur = plan.meta?.currency;
@@ -77,7 +79,7 @@ export function render(page, ctx) {
   live = { box, redraw };
   const readBtn = ui.button(inflight ? "Reading your note…" : "Read my note", () => read());
   readBtn.disabled = !!inflight;
-  const hint = ui.h("p", { class: "muted small", hidden: !inflight }, "With the AI helper, this can take a minute or two.");
+  const hint = ui.h("p", { class: "muted small", hidden: !inflight }, aiQuiet ? "" : "With the AI helper, this can take a minute or two.");
   const SR = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   let speakBtn = null;
   if (SR) {
@@ -110,8 +112,8 @@ export function render(page, ctx) {
       let st = "unreachable";
       try { st = String(await ai.status()); } catch { /* not answering */ }
       const found = (list, by, m = "") => { entries = list.map((p) => ({ uid: ++n, ...p })); source = by; model = m; readPart = part.read; unread = part.rest.length; open.clear(); typed.clear(); fresh = entries.length > 0; };
-      const rules = (why) => { found(quickRead(note, plan, today), "rules"); advice = why; };
-      if (!st.startsWith("on")) { rules({ kind: "info", text: st === "off" ? OFF : st === "no models" ? NO_MODELS : NO_ANSWER }); return; }
+      const rules = (why) => { found(quickRead(note, plan, today), "rules"); advice = aiQuiet ? null : why; };
+      if (aiQuiet || !st.startsWith("on")) { rules({ kind: "info", text: st === "off" ? OFF : st === "no models" ? NO_MODELS : NO_ANSWER }); return; }
       try {
         const q = buildPrompt(note, plan, today);
         const r = await ai.chat(q.messages, CHAT_OPTIONS);

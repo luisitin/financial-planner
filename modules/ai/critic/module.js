@@ -10,6 +10,7 @@ export default {
   order: 50,
   version: 1,
   status: "usable",
+  requires: "ai",   // needs the AI helper (through the PC): offered only while it answers (core/view.js)
   phase: 10,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "goals", "retirement", "insurance", "estate", "assumptions"],

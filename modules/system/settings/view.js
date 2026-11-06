@@ -16,7 +16,8 @@ const sectionName = (k) => SECTION_NAMES[k] ?? k.replace(/([A-Z])/g, " $1").toLo
 let pending = null;
 
 export function render(root, ctx) {
-  const { ui, fmt, api, ai, store, features, modules, GROUPS, derived, plan } = ctx;
+  const { ui, fmt, api, ai, store, features, modules, GROUPS, derived, plan, view } = ctx;
+  const build = view.build;   // the household's view hides pages still to come and builder pages (core/view.js)
   const c = conn.load();
 
   // A notice that confirms in green or warns in red, replaced on every call. A confirmation
@@ -44,7 +45,7 @@ export function render(root, ctx) {
   // ---- pages: one fold per topic; a pill only when a page was switched by you or the PC
   const folds = [];
   for (const g of GROUPS) {
-    const pages = [...modules.values()].filter((m) => m.group === g.id).sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+    const pages = [...modules.values()].filter((m) => m.group === g.id && (build || (ctx.isReady(m) && !m.builderOnly))).sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
     if (!pages.length) continue;
     const status = ui.h("span", { class: "fold-status" });
     const setStatus = () => { const n = pages.filter((m) => features.enabled(m)).length; status.textContent = `${n} of ${pages.length} on`; };
@@ -87,7 +88,7 @@ export function render(root, ctx) {
   // ---- PC connection (folded)
   const serverOut = out();
   const onPc = store.backend() === "server";
-  root.append(ui.h("details", { class: "card fold fold-card" },
+  const pcFold = ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "PC connection"), ui.h("span", { class: "fold-status" }, onPc ? "Connected" : "Not connected"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
     ui.h("div", { class: "fold-body" },
       ui.muted("Your plan is saved on your PC, which also does the heavy math. If you opened this page from the PC's own address, leave the address blank."),
@@ -103,7 +104,8 @@ export function render(root, ctx) {
       }, { class: "secondary" })),
       serverOut,
       ui.muted(onPc ? "Your plan is saved on the PC." : "Your plan is saved in this browser only."),
-    )));
+    ));
+  root.append(pcFold);
 
   // Once the PC answers: if it requires a token, say where to find it (design log 2026-09-15, pass 2).
   const tokenHelp = root.querySelector("input[name=token]")?.closest("label")?.querySelector(".help");
@@ -114,9 +116,10 @@ export function render(root, ctx) {
   const aiOut = out();
   const aiStatus = ui.h("span", { class: "fold-status" }, "...");
   const aiBody = ui.h("div", { class: "fold-body" });
-  root.append(ui.h("details", { class: "card fold fold-card" },
+  const aiFold = ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "AI assistant"), aiStatus, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-    aiBody));
+    aiBody);
+  root.append(aiFold);
   ai.settings().then((s) => {
     const source = s.source === "properties" ? "Right now the PC's own AI settings are in use; these apply when the PC has none."
       : s.source === "device" ? "Right now the settings below are in use." : "Right now the built-in defaults are in use.";
@@ -149,4 +152,21 @@ export function render(root, ctx) {
       aiOut,
     );
   }).catch((e) => { aiStatus.textContent = "Unknown"; aiBody.append(ui.notice("error", `Could not read the AI settings: ${e.message}`)); });
+
+  // ---- what is still being built (folded, last; core/view.js). Off by default: the household's view shows only what works.
+  const viewStatus = ui.h("span", { class: "fold-status" }, build ? "On" : "Off");
+  const viewBox = ui.h("input", { type: "checkbox", checked: build ? true : null, onChange: (e) => { view.set(e.target.checked); } });
+  const viewBody = ui.h("div", { class: "fold-body" },
+    ui.h("label", { class: "toggle-row" }, viewBox, ui.h("span", { class: "toggle-text" }, "Show what is still being built: coming-soon pages, build progress and developer pages")),
+    ui.muted("Off is the everyday view: only pages that work. On is for whoever is building the app."));
+  if (build) {
+    root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "What is still being built"), viewStatus, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")), viewBody));
+  } else {
+    // the household's view: the technical parts (connecting a PC, the AI helper, this switch) sit together in one fold, last
+    const inner = (node) => { node.className = "fold"; return node; };
+    const advanced = ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Advanced"), ui.h("span", { class: "fold-status" }, "Not needed day to day"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("div", { class: "fold-body" }, inner(pcFold), inner(aiFold),
+        inner(ui.h("details", {}, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What is still being built"), viewStatus, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")), viewBody))));
+    root.append(advanced);
+  }
 }

@@ -14,7 +14,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "How often does the money last?"),
     ui.h("p", { class: "lede" }, "The same plan run thousands of times with returns drawn at random around your assumptions (the swings on the Assumptions page). The share of runs where the money lasts to the end is the plan's chance of success."),
-    ui.h("p", { class: "muted small" }, ctx.store.backend() === "server" ? "Runs on your PC." : "Runs on this device (the PC is not connected)."),
+    ui.h("p", { class: "muted small" }, ctx.view.build ? (ctx.store.backend() === "server" ? "Runs on your PC." : "Runs on this device (the PC is not connected).") : "Runs on this device."),
   ));
   root.append(host);
   host.append(ui.notice("info", `Running ${state.paths.toLocaleString("en-US")} paths...`));
@@ -41,7 +41,7 @@ export function render(root, ctx) {
     host.append(ui.card("Still funded at...",
       ui.h("ul", { class: "records" }, [70, 75, 80, 85, 90, 95].map((a) => at(a)).filter(Boolean).map((b) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Age ${b.age} (${b.year})`), ui.h("span", { class: "rec-value" }, fmt.pct(b.funded, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(b.funded * 100)}%`, background: b.funded >= 0.85 ? "var(--ok)" : b.funded >= 0.7 ? "var(--warn)" : "var(--bad)" } }))))),
     ));
-    const pathsSel = ui.select([{ value: "1000", label: "1,000 runs (quick)" }, { value: "2000", label: "2,000 runs" }, { value: "10000", label: "10,000 runs (PC)" }], String(state.paths), { "aria-label": "Runs", onChange: (e) => { state.paths = Number(e.target.value); root.innerHTML = ""; render(root, ctx); } });
+    const pathsSel = ui.select([{ value: "1000", label: "1,000 runs (quick)" }, { value: "2000", label: "2,000 runs" }, { value: "10000", label: ctx.view.build ? "10,000 runs (PC)" : "10,000 runs" }], String(state.paths), { "aria-label": "Runs", onChange: (e) => { state.paths = Number(e.target.value); root.innerHTML = ""; render(root, ctx); } });
     host.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How this is done"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, `Each run draws a return for stocks and bonds every year (lognormal, mean ${fmt.pct(plan.assumptions.returnStocks, 1)} and ${fmt.pct(plan.assumptions.returnBonds, 1)}, swings ${fmt.pct(plan.assumptions.stdevStocks, 0)} and ${fmt.pct(plan.assumptions.stdevBonds, 0)}, mildly linked), inflation steady at ${fmt.pct(plan.assumptions.inflation, 1)}. The same seed gives the same answer every time.`), ui.h("div", { class: "form" }, ui.field("Runs", pathsSel)))));
   }).catch((e) => { host.innerHTML = ""; host.append(ui.notice("error", `Could not run it: ${e.message}`)); });

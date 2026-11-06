@@ -6,7 +6,7 @@ export default {
   id: "notes",
   group: "ai",
   title: "Voice notes",
-  icon: "🤖",
+  icon: "📝",
   order: 70,
   version: 1,
   status: "usable",

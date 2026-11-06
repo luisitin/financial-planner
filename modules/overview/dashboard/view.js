@@ -141,12 +141,18 @@ export function render(root, ctx) {
     : setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }
       : { icon: "💰", t: "Add your accounts", d: "Checking, savings, retirement, loans. This is where the numbers start.", go: ["balance", "net-worth"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
-    { icon: "📱", t: "Set up your phone", d: "Connect this device to the PC and add the app to your home screen.", go: ["system", "settings"] },
+    { icon: "📱", t: "Put it on your phone", d: "Open the planner on your phone and add it to your home screen, so it opens like any other app.", go: ["system", "settings"] },
   ] : [
     { icon: "🔔", t: "Needs attention", d: alN ? `${alN} thing${alN === 1 ? "" : "s"} to look at, worst first.` : "Nothing needs your attention right now.", go: ["overview", "alerts"] },
     { icon: "📥", t: "Import a bank file", d: "Three months of transactions keeps the numbers real.", go: ["transactions", "import"] },
     { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
   ];
+  // The household's view offers only what works: no "Ask a question" while the AI helper does not answer, and no
+  // "connect this device to the PC" while there is no PC to connect to (core/view.js, docs/CONVENTIONS.md "View").
+  if (ctx.view && !ctx.view.build) {
+    const keep = actions.filter((a) => !(a.go?.[0] === "ai" && !ctx.live.ai) && !(a.go?.[0] === "system" && a.go?.[1] === "settings" && !ctx.live.pc));
+    actions.splice(0, actions.length, ...keep);
+  }
   const askOff = (st) => st !== "on";
   const tiles = actions.map((a) => ui.h("a", { href: a.href ?? `#/${a.go.join("/")}`, class: "action" },
     ui.h("span", { class: "ic" }, a.icon), ui.h("span", {}, ui.h("div", { class: "t" }, a.t), ui.h("div", { class: "d" }, a.d))));
@@ -164,7 +170,7 @@ export function render(root, ctx) {
   const shortLabel = { accounts: "Add your accounts", people: "Add your household", income: "Enter what comes in", expenses: "Enter what goes out", goals: "Set your first goal", assumptions: "Check the assumptions" };
   const stepsList = () => ui.h("ol", { class: "steps" }, d.steps.map((s, i) => {
       const m = modules.get(s.go.join("/"));
-      const soon = m && !isReady(m);
+      const soon = m && !isReady(m) && ctx.view?.build;   // "coming soon" is build-view talk (core/view.js)
       return ui.h("li", { class: s.done ? "done" : (s === next ? "next" : "") },
         ui.h("a", { href: `#/${s.go.join("/")}`, class: "step-link" },
           ui.h("span", { class: "num" }, s.done ? "✓" : String(i + 1)),
@@ -194,7 +200,8 @@ export function render(root, ctx) {
       ui.h("div", { class: "steps-cta" }, ui.h("a", { href: `#/${next.go.join("/")}`, class: moveShown ? "btn secondary" : "btn" }, `Do step ${nextIdx + 1}: ${shortLabel[next.key] ?? next.label}`))));
   }
 
-  // ---- what is coming
+  // ---- what is coming (build view only: the household's view has no build progress; design log 2026-11-06)
+  if (!ctx.view || ctx.view.build) {
   const byPhase = new Map(PHASES.map((p) => [p.n, { ready: 0, total: 0 }]));
   for (const m of all) { const b = byPhase.get(Number(m.phase ?? 10)) ?? byPhase.get(10); b.total++; if (isReady(m)) b.ready++; }
   const nowPhase = PHASES.find((p) => { const b = byPhase.get(p.n); return b.total > b.ready; })?.n;
@@ -213,4 +220,5 @@ export function render(root, ctx) {
     })),
     ui.row(ui.h("a", { href: "#/overview/pages", class: "btn secondary" }, "Browse all pages"), d.noteCount ? ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, `You have left notes on ${d.noteCount} page${d.noteCount === 1 ? "" : "s"}.`) : null),
   ));
+  }
 }

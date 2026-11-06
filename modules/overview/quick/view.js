@@ -25,7 +25,7 @@ const STYLE = `
 
 export function render(root, ctx) {
   const { ui, modules, features, isReady } = ctx;
-  const usable = (key) => { const m = modules.get(key); return !!m && isReady(m) && features.enabled(m); };
+  const usable = (key) => { const m = modules.get(key); return !!m && isReady(m) && features.enabled(m) && (ctx.shown ? ctx.shown(m) : true); };
   const off = [...modules.keys()].filter((k) => !usable(k));
   const d = compute(ctx.plan, { off, today: ctx.fmt.today() });
   const wrap = ui.h("div", { class: "qk-root" }, ui.h("style", {}, STYLE));
@@ -39,7 +39,7 @@ export function render(root, ctx) {
   wrap.append(ui.h("section", { class: "card" },
     ui.h("h1", {}, "Get a quick answer"),
     ui.h("p", { class: "qk-lede" }, d.answers.length ? "Your plan already answers the first questions below. For the others, pick one and type your own numbers: nothing to set up first." : "Pick a question and type your own numbers. Each one answers on its own page, with nothing to set up first."),
-    ui.h("p", { class: "qk-foot" }, "Everything stays on your own computer and phone. Nothing goes to the cloud."),
+    ui.h("p", { class: "qk-foot" }, "Everything stays on your own devices. Nothing goes to the cloud."),
     // the questions the plan already answers: the answer itself, in the answer page's words, first
     d.answers.length ? [
       ui.h("h2", {}, "Your plan already answers"),

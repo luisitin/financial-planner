@@ -18,7 +18,7 @@ export const GROUPS = [
   { id: "career",       title: "Career and income",        icon: "💼" },
   { id: "scenarios",    title: "What-if scenarios",        icon: "🔀" },
   { id: "reports",      title: "Reports",                  icon: "📄" },
-  { id: "ai",           title: "AI assistant",             icon: "🤖" },
+  { id: "ai",           title: "Helpers",                  icon: "🧰" },
   { id: "system",       title: "System",                   icon: "⚙️" },
 ];
 export const GROUP_IDS = new Set(GROUPS.map((g) => g.id));

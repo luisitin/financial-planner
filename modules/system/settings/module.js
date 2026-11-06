@@ -14,7 +14,7 @@ export default {
   needs: ["meta"],
   writes: ["meta"],
   heavy: false,
-  purpose: "Connect this device to the PC, choose the AI model, turn pages on or off, export or import your plan.",
+  purpose: "Turn pages on or off, download or restore a copy of your plan, and the advanced options.",
   aliases: ["connect to the PC", "server", "phone setup", "export", "import", "backup", "AI", "Ollama"],
   compute,
   render,

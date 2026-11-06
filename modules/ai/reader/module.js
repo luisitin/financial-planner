@@ -5,7 +5,7 @@ export default {
   id: "reader",
   group: "ai",
   title: "Document reader",
-  icon: "🤖",
+  icon: "📄",
   order: 40,
   version: 1,
   status: "usable",

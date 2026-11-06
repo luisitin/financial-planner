@@ -10,6 +10,7 @@ export default {
   order: 30,
   version: 1,
   status: "usable",
+  requires: "ai",   // needs the AI helper (through the PC): offered only while it answers (core/view.js)
   phase: 3,
   enabledByDefault: true,
   needs: ["transactions", "rules", "categories"],

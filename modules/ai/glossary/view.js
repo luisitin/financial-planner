@@ -40,7 +40,7 @@ export function render(page, ctx) {
   // a page that is not built yet (a placeholder), turned off or gone gets no button
   const titleOf = (key) => {
     const m = modules?.get?.(key);
-    return m && (ctx.isReady ? ctx.isReady(m) : m.status !== "planned") && (ctx.features?.enabled?.(m) ?? true) ? m.title : null;
+    return m && (ctx.isReady ? ctx.isReady(m) : m.status !== "planned") && (ctx.features?.enabled?.(m) ?? true) && (ctx.shown ? ctx.shown(m) : true) ? m.title : null;
   };
 
   const box = ui.input({ type: "search", class: "gl-search", value: query, placeholder: "Type a word, like Roth", "aria-label": "Search the glossary", autocomplete: "off" });
@@ -81,7 +81,7 @@ export function render(page, ctx) {
 
   // whether the AI helper is on: asked once per visit, not once per keystroke
   let aiOn = null;
-  const aiReady = () => (aiOn ??= Promise.resolve().then(() => ai.status()).then((s) => String(s).startsWith("on")).catch(() => false));
+  const aiReady = () => (aiOn ??= (ctx.view.build || ctx.live.ai) ? Promise.resolve().then(() => ai.status()).then((s) => String(s).startsWith("on")).catch(() => false) : Promise.resolve(false));   // the household's view: only while the AI helper answers (core/view.js)
   const askAi = (q, where) => {
     const btn = ui.button(asked?.error && asked.q === q ? "Try again" : `Ask the AI what "${q}" means`, async () => {
       btn.disabled = true; btn.textContent = "Asking…";
@@ -96,7 +96,7 @@ export function render(page, ctx) {
     aiReady().then((on) => {
       if (!where.isConnected) return;
       if (on) where.append(ui.row(btn));
-      else hint.textContent = "Try another spelling or a shorter word. When the AI helper is on (Settings), it can explain words that are not here.";
+      else if (ctx.view.build) hint.textContent = "Try another spelling or a shorter word. When the AI helper is on (Settings), it can explain words that are not here.";
     });
   };
 

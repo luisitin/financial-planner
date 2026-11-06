@@ -19,7 +19,7 @@ export const features = {
   },
   set(key, value) {
     if (value === null || value === undefined) delete this.overrides[key]; else this.overrides[key] = !!value;
-    localStorage.setItem(LS_KEY, JSON.stringify(this.overrides));
+    try { localStorage.setItem(LS_KEY, JSON.stringify(this.overrides)); } catch { }   // storage may be unavailable (a sandboxed frame): the choice then lasts for this visit
     dispatchEvent(new Event("planner:features"));
   },
   sourceOf(m) { const k = this.key(m); return k in this.overrides ? "device" : (k in fromServer ? "properties" : "default"); },

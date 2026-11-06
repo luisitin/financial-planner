@@ -76,11 +76,21 @@ const stamp = (p) => p?.meta?.rev || p?.meta?.updatedAt || "";
 const when = (p) => p?.meta?.updatedAt ?? "";
 const newRev = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const touch = (p) => { p.meta = p.meta ?? {}; p.meta.updatedAt = new Date().toISOString(); p.meta.rev = newRev(); return p; };
-function readLocal() { try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+// A browser that keeps nothing between visits (a sandboxed frame, where reading storage throws): the plan then lives in
+// memory for the visit, so the app works instead of failing, and nothing says the storage is full.
+const keepsNothing = (() => { try { const k = "planner.__probe"; localStorage.setItem(k, "1"); localStorage.removeItem(k); return false; } catch { return true; } })();
+let inMemory = null;                        // the plan (as JSON) when keepsNothing
+function readLocal() {
+  if (keepsNothing) return inMemory ? JSON.parse(inMemory) : null;
+  try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
 function writeLocal(p) {
+  if (keepsNothing) { inMemory = JSON.stringify(p); written = stamp(p); localFull = false; return true; }
   try { localStorage.setItem(LS_KEY, JSON.stringify(p)); written = stamp(p); localFull = false; return true; }
   catch { localFull = !SANDBOX; return false; }
 }
+/** A starting plan baked into a single-file build (tools/build.mjs --demo), used only while this browser has no plan of its own. */
+function startingPlan() { try { const p = globalThis.__PLANNER_START__; return p && typeof p === "object" ? JSON.parse(JSON.stringify(p)) : null; } catch { return null; } }
 function readSync() {
   try { const s = JSON.parse(localStorage.getItem(SYNC_KEY) || "{}") || {}; if (typeof s.sent === "string") s.sent = [s.sent]; return s; }
   catch { return {}; }
@@ -173,7 +183,8 @@ export const store = {
       try { server = await api.getPlan(); backend = "server"; reached = true; } catch (e) { console.warn("[store] server plan unavailable", e); }
     }
     // this device's copy is read only now: another tab may have saved while the PC answered
-    const stored = readLocal();
+    let stored = readLocal();
+    if (!stored && !SANDBOX) { const start = startingPlan(); if (start) { const p = touch(migrate(start)); writeLocal(p); stored = p; } }
     const local = stored ? migrate(stored) : null;
     written = stamp(stored);
     if (!SANDBOX) sync = readSyncFor(stamp(stored), { atOpen: true });
@@ -309,6 +320,7 @@ export const store = {
   /** Erase this device's copy (the pretend plan in the sandbox) and its waiting mark; the PC's copy is untouched. */
   eraseDevice() {
     clearTimeout(saveTimer); saveTimer = null;
+    inMemory = null;
     try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); } catch { }
     writeDraft(null);
   },

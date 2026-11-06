@@ -23,7 +23,7 @@ const STYLE = `
 .cal-root .cal-amt { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cal-root .cal-sub { color: var(--muted); font-size: var(--fs-sm); }
 .cal-root .cal-item a, .cal-root .cal-item button { min-height: 44px; }
-.cal-root .cal-link { display: inline-flex; align-items: center; min-height: 44px; font-size: var(--fs-sm); }
+.cal-root .cal-link { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; font-size: var(--fs-sm); }
 .cal-root .cal-today { color: var(--accent); }
 .cal-root .rec-foot { flex-wrap: wrap; gap: 8px; }
 `;

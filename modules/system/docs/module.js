@@ -9,6 +9,7 @@ export default {
   order: 2,
   version: 1,
   status: "usable",
+  builderOnly: true,   // a builder page: never in a household's menu (core/view.js)
   phase: 0,
   enabledByDefault: true,
   needs: [],

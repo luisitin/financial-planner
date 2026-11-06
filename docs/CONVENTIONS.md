@@ -72,6 +72,13 @@ shows no notice gets no copy, so every save, add and remove still needs its own 
 | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
 | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
 
+## View: the household's view and the build view
+`core/view.js` holds two things pages may read through `ctx`: `ctx.view.build` (false by default: the household's view) and `ctx.live` (`{ pc, ai }`: the PC server answers; the AI helper answers through it). `ctx.shown(m)` says whether a page is offered.
+- User view (default): a page is offered when it is ready, not `builderOnly`, and its `requires` ("pc" or "ai", a manifest field) answers. No "soon", phases, ready counts, "PC", "server", "sync" or "AI helper isn't answering" on screen. A page that is not ready still opens by its address (a plain placeholder) but is never linked.
+- Build view: everything as before. Set with Settings > Advanced (folded, last) or `?view=build` / `?view=user` in the address; remembered in `localStorage` "planner.view" (try/catch; with storage unavailable the user view shows).
+- A page that mentions the PC or the AI helper (or links to a page that needs them) checks `ctx.live` / `ctx.shown`. Manifest fields: `builderOnly: true`, `requires: "pc" | "ai"` (tests/user-view.test.mjs).
+- The single-file build: `node tools/build.mjs --demo qa/fixtures/demo-household.mjs --out <file>` (see tools/build.mjs); it works from file:// and in a frame sandboxed with only allow-scripts (plan kept in memory; submit buttons are mended by `mendBlockedForms` in core/app.js). `node qa/user-view.mjs` checks both views on a phone.
+
 ## Shell hook: frame
 A manifest may export `frame(ctx, page) -> { before, after } | null`. The shell calls it only on `overview/guide`
 (the step-by-step guides), for every page it renders, and draws `before` above the page and `after` below it. The page

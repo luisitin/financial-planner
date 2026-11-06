@@ -9,6 +9,7 @@ export default {
   order: 1,
   version: 1,
   status: "usable",
+  requires: "ai",   // needs the AI helper (through the PC): offered only while it answers (core/view.js)
   phase: 0,
   enabledByDefault: true,
   needs: ["household", "accounts", "goals", "assumptions"],

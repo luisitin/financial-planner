@@ -6,8 +6,9 @@ import { matches } from "../../../core/search.js";
 
 export function render(root, ctx) {
   const { ui, modules, GROUPS, isReady, features, route, derived } = ctx;
+  const build = ctx.view.build;   // the household's view lists only pages that work: no ready/soon filter, no phases (core/view.js)
   const initial = route.rest[0] ?? "all";
-  let filter = initial.startsWith("phase-") ? initial : (["ready", "soon"].includes(initial) ? initial : "all");
+  let filter = !build ? "all" : initial.startsWith("phase-") ? initial : (["ready", "soon"].includes(initial) ? initial : "all");
   let q = "";
 
   const search = ui.h("input", { type: "search", placeholder: "Search pages, e.g. mortgage, Roth, budget", "aria-label": "Search pages" });
@@ -20,15 +21,15 @@ export function render(root, ctx) {
 
   function draw() {
     chips.innerHTML = "";
-    for (const [k, label] of chipDefs) chips.append(ui.h("button", { type: "button", class: `chip${filter === k ? " on" : ""}`, onClick: () => { filter = k; phaseSel.value = ""; draw(); } }, label));
-    chips.append(phaseSel);
+    if (build) for (const [k, label] of chipDefs) chips.append(ui.h("button", { type: "button", class: `chip${filter === k ? " on" : ""}`, onClick: () => { filter = k; phaseSel.value = ""; draw(); } }, label));
+    if (build) chips.append(phaseSel);
     phaseSel.value = filter.startsWith("phase-") ? filter.slice(6) : "";
     phaseSel.classList.toggle("on", filter.startsWith("phase-"));
     list.innerHTML = "";
     const qq = q.trim().toLowerCase();
     let shown = 0;
     for (const g of GROUPS) {
-      const pages = [...modules.values()].filter((m) => m.group === g.id && features.enabled(m)).sort((a, b) => (a.order ?? 100) - (b.order ?? 100)).filter((m) => {
+      const pages = [...modules.values()].filter((m) => m.group === g.id && features.enabled(m) && ctx.shown(m)).sort((a, b) => (a.order ?? 100) - (b.order ?? 100)).filter((m) => {
         if (filter === "ready" && !isReady(m)) return false;
         if (filter === "soon" && isReady(m)) return false;
         if (filter.startsWith("phase-") && Number(m.phase ?? 10) !== Number(filter.slice(6))) return false;
@@ -45,7 +46,7 @@ export function render(root, ctx) {
         return ui.h("li", {}, ui.h("a", { href: `#/${key}`, class: "row-link" },
           ui.h("span", { class: "ic ic-sm" }, m.icon ?? g.icon),
           ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, m.title, derived.noted.has(key) ? ui.h("span", { class: "pill accent" }, "your notes") : null), ui.h("div", { class: "d" }, m.purpose ?? "")),
-          ui.h("span", { class: "st" }, ready ? ui.h("span", { class: "pill ok" }, "ready") : ui.h("span", { class: "pill" }, `soon · phase ${m.phase ?? "?"}`))));
+          build ? ui.h("span", { class: "st" }, ready ? ui.h("span", { class: "pill ok" }, "ready") : ui.h("span", { class: "pill" }, `soon · phase ${m.phase ?? "?"}`)) : null));
       }))));
     }
     const shownQ = `“${q.trim()}”`;
@@ -55,7 +56,7 @@ export function render(root, ctx) {
       : p ? `Phase ${p.n}: ${p.title}. ${p.blurb}` : (filter === "ready" ? "Pages you can use today." : filter === "soon" ? "Pages that are planned. Open one to leave notes on what it should do." : `${shown} pages across ${GROUPS.length} topics.`);
   }
   search.addEventListener("input", () => { q = search.value; draw(); });
-  root.append(ui.card(null, search, ui.h("div", { style: { height: "10px" } }), chips, head));
+  root.append(ui.card(null, search, ui.h("div", { style: { height: "10px" } }), build ? chips : null, head));
   root.append(list);
   draw();
 }

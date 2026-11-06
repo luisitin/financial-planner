@@ -65,7 +65,8 @@ export function render(root, ctx) {
     ui.h("div", {}, ui.h("a", { href: r.guideHref, class: "go-link" }, "See all its steps ›"))));
 
   // not connected to the PC: say where what you save goes, before anyone types for half an hour
-  if (store.backend() !== "server" && !store.sandbox()) wrap.append(ui.h("div", { class: "notice info" },
+  // (the household's view says nothing about a PC: the pill at the top says where the plan is kept)
+  if (ctx.view.build && store.backend() !== "server" && !store.sandbox()) wrap.append(ui.h("div", { class: "notice info" },
     "This device is not connected to your PC, so what you save stays on this device only. To keep one plan on your phone and your PC, ",
     ui.h("a", { href: "#/system/settings" }, "connect them in Settings"), "."));
 
@@ -114,7 +115,7 @@ export function render(root, ctx) {
   const heroDash = usable(ctx, "overview/setup") && s.state === "done" && !s.move;
   wrap.append(ui.h("div", { class: "go-foot" },
     heroDash ? null : ui.h("a", { href: "#/overview/dashboard", class: "go-look", onClick: () => choose("look") }, d.empty ? "Just exploring? Go to the dashboard ›" : "Go to my dashboard ›"),
-    ui.h("p", {}, "🔒 Everything stays on your own computer and phone. No bank logins or account numbers, ever.")));
+    ui.h("p", {}, "🔒 Everything stays on your own devices. No bank logins or account numbers, ever.")));
   // the first page people see: start on its heading, not behind the menu's links
   try { h1.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
 }

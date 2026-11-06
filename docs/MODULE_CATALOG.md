@@ -10,7 +10,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## overview
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `overview/dashboard` | Dashboard | usable | 0 | Welcomes you with start-here actions, the setup steps still to do and a look at what is coming next. | - |
+| `overview/dashboard` | Dashboard | usable | 0 | Welcomes you with start-here actions, the setup steps still to do and, in the build view only, a look at what is coming next. | - |
 | `overview/pages` | All pages | usable | 0 | Lets you search every page in the app and see which ones work today and which build phase the rest belong to. | - |
 | `overview/start` | Get started | usable | 10 | Pick what you came to do: a quick answer, one goal or the whole plan, then follow it step by step. | Material self-select, GOV.UK start pages |
 | `overview/setup` | Set up my plan | usable | 10 | A few friendly questions, one per screen, that put your household, pay, accounts, debts, spending and goals in the plan, then show where you stand and your first three moves. | Monarch, Copilot and YNAB onboarding; TurboTax interview |

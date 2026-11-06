@@ -10,6 +10,7 @@ export default {
   order: 70,
   version: 1,
   status: "usable",
+  builderOnly: true,   // a builder page: never in a household's menu (core/view.js)
   phase: 10,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "goals", "debts", "retirement", "transactions", "holdings", "rules", "insurance", "estate", "events", "property", "assumptions"],
