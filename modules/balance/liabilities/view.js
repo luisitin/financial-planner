@@ -1,6 +1,7 @@
 // modules/balance/liabilities/view.js -- DOM only. Totals, a tappable list of debts, and one
 // form for the selected debt's rate and payments.
-import { compute } from "./compute.js";
+import { compute, HIGH_RATE } from "./compute.js";
+import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
@@ -58,6 +59,8 @@ export function render(root, ctx) {
           p.debts = p.debts ?? [];
           const i = p.debts.findIndex((x) => x.accountId === r.id);
           if (i >= 0) p.debts[i] = { ...p.debts[i], ...clean }; else p.debts.push({ id: ui.uid(), ...clean });
+          // saved from the form, the rate and payment are the person's (even unchanged): no longer our guesses (spec S2)
+          if (i >= 0 && typeof p.debts[i].id === "string") for (const f of ["rate", "minPayment"]) clearGuess(p, `debts[${p.debts[i].id}].${f}`);
         });
         selected = null;
       }, { submitLabel: "Save", onCancel: () => { selected = null; drawForm(); } }),
@@ -80,6 +83,10 @@ export function render(root, ctx) {
     if (r.securedBy) bits.push(`secured by ${r.securedBy}`);
     return bits.join(" · ");
   };
+  // one muted line on a debt whose figures are our guesses (spec 9.4), and, when its balance and rate are both ours, its
+  // interest said calmly instead of the amber "expensive" (spec P7: a guess never turns a figure amber by itself)
+  const ours = (r) => [isGuess(plan, `accounts[${r.id}].balance`) ? "what's owed" : null, r.detail && isGuess(plan, `debts[${r.detail.id}].rate`) ? "the rate" : null, r.detail && isGuess(plan, `debts[${r.detail.id}].minPayment`) ? "the payment" : null].filter(Boolean);
+  const oursLine = (r) => { const o = ours(r); if (!o.length) return null; const w = o.length === 1 ? o[0] : `${o.slice(0, -1).join(", ")} and ${o[o.length - 1]}`; return ui.h("div", { class: "d muted" }, `${w[0].toUpperCase()}${w.slice(1)} ${o.length === 1 ? "is our guess" : "are our guesses"} for now: tap to type the real ${o.length === 1 ? "one" : "ones"}.${r.byGuesses && r.rate >= HIGH_RATE && r.interestMonthly ? ` By our guesses it costs about ${fmt.money(r.interestMonthly, cur)} a month in interest.` : ""}`); };
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(ui.card("Your debts",
@@ -87,7 +94,7 @@ export function render(root, ctx) {
       onClick: () => { selected = r; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, r.icon),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.name, " ", r.expensive ? ui.h("span", { class: "pill warn" }, "expensive") : null, !r.detail ? ui.h("span", { class: "pill" }, "needs details") : null), ui.h("div", { class: "d" }, sub(r))),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.name, " ", r.expensive ? ui.h("span", { class: "pill warn" }, "expensive") : null, !r.detail ? ui.h("span", { class: "pill" }, "needs details") : null), ui.h("div", { class: "d" }, sub(r)), oursLine(r)),
       ui.h("span", { class: "st" }, ui.h("div", {}, fmt.money(r.owed, cur)), ui.h("div", { class: "muted small", style: { textAlign: "right" } }, "Edit ›")),
     ))),
     ui.h("p", { class: "muted small" }, "Highest interest rate first: that is the order that saves the most if you pay extra. Tap a debt to enter or change its rate and payments."),

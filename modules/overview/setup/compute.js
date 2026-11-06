@@ -22,6 +22,7 @@ import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { isGuess, markGuess, clearGuess } from "../../../core/estimate/index.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -625,7 +626,10 @@ export function applyHaveAmounts(draft, v, today) {
       const id = haveId(h.key, pid);
       const kind = RETIRE_KINDS.find((k) => k.value === v[`kind-${pid}`]) ?? RETIRE_KINDS[0];
       const mine = h.perAdult ? pos(v[`contrib-${pid}`]) : null, match = h.perAdult && kind.value === "work" ? pos(v[`match-${pid}`]) : null;
-      if (amount === null && !mine && !match) { gone.push(id); continue; }
+      // a box left empty over our guess (Q5b guessed the home) keeps it: the screen showed it grey, so it is what is counted
+      const ours = isGuess(draft, `accounts[${id}].balance`);
+      if (amount === null && !mine && !match) { if (!ours) gone.push(id); continue; }
+      if (amount !== null && ours) clearGuess(draft, `accounts[${id}].balance`);   // typed, even the same figure: the person's
       const person = pid ? byId(adults(draft), pid) : null;
       const old = byId(draft.accounts, id);
       const type = h.perAdult ? (old && kind.group.includes(old.type) ? old.type : kind.type) : undefined;   // a Roth set on Net worth stays a Roth
@@ -663,7 +667,8 @@ export function applyOwePicks(draft, keys) {
  * and a rate or payment set on Liabilities that reads back the same stays as it is. The payment is not written as an
  * expense: Expenses counts the Liabilities rows' payments itself (its F-019 rule).
  */
-export function applyOweAmounts(draft, v, today) {
+export function applyOweAmounts(draft, v, today, { guess = null } = {}) {
+  if (typeof guess === "function") return applyOweGuessed(draft, v, today, guess);
   ensure(draft);
   const gone = [];
   let paidInFull = false;
@@ -702,8 +707,100 @@ export function applyOweAmounts(draft, v, today) {
   if ((draft.guide.setup.paidInFull ?? false) !== paidInFull) draft.guide.setup.paidInFull = paidInFull;
   return dropAccounts(draft, gone);
 }
+/** The one-tap answers Q5b may show, by debt (one at a time: the mortgage's, else the car loan's; guide.setup.taps). */
+export const OWE_TAPS = { mortgage: "mortgage-start", "car-loan": "car-loan-start" };
+const TAP_VALUES = { "mortgage-start": ["pre2010", "2010s", "2020-21", "2022on", "unsure"], "car-loan-start": ["0", "1-2", "3-4", "5+", "unsure"] };
+/**
+ * What Q5b holds for one debt, as the guesses read it (core/estimate `args`): { owed, payment, rate (a fraction), start }
+ * and, for a mortgage whose screen asks it, home. A number for a box with a figure, null for a box left blank, so the
+ * grey figure on the screen is worked out from exactly what saving the screen writes (the same reading
+ * applyOweAmounts makes: a payment or rate set on Liabilities that reads back the same is kept as it is).
+ */
+export function oweArgs(plan, x = {}, key, { askHome = false } = {}) {
+  const did = `setup-debt-${key}`, row = byId(L(plan, "debts"), did);
+  const typed = parseMoney(x?.rate);
+  const known = typed !== null && typed >= 0 && typed <= 100;
+  const own = row && !rateIsGuess(row) && !isGuess(plan, `debts[${did}].rate`);
+  const shown = own ? Math.round(Number(row.rate) * 100000) / 1000 : null;
+  const rate = known ? (shown !== null && shown === Math.round(typed * 1000) / 1000 ? row.rate : Math.round(typed * 1000) / 100000) : null;
+  // a box left blank is null (our guess fills it); a 0 typed is the person's 0: "I owe nothing" drops the debt, a $0
+  // payment (a loan on hold) is kept as typed. Neither gets a guess.
+  const paid = nonneg(x?.payment);
+  const ownPay = row && !paymentIsGuess(row) && !isGuess(plan, `debts[${did}].minPayment`) && Number(row.minPayment) > 0 ? row.minPayment : null;
+  const out = { owed: nonneg(x?.owed), payment: paid === null ? null : paid > 0 && ownPay !== null && Math.round(ownPay) === Math.round(paid) ? ownPay : paid, rate };
+  if (OWE_TAPS[key]) out.start = TAP_VALUES[OWE_TAPS[key]].includes(x?.start) ? x.start : null;
+  if (key === "mortgage" && askHome) out.home = pos(x?.home);
+  return out;
+}
+/**
+ * Q5b with our guesses (the view passes ctx.guess; spec 10, section 7.D): a debt picked on Q5 is never dropped. A box
+ * left blank gets our guess, written through markGuess (the ledger entry, and the older rateGuessed / paymentGuessed
+ * flags mirrored, so Liabilities and the reveal read them as before): what is still owed (worked back from the payment
+ * when it is typed), the rate and the payment; the mortgage's home value when the screen asks it. A figure typed is the
+ * person's (any guess on it goes). The one-tap answer (when the loan was taken out) is kept in guide.setup.taps. Every
+ * guess is worked out by `guess(key, { path, args })` from the plan as it was before this save plus the screen's answers
+ * (oweArgs), the same call the screen made for its grey figures. With no guess at all (a plan outside the U.S.: the
+ * guesses' gate is closed), each box does what it did before the guesses: a blank balance saves nothing, a blank rate
+ * or payment gets the typical one.
+ */
+function applyOweGuessed(draft, v, today, guess) {
+  ensure(draft);
+  const gone = [];
+  let paidInFull = false;
+  const askHome = askHomeWithMortgage(draft);
+  const ask = (key, path, args) => { let e = null; try { e = guess(key, { path, args }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
+  for (const o of OWE) {
+    if (!picks(draft, "owe").includes(o.key) || oweTaken(draft, o.key)) continue;
+    const x = v[o.key] ?? {};
+    const id = oweId(o.key), did = `setup-debt-${o.key}`;
+    if (o.key === "credit" && x.paidInFull) { paidInFull = true; gone.push(id); continue; }
+    const args = oweArgs(draft, x, o.key, { askHome });
+    const owedPath = `accounts[${id}].balance`, ratePath = `debts[${did}].rate`, payPath = `debts[${did}].minPayment`;
+    const gOwed = args.owed === null ? ask(`debt.${o.key}.owed`, owedPath, args) : null;
+    const owed = args.owed ?? gOwed?.value ?? null;
+    if (!(owed > 0)) { gone.push(id); continue; }
+    const gRate = args.rate === null ? ask(`debt.${o.key}.rate`, ratePath, args) : null;
+    const gPay = args.payment === null ? ask(`debt.${o.key}.payment`, payPath, args) : null;
+    const gHome = o.key === "mortgage" && askHome && args.home === null ? ask("home.value", `accounts[${haveId("home")}].balance`, args) : null;
+    const old = byId(draft.accounts, id);
+    put(draft.accounts, id, old && old.balance === owed ? {} : { balance: owed, asOf: today }, { name: o.name, type: o.type, institution: "", asOf: today, ownerId: "", history: [], notes: "" });
+    // a plan from before the guesses dropped this mortgage, so question 6 asked "Rent" and the person put the home's
+    // payment there: named "Rent or mortgage", Expenses files the mortgage under it and counts the payment once
+    const housing = o.key === "mortgage" && !old ? byId(draft.expenses, "setup-x-housing") : null;
+    if (housing && housing.name === SPEND.find((r) => r.key === "housing").label) housing.name = "Rent or mortgage";
+    const row0 = byId(draft.debts, did);
+    // with no guess (the gate is closed), the rate and payment as before: the row's own, else the typical one, kept in the flag
+    const ownRate = row0 && !rateIsGuess(row0) && !isGuess(draft, ratePath);
+    const rate = args.rate ?? gRate?.value ?? (ownRate ? row0.rate : TYPICAL_RATES[o.key]);
+    const ownPay = row0 && !paymentIsGuess(row0) && !isGuess(draft, payPath) && Number(row0.minPayment) > 0 ? row0.minPayment : null;
+    const payment = args.payment ?? gPay?.value ?? ownPay ?? typicalPayment(o.key, owed, rate);
+    const r = put(draft.debts, did, { rate, minPayment: payment }, { accountId: id, extra: 0, termMonths: null, startDate: "", securedBy: "", creditLimit: null });
+    if (gOwed) markGuess(draft, owedPath, gOwed, today); else clearGuess(draft, owedPath);
+    if (gRate) markGuess(draft, ratePath, gRate, today);
+    else if (args.rate !== null || ownRate) clearGuess(draft, ratePath);
+    else if (r.rateGuessed !== rate) r.rateGuessed = rate;
+    if (gPay) markGuess(draft, payPath, gPay, today);
+    else if (args.payment !== null || ownPay !== null) clearGuess(draft, payPath);
+    else if (r.paymentGuessed !== payment) r.paymentGuessed = payment;
+    const tap = OWE_TAPS[o.key];
+    if (tap && args.start !== null && draft.guide.setup.taps?.[tap] !== args.start) draft.guide.setup.taps = { ...(draft.guide.setup.taps ?? {}), [tap]: args.start };
+    // a mortgage with no home in the plan: what the home would sell for (typed, else our guess), so net worth has both sides
+    if (o.key === "mortgage" && askHome && !existingHave(draft, "home").length) {
+      const home = args.home ?? gHome?.value ?? null;
+      if (home) {
+        const hid = haveId("home"), h = HAVE.find((k) => k.key === "home"), was = byId(draft.accounts, hid);
+        put(draft.accounts, hid, was && was.balance === home ? {} : { balance: home, asOf: today }, { name: h.name, type: h.type, institution: "", asOf: today, ownerId: "", history: [], notes: "" });
+        if (gHome) markGuess(draft, `accounts[${hid}].balance`, gHome, today); else clearGuess(draft, `accounts[${hid}].balance`);
+        if (!picks(draft, "have").includes("home")) { draft.guide.setup.picks.have = [...picks(draft, "have"), "home"]; draft.guide.setup.homeFromOwe = true; }
+      }
+    }
+  }
+  if ((draft.guide.setup.paidInFull ?? false) !== paidInFull) draft.guide.setup.paidInFull = paidInFull;
+  return dropAccounts(draft, gone);
+}
 /** Ask the home's value with the mortgage: the plan has no home, or only the one this box made. */
-export const askHomeWithMortgage = (p) => !existingHave(p, "home").length && (!byId(L(p, "accounts"), haveId("home")) || !!setupOf(p).homeFromOwe);
+// (and while the setup's home value is still our guess: it stays a grey box here, never a line that says it was typed)
+export const askHomeWithMortgage = (p) => !existingHave(p, "home").length && (!byId(L(p, "accounts"), haveId("home")) || !!setupOf(p).homeFromOwe || isGuess(p, `accounts[${haveId("home")}].balance`));
 /** Has a mortgage: the housing question then asks for costs besides its payment. */
 export const hasMortgage = (p) => L(p, "accounts").some((a) => a.type === "mortgage" && Number(a.balance));
 /**
@@ -769,6 +866,10 @@ export function applySpend(draft, v) {
       const id = `setup-x-${s.key}`;
       keep.add(id);
       put(draft.expenses, id, { amount }, { name: s.key === "housing" && mortgage ? "Home costs" : s.label, category: s.key, essential: s.group === "must" && CATEGORIES[s.key]?.essential !== false, ...line });
+      // "Rent or mortgage" (Q5b's name for a "Rent" row once our guesses kept the mortgage): answered here as the home's
+      // costs besides the mortgage, it is named so, and the mortgage's payment counts from Debts again
+      const row = s.key === "housing" && mortgage ? byId(draft.expenses, id) : null;
+      if (row && row.name === "Rent or mortgage") row.name = "Home costs";
     }
   }
   draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
@@ -890,7 +991,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   if (screen === "have") return picks(plan, "have");
   if (screen === "have-amounts") {
     const o = {};
-    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)); o[h.perAdult ? `${h.key}-${pid}` : h.key] = a ? a.balance : ""; }
+    // a balance that is one of our guesses reopens empty: the screen shows it grey (spec P2), never as typed text
+    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)); o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : ""; }
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
       // someone paid by their own business has no employer plan: "On my own" first (review 2026-11-02)
@@ -903,8 +1005,15 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   if (screen === "owe") return picks(plan, "owe");
   if (screen === "owe-amounts") {
     const o = {};
-    for (const d of OWE) { const a = acct(oweId(d.key)); const r = byId(L(plan, "debts"), `setup-debt-${d.key}`); o[d.key] = { owed: a?.balance ?? "", payment: r && !paymentIsGuess(r) && Number(r.minPayment) > 0 ? Math.round(r.minPayment) : "", rate: r && !rateIsGuess(r) ? Math.round(r.rate * 100000) / 1000 : "", paidInFull: d.key === "credit" ? !!s.paidInFull : false }; }
-    o.mortgage.home = acct(haveId("home"))?.balance ?? "";
+    // a figure that is one of our guesses is not shown as typed: its box stays empty and the screen shows it grey
+    const g = (path) => isGuess(plan, path);
+    for (const d of OWE) {
+      const a = acct(oweId(d.key)), did = `setup-debt-${d.key}`, r = byId(L(plan, "debts"), did);
+      o[d.key] = { owed: a && !g(`accounts[${a.id}].balance`) ? a.balance : "", payment: r && !paymentIsGuess(r) && !g(`debts[${did}].minPayment`) && (Number(r.minPayment) > 0 || r.minPayment === 0) ? Math.round(r.minPayment) : "", rate: r && !rateIsGuess(r) && !g(`debts[${did}].rate`) ? Math.round(r.rate * 100000) / 1000 : "", paidInFull: d.key === "credit" ? !!s.paidInFull : false };
+      if (OWE_TAPS[d.key]) o[d.key].start = s.taps?.[OWE_TAPS[d.key]] ?? null;
+    }
+    const home = acct(haveId("home"));
+    o.mortgage.home = home && !g(`accounts[${home.id}].balance`) ? home.balance : "";
     return o;
   }
   if (screen === "spend") {
@@ -933,7 +1042,12 @@ export function reflect(plan, screen, { today = null } = {}) {
   }
   if (screen === "have-amounts") { const t = L(plan, "accounts").filter((a) => isHave(a.id) && a.type !== "property" && a.type !== "vehicle").reduce((s, a) => s + (Number(a.balance) || 0), 0); return t > 0 ? { kind: "have", total: t } : null; }
   if (screen === "owe" && picks(plan, "owe").includes("none")) return { kind: "debt-free" };
-  if (screen === "owe-amounts") { const t = L(plan, "accounts").filter((a) => isOwe(a.id)).reduce((s, a) => s + Math.abs(Number(a.balance) || 0), 0); return t > 0 ? { kind: "owe", total: t } : setupOf(plan).paidInFull ? { kind: "paid-in-full" } : null; }
+  if (screen === "owe-amounts") {
+    const owe = L(plan, "accounts").filter((a) => isOwe(a.id)), t = owe.reduce((s, a) => s + Math.abs(Number(a.balance) || 0), 0);
+    // how many of those balances are our guesses (said with the total: "2 of these are our guesses for now")
+    const guessed = owe.filter((a) => isGuess(plan, `accounts[${a.id}].balance`)).length;
+    return t > 0 ? { kind: "owe", total: t, ...(guessed ? { guessed, of: owe.length } : {}) } : setupOf(plan).paidInFull ? { kind: "paid-in-full" } : null;
+  }
   if (screen === "spend") { const e = L(plan, "expenses").length || L(plan, "debts").length ? computeExpenses(plan, {}) : null; return e && e.monthly > 0 ? { kind: "spend", monthly: e.monthly, essential: e.essentialMonthly } : null; }
   return null;
 }
@@ -992,11 +1106,13 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     let rows = [];
     try { rows = computeLiabilities(plan, { today }).rows; } catch { rows = []; }
     return rows.filter((r) => r.owed > 0 && r.rate !== null && r.rate >= lo && r.rate < hi && r.type !== "mortgage").sort((a, b) => b.rate - a.rate)
-      .map((r) => ({ name: r.name, rate: r.rate, guess: rateIsGuess(r.detail), card: r.type === "credit" }));
+      .map((r) => ({ name: r.name, rate: r.rate, guess: rateIsGuess(r.detail), card: r.type === "credit", ours: typeof r.detail?.id === "string" && !!plan?.guesses?.[`debts[${r.detail.id}].rate`] }));
   };
+  // where to type the real rate: a rate in the guesses' ledger is listed on Our guesses for you; an older one on Debts
+  const where = (list) => (list.some((d) => d.ours) ? "Our guesses for you" : "What you owe");
   const said = (list) => {
     const words = list.map((d) => `${d.name} about ${pct(d.rate)} a year`).join(", ");
-    return `${words}${list.some((d) => d.guess) ? " (a typical rate: type yours on What you owe)" : ""}`;
+    return `${words}${list.some((d) => d.guess) ? ` (a typical rate: type yours on ${where(list)})` : ""}`;
   };
   switch (step.id) {
     case "bills": return retired
@@ -1019,7 +1135,7 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     case "high-debt": {
       const list = costly(HIGH_RATE, Infinity), cards = list.length && list.every((d) => d.card);
       // savings above the full cushion pay it today (Next best action's fromSavings): the move says so
-      if (step.fromSavings > 0) return { title: cards ? "Pay off the cards from your savings" : "Pay off costly debt from your savings", detail: `${step.detail}${list.some((d) => d.guess) ? " The rate is a typical one: type yours on What you owe." : ""}` };
+      if (step.fromSavings > 0) return { title: cards ? "Pay off the cards from your savings" : "Pay off costly debt from your savings", detail: `${step.detail}${list.some((d) => d.guess) ? ` The rate is a typical one: type yours on ${where(list)}.` : ""}` };
       return { title: cards ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail };
     }
     case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
@@ -1094,7 +1210,10 @@ export function standing(plan, { today }) {
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
   const estimated = adults(plan).filter((p) => wrote[p.id] !== undefined && Number(ssAll[p.id]?.monthlyAtFRA) === wrote[p.id] && !(ssAll[p.id]?.record ?? []).length);
   if (estimated.length) later.push({ label: `Social Security is estimated from ${estimated.length > 1 ? "your pay" : `${estimated[0].name === "Me" ? "your" : `${estimated[0].name}'s`} pay`}: the statement at ssa.gov/myaccount is exact`, href: "#/retirement/social-security", key: "ss-estimate" });
-  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d)).map((d) => ({ name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null }));
+  // debts with a figure we filled in: the rate and payment (the flags core/estimate mirrors), and what is still owed (a
+  // balance that is one of our guesses; `owed` is there only then)
+  const owedGuess = (d) => { const a = byId(L(plan, "accounts"), d.accountId); return a && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) ? Math.abs(Number(a.balance) || 0) : null; };
+  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d) || owedGuess(d) !== null).map((d) => { const o = owedGuess(d); return { name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null, ...(o !== null ? { owed: o } : {}) }; });
   // one sentence that says what matters most, never at odds with the cards under it
   const first = open[0]?.id ?? null;
   const saved = savedTotal(plan);
@@ -1117,6 +1236,8 @@ export function standing(plan, { today }) {
   const empty = !L(plan, "accounts").length || (nw.assets === 0 && nw.liabilities === 0);
   return {
     netWorth: empty ? null : nw.netWorth, assets: nw.assets, liabilities: nw.liabilities,
+    // half or more of what you own, or of what you owe, is our guesses (Net worth's partlyGuessed): the tile says so and waits
+    ...(nw.partlyGuessed ? { netWorthGuessed: true } : {}),
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved, lean,
     // the full cushion waits on purpose while costly debt is paid first (next-best-action cushionLater): "enough for now"
     cushionLater: (runwayStatus === "warn" || runwayStatus === "bad") ? cushionLater(nba) : null,

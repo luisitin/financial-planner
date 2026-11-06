@@ -10,8 +10,10 @@ import {
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
-  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow,
+  applyGoalPicks, applyGoalDetails, applyGuesses, progress, standing, payLineNow, oweArgs, haveId,
 } from "./compute.js";
+import { applies, guessesInUse, isGuess } from "../../../core/estimate/index.js";
+import { guessTwins } from "../guesses/compute.js";
 import { dayWords } from "../next-best-action/compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
@@ -27,6 +29,7 @@ let warnedKept = null;   // the "Kept X" warnings Finish later already stopped f
 
 const STYLE = `
 .su-root { max-width: 580px; margin: 0 auto; }
+.su-root input::placeholder { color: var(--muted); opacity: 1; }
 .su-root .su-vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .su-top { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: -6px 0 2px; }
 .su-root .su-icon { flex: none; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 0; background: none; color: var(--accent-ink); font-size: 28px; line-height: 1; }
@@ -224,6 +227,8 @@ export function render(page, ctx) {
   const today = fmt.today();
   const cur = plan.meta?.currency ?? "USD";
   const money = (n) => fmt.money(Math.round(Number(n) || 0), cur);
+  // an "about" figure that adds up our guesses: three significant figures ($158,900 -> $159,000), $10 under $1,000
+  const about = (n) => { const x = Math.abs(Number(n) || 0); if (x < 1000) return Math.round(n / 10) * 10; const step = 10 ** (Math.floor(Math.log10(x)) - 2); return Math.round(n / step) * step; };
   const pctOf = (r) => `${(Math.round(r * 1000) / 10).toFixed(1)}%`;
   const symbol = (() => { try { return new Intl.NumberFormat(plan.meta?.locale || "en-US", { style: "currency", currency: cur }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } })();
   const prog = progress(plan);
@@ -349,11 +354,11 @@ export function render(page, ctx) {
     emoji ? ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, emoji) : null,
     ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, screen.q ? ui.h("span", { class: "su-vh" }, `Question ${screen.q} of ${QUESTIONS}: `) : null, q),
     help ? ui.h("p", { class: "su-help" }, help) : null);
-  const actions = (label = "Continue", { noSkip = false } = {}) => {
+  const actions = (label = "Continue", { noSkip = false, skipLabel = "Skip this question", onSkip = skip } = {}) => {
     add(card, ui.h("div", { class: "su-actions" },
       ui.h("button", { type: "button", class: "secondary su-backbtn", onClick: back }, "‹ Back"),
       ui.h("button", { type: "submit", class: "su-go" }, backDone ? "Save" : label)));
-    if (!noSkip && !backDone) add(card, ui.h("button", { type: "button", class: "su-skip", onClick: skip }, "Skip this question"));
+    if (!noSkip && !backDone) add(card, ui.h("button", { type: "button", class: "su-skip", onClick: onSkip }, skipLabel));
   };
   /**
    * Choice tiles, built once and updated in place (so focus and the screen reader stay on the tile tapped). Multi:
@@ -391,7 +396,8 @@ export function render(page, ctx) {
     el.setAttribute("aria-describedby", id);
     return ui.h("span", { class: "su-sub", id }, sub);
   };
-  const moneyIn = (value, onValue, { label = null, placeholder = "0" } = {}) => {
+  // no grey figure by default: a grey figure in a box is what the plan counts (smart guesses, rule P1), never an example
+  const moneyIn = (value, onValue, { label = null, placeholder = "" } = {}) => {
     const input = ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: "next", autocomplete: "off", value: groupDigits(value === null || value === undefined ? "" : String(value)), placeholder, "aria-label": label });
     input.addEventListener("input", () => {
       const at = input.selectionStart ?? input.value.length;
@@ -511,7 +517,7 @@ export function render(page, ctx) {
       // someone paid by their own business: what they already sent the IRS this year, so no page starts from "$0 paid"
       const taxHost = ui.h("div");
       const drawTax = () => swap(taxHost, ad.some((q) => v.people[q.id]?.status === "work" && v.people[q.id]?.by === "self" && !existingPay(plan, q.id).filter((i) => i.id !== `setup-pay-${q.id}`).length)
-        ? group("Tax on your own work", field("Estimated tax paid so far this year", moneyIn(v.taxPaid, (val) => { v.taxPaid = val; }, { label: "Estimated tax paid so far this year", placeholder: "0" }), "The quarterly payments sent to the IRS for this year. Type 0 if none; leave it blank if you are not sure."))
+        ? group("Tax on your own work", field("Estimated tax paid so far this year", moneyIn(v.taxPaid, (val) => { v.taxPaid = val; }, { label: "Estimated tax paid so far this year" }), "The quarterly payments sent to the IRS for this year. Type 0 if none; leave it blank if you are not sure."))
         : "");
       for (const p of ad) {
         const x = v.people[p.id];
@@ -528,8 +534,8 @@ export function render(page, ctx) {
             // the plan then works out self-employment tax and quarterly payments instead of a W-4)
             const by = x.by === "self" ? "self" : "employer";
             const amountField = by === "self"
-              ? field("What your work brings in, before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "what the work brings in"), placeholder: "65,000" }), "If it changes month to month, give a typical year. Business costs come later, on Small business.")
-              : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax"), placeholder: "65,000" }));
+              ? field("What your work brings in, before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "what the work brings in") }), "If it changes month to month, give a typical year. Business costs come later, on Small business.")
+              : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax") }));
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
               fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live);
@@ -645,12 +651,21 @@ export function render(page, ctx) {
 
     "have-amounts"() {
       head("🧮", "About how much is in each?", "Today's balance or value. Round numbers are fine; you can make them exact later.");
+      // a balance that is one of our guesses (question 5 guessed the home): its box is empty with our figure in grey, and
+      // an empty box keeps it (applyHaveAmounts), so the screen never shows a guess as typed text (spec P2)
+      const greyOf = (id) => {
+        const path = `accounts[${id}].balance`, a = (plan.accounts ?? []).find((x) => x.id === id);
+        if (!a || !isGuess(plan, path)) return null;
+        let why = null; try { why = ctx.guess(plan.guesses?.[path]?.k, { path })?.why ?? null; } catch { why = null; }
+        return { shown: groupDigits(String(Math.round(Number(a.balance) || 0))), line: why ? `Our guess: ${why}.` : "Our guess for now." };
+      };
       const v = draft(() => valuesFor(plan, "have-amounts"));
       for (const h of HAVE.filter((x) => picks(plan, "have").includes(x.key))) {
         for (const pid of askOwners(plan, h.key)) {
           if (!h.perAdult) {
             const label = h.key === "home" ? "Your home" : h.key === "car" ? "Your car" : h.label;
-            add(card, group(null, field(`${h.icon} ${label}`, moneyIn(v[h.key], (val) => { v[h.key] = val; }, { label }), h.ask ?? null)));
+            const g = greyOf(haveId(h.key));
+            add(card, group(null, field(`${h.icon} ${label}`, moneyIn(v[h.key], (val) => { v[h.key] = val; }, { label: g ? `${label}, blank uses our guess of about ${symbol}${g.shown}` : label, placeholder: g?.shown ?? "" }), g ? [g.line, h.ask ? `${h.ask}${/[.!?]$/.test(h.ask) ? "" : "."}` : null].filter(Boolean).join(" ") : h.ask ?? null)));
             continue;
           }
           const p = ad.find((x) => x.id === pid);
@@ -663,7 +678,7 @@ export function render(page, ctx) {
           drawExtra();
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
             fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA."),
-            field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far") }), "Add up every account of that kind."),
+            (() => { const g = greyOf(haveId(h.key, pid)); return field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far"), placeholder: g?.shown ?? "" }), g ? `${g.line} Add up every account of that kind.` : "Add up every account of that kind."); })(),
             extra));
         }
       }
@@ -689,28 +704,102 @@ export function render(page, ctx) {
     },
 
     "owe-amounts"() {
-      head("✍️", "Tell us about each one", "What you owe today and what you pay a month. The rate is on the statement; leave a box blank if you don't know it.");
+      // our guesses fill what is left blank (U.S. plans: core/estimate applies); elsewhere the boxes work as they did
+      const guessing = applies(plan);
+      head("✍️", "Tell us about each one", guessing ? "Start with what you pay a month. Leave the rest empty and we'll work it out." : "What you pay a month and what you owe today. The rate is on the statement; leave a box blank if you don't know it.");
       const v = draft(() => valuesFor(plan, "owe-amounts"));
       const askHome = askHomeWithMortgage(plan);
-      for (const o of OWE.filter((x) => picks(plan, "owe").includes(x.key) && !oweTaken(plan, x.key))) {
+      const picked = OWE.filter((x) => picks(plan, "owe").includes(x.key) && !oweTaken(plan, x.key));
+      // one question that sharpens a guess the most, at most, on the screen: when the mortgage was taken out, else the car loan
+      const tapOn = picked.some((o) => o.key === "mortgage") ? "mortgage" : picked.some((o) => o.key === "car-loan") ? "car-loan" : null;
+      const shownMoney = (n) => groupDigits(String(Math.round(n)));
+      const shownPct = (r) => String(Math.round(r * 1000) / 10);
+      // the home on file (from question 4, or Net worth): said as a line, not asked twice
+      const homeAcct = askHome ? null : (plan.accounts ?? []).find((a) => a.id === "setup-have-home") ?? existingHave(plan, "home")[0] ?? null;
+      for (const o of picked) {
         const x = v[o.key];
         const body = ui.h("div", {});
-        const payHelp = o.key === "mortgage" ? "The whole payment on your statement, including property tax and insurance if they're in it. Blank: a typical payment for now."
-          : o.key === "credit" ? "The minimum, or what you usually pay. Blank: a typical minimum for now." : "Blank: a typical payment for now.";
-        const draw = () => swap(body, ...(o.key === "credit" && x.paidInFull ? [ui.h("p", { class: "su-sub" }, "Then your cards cost you nothing in interest. Nothing to add.")] : [
-          o.key === "mortgage" && askHome ? field("🏡 What would your home sell for today?", moneyIn(x.home, (val) => { x.home = val; }, { placeholder: "300,000" }), "So what you own counts beside what you owe. A rough figure is fine.") : null,
-          field("Still owed", moneyIn(x.owed, (val) => { x.owed = val; }, { label: `${o.label}: still owed` }), o.key === "credit" ? "All your cards together" : null),
-          field("Paid a month", moneyIn(x.payment, (val) => { x.payment = val; }, { label: `${o.label}: paid a month` }), payHelp),
-          field("Interest rate a year", pctIn(x.rate, (val) => { x.rate = val; }, `${o.label}: interest rate a year`, o.key === "credit" ? "e.g. 24.9" : "e.g. 6.5"), `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`),
-        ]));
+        const helpOf = {
+          payment: `${o.key === "mortgage" ? "It's on your bank statement. Include tax and insurance if they're in it." : o.key === "credit" ? "The minimum, or what you usually pay." : "It's on your bank statement."}${guessing ? "" : " Blank: a typical payment for now."}`,
+          owed: o.key === "credit" ? "All your cards together." : null,
+          rate: guessing ? "It's on your statement." : `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`,
+          home: "So what you own counts beside what you owe.",
+        };
+        const labels = { payment: `${o.label}: paid a month`, owed: `${o.label}: still owed`, rate: `${o.label}: interest rate a year`, home: "What your home would sell for today" };
+        const keyOf = { payment: `debt.${o.key}.payment`, owed: `debt.${o.key}.owed`, rate: `debt.${o.key}.rate`, home: "home.value" };
+        const pathOf = { payment: `debts[setup-debt-${o.key}].minPayment`, owed: `accounts[setup-owe-${o.key}].balance`, rate: `debts[setup-debt-${o.key}].rate`, home: "accounts[setup-have-home].balance" };
+        const boxes = {};
+        const box = (k, control) => { const input = control.querySelector("input"); boxes[k] = { input }; return control; };
+        const sub = (k) => { const el = ui.h("span", { class: "su-sub" }); boxes[k].sub = el; return el; };
+        const fieldWith = (label, k, control) => { box(k, control); const el = sub(k); const id = `su-h-${++uid}`; el.id = id; boxes[k].input.setAttribute("aria-describedby", id); return ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), el); };
+        // the tap: shown once our guess of what is still owed says it would sharpen it, and kept while it has an answer
+        const tapWrap = ui.h("div", { hidden: true });
+        let tapBuilt = false;
+        const refresh = () => {
+          const args = oweArgs(plan, x, o.key, { askHome });
+          for (const k of Object.keys(boxes)) {
+            const b = boxes[k], blank = args[k] === null;
+            const g = guessing && blank ? ctx.guess(keyOf[k], { path: pathOf[k], args }) : null;
+            const shown = g && g.value !== null ? (k === "rate" ? shownPct(g.value) : shownMoney(g.value)) : "";
+            b.input.placeholder = shown;
+            b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, blank uses our guess of about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}` : ""}`);
+            // the guess, then the field's own help (spec 9.3): where to find it stays on screen while our figure shows
+            b.sub.textContent = shown ? [`Our guess: ${g.why}.`, helpOf[k]].filter(Boolean).join(" ") : helpOf[k] ?? "";
+          }
+          if (tapOn === o.key) {
+            const g = guessing ? ctx.guess(keyOf.owed, { path: pathOf.owed, args }) : null;
+            const want = !!((g?.ask && args.owed === null) || args.start);
+            if (want && !tapBuilt && g?.ask) {
+              const q = g.ask;
+              swap(tapWrap, fieldset(q.question, seg(q.options, x.start ?? null, (val) => { x.start = val; refresh(); }, q.question), "Tell us and we'll work out what's left from your payment."));
+              tapBuilt = true;
+            }
+            tapWrap.hidden = !(want && tapBuilt);
+          }
+        };
+        const moneyBox = (k, label) => moneyIn(x[k], (val) => { x[k] = val; refresh(); }, { label, placeholder: "" });
+        const draw = () => {
+          for (const k of Object.keys(boxes)) delete boxes[k];
+          tapBuilt = false;
+          swap(body, ...(o.key === "credit" && x.paidInFull ? [ui.h("p", { class: "su-sub" }, "Then your cards cost you nothing in interest. Nothing to add.")] : [
+            fieldWith("Paid a month", "payment", moneyBox("payment", labels.payment)),
+            fieldWith("Still owed", "owed", moneyBox("owed", labels.owed)),
+            // the one tap sits under the figure it sharpens
+            tapOn === o.key ? tapWrap : null,
+            fieldWith("Interest rate a year", "rate", pctIn(x.rate, (val) => { x.rate = val; refresh(); }, labels.rate, "")),
+            o.key === "mortgage" && askHome ? fieldWith("🏡 What would your home sell for today?", "home", moneyBox("home", labels.home)) : null,
+            // the home on file, after the boxes and the tap (a 44 px button, not a bare link: thumbs)
+            o.key === "mortgage" && homeAcct ? ui.h("div", { class: "su-field" },
+              ui.h("p", { class: "su-sub" }, `Your home: about ${fmt.money(Math.round(Number(homeAcct.balance) || 0), cur)}, ${homeAcct.id === "setup-have-home" ? "from question 4" : "on Net worth"}.`),
+              ui.h("p", { class: "su-sub" }, ui.h("a", { href: homeAcct.id === "setup-have-home" ? setupHref("have-amounts") : "#/balance/net-worth", class: "btn secondary small" }, "Change the home's value"))) : null,
+          ]));
+          // a tap or a payment moves the grey figure under Still owed: it is announced (screen readers)
+          boxes.owed?.sub?.setAttribute("aria-live", "polite");
+          refresh();
+        };
         draw();
         add(card, group(`${o.icon} ${o.label}`,
-          o.key === "credit" ? fieldset("Do you pay the whole bill every month?", seg([{ value: "yes", label: "Yes, every month" }, { value: "no", label: "No, some carries over" }], x.paidInFull ? "yes" : x.owed !== "" ? "no" : null, (val) => { x.paidInFull = val === "yes"; draw(); }, "Do you pay the whole card bill every month?")) : null,
+          o.key === "credit" ? fieldset("Do you pay the whole bill every month?", seg([{ value: "yes", label: "Yes, every month" }, { value: "no", label: "No, some carries over" }], x.paidInFull ? "yes" : x.owed !== "" || x.payment !== "" ? "no" : null, (val) => { x.paidInFull = val === "yes"; draw(); }, "Do you pay the whole card bill every month?")) : null,
           body));
       }
       firstGroup();
-      current = { apply: (d) => applyOweAmounts(d, v, today), words: (p2) => { const r = reflect(p2, "owe-amounts"); return r?.kind === "owe" ? `Got it: ${money(r.total)} owed in all.` : r?.kind === "paid-in-full" ? "Paid in full every month: no card debt to plan for." : null; } };
-      actions();
+      const words = (p2) => {
+        const r = reflect(p2, "owe-amounts");
+        if (r?.kind === "paid-in-full") return "Paid in full every month: no card debt to plan for.";
+        if (r?.kind !== "owe") return null;
+        if (!r.guessed) return `Got it: ${money(r.total)} owed in all.`;
+        // the payments typed are the person's: said so when every balance is ours
+        const typedPays = (p2.debts ?? []).filter((d) => typeof d.id === "string" && d.id.startsWith("setup-debt-") && Number(d.minPayment) > 0 && !isGuess(p2, `debts[${d.id}].minPayment`)).length;
+        const ours = r.guessed === r.of ? `by our guesses.${typedPays ? ` ${typedPays === 1 ? "The payment you typed stays" : "The payments you typed stay"} as you typed ${typedPays === 1 ? "it" : "them"}.` : ""}`
+          : `${r.guessed === 1 ? "One balance is" : `${r.guessed} balances are`} our guess for now.`;
+        return `Got it: about ${money(about(r.total))} still owed in all${r.guessed === r.of ? `, ${ours}` : `. ${ours}`}`;
+      };
+      const guessOpt = guessing ? { guess: ctx.guess } : {};
+      current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words };
+      // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess,
+      // the same save as Continue; a debt picked is never dropped
+      const skipGuessing = () => { current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words }; forward(); };
+      actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: skipGuessing } : {});
     },
 
     spend() {
@@ -748,7 +837,7 @@ export function render(page, ctx) {
       const mode = tileGroup("How to answer", [{ key: "rows", icon: "📋", label: "A few groups", line: "Rent, food, car..." }, { key: "total", icon: "✏️", label: "One rough total", line: "If you're not sure" }],
         { radio: true, isOn: (o) => (o.key === "total") === (v.mode === "total"), onPick: (o) => { v.mode = o.key; drawBody(); } });
       const drawBody = () => {
-        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }, { placeholder: "3,500" }), "Home, food, car, fun: everything. It counts as must-pay, to be safe."));
+        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }), "Home, food, car, fun: everything. It counts as must-pay, to be safe."));
         else {
           sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
           const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
@@ -809,8 +898,8 @@ export function render(page, ctx) {
         const drawDate = () => swap(dateBox, chip === "date" ? ui.h("input", { class: "su-in", type: "date", value: x.date || "", min: today, "aria-label": `${g.label}: by when`, onInput: (e) => { x.date = e.target.value; x.years = null; } }) : "");
         drawDate();
         add(card, group(`${g.icon} ${g.label}`,
-          g.key === "other" ? field("What is it?", ui.h("input", { class: "su-in", enterkeyhint: "next", value: x.name, placeholder: "e.g. A new kitchen", onInput: (e) => { x.name = e.target.value; } })) : null,
-          field("How much", moneyIn(x.target, (val) => { x.target = val; }, { label: `${g.label}: how much`, placeholder: g.key === "home" ? "60,000" : g.key === "trip" ? "4,000" : "10,000" }), g.key === "home" ? "The down payment and closing costs" : null),
+          g.key === "other" ? field("What is it?", ui.h("input", { class: "su-in", enterkeyhint: "next", value: x.name, onInput: (e) => { x.name = e.target.value; } }), "For example, a new kitchen.") : null,
+          field("How much", moneyIn(x.target, (val) => { x.target = val; }, { label: `${g.label}: how much` }), g.key === "home" ? "The down payment and closing costs. For example, 60,000." : `For example, ${g.key === "trip" ? "4,000" : "10,000"}.`),
           fieldset("By when", seg(opts, chip, (val) => { chip = val; if (val !== "date") { x.years = Number(val); x.date = ""; } drawDate(); }, `${g.label}: by when`)), dateBox));
       }
       firstGroup();
@@ -845,7 +934,9 @@ export function render(page, ctx) {
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
     };
     const couple = st.later.some((l) => l.key === "couple");
+    // half or more of one side is our guesses: the figure, said as partly ours, calm (never "a solid base" on guesses)
     const nwFig = st.netWorth === null ? fig("open", "What you own, minus what you owe", "Not yet", "Needs what you have and what you owe.", "Add them ›", setupHref("have"))
+      : st.netWorthGuessed ? fig("calm", "What you own, minus what you owe", st.netWorth, `Partly our guesses. You own about ${money(about(st.assets))} and owe about ${money(about(st.liabilities))}.`, "● Our guesses for now")
       : st.netWorth >= 0 ? fig("ok", "What you own, minus what you owe", st.netWorth, `You own ${money(st.assets)} and owe ${money(st.liabilities)}.`, "● A solid base")
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
@@ -871,24 +962,40 @@ export function render(page, ctx) {
         ui.h("ol", { class: "su-moves" }, st.moves.map((m, i) => ui.h("li", {}, ui.h("a", { href: m.href }, ui.h("span", { class: "n", "aria-hidden": "true" }, String(i + 1)), ui.h("span", {}, ui.h("b", {}, m.title), m.detail ? ui.h("span", { class: "d" }, m.detail) : null), ui.h("span", { class: "c", "aria-hidden": "true" }, "›"))))));
     }
     // what is not counted yet: what no tile above already asks for (their "Add them" links cover the rest)
-    const notes = st.later.filter((l) => !["income", "spend", "accounts", "retire"].includes(l.key)).map((l) => rowLink(l.href, null, l.label));
-    for (const g of st.guessed) {
-      const parts = [g.rate !== null ? `rate (a typical ${pctOf(g.rate)} for now)` : null, g.payment !== null ? `payment (about ${money(g.payment)} a month for now)` : null].filter(Boolean);
-      notes.push(rowLink("#/balance/liabilities", null, `${g.name}: the real ${and(parts)}`));
+    // Social Security worked out from pay is counted, so it is one of our guesses, not "not counted yet"
+    const ssLine = st.later.find((l) => l.key === "ss-estimate");
+    const notes = st.later.filter((l) => !["income", "spend", "accounts", "retire", "ss-estimate"].includes(l.key)).map((l) => rowLink(l.href, null, l.label));
+    // a car loan counts while the car is not in yet (question 4 left its value empty): said, with where to add it
+    const carLoan = (plan.accounts ?? []).some((a) => a.type === "loan" && (a.id === "setup-owe-car-loan" || /car|auto|vehicle|truck/i.test(a.name ?? "")) && Math.abs(Number(a.balance) || 0) > 0);
+    const carIn = (plan.accounts ?? []).some((a) => a.type === "vehicle" && Number(a.balance) > 0);
+    if (carLoan && !carIn) notes.unshift(rowLink(setupHref(picks(plan, "have").includes("car") ? "have-amounts" : "have"), null, "Your car: type what it would sell for, so it counts beside its loan"));
+    // the debt figures we filled in are counted, so they are not "not counted yet": they are listed as our guesses, each
+    // debt on one row, with the page that lists every guess (and where to type the real figures)
+    const homes = (plan.accounts ?? []).filter((a) => a.type === "property" && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`))
+      .map((a) => rowLink("#/overview/guesses", null, `${a.name}: worth about ${money(a.balance)}`));
+    const ours = [...guessTwins(plan).map((t) => rowLink("#/overview/guesses", null, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once`)), ...homes, ...st.guessed.map((g) => {
+      const parts = [g.owed !== undefined ? `still owed about ${money(g.owed)}` : null, g.rate !== null ? `rate ${pctOf(g.rate)}` : null, g.payment !== null ? `${money(g.payment)} a month` : null].filter(Boolean);
+      return rowLink("#/overview/guesses", null, `${g.name}: ${parts.join(", ")}`);
+    }), ...(ssLine ? [rowLink(ssLine.href, null, ssLine.label)] : [])];
+    if (ours.length) {
+      const n = guessesInUse(plan).length;
+      add(card, ui.h("h2", { class: "su-h2" }, "Our guesses for now"),
+        ui.h("p", { class: "su-help" }, "Typical figures for a household like yours. Good enough to start; type the real ones when you have them."),
+        ui.h("ul", { class: "page-list" }, ours, n > ours.length ? rowLink("#/overview/guesses", null, `All ${n} of our guesses`) : null));
     }
     if (notes.length) add(card, ui.h("h2", { class: "su-h2" }, "Not counted yet"), ui.h("ul", { class: "page-list" }, notes));
     const a = plan.assumptions ?? {};
     const pc = (x) => `${Math.round(Number(x) * 1000) / 10}%`;
     const looked = !!a.reviewedAt;
     add(card, ui.h("details", { class: "card fold fold-card su-guess" },
-      ui.h("summary", {}, ui.h("h2", {}, "How the plan makes its guesses"), ui.h("span", { class: "fold-status" }, looked ? "✓ Looked over" : "Worth a look"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("summary", {}, ui.h("h2", {}, "What the plan assumes about prices and markets"), ui.h("span", { class: "fold-status" }, looked ? "✓ Looked over" : "Worth a look"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("ul", { class: "su-list" },
         [["🏷️", `Prices rise ${pc(a.inflation ?? 0.03)} a year`, "Inflation, the long-run average"],
           ["📈", `Stocks grow about ${pc(a.returnStocks ?? 0.07)} a year, bonds ${pc(a.returnBonds ?? 0.04)}`, "Before inflation, on average; some years fall"],
           ["🎂", `The plan runs to age ${a.planEndAge ?? 95}`, "So the money is planned to last"],
           ["🛟", `A cushion of ${a.emergencyMonths ?? 6} months of must-pay bills`, "For a lost job or a big repair"]]
           .map(([i, b, m]) => ui.h("li", {}, ui.h("span", { class: "su-li", "aria-hidden": "true" }, i), ui.h("div", {}, ui.h("b", {}, b), ui.h("span", { class: "m" }, m))))),
-      ui.h("div", { class: "su-gbtns" }, looked ? null : ui.h("button", { type: "button", class: "secondary", onClick: () => { pending = [{ kind: "ok", text: "Saved: the plan's guesses are looked over." }]; store.update((d) => applyGuesses(d, today)); } }, "These sound fine"), ui.h("a", { href: "#/system/assumptions", class: "btn secondary" }, "Change them ›"))));
+      ui.h("div", { class: "su-gbtns" }, looked ? null : ui.h("button", { type: "button", class: "secondary", onClick: () => { pending = [{ kind: "ok", text: "Saved: you've looked over what the plan assumes." }]; store.update((d) => applyGuesses(d, today)); } }, "These sound fine"), ui.h("a", { href: "#/system/assumptions", class: "btn secondary" }, "Change them ›"))));
     add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: "#/overview/dashboard" }, "Go to my dashboard"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer")));
     try { card.querySelector("#su-q")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
   }

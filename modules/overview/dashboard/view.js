@@ -115,7 +115,7 @@ export function render(root, ctx) {
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
-      tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.change ? `${Math.abs(nw.change.sinceLast) < 0.5 ? "No change" : fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
+      tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.partlyGuessed ? "Partly our guesses" : nw.change ? `${Math.abs(nw.change.sinceLast) < 0.5 ? "No change" : fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       tile("#/balance/net-worth", "You own", fmt.money(nw.assets, cur), `${fmt.money(nw.liquid, cur)} of it is cash or easy to sell`),
       tile("#/balance/liabilities", "You owe", fmt.money(nw.liabilities, cur), nw.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       tile("#/goals/goals", "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),

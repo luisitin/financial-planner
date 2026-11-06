@@ -3,6 +3,8 @@
 // sheet; other modules import ACCOUNT_TYPES from this file.
 // liquid: cash or sellable within days.  invested: money put away for later (counts in "Invested
 // for later"); everyday cash is liquid but not invested.  taxBucket: how growth is taxed.
+import { isGuess } from "../../../core/estimate/index.js";
+
 export const ACCOUNT_TYPES = {
   checking:        { label: "Checking",            side: "asset",     liquid: true,  invested: false, taxBucket: "taxable" },
   savings:         { label: "Savings or money market", side: "asset", liquid: true,  invested: false, taxBucket: "taxable" },
@@ -33,7 +35,10 @@ export const countedBalance = (a) => isLiability(a.type) ? Math.abs(Number(a.bal
  *   assets, liabilities, netWorth, liquid, cash (checking + savings + cash), investable (invested types only),
  *   byType: { [type]: total }, bySide: { asset, liability },
  *   byTaxBucket: { taxable, deferred, free, none } (invested money only, so the three buckets add up to investable),
- *   count, history: [{ date, assets, liabilities, netWorth }], change: { sinceLast, sinceLastPct } | null
+ *   count, history: [{ date, assets, liabilities, netWorth }], change: { sinceLast, sinceLastPct } | null,
+ *   guessedAssets?, guessedLiabilities?, partlyGuessed?   (only when a balance is one of our guesses: docs/CONVENTIONS.md
+ *   "Guesses"; partlyGuessed when the guessed balances are half or more of what you own, or of what you owe, so the
+ *   figure is said as "partly our guesses" and never praised as "a solid base")
  * }
  * Asset balances keep their sign (an overdrawn checking account is negative and lowers what you own);
  * debts count as positive amounts owed whatever sign was typed.
@@ -43,11 +48,16 @@ export function compute(plan, params = {}) {
   const accounts = plan.accounts ?? [];
   let assets = 0, liabilities = 0, liquid = 0, investable = 0, cash = 0;
   const byType = {}, byTaxBucket = { taxable: 0, deferred: 0, free: 0, none: 0 };
+  // balances that are our guesses (a ledger entry the balance still equals); a plan with no ledger is never looked at
+  const led = plan.guesses && typeof plan.guesses === "object" && Object.keys(plan.guesses).length > 0;
+  let guessedAssets = 0, guessedLiabilities = 0;
   for (const a of accounts) {
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset;
     const bal = countedBalance(a);
     byType[a.type] = (byType[a.type] ?? 0) + bal;
-    if (t.side === "liability") { liabilities += bal; continue; }
+    const guessed = led && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`);
+    if (t.side === "liability") { liabilities += bal; if (guessed) guessedLiabilities += bal; continue; }
+    if (guessed) guessedAssets += bal;
     assets += bal;
     if (t.liquid) liquid += bal;
     if (t.liquid && !t.invested) cash += bal;
@@ -59,5 +69,9 @@ export function compute(plan, params = {}) {
   const last = earlier[earlier.length - 1];
   const netWorth = assets - liabilities;
   const change = last ? { sinceLast: netWorth - last.netWorth, sinceLastPct: last.netWorth ? (netWorth - last.netWorth) / Math.abs(last.netWorth) : null, since: last.date } : null;
-  return { assets, liabilities, netWorth, liquid, cash, investable, byType, bySide: { asset: assets, liability: liabilities }, byTaxBucket, count: accounts.length, history, change };
+  const guesses = guessedAssets || guessedLiabilities ? {
+    guessedAssets, guessedLiabilities,
+    partlyGuessed: (assets > 0 && guessedAssets / assets >= 0.5) || (liabilities > 0 && guessedLiabilities / liabilities >= 0.5),
+  } : {};
+  return { assets, liabilities, netWorth, liquid, cash, investable, byType, bySide: { asset: assets, liability: liabilities }, byTaxBucket, count: accounts.length, history, change, ...guesses };
 }

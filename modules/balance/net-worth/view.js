@@ -1,6 +1,8 @@
 // modules/balance/net-worth/view.js -- DOM only.
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
+import { isGuess, clearGuess } from "../../../core/estimate/index.js";
+import { guessTwins } from "../../overview/guesses/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -39,7 +41,8 @@ export function render(root, ctx) {
     ));
   } else {
     root.append(ui.card(null, ui.row(
-      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.change ? `${Math.abs(d.change.sinceLast) < 0.5 ? "No change" : fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
+      // smart guesses C2 (spec 8.1): a guessed balance that is half or more of either side says so, never as settled fact
+      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.partlyGuessed ? "Partly our guesses. Type the real balances below." : d.change ? `${Math.abs(d.change.sinceLast) < 0.5 ? "No change" : fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       ui.stat("You own", fmt.money(d.assets, cur), `${fmt.money(d.liquid, cur)} is cash or easy to sell`),
       ui.stat("You owe", fmt.money(d.liabilities, cur), d.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       ui.stat("Invested for later", fmt.money(d.investable, cur), investedLine(d, fmt, cur)),
@@ -58,6 +61,7 @@ export function render(root, ctx) {
     }
     const values = editing ? { ...editing } : { type: "checking", asOf: fmt.today() };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an account"));
+    if (editing && isGuess(plan, `accounts[${editing.id}].balance`)) formHost.append(ui.h("p", { class: "muted small" }, "This balance is our guess. Type the real one, or save it as it is to keep it as yours."));
     const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
     formHost.append(ask);
     const save = (v, typo) => {
@@ -75,6 +79,8 @@ export function render(root, ctx) {
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
             if (moved) markTyped(p, old.id, fmt.today());
+            // saved from the form, even unchanged, the balance is the person's: it is no longer our guess (spec S2)
+            clearGuess(p, `accounts[${old.id}].balance`);
           }
         }
         else p.accounts.push({ id: ui.uid(), ...v, history: [] });
@@ -103,6 +109,7 @@ export function render(root, ctx) {
 
   const edit = (a) => { editing = a; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth" }); };
   const del = (a) => { if (ui.confirm(`Delete ${a.name}?`)) { pending = { card: "accounts", text: `${a.name} removed.` }; store.update((p) => { p.accounts = p.accounts.filter((x) => x.id !== a.id); }); } };
+  const guessed = (a) => isGuess(plan, `accounts[${a.id}].balance`);
   const typeLabel = (a) => (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label;
   // Anything that counts against you (a loan, or an overdrawn asset) shows a minus in red (F-008).
   const balance = (a) => { const against = isLiability(a.type) || countedBalance(a) < 0; return ui.h("span", { class: against ? "bad" : "" }, (against ? "-" : "") + fmt.money(Math.abs(countedBalance(a)), cur)); };
@@ -113,7 +120,7 @@ export function render(root, ctx) {
     { key: "type", label: "Type", render: typeLabel },
     { key: "institution", label: "Institution" },
     { key: "balance", label: "Balance", align: "right", render: balance },
-    { key: "asOf", label: "Balance as of", render: (a) => fmt.date(a.asOf) },
+    { key: "asOf", label: "Balance as of", render: (a) => (guessed(a) ? "our guess for now" : fmt.date(a.asOf)) },
     { key: "actions", label: "", render: (a) => ui.h("span", {},
       ui.button("Edit", () => edit(a), { class: "secondary small" }), " ",
       ui.button("Delete", () => del(a), { class: "danger small" })) },
@@ -124,8 +131,11 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name),
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
-    ui.h("div", { class: "rec-sub" }, a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
+    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now: Edit to type the real balance" : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
   const said = (card) => { if (pending?.card !== card) return null; const n = ui.notice("ok", pending.text); pending = null; return n; };
+  // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
+  const twins = guessTwins(plan);
+  if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
   root.append(ui.card(empty ? null : "Accounts",
     said("accounts"),
     empty ? null : ui.h("p", {}, ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update all balances at once")),

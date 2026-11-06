@@ -49,3 +49,31 @@ test("a payment below the interest never pays off; zero balance is paid off", ()
   assert.equal(d.rows.find((r) => r.name === "Old loan").months, 0);
   assert.ok(d.warnings.some((w) => w.includes("never pays off")));
 });
+
+// smart guesses (spec P7, C2 review): a card whose balance and rate are both our guesses is not called expensive in amber:
+// the verdict would rest on our guesses alone. A typed balance or rate keeps today's warning.
+test("a debt resting on our guesses alone (balance and rate) is not flagged expensive; typed figures still are", async () => {
+  const { compute: alerts } = await import("../../overview/alerts/compute.js");
+  const make = (guessBalance, guessRate) => {
+    const p = emptyPlan();
+    p.accounts = [{ id: "setup-owe-credit", name: "Credit cards", type: "credit", balance: 3000, asOf: "2026-11-01" }];
+    p.debts = [{ id: "setup-debt-credit", accountId: "setup-owe-credit", rate: 0.224, minPayment: 90, extra: 0 }];
+    p.guesses = {};
+    if (guessBalance) p.guesses["accounts[setup-owe-credit].balance"] = { k: "debt.credit.owed", v: 3000, u: "total", s: 0.9, at: "2026-11-01", d: "2026-11-01" };
+    if (guessRate) { p.guesses["debts[setup-debt-credit].rate"] = { k: "debt.credit.rate", v: 0.224, u: "rate", s: null, at: "2026-11-01", d: "2026-11-01" }; p.debts[0].rateGuessed = 0.224; }
+    if (!Object.keys(p.guesses).length) delete p.guesses;
+    return p;
+  };
+  const ours = compute(make(true, true), { today: "2026-11-01" });
+  assert.equal(ours.rows[0].expensive, false);
+  assert.equal(ours.rows[0].byGuesses, true);
+  assert.deepEqual(ours.warnings, []);
+  assert.equal(alerts(make(true, true), { today: "2026-11-01" }).alerts.some((a) => /expensive/.test(a.id ?? "")), false);
+  assert.equal(alerts(make(false, false), { today: "2026-11-01" }).alerts.some((a) => /expensive/.test(a.id ?? "")), true, "typed: the alert as today");
+  for (const [b, r] of [[false, true], [true, false], [false, false]]) {
+    const d = compute(make(b, r), { today: "2026-11-01" });
+    assert.equal(d.rows[0].expensive, true, `${b}/${r}`);
+    assert.equal("byGuesses" in d.rows[0], false);
+    assert.equal(d.warnings.length, 1);
+  }
+});

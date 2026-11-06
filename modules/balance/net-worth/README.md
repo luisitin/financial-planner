@@ -4,13 +4,18 @@
 **Purpose:** the balance sheet: every account with a balance, totals, liquidity and tax-bucket splits, and a dated history of snapshots.
 
 ## Inputs
-Plan sections read: `accounts`, `netWorthHistory`, `meta.currency`.
+Plan sections read: `accounts`, `netWorthHistory`, `meta.currency`, `guesses` (the ledger of our guesses, read only).
 `compute(plan)` takes no parameters.
 
 ## Outputs
 `assets`, `liabilities`, `netWorth` (= assets - liabilities), `liquid` (cash-like and taxable brokerage),
 `investable` (everything with a tax bucket), `byType`, `bySide`, `byTaxBucket` (taxable / deferred / free / none),
 `count`, `history` sorted by date, `change` vs the last snapshot or `null`.
+Only when the plan holds guesses (smart guesses C2, spec 8.1; additive, so a plan without any computes exactly as
+before): `guessedAssets` and `guessedLiabilities` (the sums of the balances that are our guess: `isGuess(plan,
+"accounts[<id>].balance")`, core/estimate) and `partlyGuessed` (a guessed side is 50% or more of what you own, or of
+what you owe). Get started's done screen reads it ("Partly our guesses", "● Our guesses for now" in place of "A solid
+base"); this page's view and the Dashboard tile are the designer's to change (see the C2 notes).
 
 ## Formulas
 Sums. Liability balances are stored as positive amounts owed and subtracted. The type table

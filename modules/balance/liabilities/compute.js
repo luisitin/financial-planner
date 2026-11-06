@@ -7,6 +7,7 @@ import { nper, amortization } from "../../../core/math/finance.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { money } from "../../../core/format.js";
+import { isGuess } from "../../../core/estimate/index.js";
 
 export const DEBT_ICONS = { credit: "💳", mortgage: "🏠", student_loan: "🎓", loan: "🚗", other_liability: "📄" };
 export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
@@ -16,14 +17,19 @@ export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
  *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment (0 once paid off),
  *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
  *            interestMonthly, months (to payoff at `payment`; null without a payment; Infinity if it never pays off),
- *            payoffDate, totalInterest, expensive, neverPaysOff }],
+ *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
  *   income: monthly gross | null, dti (payments / income) | null, highest: row | null, warnings: [text]
  * }
+ * byGuesses (only when true): both what is owed and the rate are our guesses (docs/CONVENTIONS.md "Guesses"). Such a debt
+ * is not called expensive (no amber pill, warning or alert): a guess never turns a figure amber by itself (smart-guesses
+ * spec P7). A typed balance or rate keeps the flag as before.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const debts = plan.debts ?? [];
+  // a plan with no guesses is never looked at (older plans compute exactly as before)
+  const led = plan.guesses && typeof plan.guesses === "object" && Object.keys(plan.guesses).length > 0;
   const rows = (plan.accounts ?? []).filter((a) => isLiability(a.type)).map((a) => {
     const detail = debts.find((x) => x.accountId === a.id) ?? null;
     const owed = Math.abs(Number(a.balance) || 0);
@@ -46,10 +52,12 @@ export function compute(plan, params = {}) {
       }
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
+    const byGuesses = led && !!detail && typeof a.id === "string" && typeof detail.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) && isGuess(plan, `debts[${detail.id}].rate`);
     return {
       ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, paidOff, typedPayment, interestMonthly, months,
       payoffDate: today && Number.isFinite(months) && months !== null ? addMonths(today, months) : null,
-      totalInterest, expensive: rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
+      totalInterest, expensive: !byGuesses && rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
+      ...(byGuesses ? { byGuesses: true } : {}),
     };
   }).sort((x, y) => (y.rate ?? -1) - (x.rate ?? -1) || y.owed - x.owed);
   const sum = (k, filter = () => true) => rows.filter(filter).reduce((s, r) => s + (Number(r[k]) || 0), 0);

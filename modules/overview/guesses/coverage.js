@@ -5,16 +5,16 @@
 // how: "guess:<estimator key>" | "compute:<where the blank is worked out>" | "fallback:<what blank counts>" | "example"
 //      | "ask" | "other-builder" (claude-a's pages: offered, never edited) | "later:C<n>" (the commit that handles it).
 // `npm run check` fails on a malformed row, a guess: key no module defines, or a later: row whose commit is built.
-export const BUILT = 1;   // the last commit of the build plan (spec 15) that is in: C1
+export const BUILT = 2;   // the last commit of the build plan (spec 15) that is in: C2
 export const COVERAGE = [
   {"page":"overview/setup","path":"retirement.contributions[setup-contrib-<pid>].employerMatch (yearly = x12)","label":"Your employer adds a month (Through work)","how":"later:C4"},
   {"page":"overview/setup","path":"accounts[setup-have-car].balance (vehicle)","label":"Your car: What it is worth today","how":"later:C4"},
   {"page":"overview/setup","path":"accounts[setup-have-retire-<pid>].balance","label":"Retirement savings: Saved so far","how":"later:C4","note":"the inventory marks it \"roughly / no\"; E12 account.retire.balance"},
-  {"page":"overview/setup","path":"debts[setup-debt-credit].rate","label":"Credit cards: Interest rate a year","how":"later:C2"},
-  {"page":"overview/setup","path":"debts[setup-debt-car-loan].rate","label":"Car loan: Interest rate a year","how":"later:C2"},
-  {"page":"overview/setup","path":"debts[setup-debt-student].rate","label":"Student loans: Interest rate a year","how":"later:C2"},
-  {"page":"overview/setup","path":"debts[setup-debt-mortgage].rate","label":"Mortgage: Interest rate a year","how":"later:C2"},
-  {"page":"overview/setup","path":"debts[setup-debt-loan].rate","label":"Another loan: Interest rate a year","how":"later:C2"},
+  {"page":"overview/setup","path":"debts[setup-debt-credit].rate","label":"Credit cards: Interest rate a year","how":"guess:debt.credit.rate","note":"Get started Q5b: the grey figure, written and marked when the box is left blank (C2)"},
+  {"page":"overview/setup","path":"debts[setup-debt-car-loan].rate","label":"Car loan: Interest rate a year","how":"guess:debt.car-loan.rate","note":"Get started Q5b: the grey figure, written and marked when the box is left blank (C2)"},
+  {"page":"overview/setup","path":"debts[setup-debt-student].rate","label":"Student loans: Interest rate a year","how":"guess:debt.student.rate","note":"Get started Q5b: the grey figure, written and marked when the box is left blank (C2)"},
+  {"page":"overview/setup","path":"debts[setup-debt-mortgage].rate","label":"Mortgage: Interest rate a year","how":"guess:debt.mortgage.rate","note":"Get started Q5b: the grey figure, written and marked when the box is left blank (C2)"},
+  {"page":"overview/setup","path":"debts[setup-debt-loan].rate","label":"Another loan: Interest rate a year","how":"guess:debt.loan.rate","note":"Get started Q5b: the grey figure, written and marked when the box is left blank (C2)"},
   {"page":"overview/setup","path":"expenses[setup-x-insurance].amount (monthly, essential when group must)","label":"Insurance and health","how":"later:C3"},
   {"page":"overview/setup","path":"expenses[setup-x-shopping].amount (monthly, essential when group must)","label":"Shopping and everything else","how":"later:C3"},
   {"page":"overview/setup","path":"retirement.spendingMonthly (+ guide.setup.retireAuto)","label":"Once you stop working, about how much a month?","how":"later:C5"},
@@ -69,7 +69,7 @@ export const COVERAGE = [
   {"page":"overview/setup","path":"retirement.socialSecurity[pid].monthlyAtFRA","label":"Your monthly benefit at full retirement age (statement)","how":"ask","note":"the screen offers \"Estimate it for me\" instead of a blank statement figure"},
   {"page":"overview/setup","path":"retirement.socialSecurity[pid].monthlyAtFRA (= estimate, tracked in guide.setup.ssWrote)","label":"Estimate it for me (no box: shows the estimate)","how":"guess:overview/setup:ss","note":"Get started's estimate from pay; listed on Our guesses for you (read through the ssWrote adapter until the person takes the ledger version)"},
   {"page":"overview/setup","path":"retirement.contributions[setup-contrib-<pid>].employerMatch (x12)","label":"Retirement: Your employer adds a month","how":"later:C4"},
-  {"page":"overview/setup","path":"debts[setup-debt-<kind>].rate","label":"Interest rate a year","how":"later:C2"},
+  {"page":"overview/setup","path":"debts[setup-debt-<kind>].rate","label":"Interest rate a year","how":"guess:debt.mortgage.rate","note":"the same box as the five rows for each kind: each kind has its own key, debt.<kind>.rate (C2)"},
   {"page":"overview/setup","path":"assumptions.emergencyMonths; goals[setup-goal-cushion].target","label":"Safety cushion: How many months of must-pay bills? (1-12)","how":"fallback:the plan's emergency months, 6 (Assumptions)","note":"a planning choice the screen asks, not a most-likely figure"},
   {"page":"retirement/annuities","path":"retirement.annuities[].monthly","label":"It pays a month","how":"later:C9"},
   {"page":"retirement/buckets","path":"retirement.buckets.cashYears","label":"Years of withdrawals in cash","how":"later:C9"},

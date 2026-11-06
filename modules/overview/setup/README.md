@@ -367,3 +367,81 @@ ended or starts later; a lean month that just about breaks even).
 `cardFile` with `plural`): "Bring in the card files", "About $2,800 a month went to your Chase cards, whose files aren't
 in, so your bank can't be checked against your plan yet. The first move fixes that." (it said "Your month works"). Test in
 `cashflow/income-statement/module.test.mjs`.
+
+## What you owe with our guesses (smart guesses C2, 2026-11-06; spec 5.2, 7.D, 8.1, 14.4)
+Before C2 a picked debt with no balance typed was dropped: no account, no Liabilities row. A mortgage known only by its
+payment vanished from net worth (overstated by the whole loan), from Timeline ("Debt-free now"), Next best action and
+Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our guess
+(modules/overview/guesses/estimators/debts.js and home.js, formulas and sources in that README).
+- **The screen (view.js).** One line: "Start with what you pay a month. Leave the rest empty and we'll work it out."
+  The boxes in this order: Paid a month, Still owed, Interest rate a year (and, with a mortgage and no home on file,
+  what the home would sell for; with a home on file, a line "Your home: about $X ... Change"). Each blank box shows
+  our guess grey (its placeholder) with "Our guess: why." under it; its accessible name adds ", blank uses our guess of
+  about $X". At most one tap per screen, for the first debt that has one: the mortgage's "When did you take out this
+  mortgage, or last refinance it?" (shown once the payment is typed and the balance is blank), else the car loan's "When
+  did you get this car loan?". The "Got it" line says which balances are our guesses ("Got it: about $X still owed in
+  all, by our guesses." / "One balance is our guess for now." / "N balances are ..."; below). "Skip: use our guesses"
+  saves the screen as it stands, every blank box guessed, and moves on.
+- **`applyOweAmounts(draft, values, today, { guess })`.** Without `guess` (every older caller and test) it is exactly
+  the old function. With `guess` (the view passes `ctx.guess`, which reads the plan before the save) it runs
+  `applyOweGuessed`: the screen's answers go through `oweArgs(plan, x, kind, { askHome })` (`{ owed, payment, rate (a
+  fraction), start?, home? }`, a box that reads back what the plan holds stays the plan's figure, a blank box null) and
+  each blank box gets `guess("debt.<kind>.owed" | ".payment" | ".rate" | "home.value", { path, args })`: the same call
+  the screen's placeholder made, so the grey figure is what is saved. A guessed box is written with `markGuess` (the
+  ledger; a rate or payment also mirrors the older `rateGuessed` / `paymentGuessed` flag, so Liabilities and the debt
+  guide read it as before), a typed one with `clearGuess`. The tap's answer is saved in `guide.setup.taps`
+  (`"mortgage-start"`, `"car-loan-start"`; values in docs/DATA_MODEL.md). When the gate is closed (not U.S. dollars,
+  "outside the U.S.") the old behaviour stays: a blank balance saves nothing and the rate is the typical one.
+- **`valuesFor("owe-amounts")`**: a guessed balance, payment, rate or home reopens blank (grey again), never as typed
+  text; the tap's answer comes back as `start`.
+- **`reflect("owe-amounts")`** adds `{ guessed, of }` (balances that are our guess, of how many) only when one is.
+- **`standing()`** adds `netWorthGuessed: true` when net worth's compute says `partlyGuessed` (a guessed balance is half
+  or more of what you own, or of what you owe; spec 8.1), and `guessed` lists a debt whose balance is our guess with
+  its `owed`. The done screen's net-worth tile then says "Partly our guesses. You own about $X and owe about $Y." with
+  the calm "● Our guesses for now" status, never "A solid base"; a section "Our guesses for now" lists the guessed home
+  and debts ("Mortgage: still owed about $110,000, rate 4.6%, $880 a month") with a link to Our guesses for you.
+- **Choices.** The skip button saves our guesses (the spec's "Skip: use our guesses"); "Skip this question" elsewhere
+  is unchanged. Q4b's own guesses are C4's; a home value saved on Q5b as a guess shows grey on Q4b (below). The done
+  screen's "Not counted yet" no longer lists a guessed debt (it is counted now).
+- **Answer keys** (module.test.mjs, the walks in `qa/fixtures/setup-personas.mjs`): Jordan's mortgage known only by
+  its $1,100 payment is kept at $110,000 owed, 4.6%, home $210,000 (net worth $100,000, partly our guesses); Pat and
+  Lee's at $210,000 (they owe more than $100,000; net worth $978,000 → $768,000; Timeline's debt-free year none →
+  2041; Pay off debts lists it; Next best action's spending +$1,600); Sam's car loan $12,000 at 11.2% and card payment
+  $90 at 22.4%; skipping every box keeps the card ($1,800, $50), the car loan ($14,000, $480) and the mortgage
+  ($110,000, $880). For every walk the grey figure equals what is saved and the settle after the save moves nothing;
+  typing over a guess ends its entry and the payment guess follows the typed balance; the 2010s tap gives $116,000;
+  outside the U.S. nothing differs from the old function.
+
+### After the two C2 reviews (2026-11-06; est/c2/c2-fix.md)
+- **A 0 typed is the person's.** `oweArgs` reads owed and payment with `nonneg`: a box left empty is null (our guess
+  fills it), a 0 typed is 0. "Still owed: 0" saves no debt (as before the guesses); a $0 payment (a loan on hold) is
+  saved as typed and reopens as 0 (`valuesFor`), so a second Continue never puts our guess over it.
+- **Our guessed home is asked as a grey box, never as a line "from question 4".** `askHomeWithMortgage` is also true
+  while the setup home's balance is our guess. On Q4b, `valuesFor("have-amounts")` returns "" for a balance that is our
+  guess and the box shows it grey with its why-line; `applyHaveAmounts` keeps our guess when that box stays empty (it
+  used to drop the home and leave the mortgage standing: net worth −$110,000) and clears the mark when a figure is
+  typed, even the same one. Plans with no guesses behave exactly as before.
+- **A plan from before the guesses going back through Q5b.** Its mortgage was dropped, so Q6 asked "Rent" and the
+  person put the home's payment there. When `applyOweGuessed` now creates the mortgage, a setup housing row still named
+  "Rent" is renamed "Rent or mortgage", so Expenses files the mortgage under it and counts the payment once ($1,700,
+  not $2,580). Answering Q6 again (now asked as "Home costs besides the mortgage") names it "Home costs", and the
+  mortgage payment counts from Debts again.
+- **The screen.** "Skip: use our guesses" saves what is on the screen (typed boxes stay typed) with every empty box
+  guessed: the same save as Continue. Each grey figure's line is "Our guess: why." followed by the box's own help (where
+  to find it). The tap sits under "Still owed", with "Tell us and we'll work out what's left from your payment."; the
+  owed line is announced when it changes (`aria-live`). A payment that covers the typical balance says so ("typical in
+  Ohio at your age and pay; your payment covers it"). The tap is still offered only once a payment is typed: without a
+  payment the spec's work-back (E21) has nothing to work from, and the reviews showed a tap paired with the typical
+  balance makes a steep payment (now refused in E22/E27).
+- **No grey examples in boxes** (spec 10's general change, brought forward: grey now means what is counted): `moneyIn`
+  has no default "0"; the pay box's "65,000", the rough total's "3,500", the goal targets' 60,000 / 4,000 / 10,000 and
+  "e.g. A new kitchen" are gone; the goal boxes' help says "For example, 4,000." The grey uses `--muted` (scoped to
+  `.su-root`: 4.8:1 light, about 6:1 dark).
+- **The done screen.** "About" figures that add up our guesses have three significant figures ("about $159,000");
+  "Got it: about $16,600 still owed in all, by our guesses. The payments you typed stay as you typed them." or "One
+  balance is our guess for now."; the Social Security estimate is listed under "Our guesses for now" (it is counted);
+  a car loan with no car value adds "Your car: type what it would sell for, so it counts beside its loan" to "Not
+  counted yet"; a debt or home added later beside the one we guessed adds "Is Home loan the mortgage we guessed? ..." (overview/guesses'
+  "Is this the same loan?"); the market fold is titled "What the plan assumes about prices and markets", as on the
+  guesses page. The first moves say "type yours on Our guesses for you" for a rate in the guesses' ledger (older plans
+  keep "What you owe").

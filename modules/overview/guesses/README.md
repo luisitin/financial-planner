@@ -1,6 +1,7 @@
 # overview/guesses: Our guesses for you
 
-**Status:** usable (C1 of the smart-guesses build plan: plumbing, data, this page; nothing else a person sees moves).
+**Status:** usable (C1 and C2 of the smart-guesses build plan: plumbing, data, this page; C2: the home and every debt
+Get started asks about, so a picked debt is never dropped, and the "Better guesses are ready" card).
 
 ## Purpose
 A layperson should get through the app without knowing every number. Where a box is left empty, the plan fills in a
@@ -25,7 +26,7 @@ field counts as a guess only while it still equals `v` (`same()`, per unit: rate
 - **S4** a removed record drops its entry; the last entry gone deletes `plan.guesses`.
 - **S5** the older Get started flags are read as frozen guesses (`LEGACY`): `debts[].rateGuessed` / `paymentGuessed`,
   `guide.setup.ssWrote`, `retireAuto`, `cushionTarget` / `cushionFunds`. Settle never re-estimates them; they stay
-  until the person types over them, keeps them, or (C2) takes the "Better guesses" card. "That's about right" or a
+  until the person types over them, keeps them, or takes the "Better guesses are ready" card (below). "That's about right" or a
   typed figure here drops the flag, so the setup and Liabilities treat the figure as the person's own (for the
   cushion, `cushionTarget` becomes `null`, which overview/setup now reads as "the person's own").
 - **S6** an entry whose estimator no module has any more stays frozen and leads this page ("Type the real figure").
@@ -39,8 +40,11 @@ field counts as a guess only while it still equals `v` (`same()`, per unit: rate
   "Sharper if you tell us".
 
 ## The page (view.js)
-Hero; one notice from the last save (kept in a module-level `pending`); "Matters most" (big guesses; when one is
-frozen, or an older payment is stale (below), it leads and the card is titled "Type these first"); "Matters less" folded (small ones); "These look fine" (sets
+Hero; one notice from the last save (kept in a module-level `pending`); "Is this the same loan?" (below) when there is
+one; "Matters most" (the first four big guesses, or every frozen and stale one when there are more; when one is frozen,
+or an older payment is stale (below), it leads and the card is titled "Type these first"); then a fold with the rest:
+"More of our guesses" when big ones spill over, else "Matters less" (small ones). Four keep the top to about a phone
+screen (a plan that skipped three debts has nine big ones; C8's measured ranking decides which matter most); "These look fine" (sets
 `guide.guessesLookedAt`); the market-assumptions fold (a link to System > Assumptions: those are planning choices, not
 guesses about you); "Where our guesses come from" last: the tables behind the guesses above, then every other table on
 hand, each with our name for it, the publisher (`shownBy`), the publisher's table (`tableShown`), a plain "as of" line
@@ -54,6 +58,23 @@ your real one too." Records, never a table (390 px). Saving: Save (or Enter) com
 button under the finger before a tap on "That's about right" lands. Empty state: an empty plan points to Get started; a
 plan with every figure typed says so, says a figure filled in later will show here, and offers the Dashboard. Rows of
 the older guesses keep the setup's order (each debt's payment, then its rate; people in household order).
+**"Better guesses are ready"** (spec 11.5, C2), right under the hero when `offers.upgrade` has rows: "We now fill in
+figures from where you live and what you told us. These N would change; nothing moves until you say so." Each row is the
+label, then "From $1,261 a month to $1,300 a month", then "Our new guess: why."; "Use the new guesses" (filled) writes them (`useNewGuesses`, notice
+"Saved: the N new guesses are in your plan. They follow your answers from now on.") and "Keep the old ones" (outlined)
+writes nothing but the choice (`keepOldGuesses`, notice "Kept: your older figures stay as they are. We won't ask
+again."). Either way `guide.guessUpgrade = { at, choice }` and the card does not come back. Its rows have no box, so
+the lists below it are unchanged. An amount that changes by under 2% (the cushion's $12,000 to $12,100) is not listed
+("Plus one small change of under 2%."): it is written with the rest; the card shows only when a row is worth listing.
+The card never lowers spending once work stops (`overview/setup:retireSpend`): it falls only when a re-guessed loan
+"ends" before work stops, and a guessed mortgage payment holds the state's tax and insurance, which the payoff counts
+as loan (on the older plan, $1,300 "ends" in about 2044 where its $948 of loan runs to 2056: $4,100 would have become
+$2,840). The older figure stays until the person types one (spec 17.4: keeping is the safe default).
+**"Is this the same loan?"** ("Is this the same home?"; "Did you add any of these twice?" for more): "You added Home
+loan, $205,000. We also have Mortgage, with our guess of about $210,000 still owed. If they're the same loan, it's
+counted twice now." with "Yes, the same loan" (filled; notice "Done: Home loan counts once, and our guess for Mortgage
+is gone.") and "No, two loans" (outlined; "Kept both: ... We won't ask again."). The grey figures in the boxes use `--muted` (scoped to `.gs-root`:
+4.8:1 in light mode, about 6:1 in dark; Chrome's own grey is 3.7:1 on the dark panel).
 Ranking in C1 is by static weight (estimator `weight`, or the legacy weights below); the measured ranking (spec 11.2,
 `compute(plan, { ranges: true })`, the "If it's off ..." line) arrives in C8.
 
@@ -62,8 +83,18 @@ Ranking in C1 is by static weight (estimator `weight`, or the legacy weights bel
 lookedAt, planEmpty }`. `rows`: `guessesInUse(plan)` (ledger + legacy) as `{ path, k, label, record, value, unit, kind,
 why, weight, legacy, frozen, stale, href, sources, basis, order }`, sorted frozen first, then stale, then big, then
 small, then by tier and order. `applies`: core/estimate `applies(plan)`; when false no row cites a table. The view
-passes the registry merged from every manifest; without it the module's own is used. `offers` stays empty until C2
-(upgrade) and C7 (fill).
+passes the registry merged from every manifest; without it the module's own is used.
+`offers.upgrade` (C2) = `upgradeOffers(plan, o)`: nothing once `guide.guessUpgrade` is set or the gate is closed; else
+every older (legacy) guess whose key an estimator has, in tier and order, each estimated on a copy of the plan on which
+the ones before it are already written (`markGuess`), so a payment is offered at the new rate. A row is offered only
+when the new figure differs from the old one, also after the old one is rounded the new way (so $12,034 against a new
+$12,000 is not offered). Rows: `{ path, k, label, kind, unit, from, to, why }`. `useNewGuesses(draft, o)` writes them
+in the same order on the draft (the ledger entry; the older flag mirrored, so Liabilities and the debt guide read it
+as before) and returns how many; from then on `settle` keeps them fresh. On `guessedPlan()` (Ohio): the mortgage rate
+7.24% → 4.6%, its payment $1,261 → $1,300 (with Ohio's tax and insurance, E22) and the cushion $12,000 → $12,100
+(listed as "one small change of under 2%"). Spending once work stops ($4,100 → $2,840) is not offered: the card never
+lowers it (below). `offers.fill` (11.4) stays empty
+until C7.
 
 ### Older guesses: words and weights (`LEGACY_WORDS`, `LEGACY_SETUP`)
 | key | label | why (after "Our guess:") | source cited | weight |
@@ -90,20 +121,102 @@ $1,261 is stale. A plan the gate closes (not U.S. dollars, a bank file in anothe
 neutral rate line and no source on any row. The setup rows take their why from the setup's
 estimator when it is in the registry, and from `LEGACY_SETUP` when it is not.
 
-## Estimators in this commit (estimators/debts.js; spec 7.D)
-All tier 2, unit rate, no spread (R11: rates have no band), rounded to 0.1 of a point.
+## Estimators (estimators/common.js, home.js, debts.js; spec 7.C, 7.D)
+Tier 2 in this order: the home first (the mortgage reads it), then each debt's rate, what is owed and the payment.
+Every why-line is the first of its candidates that fits in 70 characters (`fit`). "Sharper if you tell us" lists at
+most two of: your state, your pay, your age, what you pay a month, when you took out the mortgage / got the car loan,
+what the home cost and when.
 
-| key | order | formula | tables | why |
+**What they share (common.js).** `profileOf(plan, today)`: the adults, the reference age (the oldest adult with a birth
+date: the Survey of Consumer Finances' "age of the family head" in a couple), the household's income a year (every
+income line running today, any kind, as the survey's family income is all of it) and whether any of it is a guess, the
+state, the tenure (a mortgage picked or held: owner with a mortgage; a home and no mortgage: owner without one; else a
+renter) and Get started's picks and taps; memoised per pass (`lib.memo("profile")`). `cpiSince(year)`: the published
+CPI (retirement/historical's `RETURNS`, Damodaran/BLS) for every year after `year` to 2025, so a 2023 premium is
+×1.0570 (spec 6.7: never the plan's own inflation setting).
+**R2 on the Survey of Consumer Finances** (`scfR2(item, { income, age })`, the 2025 SCF "median value if held", by
+income and age): value = all-families median × `rInc` × `resid`, where
+- `rInc` = the median at the family's income / all. The income's percentile comes from the survey's income cut-offs,
+  straight lines on log income from ($1,000, 0.5); the medians are joined by straight lines on their logs between the
+  income groups' middle percentiles (10, 30, 50, 70, 85, 95) and held flat beyond them;
+- `resid` = the age group's ratio with its typical income taken out: (age-group median / all) / (median at the age
+  group's median family income / all). No income: the age group's own ratio; no age: 1;
+- the spread is the age group's (else all families') sqrt(2 ln(mean / median)).
+
+| key | order, unit, weight | formula | tables | why (examples) |
 |---|---|---|---|---|
-| `debt.mortgage.rate` | 4 | the state's average contract rate on mortgages outstanding (FHFA NMDB 2026 Q2, row "Average contract interest rate (%)"); no state: the U.S. figure by loan count (4.4%); tap `mortgage-start` = `2022on`: the 2025 new home-purchase rate, the state's, or with no state the U.S. one by loan count (all purchase loans, 6.3%: "the average on new U.S. home loans lately") | `mortgage_outstanding_fhfa_by_state_2026q2`, `mortgage_outstanding_fhfa_national`, `mortgage_new_purchase_fhfa_by_state_2025`, `mortgage_new_loans_fhfa_national_2025` | "the average on Ohio mortgages people already have" (Ohio 4.6%, Arizona 4.3%) |
-| `debt.credit.rate` | 10 | G.19 "accounts assessed interest", August 2026: 22.36% -> 22.4% | `cc_apr_fed_g19` | "the average rate on cards that charge interest" |
-| `debt.student.rate` | 13 | Direct Subsidized/Unsubsidized undergraduate, first paid out 2026-07-01 to 2027-06-30: 6.52% -> 6.5%. Earlier years' rates are not in the tables. | `student_loan_rates_federal` | "the federal rate on new undergraduate student loans" |
-| `debt.loan.rate` | 16 | G.19 personal loan, 24-month, August 2026: 11.90% | `auto_personal_rate_fed_g19` | "the average bank rate on a two-year personal loan" |
+| `home.value` (E18) | 1, total, big | Home's purchase price × FHFA all-transactions HPI (state, 2025) / HPI (state, the year bought), when the Home page has the price, a year from 1990 and a state is set; declared spread 0.15. Else the ACS 2025 median home value for owners with (or without) a mortgage, state (else U.S.), × `rInc` × `resid` on the SCF primary residence (R2), measured spread | `fhfa_hpi_at_state_annual`; `acs2025_median_home_value_by_state_and_mortgage_status` + the SCF tables | "what you paid in 2018, grown with Ohio home prices since"; "typical for an Ohio home with a mortgage, on your pay" |
+| `home.propertyTax` (E23) | 2, year, big | the home's value (typed or on file, else E18) × ACS median taxes / median value (Ohio 1.223%, U.S. 0.901%) | `acs2025_effective_property_tax_rate_by_state` | "Ohio homes pay about 1.2% of their value a year" |
+| `home.insurance` (E24) | 3, year, small | NAIC 2023 average HO-3 premium (Ohio $1,116, U.S. $1,737) × CPI 2024-2025 (1.0570) | `naic2023_homeowners_premium_by_state` | "the average Ohio homeowner policy, in 2025 prices" |
+| `debt.mortgage.rate` (E20) | 4, rate, big | the state's average contract rate on mortgages outstanding (FHFA NMDB 2026 Q2); no state: the U.S. figure by loan count (4.4%); tap "2022 or later": the 2025 new home-purchase rate, the state's, else the U.S. one (6.3%) | `mortgage_outstanding_fhfa_by_state_2026q2`, `mortgage_outstanding_fhfa_national`, `mortgage_new_purchase_fhfa_by_state_2025`, `mortgage_new_loans_fhfa_national_2025` | "the average on Ohio mortgages people already have" (Ohio 4.6%, Arizona 4.3%) |
+| `debt.mortgage.owed` (E21) | 5, total, big | with the payment typed and the tap answered: pv(r/12, 360 − months since the middle of the span, P&I), declared spread 0.15. Else a prior: (a) a typed home × the state's average loan-to-value (FHFA; Arizona 47.6%), declared spread; (b) FHFA unpaid balance per loan in the state (U.S.: by loan count) × the SCF median-to-mean 0.767 × `rInc` × `resid` on the SCF mortgage, measured spread (sqrt(2 ln(mean / median)) of the SCF mortgage balance, all families: sqrt(2 ln(241,300/185,000)) = 0.73, read from the two cells). With a payment typed: at most pv(r/12, 360, P&I); when that bound does not bind, the why-line says the payment covers it | the FHFA state and national tables + the SCF tables | "typical in Ohio at your age and pay; your payment covers it"; "48% of your home's value, usual in Arizona; your payment covers it"; "typical for an Ohio mortgage at your age and pay" (no payment); "worked back from your $1,100 payment and when you took it out" |
+| `debt.mortgage.payment` (E22) | 6, month, big | pmt(r/12, months left, owed) + tax and insurance a month (E23 + E24 / 12, or the yearly figures typed on Home / 12), unless the escrow tap says "no". Months left come from the tap only for a balance the person typed; a guessed balance (already the typical one, midway through people's loans) is paid over 360 | as read | "a loan of about $110,000 at 4.6%, plus Ohio's usual tax and insurance" |
+| `debt.car-loan.rate` (E26) | 7, rate, small | new or used: whichever Experian class's average payment is nearer the typed payment in log terms (else its average amount financed nearer the balance; else the SCF balance). Used: Experian's average rate (11.19%); new: the Fed's 72-month bank rate (7.17%) | `auto_loan_terms_experian_q2_2026`, `auto_personal_rate_fed_g19` | "the average rate on a used-car loan" |
+| `debt.car-loan.owed` (E25) | 8, total, big | no payment: the SCF vehicle-loan balance (R2). A payment typed: pv(r/12, term/2, payment) with the spread ln(pv at three quarters / pv at a quarter)/1.349, combined in logs with the SCF figure (R4); with the tap, pv(r/12, months left, payment), spread 0.25. Asks the tap when the spread is over 0.5 | Experian + the SCF tables | "worked back from your $420 payment, about halfway through a usual loan" |
+| `debt.car-loan.payment` (E27) | 9, month, big | pmt(r/12, term/2, owed); the tap's months left only for a balance the person typed (a tap never turns the typical balance into a steep payment) | Experian | "what pays off $12,000 at 11.2% in about 34 months" |
+| `debt.credit.rate` (E28) | 10, rate, big | G.19 "accounts assessed interest", August 2026: 22.36% → 22.4% | `cc_apr_fed_g19` | "the average rate on cards that charge interest" |
+| `debt.credit.owed` (E29) | 11, total, big | the SCF card balance (R2); with a payment typed, at most payment / (1% + r/12) (the usual minimum, CFPB) | the SCF tables, `card_minimum_payment_rule_cfpb` | "typical card balance at your age and pay"; "worked back from your $20 payment, if that's the minimum" |
+| `debt.credit.payment` (E30) | 12, month, big | min(owed, max($40, 1% of owed + a month's interest)) (CFPB), rounded inside the estimator (R11's $10) and never above the balance after rounding ($35 owed: $35) | `card_minimum_payment_rule_cfpb` | "the month's interest plus 1% of what you owe, a usual minimum" |
+| `debt.student.rate` (E31) | 13, rate, small | Direct Subsidized/Unsubsidized undergraduate, 2026-27: 6.52% → 6.5% | `student_loan_rates_federal` | "the federal rate on new undergraduate student loans" |
+| `debt.student.owed` / `.payment` (E31) | 14 / 15 | the SCF education-loan balance (R2), at most pv(r/12, 120, payment) when a payment is typed; the payment pmt(r/12, 120, owed) | the SCF tables | "what pays off $26,000 at 6.5% over 10 years, the standard plan" |
+| `debt.loan.rate` / `.owed` / `.payment` (E32) | 16 / 17 / 18, small | the Fed's 24-month personal loan rate (11.9%); the SCF other-installment balance, at most pv(r/12, 36, payment); pmt(r/12, 36, owed) | `auto_personal_rate_fed_g19` + the SCF tables | "what pays off $6,000 at 11.9% over 3 years" |
 
-No page calls them yet: Get started starts using them in C2 together with what is owed and the payment (E21-E32), the
-car-loan rate (E26, which needs the new/used class) and the home (E18, E23, E24).
-The setup's own keys live in modules/overview/setup/compute.js `estimators` (tier 4, basis "yours": worked out from the
-plan's own answers with the formulas the setup always used; `tables: []`, `dataAsOf` "2026-11-02").
+P&I is the payment less tax and insurance a month, not rounded (E23 + E24 / 12: 210,000 × 1.223% / 12 = 214.0 and
+1,116 × 1.057 / 12 = 98.3), the same arithmetic as the spec, and never less than half the payment:
+P&I = max(payment − tax and insurance, payment / 2). Without the floor a payment just above the usual tax and insurance
+($313 in Ohio) worked back to almost nothing ($130 owed) while $312 gave $61,000; with it, a higher payment never owes
+less (R3), and the 7.H keys are unchanged (Jordan's $788 and Pat and Lee's $1,329 are above half the payment). Tax and
+insurance typed on Home (`property[].propertyTax`, `.insurance`, a year, above 0 and not a guess) win over the
+state's figures, so the work-back and the payment follow them (settle). A typed figure always wins: each estimator reads the
+screen's answers first (`args`: a key present is the box, a number or null when blank), else the plan's figure when it
+is not a guess. A rate it works with is the typed one, else our guess for it (an earlier key), so a typed rate is
+used for the payment and the work-back.
+
+**The one tap per debt** (`ask`, Q5b shows the first): the mortgage's "When did you take out this mortgage, or last
+refinance it?" (Before 2010 / 2010 to 2019 / 2020 or 2021 / 2022 or later / Not sure; the middle of each span:
+2007-07, 2015-01, 2021-01, 2024-01; saved as `guide.setup.taps["mortgage-start"]`), asked only when the payment is
+typed; the car loan's "When did you get this car loan?" (This year / 1 or 2 years ago / 3 or 4 / 5 or more / Not sure:
+6, 24 or 48 months gone, or about 6 months left; `taps["car-loan-start"]`), asked when the work-back's spread is over
+0.5. "Not sure" is no answer.
+
+**7.H answer keys** (module.test.mjs, the arithmetic in comments; R11 rounding wins where a 7.H figure is unrounded):
+Jordan (Ohio, $58,000, 41, a $1,100 payment): home $210,000, tax $2,550 a year ($210 a month), insurance $1,200 a
+year ($100 a month), rate 4.6%, owed $110,000 (7.H's $111,000 is the unrounded $111,114), tap 2010s $116,000, a blank
+payment $880. Pat and Lee (Arizona, $125,000, 61, a typed $450,000 home, $1,600): tax $2,000 a year ($170 a month),
+insurance $1,250 a year (the unrounded $105.2 a month is 7.H's $110), rate 4.3%, owed $210,000 (7.H's $214,000 is the
+unrounded $214,200), tap 2010s $201,000. Sam (Texas, $48,000, 24, a $420 car payment, $3,000 on cards): car rate
+11.2%, owed $12,000 (7.H's $12,500 is the unrounded $12,464), card rate 22.4%, payment $90 (7.H's $86 unrounded).
+
+**Where this differs from the spec, and why.**
+- The 2010-2019 span's middle is January 2015 (the spec's text says July 2015; its own 7.H figures and the span's true
+  middle use January).
+- E23 and E24 are yearly figures (Home's property tax and insurance boxes are a year); 7.H's monthly figures are
+  checked as a year / 12. Inside E21 and E22 the monthly tax and insurance are not rounded.
+- E25 works back with the plan's rate (typed, else E26), and E29/E31/E32 take the smaller of the SCF figure and the
+  payment's bound, so a small typed payment is never read as a large balance.
+- The card payment's floor is $40 (the CFPB table's most common floor), never more than the balance.
+- A plan the gate closes (not U.S. dollars, outside the U.S.) keeps Get started's older behaviour on Q5b (the typical
+  rate, a blank balance saves nothing).
+- E22 includes tax and insurance (people know their whole payment); Pay off debts and Timeline then count that whole
+  payment against the balance, as they already did for a typed payment. Filed for the owner: escrow is not principal
+  (est/c2/c2-fix.md, UX 1: a `debts[].escrowMonthly` the payoff math subtracts is the proposed fix; it touches
+  core/math/payoff.js and every page that reads `minPayment`, claude-a's debt/consolidation and cashflow/statement among
+  them).
+- The 0.5 floor on P&I (above) is ours: the spec subtracts the tax and insurance in full.
+
+**"Is this the same loan?"** (`guessTwins`, `sameLoan`, `twoLoans`; `offers.twins`, present only when there is one to
+ask). Get started keeps every debt picked, with our guess of what is owed, and the home Q5b asked about. A person who
+later adds the real loan or home on Net worth or Debts would have it counted twice (Pat and Lee: net worth $563,000
+instead of $773,000, $3,200 a month of payments; Jordan with a $300,000 house added: $400,000 instead of $190,000). A
+Get started debt (`setup-owe-<kind>`) or home (`setup-have-home`) whose balance is still our guess, beside an account
+of the same type made elsewhere with a balance that is not a guess, is listed first on the page
+(`{ kind: "loan" | "home", id, name, amount, twinId, twinName, twinAmount }`); a Home page entry on our home moves to
+theirs on Yes. "Yes, the same loan" removes ours
+(its account and the guess on it); when their loan has no row on Debts yet, our row moves onto it under the id
+`debt-<their account id>` with its ledger entries, so our rate and payment guesses follow their balance and a payment
+typed on Get started stays. "No, two loans" stores `guide.setup.twins[<our id>][<their id>] = today` and the question
+is not asked again for that pair; a loan or home of the same kind added later is asked about (a HELOC answered "No",
+then the real home loan added: asked, so it is not counted twice in silence).
 
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
@@ -150,7 +263,7 @@ median value). The FHFA balance per loan is a derived constant below.
 Prices: survey shares are ratios to income and need no aging; balances are end of 2025 and are not aged; flows
 published in an older year's dollars (NAIC 2023, AHS 2023, NDCP 2022, each table's `dollarsOf`) will be aged with the published CPI in
 modules/retirement/historical/data/returns.js up to its last year (2025), never beyond and never with the plan's own
-inflation setting (the estimators that use them arrive in C2-C3).
+inflation setting (`cpiSince`; C2's home insurance is NAIC 2023 × 1.0570; the others arrive in C3).
 
 ### Derived constants (`DERIVED`, recomputed from `T` in module.test.mjs)
 | constant | value | how |
@@ -251,7 +364,8 @@ computes: `core/math/tax.js`, `modules/taxes/state/compute.js` (claude-a's file,
 Every input the 2026-11-02 inventory marked "a layperson does not know this" (191 rows after de-duplication, the
 "roughly / no" 401(k) balance on Get started and the "no (until quoted)" refinance rate included; the spec counted 188), with how a blank is handled: `guess:<key>`, `compute:`, `fallback:`, `example`, `ask`, `other-builder`
 (claude-a's pages) or `later:C<n>`. `npm run check` validates it and prints "guess coverage: N of 191 unknown inputs
-handled (M later)"; a `later:` row whose commit is built fails. C1: 48 handled, 143 later.
+handled (M later)"; a `later:` row whose commit is built fails. C1: 48 handled, 143 later. C2: the six Get started
+rate boxes are `guess:debt.<kind>.rate` (54 handled, 137 later).
 
 ## Tests (module.test.mjs)
 Data: every table has publisher, https URL, vintage and read date; every row's length equals `cols`; spot values (CE
@@ -276,11 +390,15 @@ replace, resolve, resync or another tab's save; a throw keeps the change; the wh
 settles under 50 ms), guesses-invariance (every qa fixture and every qa/households plan: settle changes nothing,
 migrate adds no `guesses`, the store keeps the same plan with and without the hook, every module computes the same)
 and guesses-legacy (the older flags frozen, listed, and made the person's own by "That's about right" or typing).
+C2: the 7.H answer keys for the home and every debt (Jordan, Pat and Lee, Sam from `qa/fixtures/setup-personas.mjs`,
+built with Get started's apply functions up to Q5b), the purchase-price case (FHFA HPI), the start taps, the card
+floor and bound, student and other loans, no state (national figures, "your state"), the gate, the profile, and the
+"Better guesses are ready" card (offers, both buttons, drawn with the stand-in kit).
 `qa/fixtures/guessed-plan.mjs` is a household made through Get started with the unknown boxes left empty (the older
 guesses in place): the tests and the screenshots use it.
 
 ## Next (spec 15)
-C2 debts are never dropped (owed, payment, car-loan rate, home; the "Better guesses" card); C3 spending; C4 retirement
+C2 (built) debts are never dropped; C3 spending; C4 retirement
 saving; C5 the questions and the reveal (pay, goal targets); C6 the form kit and the pages outside setup (`restsOn`);
 C7 existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
 C10 plain words.

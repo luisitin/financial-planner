@@ -3,10 +3,11 @@
 // box to type the real figure (grey with ours) and "That's about right". Folded below: the ones that matter less, the
 // market assumptions, and, last, where the figures come from. The plan changes only through ctx.store.update, with
 // core/estimate's saveField (a typed figure is the person's: the guess on it is dropped) and confirmGuess.
-import { compute } from "./compute.js";
+import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans } from "./compute.js";
 import { mergeEstimators, saveField, confirmGuess } from "../../../core/estimate/index.js";
 
 const STYLE = `
+.gs-root input::placeholder { color: var(--muted); opacity: 1; }
 .gs-root .gs-why { color: var(--text-2); font-size: var(--fs-sm); margin-top: 4px; line-height: 1.4; }
 .gs-root .gs-note { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; }
 .gs-root .gs-form { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; }
@@ -48,6 +49,41 @@ export function render(page, ctx) {
       ? "We filled in what you skipped with typical figures, so your plan works before you know every number. The first few change your answers the most. Type the real figure when you have it."
       : "When you leave a box empty, we fill in a typical figure so your plan still works. Every figure we fill in shows up here.")));
   if (pending) { root.append(ui.notice(pending.kind, pending.text)); ctx.announce?.(pending.text); pending = null; }
+
+  // "Is this the same loan?" (C2 review D2): a debt or home Get started guessed beside one of its kind added later;
+  // counted twice until the person says which it is
+  const twins = d.offers.twins ?? [];
+  if (twins.length) {
+    const m = (v) => fmt.money(Math.round(v), cur);
+    const noun = (t) => (t.kind === "home" ? "home" : "loan");
+    root.append(ui.card(twins.length === 1 ? `Is this the same ${noun(twins[0])}?` : "Did you add any of these twice?",
+      ui.h("ul", { class: "records" }, twins.map((t) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${t.twinName} and ${t.name}`)),
+        ui.h("p", {}, `You added ${t.twinName}, ${m(t.twinAmount)}. We also have ${t.name}, with our guess of about ${m(t.amount)}${t.kind === "home" ? "" : " still owed"}. If they're the same ${noun(t)}, it's counted twice now.`),
+        ui.h("div", { class: "row" },
+          ui.button(`Yes, the same ${noun(t)}`, () => { say("ok", `Done: ${t.twinName} counts once, and our guess for ${t.name} is gone.`); store.update((draft) => { sameLoan(draft, t.id, t.twinId); }); }),
+          ui.button(`No, two ${noun(t)}s`, () => { say("ok", `Kept both: ${t.twinName} and ${t.name} count as two ${noun(t)}s. We won't ask about these two again.`); store.update((draft) => { twoLoans(draft, t.id, t.twinId, today); }); }, { class: "secondary" })))))));
+  }
+
+  // "Better guesses are ready" (spec 11.5): the figures Get started filled in before stay as they are until a tap here.
+  // A change of under 2% in an amount is not listed (it is still written with the rest): it would only be noise
+  const up = d.offers.upgrade;
+  const small = (x) => x.kind === "money" && Number(x.from) > 0 && Math.abs(x.to - x.from) / Number(x.from) < 0.02;
+  const listed = up.filter((x) => !small(x)), quiet = up.length - listed.length;
+  if (listed.length) {
+    const words = (x, v) => (x.kind === "percent" ? pctText(v) : x.kind === "money" ? `${fmt.money(v, cur)}${x.unit === "month" ? " a month" : x.unit === "year" ? " a year" : ""}` : String(v));
+    root.append(ui.card("Better guesses are ready",
+      ui.h("p", {}, `We now fill in figures from where you live and what you told us. ${listed.length === 1 ? "This one would change" : `These ${listed.length} would change`}; nothing moves until you say so.`),
+      ui.h("ul", { class: "records" }, listed.map((x) => ui.h("li", {},
+        // the label on its own line and the change under it: side by side, a long label broke into one word a line at 390 px
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label)),
+        ui.h("div", { class: "rec-value" }, `From ${words(x, x.from)} to ${words(x, x.to)}`),
+        ui.h("div", { class: "gs-why" }, `Our new guess: ${x.why}.`)))),
+      quiet ? ui.h("p", { class: "muted small" }, `Plus ${quiet === 1 ? "one small change" : `${quiet} small changes`} of under 2%.`) : null,
+      ui.h("div", { class: "row" },
+        ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
+        ui.button("Keep the old ones", () => { say("ok", "Kept: your older figures stay as they are. We won't ask again."); store.update((draft) => { keepOldGuesses(draft, today); }); }, { class: "secondary" }))));
+  }
 
   if (!d.count) {
     root.append(d.planEmpty
@@ -111,12 +147,14 @@ export function render(page, ctx) {
     return li;
   }
 
-  const big = d.big, small = d.small;
+  // at most four open at the top (a phone screen or so; C2 review, UX 10): the rest of the big ones fold with the small
+  const lead = Math.max(4, d.big.filter((r) => r.frozen || r.stale).length);
+  const big = d.big.slice(0, lead), more = [...d.big.slice(lead), ...d.small];
   if (big.length) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, big.map(record))));
-  if (small.length) {
+  if (more.length) {
     root.append(ui.h("details", { class: "card fold fold-card", open: big.length ? null : true },
-      ui.h("summary", {}, ui.h("h2", {}, "Matters less"), ui.h("span", { class: "fold-status" }, `${small.length} ${small.length === 1 ? "guess" : "guesses"}`), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("ul", { class: "records" }, small.map(record))));
+      ui.h("summary", {}, ui.h("h2", {}, d.big.length > lead ? "More of our guesses" : "Matters less"), ui.h("span", { class: "fold-status" }, `${more.length} ${more.length === 1 ? "guess" : "guesses"}`), ui.h("span", { class: "fold-chev" }, "›")),
+      ui.h("ul", { class: "records" }, more.map(record))));
   }
   root.append(ui.h("section", { class: "card flat" },
     ui.h("p", { class: "muted" }, d.lookedAt ? `You looked these over on ${fmt.date(d.lookedAt)}. Type a real figure whenever you have one.` : "Looked them over? Say so here. You can type a real figure any time."),
