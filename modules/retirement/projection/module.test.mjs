@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildInputs, compute, BUCKET_OF } from "./compute.js";
+import { project } from "../../../core/math/retirement.js";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -193,4 +194,169 @@ test("recheck 2026-11-05: a spouse's top-up counts from when both have claimed, 
   // no figure of Sam's own: nothing counted for him
   const none = plan(67, 67); delete none.retirement.socialSecurity.s;
   assert.equal(buildInputs(none, { today: T }).inputs.incomes.filter((x) => x.kind === "social" && x.personIndex === 1).length, 0);
+});
+
+// recheck 2026-11-05: income on the Income page that is not pay, a pension or Social Security, after work stops. Rent goes on;
+// support and other count after work only up to an end date they carry, else stop when their owner stops work; child support
+// with no end date ends in the year the youngest dependent (or the child it names) turns 18; dividends and interest never.
+const T5 = "2026-11-02";
+const household = async (file) => { const fs = await import("node:fs"); return JSON.parse(fs.readFileSync(new URL(`../../../qa/households/${file}`, import.meta.url), "utf8").match(/## Plan JSON\s*```json\s*([\s\S]*?)```/)[1]); };
+const figures = (p) => { const d = compute(p, { today: T5 }); return { success: d.result.success, end: Math.round(d.atEnd.totalReal), carries: Math.round(d.affordable), verdict: d.verdict, shortYear: d.shortYear ?? null }; };
+const without = (p, name) => ({ ...p, income: p.income.filter((x) => x.name !== name) });
+const yearsOf = (I, name) => project(I).rows.filter((r) => r.incomeLines.some((l) => l.name === name)).map((r) => r.year);
+
+test("recheck 2026-11-05: help from parents with no end date does not change H-0826; with an end date it counts to it", async () => {
+  const p = await household("09-near-retirement/income/H-0826-untaxed-support.md");
+  assert.deepEqual(figures(p), figures(without(p, "Monthly help from parents")), "help from parents for life flipped short to tight");
+  assert.equal(figures(p).verdict, "short"); assert.equal(figures(p).shortYear, 2059);
+  const b = buildInputs(p, { today: T5 });
+  assert.equal(b.inputs.incomes.some((x) => x.name === "Monthly help from parents"), false);
+  assert.deepEqual(b.otherLeft.map((x) => [x.name, x.yearly, x.why]), [["Monthly help from parents", 4800, "work"]]);
+  // with an end date it counts after work (Gloria stops in 2030), to that year
+  const q = JSON.parse(JSON.stringify(p)); q.income.find((x) => x.name === "Monthly help from parents").endDate = "2040-12-31";
+  const J = buildInputs(q, { today: T5 });
+  assert.deepEqual(yearsOf(J.inputs, "Monthly help from parents"), [2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040]);
+  assert.deepEqual(J.otherLeft, []);
+  assert.ok(compute(q, { today: T5 }).affordable > compute(p, { today: T5 }).affordable);
+});
+
+test("recheck 2026-11-05: 'IRA withdrawals' typed as other income adds nothing after work stops (H-0796): the IRA is already in the plan", async () => {
+  const p = await household("08-retired/special/H-0796-draws-from-ira.md");
+  assert.deepEqual(figures(p), figures(without(p, "IRA withdrawals")));
+  assert.ok(buildInputs(p, { today: T5 }).otherLeft.some((x) => x.name === "IRA withdrawals" && x.yearly === 30000 && x.why === "accounts"));
+});
+
+test("recheck 2026-11-05: child support with no end date ends in the year the youngest dependent turns 18", async () => {
+  // H-0201: Dana retires in 2050; Leo (2014) and Nia (2018) are grown by then: nothing after work stops
+  const p = await household("03-single-parent/base/H-0201-base.md");
+  assert.deepEqual(figures(p), figures(without(p, "Child support received")));
+  assert.equal(buildInputs(p, { today: T5 }).inputs.incomes.some((x) => x.name === "Child support received"), false);
+  // retiring in 2030 instead: it counts from 2030 to 2036, the year Nia (born 2018) turns 18, and not after
+  const q = JSON.parse(JSON.stringify(p)); q.household.people[0].retirementAge = 45;
+  const I = buildInputs(q, { today: T5 }).inputs;
+  assert.deepEqual(yearsOf(I, "Child support received"), [2030, 2031, 2032, 2033, 2034, 2035, 2036]);
+  assert.equal(I.incomes.find((x) => x.name === "Child support received").endAge, 2036 - 1985);
+  // "Child support for Zoe" ends when Zoe (not the youngest) turns 18; a dependent born later does not stretch it
+  const b = await household("06-blended-family/base/H-0501-base.md");
+  b.household.people.find((x) => x.role === "self").retirementAge = 45;   // Rob stops in 2027
+  const K = buildInputs(b, { today: T5 }).inputs;
+  assert.equal(Math.max(...yearsOf(K, "Child support for Zoe")), 2017 + 18);
+  // no dependent with a birth date: it is like any other support (stops when its owner stops work)
+  const r = JSON.parse(JSON.stringify(q)); r.household.people = r.household.people.filter((x) => x.role !== "dependent");
+  assert.deepEqual(yearsOf(buildInputs(r, { today: T5 }).inputs, "Child support received"), []);
+});
+
+test("recheck 2026-11-05: dividends and interest are not added (the accounts' growth holds them); rent still counts, for life", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const p = retiredCouplePlan();
+  assert.deepEqual(figures(p), figures(without(p, "Dividends")), "dividends counted on top of the brokerage's growth");
+  const b = buildInputs(p, { today: T5 });
+  assert.equal(b.inputs.incomes.some((x) => x.name === "Dividends"), false);
+  assert.deepEqual(b.otherLeft.map((x) => [x.name, x.yearly, x.why]), [["Dividends", 4800, "growth"]]);
+  // rent: from the household's first retirement year (this year: Ruth stopped at 62) for life, rising with its 2% raise
+  const rent = b.inputs.incomes.find((x) => x.name === "Rental duplex");
+  assert.deepEqual([rent.yearly, rent.startAge, rent.endAge, rent.cola, rent.type], [24000, 2026 - 1957, undefined, true, "rental"]);
+  assert.ok([2026, 2040, 2054].every((y) => yearsOf(b.inputs, "Rental duplex").includes(y)));
+  assert.ok(figures(p).carries > figures(without(p, "Rental duplex")).carries, "rent counts");
+  // with an end date, to it
+  const q = retiredCouplePlan(); q.income.find((x) => x.name === "Rental duplex").endDate = "2035-06-30";
+  assert.equal(Math.max(...yearsOf(buildInputs(q, { today: T5 }).inputs, "Rental duplex")), 2035);
+  // the first retirement year's income, by what it is: the stat's words
+  const d = compute(p, { today: T5 });
+  assert.deepEqual(d.coverageFrom, ["Social Security", "pensions", "rent"]);
+  assert.ok(Math.abs(d.coverage - d.rows[0].income / d.rows[0].spending) < 1e-12);
+});
+
+test("recheck 2026-11-05: a partner's support with no end date counts until they stop work, as their pay did, and not after", () => {
+  const p = retirementPlan();   // Sam (self) stops in 2033, Lee (partner) in 2037
+  p.income.push({ id: "h", name: "Help from Lee's parents", type: "support", personId: "lee", amount: 500, period: "monthly", growth: 0, taxable: false });
+  const b = buildInputs(p, { today: T5 });
+  assert.deepEqual(yearsOf(b.inputs, "Help from Lee's parents"), [2033, 2034, 2035, 2036]);
+  assert.equal(b.inputs.incomes.find((x) => x.name === "Lee's pay").yearly, 66000, "pay is pay only");
+  assert.deepEqual(b.otherLeft.map((x) => [x.name, x.why]), [["Help from Lee's parents", "work"]]);
+});
+
+// recheck 2026-11-05, second pass (verify of the first pass)
+test("recheck 2026-11-05: withdrawals from the plan's own accounts typed as income are never added, even with an end date (H-0796)", async () => {
+  const { ownAccountMoney } = await import("./compute.js");
+  const p = await household("08-retired/special/H-0796-draws-from-ira.md");
+  // following the old advice ("give it an end date if it carries on") counted the IRA twice again: $85,416 became $106,606
+  const q = JSON.parse(JSON.stringify(p)); q.income.find((x) => x.name === "IRA withdrawals").endDate = "2055-12-31";
+  assert.deepEqual(figures(q), figures(without(p, "IRA withdrawals")));
+  assert.equal(buildInputs(q, { today: T5 }).inputs.incomes.some((x) => x.name === "IRA withdrawals"), false);
+  assert.ok(buildInputs(q, { today: T5 }).otherLeft.some((x) => x.name === "IRA withdrawals" && x.yearly === 30000 && x.why === "accounts"));
+  // by its name: retirement accounts and savings drawn on; a person called Ira, a trust's payout or an annuity are not
+  for (const n of ["IRA withdrawals", "401(k) distribution", "401k draw", "RMD", "Required minimum distribution", "Roth withdrawals", "403b payout", "Withdrawals from savings", "Brokerage draws", "TSP payments", "457 plan"]) assert.equal(ownAccountMoney(n), true, n);
+  for (const n of ["Help from Ira", "Family trust distribution", "Monthly help from parents", "Annuity", "Withdrawals from the family trust", "Child support received"]) assert.equal(ownAccountMoney(n), false, n);
+});
+
+test("recheck 2026-11-05: only child support is child support ('Children's book royalties' is other income)", async () => {
+  const p = await household("03-single-parent/base/H-0201-base.md");
+  p.household.people.find((x) => x.role === "self").retirementAge = 45;   // Dana stops in 2030; Nia (the youngest, born 2018) turns 18 in 2036
+  const self = p.household.people.find((x) => x.role === "self").id;
+  p.income.push({ id: "roy", name: "Children's book royalties", type: "other", personId: self, amount: 800, period: "monthly", growth: 0, taxable: true });
+  p.income.push({ id: "sn", name: "Support for Leo", type: "support", personId: self, amount: 300, period: "monthly", growth: 0, taxable: false });
+  const b = buildInputs(p, { today: T5 });
+  // royalties with no end date stop with work (listed as not counted), never counted to a child's 18th
+  assert.deepEqual(yearsOf(b.inputs, "Children's book royalties"), []);
+  assert.ok(b.otherLeft.some((x) => x.name === "Children's book royalties" && x.why === "work"));
+  // support that names a dependent is child support, to that child's 18th (Leo, born 2014: 2032); "Child support received"
+  // still runs to the youngest's (Nia: 2036)
+  assert.deepEqual(yearsOf(b.inputs, "Support for Leo"), [2030, 2031, 2032]);
+  assert.deepEqual(yearsOf(b.inputs, "Child support received"), [2030, 2031, 2032, 2033, 2034, 2035, 2036]);
+});
+
+test("recheck 2026-11-05: what is not counted is said with what to do: own-account withdrawals, and dividends from outside the accounts", async () => {
+  const { leftWords } = await import("../careful.js");
+  const ui = { h: (tag, attrs, ...kids) => kids.join("") };
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const say = (left) => leftWords(ui, money, left).join("");
+  const own = say([{ name: "IRA withdrawals", yearly: 30000, why: "accounts" }]);
+  assert.match(own, /IRA withdrawals, \$30,000 a year, is not added: it comes out of your own accounts, which the plan already draws on\./);
+  assert.doesNotMatch(own, /end date/, "an end date would count the IRA twice");
+  assert.match(say([{ name: "IRA withdrawals", yearly: 30000, why: "accounts" }, { name: "RMD", yearly: 5000, why: "accounts" }]), /IRA withdrawals and RMD, \$35,000 a year, are not added: they come out of your own accounts/);
+  const growth = say([{ name: "Dividends", yearly: 4800, why: "growth" }]);
+  assert.match(growth, /already includes them\. If some of it comes from outside your accounts \(a loan you made, a trust\), type that part as other income with an end date on the Income page\./);
+  assert.match(say([{ name: "Help from parents", yearly: 4800, why: "work" }]), /Give it an end date on the Income page if it carries on\./);
+  // the "Not counted" row of What goes into this says why, by kind (it said "no end date, so it stops when work does" for H-0796's IRA)
+  const { leftWhy } = await import("../careful.js");
+  assert.deepEqual(["work", "growth", "accounts"].map((why) => leftWhy({ why })), ["no end date, so it stops when work does", "already in your accounts' growth", "taken from your own accounts, which the plan already draws on"]);
+});
+
+// review 2026-11-06 (verify of the second pass)
+test("review 2026-11-06: rent named by its address or unit ('457 Elm St duplex', 'Rent from condo 401B') is rent, and a person called Roth is not a Roth account", async () => {
+  const { ownAccountMoney } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  // the retired couple's rent counts for life whatever it is called: the name check for money out of the plan's own accounts
+  // dropped it ($85,416 a year carried became $61,416, "Paid by income" 201% became 129%) and said "it comes out of your own
+  // accounts, which the plan already draws on"
+  const named = (name) => { const p = retiredCouplePlan(); p.income.find((x) => x.type === "rental").name = name; return p; };
+  for (const name of ["457 Elm St duplex", "Rent from condo 401B", "Unit 403 B rent", "Rent from the Roth house"]) {
+    const p = named(name);
+    assert.deepEqual(figures(p), figures(retiredCouplePlan()), name);
+    const b = buildInputs(p, { today: T5 });
+    assert.ok(b.inputs.incomes.some((x) => x.name === name && x.yearly === 24000), name);
+    assert.equal(b.otherLeft.some((x) => x.why === "accounts"), false, name);
+  }
+  // help from a grandmother whose surname is Roth, to its end date, counts to that date like any other support
+  const p = retiredCouplePlan();
+  p.income.push({ id: "gr", name: "Help from Grandma Roth", type: "support", personId: "p-ruth", amount: 300, period: "monthly", growth: 0, taxable: false, endDate: "2030-12-31" });
+  assert.deepEqual(yearsOf(buildInputs(p, { today: T5 }).inputs, "Help from Grandma Roth"), [2026, 2027, 2028, 2029, 2030]);
+  for (const n of ["Support from Grandma Roth", "Rothman consulting", "Roth", "457 Elm St", "Unit 401B"]) assert.equal(ownAccountMoney(n), false, n);
+  for (const n of ["Roth IRA withdrawals", "Roth distributions", "Roth conversion", "457(b) payout", "457 b withdrawals", "457 plan", "Draws from my Roth account"]) assert.equal(ownAccountMoney(n), true, n);
+});
+
+test("review 2026-11-06: a draw from a business or against pay is not money out of the household's own accounts", async () => {
+  const { ownAccountMoney } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  // "Owner's draw from business account" read as a withdrawal from the household's accounts: never counted, and the page
+  // said it came out of the household's own accounts
+  for (const n of ["Owner's draw from business account", "Owner’s draw from business account", "Account manager bonus draws", "Draws against commissions account", "Partnership draws from capital account"]) assert.equal(ownAccountMoney(n), false, n);
+  // the accounts themselves still are, a business owner's own 401(k) included
+  for (const n of ["Withdrawals from savings", "Brokerage account draws", "IRA withdrawals", "Business owner's 401(k) withdrawals", "Roth IRA withdrawals"]) assert.equal(ownAccountMoney(n), true, n);
+  const p = retiredCouplePlan();
+  p.income.push({ id: "od", name: "Owner's draw from business account", type: "other", personId: "p-sam", amount: 1000, period: "monthly", growth: 0, taxable: true, endDate: "2029-12-31" });
+  const b = buildInputs(p, { today: T5 });
+  assert.deepEqual(yearsOf(b.inputs, "Owner's draw from business account"), [2026, 2027, 2028, 2029]);
+  assert.equal(b.otherLeft.some((x) => x.why === "accounts"), false);
 });

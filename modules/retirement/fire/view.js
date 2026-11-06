@@ -4,7 +4,7 @@
 // check, folded: the number, how far along you are, the years to get there at the current pace, and the coast figure.
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
 import { compute, carefulAgeSteps } from "./compute.js";
-import { whenWorked, slot } from "../careful.js";
+import { whenWorked, slot, RULE_WORDS, leftWords } from "../careful.js";
 
 const STYLE = `
 .fi-root .fi-note { margin-top: 10px; }
@@ -61,13 +61,19 @@ export function render(root, ctx) {
   const who = sayName(w.name), Who = cap(who), age = w.earliestAge, planned = w.plannedAge;
   const round100 = (n) => money(Math.round((n ?? 0) / 100) * 100);
   const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
-  const others = (w.others ?? []).map((o) => (o.retired ? `${sayName(o.name)} already retired` : `${sayName(o.name)} stopping at ${o.retireAge} as planned`));
+  // someone under their retirement age with no pay who did not say "retired" is "not working", never "already retired" (a
+  // parent at home; recheck 2026-11-05, second pass)
+  const others = (w.others ?? []).map((o) => (o.notWorking ? `${sayName(o.name)} not working` : o.retired ? `${sayName(o.name)} already retired` : `${sayName(o.name)} stopping at ${o.retireAge} as planned`));
   // named in one fixed order (pensions, rent, dividends, other income), whatever order the plan lists them in
   const KINDS = { pension: "pensions", rent: "rent", dividends: "dividends", other: "other income" };
   const kinds = Object.keys(KINDS).filter((k) => (w.otherKinds?.length ? w.otherKinds : ["pension"]).includes(k));
-  const otherWords = w.otherYearly > 0 ? `${money(w.otherYearly)} a year of ${listOf((kinds.length ? kinds : ["other"]).map((k) => KINDS[k]))}` : "";
-  // Social Security already being paid says so (review: "from 2020" for someone who claimed in 2020)
-  const ssWhen = !w.ssFrom ? "" : w.ssFrom < w.startYear ? `already being paid${w.ssFullFrom > w.startYear ? ` (all of it from ${w.ssFullFrom})` : ""}` : `from ${w.ssFrom}${w.ssFullFrom && w.ssFullFrom !== w.ssFrom ? ` (all of it from ${w.ssFullFrom})` : ""}`;
+  // what of it stops, and when (review 2026-11-06: "plus $14,400 a year of other income" for child support that ends in 2034)
+  const ends = w.otherYearly > 0 ? w.otherEnding : null;
+  const endWords = !ends ? "" : ends.all ? ` until ${ends.by}` : ` (${money(ends.yearly)} of it only until ${ends.by})`;
+  const otherWords = w.otherYearly > 0 ? `${money(w.otherYearly)} a year of ${listOf((kinds.length ? kinds : ["other"]).map((k) => KINDS[k]))}${endWords}` : "";
+  // Social Security already being paid says so (review: "from 2020" for someone who claimed in 2020; recheck 2026-11-05: and
+  // for Social Security typed on the Income page, which starts this year in the plan)
+  const ssWhen = !w.ssFrom ? "" : w.ssPaidNow ? `already being paid${w.ssFullFrom > w.startYear ? ` (all of it from ${w.ssFullFrom})` : ""}` : `from ${w.ssFrom}${w.ssFullFrom && w.ssFullFrom !== w.ssFrom ? ` (all of it from ${w.ssFullFrom})` : ""}`;
   // more than all the spending is "more than", never a share capped at 100%
   const ssOf = !w.ssShare ? "" : w.ssShare >= 1 ? `, more than the ${money(w.spendingYearly)} a year you plan to spend` : `, ${fmt.pct(w.ssShare, 0)} of the ${money(w.spendingYearly)} a year you plan to spend`;
   const income = w.ssFrom
@@ -86,7 +92,9 @@ export function render(root, ctx) {
   let head, lede, saved = null, pending = false;
   if (w.retired) {
     head = w.lasts ? "The money lasts" : `The money runs short${w.failYear ? ` in ${w.failYear}` : ""}`;
-    lede = w.lasts ? `You have stopped work, and what you have, with${w.ssFrom ? " Social Security and" : ""} any pensions, lasts to the end of the plan${leaves}.` : `You have stopped work, and at the spending you plan the money runs out${w.failYear ? ` in ${w.failYear}` : ""}. Will the money last? shows what would fix it.`;
+    // named by what the plan counts (recheck 2026-11-05: "with Social Security and any pensions" left out the rent it counted)
+    const withWhat = listOf([w.ssFrom ? "Social Security" : null, ...(w.otherYearly > 0 ? kinds.map((k) => KINDS[k]) : [])].filter(Boolean));
+    lede = w.lasts ? `You have stopped work, and what you have${withWhat ? `, with ${withWhat},` : ""} lasts to the end of the plan${leaves}.` : `You have stopped work, and at the spending you plan the money runs out${w.failYear ? ` in ${w.failYear}` : ""}.${w.plannedStop ? "" : " Will the money last? shows what would fix it."}`;
   } else if (age === null) {
     head = `Even working to ${w.upTo ?? 75}, the money runs short`;
     lede = `The money does not last to the end of the plan${w.legacy > 0 ? ` and leave the ${money(w.legacy)} you want to leave` : ""}, even if markets do as well as average and ${works(w.upTo ?? 75)}${alongside}. Will the money last? shows when it runs short and what would fix it.`;
@@ -99,6 +107,15 @@ export function render(root, ctx) {
   const h1 = ui.h("h1", {}, head);
   const ledeEl = ui.h("p", { class: "lede", "aria-live": "polite", style: pending ? { color: "var(--muted)" } : {} }, lede);
   const savedEl = saved ? ui.h("p", { style: { color: "var(--muted)" } }, ...saved) : null;
+  // the first adult counted as stopped now while the plan still has a later age (review 2026-11-06: this page read "The money
+  // runs short in 2052" and Will the money last?, spending savings only from 2031, "It lasts, just")
+  // (verify 2026-11-06: one who said "Not working now", a parent at home, read "stopped" and "If Elena has stopped, set Elena's
+  // retirement age to 35"; now "not working" and "if Elena does not go back to work")
+  const ps = w.plannedStop, psWho = ps ? sayName(ps.name) : "", psYou = psWho === "you";
+  const psWords = !ps ? "" : ps.notWorking
+    ? `This counts ${psWho} as not working from this year on. Your plan still has ${psWho} working until ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}. If ${psWho} ${psYou ? "do" : "does"} not go back to work, set ${psYou ? "your" : `${psWho}'s`} retirement age to ${ps.age} on the `
+    : `This counts ${psWho} as stopped from this year. Your plan still has ${psWho} stopping work at ${ps.plannedAge}, so Will the money last? starts spending savings only in ${ps.plannedYear}. If ${psWho} ${psYou ? "have" : "has"} stopped, set ${psYou ? "your" : `${psWho}'s`} retirement age to ${ps.age} on the `;
+  const psEl = ps ? ui.h("p", { class: "small" }, psWords, ui.h("a", { href: "#/household/people" }, "People page"), ".") : null;
   // fill in the 9-in-10 age: the same paths and seed as Will the money last?'s careful figure (fire/compute.js carefulAgeSteps)
   // (no height kept: the answer is as long as the placeholder or shorter, and a kept height left a blank gap)
   const fill = (c) => {
@@ -127,14 +144,18 @@ export function render(root, ctx) {
   if (pending) whenWorked(ctx, ledeEl, {
     remote: ["retirement/fire", { today: fmt.today(), careful: true }],
     pick: (out) => out?.withIncome?.careful ?? null,
-    steps: () => carefulAgeSteps(ctx.store.get(), { today: fmt.today(), legacy: w.legacy, personId: w.personId, from: age, upTo: w.upTo }),
+    steps: () => carefulAgeSteps(ctx.store.get(), { today: fmt.today(), legacy: w.legacy, personId: w.personId, from: age, upTo: w.upTo, stopNow: w.stopNow }),
   }, fill);
   const needSs = !w.ssFrom && !w.ssNone;
   hero.append(...[
     h1,
     ledeEl,
     savedEl,
-    ui.h("p", { class: "muted small" }, `${income} ${how}`),
+    psEl,
+    // what is not counted after work stops and how to keep it, then the spending rule both ages use when the plan has another
+    // (recheck 2026-11-05)
+    ui.h("p", { class: "muted small" }, `${income} ${how}`, ...(w.left?.length ? [" ", ...leftWords(ui, money, w.left)] : []),
+      ...(!w.retired && w.strategy && w.strategy !== "fixed-real" ? [` Both ages spend the same every year; your plan uses another rule, ${RULE_WORDS[w.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
     ui.row(
       needSs ? ui.h("a", { class: "btn", href: "#/retirement/social-security" }, "Add Social Security") : ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"),
       needSs ? ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it"),

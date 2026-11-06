@@ -106,3 +106,19 @@ test("the claiming lever says 'now' only when it is now for everyone it moves (r
   assert.equal(s.nowForAll, true); assert.equal(s.value, s.nowAge);
   assert.match(s.sentence, /^Sam claiming now \(64 and 6 months\)/);
 });
+
+test("recheck 2026-11-05: the earliest age spends the plan's amount the same every year, whatever rule the plan uses", async () => {
+  const { earliestRetireAge } = await import("./compute.js");
+  const T = "2026-11-02";
+  const steady = earliestRetireAge(familyPlan(T), { today: T });
+  assert.ok(steady.age > steady.ageNow, "the family cannot stop now");
+  for (const rule of ["percent", "guardrails", "vpw"]) {
+    const p = familyPlan(T); p.retirement.strategy = rule;
+    // with the plan's own rule spending shrinks with the money and never runs short: "stopping now would do" at 36
+    assert.equal(earliestRetireAge(p, { today: T }).age, steady.age, rule);
+    const d = compute(p, { today: T });
+    assert.equal(lever(d, "retire").value, steady.age, rule);
+    assert.equal(d.strategy, rule);
+  }
+  assert.equal(compute(familyPlan(T), { today: T }).strategy, "fixed-real");
+});

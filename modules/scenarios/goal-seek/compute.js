@@ -35,6 +35,9 @@ export function smallestWhere(ok, lo, hi, tol = 0.5) {
  * planned age. Goal seek's "When you can retire" lever and Financial independence share it, so both pages give one answer.
  * (Round 5 review, 2026-11-02: it started at next year's age and never below 45, so a plan that already worked now or at
  * 40 read "at 59" or "at 45"; and someone past 75 was never tried.)
+ * Each age is tested spending the plan's amount the same every year after inflation (strategy "fixed-real"), as the most you
+ * can spend and the 9-in-10 figures are, whatever rule the plan uses (recheck 2026-11-05: under a set share of what is left,
+ * guardrails or years-left spending the money never runs out, so a 36-year-old read "stopping now would do").
  */
 export function earliestRetireAge(plan, params = {}) {
   const today = params.today ?? null;
@@ -45,7 +48,7 @@ export function earliestRetireAge(plan, params = {}) {
   const ageNow = ageOn(self.birthDate, today);
   const planned = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
   if (ageNow === null || !Number.isFinite(planned) || !(ageNow < planned)) return null;
-  const meets = (inputs) => { const r = project(inputs); return r.success && r.endBalanceReal >= legacy - 0.5; };
+  const meets = (inputs) => { const r = project({ ...inputs, strategy: "fixed-real" }); return r.success && r.endBalanceReal >= legacy - 0.5; };
   const withAge = (a) => { const p2 = JSON.parse(JSON.stringify(plan)); p2.household.people.find((q) => q.id === self.id).retirementAge = a; return buildInputs(p2, { today }).inputs; };
   const upTo = Math.max(75, planned);
   let age = null;
@@ -60,6 +63,7 @@ export function earliestRetireAge(plan, params = {}) {
 /**
  * compute(plan, { today, legacy = 0 }) -> {
  *   ready, missing, legacy, meets (the plan as it stands reaches the goal), endReal, spendingMonthly,
+ *   strategy (the plan's withdrawal rule: the spending and retirement levers spend the same every year whatever it is),
  *   levers: [{ id, title, icon, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"needs"|"cannot"|"same", sentence, go }]
  * }
  * Every money figure is in today's dollars. `legacy` is what the plan should still hold at its end.
@@ -176,7 +180,7 @@ export function compute(plan, params = {}) {
       sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
-  return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, levers };
+  return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
 }
 
 const pct = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;

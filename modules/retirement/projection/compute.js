@@ -58,7 +58,7 @@ export function incomePensions(plan, people, pensions, today) {
     if (dup) continue;
     const startYear = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : nowYear;
     const endAge = x.endDate ? Number(String(x.endDate).slice(0, 4)) - who.birthYear : undefined;
-    out.push({ name, yearly, personId: who.id, startAge: startYear - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, source: "income" });
+    out.push({ name, yearly, personId: who.id, startAge: startYear - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type: "pension", source: "income" });
   }
   return out;
 }
@@ -67,7 +67,9 @@ export function incomePensions(plan, people, pensions, today) {
  * Social Security already being paid, typed on the Income page (type "social"), for an adult with no figure or record
  * on the Social Security page: counted from now (or its start date), rising with inflation, so a retiree who typed it
  * there is not told "Social Security is not counted yet". A Social Security page figure wins, so nothing counts twice.
- * incomeSocial(plan, people, ssPeople, today) -> [{ name, yearly, personId, startAge, cola, taxable, kind: "social", source: "income" }]
+ * incomeSocial(plan, people, ssPeople, today) -> [{ name, yearly, personId, startAge, cola, taxable, kind: "social", source: "income", startsOn? }]
+ * startsOn: the line's own start date, only when it is after today (it starts this calendar year in the plan, but is not
+ * paid yet: recheck 2026-11-05, a line from next month read "already being paid").
  */
 export function incomeSocial(plan, people, ssPeople, today) {
   const out = [];
@@ -80,8 +82,9 @@ export function incomeSocial(plan, people, ssPeople, today) {
     if (x.endDate && String(x.endDate) < String(today)) continue;
     const who = people.find((p) => p.id === x.personId) ?? people[0];
     if ((ssPeople ?? []).some((q) => q.id === who.id && q.yearly > 0)) continue;
-    const startYear = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : nowYear;
-    out.push({ name: String(x.name || `${who.name}'s Social Security`).trim(), yearly, personId: who.id, startAge: startYear - who.birthYear, cola: true, taxable: x.taxable !== false, kind: "social", source: "income" });
+    const later = x.startDate && String(x.startDate) > String(today);
+    const startYear = later ? Number(String(x.startDate).slice(0, 4)) : nowYear;
+    out.push({ name: String(x.name || `${who.name}'s Social Security`).trim(), yearly, personId: who.id, startAge: startYear - who.birthYear, cola: true, taxable: x.taxable !== false, kind: "social", source: "income", ...(later ? { startsOn: String(x.startDate) } : {}) });
   }
   return out;
 }
@@ -90,31 +93,98 @@ export function incomeSocial(plan, people, ssPeople, today) {
 export const PAY_TYPES = ["salary", "bonus", "business"];
 /** Income that is neither pay, a pension nor Social Security (rent, dividends and interest, support, other). */
 export const OTHER_INCOME_TYPES = ["rental", "investment", "support", "other"];
+/** Child support with no end date runs to the year the child turns this age (most US states end it at 18). */
+export const CHILD_SUPPORT_UNTIL = 18;
+const KNOWN_TYPES = [...PAY_TYPES, "pension", "social", ...OTHER_INCOME_TYPES];
+const CHILD_WORDS = /\b(child|children|kids?)\b/i;
+const yearOf = (d) => Number(String(d).slice(0, 4));
 
 /**
- * Rent, dividends and interest, support and other income typed on the Income page (anyone's, or the household's), as engine
- * incomes that do not stop when work does (round 5, 2026-11-02: a partner's rent came in only as their "pay" and stopped when
- * they stopped work, and the first adult's and the household's never counted). Each counts from the household's first
- * retirement year (the year spending starts; before it the plan's saving is what goes into the accounts) or its own later
- * start date, to its end date (the age its owner reaches that year), rising with inflation when the item has a raise (cola,
- * as pensions), taxed unless marked untaxed. One-off and ended items are left out.
- * incomeOther(plan, people, retireYear, today) -> [{ name, yearly, personId, startAge (its owner's age in the year it starts), endAge?, cola, taxable, type, source: "income" }]
+ * ownAccountMoney(name) -> true when an income's name says it is money taken out of the household's own accounts (an IRA,
+ * a 401(k), 403(b), 457(b) or TSP, a Roth, a required minimum distribution, or withdrawals or draws from savings, a brokerage
+ * or a portfolio). The plan already draws on those accounts (Net worth), so such a line is never added on top (recheck
+ * 2026-11-05: H-0796's "IRA withdrawals" with an end date counted the IRA twice: $85,416 a year became $106,606). "IRA",
+ * "RMD", "TSP" and "HSA" are matched in capitals only, so "Help from Ira" is not one; a trust's or an annuity's payout is not
+ * one either (it is money from outside the plan's accounts). Review 2026-11-06: 401(k), 403(b) and 457(b) only as the plans
+ * ("Unit 401B", "457 Elm St" are not), "Roth" only next to an account or a withdrawal word ("Grandma Roth" is not), and a
+ * draw from a business or against pay is not one. Rent is never checked (otherIncome).
  */
-export function incomeOther(plan, people, retireYear, today) {
-  const out = [];
-  if (!people.length) return out;
+export function ownAccountMoney(name) {
+  const n = String(name ?? "");
+  if (/\btrust\b|\bannuit/i.test(n)) return false;
+  // 401(k), 403(b) and 457(b) only as the plans ("Unit 401B" is a flat, "457 Elm St" a house), and "Roth" only next to an account
+  // or a withdrawal word ("Help from Grandma Roth" is a person): review 2026-11-06
+  const ROTH = /\broth\b[\s\S]*\b(ira|401|403|457|accounts?|withdrawals?|distributions?|conversions?|draws?)\b|\b(withdrawals?|distributions?|draws?)\b[\s\S]*\broth\b/i;
+  if (/\b(IRA|RMD|TSP|HSA)s?\b/.test(n) || /\b401\s*\(?\s*k\b|\b403\s*\(?\s*b\b|\b457\s*(\(b\)|b\b|plan\b)|required minimum/i.test(n) || ROTH.test(n)) return true;
+  // draws from a business or against pay are not the household's savings ("Owner's draw from business account", "Account
+  // manager bonus draws": review 2026-11-06)
+  if (/\b(business|company|firm|LLC|partnership|owner['’]?s|commissions?|bonus(es)?)\b/i.test(n)) return false;
+  return /\b(withdrawals?|draws?|drawdowns?)\b[\s\S]*\b(savings|brokerage|portfolio|investments?|accounts?|nest egg)\b|\b(savings|brokerage|portfolio|investments?|accounts?|nest egg)\b[\s\S]*\b(withdrawals?|draws?|drawdowns?)\b/i.test(n);
+}
+
+/**
+ * Rent, dividends and interest, support and other income typed on the Income page (anyone's, or the household's, which
+ * belongs to the first adult), after work stops (recheck 2026-11-05: round 5 counted all of it for the rest of the plan):
+ * - rent (`rental`): counted from the household's first retirement year (or its own later start date) for life, or to its
+ *   end date. Gross: the rental's own costs (tax, insurance, repairs) are not taken off.
+ * - support and other: counted after work only up to an end date they carry. Without one they stop when their owner stops
+ *   work (a partner who works on after the household retires keeps it until then, as inside their pay before round 5;
+ *   the first adult's and the household's stop at the household's retirement), and are listed in `left` (why "work").
+ *   Child support with no end date ends instead in the year the child it names, else the youngest dependent with a birth
+ *   date, turns 18; with no such dependent it is like any other support. Child support is a name with "support" and "child",
+ *   "children", "kid(s)" or a dependent's first name ("Support for Leo"), or a support line with one of those words (recheck
+ *   2026-11-05: "Children's book royalties" typed as other was counted to a grandchild's 18th).
+ * - withdrawals from the household's own accounts typed as support or other (ownAccountMoney: "IRA withdrawals", "RMD"):
+ *   never, end date or not, as the plan already draws on those accounts; listed in `left` (why "accounts"). Rent is not
+ *   checked, whatever its name ("Rent from condo 401B": review 2026-11-06).
+ * - dividends and interest (`investment`): never, the accounts' own growth already holds them; listed in `left` (why "growth").
+ * Each rises with inflation when the item has a raise (cola, as pensions), taxed unless marked untaxed. One-off and ended items
+ * are left out, and so is an item that ends before retirement. An unknown type is "other", as on the Income page.
+ * otherIncome(plan, people, retireYear, today) -> {
+ *   counted: [{ name, yearly, personId, startAge (its owner's age in the year it starts), endAge?, cola, taxable, type, source: "income", whileWorking? }],
+ *   left: [{ name, yearly, type, personId, why: "work" | "growth" | "accounts" }]
+ * }
+ */
+export function otherIncome(plan, people, retireYear, today) {
+  const counted = [], left = [];
+  if (!people.length) return { counted, left };
+  const deps = (plan.household?.people ?? []).filter((p) => p.role === "dependent" && /^\d{4}/.test(String(p.birthDate ?? "")));
+  // the child a "Child support for Zoe" line names, else every dependent; the youngest of them
+  const wordsOf = (name) => String(name).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const namesDep = (name) => { const words = wordsOf(name); return deps.filter((d) => words.includes(String(d.name ?? "").trim().split(/\s+/)[0].toLowerCase())); };
+  const childSupport = (name, type) => (/\bsupport\b/i.test(name) && (CHILD_WORDS.test(name) || namesDep(name).length > 0)) || (type === "support" && CHILD_WORDS.test(name));
+  const childEnd = (name) => {
+    const named = namesDep(name);
+    const pool = named.length ? named : deps;
+    return pool.length ? Math.max(...pool.map((d) => yearOf(d.birthDate))) + CHILD_SUPPORT_UNTIL : null;
+  };
   for (const x of plan.income ?? []) {
-    if (!OTHER_INCOME_TYPES.includes(x.type ?? "other") || x.period === "once") continue;
+    const type = KNOWN_TYPES.includes(x.type) ? x.type : "other";
+    if (!OTHER_INCOME_TYPES.includes(type) || x.period === "once") continue;
     const yearly = perYear(x.amount, x.period);
     if (!(yearly > 0)) continue;
     if (x.endDate && String(x.endDate) < String(today)) continue;
     const who = people.find((p) => p.id === x.personId) ?? people[0];
-    const starts = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : retireYear;
-    const endAge = x.endDate ? Number(String(x.endDate).slice(0, 4)) - who.birthYear : undefined;
-    out.push({ name: String(x.name || "Other income").trim(), yearly, personId: who.id, startAge: Math.max(retireYear, starts) - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type: x.type ?? "other", source: "income" });
+    const name = String(x.name || "Other income").trim();
+    if (type === "investment") { left.push({ name, yearly, type, personId: who.id, why: "growth" }); continue; }
+    // rent is never money out of the household's own accounts, whatever its name ("Rent from condo 401B", "457 Elm St duplex":
+    // review 2026-11-06, the name check dropped it and said it came out of the accounts)
+    if (type !== "rental" && ownAccountMoney(name)) { left.push({ name, yearly, type, personId: who.id, why: "accounts" }); continue; }
+    const from = Math.max(retireYear, x.startDate && String(x.startDate) > String(today) ? yearOf(x.startDate) : retireYear);
+    let until = x.endDate ? yearOf(x.endDate) : null, whileWorking = false;
+    if (until === null && type !== "rental") {
+      const kid = childSupport(name, type) ? childEnd(name) : null;
+      if (kid !== null) until = kid;
+      else { until = who.birthYear + who.retireAge - 1; whileWorking = true; left.push({ name, yearly, type, personId: who.id, why: "work" }); }
+    }
+    if (until !== null && until < from) continue;
+    counted.push({ name, yearly, personId: who.id, startAge: from - who.birthYear, endAge: until === null ? undefined : until - who.birthYear, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type, source: "income", ...(whileWorking ? { whileWorking: true } : {}) });
   }
-  return out;
+  return { counted, left };
 }
+
+/** The engine incomes otherIncome() counts (round 5's name, kept for its callers). */
+export const incomeOther = (plan, people, retireYear, today) => otherIncome(plan, people, retireYear, today).counted;
 
 /** An adult whose Social Security is on the Income page (type "social", recurring, not ended). */
 export const ssOnIncome = (plan, id, today) => (plan?.income ?? []).some((x) => x.type === "social" && x.personId === id && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)));
@@ -168,7 +238,7 @@ export function buildInputs(plan, params = {}) {
   // later of the two people's own start years, never before the partner has claimed (recheck 2026-11-05: never counted).
   // After each person's own line, so the stress tests' "first Social Security line of a person" stays their own
   for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: `${p.name}'s spouse's benefit`, yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social" }); }
-  for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true });
+  for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension" });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
   const retireYear = Math.max(year, people[0].birthYear + people[0].retireAge);
@@ -178,10 +248,11 @@ export function buildInputs(plan, params = {}) {
     const p = people[i];
     const theirs = inc ? inc.active.filter((x) => x.personId === p.id && PAY_TYPES.includes(x.type)).reduce((s, x) => s + x.yearly, 0) : 0;
     const ageNow = year - p.birthYear;
-    if (theirs > 0 && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true });
+    if (theirs > 0 && p.birthYear + p.retireAge > retireYear) incomes.push({ name: `${p.name}'s pay`, yearly: theirs, personIndex: i, startAge: ageNow, endAge: p.retireAge - 1, cola: true, taxable: true, type: "pay" });
   }
-  // rent, dividends and interest, support and other income that is not pay does not stop when work does
-  for (const x of incomeOther(plan, people, retireYear, today ?? `${year}-01-01`)) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  // rent after work stops; support and other to their end date (else while their owner works); never dividends (otherIncome)
+  const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`);
+  for (const x of other.counted) incomes.push({ ...x, personIndex: personIndex(x.personId) });
   const endYear = Math.max(...people.map((p) => p.birthYear + p.endAge));
   const inputs = {
     startYear: year, endYear, people, balances, contributions, incomes,
@@ -199,14 +270,25 @@ export function buildInputs(plan, params = {}) {
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
-  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, ssYearly: ss.householdYearly, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
+  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
 }
+
+/** What an engine income is, in the words the page names it by (Social Security, pensions, a partner's pay, rent, other income). */
+export const INCOME_WORDS = { social: "Social Security", pension: "pensions", pay: "a partner's pay", rental: "rent", other: "other income" };
+const wordKey = (x) => (x.kind === "social" ? "social" : x.type === "pay" ? "pay" : x.type === "rental" ? "rental" : x.type === "support" || x.type === "other" ? "other" : "pension");
+/** The engine counts an income in `year` (core/math/retirement.js project: its owner's age within start and end, and the year bounds). */
+export const incomeIn = (I, x, year) => {
+  const age = year - (I.people[x.personIndex ?? 0]?.birthYear ?? 0);
+  return !(age < x.startAge || (x.endAge !== undefined && x.endAge !== null && age > x.endAge) || (x.fromYear != null && year < x.fromYear) || (x.untilYear != null && year > x.untilYear));
+};
 
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, notes, inputs, result (project with expected returns), rows,
  *   atRetirement: { year, age, totalReal }, atEnd: { year, age, totalReal }, yearsInRetirement,
- *   affordable (real yearly spending the plan can carry), spendingYearly, coverage (guaranteed income / spending in the first retirement year),
+ *   affordable (real yearly spending the plan can carry), spendingYearly,
+ *   coverage (all the income that comes in / spending, in the first retirement year), coverageFrom (what that income is, in
+ *   INCOME_WORDS order: ["Social Security", "pensions", "rent"]), otherLeft (buildInputs: income not counted after work stops),
  *   verdict: "on track" | "tight" | "short", shortYear, shortAge
  * }
  */
@@ -219,6 +301,8 @@ export function compute(plan, params = {}) {
   const last = rows[rows.length - 1];
   const affordable = affordableSpending(b.inputs);
   const coverage = rRow && rRow.spending > 0 ? rRow.income / rRow.spending : null;
+  const firstYear = new Set(rRow ? b.inputs.incomes.filter((x) => x.yearly > 0 && incomeIn(b.inputs, x, rRow.year)).map(wordKey) : []);
+  const coverageFrom = Object.keys(INCOME_WORDS).filter((k) => firstYear.has(k)).map((k) => INCOME_WORDS[k]);
   const ratio = b.spendingYearly > 0 ? affordable / b.spendingYearly : 1;
   const verdict = !result.success ? "short" : ratio < 1.15 ? "tight" : "on track";
   return {
@@ -226,7 +310,7 @@ export function compute(plan, params = {}) {
     atRetirement: rRow ? { year: rRow.year, age: rRow.ages[0], totalReal: rRow.totalReal, total: rRow.total } : null,
     atEnd: { year: last.year, age: last.ages[0], totalReal: last.totalReal, total: last.total },
     yearsInRetirement: rows.filter((r) => r.retired).length,
-    affordable, spendingYearly: b.spendingYearly, spendingSource: b.spendingSource, ssYearly: b.ssYearly, coverage,
+    affordable, spendingYearly: b.spendingYearly, spendingSource: b.spendingSource, ssYearly: b.ssYearly, coverage, coverageFrom, otherLeft: b.otherLeft,
     verdict, shortYear: result.failYear, shortAge: result.failAge, people: b.people, strategy: result.strategy, orderLabel: b.orderLabel,
   };
 }

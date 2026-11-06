@@ -4,10 +4,9 @@ import { compute } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords } from "../careful.js";
+import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, RULE_WORDS, leftWords, leftWhy } from "../careful.js";
 
-/** The withdrawal rules other than steady spending, in plain words, for the careful line. */
-const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "steady spending cut by a tenth after a bad stretch and raised by a tenth after a good one", vpw: "spending what the years left can afford" };
+const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "");
 
 let pending = null;
 
@@ -67,14 +66,17 @@ export function render(root, ctx) {
     headline,
     ui.h("p", { class: "lede" }, verdictText),
     careLine,
-    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${d.people[0].name} at ${d.atRetirement.age}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`)),
+    // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
+    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${d.people[0].name} at ${d.atRetirement.age}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`), ...(d.otherLeft?.length ? [" ", ...leftWords(ui, money, d.otherLeft)] : [])),
     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away
     ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›")),
   ));
   root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
     careStat,
-    ui.stat("Guaranteed income", d.coverage !== null ? fmt.pct(d.coverage, 0) : "-", "of the first retirement year's spending: Social Security, pensions, a partner's pay"),
+    // all the income that comes in that year, named by what it is (recheck 2026-11-05: "Guaranteed income ... Social Security,
+    // pensions, a partner's pay" read 203% for a couple whose rent and dividends were in it)
+    ui.stat("Paid by income", d.coverage !== null ? fmt.pct(d.coverage, 0) : "-", d.coverageFrom?.length ? `of the first retirement year's spending, from ${listOf(d.coverageFrom)}` : "of the first retirement year's spending: nothing comes in that year but savings"),
     ui.stat(`Left in ${d.atEnd.year}`, money(Math.max(0, d.atEnd.totalReal)), d.atEnd.totalReal > 0 ? "today's dollars" : "nothing"),
   )));
   const years = d.rows.map((r) => r.year);
@@ -87,7 +89,8 @@ export function render(root, ctx) {
       ["People", d.people.map((p) => `${p.name}: retires at ${p.retireAge}, plan to ${p.endAge}`).join("; ")],
       ["Retirement money today", `${money(d.inputs.balances.cash + d.inputs.balances.taxable + d.inputs.balances.deferred + d.inputs.balances.free)}: ${money(d.inputs.balances.cash)} cash, ${money(d.inputs.balances.taxable)} taxable, ${money(d.inputs.balances.deferred)} pre-tax, ${money(d.inputs.balances.free)} tax-free`],
       ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (Contributions page)` : "nothing entered (Contributions page)"],
-      ["Guaranteed income", d.inputs.incomes.length ? d.inputs.incomes.map((i) => `${i.name}: ${money(i.yearly)} a year from ${i.startAge}`).join("; ") : "none entered (Social Security page)"],
+      ["Income counted", d.inputs.incomes.length ? d.inputs.incomes.map((i) => `${i.name}: ${money(i.yearly)} a year from ${i.startAge}${i.endAge !== undefined && i.endAge !== null ? ` to ${i.endAge}` : ""}${i.type === "rental" ? " (before its costs)" : ""}`).join("; ") : "none entered (Social Security page)"],
+      ...(d.otherLeft?.length ? [["Not counted", d.otherLeft.map((x) => `${x.name}: ${money(x.yearly)} a year, ${leftWhy(x)}`).join("; ")]] : []),
       ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" ? " (today's expenses)" : ""}`],
       ["Growth and inflation", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, ${fmt.pct(d.inputs.rates.inflation, 1)} inflation (Assumptions page); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${d.orderLabel.toLowerCase()}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals from ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from pre-tax accounts; withdrawals ${d.orderLabel.toLowerCase()}; required withdrawals from ${d.inputs.rmd.startAge}`],

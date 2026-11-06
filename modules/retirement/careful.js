@@ -70,3 +70,31 @@ export const monthlyOf = (yearly) => Math.floor(yearly / 1200) * 100;
 export const busyWords = (ui, text) => ui.h("span", { style: { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } }, text);
 
 export const slot = (ui, like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
+
+/** The withdrawal rules other than steady spending, in plain words (Will the money last?, Financial independence, Goal seek). */
+export const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "steady spending cut by a tenth after a bad stretch and raised by a tenth after a good one", vpw: "spending what the years left can afford" };
+
+const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "");
+
+/**
+ * leftWords(ui, money, left) -> [text and nodes]: the income the projection does not count after work stops (projection
+ * buildInputs' `otherLeft`), said plainly: support and other income with no end date, with the way to keep it (an end date on
+ * the Income page, linked), dividends and interest, which the accounts' growth already holds (recheck 2026-11-05), and money
+ * taken out of the household's own accounts ("IRA withdrawals": projection ownAccountMoney), which the plan already draws on,
+ * so an end date is never suggested for it (recheck 2026-11-05, second pass: following that advice counted the IRA twice).
+ * Dividends and interest from outside the accounts (a loan the household made, a trust) are typed as other income with an end
+ * date, and the sentence says so.
+ */
+/** leftWhy(item) -> why an `otherLeft` item is not counted, for Will the money last?'s "Not counted" row (recheck 2026-11-05). */
+export const leftWhy = (x) => (x.why === "growth" ? "already in your accounts' growth" : x.why === "accounts" ? "taken from your own accounts, which the plan already draws on" : "no end date, so it stops when work does");
+
+export function leftWords(ui, money, left = []) {
+  const work = left.filter((x) => x.why === "work"), growth = left.filter((x) => x.why === "growth"), own = left.filter((x) => x.why === "accounts");
+  const sum = (a) => money(a.reduce((s, x) => s + x.yearly, 0));
+  const out = [];
+  const gap = () => (out.length ? " " : "");
+  if (work.length) out.push(`${sum(work)} a year of other income is not counted after work stops: ${listOf(work.map((x) => x.name))}. Give ${work.length === 1 ? "it" : "each one"} an end date on the `, ui.h("a", { href: "#/cashflow/income" }, "Income page"), ` if ${work.length === 1 ? "it carries" : "they carry"} on.`);
+  if (own.length) out.push(`${gap()}${listOf(own.map((x) => x.name))}, ${sum(own)} a year, ${own.length === 1 ? "is not added: it comes" : "are not added: they come"} out of your own accounts, which the plan already draws on. If an account is missing, add it on `, ui.h("a", { href: "#/balance/net-worth" }, "Net worth"), ".");
+  if (growth.length) out.push(`${gap()}Dividends and interest, ${sum(growth)} a year, are not added: your accounts' growth already includes them. If some of it comes from outside your accounts (a loan you made, a trust), type that part as other income with an end date on the `, ui.h("a", { href: "#/cashflow/income" }, "Income page"), ".");
+  return out;
+}

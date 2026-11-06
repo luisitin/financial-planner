@@ -2,7 +2,7 @@
 // much), then every lever solved for it on its own: spending, retirement age, saving, the return
 // needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
-import { whenCareful, monthlyOf } from "../../retirement/careful.js";
+import { whenCareful, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 
@@ -66,7 +66,9 @@ export function render(page, ctx) {
     const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : l.nowForAll && l.value === l.nowAge ? "now" : `age ${ageWords(l.value)}`;
     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each lever could move" : "What each lever would have to be"),
-      ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less."),
+      ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less.",
+        // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05)
+        ...(d.strategy && d.strategy !== "fixed-real" ? [` What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
       ui.h("div", { class: "grid" }, d.levers.map((l) => {
         const [tone, label] = PILL[l.status];
         let pillEl = null;

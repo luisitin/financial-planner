@@ -7,7 +7,7 @@
 Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
 
 ## Outputs
-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70).
+`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70).
 
 ## The goal and the levers
 The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
@@ -60,3 +60,15 @@ Only then do the sentence ("claiming now (64 and 6 months)"), the big figure ("n
 Otherwise they say "at 64 and 6 months", "age 64 and 6 months", and "64" over "6 mo" under the bar (it fits a 390 px phone). Before,
 a couple of 64 and 6 months and 60 and 5 months were both told to claim "now", which is 19 months away for the younger one.
 Moving both to the same age is still the design: the younger one's 62 to 64 are not tried, as before.
+
+## Recheck 2026-11-05: the earliest age spends the same every year
+`earliestRetireAge` tested each age with the plan's own withdrawal rule. Under "a set share of what is left" (`percent`),
+guardrails or years-left spending (VPW) spending shrinks with the money, so the projection never runs short and the family
+(Ana, 36, $177,000 invested) read "When Ana can retire: age 36 ... now" while Financial independence's 9-in-10 search (steady
+spending) started there and ran 29 ages. Each age is now tested spending the plan's amount the same every year after inflation
+(`project({ ...inputs, strategy: "fixed-real" })`), as the spending lever and the 9-in-10 figures already were: the family reads
+58 under every rule. When the plan uses another rule the levers card says once: "What you can spend and when you can retire are
+worked out spending the same every year; your plan uses another rule, a set share of what is left each year, so what you spend
+moves with markets (How much to take out)." The saving, return and lump-sum levers still use the plan's own rule (under the
+share rule they read "$0" and "-9.2%", as before; not changed here). Test: `module.test.mjs` "recheck 2026-11-05" (percent,
+guardrails and VPW give the steady age on both the function and the lever).
