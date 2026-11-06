@@ -335,3 +335,35 @@ test("verify 5, D: two Chase cards with no files, and checking alone already sho
   assert.equal(s.moves[0].id, "bank");
   assert.match(s.headline, /^Your bank shows about \$1,220 a month more going out than your plan lists/);
 });
+
+// C7 (R12 on): a mortgage on Debts, paid from checking, is filed under housing by the bank. It was read as that much more
+// spent on the home than Expenses lists, and "Use" on Get started's home-costs row (our guess) counted the mortgage twice.
+test("C7: the bank's mortgage line is compared with loan payments when the mortgage is counted from Debts, not as home costs", async () => {
+  const { bankVsPlan } = await import("./compute.js");
+  const S = await import("../../overview/setup/compute.js");
+  const { patLee } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const T = "2026-11-02";
+  const make = (typedMortgage) => {
+    const p = patLee(T);
+    S.applyOweAmounts(p, { mortgage: { owed: 300000, payment: 1600, rate: "4" } }, T);
+    S.applySpend(p, { mode: "rows", rows: { housing: 90, utilities: 0, groceries: 900, transport: 0, insurance: 0, dining: 40, shopping: 500 } }, T);
+    if (typedMortgage) p.expenses.push({ id: "mtg", name: "Mortgage payment", category: "housing", amount: 1600, period: "monthly", essential: true, inflates: false, startDate: "", endDate: "" });
+    p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 1, asOf: T, institution: "", ownerId: "", history: [], notes: "" });
+    p.transactions = []; p.imports = [{ id: "imp", accountId: "chk", from: "2026-09-01", to: "2026-10-31", at: T, rows: 0 }];
+    let n = 0;
+    const add = (date, amount, category, payee) => p.transactions.push({ id: `t${++n}`, date, amount, payee, rawPayee: payee, accountId: "chk", category, tags: [], note: "", importId: "imp" });
+    for (const ym of ["2026-09", "2026-10"]) {
+      add(`${ym}-01`, 9000, "income-salary", "PAYROLL"); add(`${ym}-02`, -1600, "housing", "WELLS FARGO HOME MTG"); add(`${ym}-03`, -90, "housing", "HOME DEPOT");
+      add(`${ym}-05`, -900, "groceries", "SAFEWAY"); add(`${ym}-08`, -2000, "shopping", "FURNITURE"); add(`${ym}-29`, -40, "dining", "CAFE");
+    }
+    return p;
+  };
+  const b = bankVsPlan(make(false), { today: T });
+  assert.equal(b.over, true, "the furniture: $1,500 a month more than listed");
+  assert.deepEqual(b.lines.map((l) => [l.category, Math.round(l.more)]), [["shopping", 1500]], "no 'home costs $1,600 more' line");
+  assert.equal(Math.round(b.gap), 1500);
+  // the mortgage typed on Expenses under housing (Debts' is then not added): the bank's line is compared there, as before
+  const t = bankVsPlan(make(true), { today: T });
+  assert.deepEqual(t.lines.map((l) => [l.category, Math.round(l.more)]), [["shopping", 1500]]);
+  assert.equal(Math.round(t.gap), 1500);
+});

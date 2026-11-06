@@ -13,6 +13,14 @@
 //                         offers: { fill, upgrade }, lookedAt, planEmpty }
 //   upgradeOffers(plan, o)  "Better guesses are ready" (spec 11.5): each older guess whose new estimate differs, old -> new
 //   useNewGuesses(draft, o) / keepOldGuesses(draft, today)   the card's two buttons (guide.guessUpgrade, asked once)
+//   fillOffers(plan, o)   "Fill in what you skipped" (spec 11.4, C7): the blanks an older plan has, each with our guess
+//                         (FILL_CASES: a debt picked on Get started with no record; income with no spending at all; C4 and
+//                         C5 add theirs). useFillGuesses(draft, o) / fillLater(draft, today): the card's two buttons
+//                         (guide.fillSkipped; "Not now" returns after FILL_AGAIN_DAYS)
+//   spendMissing(plan, o) "Is something missing?" (spec 11.6, E10): typed spending far below what households like this
+//                         spend, with our guesses for the rows not listed. addSpendGuesses(draft, o) / spendIsComplete(draft,
+//                         today): its two buttons (guide.spendComplete ends it)
+//   guessCards(plan, o)   the Dashboard's cards (spec 11.3): fill, missing, upgrade, and which comes first
 //   guessTwins(plan)      "Is this the same loan?": a debt Get started guessed beside one of its kind added later
 //   sameLoan(draft, id, twinId) / twoLoans(draft, id, twinId, today)   that card's two buttons (guide.setup.twins: each pair
 //                         asked once)
@@ -20,11 +28,14 @@
 //
 // The import rule (spec 6.2, tests/guesses-imports in module.test.mjs): this file and estimators/*.js import core/*,
 // their own data/, and nothing from overview/*.
-import { guessesInUse, guessAt, estimate, applies, same, parsePath, getAt, mergeEstimators, markGuess, clearGuess, isGuess } from "../../../core/estimate/index.js";
+import { guessesInUse, guessAt, estimate, applies, same, parsePath, getAt, mergeEstimators, markGuess, clearGuess, isGuess, settle } from "../../../core/estimate/index.js";
 import { roundGuess } from "../../../core/math/estimate.js";
 import { typicalPayment, TYPICAL_TERMS } from "../../../core/math/finance.js";
+import { daysBetween } from "../../../core/math/dates.js";
+import { perYear, perMonth, activeOn } from "../../../core/math/periods.js";
 import { estimators as debtEstimators } from "./estimators/debts.js";
-import { estimators as spendEstimators } from "./estimators/spend.js";
+import { estimators as spendEstimators, ROWS as SPEND_ROWS, ROW_NAME, MUST, housingName, householdWords, missingSpend, spendPath, spendTenure, OFF as ROW_HOLDS, bankSpend, bankHeldWords, BANK } from "./estimators/spend.js";
+import { profileOf as profileFor } from "./estimators/common.js";
 import { estimators as savingEstimators } from "./estimators/saving.js";
 import { estimators as homeEstimators } from "./estimators/home.js";
 import { estimators as payEstimators } from "./estimators/pay.js";
@@ -188,6 +199,8 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
   const order = (e.legacy || !def ? legacyOrder(e.k) : def.tier * 100 + def.order) + person / 100;
   return {
     path: e.path, k: e.k, label, record, value: e.v, unit: e.u, kind: kindOfUnit(e.u), why, weight, legacy: !!e.legacy, frozen, stale,
+    // read from the person's own bank files (R12): theirs in all but name, listed apart on the page (C7 UX review 11)
+    fromBank: /^your bank files\b/.test(why ?? ""),
     href: hrefOf(e.path, def), sources: us ? sources.filter((id) => tables[id]) : [], basis: def?.basis ?? (debt ? "population" : "yours"),
     order,
   };
@@ -303,13 +316,361 @@ export function twoLoans(draft, id, twinId, today) {
   draft.guide.setup.twins = { ...(draft.guide.setup.twins ?? {}), [id]: { ...(was && typeof was === "object" ? was : {}), [twinId]: today ?? null } };
 }
 
+// ---- "Fill in what you skipped" (spec 11.4, C7): a plan made before the guesses has blanks Get started dropped (a debt picked
+// with no balance typed) or never asked for (spending). The card lists our guess for each; nothing is written until a tap.
+/** Days "Not now" keeps the card away (guide.fillSkipped = { at, choice: "later" }). */
+export const FILL_AGAIN_DAYS = 30;
+/** Get started's debts (setup's OWE: key, the Net worth type, the account's name; a test checks they agree). */
+export const OWE_KINDS = [
+  { key: "credit", type: "credit", name: "Credit cards" },
+  { key: "car-loan", type: "loan", name: "Car loan" },
+  { key: "student", type: "student_loan", name: "Student loans" },
+  { key: "mortgage", type: "mortgage", name: "Mortgage" },
+  { key: "loan", type: "loan", name: "Other loan" },
+];
+const setupOf = (p) => (p?.guide?.setup && typeof p.guide.setup === "object" ? p.guide.setup : {});
+const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
+const carName = (a) => /car|auto|vehicle|truck/i.test(a?.name ?? "");
+/** A loan's name that says it is not a car's ("Personal loan", "Student", "HELOC"). */
+const notCarName = (a) => /personal|student|school|tuition|medical|dental|home|heloc|equity|furniture|boat|signature|consolidat|payday|family|401k|solar|business/i.test(a?.name ?? "");
+/** Get started is past a screen: finished, or its furthest screen reached is one of these (so it will not ask again itself). */
+const past = (plan, screens) => !!setupOf(plan).finishedAt || screens.includes(setupOf(plan).at);
+const PAST_DEBTS = ["spend", "goals", "goal-details", "done"], PAST_SPEND = ["goals", "goal-details", "done"];
+/**
+ * A kind the person keeps elsewhere (setup's existingOwe: an account of its type they added on Net worth or Debts). A car loan and
+ * another loan share the type (C7 review M4): any loan added stands for the one picked whatever its name ("Honda Civic", "Ally
+ * loan"), unless its name says it is the other kind; with both picked, a car's name is the car loan, a name that says it is not
+ * a car's is the other loan, and a name that says neither goes to the car loan first.
+ */
+function keptElsewhere(plan, o, picked) {
+  const theirs = L(plan, "accounts").filter((a) => !isSetupId(a?.id) && a?.type === o.type);
+  if (o.type !== "loan") return theirs.length > 0;
+  const both = picked.includes("car-loan") && picked.includes("loan");
+  if (!both) return o.key === "car-loan" ? theirs.some((a) => carName(a) || !notCarName(a)) : theirs.length > 0;
+  const car = theirs.filter(carName), other = theirs.filter((a) => !carName(a) && notCarName(a)), neither = theirs.length - car.length - other.length;
+  return o.key === "car-loan" ? car.length > 0 || neither > 0 : other.length > 0 || neither - (car.length ? 0 : 1) > 0;
+}
+/** Words a housing bill has when it is not a mortgage's payment (the home's other costs). */
+const NOT_HOUSE_PAYMENT = /home costs|tax|insur|hoa|condo|associat|repair|upkeep|mainten|util|electric|water|power|gas\b|internet|clean|lawn|yard|garden|pest|security|alarm|furnit|improv|storage/i;
+/** A loan payment's words that say it is a car's ("Car payment", "Toyota", "Ally auto"). */
+const CAR_PAY = /\b(car|auto|vehicle|truck|toyota|honda|ford|chevy|chevrolet|gm|nissan|hyundai|kia|subaru|mazda|tesla|jeep|dodge|ram|bmw|mercedes|lexus|acura|volkswagen|vw|ally|carmax|santander)\b/i;
+/**
+ * A payment the person typed on Expenses for a debt Get started dropped (C7 review M5): Expenses counts it there, so it is the
+ * debt's payment (written as typed, the balance worked back from it) and not a second payment beside ours. The mortgage: the
+ * largest active housing bill that is not one of the home's other costs, named for the payment ("Mortgage", "House payment",
+ * "Rent" from before) or at least half our guessed payment ("Wells Fargo" $1,600). A car loan: the largest bill under loan and
+ * card payments, or under the car, named for a car or its maker, or under loan and card payments named for a loan when no
+ * other loan was picked. -> { id, name, category, monthly } | null
+ */
+function typedPaymentOf(plan, key, guess, picked, today) {
+  const bills = L(plan, "expenses").filter((x) => x && x.period !== "once" && Number(x.amount) > 0 && (!today || activeOn(x, today)) && !(typeof x.id === "string" && isGuess(plan, `expenses[${x.id}].amount`)))
+    .map((x) => ({ id: x.id ?? null, name: x.name ?? "", category: x.category, monthly: perMonth(x.amount, x.period) })).sort((a, b) => b.monthly - a.monthly);
+  if (key === "mortgage") return bills.find((b) => b.category === "housing" && !NOT_HOUSE_PAYMENT.test(b.name) && (/mortgage|house|home loan|rent/i.test(b.name) || b.monthly >= 0.5 * (guess ?? 0))) ?? null;
+  if (key === "car-loan") return bills.find((b) => !/card|credit|visa|master|amex|discover|student/i.test(b.name) && ((b.category === "debt" && (CAR_PAY.test(b.name) || (!picked.includes("loan") && /loan|payment/i.test(b.name))))
+    || (b.category === "transport" && CAR_PAY.test(b.name) && /payment|loan|financ|lease/i.test(b.name)))) ?? null;
+  return null;
+}
+/** Write a record as Get started does (setup's put): one that exists gets only `asked`; a new one `full` then `asked`. */
+function put(list, id, asked, full) {
+  const r = list.find((x) => x?.id === id);
+  if (r) { Object.assign(r, asked); return r; }
+  const rec = { id, ...full, ...asked };
+  list.push(rec);
+  return rec;
+}
+const ACCOUNT = (name, type, today) => ({ name, type, institution: "", asOf: today, ownerId: "", history: [], notes: "" });
+const incomeNow = (plan, today) => L(plan, "income").some((x) => x && x.period !== "once" && Number(x.amount) > 0 && (!today || activeOn(x, today)));
+const allRetired = (plan) => { const a = L(plan?.household, "people").filter((x) => x?.role !== "dependent"); return a.length > 0 && a.every((x) => setupOf(plan).status?.[x.id] === "retired"); };
+const guessOf = (plan, key, opts, extra) => { try { const e = estimate(plan, key, { ...opts, ...extra }); return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; } catch { return null; } };
+
+/**
+ * The cases, in Get started's order (its debts screen, then its spending screen), each worked out from the plan as it is
+ * when its turn comes (after the cases before it are written), as Get started's screens are. A case: { id, can(plan, o)
+ * (cheap: is there anything to look at), find(plan, o) -> [item] (our guesses, from the plan as given), write(draft, item, o),
+ * endsWhenUsed (after "Use these guesses" the case is not offered again: a debt or the spending removed later was removed on
+ * purpose) }. C4 adds a retirement tile picked with no account for an adult (balance, contribution, match; the contribution
+ * a question when its amount and match are both 0); C5 a setup goal with target 0 (education, home). Neither is built yet.
+ */
+export const FILL_CASES = [
+  {
+    // a debt picked on Get started's question 5 with no record: Get started before the guesses dropped a debt whose balance
+    // was left blank. The account, what is owed, the rate and the payment (E20-E32), as question 5 would write them today,
+    // and with a mortgage and no home in the plan, the home's value (question 5 asks it then).
+    id: "debt", endsWhenUsed: true,
+    can: (plan) => {
+      const picked = Array.isArray(setupOf(plan).picks?.owe) ? setupOf(plan).picks.owe : [];
+      return picked.length > 0 && !picked.includes("none") && past(plan, PAST_DEBTS);
+    },
+    find(plan, o) {
+      const s = setupOf(plan), picked = s.picks.owe, accounts = L(plan, "accounts");
+      const out = [], memo = new Map();   // one pass over one plan: the household is read once
+      for (const k of OWE_KINDS) {
+        if (!picked.includes(k.key) || accounts.some((a) => a?.id === `setup-owe-${k.key}`) || keptElsewhere(plan, k, picked) || (k.key === "credit" && s.paidInFull)) continue;
+        // its row on Debts is there without its account: it was removed on Net worth, on purpose (C7 review M6)
+        if (L(plan, "debts").some((d) => d?.id === `setup-debt-${k.key}`)) continue;
+        const addHome = k.key === "mortgage" && !accounts.some((a) => a?.type === "property");
+        const tap = { mortgage: "mortgage-start", "car-loan": "car-loan-start" }[k.key];
+        const args = { owed: null, payment: null, rate: null, ...(tap ? { start: s.taps?.[tap] ?? null } : {}), ...(addHome ? { home: null } : {}) };
+        const paths = { owed: `accounts[setup-owe-${k.key}].balance`, rate: `debts[setup-debt-${k.key}].rate`, payment: `debts[setup-debt-${k.key}].minPayment`, home: "accounts[setup-have-home].balance" };
+        const est = {
+          owed: guessOf(plan, `debt.${k.key}.owed`, o, { path: paths.owed, args, memo }),
+          rate: guessOf(plan, `debt.${k.key}.rate`, o, { path: paths.rate, args, memo }),
+          payment: guessOf(plan, `debt.${k.key}.payment`, o, { path: paths.payment, args, memo }),
+          home: addHome ? guessOf(plan, "home.value", o, { path: paths.home, args, memo }) : null,
+        };
+        if (!(est.owed?.value > 0) || !est.rate || !(est.payment?.value >= 0)) continue;
+        // the payment typed on Expenses: what is owed and the rate are worked back from it (question 5 asks the payment first)
+        const typed = typedPaymentOf(plan, k.key, est.payment.value, picked, o.today);
+        if (typed) {
+          const a2 = { ...args, payment: typed.monthly };
+          const owed = guessOf(plan, `debt.${k.key}.owed`, o, { path: paths.owed, args: a2, memo: new Map() }), rate = guessOf(plan, `debt.${k.key}.rate`, o, { path: paths.rate, args: a2, memo: new Map() });
+          if (owed?.value > 0 && rate) { est.owed = owed; est.rate = rate; est.payment = { ...est.payment, value: typed.monthly, typed: true }; }
+        }
+        out.push({ case: "debt", key: k.key, name: k.name, type: k.type, paths, est, ...(est.payment.typed ? { paidAs: typed.name, paidBy: { id: typed.id, category: typed.category } } : {}) });
+      }
+      return out;
+    },
+    write(draft, x, { today }) {
+      draft.accounts = L(draft, "accounts"); draft.debts = L(draft, "debts"); draft.expenses = L(draft, "expenses");
+      const id = `setup-owe-${x.key}`, did = `setup-debt-${x.key}`;
+      put(draft.accounts, id, { balance: x.est.owed.value, asOf: today }, ACCOUNT(x.name, x.type, today));
+      // a "Rent" row typed when Get started had dropped this mortgage held the home's payment: named "Rent or mortgage", Expenses
+      // files the mortgage under it and counts the payment once (as question 5 does today)
+      const housing = x.key === "mortgage" ? draft.expenses.find((e) => e?.id === "setup-x-housing") : null;
+      if (housing && housing.name === ROW_NAME.housing) housing.name = isGuess(draft, "expenses[setup-x-housing].amount") ? "Home costs" : "Rent or mortgage";
+      // a row on Debts that is there already is the person's: never written over (C7 review M6)
+      const fresh = !draft.debts.some((d) => d?.id === did);
+      if (fresh) draft.debts.push({ id: did, accountId: id, extra: 0, termMonths: null, startDate: "", securedBy: "", creditLimit: null, rate: x.est.rate.value, minPayment: x.est.payment.value });
+      markGuess(draft, x.paths.owed, x.est.owed, today);
+      if (fresh) {
+        markGuess(draft, x.paths.rate, x.est.rate, today);
+        // a payment typed on Expenses stays the person's (Expenses matches it, so it is counted once)
+        if (!x.est.payment.typed) markGuess(draft, x.paths.payment, x.est.payment, today);
+      }
+      // a car payment typed under "Car, gas and transit": Expenses ties a loan's payment to its bill only under "Loan and card
+      // payments", so it would be counted twice (the bill, and the loan's payment from Debts); it moves there (C7 verify V1)
+      const paidBy = x.paidBy?.id != null ? draft.expenses.find((e) => e?.id === x.paidBy.id) : null;
+      if (paidBy && paidBy.category !== "debt" && paidBy.category !== "housing") paidBy.category = "debt";
+      if (x.est.home?.value > 0) {
+        put(draft.accounts, "setup-have-home", { balance: x.est.home.value, asOf: today }, ACCOUNT("Home", "property", today));
+        markGuess(draft, x.paths.home, x.est.home, today);
+        const s = draft.guide?.setup;
+        if (s) {
+          s.picks = s.picks ?? {};
+          const have = Array.isArray(s.picks.have) ? s.picks.have : [];
+          if (!have.includes("home")) { s.picks.have = [...have, "home"]; s.homeFromOwe = true; }
+        }
+      }
+    },
+  },
+  {
+    // income on file but nothing going out: no bill and no bank file (Get started's spending screen skipped, or a plan built on
+    // its pages). Each of Get started's rows as question 6 writes it when every box is left empty (7.A; childcare only with
+    // children, and only once its tap says Yes; a row typed as 0 stays the person's 0), and, for a plan made through Get
+    // started with no figure for it yet, spending once work stops (overview/setup:retireSpend, the same screen's).
+    id: "spend", endsWhenUsed: true,
+    can: (plan, { today }) => !L(plan, "expenses").length && !L(plan, "transactions").length && incomeNow(plan, today) && (!setupOf(plan).startedAt || past(plan, PAST_SPEND)),
+    find(plan, o) {
+      const s = setupOf(plan);
+      const zero = Array.isArray(s.spendZero) ? s.spendZero : [];
+      const kids = L(plan?.household, "people").some((p) => p?.role === "dependent");
+      const rows = SPEND_ROWS.filter((r) => (r !== "childcare" || kids) && !zero.includes(r));
+      // the card's own questions answered on it (how health cover is had, childcare: o.taps), as question 6 asks them
+      const taps = Object.fromEntries(Object.entries(o.taps ?? {}).filter(([k, v]) => SPEND_TAPS.includes(k) && typeof v === "string" && v));
+      const args = { mode: "rows", rows: Object.fromEntries(rows.map((r) => [r, null])), total: null, taps };
+      const memo = new Map();   // the rows are worked out together (one household spending plan, one envelope)
+      const raw = rows.map((row) => { let e = null; try { e = estimate(plan, `spend.${row}`, { ...o, path: spendPath(row), args, memo }); } catch { e = null; } return { row, e }; });
+      // the questions still open (question 6's taps: health cover, childcare with a child, an HOA fee in some states)
+      const asks = [];
+      for (const { e } of raw) if (e?.ask && !asks.some((a) => a.key === e.ask.key)) asks.push(e.ask);
+      const est = raw.filter(({ e }) => e && typeof e.value === "number" && Number.isFinite(e.value) && e.value > 0).map(({ row, e }) => ({ row, est: e }));
+      if (!est.length) return [];
+      const later = plan?.guide?.setup && !allRetired(plan) && !(Number(plan?.retirement?.spendingMonthly) > 0) && plan?.retirement && typeof plan.retirement === "object"
+        ? guessOf(plan, "overview/setup:retireSpend", o, { path: "retirement.spendingMonthly", args, memo }) : null;
+      const mortgage = spendTenure(plan, profileFor(plan, null)) === "ownerWithMortgage";
+      // a mortgage added on Net worth with no payment on Debts is counted nowhere yet: the spending here leaves it out, so the
+      // card says so (C7 verify V2). The card's own mortgage is written before this case is worked out, with its payment.
+      const accounts = L(plan, "accounts");
+      const mortgageUnpaid = mortgage && !L(plan, "debts").some((d) => Number(d?.minPayment) > 0 && accounts.find((a) => a?.id === d?.accountId)?.type === "mortgage");
+      return [{ case: "spend", rows: est.map((r) => ({ ...r, name: r.row === "housing" ? (mortgage ? "Home costs" : housingName(plan)) : ROW_NAME[r.row] })), retire: later && later.value > 0 ? later : null, who: householdWords(plan, { today: o.today }), mortgage, mortgageUnpaid, asks, taps }];
+    },
+    write(draft, x, { today }) {
+      draft.expenses = L(draft, "expenses");
+      const s = draft.guide?.setup;
+      if (s && s.spendMode !== "rows") s.spendMode = "rows";
+      // the answers given on the card are kept as question 6 keeps them (guide.setup.taps), so the rows follow them from now on
+      if (Object.keys(x.taps ?? {}).length) {
+        draft.guide = draft.guide ?? {};
+        draft.guide.setup = draft.guide.setup ?? {};
+        draft.guide.setup.taps = { ...(draft.guide.setup.taps ?? {}), ...x.taps };
+      }
+      for (const r of x.rows) {
+        put(draft.expenses, `setup-x-${r.row}`, { amount: r.est.value }, { name: r.name, category: r.row, essential: MUST.includes(r.row), period: "monthly", inflates: true, startDate: "", endDate: "" });
+        markGuess(draft, spendPath(r.row), r.est, today);
+      }
+      if (x.retire) {
+        if (draft.retirement.spendingMonthly === undefined) draft.retirement.spendingMonthly = null;
+        markGuess(draft, "retirement.spendingMonthly", x.retire, today);
+      }
+    },
+  },
+];
+
+/** "Not now" was tapped under FILL_AGAIN_DAYS ago (a day that is not a date asks again). */
+export function fillWaits(plan, today) {
+  const f = plan?.guide?.fillSkipped;
+  if (!f || typeof f !== "object" || f.choice !== "later") return false;
+  const d = typeof f.at === "string" && today ? daysBetween(f.at, today) : null;
+  return d !== null && d >= 0 && d < FILL_AGAIN_DAYS;
+}
+/** Work the cases out in order on `target` and write them into it; the plan after each case is the next one's (settled, as the
+ *  store settles after each of Get started's screens). -> [item] */
+function runFill(target, o = {}) {
+  const today = o.today ?? null;
+  const opts = { estimators: o.estimators ?? estimators, tables: o.tables ?? TABLES, today };
+  if (!applies(target) || (!o.ignoreLater && fillWaits(target, today))) return [];
+  const used = target?.guide?.fillSkipped?.choice === "used";
+  const items = [];
+  for (const c of FILL_CASES) {
+    if ((o.only && c.id !== o.only) || (used && c.endsWhenUsed) || !c.can(target, { ...opts, taps: o.taps })) continue;
+    if (items.length) settle(target, opts);
+    const found = c.find(structuredClone(target), { ...opts, taps: o.taps });
+    for (const x of found) c.write(target, x, opts);
+    items.push(...found);
+  }
+  return items;
+}
+/** One item as the card shows it (no Estimate objects): the figures and why-lines. */
+function fillShown(x) {
+  if (x.case === "debt") return { case: "debt", key: x.key, name: x.name, owed: x.est.owed.value, rate: x.est.rate.value, payment: x.est.payment.value, paidAs: x.paidAs ?? null, paidUnder: x.paidBy?.category ?? null, home: x.est.home?.value > 0 ? x.est.home.value : null, why: x.est.owed.why };
+  // (with a mortgage, the home's row is its upkeep: its tax and insurance are in the mortgage's payment; C7 UX review 4)
+  if (x.case === "spend") return { case: "spend", rows: x.rows.map((r) => ({ row: r.row, name: r.name, label: r.row === "housing" && x.mortgage ? "Home upkeep" : r.name, value: r.est.value, why: r.est.why })), total: x.rows.reduce((t, r) => t + r.est.value, 0), retire: x.retire?.value ?? null, who: x.who, mortgage: !!x.mortgage, mortgageUnpaid: !!x.mortgageUnpaid, asks: x.asks ?? [], taps: x.taps ?? {} };
+  return { case: x.case };
+}
+/** The card's answers (o.taps) that a question it shows may take: question 6's one-tap answers. */
+const SPEND_TAPS = ["health-cover", "childcare", "hoa"];
+/**
+ * "Fill in what you skipped": what one tap would write, worked out on a copy (nothing is written). o: { estimators, tables, today,
+ * taps (the card's own answers: health cover, childcare, HOA), only (one case id: Expenses offers the spending alone),
+ * ignoreLater (the guesses page lists what "Not now" put off) }.
+ * [] once answered for now (guide.fillSkipped "later", for FILL_AGAIN_DAYS), outside the U.S., or with nothing to fill.
+ * -> [{ case: "debt", key, name, owed, rate, payment, paidAs (the bill typed on Expenses that is its payment), paidUnder (that bill's
+ *       kind: a car payment under "Car, gas and transit" moves under "Loan and card payments" with the tap), home, why }
+ *     | { case: "spend", rows: [{ row, name, label, value, why }], total, retire, who, mortgage (a mortgage's payment is counted
+ *       from Debts, so the home's row is its upkeep), mortgageUnpaid (a mortgage with no payment on Debts: counted nowhere yet),
+ *       asks: [question 6's taps still open], taps (the answers given) }]
+ */
+export function fillOffers(plan, o = {}) {
+  return runFill(structuredClone(plan), o).map(fillShown);
+}
+/** What the card's tap changes beside the spending: what is owed and the home added, what you own minus what you owe moves by,
+ *  and the spending a month counted. -> { owed, home, net, spend } */
+export function fillEffect(items) {
+  const owed = items.filter((x) => x.case === "debt").reduce((t, x) => t + x.owed, 0), home = items.filter((x) => x.case === "debt").reduce((t, x) => t + (x.home ?? 0), 0);
+  return { owed, home, net: home - owed, spend: items.find((x) => x.case === "spend")?.total ?? 0 };
+}
+/** "Use these guesses": the same figures, written with markGuess on the draft; guide.fillSkipped = { at, choice: "used" } (not when
+ *  one case alone is taken, `only`: Expenses' spending card, whose case ends on its own once the rows are there). -> how many items */
+export function useFillGuesses(draft, o = {}) {
+  const items = runFill(draft, o);
+  if (o.only) return items.length;
+  draft.guide = draft.guide ?? {};
+  draft.guide.fillSkipped = { at: o.today ?? null, choice: "used" };
+  return items.length;
+}
+/** "Not now": nothing is written but the answer; the card comes back after FILL_AGAIN_DAYS. */
+export function fillLater(draft, today) {
+  draft.guide = draft.guide ?? {};
+  draft.guide.fillSkipped = { at: today ?? null, choice: "later" };
+}
+
+// ---- "Is something missing?" (spec 11.6, E10)
+const libFor = (plan, opts) => { const memo = new Map(); return { today: opts.today, memo: (n, f) => { if (!memo.has(n)) memo.set(n, f()); return memo.get(n); }, estimate: (k, o2 = {}) => estimate(plan, k, { ...opts, memo, ...o2 }) }; };
+/**
+ * Typed spending far below what households like this spend (estimators/spend.js missingSpend: every row typed, under 0.56 of
+ * the household's guessed total, no bank files of two whole months, not answered "That's everything"), with our guesses for
+ * Get started's rows that have no bill of their kinds, worked out together (one envelope, so the settle after writing moves
+ * nothing). -> { typed, usual, rows: [{ row, name, value, est }], rest (their total) } | null
+ */
+export function spendMissing(plan, o = {}) {
+  const opts = { estimators: o.estimators ?? estimators, tables: o.tables ?? TABLES, today: o.today ?? null };
+  if (!opts.today || !applies(plan)) return null;
+  let m = null;
+  try { m = missingSpend(plan, { today: opts.today, ignoreComplete: !!o.ignoreComplete }, libFor(plan, opts)); } catch { m = null; }
+  if (!m) return null;
+  const typedRows = Object.fromEntries(L(plan, "expenses").filter((x) => typeof x?.id === "string" && x.id.startsWith("setup-x-") && SPEND_ROWS.includes(x.id.slice(8)))
+    .map((x) => [x.id.slice(8), perMonth(x.amount, x.period)]));
+  const args = { mode: "rows", rows: { ...typedRows, ...Object.fromEntries(m.rest.map((r) => [r, null])) }, total: null, taps: {} };
+  const mortgage = spendTenure(plan, profileFor(plan, null)) === "ownerWithMortgage";
+  const memo = new Map();
+  // what is listed already under a row's other kinds (the phones under "Utilities and phone"): the row is offered less it
+  const bills = L(plan, "expenses").filter((x) => !(typeof x?.id === "string" && x.id.startsWith("setup-x-")) && (!opts.today || activeOn(x, opts.today)));
+  const listedIn = (row) => bills.filter((x) => (ROW_HOLDS[row] ?? []).includes(x?.category)).reduce((t, x) => t + perMonth(x.amount, x.period), 0);
+  const rows = m.rest.map((row) => ({ row, name: row === "housing" ? (mortgage ? "Home costs" : housingName(plan)) : ROW_NAME[row], est: guessOf(plan, `spend.${row}`, opts, { path: spendPath(row), args, memo }) }))
+    .filter((r) => r.est && r.est.value > 0).map((r) => ({ ...r, value: r.est.value, listed: listedIn(r.row) }));
+  const rest = rows.reduce((t, r) => t + r.value, 0);
+  return { typed: m.typed, usual: m.guessedTotal, rows, rest, withThese: m.typed + rest };
+}
+/** "Add our guesses for the rest": those rows, as Get started writes them, marked as our guesses. -> how many */
+export function addSpendGuesses(draft, o = {}) {
+  const miss = spendMissing(draft, o);
+  if (!miss) return 0;
+  draft.expenses = L(draft, "expenses");
+  for (const r of miss.rows) {
+    put(draft.expenses, `setup-x-${r.row}`, { amount: r.value }, { name: r.name, category: r.row, essential: MUST.includes(r.row), period: "monthly", inflates: true, startDate: "", endDate: "" });
+    markGuess(draft, spendPath(r.row), r.est, o.today ?? null);
+  }
+  return miss.rows.length;
+}
+/** "That's everything": the list is the person's whole month, and the question ends (guide.spendComplete). */
+export function spendIsComplete(draft, today) {
+  draft.guide = draft.guide ?? {};
+  draft.guide.spendComplete = today ?? null;
+}
+/** "Ask me again" (Expenses, after "That's everything"): the question comes back while it applies. */
+export function spendAskAgain(draft) {
+  if (draft?.guide && typeof draft.guide === "object") delete draft.guide.spendComplete;
+}
+/** "That's everything" was said and the list is still far below the usual total: Expenses offers to ask again. */
+export const spendSaidComplete = (plan, o = {}) => !!plan?.guide?.spendComplete && !!spendMissing(plan, { ...o, ignoreComplete: true });
+/**
+ * Why the bank files set no spending row yet, while a row is still our survey guess (R12 held: a card's file missing, a card in
+ * no file, lines with no kind, no checking file, files over a year old): estimators/spend.js bankHeldWords. -> { text, link } | null
+ */
+export function spendBankNote(plan, o = {}) {
+  if (!o.today || !applies(plan) || !L(plan, "transactions").length) return null;
+  const led = plan?.guesses && typeof plan.guesses === "object" ? plan.guesses : {};
+  const ours = L(plan, "expenses").some((x) => typeof x?.id === "string" && x.id.startsWith("setup-x-") && isGuess(plan, `expenses[${x.id}].amount`) && led[`expenses[${x.id}].amount`]?.s !== BANK.sigma);
+  if (!ours) return null;
+  const kids = L(plan?.household, "people").some((p) => p?.role === "dependent");
+  try { return bankHeldWords(plan, bankSpend(plan, o.today, { rows: kids ? SPEND_ROWS : SPEND_ROWS.filter((r) => r !== "childcare") })); } catch { return null; }
+}
+
+/**
+ * The Dashboard's cards about our guesses (spec 11.3): "Fill in what you skipped", "Is something missing?" and "Better guesses
+ * are ready", each only while it has something; `first` is the one the Dashboard shows (one at a time, in that order: the
+ * blanks that leave a figure out, then the list that is far too short, then the older figures). -> { fill, missing, upgrade,
+ * first } | null when none applies. o: { estimators, tables, today } (the registry merged from every module).
+ */
+export function guessCards(plan, o = {}) {
+  if (!o.today) return null;
+  const merged = o.estimators ? { estimators: o.estimators, tables: o.tables ?? TABLES } : { estimators, tables: TABLES };
+  const opts = { ...merged, today: o.today };
+  let fill = [], missing = null, upgrade = [];
+  try { fill = fillOffers(plan, opts); } catch { fill = []; }
+  try { const m = spendMissing(plan, opts); missing = m ? { typed: m.typed, usual: m.usual, rows: m.rows.map(({ est, ...r }) => r), rest: m.rest } : null; } catch { missing = null; }
+  try { upgrade = upgradeOffers(plan, opts).map(({ est, ...x }) => x); } catch { upgrade = []; }
+  const first = fill.length ? "fill" : missing?.rows.length ? "missing" : upgrade.length ? "upgrade" : null;
+  return first ? { fill, ...(fill.length ? { fillEffect: fillEffect(fill) } : {}), missing, upgrade, first } : null;
+}
+
 const planEmpty = (plan) => !L(plan?.household, "people").length && !L(plan, "accounts").length && !L(plan, "income").length && !L(plan, "expenses").length;
 
 /**
  * The page: every guess still in use (ledger and older flags), a frozen one first, then the big ones, then the rest;
  * the sources behind them and all the tables on hand. params: { estimators, tables } (the merged registry from every
  * module; this module's own when absent), today. offers.upgrade is the "Better guesses are ready" card (spec 11.5, C2);
- * offers.fill (11.4) arrives with C7: empty here.
+ * offers.fill the "Fill in what you skipped" card (11.4, C7: fillOffers).
  */
 export function compute(plan, params = {}) {
   const merged = params.estimators ? { estimators: params.estimators, tables: params.tables ?? TABLES } : mergeEstimators([{ from: "overview/guesses", estimators, tables: TABLES }]);
@@ -318,17 +679,22 @@ export function compute(plan, params = {}) {
   const first = (r) => (r.frozen || r.stale ? 1 : 0);
   const rows = guessesInUse(plan).filter((e) => getAt(plan, e.path) !== undefined).map((e) => rowOf(plan, e, o))
     .sort((a, b) => (b.frozen - a.frozen) || (b.stale - a.stale) || ((a.weight === "big" ? 0 : 1) - (b.weight === "big" ? 0 : 1)) || a.order - b.order || (a.path < b.path ? -1 : 1));
+  const ours = rows.filter((r) => !r.fromBank);
+  const waits = fillWaits(plan, o.today);
+  const skipped = waits ? fillOffers(plan, { ...o, ignoreLater: true }) : [];
   const used = [...new Set(rows.flatMap((r) => r.sources))];
   const twins = guessTwins(plan);
   const all = Object.keys(o.tables).map((id) => sourceOf(id, o.tables)).filter(Boolean);
   return {
-    rows, top: rows.filter((r) => !r.frozen && !r.stale).slice(0, 3), count: rows.length, frozen: rows.filter((r) => r.frozen).length, stale: rows.filter((r) => r.stale).length,
-    big: rows.filter((r) => r.weight === "big" || first(r)), small: rows.filter((r) => r.weight !== "big" && !first(r)),
+    rows, top: ours.filter((r) => !r.frozen && !r.stale).slice(0, 3), count: rows.length, frozen: rows.filter((r) => r.frozen).length, stale: rows.filter((r) => r.stale).length,
+    big: ours.filter((r) => r.weight === "big" || first(r)), small: ours.filter((r) => r.weight !== "big" && !first(r)), bank: rows.filter((r) => r.fromBank),
     applies: applies(plan),
     sources: { used: used.map((id) => sourceOf(id, o.tables)).filter(Boolean), all, orgs: new Set(all.map((x) => x.org ?? x.publisher)).size },
-    // "Fill in what you skipped" arrives with C7; the "Better guesses" card here lists old -> new (nothing written until a tap)
+    // "Fill in what you skipped" (C7) and "Better guesses" list what one tap would write (nothing written until then)
     // "Is this the same loan?" only while one is to ask (the key is absent otherwise, so older plans compute as before)
-    offers: { fill: [], upgrade: upgradeOffers(plan, o).map(({ est, ...x }) => x), ...(twins.length ? { twins } : {}) },
+    offers: { fill: fillOffers(plan, o), upgrade: upgradeOffers(plan, o).map(({ est, ...x }) => x), ...(twins.length ? { twins } : {}), ...(skipped.length ? { skipped } : {}) },
+    // why two months of bank files set no spending row yet (R12 held), while a row is our survey guess
+    bankNote: spendBankNote(plan, o),
     lookedAt: plan?.guide?.guessesLookedAt ?? null,
     planEmpty: planEmpty(plan),
   };

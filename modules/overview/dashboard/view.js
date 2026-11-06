@@ -7,6 +7,7 @@ import { goalsBehind } from "../alerts/compute.js";
 import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
 import { aiHealth } from "../../ai/health.js";
+import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
 
 // scoped to the where-you-stand card (no new global CSS)
 const STYLE = `
@@ -27,6 +28,10 @@ const STYLE = `
 .db-now .db-all { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; font-weight: 600; }
 @media (min-width: 720px) { .db-now .db-go { width: auto; display: inline-flex; padding: 0 22px; } .db-now .db-all { display: inline-flex; margin: 0 0 0 16px; } }
 `;
+
+// The green line a tap on one of our guesses' cards leaves, shown where the card was on the next render (the shell re-renders
+// after store.update).
+let pending = null;
 
 // Whether the AI helper answers, asked at most once a minute (the Dashboard re-renders after every change) and never
 // waited for: the "Ask a question" tile is drawn at once and changes when the answer comes.
@@ -59,6 +64,18 @@ export function render(root, ctx) {
       ui.h("p", { class: "lede", style: { marginTop: "10px", fontWeight: "600" } }, setupOn ? "Start with a few easy questions. It takes about five minutes." : "Start by adding your accounts. It takes about five minutes."),
     ));
   } else {
+    // ---- our guesses (spec 11.3): one card at a time. "Fill in what you skipped" and "Is something missing?" sit right under
+    // where you stand (C7 UX review 2: a green "Left over" with the card a screen below read as money to spare); "Better
+    // guesses are ready" after the money tiles. Dashboard compute's `guesses`; nothing is written before a tap.
+    const reg = usable(ctx, "overview/guesses") ? registryOf(ctx) : null;
+    const gc = reg ? computeOf("overview/dashboard", { today, estimators: reg.estimators, tables: reg.tables })?.guesses ?? null : null;
+    const say = (kind, text, undo = null) => { pending = { kind, text, undo }; };
+    const said = pending ? sayNotice(ctx, pending, say) : null;
+    if (pending) { ctx.announce?.(pending.text); pending = null; }
+    const fillSpend = gc?.first === "fill" ? gc.fill.find((x) => x.case === "spend") ?? null : null;
+    const guessCard = gc?.first === "fill" ? fillCard(ctx, gc.fill, { reg, today, say, compact: true }) : gc?.first === "missing" ? missingCard(ctx, gc.missing, { reg, today, say }) : null;
+    // while the card is up, the rows it decides go calm and lead to it: one way to fill in spending, not two (UX review 4)
+    const toCard = guessCard ? { onClick: (e) => { e.preventDefault(); guessCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); } } : {};
     // ---- where you stand: the setup's end screen, kept up to date, so every return starts with it
     const st = setupOn ? computeOf("overview/setup", { today, screen: "done" })?.standing ?? null : null;
     // balances more than a month old: one line here (not another card under What to do now, the owner's three)
@@ -94,12 +111,20 @@ export function render(root, ctx) {
       const due = usable(ctx, "overview/monthly-review") ? checkInDue(plan, today) : null;
       if (due) rows.push({ dot: oldDays >= 25 ? "warn" : "", k: `Your ${due.name} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "About ten minutes, once a month", v: "Start ›", open: true, href: "#/overview/monthly-review" });
       else if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
+      // (C7 UX reviews 2 and 4: with spending or a debt left out, or a list far too short, the month and retirement wait on the card)
+      if (guessCard) {
+        const waitWords = gc.first === "missing" ? `Depends on your spending: your list may be missing about ${money(Math.round(gc.missing.rest / 10) * 10)} a month` : fillSpend ? "Depends on your spending: not counted yet" : "Depends on what you owe: not all counted yet";
+        for (const r of rows) {
+          if (r.k === "Left over each month" || (r.k === "Safety cushion" && r.open && fillSpend)) Object.assign(r, { dot: "", s: r.k === "Left over each month" ? waitWords : "Needs your spending", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
+          else if (r.k === "Retirement" && !r.open) Object.assign(r, { dot: "", s: "Depends on the figures below", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
+        }
+      }
       const move = st.moves[0] ?? null;
       moveShown = !!move;
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
         ui.h("h1", { id: "db-now-h" }, name ? `Hi ${name}.` : "Where you stand"),
         ui.h("p", { class: "db-head" }, st.headline),
-        ui.h("ul", { class: "db-rows" }, rows.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.` },
+        ui.h("ul", { class: "db-rows" }, rows.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.`, ...(r.onClick ? { onClick: r.onClick } : {}) },
           ui.h("span", { class: `db-dot ${r.dot}`, "aria-hidden": "true" }),
           ui.h("span", { class: "db-k", "aria-hidden": "true" }, r.k, ui.h("span", { class: "db-s" }, r.s)),
           ui.h("span", { class: `db-v${r.open ? " open" : ""}`, "aria-hidden": "true" }, r.v),
@@ -107,6 +132,8 @@ export function render(root, ctx) {
         move ? ui.h("a", { class: "btn db-go", href: move.href }, `Your next move: ${move.title} ›`) : null,
         ui.h("a", { class: "db-all", href: "#/overview/setup/done" }, move ? "See all your moves ›" : "See where you stand ›")));
     }
+    if (said) root.append(said);
+    if (guessCard) root.append(guessCard);
 
     const nw = computeOf("balance/net-worth", { today });   // change since the last point before today
     const savedToday = (nw.history ?? []).some((h) => h.date === today);
@@ -124,6 +151,7 @@ export function render(root, ctx) {
       tile("#/balance/liabilities", "You owe", fmt.money(nw.liabilities, cur), nw.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       tile("#/goals/goals", "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),
     )));
+    if (gc?.first === "upgrade") root.append(upgradeCard(ctx, gc.upgrade, { reg, today, say }));
   }
 
   // ---- start here

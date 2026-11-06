@@ -5,7 +5,7 @@ import { isTransfer, monthOf, monthLabel, coverage, monthCover, COVER_SLACK, sho
 import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { compute as computeIncome } from "../income/compute.js";
 import { perMonth, activeOn } from "../../../core/math/periods.js";
-import { compute as computeExpenses, CATEGORIES, ROW_HOLDS, guessedSetupRow } from "../expenses/compute.js";
+import { compute as computeExpenses, CATEGORIES, ROW_HOLDS, guessedSetupRow, mortgageLines } from "../expenses/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
 import { takeHome } from "../paycheck/compute.js";
 
@@ -179,6 +179,17 @@ export function bankVsPlan(plan, params = {}) {
   // ...and in a month whole but for them, the payments counted for neither card (they went to one of the cards; re-check 5)
   const unsureIds = [];
   for (const [ym, u] of unsureOnly ?? []) if (inWindow.has(ym)) { cards += u.paid; for (const id of u.cardIds) if (!unsureIds.includes(id)) unsureIds.push(id); }
+  const exp = computeExpenses(plan, { today });
+  // a mortgage counted from Debts (not typed under housing on Expenses): the bank's housing line that is its payment (named so,
+  // within 10% of it, or its servicer's line every month: Expenses mortgageLines) is compared with loan payments, where the plan
+  // counts it, up to the payment on Debts; what goes to the servicer beyond it (the home's tax and insurance, or a payment typed
+  // low) stays a home cost, as the spending guesses read it. Under housing it read as that much more spent on the home than
+  // planned, and "Use" on our home-costs row counted the mortgage twice (C7; review M2: "MR COOPER", "PENNYMAC LOAN SVC")
+  // (Expenses' fromDebts: the debts counted from Debts, by their account)
+  const mortgagePay = exp.fromDebts.filter((f) => (plan.accounts ?? []).find((a) => a.id === f.id)?.type === "mortgage").reduce((s, f) => s + (Number(f.monthly) || 0), 0);
+  const housingOut = txs.filter((t) => inWindow.has(monthOf(t.date)) && t.category === "housing" && (Number(t.amount) || 0) < 0 && (categoryById(plan, t.category)?.kind ?? "expense") === "expense")
+    .map((t) => ({ t, ym: monthOf(t.date), out: -(Number(t.amount) || 0) }));
+  const servicer = mortgageLines(housingOut, yms, mortgagePay), payLeft = new Map();
   for (const t of txs) {
     if (!inWindow.has(monthOf(t.date))) continue;
     const amt = Number(t.amount) || 0;
@@ -188,10 +199,16 @@ export function bankVsPlan(plan, params = {}) {
     const key = CATEGORIES[t.category] ? t.category : t.category ? "other" : "";
     if (key === "taxes") continue;
     out += -amt;
+    if (servicer.has(t)) {
+      const ym = monthOf(t.date), left = payLeft.has(ym) ? payLeft.get(ym) : mortgagePay, toDebt = Math.min(-amt, left);
+      payLeft.set(ym, left - toDebt);
+      byCat.set("debt", (byCat.get("debt") ?? 0) + toDebt);
+      if (-amt - toDebt > 0) byCat.set("housing", (byCat.get("housing") ?? 0) + (-amt - toDebt));
+      continue;
+    }
     if (!key) unfiled += -amt; else byCat.set(key, (byCat.get(key) ?? 0) - amt);
   }
   const n = yms.length;
-  const exp = computeExpenses(plan, { today });
   const planCat = new Map(exp.byCategory.map((c) => [c.category, c.monthly]));
   let extra = 0;
   try { const pay = computePayoff(plan, { today }); extra = pay?.hasData && pay.extra > 0 ? pay.extra : 0; } catch { extra = 0; }
@@ -203,12 +220,17 @@ export function bankVsPlan(plan, params = {}) {
   // whose `ours` says which row "Add" sets to what the bank shows (addFromBank). A bill added beside our guess came off it
   // again at the next save (C3 review D3). Only for a plan with such a row; every other plan's lines are as before.
   const ourRows = (plan.expenses ?? []).filter((x) => ROW_HOLDS[x.category] && x.id === `setup-x-${x.category}` && (!today || activeOn(x, today)) && guessedSetupRow(plan, x));
-  const grouped = new Map(ourRows.flatMap((r) => ROW_HOLDS[r.category].map((c) => [c, r])));
+  // "Shopping and everything else" holds every kind in no row too (travel, gifts, other, one of your own), as the spending
+  // guesses read the bank files (R12, C7): a line for them beside our row would count them twice
+  const held = new Set(Object.values(ROW_HOLDS).flat());
+  const rest = [...new Set([...byCat.keys(), ...planCat.keys()])].filter((c) => !held.has(c) && c !== "debt" && c !== "taxes");
+  const holdsOf = (row) => (row === "shopping" ? [...ROW_HOLDS.shopping, ...rest] : ROW_HOLDS[row]);
+  const grouped = new Map(ourRows.flatMap((r) => holdsOf(r.category).map((c) => [c, r])));
   const lineOf = (category, bank, planned) => ({ category, label: CATEGORIES[category].label, icon: CATEGORIES[category].icon, essential: CATEGORIES[category].essential, bank, plan: planned, more: bank - planned });
   const lines = [
     ...[...byCat].filter(([category]) => !grouped.has(category)).map(([category, total]) => lineOf(category, total / n, (planCat.get(category) ?? 0) + (category === "debt" ? extra : 0))),
     ...ourRows.map((r) => {
-      const holds = ROW_HOLDS[r.category], bank = holds.reduce((t, c) => t + (byCat.get(c) ?? 0), 0) / n, planned = holds.reduce((t, c) => t + (planCat.get(c) ?? 0), 0);
+      const holds = holdsOf(r.category), bank = holds.reduce((t, c) => t + (byCat.get(c) ?? 0), 0) / n, planned = holds.reduce((t, c) => t + (planCat.get(c) ?? 0), 0);
       const amount = perMonth(r.amount, r.period);
       // kind by kind, what the bank shows less what is typed beside our row (the row is in its own kind's figure): "Use" writes
       // each kind on its own, as the card compares them once the row is the person's (C3 verify: "Use $390" on Utilities and

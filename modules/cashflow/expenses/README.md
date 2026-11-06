@@ -43,6 +43,47 @@ nice-to-haves that make a lean month safe but no longer says "The rest has to co
 good months make up for lean ones, with the cash cushion in between. Before, a freelancer whose full month leaves $1,197
 was told to cut her rent.
 
+## Is something missing? (smart guesses C7, 2026-11-06; spec 11.6)
+When every bill is typed (none our guess, not one rough total), the typed month (bills and loan payments) is under
+exp(-2.33 x 0.25) = 0.5585 of what households like this spend (overview/guesses `spendMissing`), and no bank files cover
+two whole months, one card under the tiles: "Households like yours usually spend about $5,300 a month. You've listed
+$2,565." (the list to the dollar, as the tile above), a "Not listed yet" record (our guesses for Get started's rows with
+no bill of their main kind; a row with bills under its other kinds is offered less them, "Utilities and phone, besides
+the $95 you listed"; then "With these, your list comes to about $5,000"), "Add our guesses for the rest" (filled; writes
+those rows as Get started does, each our guess; "Added our guesses for what wasn't listed: about $2,460 a month. Change
+any of them in the list below when you know the real figure.", with an outlined Undo) and "That's everything"
+(outlined; `guide.spendComplete`, which ends the question). While the card is up the left-over tile waits ("Depends on
+your spending. Your list may be missing about $2,460 a month. See “Is something missing?” just below."; C7 UX review
+2). After "That's everything", while the list is still under the line, one muted line under the tiles: "You said this
+list is everything." with an outlined "Ask me again" (`spendAskAgain`). Nothing is written before a tap; the notice is
+kept in a module-level `missingSaid` for the next render. With two or more whole months of bank files, the rows that
+are our guesses become the bank's monthly average instead (R12, overview/guesses README "Spending"), so the bank card
+below has nothing to add for them; while bank files are in but set no row yet, one muted line under the tiles says
+why and what to do (overview/guesses `spendBankNote`: a card's file missing, a card not in the plan, no checking file,
+lines with no kind ("12 bank lines still need a kind. File them, ... Categorize ›"), files over a year old).
+Such a row is the person's own months: its ledger spread is `BANK_SPREAD` (0.15, the spending guesses' declared spread
+for a row read from the bank), and `guessedMonthly` / `guessedShare` leave it out, so the left-over figure, the cushion and
+Next best action no longer wait on it ("Type what you really spend" was asked of someone whose figures were their bank's).
+A row whose bank figure equals its earlier survey figure is the bank's all the same (core/estimate `settle` refreshes the
+entry's spread when the figure is unchanged; C7 review M9).
+
+**Nothing listed yet** (C7 UX review 8): with the guesses page on and income on file, the empty page offers the same
+card as the Dashboard (overview/guesses `fillCard`, all of `fillOffers` with `ignoreLater`). With the spending alone it
+is "Not sure what you spend?": "Households like yours (one parent of two owning their home in Ohio on about $58,000 a
+year) spend about $3,520 a month. Use our guesses to start, and type your own figures as you learn them.", question 6's
+open questions as chips, "Use these guesses" (filled; the spending alone, `only: "spend"`) and "I'll type mine"
+(outlined; writes nothing, scrolls to the form). With a debt left out too it is the Dashboard's "Fill in what you
+skipped" with the same figures, and "Not now" there does not hide it here.
+
+**The mortgage's servicer** (`mortgageLines(lines, months, pay)`, C7 review M2): of the housing lines in the months
+read, those that are the mortgage's: named mortgage or mtg, or within 10% of the payment on Debts (`mortgageFiled`'s
+test), or, when none is, the largest payee whose line is in every month, within 10% of the same amount each month and at
+least half the payment ("MR COOPER" beside a $1,300 payment typed on Debts). overview/guesses R12 and the Income
+statement's bank card use it, so a servicer under another name is the loan's, not "home costs".
+Known limit (not changed here): a car payment typed under "Car, gas and transit" is not matched to the car loan on
+Debts (`matchDebts` matches only "Loan and card payments" bills), so it counts twice; the guesses no longer add a car
+loan beside one (overview/guesses M5).
+
 ## Ideas / not yet
 - Fill amounts from imported transactions (phase 3): average of the last 3 months per category.
 - Per-person expenses for the survivor scenario (phase 8).

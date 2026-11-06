@@ -6,7 +6,7 @@
 // an answer updates the same records; a record that exists gets only the fields its screen asks for; a kind of record
 // the plan already has (made on its own page) is shown and not asked again; nothing that another record points at is
 // ever removed; a blank box saves nothing.
-import { CATEGORIES, compute as computeExpenses } from "../../cashflow/expenses/compute.js";
+import { CATEGORIES, compute as computeExpenses, BANK_SPREAD } from "../../cashflow/expenses/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
@@ -1148,7 +1148,9 @@ function applySpendGuessed(draft, v, today, guess) {
 /** The month on Q6 once saved: the rows the screen asks (typed and ours), how many are ours, and their total. */
 export function spendRowsNow(plan) {
   const rows = L(plan, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
-  const guessed = rows.filter((x) => isGuess(plan, `expenses[${x.id}].amount`));
+  // a row read from two months of bank files (ledger spread BANK_SPREAD, smart guesses C7 R12) is the household's own
+  // spending, not "our guess", as on Expenses (`guessedMonthly`)
+  const guessed = rows.filter((x) => isGuess(plan, `expenses[${x.id}].amount`) && plan.guesses?.[`expenses[${x.id}].amount`]?.s !== BANK_SPREAD);
   const m = (list) => list.reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
   return { count: rows.length, guessed: guessed.length, monthly: m(rows), guessedMonthly: m(guessed), typedMonthly: m(rows) - m(guessed) };
 }

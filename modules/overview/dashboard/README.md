@@ -42,6 +42,29 @@ With setup's `standing.bank` (the bank files show clearly more going out than Ex
 says "By your plan. Your bank shows about $5,350 a month more going out" and opens Expenses; the headline and the first
 move say the same. A row reading $3,804 in green beside a bank that shows the household short was the round-4 finding.
 
+## Our guesses' cards (smart guesses C7, 2026-11-06; spec 11.3)
+With a day (and the guesses registry merged from every manifest, `registryOf`), `compute(plan, { today, estimators,
+tables })` adds `guesses` (overview/guesses `guessCards`) only while one applies: `{ fill, missing, upgrade, first }`.
+The shell's own `compute(plan)` (no day) has no such key, so every other reader of `ctx.derived` is as before. The view
+shows one card, `first`, only with money in the plan: "Fill in what you skipped" (blanks a plan made before the guesses
+has: a debt picked with no balance, or no spending at all; compact, no rows fold; question 6's open questions as
+chips; a line of what else the tap changes) or "Is something missing?" (a typed list far below what households like
+this spend) right under "where you stand" (C7 UX review 2: a green "Left over" with the card a screen below read as
+money to spare), else "Better guesses are ready" (the older Get started figures, its first two changes with their
+why-lines, "Plus one small change of under 2%.", "See all on Our guesses for you ›") after the money tiles. While fill
+or missing is up, the rows of "where you stand" that it decides wait on it and lead to it (one way to fill in
+spending, UX review 4): "Left over each month" ("Depends on your spending: not counted yet", "...: your list may be
+missing about $2,460 a month", or with a debt alone "Depends on what you owe: not all counted yet"), "Safety cushion"
+when it is open and the spending is not counted ("Needs your spending"), and "Retirement" whatever its verdict
+("Depends on the figures below"): no coloured dot, "See below ›", `#/overview/guesses`, and a tap scrolls to the card.
+(The headline and the next move are overview/setup's `standing` and Next best action's, another batch's files.) Each
+card lists what its filled button writes; nothing is written before a tap; "Not now", "That's everything" and "Keep the
+old ones" write only the answer. The green line a tap leaves is kept in a module-level `pending` and shown where the
+card was on the next render, with an outlined "Undo" after a tap that wrote figures (overview/guesses `sayNotice`). The
+cards are drawn by overview/guesses `fillCard`, `missingCard` and `upgradeCard`; "What is coming" is not touched
+(DESIGN_LOG 2026-09-15). Not changed (designer-lane words outside the cards): "You owe ... loans, cards, mortgage"
+lists every kind whatever is on file (C7 UX review 12).
+
 ## The first day (2026-11-02, round 4)
 - Set up my plan stopped part way: the start-here tile says "Question 3 of 7. Next: your ages. Pick up where you left off"
   and links to that screen (start/compute.js `setupCard`, the same card Get started shows). With money in the plan the

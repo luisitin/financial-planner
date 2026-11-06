@@ -96,6 +96,19 @@ plan3 unchanged: July $4,189.71, August $5,714.38, September $8,727.03, October 
 September and October, $8,090.33 out. One checking file a month (8/3-8/29, 9/1-9/26, 10/1-10/31, no card): no hole, three
 typical months of $4,205.78 (as dc6e73c), bank versus plan $4,205.78 against Expenses, -$1,220.55.
 
+## The bank's mortgage line (smart guesses C7, 2026-11-06)
+A mortgage counted from Debts (none typed under housing on Expenses: Expenses' `fromDebts`) is often paid from checking
+and filed by the bank under housing. `bankVsPlan` now compares such a line (a housing line named mortgage or mtg, or
+within 10% of the mortgage's payment, Expenses' own test for a typed one) with loan payments, where the plan counts it.
+Before, it read as that much more spent on the home ("Home costs: $1,600 more") and "Use" on Get started's home-costs row
+(our guess) set the row to the mortgage plus the upkeep, counting the payment twice. `bankOut`, `planOut` and `gap` do
+not move; only the kind a line is compared under. Test: module.test.mjs "C7: the bank's mortgage line ...".
+C7 review M2: the servicer's lines are Expenses' `mortgageLines` (also a servicer under another name, "MR COOPER", found
+by its line in every month near the same amount and at least half the payment). Each servicer line is split: up to the
+payment on Debts still owed that month goes under loan payments, the rest (its tax and insurance, or a payment typed
+low) stays under housing, so the gap is the same and a payment typed lower than the bank's shows as home costs, not as
+nothing.
+
 ## Edge cases
 No transactions: empty state, plus the planned figures if entered. Months with only transfers do not appear.
 

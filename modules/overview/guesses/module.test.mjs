@@ -26,6 +26,8 @@ import { estimate, mergeEstimators, checkEstimators, markGuess, saveField, appli
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { guessedPlan } from "../../../qa/fixtures/guessed-plan.mjs";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { escrowMonthly } from "./estimators/home.js";
 import { jordan, patLee, sam } from "../../../qa/fixtures/setup-personas.mjs";
 import { ARCHETYPES, SPECIAL_PACKS } from "../../../qa/households/lib/catalog.mjs";
 
@@ -283,16 +285,19 @@ test("the gate: a EUR household and 'I live outside the U.S.' get no guess for a
 const IMPORT = /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|\n)\s*import\s*["']([^"']+)["']|\bimport\(\s*["'`]([^"'`]+)["'`]\s*\)/g;
 const importsIn = (src, file) => [...src.matchAll(IMPORT)].map((m) => m[1] ?? m[2] ?? m[3]).filter((s) => s.startsWith(".")).map((s) => path.resolve(path.dirname(file), s));
 const importsOf = (file) => importsIn(fs.readFileSync(file, "utf8"), file);
-// spec 6.2: core/*, its own data and estimators, three named data files of other modules, and three computes read-only
+// spec 6.2: core/*, its own data and estimators, three named data files of other modules, and three computes read-only; C7
+// adds two for R12 (the bank files' whole months and transfers, transactions/ledger; the kinds, transactions/categories),
+// read-only, so a row taken from the bank files reads the same months as Expenses' bank card
 const ALLOWED = [/^core\//, /^modules\/overview\/guesses\/(data|estimators)\//, /^modules\/taxes\/federal\/data\/federal\.js$/, /^modules\/retirement\/social-security\/data\/ssa\.js$/,
-  /^modules\/retirement\/historical\/data\/returns\.js$/, /^modules\/taxes\/state\/compute\.js$/, /^modules\/cashflow\/expenses\/compute\.js$/];
+  /^modules\/retirement\/historical\/data\/returns\.js$/, /^modules\/taxes\/state\/compute\.js$/, /^modules\/cashflow\/expenses\/compute\.js$/,
+  /^modules\/transactions\/ledger\/compute\.js$/, /^modules\/transactions\/categories\/compute\.js$/];
 function reach(start) {
   const seen = new Set(), todo = [start];
   while (todo.length) { const f = todo.pop(); if (seen.has(f)) continue; seen.add(f); todo.push(...importsOf(f)); }
   seen.delete(start);
   return seen;
 }
-test("the import rule: core/*, its own data and estimators, other modules' data and three named computes; no cycle, no overview compute", () => {
+test("the import rule: core/*, its own data and estimators, other modules' data and five named computes; no cycle, no overview compute", () => {
   const rel = (f) => path.relative(ROOT, f).split(path.sep).join("/");
   const own = [path.join(HERE, "compute.js"), ...fs.readdirSync(path.join(HERE, "estimators")).map((f) => path.join(HERE, "estimators", f)), ...fs.readdirSync(path.join(HERE, "data")).map((f) => path.join(HERE, "data", f))];
   for (const f of own) for (const i of importsOf(f)) assert.ok(ALLOWED.some((re) => re.test(rel(i))), `${rel(f)} imports ${rel(i)}`);
@@ -437,18 +442,26 @@ test("a plan not in U.S. dollars: older guesses in neutral words with no source;
   assert.equal(page(guessedPlan()).applies, true);
 });
 
+/** A null, undefined or false handed to the DOM's own append or replaceChildren shows as that word on screen (C7 fix: "null"
+ *  under "How it adds up" on Expenses): never in a drawn page. */
+function noStrayText(root) {
+  const walk = (n) => { if (!n || typeof n !== "object") return; for (const k of n.kids) { if (k === "null" || k === "undefined" || k === "false") throw new Error(`"${k}" written on the page inside <${n.tag}>`); walk(k); } };
+  walk(root);
+}
 // ---- the page drawn with a stand-in for the UI kit (no browser): every element keeps its attributes and children, so the
 // words, the links' classes and the Save handler can be read and used (review of C1, 2026-11-06)
-async function drawPage(plan) {
+async function drawPage(plan, { view = "./view.js", more = {} } = {}) {
   const fmt = await import("../../../core/format.js");
-  const { render } = await import("./view.js");
+  const { render } = await import(view);
   const { estimators: setupEst } = await import("../setup/compute.js");
   const node = (tag, attrs = {}, kids = []) => {
     const n = { tag, attrs: attrs ?? {}, kids: [], style: {}, value: attrs?.value ?? "",
-      append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
-      replaceChildren(...k) { n.kids = []; n.append(...k); }, focus() {},
+      // as the DOM: append and replaceChildren write null, undefined or false as text (ui.h skips them: add)
+      add(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
+      append(...k) { for (const c of k) n.kids.push(c !== null && typeof c === "object" ? c : String(c)); },
+      replaceChildren(...k) { n.kids = []; n.append(...k); }, focus() {}, remove() {}, scrollIntoView() {}, querySelector() { return null; }, set innerHTML(v) { n.kids = []; void v; },
       get textContent() { return n.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } };
-    n.append(...kids); return n;
+    n.add(...kids); return n;
   };
   const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
   const ui = {
@@ -458,19 +471,28 @@ async function drawPage(plan) {
     button: (label, onClick, o = {}) => node("button", { class: o.class ?? "", onClick }, [label]),
     moneyBox: (o) => { const input = node("input", { ...o, placeholder: o.placeholder }); return { box: node("span", { class: "money-in" }, [input]), input }; },
     moneyValue: (el) => fmt.readAmount(el.value),
+    // (the other pages' kit, for Expenses: C7 fix UX)
+    row: (...k) => node("div", { class: "row" }, k), stat: (l, v, s) => node("div", { class: "stat" }, [l, v, s]), form: () => node("form"), field: (l, c) => node("label", {}, [l, c]),
+    select: () => node("select"), uid: () => "u1", confirm: () => true,
   };
   let current = structuredClone(plan);
   const modules = new Map([["overview/guesses", { group: "overview", id: "guesses", estimators, guessTables: TABLES }], ["overview/setup", { group: "overview", id: "setup", estimators: setupEst }]]);
   const draw = () => {
     const root = node("root");
-    render(root, { ui, fmt: { ...fmt, today: () => T0 }, plan: current, modules, store: { update(fn) { const next = structuredClone(current); fn(next); current = next; } } });
+    render(root, ctxOf(current));
+    noStrayText(root);
     return root;
   };
+  function ctxOf(p) {
+    const extra = typeof more === "function" ? more(p) : more;
+    return { ui, fmt: { ...fmt, today: () => T0 }, plan: p, modules, isReady: () => true, features: { enabled: () => true }, route: { query: {} },
+      store: { update(fn) { const next = structuredClone(current); fn(next); current = next; } }, ...extra };
+  }
   const all = (n, test, out = []) => { if (n && typeof n === "object") { if (test(n)) out.push(n); for (const k of n.kids) all(k, test, out); } return out; };
   const text = (n) => n.textContent.replace(/\s+/g, " ");
   // the guesses listed (C2: the "Better guesses are ready" card comes first on a plan with older guesses; its rows have no box)
   const listed = (root) => all(root, (n) => n.tag === "section" && /\bcard\b/.test(n.attrs.class ?? "") && !/hero/.test(n.attrs.class ?? "") && !/^Better guesses are ready/.test(text(n)));
-  return { draw, all, text, listed, plan: () => current };
+  return { draw, all, text, listed, plan: () => current, ctx: () => ctxOf(current) };
 }
 
 test("the page on a phone: the source links are 44 px buttons, rates keep a thousandth of a percent, a stale payment is said first", async () => {
@@ -1140,4 +1162,934 @@ test("C3 review D5: streaming, pets and personal care typed on Expenses come off
   // a gift or a trip is not inside a row: it adds to the month
   p.expenses.push(bill("x4", "Birthday gifts", "giving", 50)); const m = month(); settle(p, OPTS);
   assert.equal(month(), m, "a gift moves no guess");
+});
+
+// ---- C7 (spec 11.4-11.6, R12): plans made before the guesses fill in what they skipped; the bank files; "Is something missing?"
+// A plan made before the guesses: Get started dropped a debt whose balance was left blank (its rate and payment too) and wrote
+// nothing for a skipped spending screen. The same household through Get started today, with the same boxes blank, is the
+// answer key: one tap on "Use these guesses" must make the same plan (key order aside), and the settle after it moves nothing.
+const G7 = await import("./compute.js");
+const { compute: dashboard } = await import("../dashboard/compute.js");
+const { bankVsPlan } = await import("../../cashflow/income-statement/compute.js");
+const { compute: computeExpenses7 } = await import("../../cashflow/expenses/compute.js");
+const { cardGapPlan: cardGap7, withVisaFile: withVisa7 } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+const OWE7 = { patLee: ["mortgage"], jordan: ["mortgage"], sam: ["car-loan", "credit"] };
+const canon7 = (x) => JSON.stringify(x, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
+const bare7 = (p) => { const q = structuredClone(p); delete q.meta; if (q.guide) delete q.guide.fillSkipped; return canon7(q); };
+/** Get started before the guesses: Q5b with every owed box blank but Sam's card ($3,000 typed), spending skipped, finished. */
+function older7(name) {
+  const p = { sam, jordan, patLee }[name](T0);
+  C3.applyOweAmounts(p, Object.fromEntries(OWE7[name].map((k) => [k, name === "sam" && k === "credit" ? { owed: "3,000" } : { owed: "" }])), T0);
+  C3.applySpend(p, { mode: "rows", rows: {} }, T0);
+  C3.markAt(p, "done", T0);
+  return p;
+}
+/** Get started today with the same boxes blank (Sam's card typed the older way, as in the plan above). */
+function today7(name) {
+  const a = older7(name), p = { sam, jordan, patLee }[name](T0);
+  viaGuess(p, (d, g) => C3.applyOweAmounts(d, Object.fromEntries(OWE7[name].map((k) => [k, name === "sam" && k === "credit" ? { owed: "3,000" } : {}])), T0, { guess: g }));
+  if (name === "sam") {
+    Object.assign(p.debts.find((d) => d.id === "setup-debt-credit"), structuredClone(a.debts.find((d) => d.id === "setup-debt-credit")));
+    for (const f of ["rate", "minPayment"]) delete p.guesses[`debts[setup-debt-credit].${f}`];
+  }
+  viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: {} }, T0, { guess: g }));
+  C3.markAt(p, "done", T0);
+  return p;
+}
+const acct7 = (p, id) => p.accounts.find((a) => a.id === id);
+const debt7 = (p, id) => p.debts.find((d) => d.id === id);
+
+test("C7 11.4: a plan made before the guesses is offered what Get started writes today; 'Use these guesses' makes the same plan", () => {
+  for (const name of ["patLee", "jordan", "sam"]) {
+    const a = older7(name), b = today7(name), before = structuredClone(a);
+    assert.equal(acct7(a, `setup-owe-${OWE7[name][0]}`), undefined, `${name}: the older Get started dropped the debt`);
+    assert.equal(a.expenses.length, 0);
+    const offers = G7.fillOffers(a, OPTS);
+    assert.deepEqual(a, before, "working the card out writes nothing");
+    const debts = offers.filter((x) => x.case === "debt");
+    assert.deepEqual(debts.map((x) => x.key), OWE7[name].filter((k) => !(name === "sam" && k === "credit")), `${name}: the dropped debts (Sam's typed card is there)`);
+    for (const x of debts) {
+      assert.equal(x.owed, acct7(b, `setup-owe-${x.key}`).balance, `${name} ${x.key} owed`);
+      assert.equal(x.rate, debt7(b, `setup-debt-${x.key}`).rate, `${name} ${x.key} rate`);
+      assert.equal(x.payment, debt7(b, `setup-debt-${x.key}`).minPayment, `${name} ${x.key} payment`);
+      assert.equal(x.home, x.key === "mortgage" && !acct7(a, "setup-have-home") ? acct7(b, "setup-have-home").balance : null, `${name}: the home's value only with no home in the plan`);
+    }
+    const s = offers.find((x) => x.case === "spend");
+    assert.deepEqual(s.rows.map((r) => [r.row, r.value]), b.expenses.filter((x) => x.id.startsWith("setup-x-")).map((x) => [x.id.slice(8), x.amount]), `${name}: the rows`);
+    assert.equal(s.total, s.rows.reduce((t, r) => t + r.value, 0));
+    assert.equal(s.retire, b.retirement.spendingMonthly, `${name}: spending once work stops`);
+    // the tap (inside store.update: the settle after it)
+    assert.equal(G7.useFillGuesses(a, OPTS), offers.length);
+    assert.deepEqual(settle(a, OPTS).changed, [], `${name}: the settle after the tap moves nothing`);
+    assert.equal(bare7(a), bare7(b), `${name}: the plan Get started makes today`);
+    assert.deepEqual(a.guide.fillSkipped, { at: T0, choice: "used" });
+    assert.deepEqual(G7.fillOffers(a, OPTS), [], "nothing left to fill");
+  }
+  // Jordan's home (picked on question 4, its value asked with the mortgage on question 5): the card adds it, as our guess
+  const j = older7("jordan"); G7.useFillGuesses(j, OPTS);
+  assert.deepEqual([acct7(j, "setup-have-home").type, isGuessIn(j, "accounts[setup-have-home].balance")], ["property", true]);
+  // with no home picked, it is added to "what you have" as question 5 adds it
+  const j2 = older7("jordan"); j2.guide.setup.picks.have = ["checking"]; G7.useFillGuesses(j2, OPTS);
+  assert.deepEqual([j2.guide.setup.picks.have, j2.guide.setup.homeFromOwe], [["checking", "home"], true]);
+});
+
+test("C7 11.4: what is not offered (kept elsewhere, paid in full, Get started not past the question, none, outside the U.S., spending there)", () => {
+  const kinds = (p, o = OPTS) => G7.fillOffers(p, o).map((x) => (x.case === "debt" ? x.key : x.case));
+  assert.deepEqual(kinds(older7("sam")), ["car-loan", "spend"]);
+  // a car loan added on What you owe after Get started: it is the one picked
+  const kept = older7("sam"); kept.accounts.push({ id: "acct-car", name: "Honda auto loan", type: "loan", balance: 9000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  assert.deepEqual(kinds(kept), ["spend"]);
+  // another loan (not a car's) does not stand in for the car loan
+  const other = older7("sam"); other.accounts.push({ id: "acct-x", name: "Personal loan", type: "loan", balance: 2000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  assert.deepEqual(kinds(other), ["car-loan", "spend"]);
+  // a card picked and "I pay it in full" (no balance on purpose)
+  const full = { sam }.sam(T0);
+  C3.applyOweAmounts(full, { "car-loan": { owed: "" }, credit: { paidInFull: true } }, T0); C3.markAt(full, "done", T0);
+  assert.deepEqual(kinds(full), ["car-loan", "spend"]);
+  // Get started stopped on the debts' screen: it asks them itself when the person goes back
+  const mid = older7("jordan"); delete mid.guide.setup.finishedAt; mid.guide.setup.at = "owe-amounts";
+  assert.deepEqual(kinds(mid), []);
+  mid.guide.setup.at = "spend"; assert.deepEqual(kinds(mid), ["mortgage"], "past the debts, not past the spending");
+  mid.guide.setup.at = "goals"; assert.deepEqual(kinds(mid), ["mortgage", "spend"]);
+  const none = older7("jordan"); none.guide.setup.picks.owe = ["none"]; assert.deepEqual(kinds(none), ["spend"]);
+  // outside the U.S. or not in dollars: nothing
+  const eur = older7("jordan"); eur.meta.currency = "EUR"; assert.deepEqual(kinds(eur), []);
+  const out = older7("jordan"); out.guide.setup.outsideUS = true; assert.deepEqual(kinds(out), []);
+  // spending: a bill, a bank line, no pay, pay that has ended
+  const bill = older7("jordan"); bill.expenses.push({ id: "x1", name: "Rent", category: "housing", amount: 900, period: "monthly", inflates: true, startDate: "", endDate: "" });
+  assert.deepEqual(kinds(bill), ["mortgage"]);
+  const bank = older7("jordan"); bank.transactions = [{ id: "t1", date: "2026-10-03", amount: -40, payee: "Shell", accountId: "setup-have-checking", category: "transport" }];
+  assert.deepEqual(kinds(bank), ["mortgage"]);
+  const nopay = older7("jordan"); nopay.income = []; assert.deepEqual(kinds(nopay), ["mortgage"]);
+  const ended = older7("jordan"); for (const x of ended.income) x.endDate = "2026-06-30"; assert.deepEqual(kinds(ended), ["mortgage"]);
+  // a row typed as 0 on Get started stays the person's 0; childcare is offered only once its question says Yes (none here)
+  const zero = older7("sam"); zero.guide.setup.spendZero = ["dining"];
+  assert.ok(!G7.fillOffers(zero, OPTS).find((x) => x.case === "spend").rows.some((r) => r.row === "dining"));
+  assert.ok(!G7.fillOffers(older7("jordan"), OPTS).find((x) => x.case === "spend").rows.some((r) => r.row === "childcare"));
+});
+
+test("C7 11.4: 'Not now' writes only guide.fillSkipped and the card is back after 30 days; after 'Use', a debt removed stays removed", () => {
+  const a = older7("patLee"), before = structuredClone(a);
+  G7.fillLater(a, T0);
+  assert.deepEqual(a.guide.fillSkipped, { at: T0, choice: "later" });
+  delete a.guide.fillSkipped; assert.deepEqual(a, before, "nothing else was written");
+  G7.fillLater(a, T0);
+  assert.equal(G7.FILL_AGAIN_DAYS, 30);
+  assert.deepEqual(G7.fillOffers(a, { ...OPTS, today: "2026-12-01" }), [], "29 days on");
+  assert.equal(G7.fillOffers(a, { ...OPTS, today: "2026-12-02" }).length, 2, "30 days on: the mortgage and the spending again");
+  // used, then the person removes the mortgage and every bill: the card does not put them back
+  const u = older7("patLee"); G7.useFillGuesses(u, OPTS);
+  u.accounts = u.accounts.filter((x) => x.id !== "setup-owe-mortgage"); u.debts = []; u.expenses = [];
+  assert.deepEqual(G7.fillOffers(u, OPTS), []);
+  // a plan built on the pages (no Get started): its spending is offered, with nothing written for retirement
+  const pages = older7("sam"); delete pages.guide.setup; const r0 = structuredClone(pages.retirement);
+  const offers = G7.fillOffers(pages, OPTS);
+  assert.deepEqual(offers.map((x) => x.case), ["spend"]);
+  assert.equal(offers[0].retire, null);
+  G7.useFillGuesses(pages, OPTS);
+  assert.deepEqual(pages.retirement, r0);
+  assert.ok(pages.expenses.length >= 6 && pages.expenses.every((x) => isGuessIn(pages, `expenses[${x.id}].amount`)));
+});
+
+test("C7 11.3: the Dashboard's cards (key only with a day; one at a time: fill, then missing, then the better guesses); nothing is written", () => {
+  const a = older7("patLee"), before = structuredClone(a);
+  assert.equal("guesses" in dashboard(a), false, "the shell's own compute (no day) is as before");
+  const d = dashboard(a, OPTS);
+  assert.deepEqual(a, before);
+  assert.equal(d.guesses.first, "fill");
+  assert.deepEqual(d.guesses.fill, G7.fillOffers(a, OPTS));
+  assert.equal(page(a).offers.fill.length, 2, "the page's offers.fill");
+  // a typed list far too short: "Is something missing?"
+  const m = atQ6("patLee"); C3.applySpend(m, { mode: "rows", rows: { housing: 100, groceries: 600, utilities: 300 } }, T0); C3.markAt(m, "done", T0);
+  const dm = dashboard(m, OPTS).guesses;
+  assert.equal(dm.first, "missing"); assert.deepEqual(dm.fill, []);
+  // older Get started flags only: the better guesses
+  assert.equal(dashboard(guessedPlan(T0), OPTS).guesses.first, "upgrade");
+  // a plan with nothing to offer has no key at all
+  const done = today7("patLee");
+  assert.equal("guesses" in dashboard(done, OPTS), false);
+});
+
+// R12: Pat and Lee (all rows ours) bring in their checking account's files. A month: pay $8,000 in; the mortgage's own $1,600
+// (on Debts: left out of the rows); home things 90; power 180 + phone 150; groceries 4 x (200 + 50k); gas 120; insurance 180 +
+// pharmacy 40; dining 60 + streaming 20; Target 150 + ATM 100 ("other": everything else) + 50 with no kind; $500 to savings
+// (a transfer) and $300 of tax (neither is spending); the second month a $30 refund at Target. (k = 0 the older month)
+const BANK7 = (ym, k) => [
+  [`${ym}-01`, "ACME PAYROLL", 8000, "income-salary"], [`${ym}-02`, "WELLS FARGO HOME MTG", -1600, "housing"], [`${ym}-03`, "HOME DEPOT", -90, "housing"],
+  [`${ym}-05`, "APS ELECTRIC", -180, "utilities"], [`${ym}-06`, "VERIZON WIRELESS", -150, "phone"],
+  ...[7, 14, 21, 28].map((d) => [`${ym}-${d}`, "SAFEWAY", -200 - 50 * k, "groceries"]),
+  [`${ym}-09`, "SHELL", -120, "transport"], [`${ym}-10`, "STATE FARM", -180, "insurance"], [`${ym}-11`, "CVS PHARMACY", -40, "health"],
+  [`${ym}-12`, "CHIPOTLE", -60, "dining"], [`${ym}-13`, "NETFLIX", -20, "subscriptions"],
+  [`${ym}-15`, "TARGET", -150, "shopping"], [`${ym}-16`, "ATM WITHDRAWAL", -100, "other"], [`${ym}-17`, "SQ COFFEE", -50, null],
+  [`${ym}-18`, "Transfer to savings", -500, "transfer"], [`${ym}-20`, "IRS USATAXPYMT", -300, "taxes"],
+  ...(k ? [[`${ym}-25`, "TARGET REFUND", 30, "shopping"]] : []),
+];
+function withBank7(p, months, { lines = BANK7, file = true } = {}) {
+  p.accounts.push({ id: "bank-chk", name: "Checking", type: "checking", balance: 5000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  p.transactions = []; p.imports = [];
+  months.forEach((ym, k) => { for (const [date, payee, amount, category] of lines(ym, k)) p.transactions.push({ id: `t${p.transactions.length}`, date, amount, payee, rawPayee: payee, accountId: "bank-chk", category, tags: [], note: "", importId: "imp-1" }); });
+  const [y, m] = months[months.length - 1].split("-").map(Number);
+  if (file) p.imports.push({ id: "imp-1", accountId: "bank-chk", from: `${months[0]}-01`, to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10), at: T0, rows: p.transactions.length });
+  return p;
+}
+const spendPath7 = (row) => `expenses[setup-x-${row}].amount`;
+const ours7 = () => { const p = atQ6("patLee"); viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: {} }, T0, { guess: g })); return p; };
+const rows7 = (p) => Object.fromEntries(p.expenses.filter((x) => x.id.startsWith("setup-x-")).map((x) => [x.id.slice(8), x.amount]));
+
+test("C7 R12: two whole months of bank files replace the guessed rows (transfers, tax and the mortgage left out); the plan's month is the bank's", () => {
+  const was = rows7(ours7());
+  assert.deepEqual(was, { housing: 120, utilities: 560, groceries: 780, transport: 960, insurance: 910, dining: 1000, shopping: 930 }, "the survey's rows");
+  const p = withBank7(ours7(), ["2026-09", "2026-10"]);
+  const b = SP.bankSpend(p, T0, { rows: ROWS7H });
+  assert.deepEqual([b.on, b.months], [true, ["2026-10", "2026-09"]]);
+  // groceries (800 + 1,000) / 2 = 900; shopping (150 + 100 + 50) + (150 + 100 + 50 - 30) over 2 = 285; the mortgage's 1,600 apart
+  assert.deepEqual(b.byRow, { housing: 90, utilities: 330, groceries: 900, transport: 120, insurance: 220, dining: 80, shopping: 285 });
+  assert.deepEqual([b.out, b.mortgage], [2025, 1600]);
+  // the bank files come in (store.update): settle moves every row of ours to its bank figure (R11: shopping 285 -> 290)
+  settle(p, OPTS);
+  assert.deepEqual(rows7(p), { housing: 90, utilities: 330, groceries: 900, transport: 120, insurance: 220, dining: 80, shopping: 290 });
+  const e = estimate(p, "spend.groceries", { ...OPTS, path: spendPath7("groceries") });
+  assert.deepEqual([e.why, e.sigma, e.basis, e.tables], ["your bank files, September and October", 0.15, "yours", []]);
+  assert.equal(SP.spendBasis(p, { today: T0 }), "The grey figures are what your bank files show going out on each, a month over September and October.");
+  // the person's own months: the left-over figure does not wait on them (Expenses' share of the month that is our guesses)
+  assert.equal(p.guesses[spendPath7("groceries")].s, 0.15);
+  assert.equal(computeExpenses7(p, { today: T0 }).guessedMonthly, undefined, "no row is a survey guess now");
+  assert.ok(computeExpenses7(ours7(), { today: T0 }).guessedShare > 0.5, "before the bank files: mostly our guesses");
+  // Expenses' bank card: the bank's month (with the mortgage) and the plan's agree to R11's rounding; no line to add
+  const v = bankVsPlan(p, { today: T0 });
+  assert.equal(v.months, 2); near(v.bankOut, 2025 + 1600, 1e-9, "bank"); near(v.gap, 0, 10, "gap");
+  assert.equal(v.over, false);
+  assert.ok(!v.lines.some((l) => l.category === "housing"), "the mortgage's own payment is not 'more spent on the home'");
+  // a row the person typed stays theirs; a bill typed on Expenses in a row's kinds comes off its bank figure (never twice)
+  const q = withBank7(ours7(), ["2026-09", "2026-10"]);
+  q.expenses.push({ id: "netflix", name: "Netflix", category: "subscriptions", amount: 20, period: "monthly", essential: false, inflates: true, startDate: "", endDate: "" });
+  saveField(q, "expenses[setup-x-groceries].amount", { value: 650 }, null, T0);
+  settle(q, OPTS);
+  assert.deepEqual([rows7(q).groceries, rows7(q).dining], [650, 60]);
+});
+
+test("C7 R12: one month, a month mostly not filed under a kind, or months the files do not cover leave the survey's rows", () => {
+  const one = withBank7(ours7(), ["2026-10"]);
+  assert.equal(SP.bankSpend(one, T0, { rows: ROWS7H }).on, false);
+  assert.deepEqual(settle(one, OPTS).changed, [], "one month: nothing moves");
+  // September's lines all without a kind: it is not read, so only October counts
+  const loose = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).map((l) => (k === 0 ? [l[0], l[1], l[2], l[2] < 0 && l[3] !== "transfer" ? null : l[3]] : l)) });
+  const lb = SP.bankSpend(loose, T0, { rows: ROWS7H });
+  assert.deepEqual([lb.whole.length, lb.months, lb.on], [2, ["2026-10"], false]);
+  assert.equal(SP.BANK.uncategorised, 0.1);
+  // no import record and a gap in the lines: September is not whole
+  const holes = withBank7(ours7(), ["2026-09", "2026-10"], { file: false, lines: (ym, k) => BANK7(ym, k).filter((l) => !(k === 0 && l[0] < `${ym}-12`)) });
+  assert.equal(SP.bankSpend(holes, T0, { rows: ROWS7H }).on, false);
+  // the month still running is never read
+  assert.equal(SP.bankSpend(withBank7(ours7(), ["2026-10", "2026-11"]), "2026-11-20", { rows: ROWS7H }).on, false);
+  // a transfer is never spending, by its kind or its pair
+  const t = withBank7(ours7(), ["2026-09", "2026-10"]);
+  t.transactions.push({ id: "tx-pair", date: "2026-10-19", amount: -700, payee: "To brokerage", accountId: "bank-chk", category: "shopping", transferId: "tx-pair-2" });
+  assert.equal(SP.bankSpend(t, T0, { rows: ROWS7H }).byRow.shopping, 285);
+  // money paid to a card whose own file is not in (the sample family's Visa): its purchases are in no file, so those months
+  // are not read, though the ledger calls them whole; with the Visa's file in, they are
+  const cg = SP.bankSpend(cardGap7(T0), T0);
+  assert.deepEqual([cg.whole, cg.months, cg.on], [["2026-10", "2026-09"], [], false]);
+  assert.deepEqual(SP.bankSpend(withVisa7(cardGap7(T0), "2026-08-20", "2026-10-31"), T0).months, ["2026-10", "2026-09"]);
+  // kinds map to rows as Expenses holds them; a kind in no row is "everything else"
+  assert.deepEqual(["phone", "health", "pets", "personal", "travel", "giving", "other", "my-own"].map((c) => SP.bankRowOf(c)), ["utilities", "insurance", "dining", "shopping", "shopping", "shopping", "shopping", "shopping"]);
+  assert.equal(SP.bankRowOf("childcare", ROWS7H), "shopping", "childcare with no children listed");
+});
+
+// E10: Pat and Lee's household total with every row ours is G (their rows plus the $1,600 mortgage); bills typed on Expenses in
+// rows' kinds come off those rows, so G stays put while the typed month grows (k stays 1 for them). The line is 0.5585 G.
+const missing7 = (bills) => {
+  const p = atQ6("patLee"); C3.markAt(p, "done", T0);
+  for (const [category, amount] of Object.entries(bills)) p.expenses.push({ id: `b-${category}`, name: category, category, amount, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+  return p;
+};
+test("C7 11.6: 'Is something missing?' only when the spending is typed, under 0.5585 of the usual total, with under two months of bank files", () => {
+  near(SP.MISSING_LINE, 0.5585, 0.0001, "exp(-2.33 x 0.25)");
+  const base = { transport: 700, insurance: 600, dining: 500, shopping: 300 };
+  const first = G7.spendMissing(missing7(base), OPTS);
+  assert.ok(first, "2,100 + the 1,600 mortgage typed");
+  const G = first.usual, line = G * SP.MISSING_LINE;
+  assert.equal(first.typed, 1600 + 2100);
+  // a dollar under the line: asked; at it (to the cent) and a dollar past it: not
+  const at = (d) => G7.spendMissing(missing7({ ...base, shopping: 300 + (line - 3700) + d }), OPTS);
+  const under = at(-1);
+  assert.ok(under, "a dollar under"); near(under.usual, G, 0.01, "G stays put");
+  assert.equal(at(0.01), null, "at the line"); assert.equal(at(1), null, "a dollar past");
+  // the rows it would add: Get started's rows with no bill of their kinds (housing, utilities, groceries; no children)
+  assert.deepEqual(under.rows.map((r) => r.row), ["housing", "utilities", "groceries"]);
+  assert.equal(under.rows.find((r) => r.row === "housing").name, "Home costs");
+  // condition 1: a row of ours, or one rough total, ends it
+  const g = missing7(base); viaGuess(g, (d, gg) => C3.applySpend(d, { mode: "rows", rows: { transport: 700, insurance: 600, dining: 500, shopping: 300 } }, T0, { guess: gg }));
+  assert.ok(g.expenses.some((x) => isGuessIn(g, `expenses[${x.id}].amount`)));
+  assert.equal(G7.spendMissing(g, OPTS), null, "a row is our guess");
+  const rough = atQ6("patLee"); C3.applySpend(rough, { mode: "total", total: 2000 }, T0);
+  assert.equal(G7.spendMissing(rough, OPTS), null, "one rough total");
+  // condition 3: bank files of two whole months (the bank card on Expenses speaks then); one month does not stop it
+  assert.equal(G7.spendMissing(withBank7(missing7(base), ["2026-09", "2026-10"]), OPTS), null);
+  assert.ok(G7.spendMissing(withBank7(missing7(base), ["2026-10"]), OPTS));
+  // "That's everything" ends it; nothing typed at all is the fill card's, not this one's
+  const c = missing7(base); G7.spendIsComplete(c, T0);
+  assert.equal(c.guide.spendComplete, T0); assert.equal(G7.spendMissing(c, OPTS), null);
+  assert.equal(G7.spendMissing(atQ6("patLee"), OPTS), null);
+});
+
+test("C7 11.6: 'Add our guesses for the rest' writes only those rows, as Get started writes them; the settle after moves nothing", () => {
+  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 }), before = structuredClone(p);
+  const m = G7.spendMissing(p, OPTS);
+  assert.deepEqual(p, before);
+  assert.equal(G7.addSpendGuesses(p, OPTS), 3);
+  assert.deepEqual(settle(p, OPTS).changed, []);
+  assert.deepEqual(p.expenses.slice(0, 4), before.expenses.slice(0, 4), "the bills typed stay as typed");
+  for (const r of m.rows) {
+    const x = p.expenses.find((e) => e.id === `setup-x-${r.row}`);
+    assert.equal(x.amount, r.value); assert.ok(isGuessIn(p, `expenses[setup-x-${r.row}].amount`));
+    const row = C3.SPEND.find((s) => s.key === r.row);
+    assert.deepEqual([x.category, x.period, x.inflates], [r.row, "monthly", true]);
+    assert.equal(x.essential, row.group === "must");
+  }
+  assert.equal(G7.spendMissing(p, OPTS), null, "with a row of ours it is answered");
+});
+
+// The qa retirees own their home outright and typed "Property tax" under taxes and "Home and car insurance" under insurance:
+// the home costs row (upkeep + property tax + insurance with no mortgage) must not count those two again, or "Is something
+// missing?" offers them a second time (it did: $430 of home costs, $300 of it the tax and insurance they had typed).
+test("C7: property tax or home insurance typed under another kind comes off the home costs guess, never counted twice", () => {
+  const p = migrate(retiredCouplePlan());
+  const bill = (q, name) => q.expenses.find((x) => x.name === name);
+  assert.deepEqual([bill(p, "Property tax").category, bill(p, "Home and car insurance").category], ["taxes", "insurance"]);
+  const esc = escrowMonthly(p, { today: T0 }, lib0(p));
+  assert.ok(esc.tax > 50 && esc.insurance > 50, "no mortgage: both parts are in the row");
+  const without = (...names) => { const q = structuredClone(p); q.expenses = q.expenses.filter((x) => !names.includes(x.name)); return q; };
+  const full = guessOf(without("Property tax", "Home and car insurance"), "spend.housing");
+  assert.match(full.why, /upkeep, property tax and insurance/);
+  const both = guessOf(p, "spend.housing");
+  near(full.value - both.value, esc.total, 10, "both parts typed: only the upkeep is left");
+  assert.match(both.why, /^upkeep/); assert.doesNotMatch(both.why, /property tax|insurance/);
+  const taxOnly = guessOf(without("Home and car insurance"), "spend.housing");
+  near(full.value - taxOnly.value, esc.tax, 10, "the property tax part"); assert.match(taxOnly.why, /^upkeep and insurance/);
+  const insOnly = guessOf(without("Property tax"), "spend.housing");
+  near(full.value - insOnly.value, esc.insurance, 10, "the insurance part"); assert.match(insOnly.why, /^upkeep and property tax/);
+  // a bill bigger than the part takes off that part only; a car insurance bill or another tax is not the home's
+  const big = without("Home and car insurance"); bill(big, "Property tax").amount = 60000;
+  near(full.value - guessOf(big, "spend.housing").value, esc.tax, 10, "never past the part");
+  const other = without("Property tax", "Home and car insurance");
+  other.expenses.push({ id: "b-car", name: "Car insurance", category: "insurance", amount: 900, period: "annual", essential: true, inflates: true, startDate: "", endDate: "" },
+    { id: "b-irs", name: "Quarterly tax payments", category: "taxes", amount: 2000, period: "quarterly", essential: true, inflates: false, startDate: "", endDate: "" });
+  assert.equal(guessOf(other, "spend.housing").value, full.value);
+  // the card: their list ($2,780: no car costs past the insurance, no clothes, no upkeep) sits just under the line, so it is
+  // asked, and offers the car less the car insurance they typed ("Home and car insurance" past the home's part; C7 review M7)
+  const m = G7.spendMissing(p, OPTS);
+  assert.deepEqual(m.rows.map((r) => r.row), ["housing", "transport", "shopping"]);
+  assert.ok(m.rows.find((r) => r.row === "transport").value < estimate(without("Home and car insurance"), "spend.transport", { ...OPTS, path: spendPath7("transport"), args: { mode: "rows", rows: { transport: null } } }).value - 200, "the car's insurance is not offered again");
+});
+
+test("C7: the cards write records as Get started does (its debts, rows and names agree)", () => {
+  assert.deepEqual(G7.OWE_KINDS, C3.OWE.map(({ key, type, name }) => ({ key, type, name })));
+  assert.deepEqual(Object.keys(SP.ROW_NAME), C3.SPEND.map((s) => s.key));
+  for (const s of C3.SPEND) if (s.key !== "housing") assert.equal(SP.ROW_NAME[s.key], s.label, s.key);
+  assert.deepEqual(SP.MUST, C3.SPEND.filter((s) => s.group === "must").map((s) => s.key));
+  for (const p of [sam(T0), jordan(T0), patLee(T0)]) assert.equal(SP.housingName(p), C3.housingWords(p).name);
+  assert.equal(SP.householdWords(sam(), { today: T0 }), "one adult renting in Texas on about $48,000 a year");
+});
+
+test("C7 the cards on the guesses page: 'Use these guesses' and 'Not now' write through store.update and say so", async () => {
+  const pg = await drawPage(older7("jordan"));
+  let root = pg.draw();
+  const titled = (g, r, t) => g.all(r, (n) => n.tag === "section" && n.kids.some((k) => k?.tag === "h2" && g.text(k).trim() === t))[0];
+  const card = () => titled(pg, root, "Fill in what you skipped");
+  const c = card();
+  assert.ok(c, "the card is drawn");
+  assert.match(pg.text(c), /Mortgage about \$110,000 owed \$880 a month at 4\.6% a year Your home: worth about \$210,000 Our guess: typical for an Ohio mortgage at your age and pay\./);
+  assert.match(pg.text(c), /Day-to-day spending \(not the mortgage\) about \$3,230 a month Our guess: typical for one parent of two paying a mortgage in Ohio on about \$58,000 a year\./);
+  assert.match(pg.text(c), /Nothing changes until you tap\./);
+  const btn = (n, label) => pg.all(n, (x) => x.tag === "button" && pg.text(x).trim() === label)[0];
+  assert.match(btn(c, "Not now").attrs.class, /secondary/);
+  btn(c, "Not now").attrs.onClick();
+  assert.equal(pg.plan().guide.fillSkipped.choice, "later");
+  assert.equal(pg.plan().accounts.some((a) => a.id === "setup-owe-mortgage"), false, "nothing else");
+  root = pg.draw();
+  assert.equal(pg.text(pg.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0]).trim(), "Nothing was changed. We'll ask again in a month; Our guesses for you keeps them until then.");
+  // (C7 UX review 7) not at the top any more, but kept here folded, so the page never says there is nothing to look over
+  const fold = pg.all(root, (n) => n.tag === "details" && /^Skipped for now: your mortgage and your spending/.test(pg.text(n).trim()))[0];
+  assert.ok(fold, "the skipped offers stay on the page, folded");
+  assert.ok(pg.all(fold, (n) => n.tag === "section" && /Fill in what you skipped/.test(pg.text(n)))[0], "with the card inside");
+  assert.doesNotMatch(pg.text(root), /Every figure in your plan is one you typed/);
+  // the tap that fills them in
+  const pg2 = await drawPage(older7("jordan"));
+  root = pg2.draw();
+  const c2 = titled(pg2, root, "Fill in what you skipped");
+  pg2.all(c2, (x) => x.tag === "button" && pg2.text(x).trim() === "Use these guesses")[0].attrs.onClick();
+  assert.ok(pg2.plan().accounts.some((a) => a.id === "setup-owe-mortgage"));
+  assert.ok(pg2.plan().expenses.length >= 6);
+  root = pg2.draw();
+  assert.equal(pg2.text(pg2.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0]).trim(), "Saved: your mortgage (about $110,000 owed) and about $3,230 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
+});
+
+test("C7 R12 on the page: a row read from the bank files says where it comes from, not 'Our guess'", async () => {
+  const p = withBank7(ours7(), ["2026-09", "2026-10"]); settle(p, OPTS);
+  const pg = await drawPage(p), root = pg.draw();
+  const row = pg.all(root, (n) => n.tag === "li" && /^Groceries/.test(pg.text(n).trim()))[0];
+  assert.match(pg.text(row), /From your bank files, September and October\./);
+  assert.doesNotMatch(pg.text(row), /Our guess:/);
+});
+
+// ---- C7 fix (reviews of 2026-11-06: money M1-M9). Each test failed on the C7 build before its fix.
+/** A bank file on an account of its own: `lines(ym, k)` -> [date, payee, amount, category]; one import record over whole months. */
+function file7(p, id, type, months, lines, { name = id } = {}) {
+  p.accounts.push({ id, name, type, balance: type === "credit" ? 0 : 5000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  p.transactions = p.transactions ?? []; p.imports = p.imports ?? [];
+  let n = 0;
+  months.forEach((ym, k) => { for (const [date, payee, amount, category] of lines(ym, k)) { p.transactions.push({ id: `${id}-t${p.transactions.length}`, date, amount, payee, rawPayee: payee, accountId: id, category, tags: [], note: "", importId: `imp-${id}` }); n++; } });
+  const [y, m] = months[months.length - 1].split("-").map(Number);
+  p.imports.push({ id: `imp-${id}`, accountId: id, from: `${months[0]}-01`, to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10), at: T0, rows: n });
+  return p;
+}
+const ours7S = () => { const p = atQ6("sam"); viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: {} }, T0, { guess: g })); return p; };
+const sOf = (p, row) => p.guesses?.[spendPath7(row)]?.s ?? null;
+
+test("C7 fix M1a: a card's own file alone reads no month (no checking file covers it): every row keeps our figure", () => {
+  const p = ours7S(), was = rows7(p);
+  file7(p, "visa", "credit", ["2026-09", "2026-10"], (ym) => [
+    ...[3, 10, 17, 24].map((d) => [`${ym}-${String(d).padStart(2, "0")}`, "KROGER", -60, "groceries"]),
+    [`${ym}-05`, "SHELL", -45, "transport"], [`${ym}-12`, "CHIPOTLE", -30, "dining"], [`${ym}-20`, "TARGET", -80, "shopping"],
+    [`${ym}-28`, "PAYMENT THANK YOU", 400, "transfer"]], { name: "Visa" });
+  const b = SP.bankSpend(p, T0);
+  assert.equal(b.on, false, "the rent, power and insurance are paid from checking, whose file is not in");
+  assert.deepEqual(b.months, []);
+  assert.deepEqual(settle(p, OPTS).changed, [], "nothing moves: rent stays $1,200, not $0 'from your bank'");
+  assert.deepEqual(rows7(p), was);
+  assert.equal(b.held?.kind, "no-checking", "the reason is said");
+});
+
+test("C7 fix M1b: money to a card that is in no file and not in the plan leaves the month unread (filed as a payment or a transfer)", () => {
+  for (const [payee, cat] of [["CHASE CREDIT CRD AUTOPAY", "debt"], ["CHASE CREDIT CRD AUTOPAY", "transfer"], ["CITI AUTOPAY PAYMENT", "debt"], ["AMEX EPAYMENT ACH PMT", "debt"], ["DISCOVER E-PAYMENT", "debt"]]) {
+    const p = ours7(), was = rows7(p);
+    withBank7(p, ["2026-09", "2026-10"], { lines: (ym, k) => [...BANK7(ym, k), [`${ym}-25`, payee, -3200, cat]] });
+    const b = SP.bankSpend(p, T0, { rows: ROWS7H });
+    assert.deepEqual([b.on, b.months], [false, []], `${payee} [${cat}]: what the card bought is in no file`);
+    assert.equal(b.held?.kind, "unknown-card", payee);
+    settle(p, OPTS);
+    assert.deepEqual(rows7(p), was, `${payee}: our rows stay ($6,860 a month, not $1,930)`);
+  }
+  // a loan on Debts paid from checking is not a card (Sam's car loan, $420): the months are read
+  const s = ours7S();
+  file7(s, "chk", "checking", ["2026-09", "2026-10"], (ym) => [[`${ym}-01`, "ACME PAYROLL", 3000, "income-salary"], [`${ym}-03`, "CAMDEN APTS RENT", -1150, "housing"],
+    [`${ym}-08`, "TOYOTA MOTOR CREDIT", -420, "debt"], [`${ym}-12`, "TXU ENERGY", -110, "utilities"], [`${ym}-14`, "KROGER", -300, "groceries"], [`${ym}-16`, "SHELL", -90, "transport"],
+    [`${ym}-18`, "GEICO", -120, "insurance"], [`${ym}-20`, "CHIPOTLE", -80, "dining"], [`${ym}-22`, "TARGET", -140, "shopping"], [`${ym}-30`, "INTEREST PAID", 0.05, "income-interest"]]);
+  assert.equal(SP.bankSpend(s, T0).on, true);
+});
+
+test("C7 fix M1c: a row the bank files show nothing for keeps our figure (not in these files is not $0)", () => {
+  const p = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).filter((l) => !["insurance", "health"].includes(l[3])) });
+  settle(p, OPTS);
+  const r = rows7(p);
+  assert.equal(r.groceries, 900, "a row the files show is theirs");
+  assert.ok(r.insurance >= 300, `insurance and health keeps our figure: ${r.insurance}`);
+  assert.equal(sOf(p, "insurance"), 0.25, "still our guess (the waiting verdict counts it)");
+  assert.equal(sOf(p, "groceries"), 0.15);
+  assert.match(estimate(p, "spend.insurance", { ...OPTS, path: spendPath7("insurance") }).why, /health cover/);
+});
+
+test("C7 fix M2: a servicer's line with no 'mortgage' in its name, beside a different payment on Debts, is the mortgage (counted once)", () => {
+  for (const [servicer, onDebts, paid] of [["MR COOPER", 1300, 1600], ["PENNYMAC LOAN SVC", 1500, 1900], ["WELLS FARGO HOME MTG", 1300, 1600]]) {
+    const p = ours7(); p.debts.find((d) => d.id === "setup-debt-mortgage").minPayment = onDebts; settle(p, OPTS);
+    withBank7(p, ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).map((l) => (l[1] === "WELLS FARGO HOME MTG" ? [l[0], servicer, -paid, "housing"] : l)) });
+    const b = SP.bankSpend(p, T0, { rows: ROWS7H });
+    // home costs: the bank's other housing ($90) plus what goes to the servicer beyond the payment on Debts (its tax and
+    // insurance, or a payment typed low): the plan's month is then the bank's
+    assert.deepEqual([b.byRow.housing, b.mortgage], [90 + paid - onDebts, paid], servicer);
+    settle(p, OPTS);
+    const v = bankVsPlan(p, { today: T0 });
+    near(v.gap, 0, 10, `${servicer}: the plan's month is the bank's`);
+    assert.ok(!v.lines.some((l) => ["housing", "debt"].includes(l.category)), `${servicer}: no line for the home or the loan`);
+  }
+});
+
+test("C7 fix M3: a line with no kind that is a bill typed (rent by check) is that bill, counted once; at most a tenth of a month unfiled", () => {
+  assert.equal(SP.BANK.uncategorised, 0.1);
+  const p = atQ6("sam");
+  viaGuess(p, (d, g) => C3.applySpend(d, { mode: "rows", rows: { housing: 1200 } }, T0, { guess: g }));
+  file7(p, "chk", "checking", ["2026-09", "2026-10"], (ym) => [
+    [`${ym}-01`, "ACME PAYROLL", 1850, "income-salary"], [`${ym}-02`, "CHECK 1043", -1200, null],
+    [`${ym}-05`, "TXU ENERGY", -120, "utilities"], [`${ym}-06`, "T-MOBILE", -60, "phone"], ...[4, 11, 18, 25].map((d) => [`${ym}-${String(d).padStart(2, "0")}`, "KROGER", -70, "groceries"]),
+    [`${ym}-09`, "SHELL", -80, "transport"], [`${ym}-10`, "GEICO", -130, "insurance"], [`${ym}-12`, "CHIPOTLE", -150, "dining"], [`${ym}-15`, "ACME PAYROLL", 1850, "income-salary"],
+    [`${ym}-20`, "TARGET", -200, "shopping"], [`${ym}-22`, "AMAZON", -260, "shopping"], [`${ym}-30`, "INTEREST PAID", 0.05, "income-interest"]]);
+  const b = SP.bankSpend(p, T0, { rows: ROWS7H });
+  assert.equal(b.on, true);
+  assert.equal(b.byRow.shopping, 460, "the check is the rent typed, not 'everything else'");
+  settle(p, OPTS);
+  assert.equal(rows7(p).shopping, 460);
+  const e = computeExpenses7(p, { today: T0 });
+  near(e.monthly - e.debtFromDebts, b.out + 1200, 10, "the plan's month (less the loans on Debts) is the bank's");
+});
+
+test("C7 fix M4: a loan added on Debts under any name is the car loan picked (no second one); with both loans picked, the name splits them", () => {
+  const kinds = (p) => G7.fillOffers(p, OPTS).filter((x) => x.case === "debt").map((x) => x.key);
+  for (const name of ["Honda Civic", "Toyota Financial", "Ally loan", "Civic payment"]) {
+    const p = older7("sam");
+    p.accounts.push({ id: "acct-car", name, type: "loan", balance: 9000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+    p.debts.push({ id: "d-car", accountId: "acct-car", rate: 0.069, minPayment: 420, extra: 0 });
+    assert.deepEqual(kinds(p), [], name);
+  }
+  const both = (name) => { const p = older7("sam"); p.guide.setup.picks.owe = [...p.guide.setup.picks.owe, "loan"]; p.accounts.push({ id: "acct-x", name, type: "loan", balance: 4000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" }); return kinds(p); };
+  assert.deepEqual(both("Honda auto loan"), ["loan"], "a car's name: the car loan is kept, the other loan is offered");
+  assert.deepEqual(both("Personal loan"), ["car-loan"], "a personal loan: the car loan is offered");
+});
+
+test("C7 fix M5: a house or car payment typed on Expenses is the debt's payment: written as typed, the balance worked back from it", () => {
+  for (const name of ["House payment", "Wells Fargo"]) {
+    const p = patLee(T0);
+    C3.applyOweAmounts(p, { mortgage: { owed: "" } }, T0); C3.markAt(p, "done", T0);
+    const bill = (id, nm, category, amount) => ({ id, name: nm, category, amount, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+    p.expenses = [bill("b1", name, "housing", 1600), bill("b2", "Groceries", "groceries", 800), bill("b3", "Power", "utilities", 300), bill("b4", "Car", "transport", 600), bill("b5", "Health", "insurance", 900), bill("b6", "Fun", "dining", 700), bill("b7", "Stuff", "shopping", 600)];
+    const before = computeExpenses7(p, { today: T0 }).monthly;
+    const offer = G7.fillOffers(p, OPTS).find((x) => x.case === "debt");
+    assert.equal(offer.payment, 1600, `${name}: the payment typed`);
+    G7.useFillGuesses(p, OPTS); settle(p, OPTS);
+    const d = debt7(p, "setup-debt-mortgage");
+    assert.deepEqual([d.minPayment, isGuessIn(p, "debts[setup-debt-mortgage].minPayment")], [1600, false], `${name}: the person's figure`);
+    assert.equal(computeExpenses7(p, { today: T0 }).monthly, before, `${name}: the month counts it once ($5,500)`);
+    // worked back from $1,600 (as question 5 does with a payment typed), not the $1,300 guessed payment's $210,000
+    const typed = estimate(patLee(T0), "debt.mortgage.owed", { ...OPTS, path: "accounts[setup-owe-mortgage].balance", args: { owed: null, payment: 1600, rate: null, start: null } });
+    assert.equal(acct7(p, "setup-owe-mortgage").balance, typed.value);
+  }
+  // a car loan's payment under "Loan and card payments", named for the car's maker: counted once
+  const s = sam(T0);
+  C3.applyOweAmounts(s, { "car-loan": { owed: "" }, credit: { owed: "3,000" } }, T0); C3.markAt(s, "done", T0);
+  s.expenses = [{ id: "b0", name: "Rent", category: "housing", amount: 1200, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" }, { id: "b1", name: "Toyota", category: "debt", amount: 380, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" }];
+  const was = computeExpenses7(s, { today: T0 }).monthly;
+  assert.equal(G7.fillOffers(s, OPTS).find((x) => x.case === "debt").payment, 380);
+  G7.useFillGuesses(s, OPTS); settle(s, OPTS);
+  const card = debt7(s, "setup-debt-credit").minPayment;
+  near(computeExpenses7(s, { today: T0 }).monthly - was, card, 0.01, "only the card's minimum is new ($380 is the car loan's, counted once)");
+});
+
+test("C7 fix M6: a debt removed on Net worth (its row left on Debts) is not offered again, and a typed rate or payment is never overwritten", () => {
+  const p = jordan(T0);
+  C3.applyOweAmounts(p, { mortgage: { owed: "150,000", rate: "3.1", payment: "1,100" } }, T0);
+  C3.applySpend(p, { mode: "rows", rows: { housing: 60, utilities: 400, groceries: 600, transport: 400, insurance: 300, childcare: 900, dining: 300, shopping: 400 } }, T0);
+  C3.markAt(p, "done", T0);
+  p.accounts = p.accounts.filter((x) => x.id !== "setup-owe-mortgage");
+  const row = structuredClone(debt7(p, "setup-debt-mortgage"));
+  assert.deepEqual(G7.fillOffers(p, OPTS), [], "removed on purpose: nothing to fill");
+  G7.useFillGuesses(p, OPTS);
+  assert.deepEqual(debt7(p, "setup-debt-mortgage"), row, "the row as she left it");
+  assert.equal(acct7(p, "setup-owe-mortgage"), undefined);
+});
+
+test("C7 fix M7: a homeowners insurance bill typed under Insurance comes off our guesses once ($150 a month, not $250)", () => {
+  const base = migrate(retiredCouplePlan());
+  base.expenses = base.expenses.filter((x) => !["Property tax", "Home and car insurance"].includes(x.name));
+  const g = (q, row) => estimate(q, `spend.${row}`, { ...OPTS, path: spendPath7(row) }).value;
+  const b = structuredClone(base);
+  b.expenses.push({ id: "hi", name: "Homeowners insurance", category: "insurance", amount: 1800, period: "annual", essential: true, inflates: true, startDate: "", endDate: "" });
+  const fall = (g(base, "housing") - g(b, "housing")) + (g(base, "insurance") - g(b, "insurance"));
+  near(fall, 150, 10, "the bill comes off once");
+  // the home's insurance part first (our figure for it: no mortgage holds it), the rest off Insurance and health as before
+  const part = escrowMonthly(base, { today: T0 }, lib0(base)).insurance;
+  near(g(base, "housing") - g(b, "housing"), Math.min(150, part), 10, "home costs give up their insurance part");
+});
+
+test("C7 fix M8: bank files more than a year old set no row; the words name the months read", () => {
+  const old = withBank7(ours7(), ["2024-01", "2024-02"]);
+  assert.equal(SP.bankSpend(old, T0, { rows: ROWS7H }).on, false);
+  assert.deepEqual(settle(old, OPTS).changed, []);
+  const p = withBank7(ours7(), ["2026-09", "2026-10"]); settle(p, OPTS);
+  assert.equal(estimate(p, "spend.groceries", { ...OPTS, path: spendPath7("groceries") }).why, "your bank files, September and October");
+  assert.equal(SP.spendBasis(p, { today: T0 }), "The grey figures are what your bank files show going out on each, a month over September and October.");
+});
+
+test("C7 fix M9: a row whose bank figure equals our survey figure is read from the bank all the same (not 'our guess')", () => {
+  const p = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).map((l) => (l[1] === "SAFEWAY" ? [l[0], l[1], -195, l[3]] : l)) });
+  settle(p, OPTS);
+  assert.equal(rows7(p).groceries, 780, "the bank's $780 is the survey's $780");
+  assert.equal(sOf(p, "groceries"), 0.15, "and the row is the bank's");
+  assert.equal(computeExpenses7(p, { today: T0 }).guessedMonthly, undefined);
+});
+
+// ---- C7 fix (UX review of 2026-11-06, items 1-12): the cards, the Dashboard and Expenses drawn with the stand-in kit
+const withNext = (view) => ({ view, more: (p) => ({ computeOf: (key, params) => (key === "overview/next-best-action" ? nextBest(p, params) : null) }) });
+const EXPENSES = withNext("../../cashflow/expenses/view.js");
+/** The Dashboard drawn with every module (the shell's registry), each page's compute through computeOf. */
+let allModules = null;
+async function drawDash(plan) {
+  if (!allModules) {
+    allModules = new Map();
+    for (const r of (await import("../../registry.js")).default) { const m = (await r.load()).default; allModules.set(`${m.group}/${m.id}`, m); }
+  }
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, attrs = {}, kids = []) => {
+    const n = { tag, attrs: attrs ?? {}, kids: [], style: {}, classList: { add() {}, remove() {}, toggle() {} },
+      // as the DOM: append and replaceChildren write null, undefined or false as text (ui.h skips them: add)
+      add(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
+      append(...k) { for (const c of k) n.kids.push(c !== null && typeof c === "object" ? c : String(c)); },
+      replaceChildren(...k) { n.kids = []; n.append(...k); }, focus() {}, remove() {}, scrollIntoView() { n.scrolled = true; }, querySelector() { return node("q"); }, setAttribute(k, v) { n.attrs[k] = v; }, addEventListener() {},
+      get textContent() { return n.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); }, set textContent(v) { n.kids = [String(v)]; } };
+    n.add(...kids); return n;
+  };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const kit = {
+    h: (tag, a, ...k) => (isAttrs(a) ? node(tag, a, k) : node(tag, {}, [a, ...k])),
+    card: (t, ...k) => node("section", { class: "card" }, [t ? node("h2", {}, [t]) : null, ...k]),
+    notice: (kind, t) => node("div", { class: `notice ${kind}` }, [t]),
+    button: (label, onClick, o = {}) => node("button", { class: o.class ?? "", onClick }, [label]),
+    row: (...k) => node("div", { class: "row" }, k), stat: (l, v, s) => node("div", { class: "stat" }, [l, v, s]),
+  };
+  const ui = new Proxy(kit, { get: (t, k) => t[k] ?? ((...a) => node(String(k), {}, a.filter((x) => typeof x === "string"))) });
+  let current = structuredClone(plan);
+  const draw = () => {
+    const root = node("root"), m = allModules.get("overview/dashboard");
+    const computeOf = (key, params) => allModules.get(key)?.compute?.(current, params ?? {}) ?? null;
+    m.render(root, { ui, fmt: { ...fmt, today: () => T0 }, plan: current, modules: allModules, isReady: (x) => x.status !== "planned", features: { enabled: () => true }, ai: {}, go() {}, announce() {},
+      derived: m.compute(current), computeOf, store: { update(fn) { const next = structuredClone(current); fn(next); current = next; }, get: () => current } });
+    noStrayText(root);
+    return root;
+  };
+  const all = (n, test, out = []) => { if (n && typeof n === "object") { if (test(n)) out.push(n); for (const k of n.kids) all(k, test, out); } return out; };
+  return { draw, all, text: (n) => n.textContent.replace(/\s+/g, " "), plan: () => current };
+}
+const btnOf = (pg, n, label) => pg.all(n, (x) => x.tag === "button" && pg.text(x).trim() === label)[0];
+const cardTitled = (pg, n, t) => pg.all(n, (x) => x.tag === "section" && x.kids.some((k) => k?.tag === "h2" && pg.text(k).trim() === t))[0];
+const noticeOf = (pg, root) => pg.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0];
+/** (a) of the review: the sample family whose plan was made before the guesses: every bill and bank line gone, Get started finished. */
+function familyBefore() {
+  const p = migrate(familyPlan(T0)); p.expenses = []; p.transactions = []; p.imports = [];
+  p.guide = { setup: { at: "done", startedAt: "2026-10-01", finishedAt: "2026-10-01", picks: { have: ["checking", "home"], owe: ["mortgage"], goals: [] } } };
+  return p;
+}
+
+test("C7 fix UX 1: a month with more than a tenth (or $50) of its money out filed under no kind is not read; Expenses and the page say how many lines to file", async () => {
+  const half = ["APS ELECTRIC", "VERIZON WIRELESS", "STATE FARM", "CHIPOTLE", "NETFLIX"];
+  const p = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).map((l) => (half.includes(l[1]) ? [l[0], l[1], l[2], null] : l)) });
+  const was = rows7(p);
+  const b = SP.bankSpend(p, T0, { rows: ROWS7H });
+  assert.deepEqual([b.on, b.held?.kind], [false, "unfiled"]);
+  settle(p, OPTS);
+  assert.deepEqual(rows7(p), was, "no $0 rows 'from your bank', no $1,850 of 'everything else'");
+  const note = G7.spendBankNote(p, OPTS);
+  assert.equal(note.text, "12 bank lines still need a kind. File them, and our spending guesses become what your bank shows.");
+  assert.deepEqual(note.link, { label: "Categorize ›", href: "#/transactions/categorize" });
+  const ex = await drawPage(p, EXPENSES), exRoot = ex.draw();
+  assert.match(ex.text(exRoot), /12 bank lines still need a kind\. File them, and our spending guesses become what your bank shows\. Categorize ›/);
+  const pg = await drawPage(p, withNext("./view.js")), root = pg.draw();
+  assert.match(pg.text(pg.all(root, (n) => n.tag === "li" && /^(Spending, with the mortgage payment|Everyday spending)/.test(pg.text(n).trim()))[0]), /12 bank lines still need a kind\./);
+  // a line with no kind that reads as a move between accounts ("Transfer to savings") is not spending, and $50 unfiled is read
+  const q = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => BANK7(ym, k).map((l) => (l[1] === "Transfer to savings" ? [l[0], l[1], l[2], null] : l)) });
+  const bq = SP.bankSpend(q, T0, { rows: ROWS7H });
+  assert.equal(bq.on, true);
+  assert.equal(bq.byRow.shopping, SP.bankSpend(withBank7(ours7(), ["2026-09", "2026-10"]), T0, { rows: ROWS7H }).byRow.shopping, "the $500 to savings is not shopping");
+});
+
+const tens = (v) => `$${(Math.round(v / 10) * 10).toLocaleString("en-US")}`;
+test("C7 fix UX 2 and 4: on the Dashboard the card sits right under where you stand, and the rows it decides wait on it and lead to it", async () => {
+  const pg = await drawDash(familyBefore()), root = pg.draw();
+  const kids = root.kids.filter((n) => n?.tag === "section");
+  const at = kids.findIndex((n) => /\bdb-now\b/.test(n.attrs.class ?? ""));
+  assert.ok(at >= 0, "where you stand is drawn");
+  assert.equal(pg.text(kids[at + 1].kids.find((k) => k?.tag === "h2")).trim(), "Fill in what you skipped", "the card comes next, above the money tiles");
+  const row = (k) => pg.all(kids[at], (n) => n.tag === "a" && pg.text(n).trim().startsWith(k))[0];
+  assert.equal(pg.text(row("Left over each month")).trim(), "Left over each month Depends on your spending: not counted yet See below ›");
+  assert.equal(pg.text(row("Safety cushion")).trim(), "Safety cushion Needs your spending See below ›");
+  assert.equal(pg.text(row("Retirement")).trim(), "Retirement Depends on the figures below See below ›", "no green 'On track' while spending is not counted");
+  for (const k of ["Left over each month", "Safety cushion", "Retirement"]) {
+    const a = row(k);
+    assert.equal(a.attrs.href, "#/overview/guesses", k);
+    assert.doesNotMatch(pg.all(a, (n) => /db-dot/.test(n.attrs.class ?? ""))[0].attrs.class, /\b(ok|warn|bad)\b/, k);
+    let stopped = false; a.attrs.onClick({ preventDefault() { stopped = true; } });
+    assert.ok(stopped && kids[at + 1].scrolled, `${k}: one way to fill in spending: the card`);
+  }
+  // one name for each figure: the card's day-to-day spending leaves the mortgage out
+  assert.match(pg.text(kids[at + 1]), /Day-to-day spending \(not the mortgage\) about \$5,800 a month/);
+  // the list far too short ("Is something missing?"): the left-over row waits on it the same way
+  const m = await drawDash(missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 })), r2 = m.draw();
+  const k2 = r2.kids.filter((n) => n?.tag === "section"), a2 = k2.findIndex((n) => /\bdb-now\b/.test(n.attrs.class ?? ""));
+  assert.equal(m.text(k2[a2 + 1].kids.find((k) => k?.tag === "h2")).trim(), "Is something missing?");
+  const miss = G7.spendMissing(m.plan(), OPTS);
+  assert.equal(m.text(m.all(k2[a2], (n) => n.tag === "a" && /^Left over each month/.test(m.text(n).trim()))[0]).trim(), `Left over each month Depends on your spending: your list may be missing about ${tens(miss.rest)} a month See below ›`);
+});
+
+test("C7 fix UX 2: Expenses' left-over tile waits while 'Is something missing?' applies (no green figure above the question)", async () => {
+  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  const miss = G7.spendMissing(p, OPTS);
+  const pg = await drawPage(p, EXPENSES), root = pg.draw(), t = pg.text(root);
+  const tile = pg.all(root, (n) => /\bstat\b/.test(n.attrs.class ?? "") && /^Left over/.test(pg.text(n).trim()))[0];
+  assert.equal(pg.text(tile).trim(), `Left over Depends on your spending Your list may be missing about ${tens(miss.rest)} a month. See "Is something missing?" just below. ›`);
+  assert.ok(t.indexOf("Is something missing?") > t.indexOf("Depends on your spending"), "the question right under the tiles");
+  // answered: the tile has its figure again
+  const done = structuredClone(p); G7.spendIsComplete(done, T0);
+  const pg2 = await drawPage(done, EXPENSES), t2 = pg2.text(pg2.draw());
+  assert.doesNotMatch(t2, /Depends on your spending/);
+});
+
+test("C7 fix UX 3: bank files that set no spending row say why, and what to do, on Expenses and on the page", async () => {
+  const words = (p) => SP.bankHeldWords(p, SP.bankSpend(p, T0, { rows: ROWS7H }));
+  // a card paid from checking whose own file is not in
+  const card = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => [...BANK7(ym, k), [`${ym}-25`, "VISA PAYMENT", -300, "debt"]] });
+  card.accounts.push({ id: "visa", name: "Visa", type: "credit", balance: 900, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  assert.deepEqual(words(card), { text: "Your bank files cover September and October, but about $300 a month went to your Visa, and its file isn't in. Bring it in, and our spending guesses become what your bank shows.",
+    link: { label: "Bring in the Visa file ›", href: "#/transactions/import?accountId=visa" } });
+  assert.deepEqual(SP.bankHeldWords(cardGap7(T0), SP.bankSpend(cardGap7(T0), T0)).link, { label: "Bring in the Visa file ›", href: "#/transactions/import?accountId=a-visa" });
+  // only a card's own file
+  const only = ours7S();
+  file7(only, "visa", "credit", ["2026-09", "2026-10"], (ym) => [[`${ym}-03`, "KROGER", -60, "groceries"], [`${ym}-28`, "PAYMENT THANK YOU", 400, "transfer"]], { name: "Visa" });
+  assert.deepEqual(words(only), { text: "Your card's files cover September and October, but not your checking account, where rent and bills are paid. Bring in its file too, and our spending guesses become what your bank shows.",
+    link: { label: "Bring in a bank file ›", href: "#/transactions/import" } });
+  // money to a card the plan does not have
+  const unknown = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => [...BANK7(ym, k), [`${ym}-25`, "CHASE CREDIT CRD AUTOPAY", -3200, "debt"]] });
+  assert.deepEqual(words(unknown), { text: "Your bank files cover September and October, but about $3,200 a month went to a card that isn't in your plan (CHASE CREDIT CRD AUTOPAY). Add the card and bring in its file, and our spending guesses become what your bank shows.",
+    link: { label: "Add the card ›", href: "#/balance/net-worth" } });
+  // a card's payment that names no card of the plan, beside one card with no file (the phone check's (c): "CAPITAL ONE
+  // AUTOPAY" filed as a transfer, a card saved as "Visa"): likely that one, and its file is asked for
+  const likely = withBank7(ours7(), ["2026-09", "2026-10"], { lines: (ym, k) => [...BANK7(ym, k), [`${ym}-24`, "CAPITAL ONE AUTOPAY", -300, "transfer"]] });
+  likely.accounts.push({ id: "visa", name: "Visa", type: "credit", balance: 900, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  assert.deepEqual(words(likely), { text: "Your bank files cover September and October, but about $300 a month went to a card (CAPITAL ONE AUTOPAY), and what it bought is in no file. If that is your Visa, bring in its file; if it is another card, add it first. Then our spending guesses become what your bank shows.",
+    link: { label: "Bring in the Visa file ›", href: "#/transactions/import?accountId=visa" } });
+  // files over a year old
+  assert.deepEqual(words(withBank7(ours7(), ["2024-01", "2024-02"])), { text: "Your bank files are from January and February 2024, more than a year ago, so our spending guesses don't use them. Bring in the last few months.",
+    link: { label: "Bring in a bank file ›", href: "#/transactions/import" } });
+  // read: nothing to say
+  assert.equal(words(withBank7(ours7(), ["2026-09", "2026-10"])), null);
+  // where it is said: under Expenses' tiles (a muted line and its link) and in the page's spending row
+  const ex = await drawPage(card, EXPENSES), exRoot = ex.draw();
+  const line = ex.all(exRoot, (n) => n.tag === "p" && /^Your bank files cover/.test(ex.text(n).trim()))[0];
+  assert.match(line.attrs.class, /muted small/);
+  assert.equal(ex.all(line, (n) => n.tag === "a")[0].attrs.href, "#/transactions/import?accountId=visa");
+  const pg = await drawPage(card, withNext("./view.js")), root = pg.draw();
+  assert.match(pg.text(pg.all(root, (n) => n.tag === "li" && /^Everyday spending/.test(pg.text(n).trim()))[0]), /about \$300 a month went to your Visa, and its file isn't in\. .* Bring in the Visa file ›/);
+});
+
+test("C7 fix UX 5: the card asks question 6's open questions as chips; an answer changes the card only, and 'Use these guesses' keeps it as question 6 does", async () => {
+  const before = older7("jordan");
+  const pg = await drawPage(before);
+  let root = pg.draw(), c = cardTitled(pg, root, "Fill in what you skipped");
+  const asks = G7.fillOffers(before, OPTS).find((x) => x.case === "spend").asks;
+  assert.deepEqual(asks.map((a) => a.key), ["health-cover", "childcare"], "a parent of two: health cover and childcare");
+  const group = (q) => pg.all(c, (n) => n.attrs.role === "radiogroup" && n.attrs["aria-label"] === q)[0];
+  assert.equal(pg.all(group("How do you get health cover?"), (n) => n.attrs.role === "radio").length, 4);
+  const pub = asks[0].options.find((o) => o.value === "public").label;
+  pg.all(group("How do you get health cover?"), (n) => n.attrs.role === "radio" && pg.text(n).trim() === pub)[0].attrs.onClick();
+  assert.deepEqual(pg.plan(), before, "nothing is written by a chip");
+  const answered = G7.fillOffers(before, { ...OPTS, taps: { "health-cover": "public" } }).find((x) => x.case === "spend");
+  assert.notEqual(answered.total, 3230);
+  assert.match(pg.text(c), new RegExp(`Day-to-day spending \\(not the mortgage\\) about \\$${answered.total.toLocaleString("en-US")} a month`), "the card's figure follows the answer");
+  assert.equal(pg.all(c, (n) => n.attrs.role === "radio" && n.attrs["aria-checked"] === "true").map((n) => pg.text(n).trim()).join(), pub);
+  assert.ok(group("How do you get health cover?") && group("Do you pay for childcare or after-school care?"), "both questions stay, the answer picked (it can be changed until the tap)");
+  // a second answer on the same card: the first is kept with it
+  const no = asks[1].options.find((o) => o.value === "no").label;
+  pg.all(group("Do you pay for childcare or after-school care?"), (n) => n.attrs.role === "radio" && pg.text(n).trim() === no)[0].attrs.onClick();
+  assert.equal(pg.all(c, (n) => n.attrs.role === "radio" && n.attrs["aria-checked"] === "true").length, 2);
+  assert.deepEqual(pg.plan(), before);
+  btnOf(pg, c, "Use these guesses").attrs.onClick();
+  assert.deepEqual([pg.plan().guide.setup.taps["health-cover"], pg.plan().guide.setup.taps.childcare], ["public", "no"], "kept where question 6 keeps them");
+  const both = G7.fillOffers(before, { ...OPTS, taps: { "health-cover": "public", childcare: "no" } }).find((x) => x.case === "spend");
+  const sum = pg.plan().expenses.filter((x) => x.id.startsWith("setup-x-")).reduce((t, x) => t + x.amount, 0);
+  assert.equal(sum, both.total, "the rows written are the card's");
+  // a plan Get started never saw: the answer starts guide.setup with it alone
+  const q = jordan(T0); delete q.guide;
+  G7.useFillGuesses(q, { ...OPTS, taps: { childcare: "no", other: "x" } });
+  assert.deepEqual(q.guide.setup, { taps: { childcare: "no" } });
+  assert.equal(q.expenses.some((x) => x.id === "setup-x-childcare"), false, "No: no childcare row");
+});
+
+test("C7 fix UX 6: the card says what else its tap changes, and the notice says what is counted now and where to type the real figures", async () => {
+  const words = async (name) => { const pg = await drawPage(older7(name)), root = pg.draw(); return pg.text(pg.all(cardTitled(pg, root, "Fill in what you skipped"), (n) => /gs-effect/.test(n.attrs.class ?? ""))[0]).trim(); };
+  assert.equal(await words("jordan"), "This counts the $110,000 you owe on your home and your home, worth about $210,000, so what you own minus what you owe goes up by about $100,000, and about $3,230 a month of spending.");
+  assert.equal(await words("sam"), "This counts the $13,000 you owe on your car loan, so what you own minus what you owe goes down by about $13,000, and about $2,670 a month of spending.");
+  assert.deepEqual(G7.fillEffect(G7.fillOffers(older7("patLee"), OPTS)), { owed: 210000, home: 0, net: -210000, spend: 5260 });
+  // the notice after the tap (Sam: two debts and the spending)
+  const pg = await drawPage(older7("sam")); let root = pg.draw();
+  btnOf(pg, cardTitled(pg, root, "Fill in what you skipped"), "Use these guesses").attrs.onClick();
+  root = pg.draw();
+  assert.equal(pg.text(noticeOf(pg, root)).trim(), "Saved: your car loan (about $13,000 owed) and about $2,670 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
+});
+
+test("C7 fix UX 7: every card's tap that writes figures has an outlined Undo that puts the plan back; 'Ask me again' after 'That's everything'", async () => {
+  const before = older7("jordan");
+  const pg = await drawPage(before); let root = pg.draw();
+  btnOf(pg, cardTitled(pg, root, "Fill in what you skipped"), "Use these guesses").attrs.onClick();
+  assert.notDeepEqual(pg.plan(), before);
+  root = pg.draw();
+  const undo = btnOf(pg, root, "Undo");
+  assert.match(undo.attrs.class, /secondary/);
+  undo.attrs.onClick();
+  assert.deepEqual(pg.plan(), before, "as it was before the tap: no mortgage, no home, no rows, no fillSkipped");
+  root = pg.draw();
+  assert.equal(pg.text(noticeOf(pg, root)).trim(), "Undone: your plan is as it was before the tap.");
+  assert.equal(btnOf(pg, root, "Undo"), undefined, "one Undo, on the next render only");
+  assert.ok(cardTitled(pg, root, "Fill in what you skipped"), "the card is back");
+  // "Is something missing?" on Expenses: Add, then Undo
+  const miss = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  const ex = await drawPage(miss, EXPENSES); let er = ex.draw();
+  btnOf(ex, cardTitled(ex, er, "Is something missing?"), "Add our guesses for the rest").attrs.onClick();
+  er = ex.draw();
+  assert.match(ex.text(noticeOf(ex, er)), /^ ?Added our guesses for what wasn't listed: about \$[\d,]+ a month\. Change any of them in the list below when you know the real figure\./);
+  btnOf(ex, er, "Undo").attrs.onClick();
+  assert.deepEqual(ex.plan(), miss);
+  // "That's everything", then "Ask me again" (muted line under the tiles, outlined button): the question is back
+  er = ex.draw();
+  btnOf(ex, cardTitled(ex, er, "Is something missing?"), "That's everything").attrs.onClick();
+  assert.equal(ex.plan().guide.spendComplete, T0);
+  er = ex.draw();
+  assert.equal(cardTitled(ex, er, "Is something missing?"), undefined);
+  assert.match(ex.text(er), /Noted: what's listed is everything\. You can ask for this again just below the totals\. .*You said this list is everything\. Ask me again/);
+  const again = btnOf(ex, er, "Ask me again");
+  assert.match(again.attrs.class, /secondary/);
+  again.attrs.onClick();
+  assert.equal("spendComplete" in ex.plan().guide, false);
+  er = ex.draw();
+  assert.ok(cardTitled(ex, er, "Is something missing?"), "asked again");
+  // a list that has grown past the line since: no "Ask me again" (nothing left to ask)
+  const grown = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 3000 }); G7.spendIsComplete(grown, T0);
+  assert.equal(G7.spendSaidComplete(grown, OPTS), false);
+  const g2 = await drawPage(grown, EXPENSES);
+  assert.doesNotMatch(g2.text(g2.draw()), /You said this list is everything/);
+  // "Use the new guesses" on this page too
+  const older = guessedPlan(T0), up = await drawPage(older); let ur = up.draw();
+  btnOf(up, cardTitled(up, ur, "Better guesses are ready"), "Use the new guesses").attrs.onClick();
+  ur = up.draw();
+  btnOf(up, ur, "Undo").attrs.onClick();
+  assert.deepEqual(up.plan(), older);
+});
+
+test("C7 fix UX 4: one name for each figure: after the tap the page says 'Spending, with the mortgage payment', and the home's row is its upkeep", async () => {
+  const pg = await drawPage(older7("jordan"), withNext("./view.js")); let root = pg.draw();
+  const c = cardTitled(pg, root, "Fill in what you skipped");
+  assert.match(pg.text(c), /How it adds up › Home upkeep \(tax and insurance are in the mortgage payment\) \$[\d,]+/);
+  btnOf(pg, c, "Use these guesses").attrs.onClick();
+  root = pg.draw();
+  const row = pg.all(root, (n) => n.tag === "li" && /^Spending, with the mortgage payment about \$[\d,]+ a month/.test(pg.text(n).trim()))[0];
+  assert.ok(row, "the page's figure says the mortgage payment is in it");
+  const nba = nextBest(pg.plan(), { today: T0 }).spare;
+  assert.match(pg.text(row), new RegExp(`about ${tens(nba.guessedMonthly).replace("$", "\\$")} a month`));
+  near(nba.guessedMonthly, 3230 + debt7(pg.plan(), "setup-debt-mortgage").minPayment, 10, "the card's day-to-day spending plus the mortgage's payment");
+});
+
+test("C7 fix UX 8: Expenses with nothing listed offers the same guesses as the Dashboard (spending alone: 'Not sure what you spend?', 'I'll type mine')", async () => {
+  // income and nothing else owed: the spending alone
+  const p = jordan(T0); C3.markAt(p, "done", T0); p.guide.setup.picks = { ...(p.guide.setup.picks ?? {}), owe: ["none"] };
+  const offer = G7.fillOffers(p, OPTS);
+  assert.deepEqual(offer.map((x) => x.case), ["spend"]);
+  const pg = await drawPage(p, EXPENSES); let root = pg.draw();
+  const c = cardTitled(pg, root, "Not sure what you spend?");
+  assert.ok(c, "the card is on Expenses");
+  assert.ok(pg.text(c).includes(`Households like yours (${offer[0].who}) spend about $${offer[0].total.toLocaleString("en-US")} a month. Use our guesses to start, and type your own figures as you learn them.`));
+  assert.match(pg.text(c), /Nothing changes until you tap\. After that, you can type your real figures any time in the list below\./);
+  assert.deepEqual(pg.all(c, (n) => n.tag === "button" && !/chip/.test(n.attrs.class ?? "")).map((b) => pg.text(b).trim()), ["Use these guesses", "I'll type mine"]);
+  assert.match(btnOf(pg, c, "I'll type mine").attrs.class, /secondary/);
+  btnOf(pg, c, "I'll type mine").attrs.onClick();
+  assert.deepEqual(pg.plan(), p, "I'll type mine writes nothing");
+  btnOf(pg, c, "Use these guesses").attrs.onClick();
+  assert.equal(pg.plan().expenses.filter((x) => x.id.startsWith("setup-x-")).reduce((t, x) => t + x.amount, 0), offer[0].total);
+  assert.equal(pg.plan().guide.fillSkipped, undefined, "the spending alone: nothing else was answered");
+  root = pg.draw();
+  assert.match(pg.text(noticeOf(pg, root)), /Saved: about \$[\d,]+ a month of spending is counted now\. Type the real figures in the list below when you have them\./);
+  // with a debt left out too (the Dashboard's card): the same card, both cases, the same figures; "Not now" there does not hide it here
+  const q = older7("jordan"); G7.fillLater(q, T0);
+  const ex = await drawPage(q, EXPENSES), er = ex.draw(), c2 = cardTitled(ex, er, "Fill in what you skipped");
+  assert.ok(c2);
+  assert.match(ex.text(c2), /Mortgage about \$110,000 owed .* Day-to-day spending \(not the mortgage\) about \$3,230 a month/);
+  btnOf(ex, c2, "Use these guesses").attrs.onClick();
+  assert.ok(acct7(ex.plan(), "setup-owe-mortgage") && ex.plan().expenses.length >= 6);
+});
+
+test("C7 fix UX 9: 'Is something missing?' offers a row whose own kind is not listed, less what is listed under its others; the list's total is to the dollar and adds up", async () => {
+  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  p.expenses.push({ id: "b-phones", name: "Phones", category: "phone", amount: 95, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+  const m = G7.spendMissing(p, OPTS);
+  assert.ok(m, "still far below the usual total");
+  const util = m.rows.find((r) => r.row === "utilities");
+  assert.ok(util, "a phone bill does not stand for the power and water");
+  assert.equal(util.listed, 95);
+  near(m.typed, 1600 + 2100 + 95, 0.01, "the mortgage's payment and every bill, to the cent");
+  near(m.withThese, m.typed + m.rest, 0.01);
+  const pg = await drawPage(p, EXPENSES), c = cardTitled(pg, pg.draw(), "Is something missing?");
+  assert.match(pg.text(c), /You've listed \$3,795\./);
+  assert.match(pg.text(c), new RegExp(`Utilities and phone, besides the \\$95 you listed \\$${util.value.toLocaleString("en-US")}`));
+  const round = (v) => Math.round(v / 100) * 100;
+  assert.match(pg.text(c), new RegExp(`With these, your list comes to about \\$${round(m.withThese).toLocaleString("en-US")}`));
+  // the rows offered add up to "Not listed yet"
+  assert.equal(m.rows.reduce((t, r) => t + r.value, 0), m.rest);
+  assert.match(pg.text(c), new RegExp(`Not listed yet about \\$${m.rest.toLocaleString("en-US")} a month`));
+});
+
+test("C7 fix UX 10: the Dashboard's 'Better guesses are ready' gives the reasons, counts the small changes, and links to the rest", async () => {
+  const before = guessedPlan(T0);
+  const pg = await drawDash(before), root = pg.draw();
+  const c = cardTitled(pg, root, "Better guesses are ready");
+  assert.ok(c, "the card, after the money tiles");
+  const up = G7.upgradeOffers(guessedPlan(T0), OPTS);
+  const small = up.filter((x) => x.kind === "money" && Number(x.from) > 0 && Math.abs(x.to - x.from) / Number(x.from) < 0.02).length;
+  assert.ok(small >= 1, "the cushion's $12,000 to $12,100");
+  assert.match(pg.text(c), /Mortgage: interest rate From 7\.24% to 4\.6% Our new guess: the average on Ohio mortgages people already have\./);
+  assert.match(pg.text(c), new RegExp(`Plus ${small === 1 ? "one small change" : `${small} small changes`} of under 2%\\.`));
+  const link = pg.all(c, (n) => n.tag === "a")[0];
+  assert.deepEqual([pg.text(link).trim(), link.attrs.href], ["See all on Our guesses for you ›", "#/overview/guesses"]);
+  btnOf(pg, c, "Use the new guesses").attrs.onClick();
+  assert.equal(debt7(pg.plan(), "setup-debt-mortgage").rate, 0.046);
+  const r2 = pg.draw();
+  assert.match(pg.text(noticeOf(pg, r2)), /^ ?Saved: the \d+ new guesses are in your plan\./);
+  btnOf(pg, r2, "Undo").attrs.onClick();
+  assert.deepEqual(pg.plan(), before, "Undo puts the older figures back (the cushion goal's target with them)");
+});
+
+test("C7 fix UX 11: rows read from the bank files fold on their own (no 'That's about right'); cover taken from pay is kept in Insurance and health", async () => {
+  const p = withBank7(ours7(), ["2026-09", "2026-10"]); settle(p, OPTS);
+  const pg = await drawPage(p), root = pg.draw();
+  const fold = pg.all(root, (n) => n.tag === "details" && /^Read from your bank files/.test(pg.text(n).trim()))[0];
+  assert.ok(fold);
+  const d = G7.compute(p, OPTS);
+  assert.match(pg.text(fold), new RegExp(`^ ?Read from your bank files ${d.bank.length} rows`));
+  assert.equal(btnOf(pg, fold, "That's about right"), undefined);
+  for (const r of d.bank) assert.ok(!d.rows.some((x) => x.path === r.path && !x.fromBank), r.path);
+  // health cover through work: the worker's share never reaches a bank file, so it stays in the row
+  const w = withBank7(ours7(), ["2026-09", "2026-10"]); w.guide.setup.taps = { ...(w.guide.setup.taps ?? {}), "health-cover": "work" }; settle(w, OPTS);
+  const e = estimate(w, "spend.insurance", { ...OPTS, path: spendPath7("insurance") });
+  const { T: HEALTH7 } = await import("./data/health.js");
+  const prem = HEALTH7.kff_ehbs2026_premiums.rows["worker contribution, monthly"][1];
+  assert.ok(prem > 0);
+  near(e.value, 180 + 40 + prem, 5, "the bank's $220 plus the worker's share of a family plan (to the nearest $10)");
+  assert.equal(e.why, "your bank files, September and October, and cover taken from pay");
+  const own = estimate(withBank7(ours7(), ["2026-09", "2026-10"]), "spend.insurance", { ...OPTS, path: spendPath7("insurance") });
+  assert.equal(own.why, "your bank files, September and October; not cover taken from pay");
+});
+
+test("C7 verify V1: a car payment typed under 'Car, gas and transit' is the car loan's payment, counted once after the tap (it moves under Loan and card payments)", () => {
+  const bill = (id, nm, category, amount) => ({ id, name: nm, category, amount, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+  for (const [name, amount] of [["Car payment", 420], ["Toyota payment", 380]]) {
+    const s = sam(T0);
+    C3.applyOweAmounts(s, { "car-loan": { owed: "" }, credit: { owed: "3,000" } }, T0); C3.markAt(s, "done", T0);
+    s.expenses = [bill("b0", "Rent", "housing", 1200), bill("b1", name, "transport", amount), bill("b2", "Food", "groceries", 300)];
+    // before: the car payment under transport, the card's minimum counted from Debts
+    const was = computeExpenses7(s, { today: T0 }).monthly;
+    const offer = G7.fillOffers(s, OPTS).find((x) => x.case === "debt");
+    assert.deepEqual([offer.key, offer.payment, offer.paidAs, offer.paidUnder], ["car-loan", amount, name, "transport"], `${name}: the card names the bill and where it is`);
+    G7.useFillGuesses(s, OPTS); settle(s, OPTS);
+    assert.deepEqual([debt7(s, "setup-debt-car-loan").minPayment, isGuessIn(s, "debts[setup-debt-car-loan].minPayment")], [amount, false], `${name}: the person's figure`);
+    assert.equal(s.expenses.find((x) => x.id === "b1").category, "debt", `${name}: filed where Expenses ties it to the loan`);
+    assert.equal(computeExpenses7(s, { today: T0 }).monthly, was, `${name}: the month counts the payment once (it was ${was} before the tap)`);
+  }
+  // under Loan and card payments already: nothing is moved
+  const d = sam(T0);
+  C3.applyOweAmounts(d, { "car-loan": { owed: "" }, credit: { owed: "3,000" } }, T0); C3.markAt(d, "done", T0);
+  d.expenses = [bill("b0", "Rent", "housing", 1200), bill("b1", "Car payment", "debt", 420)];
+  assert.equal(G7.fillOffers(d, OPTS).find((x) => x.case === "debt").paidUnder, "debt");
+  G7.useFillGuesses(d, OPTS);
+  assert.equal(d.expenses.find((x) => x.id === "b1").category, "debt");
+});
+
+test("C7 verify V2: a mortgage added on Net worth with no payment on Debts: the spending card says the payment is not counted and where to add it", async () => {
+  const p = older7("patLee");
+  p.accounts.push({ id: "acct-m1", name: "Home loan", type: "mortgage", balance: 182000, asOf: T0, institution: "", ownerId: "", history: [], notes: "" });
+  const offers = G7.fillOffers(p, OPTS);
+  assert.deepEqual(offers.map((x) => x.case), ["spend"], "the mortgage is kept elsewhere: not offered again");
+  assert.deepEqual([offers[0].mortgage, offers[0].mortgageUnpaid], [true, true]);
+  const pg = await drawPage(p), root = pg.draw();
+  const card = cardTitled(pg, root, "Fill in what you skipped");
+  assert.match(pg.text(card), /Your mortgage's payment isn't on Debts yet, so it isn't counted\./);
+  assert.ok(pg.all(card, (n) => n.tag === "a" && n.attrs.href === "#/balance/liabilities").length, "a link to Debts");
+  // its payment typed on Debts: counted, and the line goes
+  p.debts = [...(p.debts ?? []), { id: "d-m1", accountId: "acct-m1", rate: 0.039, minPayment: 1820, extra: 0 }];
+  assert.equal(G7.fillOffers(p, OPTS)[0].mortgageUnpaid, false);
+  // the card's own mortgage (offered with the spending) is counted from Debts once written: no line
+  assert.equal(G7.fillOffers(older7("patLee"), OPTS).find((x) => x.case === "spend").mortgageUnpaid, false);
 });

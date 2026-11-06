@@ -126,7 +126,8 @@ while the field still equals `v` (`same(value, v, unit)`: rates within 1e-9, mon
   `guessed: false` clears the entry); nothing moves a typed figure ever again. "That's about right" is `confirmGuess`:
   the value stays and becomes theirs.
 - **Settle follows the answers.** `store.update` runs `settle` on the draft after the page's change: each untouched
-  entry, in tier order, is re-estimated and written when it moved; a typed-over entry is dropped (`"typed"`), one whose
+  entry, in tier order, is re-estimated and written when it moved (when only its spread moved, a spending row now read
+  from the bank files at the survey's own figure, the entry's `s` is refreshed and the field is not touched); a typed-over entry is dropped (`"typed"`), one whose
   record is gone too (`"gone"`), and one that is not an entry at all (`null`, a string, no `k`, a `v` that is not a
   number or a list: an import or a hand edit) first (`"bad"`), so one bad entry never stops the rest; a `guesses` that is
   not an object goes whole. Estimator keys are looked up as own keys only (`constructor` names none). It never creates, is idempotent, skips the older Get started flags (frozen), keeps an

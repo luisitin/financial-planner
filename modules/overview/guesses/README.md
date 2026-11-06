@@ -59,6 +59,46 @@ your real one too." Records, never a table (390 px). Saving: Save (or Enter) com
 button under the finger before a tap on "That's about right" lands. Empty state: an empty plan points to Get started; a
 plan with every figure typed says so, says a figure filled in later will show here, and offers the Dashboard. Rows of
 the older guesses keep the setup's order (each debt's payment, then its rate; people in household order).
+**"Fill in what you skipped"** (spec 11.4, C7), after "Is this the same loan?" and before "Better guesses are ready",
+when `offers.fill` has items: "When your plan was set up, some boxes were left blank, so these aren't counted yet. Here
+is what's typical for a household like yours." One record per debt ("Mortgage, about $110,000 owed", "$880 a month at
+4.6% a year" or, with the payment typed on Expenses, "$1,600 a month (your “House payment” on Expenses) at ...", with no
+home in the plan "Your home: worth about $210,000", "Our guess: why.") and one for the spending ("Day-to-day spending
+(not the mortgage)" with a mortgage, else "Everyday spending", "about $3,230 a month", "Our guess: typical for one parent
+of two paying a mortgage in Ohio on about $58,000 a year.", "Once you stop working: about ...", question 6's open
+questions as chips (below), and on this page the rows in a fold, "How it adds up", where with a mortgage the home's row
+is "Home upkeep (tax and insurance are in the mortgage payment)"); one line of what else the tap changes (`fillEffect`:
+"This counts the $110,000 you owe on your home and your home, worth about $210,000, so what you own minus what you owe
+goes up by about $100,000, and about $3,230 a month of spending.", thousands rounded); "Nothing changes until you tap.
+After that, you can type your real figures any time on Expenses and Debts."; "Use these guesses" (filled;
+`useFillGuesses` with the card's answers; notice "Saved: your mortgage (about $110,000 owed) and about $3,230 a month of
+spending are counted now. Type the real figures on Expenses and Debts when you have them.") and "Not now" (outlined;
+`fillLater`; "Nothing was changed. We'll ask again in a month; Our guesses for you keeps them until then."). After "Not
+now" this page keeps the offer folded ("Skipped for now: your mortgage and your spending", the same card inside, with
+`ignoreLater`); the 30 days apply to the Dashboard only. With the card (or the fold) and no guess in use yet, it is the
+page (the "every figure is one you typed" card would say the opposite). **The card's questions** (C7 UX review 5):
+question 6's taps the rows still need (health cover; childcare with a child; an HOA fee where the state's share is
+asked), each as chips (`role="radio"`); an answer redraws the card with the figures it gives (`fillOffers` with `taps`;
+nothing is written), the question stays with its answer picked, and "Use these guesses" writes the answers where
+question 6 keeps them (`guide.setup.taps`, creating `guide.setup` with them alone on a plan Get started never saw).
+**Undo** (UX review 7): after a tap that writes figures (Use these guesses, Add our guesses for the rest, Use the new
+guesses) the green notice carries an outlined "Undo" for the next render: `undoOf(plan)` keeps the plan's parts a tap
+may change (accounts, debts, expenses, goals, income, household, retirement, guesses, guide) as they were, and Undo
+puts them back through `store.update` ("Undone: your plan is as it was before the tap."). The same cards are drawn by
+`fillCard`, `missingCard` and `upgradeCard` (exported, with `sayNotice` and `registryOf`; scoped `.gs-card` styles) for
+the Dashboard and Expenses. On Expenses with nothing listed (UX review 8) `fillCard(..., { onMine, only, title })`:
+with the spending alone, "Not sure what you spend?" ("Households like yours (who) spend about $X a month, besides the
+mortgage. Use our guesses to start, and type your own figures as you learn them.", "Use these guesses" writing the
+spending alone (`only: "spend"`, no `fillSkipped`) and "I'll type mine", which writes nothing and goes to the form);
+with a debt left out too, the Dashboard's card and figures. "Not now" on the Dashboard does not hide it there.
+**Rows read from the bank files** (R12, UX review 11) are not "our guesses": they fold apart, "Read from your bank
+files" with their count ("These follow your bank files as new ones come in. Type your own figure to keep one as it
+is."), each "From your bank files, September and October." and no "That's about right". With every spending row from
+the bank the hero's lede says so. While bank files are in but set no row (R12 held, below) the spending row carries
+why and what to do (`spendBankNote`, e.g. "Your bank files cover September and October, but about $300 a month went to
+your Visa, and its file isn't in. Bring it in, and our spending guesses become what your bank shows. Bring in the Visa
+file ›"). With a guessed mortgage payment in it the spending row is "Spending, with the mortgage payment" (one name for
+each figure, UX review 4).
 **"Better guesses are ready"** (spec 11.5, C2), right under the hero when `offers.upgrade` has rows: "We now fill in
 figures from where you live and what you told us. These N would change; nothing moves until you say so." Each row is the
 label, then "From $1,261 a month to $1,300 a month", then "Our new guess: why."; "Use the new guesses" (filled) writes them (`useNewGuesses`, notice
@@ -80,7 +120,7 @@ Ranking in C1 is by static weight (estimator `weight`, or the legacy weights bel
 `compute(plan, { ranges: true })`, the "If it's off ..." line) arrives in C8.
 
 ## compute(plan, { estimators, tables, today })
-`{ rows, top, count, frozen, stale, big, small, applies, sources: { used, all, orgs }, offers: { fill: [], upgrade: [] },
+`{ rows, top, count, frozen, stale, big, small, applies, sources: { used, all, orgs }, offers: { fill, upgrade, twins? },
 lookedAt, planEmpty }`. `rows`: `guessesInUse(plan)` (ledger + legacy) as `{ path, k, label, record, value, unit, kind,
 why, weight, legacy, frozen, stale, href, sources, basis, order }`, sorted frozen first, then stale, then big, then
 small, then by tier and order. `applies`: core/estimate `applies(plan)`; when false no row cites a table. The view
@@ -94,8 +134,82 @@ in the same order on the draft (the ledger entry; the older flag mirrored, so Li
 as before) and returns how many; from then on `settle` keeps them fresh. On `guessedPlan()` (Ohio): the mortgage rate
 7.24% → 4.6%, its payment $1,261 → $1,300 (with Ohio's tax and insurance, E22) and the cushion $12,000 → $12,100
 (listed as "one small change of under 2%"). Spending once work stops ($4,100 → $2,840) is not offered: the card never
-lowers it (below). `offers.fill` (11.4) stays empty
-until C7.
+lowers it (below).
+
+### "Fill in what you skipped" (`offers.fill`, spec 11.4, C7)
+`fillOffers(plan, o)`: what one tap would write, worked out on a copy (nothing is written), as a list of cases
+(`FILL_CASES`), each `{ id, can, find, write, endsWhenUsed }`, run in Get started's order; each case is worked out from
+the plan as the cases before it leave it (written and settled on the copy, as the store settles after each of Get
+started's screens), so the spending is guessed with the filled-in mortgage's payment counted. Nothing at all while the
+gate is closed (EUR, "outside the U.S.") or for `FILL_AGAIN_DAYS` (30) after "Not now". Built now:
+- **debt**: a kind picked on Get started's question 5 (`guide.setup.picks.owe`, not "none") with no `setup-owe-<kind>`
+  account, Get started past its debts (`at` is spend, goals, goal-details or done, or `finishedAt`), not kept elsewhere
+  (an account of its type added on Net worth or Debts; a car loan is a loan named car, auto, vehicle or truck, as setup's
+  `existingOwe` reads it), and not a card answered "I pay it in full". Get started before the guesses dropped such a debt
+  when its balance was left blank. The item: what is owed, the rate and the payment (E20-E32: `debt.<kind>.owed`,
+  `.rate`, `.payment`, with question 5b's args, every box blank and its start tap if one was given), and with a mortgage
+  and no home in the plan the home's value (`home.value`, as question 5b asks it then). `write` puts the account and the
+  debt row exactly as question 5b's `put` does (an existing record gets only the figures), marks the three (four) as
+  our guesses, renames a typed "Rent" row "Rent or mortgage" (our "Rent" row "Home costs"), and adds "home" to
+  `picks.have` (`homeFromOwe`) when it adds the home. Fixes after the C7 money review (each with a test that failed
+  first): **M4** kept elsewhere (`keptElsewhere`): with only the car loan picked, any loan added on Net worth or Debts is
+  it, whatever its name ("Honda Civic", "Ally loan"), unless the name says personal, student or another kind
+  (`notCarName`); with both the car loan and another loan picked, a car's name or maker (car, auto, vehicle, truck,
+  Honda, Toyota, Ford ...) is the car loan and any other name the other loan. **M6** a `setup-debt-<kind>` row on Debts
+  without its account was removed on Net worth on purpose: not offered; and `write` never writes over a debt row that is
+  there (only a fresh row gets the rate and payment and their marks). **M5** a payment typed on Expenses
+  (`typedPaymentOf`: for the mortgage a housing bill named mortgage, house or home payment, or a lender's name, or within
+  10% of our payment and not rent; for the car loan a bill named car, auto, the maker or the lender, under transport or
+  "Loan and card payments") is the debt's payment: written as typed (not marked: Expenses matches it, so it counts once),
+  and what is owed and the rate are worked back from it with question 5b's args (`payment` given), as question 5 does.
+  Expenses ties a loan's payment to its bill only under "Loan and card payments" (`matchDebts`), so a car payment typed
+  under "Car, gas and transit" would be counted twice after the tap (the bill, and the loan's payment from Debts): `write`
+  moves that bill under "Loan and card payments", and the card says so ("moved under Loan and card payments so it counts
+  once"; `paidUnder`). A mortgage's bill under housing stays where it is (Expenses' `mortgageFiled` reads it there). (C7
+  verify V1, 2026-11-06.)
+- **spend**: income on file now (not once-only, active today), no expense and no bank line, and Get started not started
+  or past its spending screen (goals, goal-details, done). The item: each of question 6's rows as it writes them with
+  every box blank (7.A; one spending plan, one envelope: `spend.<row>` with `args = { mode: "rows", rows: every row
+  null }`), childcare only with a child listed and only once its question says Yes (none here: it is not offered), a row
+  typed as 0 (`spendZero`) left the person's 0; and, for a plan made through Get started with no figure for it yet,
+  spending once work stops (`overview/setup:retireSpend`, the same screen's; not for a plan built on the pages, nor when
+  every adult is retired). `write`: `setup-x-<row>` rows with setup's shape (name, category, essential = a must-pay row,
+  monthly, inflating) and `spendMode: "rows"`, each marked. `o.taps` (the card's chips: health-cover, childcare, hoa
+  only) go into the rows' args as question 6's would, the item lists the questions still open (`asks`, from the
+  estimators' `ask`) and the answers (`taps`), and `write` keeps the answers in `guide.setup.taps`. With a mortgage the
+  item says so (`mortgage`): its payment is counted from Debts, so the home's row is its upkeep. A mortgage added on Net
+  worth with no payment on Debts (kept elsewhere, so the debt case leaves it) is counted nowhere yet: `mortgageUnpaid`, and
+  the card says "Your mortgage's payment isn't on Debts yet, so it isn't counted. Add it on Debts ›" (C7 verify V2). `o.only` runs one case
+  (Expenses' spending card); `o.ignoreLater` lists what "Not now" put off (this page's fold, Expenses).
+- **Later** (not built): C4 adds a retirement tile picked with no account for an adult (balance, contribution, match;
+  a contribution with amount 0 and match 0 becomes a question, "Do you put money into it from your pay?", never a
+  figure); C5 a setup goal with target 0 (education, home). Each is one more entry in `FILL_CASES`.
+`useFillGuesses(draft, o)` runs the same cases on the draft (inside `store.update`; the store's settle after it moves
+nothing, a test checks) and sets `guide.fillSkipped = { at, choice: "used" }`: a case with `endsWhenUsed` is not offered
+again (a debt or the spending removed later was removed on purpose). `fillLater(draft, today)` writes only
+`guide.fillSkipped = { at, choice: "later" }`. Shown items: `{ case: "debt", key, name, owed, rate, payment, paidAs, home, why }`
+and `{ case: "spend", rows: [{ row, name, label, value, why }], total, retire, who, mortgage, asks, taps }` (`who`:
+`householdWords`). `fillEffect(items)` = `{ owed: sum of owed, home: sum of the homes added, net: home - owed, spend:
+the spending's total }` (the card's line of what else changes). On the three
+7.H households made before the guesses (setup-personas, Q5b's owed boxes blank, Q6 skipped), one tap makes the plan
+Get started makes today with the same boxes blank (key order aside; module.test.mjs).
+Known limit: a debt removed later while Get started's pick stays, on a plan that never tapped, is offered again (nothing
+in the plan tells it from a dropped one); the person taps "Not now" (a month) or adds it. An "I don't have it any more"
+choice is the owner's call (C7 report).
+
+### The Dashboard's cards (`guessCards(plan, o)`, spec 11.3; overview/dashboard compute's `guesses`)
+`{ fill, missing, upgrade, first } | null`: "Fill in what you skipped" (`fillOffers`), "Is something missing?"
+(`spendMissing`, below) and "Better guesses are ready" (`upgradeOffers`), each only while it has something. The
+Dashboard shows one at a time: `first` is fill (blanks that leave a figure out), else missing (a list far too short),
+else upgrade (older figures). Fill and missing sit right under "where you stand" (C7 UX review 2), and while one is up
+the rows it decides wait on it: "Left over each month" ("Depends on your spending: not counted yet", or "...: your list
+may be missing about $2,460 a month", or "Depends on what you owe: not all counted yet"), "Safety cushion" while it is
+open and the spending is not counted ("Needs your spending") and "Retirement" with any verdict ("Depends on the figures
+below"), each with no coloured dot, "See below ›", and a tap that scrolls to the card (one way to fill in spending, UX
+review 4). "Better guesses are ready" comes after the money tiles, with the same filter and why-lines as this page
+("Our new guess: ...", "Plus one small change of under 2%.") and "See all on Our guesses for you ›" as a link (UX
+review 10). `guessCards` adds `fillEffect`. The Dashboard compute adds the key only when given a day (its view asks
+with the registry merged from every manifest); the shell's own `compute(plan)` is as before.
 
 ### Older guesses: words and weights (`LEGACY_WORDS`, `LEGACY_SETUP`)
 | key | label | why (after "Our guess:") | source cited | weight |
@@ -272,7 +386,11 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   median fee (with or without a mortgage), in between asked ("Do you pay an HOA or condo fee?"; unanswered or Not sure
   takes the likelier side; the spec has the box wait for the answer, but a box with no grey figure would save nothing,
   so the likelier side is shown while it asks), plus property tax and insurance (`home.propertyTax`, `home.insurance`,
-  or the Home page's typed ones) when there is no mortgage or the escrow tap says they are not in the payment. J $50,
+  or the Home page's typed ones) when there is no mortgage or the escrow tap says they are not in the payment. A bill
+  typed under another kind whose name says it is one of those two parts (`PROPERTY_TAX_BILL`: property, real estate, home
+  or house tax; `HOME_INSURANCE_BILL`: home, house, homeowners, dwelling or condo ... insurance) comes off that part, never
+  past it (C7: the qa retirees typed "Property tax" under taxes and "Home and car insurance" under insurance, and the row
+  counted both again, $297 of its $431); a housing bill comes off the whole row as above. J $50,
   N $120 (Arizona 48.8%: asked; No is the likelier side).
 - **Insurance and health (E05)**, by the `health-cover` tap (asked once): through work, KFF's worker contribution
   ($139 a month single for one adult and no children, else $623 family) plus the out-of-pocket share (medical services,
@@ -305,8 +423,84 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   work stops (C3 money review D9). Pat and Lee: about $3,790 of costs plus the $1,600 payment, $5,390 (spec 7.H's "$4,100
   + mortgage" counted the $280 of tax and insurance twice; the figure is one amount for every year of retirement).
 - **The basis line (`spendBasis`)**: "The grey figures are what a household like yours usually spends: one adult
-  renting in Texas on about $48,000 a year." **E10 (`missingSpend`)**: every row typed and the month under exp(-2.33 x
-  0.25) = 0.56 of the household's guessed total; shown in C7. R12 (bank files) stays off until C7.
+  renting in Texas on about $48,000 a year." (`householdWords` is the part after the colon.) With R12 on: "The grey
+  figures are what your bank files show going out on each, a month over September and October." (the months read, M8)
+- **R12, the person's own bank files (`bankSpend`, C7; spec 2.2 R12, 7.A).** A month (before this one) is read when
+  all of these hold, looked at newest first: it is at most `BANK.maxAge` = 12 months old (else held "old"); it is whole
+  (ledger `monthCover` full and `monthGaps(...).whole`: the files reach both ends within the ledger's slack, no
+  account's files have a hole in it, stop early or start late; the same test Expenses' bank card uses); a checking,
+  savings or cash account's own files cover it (a card's file alone shows what the card bought, never the rent and
+  bills: held "no-checking", M1a); no money went to a card whose own file is not in (ledger `monthGaps` cards and
+  "unsure", and a line paying a card in the plan by name, `CARD_LINE` + `PAY_LINE` words, with no line of that card's
+  own: held "card", M1b) nor to a card the plan does not have (a card-payment line filed as a payment, a transfer that
+  `cardPayments` does not tie to a card in the plan, or with no kind: held "unknown-card", M1b); and what is left with
+  no kind is at most `max(BANK.looseDollars, BANK.uncategorised x the month's money out)` = max($50, a tenth) (else held
+  "unfiled", UX review 1; it was half). Before that, a line with no kind is taken out when it says it is a transfer
+  (`TRANSFER_LINE`: transfer, xfer) or a card's payment, when it is a bill typed on Expenses (within 10% of its amount,
+  as often as its period has in a month: a rent paid by check is that bill, counted once on Expenses, M3), or a payment
+  on Debts (a loan's words, `LOAN_LINE`, or within 10% of a loan's payment or the mortgage's). The newest
+  `BANK.maxMonths` = 6 such months are read, and R12 is on with `BANK.minMonths` = 2 or more. The ledger's month checks
+  read every line (about 7 ms a month on six months of 150 lines) and the store settles on every change, so the answer
+  is kept for the same inputs (every line, file record, account, kind, bill typed, debt, the day and the rows; the last
+  eight). A line counts when it is money out of a spending kind (with no kind, by its sign), not a transfer
+  (`transferId`, the transfer kind), a loan or card payment (`debt`), `taxes` or `savings`; a refund in a spending kind
+  takes off. Kinds map to rows as Expenses holds them (`ROW_HOLDS`: phone in utilities, health in insurance, fun,
+  subscriptions and pets in eating out, personal care in shopping; the spec says setup's `covers`, which leave
+  subscriptions, pets and personal care in no row, and Expenses' bank card groups them this way); the lines with no kind
+  left and every kind in no row (travel, gifts, other, one of your own) go to "Shopping and everything else", as does
+  childcare with no child listed. **The mortgage** (M2, Expenses' `mortgageLines`): a housing line named mortgage or
+  mtg, or within 10% of the payment on Debts, or the largest payee's line found in every month read that is within 10%
+  of the same amount each month and at least half the payment (a servicer's name: "MR COOPER", "PENNYMAC LOAN SVC"), is
+  the servicer's; the payment on Debts is counted there, and what goes to the servicer beyond it each month (its tax and
+  insurance, or a payment typed low) is a home cost, so the plan's month is the bank's. Each row is then
+  `max(0, its lines / months - the bills typed on Expenses that the bank puts in it, less the months a line with no kind
+  was that bill)` (never counted twice), no envelope, no tap, `sigma` 0.15 (declared), `basis: "yours"`, why "your bank
+  files, September and October" (ledger `monthsWords`; "your bank files, six months to May" when that does not fit), no
+  table and `dataAsOf` = the spending tables' read date (so moving between the bank and the survey is never held back by
+  the S7 guard). **A row the files show nothing for keeps our figure** (M1c: "not in these files" is not $0; lumpy home
+  upkeep is a mean over years). **Insurance and health** (UX review 11) adds the cover the bank never sees: with health
+  cover through work the worker's share (KFF EHBS 2026, the row's own `premium`: $139 single, $623 family), with
+  Medicare each adult 65 or over's Part B premium (it comes out of Social Security); why "..., and cover taken from pay",
+  or "...; not cover taken from pay" when nothing is added. One month, or none, leaves the survey's rows, and
+  `bankHeldWords(plan, b)` says why in one line with a link (Expenses under its tiles and this page's spending row,
+  through compute.js `spendBankNote`, only while a row is still ours): "no-checking" "Your card's files cover ..., but
+  not your checking account, where rent and bills are paid. Bring in its file too, ..." (Bring in a bank file ›);
+  "card" "Your bank files cover September and October, but about $300 a month went to your Visa, and its file isn't
+  in. Bring it in, ..." (Bring in the Visa file ›, `#/transactions/import?accountId=<card>`); "unknown-card" "... about
+  $3,200 a month went to a card that isn't in your plan (CHASE CREDIT CRD AUTOPAY). Add the card and bring in its file,
+  ..." (Add the card ›, Net worth), or with cards in the plan that the line does not name (a "CAPITAL ONE AUTOPAY" beside
+  a card saved as "Visa") "... about $300 a month went to a card (CAPITAL ONE AUTOPAY), and what it bought is in no file.
+  If that is your Visa, bring in its file; if it is another card, add it first. ..." (Bring in the Visa file ›; with
+  several cards, Bring in the card files ›); "unfiled" "12 bank lines still need a kind. File them, ..." (Categorize ›, the
+  plan's lines with no kind); "old" "Your bank files are from January and February 2024, more than a year ago, ..."
+  (Bring in a bank file ›); each ends "and our spending guesses become what your bank shows." Rows of ours move at the
+  next save (settle; a row whose bank figure equals the survey's still says it is the bank's, M9: settle refreshes the
+  entry's spread when the figure is the same); a row the person typed stays theirs. Pat and Lee with two months of
+  checking (module.test.mjs): home 90, utilities 330, groceries (800 + 1,000) / 2 = 900, car 120, insurance 220, eating
+  out 80, shopping (300 + 270) / 2 = 285 -> $290; the $1,600 mortgage line apart; Expenses' bank card then shows a gap
+  of about $5 (rounding) and no line.
+- **Bills typed under another kind (`elsewhere`, C7 M7).** A homeowners insurance bill typed under Insurance comes off
+  the home costs row's insurance part first (`HOME_INSURANCE_BILL`; at most our figure for that part) and only the rest
+  off Insurance and health, so it is taken off once ($150 a month off the two rows, not $250); a bill named for a car's
+  insurance (`CAR_INSURANCE_BILL`: car, auto, vehicle, truck or motorcycle ... insurance) typed under Insurance comes off
+  Car, gas and transit's guess, not Insurance and health's (the survey keeps vehicle insurance in transport); "Home and
+  car insurance" gives the home part first (`homeInsTaken`), the rest to the car (`carShift`).
+- **E10, "Is something missing?" (`missingSpend`, spec 11.6, C7)** when all three hold: the spending is typed (no row of
+  it our guess, and not one rough total, which no row can be added beside); the typed month (bills and loan payments)
+  is under `MISSING_LINE` = exp(-2.33 x 0.25) = 0.5585 of the household's guessed total (every row ours with every box
+  blank, plus the bills typed elsewhere and the loan payments: a bill in a row's kinds comes off that row, so the total
+  stays put while the list grows); and no bank files cover two whole months (Expenses' bank card speaks then).
+  "That's everything" (`guide.spendComplete`) ends it. `rest`: Get started's rows with no bill of their main kind (the
+  first of setup's `covers`, UX review 9: "Phones $95" under phone leaves "Utilities and phone" to offer, less the $95)
+  and not typed as 0. Pat and Lee with $2,100 of bills and the $1,600 mortgage: asked; a dollar under the line asked,
+  at it and a dollar past it not (module.test.mjs). compute.js `spendMissing` adds our guesses for `rest`, worked out
+  together (one envelope: the settle after "Add our guesses for the rest" moves nothing), each row's `listed` (the bills
+  under its other kinds, which its guess is already less) and `withThese` = typed + rest; `addSpendGuesses` writes them
+  as Get started does; `spendIsComplete` stores the day; `spendAskAgain` deletes it ("Ask me again" on Expenses, shown
+  while `spendSaidComplete`: said, and the list is still under the line). The card: "Households like yours usually spend
+  about $5,700 a month. You've listed $2,565." (the list to the dollar, as Expenses' tile), "Not listed yet, about
+  $2,460 a month", each row ("Utilities and phone, besides the $95 you listed  $310"), "With these, your list comes to
+  about $5,000"; "Add our guesses for the rest" (filled, with Undo) and "That's everything" (outlined).
 
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
@@ -325,8 +519,8 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
 - **R9** `typoCheck`: only when `|ln(typed/guess)|/s > 2.33` and a common slip maps the figure inside `|z| <= 0.674`.
 - **R11** `roundGuess`: flows to $10 under $1,000 else $50 (2 significant figures when a measured s > 0.5); balances 3
   significant figures when s <= 0.15 else 2; rates 0.1 point; ages and years whole.
-- **R10** the household envelope (C3, "Spending" above). R7 (couples split by pay), R8 (totals are sums) and R12 (bank
-  files) are the saving and bank commits' (C4, C7).
+- **R10** the household envelope (C3, "Spending" above). **R12** the bank files (C7, "Spending" above). R7 (couples
+  split by pay) and R8 (totals are sums) are the saving commit's (C4).
 
 ## Data (data/*.js, built by tools/build-guess-data.mjs)
 Built from the research step's files (`est/data/*.json`, read 2026-11-02; a copy is kept in the git-ignored
@@ -371,7 +565,8 @@ inflation setting (`cpiSince`; C2's home insurance is NAIC 2023 × 1.0570; the o
 Survey spending spread 0.25 (not measured: may make a verdict wait, never printed as a range); the envelope factor's
 lower bound 0.5; "Not sure" takes the likelier side of a hurdle; 3- to 5-year-olds priced at Child Care Aware's
 "four-year-old" figure; unmarried partners priced with the married-couple cells (the survey has no other couple
-column). Direction of bias (C3): the survey's lower-income and one-parent cells spend more than their after-tax income,
+column). C7: the bank files' spread 0.15 (`BANK.sigma`), the months read from the bank (`BANK`: two to six whole months at
+most 12 months old, at most $50 or a tenth of a month's money out with no kind), "Not now" waits 30 days (`FILL_AGAIN_DAYS`). Direction of bias (C3): the survey's lower-income and one-parent cells spend more than their after-tax income,
 so spending guesses lean high for households under about $60,000 after tax; the envelope and the waiting verdict
 contain it.
 
@@ -446,8 +641,10 @@ contain it.
 
 ## The import rule (spec 6.2; a test reads the import graph)
 compute.js and estimators/*.js import `core/*`, their own `data/`, and, read-only, other modules' data files and these
-computes: `core/math/tax.js`, `modules/taxes/state/compute.js` (claude-a's file, imported and never edited) and
-`modules/cashflow/expenses/compute.js`. No file reachable from this compute imports this compute, and it imports no
+computes: `core/math/tax.js`, `modules/taxes/state/compute.js` (claude-a's file, imported and never edited),
+`modules/cashflow/expenses/compute.js` and, for R12 (C7), `modules/transactions/ledger/compute.js` (whole months) and
+`modules/transactions/categories/compute.js` (each kind's in, out or transfer); the spec's 6.2 names three, the test
+names the five. No file reachable from this compute imports this compute, and it imports no
 `overview/*` compute. overview/setup may import this compute (nothing here reaches setup).
 
 ## Coverage (coverage.js)
@@ -494,11 +691,35 @@ Yes adds the fee), childcare always asked (Yes $1,400 for J, No and Not sure not
 fallbacks), health cover asked once; E05 by tap (work, Medicare, Medicaid); a bill typed later on Expenses comes off
 its row (and comes back when removed); the 7.F ratios and N's figure from 50; the $15,000 rent slip; the rows agree with
 setup's; the basis line and E10.
+C7 (each failed before the change): the three 7.H households made before the guesses are offered Get started's own
+figures and one tap makes its plan (settle after it moves nothing); what is not offered (kept elsewhere, another loan is
+not a car loan, paid in full, Get started on the debts' screen, "none", EUR, outside the U.S., a bill, a bank line, no
+pay, pay ended, a row typed 0, childcare); "Not now" writes only its answer and the card is back at 30 days, not 29;
+after "Use" a removed debt stays removed; a plan built on the pages gets no retirement figure; the Dashboard's key only
+with a day and its order; R12 with two months (the rows, the why, the basis line, the bank card's gap, a typed row kept,
+a typed bill taken off), one month, a mostly unfiled month, a hole, the month running, a transfer pair, the kinds' rows;
+E10 at and around its line and each of its three conditions; "Add our guesses for the rest"; the constants agree with
+setup's; an owner's property tax and home insurance typed under other kinds come off the home costs row's two
+parts, each part alone, never past it, and a car insurance or income tax bill does not; the fill card drawn with the
+stand-in kit (both buttons, their notices). The bank card's mortgage line:
+cashflow/income-statement/module.test.mjs. C7 fixes after the money review ("C7 fix M1a" ... "M9", each failed on the C7
+build first): a card's file alone, money to a card in no file or not in the plan, a row the files show nothing for, a
+servicer's line under another name beside a different payment on Debts, a rent paid by check and the tenth unfiled, a
+loan on Debts under any name, a house or car payment typed on Expenses, a debt removed on Net worth and a typed rate
+kept, a homeowners bill typed under Insurance, files over a year old and the months' words, a bank figure equal to the
+survey's. After the UX review ("C7 fix UX 1" ... "UX 11", drawn with the stand-in kit; the Dashboard with every module's
+manifest and compute): a month half unfiled and its line on Expenses and here; the Dashboard's card under where you
+stand and its waiting rows (Left over, Safety cushion, Retirement) leading to it, and Expenses' waiting tile; each held
+reason's words and link; the names after the tap; the card's chips (nothing written until the tap, the answers kept in
+`guide.setup.taps`); the line of what else changes and the notice; Undo on every writing tap, "Ask me again"; Expenses'
+own card ("Not sure what you spend?", "I'll type mine"); the missing card's main-kind rows, "besides the $95 you
+listed", the list to the dollar and its total; the Dashboard's "Better guesses are ready" with its why-lines, small
+changes and link; the bank rows' fold and the cover taken from pay.
 `qa/fixtures/guessed-plan.mjs` is a household made through Get started with the unknown boxes left empty (the older
 guesses in place): the tests and the screenshots use it.
 
 ## Next (spec 15)
 C2 (built) debts are never dropped; C3 (built) spending; C4 retirement
-saving; C5 the questions and the reveal (pay, goal targets); C6 the form kit and the pages outside setup (`restsOn`);
-C7 existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
+saving (and its `FILL_CASES` entry); C5 the questions and the reveal (pay, goal targets; and its `FILL_CASES` entry); C6
+the form kit and the pages outside setup (`restsOn`); C7 (built for debts and spending) existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
 C10 plain words.

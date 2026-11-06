@@ -1,8 +1,12 @@
 // modules/overview/dashboard/compute.js -- PURE. Setup steps, whether "Set up my plan" is finished, and whether the
 // plan has enough in it to show money instead of a welcome. Where you stand and the next move come from
 // overview/setup's standing() (view.js asks for it through ctx.computeOf). Readiness of pages (how many are built)
-// is display logic done in view.js from ctx.modules.
-export function compute(plan) {
+// is display logic done in view.js from ctx.modules. With a day (and the guesses registry merged from every module, as
+// view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
+// something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
+import { guessCards } from "../guesses/compute.js";
+
+export function compute(plan, params = {}) {
   const steps = [
     { key: "accounts", label: "Add your accounts and balances", done: (plan.accounts ?? []).length > 0, go: ["balance", "net-worth"] },
     { key: "people", label: "Add the people in your household", done: (plan.household?.people ?? []).length > 0, go: ["household", "people"] },
@@ -16,5 +20,7 @@ export function compute(plan) {
   // "Set up my plan" finished: the checklist folds to one line even while a step (the assumptions) is open; that
   // step stays a to-do on Needs attention, and the page's one filled button becomes your next move
   const setupFinished = !!plan.guide?.setup?.finishedAt;
-  return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length };
+  // nothing is written here: each card lists what its one tap would write (the view's buttons write it through store.update)
+  const guesses = params.today ? guessCards(plan, { today: params.today, estimators: params.estimators, tables: params.tables }) : null;
+  return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length, ...(guesses ? { guesses } : {}) };
 }

@@ -12,7 +12,8 @@ export default {
   phase: 0,
   enabledByDefault: true,
   needs: ["accounts", "goals", "household", "income", "expenses", "transactions"],
-  writes: [],
+  // our guesses' cards (overview/guesses fillCard, missingCard, upgradeCard): each writes only on its tap
+  writes: ["guesses", "accounts", "debts", "expenses", "retirement", "guide"],
   heavy: false,
   purpose: "Where you stand today and what to do next.",
   aliases: ["home", "overview", "summary", "start"],

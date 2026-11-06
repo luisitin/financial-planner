@@ -39,6 +39,34 @@ export const CATEGORIES = {
  * card compares the row with all of them at once (income-statement bankVsPlan). Gifts, travel and "other" are in no row.
  */
 export const ROW_HOLDS = { housing: ["housing"], utilities: ["utilities", "phone"], groceries: ["groceries"], transport: ["transport"], insurance: ["insurance", "health"], childcare: ["childcare"], dining: ["dining", "fun", "subscriptions", "pets"], shopping: ["shopping", "personal"] };
+/** The spread (ledger `s`) the spending guesses give a row read from the person's own bank files (overview/guesses R12, C7):
+ *  such a row is their own months, so it does not count as our guess in `guessedMonthly` (a verdict waits on our guesses,
+ *  not on the bank's figures). */
+export const BANK_SPREAD = 0.15;
+/**
+ * mortgageLines(lines, months, pay) -> Set of the bank lines (t) that are a mortgage's own payment (C7 review M2), with a mortgage
+ * on Debts paying `pay` a month: a housing line named so ("mortgage", "mtg") or within 10% of the payment, as a typed bill is
+ * read below; and, of the payees seen in every month looked at (each month's total from it within 10% of the others), the
+ * largest when it is at least half the payment: a servicer's own name ("MR COOPER", "PENNYMAC LOAN SVC"), often with the home's
+ * tax and insurance on top. lines: [{ t, ym, out }] (housing money out, a positive amount, over `months`). The bank's spending
+ * rows (overview/guesses R12) and the bank card (income-statement bankVsPlan) both ask this.
+ */
+export function mortgageLines(lines, months, pay) {
+  const out = new Set();
+  if (!(pay > 0)) return out;
+  for (const l of lines) if (/mortgage|\bmtg\b/i.test(`${l.t?.payee ?? ""} ${l.t?.rawPayee ?? ""}`) || Math.abs(l.out - pay) <= pay * 0.1) out.add(l.t);
+  const key = (t) => String(t?.rawPayee || t?.payee || "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  const by = new Map();
+  for (const l of lines) { const k = key(l.t); if (!k) continue; const m = by.get(k) ?? by.set(k, new Map()).get(k); m.set(l.ym, (m.get(l.ym) ?? 0) + l.out); }
+  let best = null;
+  for (const [k, m] of by) {
+    if (!months.length || !months.every((ym) => m.has(ym))) continue;
+    const v = months.map((ym) => m.get(ym)), hi = Math.max(...v), lo = Math.min(...v), avg = v.reduce((t, x) => t + x, 0) / v.length;
+    if (hi - lo <= 0.1 * hi && avg >= 0.5 * pay && (!best || avg > best.avg)) best = { k, avg };
+  }
+  if (best) for (const l of lines) if (key(l.t) === best.k) out.add(l.t);
+  return out;
+}
 /** A bill is one of Get started's spending rows whose amount is still our guess (only a plan whose ledger holds its path). */
 export const guessedSetupRow = (plan, x) => typeof x?.id === "string" && x.id.startsWith("setup-x-") && !!plan?.guesses && typeof plan.guesses === "object"
   && Object.prototype.hasOwnProperty.call(plan.guesses, `expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`);
@@ -141,7 +169,8 @@ export function compute(plan, params = {}) {
     // only a path that can be a guess is looked at: a bill only through the ledger (no older flag covers expenses), a
     // debt payment through the ledger or its older `paymentGuessed` flag
     const inLedger = (path) => Object.prototype.hasOwnProperty.call(plan.guesses, path);
-    const g = active.filter((x) => typeof x.id === "string" && inLedger(`expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`));
+    // (a row our guesses read from the bank files is the person's own months: not counted here; C7)
+    const g = active.filter((x) => typeof x.id === "string" && inLedger(`expenses[${x.id}].amount`) && plan.guesses[`expenses[${x.id}].amount`]?.s !== BANK_SPREAD && isGuess(plan, `expenses[${x.id}].amount`));
     const gDebts = fromDebts.filter((f) => { const d = rows.find((r) => r.id === f.id)?.detail; return typeof d?.id === "string" && (inLedger(`debts[${d.id}].minPayment`) || typeof d.paymentGuessed === "number") && isGuess(plan, `debts[${d.id}].minPayment`); });
     const guessedMonthly = sum(g, "monthly") + gDebts.reduce((t, x) => t + x.monthly, 0);
     const guessedEssential = sum(g.filter((x) => x.essential), "monthly") + gDebts.reduce((t, x) => t + x.required, 0);

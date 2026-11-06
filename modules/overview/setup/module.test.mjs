@@ -1597,7 +1597,7 @@ test("C3 review D3: the bank card's one tap beside a guessed row makes the plan'
   const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
   const { bankVsPlan } = await import("../../cashflow/income-statement/compute.js");
   const { addFromBank } = await import("../../cashflow/expenses/compute.js");
-  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-08-20", "2026-10-31");
+  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-10-01", "2026-10-31");
   p.expenses = p.expenses.filter((x) => ["housing", "childcare", "debt"].includes(x.category));
   // a smaller pay, so our guesses sit under what the bank shows; question 6 skipped
   p.income = p.income.filter((x) => x.type === "salary").map((x) => ({ ...x, amount: x.period === "biweekly" ? 1200 : 1500 }));
@@ -1621,7 +1621,7 @@ test("C3 verify: 'Use' on a row of ours that holds two kinds writes each kind on
   const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
   const { bankVsPlan } = await import("../../cashflow/income-statement/compute.js");
   const { addFromBank, fromBankWords } = await import("../../cashflow/expenses/compute.js");
-  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-08-20", "2026-10-31");
+  const p = withVisaFile(cardGapPlan(PERSONA_TODAY), "2026-10-01", "2026-10-31");
   p.expenses = p.expenses.filter((x) => ["housing", "childcare", "debt"].includes(x.category));
   p.income = p.income.filter((x) => x.type === "salary").map((x) => ({ ...x, amount: x.period === "biweekly" ? 1200 : 1500 }));
   spendWithGuesses(p, { mode: "rows", rows: {} });
@@ -2177,4 +2177,20 @@ test("R8 B3 review UX 9: the plan-at-work lines read as plain words, with Tap", 
   S.applyMoney(one, { people: { "setup-self": { status: "work", by: "employer", amount: 50000, period: "annual", plan: "yes" } }, today: T6 });
   assert.equal(S.workPlanLine(one), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
   assert.equal(S.workPlanAdded(one, ["setup-self"]), "We added your plan at work, with $0 in it for now.");
+});
+
+test("C7 integration (M10): a spending row read from bank files is not counted as our guess on the done screen", async () => {
+  const { BANK_SPREAD } = await import("../../cashflow/expenses/compute.js");
+  const plan = { people: [], income: [], accounts: [], debts: [], goals: [], expenses: [
+    { id: "setup-x-groceries", name: "Groceries", category: "groceries", amount: 900, period: "monthly", essential: true },
+    { id: "setup-x-fun", name: "Eating out and fun", category: "fun", amount: 400, period: "monthly", essential: false },
+  ], guesses: {
+    "expenses[setup-x-groceries].amount": { k: "overview/setup:spend.groceries", v: 900, s: BANK_SPREAD },
+    "expenses[setup-x-fun].amount": { k: "overview/setup:spend.fun", v: 400, s: 0.25 },
+  } };
+  const r = S.spendRowsNow(plan);
+  assert.equal(r.count, 2);
+  assert.equal(r.guessed, 1, "only the survey's figure is ours");
+  assert.equal(r.guessedMonthly, 400);
+  assert.equal(r.typedMonthly, 900);
 });

@@ -88,7 +88,8 @@ const mirror = (draft, path, value) => { for (const a of LEGACY) if (a.owns(path
 
 /**
  * Refresh untouched guesses inside a draft (core/store.js calls it in update(), after the page's change). Never creates
- * an entry; never writes a field whose value differs from its entry's v (that one was typed: the entry goes); legacy
+ * an entry; never writes a field whose value differs from its entry's v (that one was typed: the entry goes); a figure
+ * that comes back the same from a source of another spread only refreshes the entry's s (the field is untouched); legacy
  * flags are not in the ledger and are never re-estimated; an entry that is not { k, v, ... } with v a number or a list (an
  * import or a hand edit) is dropped first, so one bad entry never stops the rest, and a ledger that is not an object at all
  * goes the same way (dropped: [{ path: "guesses", why: "bad" }]). Returns { changed: [{ path, k, from, to }], dropped: [{ path, k,
@@ -116,7 +117,9 @@ export function settle(draft, { estimators = {}, tables = {}, today } = {}) {
       const est = estimate(draft, e.k, { estimators, tables, today, path, memo });
       if (!est || est.value === null) continue;                                                      // the gate closed or an input went: frozen
       if (e.d && est.dataAsOf < e.d) continue;                                                       // S7: never put older figures back
-      if (same(est.value, e.v, e.u)) continue;
+      // the same figure from a source of another spread (a spending row now read from the bank files, sigma 0.15, where the
+      // survey's 0.25 gave the same rounded figure; C7 review M9): the entry says where it comes from, the field is untouched
+      if (same(est.value, e.v, e.u)) { if ((est.sigma ?? null) !== (e.s ?? null)) led[path] = { ...e, s: est.sigma ?? null }; continue; }
       if (!setAt(draft, path, est.value)) continue;
       led[path] = { ...e, v: est.value, s: est.sigma ?? null, at: today, d: est.dataAsOf };
       mirror(draft, path, est.value);

@@ -12,7 +12,8 @@ export default {
   phase: 2,
   enabledByDefault: true,
   needs: ["expenses", "income", "household"],
-  writes: ["expenses"],
+  // (and "Is something missing?": our guesses for the rest, or guide.spendComplete)
+  writes: ["expenses", "guesses", "guide"],
   heavy: false,
   purpose: "Your regular spending by category, split into what you must pay and what is nice to have.",
   aliases: ["spending", "bills", "what I spend", "where my money goes", "budget", "rent", "groceries", "subscriptions"],
