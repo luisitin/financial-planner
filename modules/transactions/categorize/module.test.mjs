@@ -20,8 +20,9 @@ test("groups the uncategorised by payee, most frequent first, with suggestions f
   assert.ok(amazon.suggestion.why.includes("earlier"));
   const netflix = d.groups.find((g) => g.payee === "Netflix");
   assert.equal(netflix.suggestion.category, "subscriptions"); assert.equal(netflix.suggestion.why, "a rule matches");
+  // the card's own line for its payment from checking (money in on the Visa): a transfer, or it would count as income (2026-11-02)
   const payment = d.groups.find((g) => g.payee === "Payment Thank You");
-  assert.equal(payment.suggestion, null); assert.equal(payment.in, true);
+  assert.deepEqual([payment.suggestion.category, payment.suggestion.why], ["transfer", "it looks like a payment to the card from your other accounts"]); assert.equal(payment.in, true);
   assert.deepEqual(d.groups.map((g) => g.count), [1, 1, 1, 1]);
   assert.equal(d.groups[0].payee, "Chase Credit Crd Autopay", "ties broken by amount");
 });
@@ -68,6 +69,12 @@ test("review: guesses try the longest name first and leave unclear names alone; 
   assert.equal(transferGuess("ZELLE TO SAVANNAH M", plan, false), false, "a person called Savannah");
   assert.equal(transferGuess("ONLINE TRANSFER TO SAV 1234", plan, false), true);
   assert.equal(transferGuess("CHASE CREDIT CRD AUTOPAY", plan, false), true);
+  // money in on a card with a payment's words is the payment arriving; a shop's refund or a reward is not (2026-11-02)
+  assert.equal(transferGuess("AUTOMATIC PAYMENT - THANK", plan, true, { onCard: true }), true);
+  assert.equal(transferGuess("PAYMENT RECEIVED - THANK YOU", plan, true, { onCard: true }), true);
+  assert.equal(transferGuess("AUTOMATIC PAYMENT - THANK", plan, true), false, "on checking, money in like this is not known to be a card's");
+  assert.equal(transferGuess("AMAZON.COM RETURN", plan, true, { onCard: true }), false);
+  assert.equal(transferGuess("CASH BACK REWARD PAYMENT", plan, true, { onCard: true }), false);
   const { emptyPlan } = await import("../../../core/schema/migrate.js");
   const p = emptyPlan();
   p.transactions.push({ id: "1", date: "2026-10-01", amount: -15.49, payee: "PAYPAL *NETFLIX", rawPayee: "PAYPAL *NETFLIX", accountId: "c", category: "" }, { id: "2", date: "2026-10-02", amount: -80, payee: "PAYPAL *EBAY", rawPayee: "PAYPAL *EBAY", accountId: "c", category: "" });

@@ -5,6 +5,7 @@
 // payee names and the category list, never amounts, dates or account names.
 import { normalizePayee, payeeWords, matchRule } from "../rules/compute.js";
 import { categoriesOf, categoryLabel } from "../categories/compute.js";
+import { isCardAccount } from "../ledger/compute.js";
 
 /**
  * Well-known shops and billers, so a first bank file is not every payee picked by hand: the word in the bank line (matched on
@@ -29,13 +30,19 @@ export function shopGuess(raw) {
   for (const [w, category] of SHOP_WORDS) if (line.includes(` ${w} `)) return category;
   return null;
 }
-/** Money moved to your own savings, or a card's payment from checking: a transfer, but only when the plan has such an account. */
-export function transferGuess(raw, plan, isIn) {
+/**
+ * Money moved to your own savings, or a card's payment from checking: a transfer, but only when the plan has such an account.
+ * `onCard`: the lines are on a card account; money in there with a payment's words ("AUTOMATIC PAYMENT - THANK", "PAYMENT
+ * RECEIVED", "AUTOPAY") is that payment arriving, the other side of the checking line already filed as a transfer: left
+ * unfiled it would count as income (2026-11-02). A shop's refund on the card ("AMAZON RETURN") has no such words.
+ */
+export function transferGuess(raw, plan, isIn, { onCard = false } = {}) {
   const t = String(raw ?? "").toLowerCase();
   const types = new Set((plan.accounts ?? []).map((a) => a.type));
   if (!isIn && types.has("savings") && /\btransfer\b.*\b(sav|savings)\b|\bto sav(ings)?\b/.test(t)) return true;
   // a card's payment ("CHASE CREDIT CRD AUTOPAY"), never a loan's ("CREDIT UNION LOAN PMT" is a loan payment, which is spending)
   if (!isIn && types.has("credit") && !/\b(loan|mortgage|union)\b/.test(t) && /\b(crd|card)\b.*\b(autopay|epay|payment|pmt)\b|\bpayment thank you\b/.test(t)) return true;
+  if (isIn && onCard && !/\b(refund|return|reversal|cashback|cash back|reward|rewards|interest)\b/.test(t) && /\b(payment|pymt|pmt|autopay|epay|epayment)\b/.test(t)) return true;
   return false;
 }
 
@@ -67,6 +74,7 @@ export function compute(plan) {
     groups.set(k, g);
   }
   const rules = plan.rules ?? [];
+  const txOf = new Map(open.map((t) => [t.id, t])), acctOf = new Map((plan.accounts ?? []).map((a) => [a.id, a]));
   const list = [...groups.values()].map((g) => {
     const sample = open.find((t) => t.id === g.ids[0]);
     const rule = rules.find((r) => matchRule(r, sample));
@@ -74,7 +82,8 @@ export function compute(plan) {
     if (rule) suggestion = { category: rule.category, label: categoryLabel(plan, rule.category), why: "a rule matches" };
     else if (known.has(g.key)) { const c = Object.entries(known.get(g.key).counts).sort((a, b) => b[1] - a[1])[0]; suggestion = { category: c[0], label: categoryLabel(plan, c[0]), why: `${c[1]} earlier ${c[1] === 1 ? "one was" : "were"} filed there` }; }
     // a guess from the line itself when nothing in the plan says: money moved between your own accounts, a well-known shop
-    if (!suggestion && transferGuess(g.rawPayee, plan, g.total >= 0)) suggestion = { category: "transfer", label: categoryLabel(plan, "transfer"), why: "it looks like money moved between your own accounts", guess: true };
+    const onCard = g.ids.every((id) => isCardAccount(acctOf.get(txOf.get(id)?.accountId)));
+    if (!suggestion && transferGuess(g.rawPayee, plan, g.total >= 0, { onCard })) suggestion = { category: "transfer", label: categoryLabel(plan, "transfer"), why: onCard && g.total >= 0 ? "it looks like a payment to the card from your other accounts" : "it looks like money moved between your own accounts", guess: true };
     if (!suggestion && g.total < 0) { const c = shopGuess(g.rawPayee); if (c) suggestion = { category: c, label: categoryLabel(plan, c), why: "usual for this kind of shop", guess: true }; }
     return { ...g, suggestion, in: g.total >= 0 };
   }).sort((a, b) => b.count - a.count || Math.abs(b.total) - Math.abs(a.total));

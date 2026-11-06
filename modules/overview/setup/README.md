@@ -362,3 +362,8 @@ ended or starts later; a lean month that just about breaks even).
   $1,850 less $900). Before: `{ claimAge 62, monthlyAtFRA 2642.9 }` ($1,850 / 0.70), a $2,180.30 survivor figure and a
   $421.40 top-up. An entry the page reads as a reduced early claim (old line clearly below the full-age amount) is not
   touched by this rule.
+
+`standing`'s `bankCard` move and headline also come for two cards at one bank with no file for either (`bankVsPlan`'s
+`cardFile` with `plural`): "Bring in the card files", "About $2,800 a month went to your Chase cards, whose files aren't
+in, so your bank can't be checked against your plan yet. The first move fixes that." (it said "Your month works"). Test in
+`cashflow/income-statement/module.test.mjs`.

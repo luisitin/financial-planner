@@ -158,3 +158,159 @@ test("checkInDue: early in the month, last month not reviewed, and only for a pl
   assert.equal(checkInDue(emptyPlan(), "2026-11-02"), null, "no accounts");
   assert.equal(defaultMonth("2026-11-02"), "2026-10", "without a plan the old rule stands");
 });
+
+// ---- the bank files are in only when every account covers the month and no card's own file is missing (2026-11-02)
+import { cardGapPlan } from "../../../qa/fixtures/card-gap-plan.mjs";
+test("the files step: a card that money went to with no file of its own is named, with its amount, and opens its import", () => {
+  const T = "2026-11-02";
+  const p = cardGapPlan(T);
+  const oct = step(compute(p, { today: T }), "import");
+  assert.equal(oct.status, "todo");
+  assert.equal(oct.detail, "Visa card: $2,610 went to it from checking in October, but its own file isn't in, so what you bought on it is missing. Bring in the Visa file.");
+  assert.deepEqual(oct.go, ["transactions", "import"]); assert.deepEqual(oct.query, { accountId: "a-visa" });
+  const file = step(compute(p, { today: T }), "file");
+  assert.equal(file.status, "skip"); assert.equal(file.detail, "Waits for the missing file above.", "every Chase line is filed: it is the Visa's file it waits for");
+  // August: the Visa ($2,450.22 on 8/14) and Chase's hole between July's lines and the 90-day file
+  const aug = step(compute(p, { today: T, month: "2026-08" }), "import");
+  assert.equal(aug.detail, "Visa card: $2,450 went to it from checking in August, but its own file isn't in, so what you bought on it is missing. Bring in the Visa file. Chase checking has no lines from 7/31 to 8/2 (your mortgage usually goes out on the 2nd and a paycheck on the 1st): bring in a file that covers those days, or add them by hand.");
+  // the Visa's file in for August to October: October is done; August still has the hole, and now opens Chase's import
+  for (let t = Date.UTC(2026, 7, 1), n = 0; t <= Date.UTC(2026, 9, 31); t += 2 * 864e5, n++) p.transactions.push({ id: `v${n}`, date: new Date(t).toISOString().slice(0, 10), amount: -40, payee: "Cafe", rawPayee: "CAFE", accountId: "a-visa", category: "dining", tags: [], note: "" });
+  const octIn = step(compute(p, { today: T }), "import");
+  assert.equal(octIn.status, "done"); assert.equal(octIn.query, undefined);
+  const augIn = step(compute(p, { today: T, month: "2026-08" }), "import");
+  assert.equal(augIn.status, "todo"); assert.match(augIn.detail, /^Chase checking has no lines from 7\/31 to 8\/2/); assert.deepEqual(augIn.query, { accountId: "a-chk", need: "2026-07-31..2026-08-02" });
+});
+test("the files step: more than a quiet spell between two files inside a month is todo; a few quiet days at a file's edge are done", () => {
+  const p = familyPlan("2026-11-02");
+  const day = (iso, n) => ({ id: `${iso}-${n}`, date: iso, amount: -10, payee: "Kroger", rawPayee: "KROGER", category: "groceries", accountId: "a-chk", tags: [], note: "" });
+  const span = (from, to) => { const out = []; for (let t = Date.parse(`${from}T00:00:00Z`), n = 0; t <= Date.parse(`${to}T00:00:00Z`); t += 864e5, n++) out.push(day(new Date(t).toISOString().slice(0, 10), n)); return out; };
+  // a line every day, then nothing 10/13 to 10/21 (9 days: more than 7 and more than 2 x 1)
+  p.transactions = [...span("2026-10-01", "2026-10-12"), ...span("2026-10-22", "2026-10-31")];
+  p.imports = [{ id: "a", accountId: "a-chk", from: "2026-10-01", to: "2026-10-12" }, { id: "b", accountId: "a-chk", from: "2026-10-22", to: "2026-10-31" }];
+  let s = step(compute(p, { today: "2026-11-02", month: "2026-10" }), "import");
+  assert.equal(s.status, "todo"); assert.equal(s.detail, "Chase checking has no lines from 10/13 to 10/21: bring in a file that covers those days, or add them by hand.");
+  assert.deepEqual(s.query, { accountId: "a-chk", need: "2026-10-13..2026-10-21" });
+  // the second file from 10/17: 4 quiet days (10/13 to 10/16), nothing usual due in them: records hold the first and last
+  // line dates, not the days a file covers, so that is a quiet spell, not a hole (re-check 4, 2026-11-02)
+  p.transactions.push(...span("2026-10-17", "2026-10-21")); p.imports[1].from = "2026-10-17";
+  s = step(compute(p, { today: "2026-11-02", month: "2026-10" }), "import");
+  assert.equal(s.status, "done"); assert.match(s.detail, /transactions dated in October 2026/);
+});
+// ---- round-5 review (2026-11-02): "most on" is a kind of spending; a late file is named; quiet days can be marked
+test("where the money went: 'most on' is a kind of spending, and what went to the card is said apart", () => {
+  const T = "2026-11-02";
+  const s = step(compute(cardGapPlan(T), { today: T }), "spending");
+  assert.equal(s.detail, "$7,454 spent in October 2026, down $1,273 (15%) on September 2026; most on Rent or mortgage ($1,980); $2,610 went to the Visa card, whose file isn't in.");
+});
+test("the files step: a card file that starts late is named; 'nothing happened' only for days no payment to the card falls in", async () => {
+  const { withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { markQuiet } = await import("../../transactions/ledger/compute.js");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-08-20", "2026-10-31");
+  const aug = step(compute(p, { today: T, month: "2026-08" }), "import");
+  assert.equal(aug.status, "todo");
+  assert.equal(aug.detail, "Chase checking has no lines from 7/31 to 8/2 (your mortgage usually goes out on the 2nd and a paycheck on the 1st): bring in a file that covers those days, or add them by hand. Visa card's lines start on 8/20: bring in a file from 8/1.");
+  // the Chase days hold the mortgage of the 2nd and a paycheck of the 1st; checking paid the Visa $2,450.22 on 8/14, inside
+  // the Visa's 8/1 to 8/19: neither is offered as "nothing happened" (re-check rule 4)
+  assert.equal(aug.quiet, undefined);
+  assert.equal(step(compute(p, { today: T, month: "2026-10" }), "import").status, "done");
+  // a Visa file from 8/10: its 8/1 to 8/9 hold no payment to it, so they can be marked
+  const e = withVisaFile(cardGapPlan(T), "2026-08-10", "2026-10-31");
+  assert.deepEqual(step(compute(e, { today: T, month: "2026-08" }), "import").quiet, [{ accountId: "a-visa", from: "2026-08-01", to: "2026-08-09", name: "Visa card" }]);
+  const q = markQuiet(e, { accountId: "a-visa", from: "2026-08-01", to: "2026-08-09", at: `${T}T10:00:00.000Z`, id: "q" });
+  assert.equal(step(compute(q, { today: T, month: "2026-08" }), "import").detail, "Chase checking has no lines from 7/31 to 8/2 (your mortgage usually goes out on the 2nd and a paycheck on the 1st): bring in a file that covers those days, or add them by hand.");
+  assert.equal(step(compute(cardGapPlan(T), { today: T, month: "2026-08" }), "import").quiet, undefined, "plan3's August: the hole holds usual payments, the Visa money went to");
+});
+// ---- re-check of the card patch (2026-11-02): the findings' own inputs and figures
+test("finding 3: no 'nothing happened' for the Visa's 8/1 to 8/19 when checking paid it on 8/14; August stays $6,074.38", async () => {
+  const { withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { compute: spending } = await import("../../cashflow/spending/compute.js");
+  const T = "2026-11-02";
+  const p = cardGapPlan(T); p.transactions = p.transactions.filter((t) => t.date >= "2026-08-01");
+  withVisaFile(p, "2026-08-20", "2026-10-31");
+  const aug = step(compute(p, { today: T, month: "2026-08" }), "import");
+  assert.equal(aug.detail, "Visa card's lines start on 8/20: bring in a file from 8/1.");
+  assert.equal(aug.quiet, undefined, "a payment to the card falls in those days");
+  // checking's $3,264.16, 12 Visa dinners of $30, and the $2,450.22 paid on 8/14 (before the Visa's first line ever)
+  assert.ok(Math.abs(spending(p, { today: T, month: "2026-08" }).total - 6074.38) < 0.005);
+  // the Visa file with a gap 9/11 to 9/19 around the 9/14 payment: no button for those days either (page review 1)
+  const g = withVisaFile(withVisaFile(cardGapPlan(T), "2026-08-01", "2026-09-10"), "2026-09-20", "2026-10-31");
+  const sep = step(compute(g, { today: T, month: "2026-09" }), "import");
+  assert.equal(sep.detail, "Visa card has no lines from 9/11 to 9/19: bring in a file that covers those days, or add them by hand.");
+  assert.equal(sep.quiet, undefined);
+});
+test("finding 4: a quiet savings account (interest on 7/31 and 10/31) in a household with no card leaves October's files step done", () => {
+  const T = "2026-11-02";
+  const p = cardGapPlan(T);
+  p.accounts = p.accounts.filter((a) => a.type !== "credit");
+  p.transactions = p.transactions.filter((t) => t.date >= "2026-08-01" && !/CRD AUTOPAY/.test(t.rawPayee));
+  for (const [i, d] of ["2026-07-31", "2026-10-31"].entries()) p.transactions.push({ id: `iq${i}`, date: d, amount: 12, payee: "INTEREST PAID", rawPayee: "INTEREST PAID", accountId: "a-sav", category: "income-interest", tags: [], note: "" });
+  for (const ym of ["2026-08", "2026-09", "2026-10"]) assert.equal(step(compute(p, { today: T, month: ym }), "import").status, "done", ym);
+});
+test("page review 7: August's files step names the Visa and Chase's missing days, with a way to each", () => {
+  const T = "2026-11-02";
+  const aug = step(compute(cardGapPlan(T), { today: T, month: "2026-08" }), "import");
+  assert.deepEqual(aug.query, { accountId: "a-visa" }, "the step itself opens the first");
+  assert.deepEqual(aug.links, [
+    { label: "Bring in the Visa file", go: ["transactions", "import"], query: { accountId: "a-visa" } },
+    // the hole's import says the days it needs; "by hand" opens August with a new line dated 8/1 (re-check 4, page findings 5, 6)
+    { label: "Bring in the Chase checking file", go: ["transactions", "import"], query: { accountId: "a-chk", need: "2026-07-31..2026-08-02" } },
+    { label: "Add Chase checking's lines by hand", go: ["transactions", "ledger"], rest: ["account", "a-chk"], query: { month: "2026-08", add: "2026-08-01" } }]);
+  assert.equal(step(compute(cardGapPlan(T), { today: T }), "import").links, undefined, "October names the Visa only: the step's own link");
+});
+test("page review 6: a month whose files miss some days, or the month before it, is not compared as fact", () => {
+  const T = "2026-11-02";
+  const p = cardGapPlan(T);
+  assert.equal(step(compute(p, { today: T, month: "2026-08" }), "spending").detail,
+    "$5,714 spent in August 2026 (its files miss some days, so it is not compared with July 2026); most on Childcare and school ($1,150); $2,450 went to the Visa card, whose file isn't in.");
+  assert.equal(step(compute(p, { today: T, month: "2026-09" }), "spending").detail,
+    "$8,727 spent in September 2026 (August 2026's files miss some days, so the two are not compared); most on Rent or mortgage ($1,980); $2,981 went to the Visa card, whose file isn't in.");
+});
+test("page review 3: a stand-in dated before the card's file starts is said so, not 'whose file isn't in'", async () => {
+  const { withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-08-20", "2026-10-31");
+  assert.match(step(compute(p, { today: T, month: "2026-08" }), "spending").detail, /; \$2,450 went to the Visa card, before its file starts on 8\/20\.$/);
+});
+
+// --- re-check 4: one rule for holes, a payment counted for neither card, the month before a card's file ---
+test("money 1 (re-check 4): one checking file a month (8/3-8/29, 9/1-9/26, 10/1-10/31): every files step is done", async () => {
+  const { noCardFromAug, oneFileAMonth } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = noCardFromAug(cardGapPlan(T)); p.transactions = p.transactions.filter((t) => t.date !== "2026-09-28" && t.date !== "2026-09-30");
+  oneFileAMonth(p, "a-chk");
+  for (const ym of ["2026-08", "2026-09", "2026-10"]) assert.equal(step(compute(p, { today: T, month: ym }), "import").status, "done", ym);
+});
+test("money 3 (re-check 4): quarterly one-line savings files (7/31 and 10/31) are no hole: every files step is done", async () => {
+  const { noCardFromAug, bankLine } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = noCardFromAug(cardGapPlan(T));
+  for (const [i, d] of ["2026-07-31", "2026-10-31"].entries()) {
+    p.transactions.push(bankLine(`q${i}`, d, 12, "INTEREST PAID", "a-sav", "income-interest", { importId: `iq${i}` }));
+    p.imports.push({ id: `iq${i}`, at: `${d}T12:00:00.000Z`, accountId: "a-sav", fileName: "ally.csv", rows: 1, added: 1, skipped: 0, bad: 0, from: d, to: d });
+  }
+  for (const ym of ["2026-08", "2026-09", "2026-10"]) assert.equal(step(compute(p, { today: T, month: ym }), "import").status, "done", ym);
+});
+test("money 4 (re-check 4): a payment for one of two Chase cards: the files step says the sentence, with a way to each card's file", async () => {
+  const { anAccount } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = cardGapPlan(T); p.accounts.find((a) => a.id === "a-visa").name = "Freedom";
+  p.accounts.push(anAccount("a-sap", "Sapphire", "credit", "Chase"));
+  const st = step(compute(p, { today: T, month: "2026-10" }), "import");
+  assert.equal(st.status, "todo");
+  assert.equal(st.detail, "$2,610 went to one of your Chase cards in October; bring in the card files to see what it bought.");
+  assert.deepEqual(st.links, [
+    { label: "Bring in the Freedom file", go: ["transactions", "import"], query: { accountId: "a-visa" } },
+    { label: "Bring in the Sapphire file", go: ["transactions", "import"], query: { accountId: "a-sap" } }]);
+  assert.equal(step(compute(p, { today: T, month: "2026-10" }), "spending").detail,
+    "$4,843 spent in October 2026 (its card purchases aren't all in, so it is not compared with September 2026); most on Rent or mortgage ($1,980).");
+});
+test("pages 4 (re-check 4): July, before the Visa's file starts on 8/1, says so in the files step and the spending step", async () => {
+  const { withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-08-01", "2026-10-31");
+  assert.equal(step(compute(p, { today: T, month: "2026-07" }), "import").detail,
+    "Visa card: $640 went to it from checking in July, before its file starts on 8/1, so what you bought on it then is missing. Bring in the Visa file for July. Chase checking has no lines from 7/31 to 8/2 (your mortgage usually goes out on the 2nd and a paycheck on the 1st): bring in a file that covers those days, or add them by hand.");
+  assert.equal(step(compute(p, { today: T, month: "2026-07" }), "spending").detail,
+    "$4,190 spent in July 2026; most on Rent or mortgage ($1,980); $640 went to the Visa card, before its file starts on 8/1.");
+});

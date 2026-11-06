@@ -10,6 +10,7 @@ import { compute as computeTimeline } from "../../overview/timeline/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { monthLabel } from "../../overview/monthly-review/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
+import { firstLineOf } from "../../transactions/ledger/compute.js";
 
 /** The year a review on `today` is about: last year in January and February, else this year so far. */
 export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(today.slice(0, 4)) - 1 : Number(today.slice(0, 4)));
@@ -21,7 +22,12 @@ export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(t
  *   netWorth: { first (the last total saved before the year, else its first; null when there is none), last (the year so far: today's
  *     balances, live: true; a year over: its last saved total), change (null without a first), points: [{ date, netWorth }],
  *     lastSaved (a year over whose last total is not from December: its date) } | null,
- *   money: { months: [{ ym, label, in, out, net }], in, out, net, rate } | null, categories: [{ label, total, share }] (the year's spending, largest first),
+ *   money: { months: [{ ym, label, in, out, net }], in, out, net, rate, cards, cardMonths: [{ cardId, name, total, months: [ym], first }], gaps: [{ why, yms }] } | null,
+ *     categories: [{ label, total, share }] (the year's spending, largest first; both from the income statement and Spending, so
+ *     a card whose own file is missing counts as its payments, "<card>, details not imported yet", `cards` is that part of
+ *     `out` and `cardMonths` says it per card with its months and its first line ever (`first`, null when it has no lines at
+ *     all), 2026-11-02; `gaps`: the income statement's `missing` reasons for the
+ *     year's months, grouped: the days an account's files miss, which the totals leave out (re-check 2026-11-02)),
  *   goals: { reached: [names], open: [{ name, status }] }, health: { score, band } | null,
  *   ahead: { year, moments: [{ date, title, icon }], steps: [{ title, detail }] }
  * }
@@ -53,7 +59,15 @@ export function compute(plan, params = {}) {
     const rows = is.rows.filter((r) => inYear(r.ym)).sort((a, b) => a.ym.localeCompare(b.ym));
     if (rows.length) {
       const tin = rows.reduce((s, r) => s + r.in, 0), tout = rows.reduce((s, r) => s + r.out, 0);
-      money = { months: rows.map((r) => ({ ym: r.ym, label: r.label, in: r.in, out: r.out, net: r.net })), in: tin, out: tout, net: tin - tout, rate: tin > 0 ? (tin - tout) / tin : null };
+      // `cards`: the payments to a card whose own file is missing that month, already in `out` (the income statement's stand-in
+      // lines); `cardMonths`: per card, its total and the months it was in, so the review names them ("in July went to the Visa")
+      const per = new Map();
+      for (const r of rows) for (const c of r.cardsBy ?? []) { const x = per.get(c.cardId) ?? { cardId: c.cardId, name: c.name, total: 0, months: [], first: firstLineOf(plan, c.cardId) }; x.total += c.total; x.months.push(r.ym); per.set(c.cardId, x); }
+      // the days an account's files miss in the year's months, grouped by the gap ("Chase checking has no lines from 7/31 to
+      // 8/2" for July and August): the totals leave out what happened then (re-check 2026-11-02)
+      const gaps = [];
+      for (const r of rows) for (const [i, why] of (r.missing ?? []).entries()) { const g = gaps.find((x) => x.why === why); if (g) g.yms.push(r.ym); else gaps.push({ why, yms: [r.ym], unsure: r.kinds?.[i] === "unsure" }); }
+      money = { months: rows.map((r) => ({ ym: r.ym, label: r.label, in: r.in, out: r.out, net: r.net })), in: tin, out: tout, net: tin - tout, rate: tin > 0 ? (tin - tout) / tin : null, cards: rows.reduce((s, r) => s + (r.cards ?? 0), 0), cardMonths: [...per.values()].sort((a, b) => b.total - a.total), gaps };
       const byCat = new Map();
       for (const r of rows) { const sp = computeSpending(plan, { today, month: r.ym }); if (sp.month !== r.ym) continue; for (const c of sp.byCategory) byCat.set(c.label, (byCat.get(c.label) ?? 0) + c.total); }
       const total = [...byCat.values()].reduce((s, v) => s + v, 0);

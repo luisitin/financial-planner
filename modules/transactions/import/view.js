@@ -1,14 +1,20 @@
 // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 // the text), check the columns and the preview, import. Past imports can be undone.
 import { compute, prepareImport } from "./compute.js";
-import { txKey, monthLabel } from "../ledger/compute.js";
+import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
+
+let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan);
-  let accountId = d.accounts[0]?.id ?? "";
-  let picked = false;   // the account box was changed by hand: a saved file layout no longer picks the account
+  // opened from the Monthly review's "Bring in the Visa file" (?accountId=a-visa): that account, as if picked by hand, so a
+  // file laid out like another account's only warns instead of switching the box (2026-11-02)
+  const qa = ctx.route?.query?.accountId ?? "";
+  const asked = d.accounts.some((a) => a.id === qa) ? qa : "";
+  let accountId = asked || (d.accounts[0]?.id ?? "");
+  let picked = !!asked;   // the account box was changed by hand: a saved file layout no longer picks the account
   let text = "", fileName = "", prep = null, mapping = null, flipSign = null;   // null = decide from the file and the account type
 
   root.append(ui.h("section", { class: "card accent hero" },
@@ -16,6 +22,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, "Download transactions from your bank or card as a CSV file (most sites: Activity > Download > CSV, last 90 days), then bring it here. The page works out the columns, skips anything already on file, and applies your rules."),
     ui.h("p", { class: "muted small" }, "Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan on the PC."),
   ));
+  if (pending) { root.append(ui.notice(...pending)); pending = null; }
   if (!d.accounts.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the account first (the checking account or card the file belongs to): ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth")))); return; }
 
   // ---- step 1: account + file
@@ -32,7 +39,17 @@ export function render(root, ctx) {
   });
   const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the CSV text here (the header line and the rows)", "aria-label": "Pasted CSV" });
   const pasteBtn = ui.button("Use the pasted text", () => { text = paste.value; fileName = "pasted text"; mapping = null; prepare(); }, { class: "secondary" });
-  root.append(ui.card("1. Which account is the file from?", ui.h("div", { class: "form" }, ui.field("Account", acctSel))));
+  // opened for days an account's files miss (the Monthly review's "Bring in the Chase checking file", ?need=from..to): the
+  // days the file must cover, and whether the usual "last 90 days" reaches them (re-check 4, 2026-11-02)
+  const need = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(ctx.route?.query?.need ?? "");
+  const needNote = (() => {
+    if (!need || !asked) return null;
+    const [, from, to] = need, md = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`, today = fmt.today();
+    const ninety = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)) - 90)).toISOString().slice(0, 10);
+    const name = d.accounts.find((a) => a.id === asked)?.name ?? "that account";
+    return ui.notice("info", `Bring in a ${name} file that covers ${from === to ? md(from) : `${md(from)} to ${md(to)}`}. On your bank's site pick those dates (or a span around them)${from < ninety ? `: a "last 90 days" file starts on ${md(ninety)}, too late` : ""}.`);
+  })();
+  root.append(ui.card("1. Which account is the file from?", needNote, ui.h("div", { class: "form" }, ui.field("Account", acctSel))));
   root.append(ui.card("2. The file",
     ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
     ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), ui.row(pasteBtn)));
@@ -89,8 +106,15 @@ export function render(root, ctx) {
       bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
     ));
     // where the file starts and stops: a month it cuts is only partly in your spending and budget pages
-    const cut = [prep.fileFrom && prep.fileFrom.slice(8, 10) > "04" ? monthLabel(prep.fileFrom) : null, prep.fileTo && prep.fileTo.slice(8, 10) < "28" ? monthLabel(prep.fileTo) : null].filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
-    if (prep.fileFrom) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`));
+    // with days missing before the file (the warning below says which), only the month it stops in is still said here (2026-11-02)
+    const startCut = prep.fileFrom && prep.fileFrom.slice(8, 10) > "04" && !prep.gap ? monthLabel(prep.fileFrom) : null;
+    const endCut = prep.fileTo && prep.fileTo.slice(8, 10) < "28" ? monthLabel(prep.fileTo) : null;
+    const cut = [startCut, endCut].filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
+    // nothing new but it spans days the account's files missed: one plain message below, never "only partly in it" (re-check 4)
+    const fillsOnly = !ok && !bad && !!prep.fileFrom && (prep.fills ?? []).length > 0;
+    if (prep.fileFrom && !fillsOnly) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`));
+    // days between this account's last lines and this file: said before importing, with the usual payments that fall in them
+    if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
     if (ok) previewHost.append(
       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
@@ -112,6 +136,22 @@ export function render(root, ctx) {
         ctx.go("transactions", "categorize");
       })),
     );
+    // nothing new, but the file spans days the account's files were missing: nothing happened then, so record the file and
+    // those days count as checked (a gap with no lines in it could never be closed otherwise, 2026-11-02)
+    else if (!bad && prep.fileFrom && (prep.fills ?? []).length) {
+      const f = prep.fills, span = (s) => (s.from === s.to ? shortDate(s.from) : `${shortDate(s.from)} to ${shortDate(s.to)}`);
+      previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${span({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(span).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
+        ui.row(ui.button(`Count ${f.map(span).join(" and ")} as checked`, () => {
+          const acct = accountId, name = fileName, when = new Date().toISOString(), rows = prep.parsed.rows.length, skipped = prep.skip.length, from = prep.fileFrom, to = prep.fileTo, key = prep.headerKey, m = mapping, flipUsed = prep.flipSign;
+          store.update((p) => {
+            p.imports = p.imports ?? [];
+            p.imports.push({ id: ui.uid(), at: when, accountId: acct, fileName: name, rows, added: 0, skipped, bad: 0, from, to });
+            p.importProfiles = p.importProfiles ?? {};
+            p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
+          });
+          pending = ["ok", `${acctName}: ${f.map(span).join(" and ")} counted as checked. Undo it under Past imports.`];
+        })));
+    }
     else if (!bad) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
   };
   prepare();
@@ -122,9 +162,12 @@ export function render(root, ctx) {
     const acctName = (id) => d.accounts.find((a) => a.id === id)?.name ?? "account";
     root.append(ui.card("Past imports",
       ui.h("ul", { class: "page-list" }, d.imports.slice(0, 20).map((im) => ui.h("li", {},
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, im.fileName || "file"), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · ${im.added} added, ${im.skipped} skipped${im.bad ? `, ${im.bad} unreadable` : ""}`)),
+        // days marked "nothing happened" on the Monthly review (ledger markQuiet): no file, no lines, only the days (2026-11-02)
+        isQuietImport(im) && im.from && im.to
+          ? ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, `Nothing happened ${im.from === im.to ? `on ${shortDate(im.from)}` : `${shortDate(im.from)} to ${shortDate(im.to)}`}`), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · marked by you`))
+          : ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, im.fileName || "file"), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · ${im.added} added, ${im.skipped} skipped${im.bad ? `, ${im.bad} unreadable` : ""}`)),
         ui.h("span", { class: "st" }, ui.button("Undo", () => {
-          if (!ui.confirm(`Remove the ${im.added} transactions from ${im.fileName || "this import"}?`)) return;
+          if (!ui.confirm(im.added ? `Remove the ${im.added} transactions from ${im.fileName || "this import"}?` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
           store.update((p) => { p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
         }, { class: "secondary small" }))))),
     ));

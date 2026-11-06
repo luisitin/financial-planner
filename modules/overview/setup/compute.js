@@ -1071,9 +1071,12 @@ export function standing(plan, { today }) {
   const guides = focus.filter((f, i) => FOCUS_GUIDE[f] && focus.indexOf(f) === i && !(f === "debt" && debtStep)).map((f) => ({ id: `guide-${f}`, title: FOCUS_GUIDE[f].title, detail: null, href: FOCUS_GUIDE[f].href }));
   // the bank files show more going out than Expenses lists (bankVsPlan): every figure here is worked out from Expenses, so
   // putting the rest on Expenses comes first (round 4, 2026-11-02)
-  let bank = null;
-  try { const b = bankVsPlan(plan, { today }); bank = b?.over ? b : null; } catch { bank = null; }
-  const bankMove = bank ? [{ id: "bank", title: "Add what your bank shows to Expenses", detail: `Your bank files show about ${fmtMoney(Math.round(bank.gap / 10) * 10, plan?.meta?.currency ?? "USD")} a month more going out than Expenses lists.`, href: "#/cashflow/expenses" }] : [];
+  // ...unless the gap is mostly payments to a card whose file isn't in: then its file comes first (re-check 4, 2026-11-02); two
+  // cards at one bank with no file for either: "Bring in the card files" the same way (re-check 5, 2026-11-05)
+  let bank = null, bankCard = null;
+  try { const b = bankVsPlan(plan, { today }); bank = b?.over ? b : null; bankCard = !bank && b?.cardsGap ? b.cardFile : null; } catch { bank = null; bankCard = null; }
+  const bankMove = bank ? [{ id: "bank", title: "Add what your bank shows to Expenses", detail: `Your bank files show about ${fmtMoney(Math.round(bank.gap / 10) * 10, plan?.meta?.currency ?? "USD")} a month more going out than Expenses lists.`, href: "#/cashflow/expenses" }]
+    : bankCard ? [{ id: "bank-card", title: bankCard.title, detail: `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, plan?.meta?.currency ?? "USD")} a month went to ${bankCard.the}, but ${bankCard.plural ? "their own files aren't in, so what they bought" : "its own file isn't in, so what it bought"} can't be checked against your plan yet.`, href: bankCard.href }] : [];
   const moves = [...bankMove, ...(drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)])].slice(0, 3);
   // what was left out, so the person knows what a figure is missing
   const later = [];
@@ -1098,6 +1101,7 @@ export function standing(plan, { today }) {
   const saved = savedTotal(plan);
   const cur = plan?.meta?.currency ?? "USD";
   const headline = bank ? `Your bank shows about ${fmtMoney(Math.round(bank.gap / 10) * 10, cur)} a month more going out than your plan lists, so the figures below may be too rosy. The first move fixes that.`
+    : bankCard ? `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, cur)} a month went to ${bankCard.the}, whose ${bankCard.plural ? "files aren't" : "file isn't"} in, so your bank can't be checked against your plan yet. The first move fixes that.`
     : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months."
     : lean?.kind === "even" ? "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there."
@@ -1117,7 +1121,7 @@ export function standing(plan, { today }) {
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved, lean,
     // the full cushion waits on purpose while costly debt is paid first (next-best-action cushionLater): "enough for now"
     cushionLater: (runwayStatus === "warn" || runwayStatus === "bad") ? cushionLater(nba) : null,
-    bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null,
+    bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null, bankCard,
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),

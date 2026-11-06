@@ -10,7 +10,8 @@ import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeAlerts, goalsBehind } from "../alerts/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
-import { coverage, monthCover, COVER_SLACK } from "../../transactions/ledger/compute.js";
+import { coverage, monthCover, COVER_SLACK, monthGaps, gapIssues, theCard, paymentsTo, bringWords, shortDate, firstLineOf } from "../../transactions/ledger/compute.js";
+import { usualInDays } from "../../transactions/import/compute.js";
 import { date as fmtDate } from "../../../core/format.js";
 
 /** A balance typed within this many days counts as fresh for the month's review. */
@@ -65,7 +66,9 @@ export function checkInDue(plan, today) {
 /**
  * compute(plan, { today, month }) -> {
  *   ready, missing, month, label, choices: [ym, ym] (this month and last),
- *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", state ("done"|"todo"|null: how a look step stands), detail, go, query? }], done, todo
+ *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", state ("done"|"todo"|null: how a look step stands), detail, go, query?,
+ *     quiet?: [{ accountId, from, to, name }] (the files step: days that can be marked "nothing happened"), links?: [{ label, go,
+ *     rest?, query? }] (the files step: one way to each fix it names, when it names more than one account or days to add by hand) }], done, todo
  *   (done and todo count only the chores: balances, net worth, bank files, filing),
  *   reviewed: { month, at, note } | null, history: [reviews, newest first, up to 12], streak (months in a row reviewed up to this one),
  *   summary: [the month in words, once known: net worth's change, spending against the month before], nextCheck: { month (the next one to review), when (the month name it is done in) }
@@ -103,20 +106,48 @@ export function compute(plan, params = {}) {
   const unfiled = txMonth.filter((t) => !t.category && !t.transferId);
   const cov = hasTx ? coverage(plan) : null, mc = cov ? monthCover(cov, month, today) : null;
   const current = month === today.slice(0, 7);
-  const filesIn = !!(txMonth.length && mc && (mc.full || (current && mc.firstDay <= 1 + COVER_SLACK && daysBetween(cov.to, today) <= COVER_SLACK)));
-  const partial = txMonth.length && !filesIn;
+  const nameOf = (id) => accounts.find((a) => a.id === id)?.name ?? "That account";
+  // the files together reach both ends of the month; then, account by account (2026-11-02): no hole inside it, no account
+  // whose lines stop early or start late, and no card whose own file is missing while money went to it (its purchases would
+  // be missing); ledger's monthGaps and gapIssues say which
+  const spanIn = !!(txMonth.length && mc && (mc.full || (current && mc.firstDay <= 1 + COVER_SLACK && daysBetween(cov.to, today) <= COVER_SLACK)));
+  const gaps = spanIn ? monthGaps(plan, month, today) : null;
+  const issues = gaps ? gapIssues(plan, gaps, month, money) : [];
+  const filesIn = spanIn && !issues.length;
+  const partial = txMonth.length && !spanIn;
+  // filing and the budget wait for what the files step asks for: a named file, or the rest of the month
+  const waitWords = issues.length ? `Waits for the missing ${issues.length === 1 ? "file" : "files"} above.` : `Waits for the rest of ${label}'s bank files.`;
   add({ id: "import", title: "Bring in the bank files", status: !hasTx ? "skip" : filesIn ? "done" : "todo",
     detail: !hasTx ? "Optional: the app works without transactions; import a bank file to see real spending." : filesIn ? `${txMonth.length} transaction${txMonth.length === 1 ? "" : "s"} dated in ${label}.`
-      : partial ? `Your files ${mc.firstDay > 1 + COVER_SLACK ? `start on ${fmtDate(mc.from)}` : `stop on ${fmtDate(cov.to)}`}: import the rest of ${label}.` : `Nothing dated in ${label} yet: download this month's file from each bank and import it.`, go: ["transactions", "import"] });
+      : issues.length ? `${issues.slice(0, 2).map((x) => x.text).join(" ")}${issues.length > 2 ? ` And ${issues.length - 2} more.` : ""}`
+      : partial ? `Your files ${mc.firstDay > 1 + COVER_SLACK ? `start on ${fmtDate(mc.from)}` : `stop on ${fmtDate(cov.to)}`}: import the rest of ${label}.` : `Nothing dated in ${label} yet: download this month's file from each bank and import it.`,
+    go: ["transactions", "import"], ...(issues.length ? { query: { accountId: issues[0].accountId, ...(issues[0].kind === "hole" ? { need: `${issues[0].from}..${issues[0].to}` } : {}) } } : {}),
+    // the days of the gaps named above that the owner can mark as checked when nothing happened on them (ledger markQuiet),
+    // never days a usual payment falls in with none of it on file that month (the mortgage of the 2nd did happen), nor days
+    // money went to that account from another one (a payment to the card on 8/14: its purchases happened; re-check 2026-11-02)
+    ...(() => { const q = issues.slice(0, 2).filter((x) => x.quiet && !usualInDays(plan, x.quiet.accountId, x.quiet.from, x.quiet.to).length && !paymentsTo(plan, x.quiet.accountId, x.quiet.from, x.quiet.to, { today }).length).map((x) => ({ ...x.quiet, name: nameOf(x.accountId) })); return q.length ? { quiet: q } : {}; })(),
+    // one way to each fix the detail names, when it names more than one account or days to add by hand (the step itself opens
+    // the first): "Bring in the Visa file", "Bring in the Chase checking file", "Add Chase checking's lines by hand". A hole's
+    // import says the days it needs (need: from..to) and its "by hand" opens the Ledger on that account and month with a new
+    // line dated the first missing day (re-check 4, 2026-11-02); a payment to one of two cards: each card's file
+    ...(() => {
+      const shown = issues.slice(0, 2), links = [];
+      for (const x of shown) for (const id of x.kind === "unsure" ? x.cardIds ?? [] : [x.accountId]) {
+        const label = bringWords(nameOf(id)).replace(/\.$/, "");
+        if (!links.some((l) => l.label === label)) links.push({ label, go: ["transactions", "import"], query: { accountId: id, ...(x.kind === "hole" ? { need: `${x.from}..${x.to}` } : {}) } });
+        if (x.kind === "hole") links.push({ label: `Add ${nameOf(id)}'s lines by hand`, go: ["transactions", "ledger"], rest: ["account", id], query: { month: x.from.slice(0, 7) < month ? month : x.from.slice(0, 7), add: x.from < `${month}-01` ? `${month}-01` : x.from } });
+      }
+      return new Set(shown.flatMap((x) => (x.kind === "unsure" ? x.cardIds ?? [] : [x.accountId]))).size > 1 || shown.some((x) => x.kind === "hole") ? { links } : {};
+    })() });
   // until the month's files are in, filing (with nothing left to file) and the budget wait for them, never "done"
   add({ id: "file", title: "File what came in", status: !hasTx || (!filesIn && !unfiled.length) ? "skip" : unfiled.length ? "todo" : "done",
-    detail: !hasTx ? "Comes after the bank files." : !txMonth.length ? `Waits for ${label}'s bank files.` : unfiled.length ? `${unfiled.length} of ${label}'s transactions ${unfiled.length === 1 ? "has" : "have"} no category yet (${cat?.uncategorised ?? unfiled.length} in all).` : !filesIn ? `Waits for the rest of ${label}'s bank files.` : `Every transaction in ${label} is filed.`, go: ["transactions", "categorize"] });
+    detail: !hasTx ? "Comes after the bank files." : !txMonth.length ? `Waits for ${label}'s bank files.` : unfiled.length ? `${unfiled.length} of ${label}'s transactions ${unfiled.length === 1 ? "has" : "have"} no category yet (${cat?.uncategorised ?? unfiled.length} in all).` : !filesIn ? waitWords : `Every transaction in ${label} is filed.`, go: ["transactions", "categorize"] });
 
   // 5. spending against the budget, and against last month
   const bud = hasTx ? computeBudget(plan, { today, month }) : null;
   const sp = hasTx && txMonth.length ? computeSpending(plan, { today, month }) : null;
   // the budget is a look step too: a month that ended over in an envelope is still reviewed (it can no longer be undone)
-  if (bud?.hasBudget && !filesIn) add({ id: "budget", title: "Spending against the budget", status: "skip", detail: txMonth.length ? `Waits for the rest of ${label}'s bank files.` : `Waits for ${label}'s bank files.`, go: ["cashflow", "budget"], query: { month } });
+  if (bud?.hasBudget && !filesIn) add({ id: "budget", title: "Spending against the budget", status: "skip", detail: txMonth.length ? waitWords : `Waits for ${label}'s bank files.`, go: ["cashflow", "budget"], query: { month } });
   else if (bud?.hasBudget) {
     const over = bud.envelopes.filter((e) => e.left < 0);
     add({ id: "budget", title: "Spending against the budget", status: "info", state: over.length ? "todo" : "done",
@@ -125,8 +156,18 @@ export function compute(plan, params = {}) {
   // the change in dollars and as a share, on the same days of the month before when the file covers only part of one
   if (sp?.hasData && sp.month === month) {
     const diff = sp.previous && sp.change !== null ? (sp.previous.current ?? sp.total) - sp.previous.total : null;
+    // "most on" is a kind of spending, never a card's stand-in line; what went to a card whose file isn't in is said apart
+    const kinds = sp.byCategory.filter((c) => !c.unimported), cardsOut = sp.byCategory.filter((c) => c.unimported);
+    // a card whose file is in for part of the month stands in only for payments before its file starts (ledger cardPayments)
+    // (any month before the card's first line, re-check 4 2026-11-02: July said "whose file isn't in" once August's file was in)
+    const cardSay = cardsOut.map((c) => { const name = accounts.find((a) => a.id === c.cardId)?.name ?? "a card"; const first = c.first ?? firstLineOf(plan, c.cardId);
+      return `${money(c.total)} went to ${theCard(name)}, ${c.before && first ? `before its file starts on ${shortDate(first)}` : "whose file isn't in"}`; });
+    // a month whose files miss some days (or the one before it) is not compared: the change would be the missing days (re-check);
+    // a payment counted for neither card: what it bought is missing, so neither is it (re-check 4)
+    const gapWhat = sp.cmpGap?.card ? "card purchases aren't all in" : "files miss some days";
+    const gapSay = !sp.cmpGap ? "" : sp.cmpGap.ym === month ? ` (its ${gapWhat}, so it is not compared with ${monthLabel(sp.cmpGap.prev)})` : ` (${monthLabel(sp.cmpGap.ym)}'s ${gapWhat}, so the two are not compared)`;
     add({ id: "spending", title: "Where the money went", status: "info",
-      detail: `${money(sp.total)} spent in ${label}${diff !== null ? `, ${diff >= 0 ? "up" : "down"} ${money(Math.abs(diff))} (${Math.round(Math.abs(sp.change) * 100)}%) on ${sp.sameDays ? `the same days of ${monthLabel(sp.previous.ym)}` : monthLabel(sp.previous.ym)}` : ""}${sp.byCategory[0] ? `; most on ${sp.byCategory[0].label} (${money(sp.byCategory[0].total)})` : ""}.`, go: ["cashflow", "spending"], query: { month } });
+      detail: `${money(sp.total)} spent in ${label}${gapSay}${diff !== null ? `, ${diff >= 0 ? "up" : "down"} ${money(Math.abs(diff))} (${Math.round(Math.abs(sp.change) * 100)}%) on ${sp.sameDays ? `the same days of ${monthLabel(sp.previous.ym)}` : monthLabel(sp.previous.ym)}` : ""}${kinds[0] ? `; most on ${kinds[0].label} (${money(kinds[0].total)})` : ""}${cardSay.length ? `; ${cardSay.join("; ")}` : ""}.`, go: ["cashflow", "spending"], query: { month } });
   }
 
   // 6. goals, 7. what needs attention, 8. the next step

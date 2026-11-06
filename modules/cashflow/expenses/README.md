@@ -59,3 +59,8 @@ where Next best action said "about $1,200". Test: `module.test.mjs` (the page dr
 A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". The tile reads "when all your uneven pay comes in, it only just about breaks even", Close the gap "Even a
 month that brings the Income page's amount only just about breaks even. This is the first thing to fix.", and the must-pays
 are offered, as for a short month. Test: `module.test.mjs`.
+
+## Recheck 2026-11-05
+The "Bring in ... before adding more here" card reads `bankVsPlan`'s `cardFile` words: its title ("Bring in the card files"
+for two cards at one bank with no file for either, as for several cards standing in), "over the last 2 months" (not "whole"
+when the months are whole but for those payments) and "their own files aren't in, so what they bought" for several cards.

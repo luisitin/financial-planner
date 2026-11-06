@@ -3,6 +3,7 @@
 // their notes, the goals, the plan's health, and what next year holds.
 import { reportFrame, figs, rtable, wideTable, section, list } from "../report-kit.js";
 import { lineChart } from "../../retirement/charts.js";
+import { theCard, monthsWords, shortDate } from "../../transactions/ledger/compute.js";
 
 let year = null;   // the year picked on this device
 
@@ -12,6 +13,18 @@ export function render(page, ctx) {
   const money = (n) => fmt.money(Math.round(n), cur);
   const today = fmt.today();
   const longDate = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  // what went to a card whose own file isn't in, card by card with its months: "$640 of what went out in July went to the
+  // Visa card; its July file isn't in, so it counts as one line until you import it." (2026-11-02)
+  // a card whose file starts after some of those payments: "before its file starts on 8/20" (re-check 2026-11-02: "its files
+  // for those months aren't in" was said of an August whose file is in from the 20th)
+  const cardSay = (m) => (m.cardMonths ?? []).filter((c) => c.total >= 1).map((c) => {
+    const when = monthsWords(c.months), one = c.months.length === 1, from = / to /.test(when) ? "from" : "in";
+    if (c.first && c.months.every((ym) => ym <= c.first.slice(0, 7))) return ` ${money(c.total)} of what went out ${from} ${when} went to ${theCard(c.name)} before its file starts on ${shortDate(c.first)}; it counts as one line ${one ? "" : "a month "}until you import the days before.`;
+    return ` ${money(c.total)} of what went out ${from} ${when} went to ${theCard(c.name)}; ${one ? `its ${when} file isn't in, so it counts as one line until you import it.` : "its files for those months aren't in, so it counts as one line a month until you import them."}`;
+  }).join("") || (m.cards >= 1 ? ` ${money(m.cards)} of what went out was paid to a card whose own file isn't in, so it counts as one line until that file is imported.` : "");
+  // the days an account's files miss: "Chase checking has no lines from 7/31 to 8/2, so July and August leave out what happened then."
+  // a payment counted for neither card is its own sentence: "$2,610 went to one of your Chase cards in October; bring in ..." (re-check 4)
+  const gapSay = (m) => (m.gaps ?? []).slice(0, 2).map((g) => (g.unsure ? ` ${g.why}.` : ` ${g.why}, so ${monthsWords(g.yms)} ${g.yms.length > 1 ? "leave" : "leaves"} out what happened then.`)).join("");
   const host = ui.h("div", {}, ui.notice("info", "Rolling the year up..."));
   page.append(host);
   ctx.computeRemote("reports/annual-review", { today, year }).then((d) => {
@@ -27,7 +40,7 @@ export function render(page, ctx) {
         !nw ? "No net-worth points were saved this year: save one each month on Net worth and next year's review will show the change."
           : nw.change === null ? `Net worth is ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}. Save it each month on Net worth and the review will show the change through the year.`
           : `Net worth went from ${money(nw.first.netWorth)} on ${longDate(nw.first.date)} to ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}: ${Math.abs(nw.change) < 0.5 ? "no change" : `${nw.change >= 0 ? "up" : "down"} ${money(Math.abs(nw.change))}`}.${nw.lastSaved ? ` (The last total saved that year is from ${longDate(nw.lastSaved)}.)` : ""}`,
-        m ? `${money(m.in)} came in and ${money(m.out)} went out${m.rate !== null ? `; ${fmt.pct(m.rate, 0)} of it was kept` : ""}.` : "",
+        m ? `${money(m.in)} came in and ${money(m.out)} went out${m.rate !== null ? `; ${fmt.pct(m.rate, 0)} of it was kept` : ""}.${cardSay(m)}${gapSay(m)}` : "",
         `${d.reviews.count} of ${d.partial ? Number(d.today.slice(5, 7)) : 12} months were reviewed.`,
         d.health ? `The plan's health today: ${d.health.score} out of 100 (${d.health.band.toLowerCase()}).` : "",
       ].filter(Boolean).join(" ")));

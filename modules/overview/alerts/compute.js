@@ -176,6 +176,9 @@ export function compute(plan, params = {}) {
   let bank = null;
   try { bank = bankVsPlan(plan, p); } catch { bank = null; }
   if (bank?.over) add("bank-over", "warn", "Your bank shows more going out than Expenses lists", `About ${money(Math.round(bank.gap / 10) * 10)} a month more, over the last ${bank.months} whole months of bank files. Add the rest on Expenses and the plan's figures follow.`, ["cashflow", "expenses"]);
+  // ...unless that is mostly what went to a card whose file isn't in: its file first (re-check 4, 2026-11-02)
+  // (two cards at one bank with no file for either: the months whole but for those payments, "Bring in the card files"; re-check 5)
+  else if (bank?.cardFile) { const f = bank.cardFile; add("bank-card", "warn", f.title, `About ${money(Math.round(f.monthly / 10) * 10)} a month went to ${f.the} over the last ${f.months}${f.whole ? " whole" : ""} months, but ${f.plural ? "their own files aren't in, so what they bought" : "its own file isn't in, so what it bought"} can't be checked against Expenses yet.`, ["transactions", "import"], { query: { accountId: f.accountId } }); }
   // a loan paid off whose payment is still on Expenses: the money is free once it is stopped there
   for (const x of exp.ended ?? []) add(`debt-paid-${x.debtId}`, "warn", `${x.debtName} is paid off`, `Its payment, ${x.name} (${money(x.monthly)} a month), is still counted on Expenses. Stop it there and that money is free.`, ["cashflow", "expenses"]);
   if (debt.count && debt.withDetail < debt.count) add("debt-details", "info", `${debt.count - debt.withDetail} ${debt.count - debt.withDetail === 1 ? "debt has" : "debts have"} no rate or payment`, "Add them to see payoff dates and what interest costs.", ["balance", "liabilities"]);

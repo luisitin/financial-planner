@@ -2,6 +2,7 @@
 // last months, one form to add or edit an envelope.
 import { compute, useExpenses } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
+import { bringWords, monthsWords, shortDate } from "../../transactions/ledger/compute.js";
 
 const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
 
@@ -17,6 +18,17 @@ export function render(root, ctx) {
   if (qm && ctx.route !== state.route) state.month = qm;
   state.route = ctx.route;
   const d = compute(plan, { today, month: state.month || undefined });
+  // a month with days missing in an account's files is left out of the suggestions, and says why; months that share one gap
+  // (a hole across July and August) are said once: "July and August 2026 are left out: ..." (2026-11-02)
+  const groups = [];
+  // (a payment counted for neither card: its reason with no amount or month, so August to October share one; re-check 5)
+  for (const s of [...(d.suggestSkipped ?? [])].sort((a, b) => a.ym.localeCompare(b.ym))) {
+    const why = s.issues?.[0]?.brief ?? s.issues?.[0]?.why ?? "some days are missing";
+    const g = groups.find((x) => x.why === why);
+    if (g) g.yms.push(s.ym); else groups.push({ why, yms: [s.ym] });
+  }
+  const withYear = (yms) => { const ys = new Set(yms.map((m) => m.slice(0, 4))); return `${monthsWords(yms)}${ys.size === 1 ? ` ${[...ys][0]}` : ""}`; };
+  const skippedNote = groups.map((g) => ` ${withYear(g.yms)} ${g.yms.length > 1 ? "are" : "is"} left out: ${g.why}.`).join("");
   let editing = null;
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   const cats = categoriesOf(plan).filter((c) => c.kind === "expense");
@@ -34,12 +46,15 @@ export function render(root, ctx) {
       : d.hasBudget
       ? (d.totals.left >= 0 ? `${fmt.money(d.totals.left, cur)} left in your envelopes with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.` : `Your envelopes are ${fmt.money(-d.totals.left, cur)} over with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.`)
       : "Give each kind of spending an envelope: an amount for the month. The page shows what is spent so far from your transactions, what is left, and whether the pace is right."),
-    d.hasBudget ? null : ui.h("p", { class: "muted small" }, d.fromExpenses.length ? "Start from the amounts on your Expenses page below. Spending against each envelope shows once a bank file is in."
+    // with bank files in but no whole month in them, say why none is suggested from, not "once a bank file is in" (re-check 5)
+    d.hasBudget ? null : ui.h("p", { class: "muted small" }, d.fromExpenses.length ? (d.hasData ? `Start from the amounts on your Expenses page below. Your bank files have no whole month to suggest amounts from yet${skippedNote ? `.${skippedNote}` : d.cover ? `; they cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}.` : "."}` : "Start from the amounts on your Expenses page below. Spending against each envelope shows once a bank file is in.")
       : !d.hasData ? "Import a bank file first and the page will suggest amounts from what you actually spend."
-      : d.suggestFrom.length ? `Suggestions below are the average of your last ${d.suggestFrom.length === 1 ? "whole month" : `${d.suggestFrom.length} whole months`} of real spending.`
-      : `Suggestions need at least one whole month in your bank files; yours cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}. Most banks let you download 90 days: import that and they appear.`),
+      : d.suggestFrom.length ? `Suggestions below are the average of your last ${d.suggestFrom.length === 1 ? "whole month" : `${d.suggestFrom.length} whole months`} of real spending.${skippedNote}`
+      : `Suggestions need at least one whole month in your bank files; yours cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}.${skippedNote || " Most banks let you download 90 days: import that and they appear."}`),
     // a file that stops days ago leaves "spent so far" short: say where it stops
     d.stale ? ui.h("p", { class: "muted small" }, `Spent so far comes from your bank files, which stop on ${fmt.date(d.cover.to)}. Import a newer file to count the rest of the month.`) : null,
+    // a payment that went to one of two cards this month: in no envelope, said once (re-check 4, 2026-11-02)
+    d.unsure ? ui.h("p", { class: "small" }, `${d.unsure} Until then, spending here leaves it out.`) : null,
     d.hasBudget && !d.hasData ? ui.row(ui.h("a", { class: "btn secondary", href: "#/transactions/import" }, "Import a bank file")) : null,
   ));
   // the confirmation goes at the top, where the eye is after a tap (it sat under the list)
@@ -94,7 +109,14 @@ export function render(root, ctx) {
     ui.h("span", { class: "ic" }, sg.icon),
     ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, sg.label), ui.h("div", { class: "d" }, `average of ${sg.months} whole month${sg.months === 1 ? "" : "s"}`)),
     ui.h("span", { class: "st" }, fmt.money(sg.average, cur), " ", ui.button("Use it", () => useIt(sg), { class: "secondary small" })));
-  if (d.suggestions.length) root.append(ui.card("Suggested from your last months", ui.h("ul", { class: "page-list" }, d.suggestions.slice(0, 12).map(suggestionRow))));
+  // a card whose own file is missing in those months: what went to it is in no suggestion, so say what the amounts leave out
+  const cardNote = (d.suggestCards ?? []).length ? ui.h("div", { class: "bu-cards", style: { marginBottom: "10px" } },
+    // every month averaged: "about $X a month went to it"; only some (its file is in for the others): name them (2026-11-02)
+    ...d.suggestCards.map((c) => { const all = (c.inMonths ?? []).length >= d.suggestFrom.length, when = monthsWords(c.inMonths ?? []);
+      return ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, all ? `${c.name}'s purchases aren't in these amounts: about ${fmt.money(c.average, cur)} a month went to it, but its own file isn't in, so what it bought isn't sorted into kinds yet. ${bringWords(c.name)}`
+        : `${c.name}'s purchases in ${when} aren't in these amounts: ${fmt.money(c.total ?? c.average * c.months, cur)} went to it then, ${c.before && c.first ? `before its file starts on ${shortDate(c.first)}` : `but its ${when} file isn't in`}, so what it bought then isn't sorted into kinds yet. ${bringWords(c.name)}`); }),
+    ui.row(...d.suggestCards.slice(0, 2).map((c) => ui.h("a", { class: "btn secondary", href: `#/transactions/import?accountId=${encodeURIComponent(c.cardId)}` }, bringWords(c.name).replace(/\.$/, ""))))) : null;
+  if (d.suggestions.length) root.append(ui.card("Suggested from your last months", cardNote, ui.h("ul", { class: "page-list" }, d.suggestions.slice(0, 12).map(suggestionRow))));
   // nothing budgeted and no whole bank month: the amounts already typed on Expenses, in one tap (round 4, 2026-11-02)
   if (d.fromExpenses.length) {
     const nba = ctx.computeOf?.("overview/next-best-action", { today });

@@ -138,3 +138,9 @@ overspending, while its own text said good months make up for it. Test: `module.
 
 A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". Such a month is red ("You spend more than comes in"), not amber: good months do not make up for lean
 ones then. Amber needs `fullKind` "ahead". Test: `module.test.mjs`.
+
+## Recheck 2026-11-05
+The `bank-card` alert names the months looked at from `cardFile` ("over the last 2 months" when they are whole but for
+payments counted for neither card; "2 whole months" for one card as before) and says "their own files aren't in" for
+several cards: two Chase cards with no files now get "Bring in the card files" (they got nothing). Test in
+`cashflow/income-statement/module.test.mjs`.

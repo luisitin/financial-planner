@@ -103,10 +103,19 @@ export function render(root, ctx) {
     // the rest, so every figure in the plan follows (round 4, 2026-11-02)
     let bk = null;
     try { bk = bankVsPlan(plan, { today: fmt.today() }); } catch { bk = null; }
+    const ten = (v) => Math.round(v / 10) * 10;
+    // months left out for a payment that went to one of two cards (ledger unsureWords), said under the card that compares
+    const unsureNote = () => ((bk?.unsure ?? []).length ? ui.h("p", { class: "muted small" }, bk.unsure.map((u) => u.text).join(" ")) : null);
+    // the gap is mostly payments to a card whose file isn't in: nobody has seen what they bought, so its file comes first,
+    // never an "Add" for it (re-check 4, 2026-11-02)
+    // (two cards at one bank with no file for either: "Bring in the card files", over the months whole but for them; re-check 5)
+    const cf = bk?.cardFile;
+    if (cf) root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, `${cf.title} before adding more here`),
+      ui.h("p", {}, `Over the last ${cf.months}${cf.whole ? " whole" : ""} months about ${fmt.money(ten(cf.monthly), cur)} a month went to ${cf.the} from your bank, but ${cf.plural ? "their own files aren't in, so what they bought isn't sorted into kinds yet. Bring them in" : "its own file isn't in, so what it bought isn't sorted into kinds yet. Bring it in"}, then compare again.`),
+      ui.row(ui.h("a", { class: "btn", href: cf.href }, cf.title)), unsureNote()));
     if (bk?.over) {
-      const ten = (v) => Math.round(v / 10) * 10;
       root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Your bank shows more going out"),
-        ui.h("p", {}, `Over the last ${bk.months} whole months your bank files show about ${fmt.money(ten(bk.bankOut), cur)} a month going out; this page lists ${fmt.money(ten(bk.planOut), cur)}. Add what is missing, and every figure in the plan follows.`),
+        ui.h("p", {}, `Over the last ${bk.months} whole months your bank files show about ${fmt.money(ten(bk.bankOut), cur)} a month going out; this page lists ${fmt.money(ten(bk.planOut), cur)}. Add what is missing, and every figure in the plan follows.${bk.cards >= 1 ? ` Another ${fmt.money(ten(bk.cards), cur)} a month went to cards whose files aren't in; that is not counted here until their files show what it bought.` : ""}`),
         bk.lines.length ? ui.h("ul", { class: "page-list" }, bk.lines.map((x) => ui.h("li", {},
           ui.h("span", { class: "ic" }, x.icon),
           ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.label), ui.h("div", { class: "d" }, x.plan > 0.5 ? `bank about ${fmt.money(ten(x.bank), cur)} a month, listed here ${fmt.money(ten(x.plan), cur)}` : `bank about ${fmt.money(ten(x.bank), cur)} a month, not listed here`)),
@@ -115,7 +124,7 @@ export function render(root, ctx) {
             pending = `Added ${name}: ${fmt.money(ten(x.more), cur)} a month.`;
             store.update((p) => { p.expenses = p.expenses ?? []; p.expenses.push({ id: ui.uid(), name, category: x.category, amount: ten(x.more), period: "monthly", essential: x.essential, inflates: true }); });
           }, { class: "secondary small" }))))) : null,
-        bk.unfiled >= 50 ? ui.h("p", { class: "muted small" }, `About ${fmt.money(ten(bk.unfiled), cur)} a month of it is not filed under a kind yet. `, ui.h("a", { href: "#/transactions/categorize" }, "File it \u203a")) : null));
+        bk.unfiled >= 50 ? ui.h("p", { class: "muted small" }, `About ${fmt.money(ten(bk.unfiled), cur)} a month of it is not filed under a kind yet. `, ui.h("a", { href: "#/transactions/categorize" }, "File it \u203a")) : null, unsureNote()));
     }
     const gc = gapCard();
     if (gc) root.append(gc);

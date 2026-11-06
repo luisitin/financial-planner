@@ -3,12 +3,26 @@
 // is right for the day of the month, and what rolled over from last month. Suggested amounts
 // come from the last three months the bank files fully cover.
 // plan.budgets: [{ id, category, amount, period ("monthly"), rollover: bool }]
-import { isTransfer, monthOf, coverage, monthCover, COVER_SLACK } from "../../transactions/ledger/compute.js";
+import { isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 
 const spendingOf = (plan, ym) => (plan.transactions ?? []).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
+/**
+ * Card stand-in lines summed per card: [{ cardId, name, label, total, months: [ym] (the months with a stand-in, oldest first),
+ * before (every one dated before the card's first line `first`: "before its file starts on 8/1", re-check 4), first }].
+ */
+const cardTotals = (lines) => {
+  const m = new Map();
+  for (const t of lines) {
+    const c = m.get(t.cardId) ?? { cardId: t.cardId, name: t.cardName, label: t.payee, total: 0, months: [], before: true, first: t.first ?? null };
+    c.total -= Number(t.amount) || 0; if (!c.months.includes(monthOf(t.date))) c.months.push(monthOf(t.date));
+    if (!t.before) { c.before = false; c.label = t.payee; }
+    m.set(t.cardId, c);
+  }
+  return [...m.values()].map((c) => ({ ...c, months: c.months.sort() }));
+};
 const byCat = (txs) => { const m = new Map(); for (const t of txs) m.set(t.category || "", (m.get(t.category || "") ?? 0) - (Number(t.amount) || 0)); return m; };
 const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
 
@@ -17,8 +31,17 @@ const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 
  *   month, label, dayOfMonth, daysInMonth, daysLeft,
  *   envelopes: [{ id, category, label, icon, amount, rollover, carried, available, spent, left, share, pace ("on"|"ahead"|"over"|"paid": one payment of 90% or more of the envelope, as last month: a monthly bill), expectedByNow }],
  *   totals: { amount, available, spent, left }, unbudgeted: [{ category, label, icon, spent }] (spending this month with no envelope),
+ *   (a card whose own file is missing this month: { category: "", card: true, cardId, label "<card>, details not imported yet", spent }),
  *   suggestions: [{ category, label, icon, average, months }] for categories without an envelope, hasBudget, hasData,
- *   suggestFrom: [ym] (the whole months the suggestions average over), cover: { from, to } | null (the days the bank files cover),
+ *   suggestFrom: [ym] (the whole months the suggestions average over), suggestSkipped: [{ ym, holes (monthHoles), issues
+ *   (gapIssues: holes, accounts whose lines stop early or start late) }] (spanned at both ends but not whole, so left out),
+ *   suggestCards: [{ cardId, name, label, average, months, inMonths: [ym], total, before, first }] (the payments to a card on days its own file
+ *   does not cover in those months: `average` = total / months, a month, in no category's suggestion; `inMonths` = the months
+ *   they were in, so "October's purchases" is said when its file is in for the others; `before`: all dated before its first
+ *   line `first`),
+ *   unsure: "$2,610 went to one of your Chase cards in October; bring in the card files to see what it bought." | null (this
+ *   month: a payment counted for neither card, ledger unsureCardPayments; re-check 4),
+ *   cover: { from, to } | null (the days the bank files cover),
  *   stale (the files stop more than COVER_SLACK days before today in this month, so "spent so far" is missing the latest days),
  *   fromExpenses: [{ category, label, icon, amount }] (no envelopes and no whole bank month: Expenses' monthly amount per kind
  *   of spending, debt payments included), fromExpensesTotal
@@ -54,17 +77,31 @@ export function compute(plan, params = {}) {
     return { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount, rollover: !!b.rollover, carried, available, spent: sp, left, share: available ? Math.min(1, sp / available) : 0, pace, expectedByNow };
   }).sort((a, b) => b.available - a.available);
   const budgeted = new Set(budgets.map((b) => b.category));
-  const unbudgeted = [...spent.entries()].filter(([c, v]) => !budgeted.has(c) && v > 0).map(([category, sp]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), spent: sp })).sort((a, b) => b.spent - a.spent);
+  // a card whose own file is missing: what went to it is spending this month with no envelope (it is no kind yet), one line a card
+  const cov = coverage(plan), covBy = coverageByAccount(plan);
+  const cardsNow = cardTotals(unimportedCardLines(plan, month, { today, covBy }));
+  const unbudgeted = [...[...spent.entries()].filter(([c, v]) => !budgeted.has(c) && v > 0).map(([category, sp]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), spent: sp })),
+    ...cardsNow.map((c) => ({ category: "", card: true, cardId: c.cardId, label: c.label, icon: "💳", spent: c.total }))].sort((a, b) => b.spent - a.spent);
   // suggestions: per spending category not yet budgeted, the average over the last three months the bank files cover from
-  // start to end (a month cut by the file would read low), divided by the number of those months, so "average of N months" is
-  // the N it was divided by; a month with nothing in a category counts as nothing spent
-  const cov = coverage(plan);
-  const suggestFrom = [];
-  for (let k = 1; k <= 3; k++) { const ym = addMonths(`${month}-01`, -k).slice(0, 7); if (monthCover(cov, ym, today).full) suggestFrom.push(ym); }
+  // start to end (a month cut by the file would read low) and that is whole account by account: no hole in any account's
+  // files, no account whose lines stop early or start late (a month missing the mortgage, or half the card's purchases, would
+  // read low too; ledger's monthGaps, 2026-11-02), divided by the number of those months, so "average of N months" is the N it
+  // was divided by; a month with nothing in a category counts as nothing spent. A card whose file is missing counts in no
+  // category: its payments are said apart (suggestCards), so the amounts read "from checking only" rather than looking complete.
+  const suggestFrom = [], suggestSkipped = [];
+  for (let k = 1; k <= 3; k++) {
+    const ym = addMonths(`${month}-01`, -k).slice(0, 7);
+    if (!monthCover(cov, ym, today).full) continue;
+    const g = monthGaps(plan, ym, today, covBy);
+    if (g.whole) suggestFrom.push(ym); else suggestSkipped.push({ ym, holes: g.holes, issues: gapIssues(plan, { ...g, cards: [] }, ym) });
+  }
   const sums = new Map();
   for (const ym of suggestFrom) for (const [c, v] of byCat(spendingOf(plan, ym))) sums.set(c, (sums.get(c) ?? 0) + v);
   const n = suggestFrom.length;
   const suggestions = n ? [...sums.entries()].filter(([c, v]) => c && !budgeted.has(c) && v > 0 && categoriesOf(plan).some((x) => x.id === c && x.kind === "expense")).map(([category, total]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), average: Math.round(total / n), months: n })).sort((a, b) => b.average - a.average) : [];
+  const suggestCards = n ? cardTotals(suggestFrom.flatMap((ym) => unimportedCardLines(plan, ym, { today, covBy }))).map((c) => ({ cardId: c.cardId, name: c.name, label: c.label, average: Math.round(c.total / n), months: n, inMonths: c.months, total: Math.round(c.total * 100) / 100, before: c.before, first: c.first })) : [];
+  // this month: a payment that went to one of two cards and is counted for neither, in one sentence (re-check 4, 2026-11-02)
+  const unsureNow = unsureCardPayments(plan, month, { today, covBy });
   // no whole bank month to average yet: start from what the Expenses page already holds (each kind of spending's monthly
   // amount, debt payments included), so "Set a budget" is one tap instead of retyping every bill (round 4, 2026-11-02)
   let fromExpenses = [];
@@ -79,7 +116,7 @@ export function compute(plan, params = {}) {
   const stale = !!(cov && today && today.slice(0, 7) === month && dayNo(today) - dayNo(cov.to) > COVER_SLACK);
   const totals = { amount: envelopes.reduce((s, e) => s + e.amount, 0), available: envelopes.reduce((s, e) => s + e.available, 0), spent: envelopes.reduce((s, e) => s + e.spent, 0) };
   totals.left = totals.available - totals.spent;
-  return { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, cover: cov, stale,
+  return { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, suggestSkipped, suggestCards, unsure: unsureNow ? `${unsureWords(plan, unsureNow, month)}.` : null, cover: cov, stale,
     fromExpenses, fromExpensesTotal: fromExpenses.reduce((t, x) => t + x.amount, 0) };
 }
 

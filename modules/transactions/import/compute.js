@@ -5,8 +5,11 @@
 import { parseCsv } from "../../../core/csv.js";
 import { isValidDate, isoOf } from "../../../core/math/dates.js";
 import { applyRules, prettyPayee } from "../rules/compute.js";
-import { txKey } from "../ledger/compute.js";
+import { txKey, coverageByAccount, usualInDays, usualWords } from "../ledger/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
+// the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
+// review's "nothing happened" button (re-check 4, 2026-11-02)
+export { usualInDays };
 
 // ---------------------------------------------------------------- detection
 const H = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -138,7 +141,9 @@ export const headerKey = (headers) => headers.map(H).join("|");
 /**
  * prepareImport(plan, text, { accountId, mapping?, flipSign?, importId }) -> {
  *   parsed, mapping, headerKey, txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
- *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null
+ *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null,
+ *   gap (gapBefore: days between the account's last lines and this file) | null, fills (uncoveredDays: the days of this file the
+ *   account's files did not cover; with nothing new to add, the page offers to record the file so those days count as checked)
  * }
  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
  */
@@ -163,7 +168,58 @@ function finish(plan, rawTxs) {
   const all = ruled.txs.map((t) => t.date).filter(Boolean).sort();   // the file's own first and last day, duplicates included
   let inTotal = 0, outTotal = 0;
   for (const t of add) { if (t.amount >= 0) inTotal += t.amount; else outTotal += -t.amount; }
-  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom: all[0] ?? null, fileTo: all[all.length - 1] ?? null, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add) };
+  const fileFrom = all[0] ?? null, fileTo = all[all.length - 1] ?? null;
+  const accountId = rawTxs[0]?.accountId ?? null;
+  return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom, fileTo, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add),
+    gap: gapBefore(plan, { accountId, fileFrom, fileTo, add }), fills: fileFrom ? uncoveredDays(plan, accountId, fileFrom, fileTo) : [] };
+}
+/**
+ * uncoveredDays(plan, accountId, from, to) -> [{ from, to, days }]: the days between from and to that the account's files do not
+ * cover yet (coverageByAccount: before its first day, after its last, or in a hole). A file with nothing new in it that spans
+ * them still says something: nothing happened on those days, so importing it records them as covered (2026-11-02).
+ */
+export function uncoveredDays(plan, accountId, from, to) {
+  if (!accountId || !from || !to || from > to) return [];
+  const c = coverageByAccount(plan)[accountId];
+  const spans = !c ? [{ from, to }] : [
+    ...(from < c.from ? [{ from, to: to < c.from ? to : plusDays(c.from, -1) }] : []),
+    ...(c.holes ?? []).filter((h) => h.from <= to && h.to >= from).map((h) => ({ from: h.from > from ? h.from : from, to: h.to < to ? h.to : to })),
+    ...(to > c.to ? [{ from: from > c.to ? from : plusDays(c.to, 1), to }] : []),
+  ];
+  return spans.map((s) => ({ ...s, days: Math.round((Date.parse(`${s.to}T00:00:00Z`) - Date.parse(`${s.from}T00:00:00Z`)) / 864e5) + 1 }));
+}
+
+const md = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+const plusDays = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+/**
+ * gapBefore(plan, { accountId, fileFrom, fileTo, add }) -> null | { accountId, name, last, fileFrom, from, to, days, hole, usual: [{ name, day, out }], text }
+ * Said before importing (2026-11-02): the days between that account's last line (or its last import's `to`) and the file's
+ * first line would be a hole once it is in (coverageByAccount's one rule, re-check 4: more than a quiet spell, or a usual
+ * payment due in them with none of it that month), so `hole` is always true when this is said. `usual`: usualInDays over the
+ * gap. "Your last Chase checking lines end 7/30; this file starts 8/3. Anything on 7/31 to 8/2 is missing (your
+ * mortgage usually goes out on the 2nd and a paycheck on the 1st). Bring in a file from 7/31, or add those by hand."
+ */
+export function gapBefore(plan, { accountId, fileFrom, fileTo = null, add = [] } = {}) {
+  if (!accountId || !fileFrom) return null;
+  const mine = (plan.transactions ?? []).filter((t) => t.accountId === accountId);
+  let last = null;
+  for (const d of [...mine.map((t) => String(t.date ?? "").slice(0, 10)), ...(plan.imports ?? []).filter((im) => im.accountId === accountId).map((im) => String(im.to ?? "").slice(0, 10))]) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d < fileFrom && (!last || d > last)) last = d;
+  if (!last) return null;
+  const gFrom = plusDays(last, 1), gTo = plusDays(fileFrom, -1);
+  if (gFrom > gTo) return null;
+  // the hole as the coverage will see it once this file is in (coverageByAccount decides)
+  const sim = { ...plan, transactions: [...(plan.transactions ?? []), ...add], imports: [...(plan.imports ?? []), { accountId, from: fileFrom, to: fileTo ?? fileFrom }] };
+  const hole = (coverageByAccount(sim)[accountId]?.holes ?? []).find((h) => h.to === gTo) ?? null;
+  // a few quiet days with nothing usual due in them are not a hole, and are not said (re-check 4, 2026-11-02)
+  if (!hole) return null;
+  const from = hole.from, to = hole.to;
+  const usual = usualInDays(plan, accountId, from, to, add);
+  const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 864e5) + 1;
+  const list = usualWords(usual);
+  const name = (plan.accounts ?? []).find((a) => a.id === accountId)?.name ?? "account";
+  const span = days === 1 ? md(from) : `${md(from)} to ${md(to)}`;
+  const text = `Your last ${name} lines end ${md(last)}; this file starts ${md(fileFrom)}. Anything on ${span} is missing${list ? ` (${list})` : ""}. Bring in a file from ${md(from)}, or add ${days === 1 ? "that" : "those"} by hand.`;
+  return { accountId, name, last, fileFrom, from, to, days, hole: !!hole, usual: usual.map(({ name: n, day, out }) => ({ name: n, day, out })), text };
 }
 /**
  * alsoOn(plan, add) -> { accountId, count, of } | null: the other account that already has most of these lines (the same day,

@@ -29,6 +29,62 @@ Once the month is marked reviewed, the hero says "October 2026 is done ✓" with
 
 From the 1st to the 10th, while the month just ended is not reviewed, the Dashboard's "where you stand" card has one row "Your October check-in · Start ›" (it takes the stale-balances row's place, since the review starts with the balances).
 
+## Every account, and the cards (2026-11-02)
+Step 3 used to tick once the files together reached both ends of the month (`coverage`, the first and last date over every
+account), so it never asked for an account with no lines (the sample family's Visa, whose autopays from checking are filed as
+transfers) or for the days between two checking files. Now the span check above comes first (its old messages are kept),
+then `monthGaps` (Transactions > Ledger) account by account; the step is done only when it finds nothing:
+- a card whose own file is missing (`missingCardFiles`): "Visa card: $2,610 went to it from checking in October, but its own
+  file isn't in, so what you bought on it is missing. Bring in the Visa file." (the payers by kind, checking or savings, else
+  by name; `cardWords`);
+- a hole in one account's files reaching into the month (`coverageByAccount`): "Chase checking has no lines from 7/31 to 8/2:
+  bring in a file that covers those days, or add them by hand." (the whole hole, even where it starts the month before;
+  `holeWords`);
+- an account whose lines stop more than its slack before the month's end: "Second checking's lines stop on 10/19: bring in the
+  rest of October."
+The first two are shown, then "And N more."; the step's `query` is `{ accountId }` of the first, so its link opens the Import
+page with that account picked. Filing and the budget then wait with "Waits for the missing file above." (the month's Chase
+lines may all be filed; it is the card's file they wait for).
+
+Review (2026-11-02): the words come from Ledger `gapIssues`, which adds an account whose files start late ("Visa card's lines
+start on 8/20: bring in a file from 8/1."). A card with lines last month, none this month and nothing paid to it is no longer
+asked for (a quiet month); a card whose daily lines stop is "short" once. The step carries `quiet: [{ accountId, name, from,
+to }]` for the gaps it names (at most two) that can be marked as nothing happened, leaving out any whose days hold a usual
+payment with none of it on file that month (Import `usualInDays`: plan3's 7/31 to 8/2 holds the mortgage of the 2nd and a
+paycheck of the 1st, so it is never offered; a Visa file from 8/20 offers "Visa card: nothing happened 8/1 to 8/19"). The page shows one
+outlined button per entry under the step; it writes Ledger `markQuiet` (an import entry with no lines, undone under Import >
+Past imports) and confirms with a notice. "Where the money went" says "most on" a kind of spending, never a card's stand-in
+line, then "$2,610 went to the Visa card, whose file isn't in" ("whose file misses some days" for a card with some lines).
+
+## Re-check of the card patch (2026-11-02)
+- "Nothing happened" (`quiet`) is never offered for days in which money went to that account from another one (Ledger
+  `paymentsTo`), as well as days a usual payment falls in. Finding 3: with the Visa's file from 8/20 and checking's $2,450.22
+  to it on 8/14, the button for the Visa's 8/1 to 8/19 is gone (pressing it dropped the stand-in and took August from
+  $6,074.38 to $3,624.16); a Visa file from 8/10 still offers 8/1 to 8/9, which hold no payment.
+- `links: [{ label, go, rest?, query? }]` on the files step when it names more than one account or days to add by hand: one
+  outlined button each under the step ("Bring in the Visa file", "Bring in the Chase checking file", "Add Chase checking's
+  lines by hand", which opens the Ledger on that account); the step itself still opens the first.
+- Where the money went: a month whose files miss some days, or the month before it, is not compared as fact (Spending's
+  `cmpGap`): "$5,714 spent in August 2026 (its files miss some days, so it is not compared with July 2026); ...", and
+  September "(August 2026's files miss some days, so the two are not compared)". A stand-in dated before the card's file
+  starts reads "$2,450 went to the Visa card, before its file starts on 8/20" (it read "whose file misses some days").
+
+## Re-check 4 (2026-11-02)
+- One rule for holes (Ledger `coverageByAccount`): a few quiet days at a file's edge are not missing; one checking file a
+  month (8/3-8/29, 9/1-9/26, 10/1-10/31) and quarterly one-line savings files leave August to October done.
+- A hole's step names the usual payments due in it ("Chase checking has no lines from 7/31 to 8/2 (your mortgage usually goes
+  out on the 2nd and a paycheck on the 1st): bring in a file that covers those days, or add them by hand."). Its links say
+  the days: "Bring in the Chase checking file" opens Import with `need: "2026-07-31..2026-08-02"` (step 1 says "Bring in a
+  Chase checking file that covers 7/31 to 8/2 ..."), and "Add Chase checking's lines by hand" opens the Ledger on that
+  account with `query: { month: "2026-08", add: "2026-08-01" }`: the reviewed month, the add form open, dated the first
+  missing day in that month (`from=review` kept, so the Ledger's back link returns here).
+- A payment counted for neither of two cards: the step says "$2,610 went to one of your Chase cards in October; bring in the
+  card files to see what it bought." with a "Bring in the <card> file" link per card; the spending step says "(its card
+  purchases aren't all in, so it is not compared with September 2026)".
+- A month before a card's first line: "Visa card: $640 went to it from checking in July, before its file starts on 8/1, so
+  what you bought on it then is missing. Bring in the Visa file for July." and "$640 went to the Visa card, before its file
+  starts on 8/1".
+
 ## A plan made this month (2026-11-02, round 4)
 `firstDay(plan)` is the earliest day the plan holds anything for: an account's balance date or history point, a saved
 net worth total, a bank line, a review (not `meta.createdAt`: an app opened empty in October and filled in on November 2
@@ -41,7 +97,7 @@ first check-in comes in early December.
 New plan section `reviews: [{ month, at, note }]` (`core/schema/migrate.js`; `migrate()` adds it to older plans, no version bump; `docs/DATA_MODEL.md`).
 
 ## Tests
-`module.test.mjs`: the month chosen for a date, the section added to old plans, the family's steps, a month with transactions, marking reviewed (replacing, the streak, a gap).
+`module.test.mjs`: the month chosen for a date, the section added to old plans, the family's steps, a month with transactions, marking reviewed (replacing, the streak, a gap). The files step on the sample family back after three months (`qa/fixtures/card-gap-plan.mjs`): October names the Visa and $2,610 and opens its import, August adds Chase's hole, and with the Visa's lines in October is done while August still names the hole; a 4-day hole inside October is todo, one within 3 days is done (2026-11-02). Re-check: finding 3 (no button for the Visa's days with a payment in them, August $6,074.38; the Visa file with a gap around 9/14 likewise), finding 4 (a quiet savings account and no card: August to October done), the files step's links, the comparison words (August, September) and "before its file starts on 8/20". Re-check 4: money 1 and 3 (one file a month, quarterly savings files: done), money 4 (the sentence and a link per card; the spending step's words), pages 4 (July's files and spending steps), and the hole's links with `need` and `add`.
 
 ## Review fixes 2026-11-02
 The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboard and Needs attention; goals waiting their turn are named apart ("Japan trip starts in December 2027, its turn on Next best action").

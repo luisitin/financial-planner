@@ -28,11 +28,57 @@ amber "check the account" notice. `alsoOn` flags a file whose lines (same day, a
 on another account, 80% of them and at least 3: the same file imported on the wrong account first, which `dedupe()`
 (within one account) would let in twice. It only warns: two real lines can match by chance.
 
+## A file that starts after a gap (2026-11-02)
+`gapBefore(plan, { accountId, fileFrom, fileTo, add })` (in every `prepareImport` / `prepareRows` result as `gap`): the
+account's last day on file before this file (its latest line or import record `to` before `fileFrom`), then the hole
+Transactions > Ledger `coverageByAccount` would see once this file is in (the plan with these lines and an import record
+`fileFrom`..`fileTo`): the hole ending the day before `fileFrom`. So the rule is the ledger's: more than the account's slack
+(3 days, `COVER_SLACK`, for an account with a line most days; wider for a sparse savings account) between the last day and the
+file's first. `usual`: the account's monthly payments (cashflow/recurring `detectRecurring` over its lines and this file's)
+whose usual day of the month (the median day of their dates) falls in the hole, money out first, then the largest, at most 3;
+a mortgage or rent by its words or category, a salary as "a paycheck", anything else by its payee. Weekly and every-two-weeks
+payments have no usual day of the month and are left out. Shown in the preview as an amber notice before the import button:
+"Your last Chase checking lines end 7/30; this file starts 8/3. Anything on 7/31 to 8/2 is missing (your mortgage usually goes
+out on the 2nd and a paycheck on the 1st). Bring in a file from 7/31, or add those by hand." (no parenthesis when nothing
+usual falls in it; the "only partly in it" months line is left off then, the notice says it better).
+
+Re-check 4 (2026-11-02): one rule for the pages and this warning. `gapBefore` warns only when the days before the file are a
+hole by Ledger `coverageByAccount`'s rule (more than a quiet spell, `quietTooLong`: more than 7 days and more than 2 x the
+account's usual spacing; or a usual monthly payment due in them with none of it that month; never for an account with lines
+on fewer than 5 days). The usual payments now come from Ledger `usualPayments` / `usualInDays` (the monthly rule of
+`detectRecurring`, moved there so both say the same; this module re-exports `usualInDays`). So "a gap within the slack
+with a usual payment in it" is now simply a hole (`hole: true`), and 4 quiet days with nothing usual in them say nothing.
+
+Opened with `?accountId=<id>` (the Monthly review's "Bring in the Visa file", Spending and Budget's card buttons), the page
+starts on that account as if picked by hand, so a file laid out like another account's warns rather than switching it.
+With `&need=2026-07-31..2026-08-02` (the Monthly review's "Bring in the Chase checking file" for a hole) step 1 says the days
+the file must cover: "Bring in a Chase checking file that covers 7/31 to 8/2. On your bank's site pick those dates (or a
+span around them): a "last 90 days" file starts on 8/4, too late." (the 90 days counted back from today).
+
+Review (2026-11-02):
+- `usualInDays(plan, accountId, from, to, add)`: the usual payments as above, now only those with none of their lines on file
+  in the month their day falls in (a mortgage paid late, on the 5th, is not missing). `gapBefore` uses it, and also speaks for
+  a gap within the slack when such a payment falls in it (`hole: false`): a Chase file from 11/4 after lines to 11/1 says
+  "Anything on 11/2 to 11/3 is missing (your mortgage usually goes out on the 2nd and Ymca Afterschool Dayton on the 3rd)".
+  The pages do not call those days missing (within the slack), so this is the one place it is said. The Monthly review uses
+  it too, to not offer "Nothing happened" for days that hold a usual payment.
+- The preview's "only partly in it" line keeps the month the file stops in when there is a gap warning (only the start month
+  is left to the warning).
+- `uncoveredDays(plan, accountId, from, to)` -> `[{ from, to, days }]`, in the result as `fills`: the file's days the account's
+  files did not cover (before its first day, after its last, in a hole). A file with nothing new that spans them says
+  "Everything in this file is already on file. It covers 9/1 to 9/30, including 9/11 to 9/19, which your Visa card files were
+  missing: so nothing happened on those days." with "Count 9/11 to 9/19 as checked": an import record with no lines added
+  (rows, skipped, from, to as for any file), so the gap closes. Past imports shows the Monthly review's "Nothing happened"
+  entries (no file name, no rows) as "Nothing happened 8/1 to 8/19 · marked by you"; Undo asks "Forget that ... were checked?".
+- Re-check 4 (page finding 9): such a file shows one message only. The "This file covers ... is only partly in it" line is left
+  off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
+  to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 
 ## Tests
-`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals.
+`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02).
 
 ## Ideas / not yet
 - OFX/QFX (vendor/banking.js as the parser), JSON exports.

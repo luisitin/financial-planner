@@ -2,6 +2,7 @@
 // checked against the plan (each opens its page), then "mark reviewed" with a note, and the months
 // reviewed before. The note and the date are the only thing this page writes (plan.reviews).
 import { compute, markReviewed, monthLabel } from "./compute.js";
+import { markQuiet, shortDate } from "../../transactions/ledger/compute.js";
 
 let month = null;      // the month picked on this device (null = the default for today)
 let arrival = null;    // the route ?month= was last taken from: each new arrival (a step's "Back to the check-in") takes it
@@ -20,6 +21,10 @@ const STYLE = `
 .mr-root .mr-t { font-weight: 650; }
 .mr-root .mr-d { color: var(--text-2); font-size: var(--fs-sm); margin-top: 2px; }
 .mr-root .mr-chev { flex: none; color: var(--muted); font-size: 22px; line-height: 1; align-self: center; }
+.mr-root .mr-quiet { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 12px 42px; border-bottom: 1px solid var(--line); }
+.mr-root .mr-step:has(.mr-quiet) > a { border-bottom: 0; }
+.mr-root .mr-quiet .btn, .mr-root .mr-quiet button { min-height: 44px; }
+.mr-root .mr-quiet:not(:last-child) { border-bottom: 0; padding-bottom: 8px; }
 `;
 
 export function render(page, ctx) {
@@ -45,10 +50,21 @@ export function render(page, ctx) {
   // each step's page shows "‹ Back to the October check-in" (guide/frame.js, from=review), and Budget and Where the money
   // went open on the month under review
   const hrefOf = (s) => `#/${s.go[0]}/${s.go[1]}?${new URLSearchParams({ ...(s.query ?? {}), from: "review", review: d.month })}`;
+  // days a gap names that had nothing on them (a quiet card, a new account): one tap marks them checked, so the step can be
+  // finished without a file that does not exist (ledger markQuiet: an import entry with no lines; Import > Past imports undoes it)
+  const quietRow = (s) => (s.status !== "todo" || !(s.quiet ?? []).length ? null : ui.h("div", { class: "mr-quiet" },
+    ...s.quiet.map((q) => ui.button(`${q.name}: nothing happened ${q.from === q.to ? `on ${shortDate(q.from)}` : `${shortDate(q.from)} to ${shortDate(q.to)}`}`, () => {
+      try { store.update((draft) => markQuiet(draft, { ...q, at: new Date().toISOString(), id: `quiet-${Date.now().toString(36)}` })); pending = ["ok", `${q.name}: ${q.from === q.to ? shortDate(q.from) : `${shortDate(q.from)} to ${shortDate(q.to)}`} marked as checked, nothing on ${q.from === q.to ? "that day" : "those days"}. Undo it on Import, under Past imports.`]; }
+      catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); }
+    }, { class: "secondary small" }))));
+  // a files step that names more than one fix (the Visa's file and Chase's missing days): one way to each, the step itself
+  // opening the first (re-check 2026-11-02)
+  const linkHref = (l) => `#/${l.go[0]}/${l.go[1]}${(l.rest ?? []).map((x) => `/${encodeURIComponent(x)}`).join("")}?${new URLSearchParams({ ...(l.query ?? {}), from: "review", review: d.month })}`;
+  const linksRow = (s) => (s.status !== "todo" || !(s.links ?? []).length ? null : ui.h("div", { class: "mr-quiet" }, ...s.links.map((l) => ui.h("a", { class: "btn secondary small", href: linkHref(l) }, l.label))));
   const list = ui.h("ol", { class: "mr-steps" }, d.steps.map((s, i) => ui.h("li", { class: `mr-step ${s.status}${s.state === "todo" ? " look-todo" : ""}` }, ui.h("a", { href: hrefOf(s) },
     ui.h("span", { class: "mr-num", "aria-hidden": "true" }, s.status === "done" ? "✓" : String(i + 1)),
     ui.h("span", { class: "mr-body" }, ui.h("div", { class: "mr-t" }, s.title, s.status === "skip" && !/^Waits/.test(s.detail) ? ui.h("span", { class: "pill" }, "optional") : null), ui.h("div", { class: "mr-d" }, s.detail)),
-    ui.h("span", { class: "mr-chev", "aria-hidden": "true" }, "›")))));
+    ui.h("span", { class: "mr-chev", "aria-hidden": "true" }, "›")), linksRow(s), quietRow(s))));
   root.append(d.reviewed
     ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, `All steps (${d.done} of ${d.todo} done)`), list)
     : ui.h("section", { class: "card" }, ui.h("h2", {}, "The steps"), list));

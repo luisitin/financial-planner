@@ -153,3 +153,132 @@ test("Start from your expenses: a full month within $5 of $0 'only just about br
     assert.doesNotMatch(text, /about \$0\b/);
   }
 });
+
+// ---- a month with a hole in an account's files is not averaged; a card's missing file is in no category (2026-11-02)
+test("suggestions skip a month with a hole between two files, and say which; the hand-worked averages", () => {
+  const p = emptyPlan();
+  p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 1 });
+  // groceries $10 every day from Jul 1 to Sep 30, rent $1,000 on the 1st; the second file starts Aug 20, 10 days after the first
+  // stops: 9 days with nothing, more than a quiet spell (more than 7 and more than 2 x the daily spacing; re-check 4)
+  for (let t = Date.UTC(2026, 6, 1), n = 0; t <= Date.UTC(2026, 8, 30); t += 864e5, n++) { const d = new Date(t).toISOString().slice(0, 10); if (d < "2026-08-11" || d > "2026-08-19") p.transactions.push(tx(`g${n}`, d, -10, "groceries")); }
+  for (const ym of ["2026-07", "2026-08", "2026-09"]) p.transactions.push(tx(`r${ym}`, `${ym}-01`, -1000, "housing"));
+  p.imports = [{ id: "a", accountId: "chk", from: "2026-07-01", to: "2026-08-10" }, { id: "b", accountId: "chk", from: "2026-08-20", to: "2026-09-30" }];
+  const d = compute(p, { today: "2026-10-05" });
+  assert.deepEqual(d.suggestFrom, ["2026-09", "2026-07"]);
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.holes[0].from, s.holes[0].to, s.holes[0].days]), [["2026-08", "2026-08-11", "2026-08-19", 9]]);
+  // groceries: (310 in July + 300 in September) / 2 = 305; rent: (1000 + 1000) / 2
+  assert.equal(d.suggestions.find((s) => s.category === "groceries").average, 305);
+  assert.equal(d.suggestions.find((s) => s.category === "housing").average, 1000);
+  assert.equal(d.suggestions[0].months, 2);
+  // the files joined up (the second from Aug 11): August counts again
+  p.imports[1].from = "2026-08-11";
+  assert.deepEqual(compute(p, { today: "2026-10-05" }).suggestFrom, ["2026-09", "2026-08", "2026-07"]);
+  // a 4-day gap with nothing usual due in it (the second file from Aug 15) is a quiet spell at a file's edge, not a hole
+  p.imports[1].from = "2026-08-15"; p.transactions = p.transactions.filter((t) => !(t.date >= "2026-08-11" && t.date <= "2026-08-14"));
+  assert.deepEqual(compute(p, { today: "2026-10-05" }).suggestFrom, ["2026-09", "2026-08", "2026-07"]);
+});
+test("the sample family in November: August is left out (the 1st and 2nd are missing), the mortgage reads $1,980, the Visa is apart", async () => {
+  const { cardGapPlan } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = cardGapPlan(T); p.budgets = [];
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.suggestFrom, ["2026-10", "2026-09"]);
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.holes[0].whole.from, s.holes[0].whole.to]), [["2026-08", "2026-07-31", "2026-08-02"]]);
+  assert.equal(d.suggestions.find((s) => s.category === "housing").average, 1980, "two mortgages over two months, not two over three");
+  assert.equal(d.suggestions.find((s) => s.category === "dining").average, 94, "$93.60 each month from checking");
+  assert.ok(!d.suggestions.some((s) => s.category === "card-unimported" || /not imported/.test(s.label)), "the card's payments are in no category");
+  // what went to the Visa in September and October, a month: (2,980.55 + 2,610.30) / 2 = 2,795.43
+  assert.deepEqual(d.suggestCards.map((c) => [c.cardId, c.name, c.average, c.months]), [["a-visa", "Visa card", 2795, 2]]);
+  // October's page: the payment is spending with no envelope, one line for the card, never an envelope to add
+  const oct = compute(p, { today: T, month: "2026-10" });
+  const card = oct.unbudgeted.find((u) => u.card);
+  assert.deepEqual([card.label, card.category, card.cardId], ["Visa card, details not imported yet", "", "a-visa"]);
+  assert.ok(Math.abs(card.spent - 2610.3) < 0.005);
+});
+// ---- round-5 review (2026-11-02): a card file that starts late is left out with its reason; a card file for some months only
+test("the Visa's file from 8/20: August is left out for both reasons; the suggestions average September and October", async () => {
+  const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-08-20", "2026-10-31"); p.budgets = [];
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.suggestFrom, ["2026-10", "2026-09"]);
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.issues.map((x) => x.why)]), [["2026-08", ["Chase checking has no lines from 7/31 to 8/2", "Visa card's lines start on 8/20"]]]);
+  // eating out: checking's $93.60 a month plus the Visa's 30 and 31 dinners of $30: (93.60 + 900 + 93.60 + 930) / 2 = 1,008.60
+  assert.equal(d.suggestions.find((s) => s.category === "dining").average, 1009);
+  assert.deepEqual(d.suggestCards, [], "the Visa's file covers both months");
+});
+test("the Visa's file for September only: what went to it in October is named as October's, not 'a month'", async () => {
+  const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-09-01", "2026-09-30"); p.budgets = [];
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.suggestFrom, ["2026-10", "2026-09"]);
+  assert.deepEqual(d.suggestCards.map((c) => [c.cardId, c.inMonths, c.total, c.average, c.months]), [["a-visa", ["2026-10"], 2610.3, 1305, 2]]);
+});
+// ---- re-check of the card patch (2026-11-02)
+test("finding 4: a quiet savings account (interest on 7/31 and 10/31) and no card: suggestions from August to October, none skipped", () => {
+  return import("../../../qa/fixtures/card-gap-plan.mjs").then(({ cardGapPlan }) => {
+    const T = "2026-11-02";
+    const p = cardGapPlan(T); p.accounts = p.accounts.filter((a) => a.type !== "credit"); p.budgets = [];
+    p.transactions = p.transactions.filter((t) => t.date >= "2026-08-01" && !/CRD AUTOPAY/.test(t.rawPayee));
+    for (const [i, d] of ["2026-07-31", "2026-10-31"].entries()) p.transactions.push({ id: `iq${i}`, date: d, amount: 12, payee: "INTEREST PAID", rawPayee: "INTEREST PAID", accountId: "a-sav", category: "income-interest", tags: [], note: "" });
+    const d = compute(p, { today: T });
+    assert.deepEqual([d.suggestFrom, d.suggestSkipped, d.suggestCards], [["2026-10", "2026-09", "2026-08"], [], []]);
+  });
+});
+test("finding 2: the Visa file stopping on 10/10 leaves October out of the suggestions; the 10/14 payment is no stand-in", async () => {
+  const { cardGapPlan, withVisaFile } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = withVisaFile(cardGapPlan(T), "2026-08-01", "2026-10-10"); p.budgets = [];
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.suggestFrom, ["2026-09"]);
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.issues.map((x) => x.why)]), [["2026-10", ["Visa card's lines stop on 10/10"]], ["2026-08", ["Chase checking has no lines from 7/31 to 8/2"]]]);
+  assert.deepEqual(d.suggestCards, []);
+  assert.equal(compute(p, { today: T, month: "2026-10" }).unbudgeted.find((u) => u.card), undefined);
+});
+
+// --- re-check 4: one rule for holes, and a payment counted for neither card ---
+test("money 1 (re-check 4): one checking file a month, each from its first to its last line: suggestions from August to October (groceries $997)", async () => {
+  const { cardGapPlan, noCardFromAug, oneFileAMonth } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = noCardFromAug(cardGapPlan(T)); p.budgets = [];
+  p.transactions = p.transactions.filter((t) => t.date !== "2026-09-28" && t.date !== "2026-09-30");
+  oneFileAMonth(p, "a-chk");
+  const d = compute(p, { today: T, month: "2026-11" });
+  assert.deepEqual([d.suggestFrom, d.suggestSkipped], [["2026-10", "2026-09", "2026-08"], []]);
+  assert.equal(d.suggestions.find((s) => s.category === "groceries").average, 997);
+});
+test("money 4 (re-check 4): a payment for one of two Chase cards: no suggestions from those months, and October says why in one sentence", async () => {
+  const { cardGapPlan, anAccount } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = cardGapPlan(T); p.budgets = []; p.accounts.find((a) => a.id === "a-visa").name = "Freedom";
+  p.accounts.push(anAccount("a-sap", "Sapphire", "credit", "Chase"));
+  const d = compute(p, { today: T, month: "2026-11" });
+  assert.deepEqual(d.suggestFrom, []);
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.issues[0].why]), [
+    ["2026-10", "$2,610 went to one of your Chase cards in October; bring in the card files to see what it bought"],
+    ["2026-09", "$2,981 went to one of your Chase cards in September; bring in the card files to see what it bought"],
+    ["2026-08", "$2,450 went to one of your Chase cards in August; bring in the card files to see what it bought"]]);
+  assert.equal(compute(p, { today: T, month: "2026-10" }).unsure, "$2,610 went to one of your Chase cards in October; bring in the card files to see what it bought.");
+});
+
+// --- re-check 5 (2026-11-05): two cards at one bank, no files: Budget's note is true and says why no month is suggested from
+test("re-check 5, defect 4: two Chase cards with no files: 'start from Expenses', and August to October are left out for the cards", async () => {
+  const { render } = await import("./view.js");
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const { cardGapPlan, anAccount } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const T = "2026-11-02";
+  const p = cardGapPlan(T); p.budgets = []; p.accounts.find((a) => a.id === "a-visa").name = "Freedom";
+  p.accounts.push(anAccount("a-sap", "Sapphire", "credit", "Chase"));
+  const d = compute(p, { today: T });
+  assert.deepEqual(d.suggestFrom, []);
+  assert.ok(d.fromExpenses.length > 0);
+  // one short reason for the months a payment counted for neither card keeps out (ledger gapIssues' `brief`)
+  assert.deepEqual(d.suggestSkipped.map((s) => [s.ym, s.issues[0].kind, s.issues[0].brief]), ["2026-10", "2026-09", "2026-08"].map((ym) => [ym, "unsure", "money went to your Chase cards, whose files aren't in"]));
+  const text = drawText(render, p, (key, params) => (key === "overview/next-best-action" ? next(p, params) : null), T);
+  assert.match(text, /Start from the amounts on your Expenses page below\. Your bank files have no whole month to suggest amounts from yet\. August to October 2026 are left out: money went to your Chase cards, whose files aren't in\./);
+  assert.doesNotMatch(text, /once a bank file is in/);
+  // with no bank file at all the old words stay true
+  const q = cardGapPlan(T, { withFile: false }); q.budgets = []; q.transactions = [];
+  assert.match(drawText(render, q, (key, params) => (key === "overview/next-best-action" ? next(q, params) : null), T), /Spending against each envelope shows once a bank file is in\./);
+});

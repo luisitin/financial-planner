@@ -24,6 +24,10 @@ two guesses fill in, each marked `guess: true` and shown as "suggested" with its
   SAVANNAH" is not) when the plan has a savings account, or a card's payment ("crd" or "card" ... "autopay"/"pmt", "payment thank
   you"; never a line that says loan, mortgage or credit union, which are loan payments and count as spending) when it has a credit card: "Transfer between my accounts", so it is not counted as
   spending (the repo's sample file counted $500 moved to savings and a $640 card payment as August spending).
+  Since 2026-11-02 also money in on a card account (every line of the group on a card, Ledger `isCardAccount`) with a
+  payment's words (payment, pymt, pmt, autopay, epay) and no refund, return, reversal, cash back, reward or interest in it:
+  the card's own line for the payment from checking ("AUTOMATIC PAYMENT - THANK"), "it looks like a payment to the card from
+  your other accounts". Unfiled, it counted as $8,041 of income once the sample family's Visa file was in.
 - `shopGuess`: a short list of well-known shops and billers (`SHOPS`: grocers, fuel and rides, streaming, coffee and fast food,
   phone and internet, power, insurers, pharmacies), matched on whole words of the normalised line ("shell" is not "Shelley"),
   longest name first across the kinds ("uber eats" is eating out before "uber trip" is a ride), and only names that are one kind of

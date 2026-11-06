@@ -1,10 +1,13 @@
 // modules/transactions/ledger/view.js -- DOM only. Filters on top, totals, the list (tap a row
 // to edit), "show more", and one form for adding or editing a transaction by hand.
-import { compute, txKey } from "./compute.js";
+import { compute, txKey, theCard } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
 
 // filter state survives the re-render the shell does after every save
 const state = { month: "", accountId: "", category: "", q: "", limit: 100 };
+// a new line to open on arrival (the Monthly review's "Add Chase checking's lines by hand": ?add=<first missing day>)
+let addOn = null;
+const STYLE = `.lg-show > summary .fold-status { white-space: normal; text-align: right; min-width: 0; }`;
 
 const FIELDS = (plan) => [
   { key: "date", label: "Date", type: "date", required: true },
@@ -22,15 +25,24 @@ export function render(root, ctx) {
   // deep links set the filters once, then the address goes back to the bare page so the
   // filters the person picks afterwards are not overridden on the next render
   const rest = ctx.route.rest ?? [];
+  const query = ctx.route.query ?? {};
   if (rest.length) {
     if (rest[0] === "uncategorised") { state.category = "none"; state.month = ""; }
     if (rest[0] === "month" && rest[1]) { state.month = rest[1]; }
-    if (rest[0] === "account" && rest[1]) { state.accountId = rest[1]; }
-    ctx.go("transactions", "ledger");
+    if (rest[0] === "account" && rest[1]) {
+      state.accountId = rest[1];
+      // opened to add the days an account's files miss: that month, and a new line dated the first missing day (re-check 4)
+      if (/^\d{4}-\d{2}$/.test(query.month ?? "")) state.month = query.month;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(query.add ?? "")) addOn = { date: query.add, accountId: rest[1] };
+    }
+    // the way back to the check-in (from=review) stays in the address (re-check 4, 2026-11-02)
+    ctx.go("transactions", "ledger", [], query.from ? { from: query.from, ...(query.review ? { review: query.review } : {}) } : {});
     return;
   }
-  const d = compute(plan, state);
-  let editing = null;
+  const d = compute(plan, { ...state, today: fmt.today() });
+  let editing = addOn ? { date: addOn.date, accountId: addOn.accountId, category: "", amount: null } : null;
+  addOn = null;
+  root.append(ui.h("style", {}, STYLE));
 
   if (d.total === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -47,7 +59,7 @@ export function render(root, ctx) {
     // (design log 2026-09-15).
     root.append(ui.card(null, ui.row(
       ui.stat("Money in", fmt.money(d.in, cur), state.month ? "this month" : "all time"),
-      ui.stat("Money out", fmt.money(d.out, cur), "transfers between your accounts not counted"),
+      ui.stat("Money out", fmt.money(d.out, cur), `transfers between your accounts not counted${d.cardsOut >= 1 ? `; ${fmt.money(d.cardsOut, cur)} of it went to ${d.cardsOutNames?.length === 1 ? `${theCard(d.cardsOutNames[0])}, whose file isn't in` : "cards whose files aren't in"}` : ""}`),
       ui.stat(d.net >= 0 ? "Kept" : "Short", fmt.money(Math.abs(d.net), cur), `${d.matched} transaction${d.matched === 1 ? "" : "s"}${d.uncategorised ? `, ${d.uncategorised} uncategorised` : ""}`),
     )));
     const showing = [
@@ -57,7 +69,7 @@ export function render(root, ctx) {
       state.q ? `“${state.q}”` : null,
     ].filter(Boolean).join(" · ");
     const filtered = !!(state.month || state.accountId || state.category || state.q);
-    root.append(ui.h("details", { class: "card fold fold-card", open: filtered ? true : null },
+    root.append(ui.h("details", { class: "card fold fold-card lg-show", open: filtered ? true : null },
       ui.h("summary", {}, ui.h("h2", {}, "Showing"), ui.h("span", { class: "fold-status" }, showing), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search)))));
     // the way to Categorise is a full-size button, not a link inside the sentence (44 px to tap)
@@ -121,6 +133,7 @@ export function render(root, ctx) {
   drawForm();
   formCard.append(formHost);
   root.append(formCard);
+  if (editing && !editing.id) requestAnimationFrame(() => formCard.scrollIntoView({ block: "start" }));
   drawList();
   root.append(list);
 }
