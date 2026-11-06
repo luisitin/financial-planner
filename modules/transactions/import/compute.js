@@ -61,6 +61,32 @@ export function detectMapping(headers, rows) {
   const payee = best(DESC_NAMES, null, taken) ?? headers.findIndex((h, i) => !taken.includes(i) && sampleScore(rows, i, (c) => /[a-z]{3}/i.test(c) ? c : null) > 0.8);
   return { date, payee: payee >= 0 ? payee : null, amount, debit, credit, type, dateOrder: guessDateOrder(rows.map((r) => r[date])) };
 }
+/**
+ * fileCurrency(parsed) -> "EUR" | "USD" | ... | null: the currency a file names in a column headed Currency (Währung,
+ * Moneda, Devise, Valuta, Divisa, Ccy) whose cells are three-letter codes; with several, the first that is not USD.
+ * Kept on the import record (importRecord), so a plan holding lines in another currency gets no U.S. guesses
+ * (core/estimate applies; guesses spec 4.8). null when no column names one.
+ */
+const CURRENCY_NAMES = /^(currency|currency code|iso currency|curr|ccy|w(a|ä|ae)hrung|moneda|devise|valuta|divisa)$/i;
+export function fileCurrency(parsed) {
+  const i = (parsed?.headers ?? []).findIndex((h) => CURRENCY_NAMES.test(String(h ?? "").replace(/^\uFEFF/, "").trim()));
+  if (i < 0) return null;
+  const cells = (parsed.rows ?? []).map((r) => String(r?.[i] ?? "").trim()).filter(Boolean);
+  if (!cells.length || !cells.every((c) => /^[A-Za-z]{3}$/.test(c))) return null;
+  const codes = [...new Set(cells.map((c) => c.toUpperCase()))];
+  return codes.find((c) => c !== "USD") ?? codes[0];
+}
+/**
+ * importRecord(prep, { id, at, accountId, fileName, checkedOnly }) -> the `imports[]` record the page writes for a file:
+ * { id, at, accountId, fileName, rows, added, skipped, bad, from, to, currency? }. checkedOnly: nothing was added, the file
+ * only counts its days as checked. `currency` only when the file names one (fileCurrency).
+ */
+export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false }) {
+  return {
+    id, at, accountId, fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
+    from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}),
+  };
+}
 /** "MDY" or "DMY" from a column of dates: if any first number is > 12 it is a day. */
 export function guessDateOrder(samples) {
   for (const s of samples ?? []) { const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-]\d{2,4}/.exec(String(s ?? "").trim()); if (m) { if (Number(m[1]) > 12) return "DMY"; if (Number(m[2]) > 12) return "MDY"; } }
@@ -140,7 +166,7 @@ export const headerKey = (headers) => headers.map(H).join("|");
 
 /**
  * prepareImport(plan, text, { accountId, mapping?, flipSign?, importId }) -> {
- *   parsed, mapping, headerKey, txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
+ *   parsed, mapping, headerKey, currency (fileCurrency), txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
  *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null,
  *   gap (gapBefore: days between the account's last lines and this file) | null, fills (uncoveredDays: the days of this file the
  *   account's files did not cover; with nothing new to add, the page offers to record the file so those days count as checked)
@@ -158,7 +184,7 @@ export function prepareImport(plan, text, { accountId, mapping = null, flipSign 
     else { flip = suggestFlip(plan, accountId, parsed, map); flipAuto = flip; }
   }
   const { txs: rawTxs, bad } = rowsToTransactions(parsed, map, { accountId, importId, flipSign: flip });
-  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, ...finish(plan, rawTxs) };
+  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), ...finish(plan, rawTxs) };
 }
 /** Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). */
 function finish(plan, rawTxs) {

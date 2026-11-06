@@ -225,6 +225,7 @@ Detail in `ROADMAP.md`. In one line each: scaffold (done) -> household, income, 
 | Server compute through dynamic import of the same `compute.js` | one implementation, no drift between phone and PC | never |
 | Shared token, not accounts | one owner, a partner at most; simplicity over ceremony | more than two people or a public tunnel |
 | Folder = page, four files | discoverability for future editors is the whole point | never |
+| Guesses are ordinary values plus a ledger (`plan.guesses`), refreshed only inside the person's own change (`settle` in `store.update`), never on load; the older Get started flags are read as frozen guesses (2026-11-02) | every page keeps reading plain numbers and needs no change; a typed figure always wins and nothing moves on its own when the app opens or another phone syncs; population figures live in sourced tables (modules/overview/guesses/data), never in the AI | the older flags have no reader left (fold them into the ledger with a schema v2 migration), or a guess must follow something outside the plan |
 
 ## 19. Glossary
 

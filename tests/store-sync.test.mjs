@@ -47,12 +47,15 @@ globalThis.fetch = async (url, opt = {}) => {
   throw new Error(`unexpected ${m} ${url}`);
 };
 let n = 0;
+// tests/store-settle.test.mjs runs this whole file again with SETTLE_HOOK=1: every scenario with a guess settle registered
+const settleHook = process.env.SETTLE_HOOK ? (await import("../core/estimate/index.js")).settle : null;
 /** A device (or tab): its own copy of the store module, on the given storage. */
 async function device(ls, { sandbox = false, tab = storage() } = {}) {
   globalThis.localStorage = ls; globalThis.sessionStorage = tab;
   globalThis.location.search = sandbox ? "?sandbox=1" : "";
   const { store } = await import(`../core/store.js?device=${++n}`);
-  const use = () => { globalThis.localStorage = ls; globalThis.sessionStorage = tab; globalThis.location.search = sandbox ? "?sandbox=1" : ""; };
+  if (settleHook) store.settleWith((d) => settleHook(d, { estimators: {}, tables: {}, today: "2026-11-01" }));
+  const use =() => { globalThis.localStorage = ls; globalThis.sessionStorage = tab; globalThis.location.search = sandbox ? "?sandbox=1" : ""; };
   return { store, ls, use, edit: (notes) => { use(); store.update((d) => { d.notes = notes; }); }, save: () => { use(); return store.save(); } };
 }
 const kept = (ls) => JSON.parse(ls.getItem("planner.plan") ?? "null")?.notes;

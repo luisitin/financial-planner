@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { prepareImport, parseBankCsv } from "../modules/transactions/import/compute.js";
+import { prepareImport, parseBankCsv, fileCurrency, importRecord } from "../modules/transactions/import/compute.js";
 import { emptyPlan } from "../core/schema/migrate.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -81,4 +81,24 @@ test("a card file that is already signed the plan's way is not flipped", () => {
   const p = emptyPlan(); p.accounts.push({ id: "a", name: "card", type: "credit", balance: 0 });
   const r = prepareImport(p, "Date,Description,Amount\n09/01/2026,STORE,-10.00\n09/02/2026,STORE,-12.00\n09/03/2026,PAYMENT,100.00\n", { accountId: "a" });
   assert.equal(r.flipSign, false); near(by(r, "PAYMENT").amount, 100);
+});
+
+// review of C1 (2026-11-06, plumbing 5; guesses spec 4.8): a file that names its currency keeps it on its import record, so
+// a plan holding euro lines gets no U.S. guesses (core/estimate applies); a file with no currency column, or a USD one, has none
+test("the file's currency column: the European bank's EUR is kept on the import record; U.S. files carry none", () => {
+  const eu = run("european-bank.csv", "checking");
+  assert.equal(eu.currency, "EUR");
+  const rec = importRecord(eu, { id: "imp-1", at: "2026-11-06T10:00:00.000Z", accountId: "a", fileName: "european-bank.csv" });
+  assert.deepEqual(rec, { id: "imp-1", at: "2026-11-06T10:00:00.000Z", accountId: "a", fileName: "european-bank.csv", rows: 4, added: 4, skipped: 0, bad: 0, from: "2026-08-25", to: "2026-09-02", currency: "EUR" });
+  const checked = importRecord(eu, { id: "imp-2", at: "2026-11-06T10:00:00.000Z", accountId: "a", fileName: "european-bank.csv", checkedOnly: true });
+  assert.deepEqual([checked.added, checked.bad, checked.skipped, checked.currency], [0, 0, 0, "EUR"], "a file only counted as checked keeps its currency too");
+  for (const f of ["amex-card.csv", "bofa-checking.csv", "capitalone-card.csv", "chase-checking.csv", "discover-card.csv", "ally-savings.csv", "wellsfargo-checking.csv"]) {
+    const r = run(f, /card/.test(f) ? "credit" : "checking");
+    assert.equal(r.currency, null, f);
+    assert.equal("currency" in importRecord(r, { id: "x", at: "t", accountId: "a", fileName: f }), false, `${f}: no currency on the record`);
+  }
+  assert.equal(fileCurrency(parseBankCsv("Date,Description,Amount,Currency\n09/01/2026,STORE,-10.00,USD\n")), "USD");
+  assert.equal(fileCurrency(parseBankCsv("Date,Description,Amount,Currency\n09/01/2026,STORE,-10.00,usd\n09/02/2026,SHOP,-3,GBP\n")), "GBP", "any other currency in the file wins");
+  assert.equal(fileCurrency(parseBankCsv("Date,Type,Amount\n09/01/2026,ACH,-10.00\n")), null, "a three-letter type column is not a currency");
+  assert.equal(fileCurrency(parseBankCsv("Date,Description,Amount,Currency\n09/01/2026,STORE,-10.00,dollars\n")), null, "not a currency code");
 });

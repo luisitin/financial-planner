@@ -14,6 +14,8 @@
 //   store.eraseDevice()    erase this device's copy (the pretend one in the sandbox) and its waiting mark
 //   store.takeSent()       true once after changes that waited on this device reached the PC
 //   store.takeLost()       true once when a change marked as waiting was not on this device any more at open
+//   store.settleWith(fn)   register the function that refreshes untouched guesses inside every update (core/app.js, once at boot)
+//   store.takeSettled()    what the last update's settle changed, once: { changed, dropped } | null
 //
 // Persistence: the PC server's data/plan.json when reachable, else this browser's
 // localStorage (per device -- the phone and the PC would then hold different plans,
@@ -64,6 +66,8 @@ let localFull = false;                      // the plan did not fit in this brow
 let justSent = false;
 let lost = false;
 let written = "";                           // the stamp this tab last read or wrote in localStorage
+let settleFn = null;                        // refreshes untouched guesses inside update() only (core/estimate settle; core/app.js registers it)
+let settled = null;                         // what the last update's settle changed, until takeSettled() reads it
 const subs = new Set();
 
 /** A version's identity: meta.rev, new on every change (two saves in the same millisecond share an updatedAt); plans
@@ -269,10 +273,21 @@ export const store = {
   get() { return plan; },
   backend() { return backend; },
   sandbox() { return SANDBOX; },
+  /** Register the function that refreshes guesses inside every update (core/app.js does it once at boot). Load, adopt,
+   * replace, resolve, resync and another tab's save never call it: opening the app or taking a copy writes nothing. */
+  settleWith(fn) { settleFn = typeof fn === "function" ? fn : null; },
+  /** What the last update's settle changed, once: { changed, dropped } | null. */
+  takeSettled() { const s = settled; settled = null; return s; },
   update(mutator) {
     otherTab();                                   // another tab's save first, so this change builds on it
-    const next = structuredClone(plan);
+    let next = structuredClone(plan);
     mutator(next);
+    // the guesses nobody has touched follow the change. It works on its own copy when the plan has guesses, so a settle
+    // that fails part way never costs the person their change, nor leaves half a refresh behind
+    if (settleFn) {
+      const trial = next.guesses ? structuredClone(next) : next;
+      try { settled = settleFn(trial) ?? null; next = trial; } catch (e) { settled = null; console.error("[store] settle failed", e); }
+    }
     plan = touch(next);
     keepHere(plan);                               // on this device and marked waiting now: closing the app loses nothing
     notify();

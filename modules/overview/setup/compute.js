@@ -20,7 +20,7 @@ import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
 import { QUARTERS } from "../../taxes/estimated/compute.js";
 import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
-import { pmt, nper } from "../../../core/math/finance.js";
+import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
@@ -103,13 +103,9 @@ export const rateIsGuess = (d) => typeof d?.rateGuessed === "number" && Math.abs
  * 5, student loans 10 (the Standard plan for loans made before July 1, 2026; README), another loan 3; pmt in
  * core/math/finance.js); cards, a common minimum (the month's interest plus 1% of the balance). Kept on the row in `paymentGuessed`, a guess while the payment still equals it.
  */
-export const TYPICAL_TERMS = { mortgage: 360, "car-loan": 60, student: 120, loan: 36 };
-export function typicalPayment(key, owed, rate) {
-  if (!(owed > 0)) return 0;
-  const r = Math.max(0, Number(rate) || 0) / 12;
-  const p = key === "credit" ? owed * r + owed * 0.01 : pmt(r, TYPICAL_TERMS[key] ?? 60, owed);
-  return Math.round(p);
-}
+// the shared ones (core/math/finance.js), so "Our guesses for you" can check an older payment against today's rate and
+// balance without importing this module (the guesses import rule, spec 6.2)
+export { TYPICAL_TERMS, typicalPayment };
 export const paymentIsGuess = (d) => typeof d?.paymentGuessed === "number" && Math.abs(Number(d.minPayment) - d.paymentGuessed) < 0.005;
 /**
  * A month's spending in two groups; must-pay comes from the group (and matches the categories' own `essential`).
@@ -830,7 +826,10 @@ export function applyGoalDetails(draft, v, today) {
       const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
       const asked = {};
       if (!old || same(old.fundedBy, s.cushionFunds)) { asked.fundedBy = funds; if (!same(s.cushionFunds, funds)) s.cushionFunds = funds; }
-      if (c.essential > 0 && (!old || Number(old.target) === Number(s.cushionTarget ?? old.target))) { asked.target = c.target; if (s.cushionTarget !== c.target) s.cushionTarget = c.target; }
+      // the amount follows the bills while it is the one this setup wrote; null means the person kept or typed their own
+      // ("That's about right" or a figure typed on Our guesses for you), so it stays
+      const oursTarget = s.cushionTarget === undefined || (s.cushionTarget !== null && Number(old?.target) === Number(s.cushionTarget));
+      if (c.essential > 0 && (!old || oursTarget)) { asked.target = c.target; if (s.cushionTarget !== c.target) s.cushionTarget = c.target; }
       if (old) for (const k of Object.keys(asked)) if (same(old[k], asked[k])) delete asked[k];
       put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: "", priority: 1, saved: 0, fundedBy: funds, monthly: 0, rate: null, inflates: false, isEmergencyFund: true });
       continue;
@@ -1127,6 +1126,51 @@ export function standing(plan, { today }) {
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
   };
 }
+
+// ---- guesses this setup makes (docs/CONVENTIONS.md "Guesses"). Each keeps the formula it has always had; the ledger
+// (core/estimate) lists them on "Our guesses for you" and, for a guess the ledger wrote, keeps it in step with the
+// answers it reads. They are worked out from the plan's own answers (basis "yours"), so they cite no population table;
+// RULES_ON is the day their rules were last checked (their dataAsOf). The older flags they replace (ssWrote, retireAuto,
+// cushionTarget, cushionFunds) are read through core/estimate's LEGACY adapters and stay frozen.
+const RULES_ON = "2026-11-02";
+const ssPerson = (path) => /^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(path ?? "")?.[1] ?? null;
+export const estimators = {
+  "overview/setup:ss": {
+    tier: 4, order: 3, label: "Social Security at full retirement age", unit: "month", weight: "big", basis: "yours", reads: [],
+    page: () => "#/retirement/social-security",
+    fn(plan, { today, path }) {
+      const pid = ssPerson(path), p = people(plan).find((x) => x.id === pid);
+      if (!p?.birthDate || !today || p.role === "dependent") return null;
+      const est = estimateSocialSecurity({ birthYear: Number(p.birthDate.slice(0, 4)), yearlyPay: yearlyPay(plan, pid), stopAge: p.retirementAge ?? Number(plan?.assumptions?.retirementAge ?? 65), today });
+      if (est === null) return null;
+      return { value: est, rounded: true, why: "worked out from the pay on file with Social Security's formula", uses: { pay: "typed", birth: "typed" }, sharperWith: [{ label: "your statement at ssa.gov", href: "#/retirement/social-security" }], tables: [], dataAsOf: RULES_ON, basis: "yours" };
+    },
+  },
+  "overview/setup:retireSpend": {
+    tier: 4, order: 4, label: "Spending a month once work stops", unit: "month", weight: "big", basis: "yours", reads: [],
+    page: () => "#/retirement/projection",
+    fn(plan, { today }) {
+      const v = retireDefault(plan, today);
+      return v > 0 ? { value: v, rounded: true, why: "today's bills without childcare, plus loans still running then", uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+    },
+  },
+  "overview/setup:cushionTarget": {
+    tier: 4, order: 5, label: "Safety cushion to aim for", unit: "total", weight: "small", basis: "yours", reads: [],
+    page: () => "#/goals/goals",
+    fn(plan, { today }) {
+      const c = cushion(plan, null, today);
+      return c.essential > 0 ? { value: c.target, rounded: true, why: `${c.months} months of your must-pay bills`, uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+    },
+  },
+  "overview/setup:cushionFunds": {
+    tier: 4, order: 6, label: "Accounts that hold the cushion", unit: "list", weight: "small", basis: "yours", reads: [],
+    page: () => "#/goals/goals",
+    fn(plan) {
+      const funds = L(plan, "accounts").filter((a) => TIERS.now.types.includes(a.type)).map((a) => a.id);
+      return funds.length ? { value: funds, why: "your checking, savings and cash accounts", uses: { accounts: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+    },
+  },
+};
 
 /** For Get started: has the setup been started, where, and is it finished. */
 export function progress(plan) {

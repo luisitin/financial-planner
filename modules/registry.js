@@ -88,6 +88,7 @@ export default [
   { group: "overview", id: "alerts", load: () => import("./overview/alerts/module.js") },
   { group: "overview", id: "benchmarks", load: () => import("./overview/benchmarks/module.js") },
   { group: "overview", id: "dashboard", load: () => import("./overview/dashboard/module.js") },
+  { group: "overview", id: "guesses", load: () => import("./overview/guesses/module.js") },
   { group: "overview", id: "guide", load: () => import("./overview/guide/module.js") },
   { group: "overview", id: "health-score", load: () => import("./overview/health-score/module.js") },
   { group: "overview", id: "monthly-review", load: () => import("./overview/monthly-review/module.js") },

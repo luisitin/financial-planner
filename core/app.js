@@ -14,6 +14,7 @@ import { features } from "./features.js";
 import * as ui from "./ui/dom.js";
 import * as fmt from "./format.js";
 import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
+import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -24,6 +25,10 @@ let rerender = null;                // the re-render a store update schedules (s
 const NAV_KEY = "planner.nav";      // { open: {groupId: bool}, showSoon: bool }
 const nav = (() => { try { return { open: {}, showSoon: true, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { open: {}, showSoon: true }; } })();
 const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav)); } catch { } };
+// Guesses (docs/CONVENTIONS.md "Guesses"): every loaded manifest's `estimators` and `guessTables`, merged once at boot
+// whatever the per-device page toggles, so a guess keeps following the answers even when its page is switched off.
+let GUESS = { estimators: {}, tables: {}, weights: {} };
+let moved = 0;                      // how many guesses the last save moved (store.takeSettled), said once with its notice
 export const isReady = (m) => m.status !== "planned";
 
 async function loadModules() {
@@ -38,6 +43,9 @@ async function loadModules() {
     } catch (e) { console.error(`[planner] module ${entry.group}/${entry.id} failed to load`, e); broken.push(`${entry.group}/${entry.id}: ${e.message}`); return null; }
   }));
   for (const m of loaded) if (m) modules.set(`${m.group}/${m.id}`, m);
+  const reg = mergeEstimators([...modules.values()].map((m) => ({ from: `${m.group}/${m.id}`, estimators: m.estimators, tables: m.guessTables })));
+  for (const p of reg.problems) console.error(`[planner] ${p}`);
+  GUESS = reg;
 }
 
 function pagesInGroup(groupId) {
@@ -156,6 +164,8 @@ function makeCtx(route) {
       return safeCompute(m, store.get(), params);
     },
     go: (group, id, rest, query) => router.go(group, id, rest, query),
+    // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
+    guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
     openSearch,
     announce,
   };
@@ -207,6 +217,8 @@ async function show(route, { keepScroll = false } = {}) {
   let frame = null;
   if (gm?.frame && isReady(gm) && features.enabled(gm)) { try { frame = gm.frame(ctx, page); } catch (e) { console.warn("[planner] guide frame failed", e); } }
   if (frame?.before) root.append(frame.before);
+  const note = guessNote(m, ctx.plan);
+  if (note) root.append(note);
   root.append(page);
   ctx.derived = safeCompute(m, ctx.plan);
   let c = null;
@@ -218,16 +230,35 @@ async function show(route, { keepScroll = false } = {}) {
   if (keepScroll) {
     const pageScrolled = Math.abs(window.scrollY - keepY) > 2;
     root.style.minHeight = "";
+    // guesses that followed this save (core/estimate settle) are said on its green notice, or on their own at the bottom
+    const followed = moved; moved = 0;
+    const words = followed ? ` ${followed} of our guesses moved with it.` : "";
+    const firstOk = followed ? [...root.querySelectorAll(".notice.ok")].find((n) => !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent)) ?? null : null;
+    if (firstOk) firstOk.append(words);
+    else if (followed) echo(words.trim());
     const now = [...root.querySelectorAll(".notice.ok, .notice.error")];
     // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
-    const fresh = now.filter((n) => !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
+    const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
     lastFresh = new Set(fresh.map((n) => n.textContent));
     const inView = (n) => { const r = n.getBoundingClientRect(); return r.bottom > topbarH() && r.top < window.innerHeight; };
     if (!pageScrolled && fresh.length && !fresh.some(inView)) {
       const words = fresh[0].cloneNode(true); words.querySelectorAll("a, button").forEach((x) => x.remove());
       echo(words.textContent.trim(), fresh[0].classList.contains("error"));
     }
-  } else lastFresh = new Set();
+  } else { lastFresh = new Set(); moved = 0; }   // a new page: an earlier save's moved guesses are old news
+}
+/**
+ * The one muted row a page that rests on a big guess shows (docs/CONVENTIONS.md "Guesses": opt-in with `restsOn:
+ * [plan sections]` in the manifest; never on Get started or the guesses page). Names the two biggest, then "and N more".
+ */
+function guessNote(m, plan) {
+  if (!Array.isArray(m?.restsOn) || !m.restsOn.length || (m.group === "overview" && (m.id === "setup" || m.id === "guesses"))) return null;
+  let big = [];
+  try { big = guessesTouching(plan, m.restsOn, { weights: GUESS.weights }).filter((e) => GUESS.weights[e.k] === "big"); } catch { big = []; }
+  if (!big.length) return null;
+  const names = [...new Set(big.map((e) => (GUESS.estimators[e.k]?.label ?? "a figure we filled in").toLowerCase()))];
+  const shown = names.slice(0, 2).join(" and ") + (names.length > 2 ? `, and ${names.length - 2} more` : "");
+  return ui.h("ul", { class: "page-list" }, ui.h("li", {}, ui.h("a", { class: "muted", href: "#/overview/guesses" }, `Some of this uses our guesses: ${shown}. ›`)));
 }
 const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
 let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
@@ -303,6 +334,8 @@ function onSync() {
 
 async function boot() {
   await loadModules();
+  // untouched guesses follow each change inside store.update (never on load, adopt, replace, resolve or another tab's save)
+  store.settleWith((draft) => settle(draft, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today() }));
   await features.init();
   await store.load();
   buildNav();
@@ -313,7 +346,10 @@ async function boot() {
   document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
   document.getElementById("scrim").addEventListener("click", closeDrawer);
   document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
-  store.subscribe(() => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50); });
+  store.subscribe(() => {
+    moved += store.takeSettled()?.changed?.length ?? 0;
+    clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
+  });
   // A tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap here
   // never saves an old copy over today's changes; changes made here while the PC was out of reach go to it now (and
   // are retried every 30 seconds and when the network returns). Never redraw over what someone is typing.

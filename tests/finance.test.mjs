@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fv, pv, pmt, pmtToReach, nper, amortization, cagr, realRate, inflate, deflate } from "../core/math/finance.js";
+import { fv, pv, pmt, pmtToReach, nper, amortization, cagr, realRate, inflate, deflate, typicalPayment, TYPICAL_TERMS } from "../core/math/finance.js";
 
 const close = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 
@@ -42,4 +42,15 @@ test("rateFor: the inverse of fv (an internal rate of return)", async () => {
   assert.ok(Math.abs(rateFor(1000 + 100 * 10, 10, 100, 1000)) < 1e-9, "no growth: 0%");
   assert.equal(rateFor(100, 0, 10), null); assert.equal(rateFor(0, 5, 10), null); assert.equal(rateFor(100, 5, 0, 0), null);
   assert.equal(rateFor(1e-9, 5, 100), null, "below what is left at -99%");
+});
+
+test("typicalPayment: a loan's level payment over its usual term, a card's interest plus 1%, whole dollars", () => {
+  assert.deepEqual(TYPICAL_TERMS, { mortgage: 360, "car-loan": 60, student: 120, loan: 36 });
+  assert.equal(typicalPayment("mortgage", 185000, 0.0724), Math.round(pmt(0.0724 / 12, 360, 185000)));
+  assert.equal(typicalPayment("mortgage", 185000, 0.0724), 1261);
+  assert.equal(typicalPayment("credit", 3600, 0.2236), Math.round(3600 * 0.2236 / 12 + 36));
+  assert.equal(typicalPayment("credit", 3600, 0.2236), 103);
+  assert.equal(typicalPayment("student", 12000, 0), 100, "no interest: a straight split over 120 months");
+  assert.equal(typicalPayment("boat", 6000, 0.12), Math.round(pmt(0.01, 60, 6000)), "an unknown kind: 5 years");
+  assert.equal(typicalPayment("mortgage", 0, 0.07), 0);
 });

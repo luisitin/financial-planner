@@ -86,3 +86,18 @@ export const inflate = (amount, rate, years) => amount * Math.pow(1 + rate, year
 /** Today's purchasing power of a future `amount`. */
 export const deflate = (amount, rate, years) => amount / Math.pow(1 + rate, years);
 export const round2 = (x) => Math.round(x * 100) / 100;
+
+/**
+ * A usual loan's term in months (mortgage 30 years, car loan 5, student loans 10: the Standard plan for loans made before
+ * July 1, 2026; another loan 3), and the payment a month Get started fills in for a debt whose payment box is left blank
+ * (overview/setup applyOweAmounts; overview/guesses checks an older one against today's rate and balance): a loan, the
+ * level payment that pays `owed` off over its usual term at `rate` a year; a card ("credit"), a common minimum: the
+ * month's interest plus 1% of the balance. Whole dollars; 0 when nothing is owed.
+ */
+export const TYPICAL_TERMS = { mortgage: 360, "car-loan": 60, student: 120, loan: 36 };
+export function typicalPayment(key, owed, rate) {
+  if (!(owed > 0)) return 0;
+  const r = Math.max(0, Number(rate) || 0) / 12;
+  const p = key === "credit" ? owed * r + owed * 0.01 : pmt(r, TYPICAL_TERMS[key] ?? 60, owed);
+  return Math.round(p);
+}

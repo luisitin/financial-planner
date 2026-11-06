@@ -1,6 +1,6 @@
 // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 // the text), check the columns and the preview, import. Past imports can be undone.
-import { compute, prepareImport } from "./compute.js";
+import { compute, prepareImport, importRecord } from "./compute.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
 
 let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
@@ -113,6 +113,10 @@ export function render(root, ctx) {
     // nothing new but it spans days the account's files missed: one plain message below, never "only partly in it" (re-check 4)
     const fillsOnly = !ok && !bad && !!prep.fileFrom && (prep.fills ?? []).length > 0;
     if (prep.fileFrom && !fillsOnly) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`));
+    // a file in another currency (its Currency column): the amounts come in as they are, not converted, so say it before
+    // importing. Its import record keeps the currency, and our guesses use no U.S. figures for the plan then (core/estimate
+    // applies; guesses spec 4.8)
+    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
     // days between this account's last lines and this file: said before importing, with the usual payments that fall in them
     if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
     if (ok) previewHost.append(
@@ -128,7 +132,7 @@ export function render(root, ctx) {
           const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId });
           for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
           p.imports = p.imports ?? [];
-          p.imports.push({ id: importId, at: when, accountId: acct, fileName: name, rows: fresh.parsed.rows.length, added: fresh.add.length, skipped: fresh.skip.length, bad: fresh.bad.length, from: fresh.fileFrom, to: fresh.fileTo });
+          p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
           p.importProfiles = p.importProfiles ?? {};
           p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
           for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
@@ -142,10 +146,10 @@ export function render(root, ctx) {
       const f = prep.fills, span = (s) => (s.from === s.to ? shortDate(s.from) : `${shortDate(s.from)} to ${shortDate(s.to)}`);
       previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${span({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(span).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
         ui.row(ui.button(`Count ${f.map(span).join(" and ")} as checked`, () => {
-          const acct = accountId, name = fileName, when = new Date().toISOString(), rows = prep.parsed.rows.length, skipped = prep.skip.length, from = prep.fileFrom, to = prep.fileTo, key = prep.headerKey, m = mapping, flipUsed = prep.flipSign;
+          const acct = accountId, name = fileName, when = new Date().toISOString(), record = importRecord(prep, { id: ui.uid(), at: when, accountId: acct, fileName: name, checkedOnly: true }), key = prep.headerKey, m = mapping, flipUsed = prep.flipSign;
           store.update((p) => {
             p.imports = p.imports ?? [];
-            p.imports.push({ id: ui.uid(), at: when, accountId: acct, fileName: name, rows, added: 0, skipped, bad: 0, from, to });
+            p.imports.push(record);
             p.importProfiles = p.importProfiles ?? {};
             p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
           });
