@@ -152,7 +152,8 @@ export function render(page, ctx) {
         const now = c.today > 0 ? `Today it would be ${money(c.today)}` : `If ${nm(p)} died today, ${pays} would pay for everything ${kw} would need`;
         return `${first}. ${now}; ${p.cover > 0 ? `${money(p.cover)} of cover is on file` : "no life insurance is on file"}.${p.termUntil ? ` Term cover until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual way to buy it.` : ""}`;
       }
-      const base = p.method === "plan" ? `If ${nm(p)} died this year, ${whoOf(p, d)} would need about ${money(p.need)} to stay on track`
+      // the plan together runs short too (round 8 item 14): never "on track"
+      const base = p.method === "plan" ? `If ${nm(p)} died this year, ${whoOf(p, d)} would need about ${money(p.need)} ${p.plan?.eitherWay ? "to last as long as your plan together does" : "to stay on track"}`
         : p.method === "child" ? `If ${nm(p)} died, ${kidsOf(p, d)} would need about ${money(p.need)}${childFor(p.child)}`
         : `If ${nm(p)} died, a common rule of thumb puts what ${whoOf(p, d)} would need at about ${money(p.need)}`;
       // a rule of thumb standing in for a second adult's missing birth date: say how to get the plan's own answer
@@ -185,6 +186,8 @@ export function render(page, ctx) {
     // nobody short: a couple's plan stays on track; a single parent's children are paid for by Social Security, savings and cover
     const coveredLine = () => {
       const ones = d.people.filter((p) => p.dependants);
+      // short for retirement whoever lives (round 8 item 14): life cover does not fix that, and "on track" is not said
+      if (d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0)) return "Your plan is short for retirement either way, whoever lives, so life cover would not fix it. Will the money last? shows what does.";
       if (ones.length && ones.every((p) => p.method === "child")) return ones.map((p) => coveredChild(p, d)).join(" ");
       if (ones.length && ones.every((p) => p.method === "dime")) return ones.map((p) => `If ${nm(p)} died, the ${money(p.cover)} of cover on file would pay what a common rule of thumb says ${whoOf(p, d)} would need (${dimeNames(p.dime)}).`).join(" ");
       return `With the cover on file${anyCover ? "" : " (none yet)"} and the savings you have, the family's plan stays on track if one of you died this year.`;
@@ -197,7 +200,7 @@ export function render(page, ctx) {
       if (!how.hidden) how.scrollIntoView({ behavior: "smooth", block: "start" });
     }, { "aria-expanded": "false", "aria-controls": "ln-how" }) : null;
     host.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, raised.length === 1 ? `${Nm(raised[0])} ${nm(raised[0]) === "you" ? "need" : "needs"} about ${money(gapOf(raised[0]))} more life cover${ruleUntil(raised[0])}` : raised.length ? `${NamesIn(raised.map((p) => p.name))} need more life cover` : small.length ? "Close to covered" : depends ? "Your family is covered" : "Nobody depends on one income"),
+      ui.h("h1", {}, raised.length === 1 ? `${Nm(raised[0])} ${nm(raised[0]) === "you" ? "need" : "needs"} about ${money(gapOf(raised[0]))} more life cover${ruleUntil(raised[0])}` : raised.length ? `${NamesIn(raised.map((p) => p.name))} need more life cover` : small.length ? "Close to covered" : d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0 && !(p.cover > 0)) ? "No life cover needed now" : depends ? "Your family is covered" : "Nobody depends on one income"),
       ui.h("p", { class: "lede" }, raised.length ? raised.map(lineOf).join(" ")
         : small.length ? small.map(smallLine).join(" ")
         : depends ? coveredLine() : "No one else in the plan lives on one person's pay, so life insurance only needs to pay for a funeral and debts."),
@@ -299,7 +302,9 @@ export function render(page, ctx) {
       if (p.gap > 0) return `Short by about ${money(p.gap)} now, and by about ${money(p.gapAfterEnd)} once ${many(p) ? `it has ended (${list(steps.map((s) => `${money(s.benefit)} on ${fmt.date(s.endDate)}`))})` : `${money(end.benefit)} of it ends on ${fmt.date(end.endDate)}`}.`;
       return many(p) ? `Covered for now: ${each}; once it has ended, short by about ${money(p.gapAfterEnd)}.` : `Covered until ${fmt.date(end.endDate)}, when ${money(end.benefit)} of it ends; short by about ${money(p.gapAfterEnd)} from then.`;
     };
-    card.append(ui.h("p", { class: `ln-verdict ${short ? "bad" : "ok"}` }, end && ae ? endWords() : end ? coupleEnd() : short ? `Short by about ${money(p.gap)}.` : p.need === 0 ? `No extra money needed: ${p.survivorName ? `${sayWhose(p.survivorName)} ${p.plan?.survivorPay > 0 ? "pay" : "income"} and your savings keep the plan on track` : p.method === "child" ? childEnough(p, d) : "the plan holds on its own"}.${p.method === "child" ? leftOutWords(p.child) : ""}${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of cover on top.` : ""}` : Math.round(p.spare) > 0 ? `Covered, with about ${money(p.spare)} to spare.` : "Covered, with nothing to spare."));
+    // short for retirement either way and no cover asked for: plain words, not a green "good" (round 8 review, UX 5)
+    const eitherNone = !short && p.need === 0 && p.plan?.eitherWay;
+    card.append(ui.h("p", { class: `ln-verdict ${short ? "bad" : eitherNone ? "" : "ok"}` }, end && ae ? endWords() : end ? coupleEnd() : short ? `Short by about ${money(p.gap)}.` : p.need === 0 && p.plan?.eitherWay ? `No life cover needed for this: your plan is short for retirement either way, whoever lives.${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of cover on file.` : ""}` : p.need === 0 ? `No extra money needed: ${p.survivorName ? `${sayWhose(p.survivorName)} ${p.plan?.survivorPay > 0 ? "pay" : "income"} and your savings keep the plan on track` : p.method === "child" ? childEnough(p, d) : "the plan holds on its own"}.${p.method === "child" ? leftOutWords(p.child) : ""}${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of cover on top.` : ""}` : Math.round(p.spare) > 0 ? `Covered, with about ${money(p.spare)} to spare.` : "Covered, with nothing to spare."));
     if (worth) card.append(ui.h("p", { class: "small" }, worth.trim()));
     // without the cover through work (compute's `gapIfJobEnds`: a single parent's year by year, `ifJobEnds`, with its year)
     const jobYear = p.method === "child" && p.child?.ifJobEnds && p.child.ifJobEnds.year > d.startYear ? ` (${diedIn(p, p.child.ifJobEnds)})` : "";
@@ -314,7 +319,12 @@ export function render(page, ctx) {
       : `${NameOf(p.survivorMissing.name)} plan could not be worked out, so a rule of thumb stands in. Check ${checkWho(p.survivorMissing.name)} on People.`,
     // the fix is on another page: an outlined button to it, on its own line
     ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn secondary small", href: "#/household/people" }, p.survivorMissing.birthDate ? "Add it on People" : "Check it on People"))]));
-    if (p.plan && !p.plan.withCover.success && p.plan.withCover.failAge) card.append(ui.notice("warn", `With today's cover, ${nameOf(p.survivorName)} money would run out at ${nameOf(p.survivorName)} age ${p.plan.withCover.failAge}.`));
+    // short either way (round 8 review, UX 5): "with or without cover" was true only of the $0 worked out, not of any cover;
+    // said as what it is: the death does not make the money run out sooner, so cover is not the fix. Cover asked for and not on
+    // file: with today's cover it runs out sooner than the plan together would, as before
+    if (p.plan && !p.plan.withCover.success && p.plan.withCover.failAge) card.append(ui.notice("warn", p.plan.eitherWay && !(p.gap > 0)
+      ? [`${NameOf(p.survivorName)} money would run out at about ${p.plan.withCover.failAge} if ${nm(p)} died, and so would your plan together: ${p.need > 0 ? "with the cover above, a death does not make it run out sooner, so more cover is not the fix" : "a death does not make it run out sooner, so life cover is not the fix"}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›")]
+      : `With today's cover, ${nameOf(p.survivorName)} money would run out at ${nameOf(p.survivorName)} age ${p.plan.withCover.failAge}.`));
 
     // how the plan's answer is worked out, then the two rules of thumb folded (they leave out the survivor's pay, Social
     // Security and savings, so they run several times higher and read as rival answers when shown at the same weight)
@@ -322,7 +332,7 @@ export function render(page, ctx) {
     if (p.plan && p.plan.need !== null) {
       const g = p.plan.gapYears.filter((x) => x.amount > 0);
       const living = g.length ? ` Before ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "retires", "retire")}, the household would be short about ${money(g[0].amount)} a year at first; that is counted.` : ` ${NameOf(p.survivorName)} pay${p.plan.benefits ? " and Social Security" : ""} would cover the household's living costs until retirement.`;
-      card.append(ui.h("p", { class: "small" }, `How it is worked out: the smallest lump sum that keeps ${nameOf(p.survivorName)} plan on track to the end, spending ${Math.round(SURVIVOR_SPENDING * 100)}% of what you spend together, after a funeral of about ${money(FUNERAL)}. ${NameOf(p.name)} savings pass to ${nameIn(p.survivorName)}.${living}`));
+      card.append(ui.h("p", { class: "small" }, `How it is worked out: the smallest lump sum that keeps ${nameOf(p.survivorName)} plan ${p.plan.eitherWay ? `going as long as your plan together's, which runs out${p.plan.jointFailYear ? ` in ${p.plan.jointFailYear}` : ""} either way` : "on track to the end"}, spending ${Math.round(SURVIVOR_SPENDING * 100)}% of what you spend together, after a funeral of about ${money(FUNERAL)}. ${NameOf(p.name)} savings pass to ${nameIn(p.survivorName)}.${living}`));
     }
     // a single parent: the answer part by part
     if (p.method === "child") card.append(...childWays(p, d));

@@ -46,7 +46,13 @@ export function render(page, ctx) {
   // the saved debt plan's extra joins the spare money once its debts are gone: a date reached with it says so
   const freed = d.debtPlan?.until ? ` with the ${money(d.debtPlan.extra)} a month that frees up after ${month(d.debtPlan.until)}` : "";
   // the tax step paid from the cash already kept apart for tax: today, not "at $X a month" of spare money
-  const when = (s) => s.fromSavings > 0 && !s.gap ? "From savings, today." : s.id === "tax" && !s.gap && s.doneDate ? "From the cash kept apart for tax, today." : s.doneDate ? `Done by about ${month(s.doneDate)}${d.spare.monthly >= 5 ? ` at ${money(d.spare.monthly)} a month` : ""}${freed && s.doneDate > d.debtPlan.until ? `${d.spare.monthly >= 5 ? ", then more" : ""}${freed}` : ""}.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
+  // a step after the goals step (round 8 item 3: the goals now come before the full cushion) gets what is left once the
+  // goals have their monthly, not the whole spare money: "at $3,530 a month" read as if a $20,580 cushion took 6 months
+  const gs = d.steps.find((x) => x.id === "goals" && x.startDate && x.monthly > 0);
+  const afterGoals = (s) => !!gs && s.n > gs.n && s.gap > 0 && !!s.doneDate && s.doneDate.slice(0, 7) > gs.startDate.slice(0, 7);
+  // (the match: its detail says what it takes from take-home pay and where that comes from; a "From ...: about $X a month of the
+  // $83 it could take" line beside it would read as a choice of how much, review D2)
+  const when = (s) => s.id === "match" ? null : s.fromSavings > 0 && !s.gap ? "From savings, today." : s.id === "tax" && !s.gap && s.doneDate ? "From the cash kept apart for tax, today." : s.doneDate ? `Done by about ${month(s.doneDate)}${afterGoals(s) ? " with what is left each month once the goals have theirs" : d.spare.monthly >= 5 ? ` at ${money(d.spare.monthly)} a month` : ""}${freed && s.doneDate > d.debtPlan.until ? `${d.spare.monthly >= 5 ? ", then more" : ""}${freed}` : ""}.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
     ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),

@@ -10,7 +10,8 @@ import { solveMonths } from "../house/compute.js";
  * compute(plan, { today }) -> {
  *   ready, available (a month), fromPlan (the plan's own figure) | null, override (set by you) | null,
  *   rows: [{ id, name, icon, priority, targetDate, needed (to arrive on time), current (the goal's monthly now), allocated, onTime, finishMonths, slipMonths, noDate }],
- *   neededTotal, allocatedTotal, leftover, short (needed beyond what is available)
+ *   neededTotal, allocatedTotal, leftover, short (needed beyond what is available),
+ *   pastDue? [{ id, name, icon, dueNow, targetDate }] (goals whose date has passed: due now, left out of the sharing; only when there is one)
  * }
  */
 export function compute(plan, params = {}) {
@@ -21,7 +22,9 @@ export function compute(plan, params = {}) {
   const o = plan.whatIfs?.prioritizer?.available;
   const override = o !== null && o !== undefined && o !== "" && Number.isFinite(Number(o)) ? Math.max(0, Number(o)) : null;
   const available = override ?? fromPlan ?? 0;
-  const open = g.goals.filter((x) => x.status !== "done" && (Number(x.remaining) || 0) > 0);
+  // a goal whose date has passed is due now, not a month's share (round 8 item 18): listed apart, given nothing here
+  const open = g.goals.filter((x) => x.status !== "done" && x.status !== "past due" && (Number(x.remaining) || 0) > 0);
+  const pastDue = g.goals.filter((x) => x.status === "past due" && (Number(x.dueNow) || 0) > 0).map((x) => ({ id: x.id, name: x.name, icon: x.icon, dueNow: x.dueNow, targetDate: x.targetDate }));
   const order = [...open].sort((a, b) => (Number(a.priority) || 2) - (Number(b.priority) || 2) || String(a.targetDate || "9999").localeCompare(String(b.targetDate || "9999")));
   let money = available;
   const rows = order.map((x) => {
@@ -40,5 +43,5 @@ export function compute(plan, params = {}) {
   }
   const neededTotal = rows.reduce((t, r) => t + (r.needed ?? 0), 0);
   const allocatedTotal = rows.reduce((t, r) => t + r.allocated, 0);
-  return { ready: true, available, fromPlan, override, rows, neededTotal, allocatedTotal, leftover: Math.max(0, available - allocatedTotal), short: Math.max(0, neededTotal - available), count: rows.length };
+  return { ready: true, available, fromPlan, override, rows, neededTotal, allocatedTotal, leftover: Math.max(0, available - allocatedTotal), short: Math.max(0, neededTotal - available), count: rows.length, ...(pastDue.length ? { pastDue } : {}) };
 }

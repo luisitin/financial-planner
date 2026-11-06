@@ -1770,14 +1770,14 @@ test("R8 item 1: after 'An employer', a retirement plan at work: Yes writes plan
   // Next best action asks about the match for Priya (a 401(k), pay, nothing going in), in plain words on the done screen
   const step = nextBest(p, { today: T6 }).steps.find((s) => s.id === "match");
   assert.ok(step && step.status === "check", "the match step is there, as a question");
-  assert.deepEqual(step.ask.map((a) => a.personId), ["setup-self"]);
-  assert.equal(S.revealWords(step, p, { today: T6 }).title, "Check if Priya's job matches retirement saving");
+  assert.deepEqual(step.ask.map((a) => a.personId), ["setup-self", "setup-partner"]);
+  assert.equal(S.revealWords(step, p, { today: T6 }).title, "Check if your jobs match retirement saving");
   // No: no plan and no match, the $0 401(k) taken back; Not sure: the answer and the 401(k) taken back
   const v = S.valuesFor(p, "money", { today: T6 });
   S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "no" } }, today: T6 });
   assert.deepEqual(p.retirement.workPlans["setup-self"], { plan: false, match: false });
   assert.equal(acct(p, "setup-workplan-setup-self"), undefined);
-  assert.equal(nextBest(p, { today: T6 }).steps.find((s) => s.id === "match"), undefined);
+  assert.deepEqual(nextBest(p, { today: T6 }).steps.find((s) => s.id === "match").ask.map((a) => a.personId), ["setup-partner"], "Tom (not sure) is still asked");
   S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "yes" } }, today: T6 });
   S.applyMoney(p, { ...v, people: { ...v.people, "setup-self": { ...v.people["setup-self"], plan: "unsure" } }, today: T6 });
   assert.equal(p.retirement.workPlans?.["setup-self"], undefined);

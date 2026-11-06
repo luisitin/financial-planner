@@ -303,23 +303,27 @@ test("goalsBehind (round 5, third pass): on the family plan a $12,000 wedding ca
   const run = (...extra) => { const p = familyPlan(T); p.goals = p.goals.filter((x) => x.id !== "g-trip"); p.goals.push(...extra); const nba = nbaOf(p, { today: T }); return goalsBehind(goalsOf(p, { today: T }), { nba, today: T }); };
   const g = (id, target, targetDate, more = {}) => ({ id, name: id, icon: "", target, targetDate, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false, ...more });
   // second pass said "behind": it took the car's extra as lasting until December 2029, but the car is due in March 2029.
-  // Month by month from December 2027 the wedding gets about $485 for 15 months, then about $1,529 for 9: about $21,100
-  // (Review 2026-11-06: the child and dependent care credit, $960 a year, now counts in the spare money, so the goals step
-  // gets $80 a month more than the $405 and $1,449 it had: 1,910.89 a month, not 1,830.89; the most was about $19,100)
+  // (Round 8 item 3: the goals step now comes right after the Visa, before the full cushion and the open-ended steps, so it
+  // starts in December 2026 with all the spare money then, $3,884 a month, not in December 2027 with $1,911; month by month
+  // from then, less the emergency fund's, the car's and college's catch-up, the most a wedding by December 2029 can reach is
+  // about $115,900, where it was about $21,100)
   const w = run(g("g-wed", 12000, "2029-12-01"));
   assert.deepEqual(w.queued.map((x) => x.id), ["g-wed"]); assert.ok(!w.behind.some((x) => x.id === "g-wed"));
-  assert.deepEqual(run(g("g-wed", 22000, "2029-12-01")).queued, [], "about $21,100 is the most it can be");
-  assert.deepEqual(run(g("g-wed", 21000, "2029-12-01")).queued.map((x) => x.id), ["g-wed"], "a $21,000 wedding can still be reached");
-  // a $36,000 wedding is behind (round 5's first finding stays fixed), and it holds the step: the 2035 boat is not said to
-  // start on that money; the boat alone waits
-  const big = run(g("g-wed", 36000, "2029-12-01"), g("g-boat", 6000, "2035-06-01"));
+  // (review D6, 2026-11-06: the family's "Emergency fund" goal is not ticked as the emergency fund, so Liquidity keeps its money
+  // apart and it is one of the dated goals the step catches up, here too: its catch-up takes about $6,100 more of what a
+  // wedding by December 2029 could reach, about $109,800 now)
+  assert.deepEqual(run(g("g-wed", 111000, "2029-12-01")).queued, [], "about $109,800 is the most it can be");
+  assert.deepEqual(run(g("g-wed", 109000, "2029-12-01")).queued.map((x) => x.id), ["g-wed"], "a $109,000 wedding can still be reached");
+  // a $150,000 wedding is behind (round 5's first finding stays fixed; $36,000 now fits, item 3), and it holds the step: the
+  // 2035 boat is not said to start on that money; the boat alone waits
+  const big = run(g("g-wed", 150000, "2029-12-01"), g("g-boat", 6000, "2035-06-01"));
   assert.deepEqual(big.queued.map((x) => x.id), []); assert.ok(big.behind.some((x) => x.id === "g-wed")); assert.ok(big.behind.some((x) => x.id === "g-boat"));
   assert.deepEqual(run(g("g-boat", 6000, "2035-06-01")).queued.map((x) => x.id), ["g-boat"]);
-  // a $3,000 holiday getting $100 a month, due 3 days after the turn (December 2, 2027; January 2, 2028 before the child care
-  // credit counted in the spare money, Review 2026-11-06): it draws nothing from the step, so the boat still waits (second
-  // pass: its catch-up came out infinite and every later goal read behind)
-  const hol = run(g("g-boat", 6000, "2035-06-01"), g("g-hol", 3000, "2027-12-05", { monthly: 100 }));
-  assert.equal(hol.turn, "2027-12-02"); assert.deepEqual(hol.queued.map((x) => x.id), ["g-boat"]); assert.ok(hol.behind.some((x) => x.id === "g-hol"));
+  // a $3,000 holiday getting $100 a month, due 3 days after the turn (December 5, 2026: the turn is December 2, 2026 since
+  // round 8 item 3): it draws nothing from the step, so the boat still waits (second pass: its catch-up came out infinite and
+  // every later goal read behind)
+  const hol = run(g("g-boat", 6000, "2035-06-01"), g("g-hol", 3000, "2026-12-05", { monthly: 100 }));
+  assert.equal(hol.turn, "2026-12-02"); assert.deepEqual(hol.queued.map((x) => x.id), ["g-boat"]); assert.ok(hol.behind.some((x) => x.id === "g-hol"));
 });
 
 test("goalsBehind (round 5, third pass): month by month from the turn, a goal's catch-up lasts only until its own date", () => {
@@ -352,12 +356,13 @@ test("goalsBehind (round 5, third pass): the two qa households whose shared-acco
     const plan = JSON.parse(fs.readFileSync(new URL(`../../../qa/households/${file}`, import.meta.url), "utf8").match(/## Plan JSON\s*```json\s*([\s\S]*?)```/)[1]);
     return goalsBehind(goalsOf(plan, { today: T }), { nba: nbaOf(plan, { today: T }), today: T });
   };
-  // retired: the trip's catch-up ends in June 2027, so Share B ($15,000 to go by January 2028) can wait (second pass: behind)
+  // Round 8 item 3: in both households the goals step now gets money this month (before, January and March 2027, after the
+  // full cushion), so no goal waits a turn: each one behind its pace is behind, and Next best action says what it needs from
+  // now. (The month-by-month reckoning from a later turn, with these households' figures, is the test above.)
   const h777 = run("08-retired/goals/H-0777-two-goals-one-account.md");
-  assert.deepEqual(h777.queued.map((x) => x.id), ["g-share2"]); assert.deepEqual(h777.behind.map((x) => x.id), ["g-trip"]);
-  // a couple: the baby fund's catch-up ends in September 2027, so Share A can wait; Share B ($30,000 from nothing) cannot
+  assert.equal(h777.turn, null); assert.deepEqual(h777.queued, []); assert.deepEqual(h777.behind.map((x) => x.id).sort(), ["g-share2", "g-trip"]);
   const h177 = run("02-couple-no-kids/goals/H-0177-two-goals-one-account.md");
-  assert.deepEqual(h177.queued.map((x) => x.id), ["g-share1"]); assert.ok(h177.behind.some((x) => x.id === "g-share2"));
+  assert.equal(h177.turn, null); assert.deepEqual(h177.queued, []); assert.ok(h177.behind.some((x) => x.id === "g-share1") && h177.behind.some((x) => x.id === "g-share2"));
 });
 
 test("goalsBehind follows Next best action's goals step: its capacity is the spare money that reaches it once it starts", async () => {
@@ -367,8 +372,10 @@ test("goalsBehind follows Next best action's goals step: its capacity is the spa
   const T = "2026-11-02";
   const plan = (due) => { const p = familyPlan(T); p.goals.find((x) => x.id === "g-col").monthly = 0; p.goals.find((x) => x.id === "g-trip").targetDate = due; return p; };
   const run = (p) => { const nba = nbaOf(p, { today: T }); return { nba, gb: goalsBehind(goalsOf(p, { today: T }), { nba, today: T }) }; };
-  const near = run(plan("2027-12-01"));
+  // (round 8 item 3: the turn is December 2026, right after the Visa, so "a month after the turn" is January 2027)
+  const near = run(plan("2027-01-01"));
   const step = near.nba.steps.find((s) => s.id === "goals");
+  assert.equal(step.startDate, "2026-12-02");
   assert.ok(step.capacity >= step.monthly && step.capacity > 0, "capacity is at least what the step gets in its first month");
   assert.ok(!near.gb.queued.some((g) => g.id === "g-trip"), "a trip due a month after the turn is behind");
   assert.ok(near.gb.queued.some((g) => g.id === "g-col"), "college due years later still waits its turn");
@@ -502,4 +509,70 @@ test("C3 a thin cushion measured against guessed must-pay bills is said by our g
   const a = d.alerts.find((x) => x.id === "emergency-guessed");
   assert.deepEqual([a.level, a.title, a.go], ["info", "Emergency fund: by our guesses", ["cashflow", "expenses"]]);
   assert.match(a.detail, /^By our guesses of your must-pay bills, usable cash covers about 0\.5 months; the plan aims for \d+\. Type your real bills to know for sure\.$/);
+});
+
+test("round 8 item 40: within a level, an alert with a date comes first: the required withdrawal before the cushion", async () => {
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-r", name: "Ruth", role: "self", birthDate: "1952-03-15", retirementAge: 74 }], filingStatus: "single", state: "FL" };
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 12000, ownerId: "", asOf: "2026-11-06", history: [] },
+    { id: "a-ira", name: "Ruth's retirement", type: "ira", balance: 410000, ownerId: "p-r", asOf: "2026-11-06", history: [] }];
+  p.income = [{ id: "i-pen", name: "Pension", type: "pension", personId: "p-r", amount: 1900, period: "monthly" }, { id: "i-ss", name: "Social Security", type: "social", personId: "p-r", amount: 2300, period: "monthly" }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 700, period: "monthly", essential: true }, { id: "e-bills", name: "Bills", category: "utilities", amount: 1650, period: "monthly", essential: true }];
+  const a = compute(p, { today: "2026-11-06" }).alerts.filter((x) => !x.chore);
+  assert.deepEqual(a.map((x) => x.id).slice(0, 2), ["rmd-p-r-2026", "emergency-warn"]);
+  assert.equal(a[0].due, "2026-12-31");
+});
+
+// Round 8 batch 2 review (money D5): a workplace plan's own required withdrawal can wait until its owner retires from that job
+// (IRC 401(a)(9)(C); IRS, Retirement plan and IRA RMD FAQs, read 2026-11-06); an IRA's cannot. The alert says the same as
+// Next best action: the amount from the IRA alone, and that the 401(k) at the job now can wait.
+test("round 8 review D5: still working at 75: the required withdrawal alert counts only what cannot wait", () => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-a", name: "Ana", role: "self", birthDate: "1951-02-01" }], filingStatus: "single", state: "NC" };
+  p.income = [{ id: "i-pay", name: "Pay", type: "salary", personId: "p-a", amount: 78000, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1400, period: "monthly", essential: true }];
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 20000, ownerId: "", history: [] },
+    { id: "a-k", name: "Work 401(k)", type: "401k", balance: 300000, ownerId: "p-a", history: [] }, { id: "a-i", name: "IRA", type: "ira", balance: 100000, ownerId: "p-a", history: [] }];
+  p.retirement.contributions = [{ id: "c1", accountId: "a-k", personId: "p-a", amount: 500, period: "biweekly", employerMatch: 3000 }];
+  const a = compute(p, { today: "2026-11-06" }).alerts.find((x) => x.id === "rmd-p-a-2026");
+  // 100,000 / 24.6 = 4,065.04
+  assert.equal(a.title, "Ana's required withdrawal: at least $4,065 by December 31");
+  assert.match(a.detail, /^From IRA, worked out from today's balance\. Ana's 401\(k\) at the job now \(Work 401\(k\)\) can usually wait until Ana retires/);
+  p.accounts = p.accounts.filter((x) => x.id !== "a-i");
+  assert.equal(compute(p, { today: "2026-11-06" }).alerts.some((x) => x.id.startsWith("rmd-")), false);
+});
+
+// Round 8 batch 2 review (UX 1): a goal Next best action pays from savings (due within 3 months, more than a month can save, the
+// cash covers it) is not "behind" by a month's saving here or on the Dashboard's Goals tile; it is said as a bill to pay
+test("round 8 review UX 1: a bill paid from savings is not in the goals-behind sum; it has its own line", () => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-m", name: "Marcus", role: "self", birthDate: "1972-03-15" }, { id: "p-l", name: "Lin", role: "partner", birthDate: "1974-05-15" },
+    { id: "k-1", name: "Child 1", role: "dependent", birthDate: "2007-07-15" }, { id: "k-2", name: "Child 2", role: "dependent", birthDate: "2005-07-15" }], filingStatus: "married_joint", state: "WA" };
+  p.income = [{ id: "i-m", name: "Pay", type: "salary", personId: "p-m", amount: 210000, period: "annual", growth: 0, taxable: true }, { id: "i-l", name: "Pay", type: "salary", personId: "p-l", amount: 30000, period: "annual", growth: 0, taxable: true }];
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 15000, ownerId: "", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 40000, ownerId: "", history: [] }];
+  p.expenses = [{ id: "e-home", name: "Mortgage", category: "housing", amount: 3200, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 1500, period: "monthly", essential: true }, { id: "e-fun", name: "Everything else", category: "fun", amount: 6000, period: "monthly", essential: false }];
+  p.retirement.workPlans = { "p-m": { match: false }, "p-l": { match: false } };
+  p.goals = [{ id: "g-c1", name: "Child 1's college, 2026-27", icon: "🎓", target: 12930, targetDate: "2027-01-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false },
+    { id: "g-c2", name: "Child 2's college, 2026-27", icon: "🎓", target: 12930, targetDate: "2027-01-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false },
+    { id: "g-car", name: "New car", icon: "🚗", target: 30000, targetDate: "2029-06-01", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false }];
+  const d = compute(p, { today: "2026-11-06" });
+  const text = d.alerts.map((a) => `${a.title} ${a.detail}`).join(" | ");
+  assert.doesNotMatch(text, /28,4\d\d|12,9\d0 a month|6,4\d0 a month/);
+  const cash = d.alerts.find((a) => a.id === "goals-from-cash");
+  assert.equal(cash.title, "Pay 2 goals from savings");
+  assert.match(cash.detail, /^Child 1's college, 2026-27 \(about \$12,930 by January 15, 2027\) and Child 2's college, 2026-27 \(about \$12,930 by January 15, 2027\) are due sooner than a month can save for them; your usable cash covers them\./);
+});
+
+// Round 8 batch 2 review (UX 4): Needs attention said "$103,000 still to go" for a college goal dated 2023, where Education
+// says $12,925 (the spring half of 2026-27) is the next bill; it points to Education as Next best action does
+test("round 8 review UX 4: a past-due college goal for a child in college points to Education's next bill", () => {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-m", name: "Marcus", role: "self", birthDate: "1972-03-15" }, { id: "k-2", name: "Child 2", role: "dependent", birthDate: "2005-07-15" }], filingStatus: "single", state: "WA" };
+  p.income = [{ id: "i-m", name: "Pay", type: "salary", personId: "p-m", amount: 150000, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e-home", name: "Rent", category: "housing", amount: 2500, period: "monthly", essential: true }];
+  p.goals = [{ id: "g-old", name: "Child 2's college", icon: "🎓", target: 103000, targetDate: "2023-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true }];
+  const a = compute(p, { today: "2026-11-06" }).alerts.find((x) => x.id === "goal-late-g-old");
+  assert.equal(a.detail, "Education says the next bill is about $12,930 (the spring half of 2026-27, due January 15, 2027): tap Update on Education to set this goal to it.");
+  assert.deepEqual(a.go, ["goals", "education"]);
 });

@@ -5,6 +5,7 @@
 import { compute, DEFAULT_TIERS } from "./compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { NameOf } from "../../../core/words.js";
+import { leftWords } from "../../overview/next-best-action/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let openFold = null;  // the settings fold just saved stays open
@@ -26,7 +27,19 @@ export function render(page, ctx) {
   const d = compute(plan, { today });
   const root = ui.h("div", { class: "bn-root" }, ui.h("style", {}, STYLE));
   page.append(root);
-  if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  // the month's spare money (Next best action's): what a choice that takes more from take-home pay is weighed against, and
+  // what the confirmation says is left after one (review D2 and UX 7)
+  let nba = null;
+  try { nba = ctx.computeOf?.("overview/next-best-action", { today }) ?? null; } catch { nba = null; }
+  if (pending) {
+    const text = typeof pending === "object" ? pending.text : pending;
+    const n = ui.notice("ok", text);
+    if (typeof pending === "object" && pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
+    root.append(n);
+    // (a confirmation that says what the month has left stays: it is something to read, not a flash)
+    if (!(typeof pending === "object" && pending.left)) setTimeout(() => n.remove(), 4000);
+    pending = null;
+  }
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Open enrollment"),
@@ -58,18 +71,25 @@ export function render(page, ctx) {
   if (k.nowMatchPlan > 0 && Math.abs(k.nowMatchPlan - k.nowMatch) > 1) k401.append(ui.h("p", { class: "muted small" }, `The Contributions page says your employer adds ${money(k.nowMatchPlan)} a year now.`));
   if (k.nowYearly <= 0) k401.append(ui.h("p", {}, "Nothing goes into a 401(k) now."));
   const label = { now: "what you put in now", match: "the whole match", max: `the ${d.limitsYear} limit` };
-  const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now")?.key;
+  // what a choice takes from take-home pay a month on top of what goes in now, against the month's spare money: the filled
+  // button is the one the month can carry (review UX 7: "Use 62.8%" was the filled button for a renter with $0 spare)
+  const nowOpt = k.options.find((o) => o.key === "now");
+  const moreAMonth = (o) => Math.max(0, ((Number(o.costPerCheck) || 0) - (Number(nowOpt?.costPerCheck) || 0)) * (Number(d.paychecks) || 0) / 12);
+  const spare = nba?.ready && !nba.spare.waits ? Math.max(0, nba.spare.monthly) : null;
+  const fits = (o) => spare === null || moreAMonth(o) <= spare + 5;
+  const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now" && fits(o))?.key ?? null;
   k401.append(ui.h("ul", { class: "records" }, k.options.map((o) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct(o.pct)} of pay: ${label[o.key]}`), ui.h("span", { class: "rec-value" }, money(o.perCheck))),
-    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k) and takes ${money(o.costPerCheck)} from take-home pay, ${o.costFrom === "paycheck" ? "less the tax the paycheck stops taking out" : "after the tax it saves"}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}`),
-    o.key !== "now" && k.hasAccount ? ui.h("div", { class: "rec-foot" }, ui.button(`Use ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
+    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k) and takes ${money(o.costPerCheck)} from take-home pay, ${o.costFrom === "paycheck" ? "less the tax the paycheck stops taking out" : "after the tax it saves"}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if your month has about ${money(Math.round(moreAMonth(o) / 10) * 10)} spare: it has about ${money(spare)}.` : ""}`),
+    // nothing going in yet: the same button starts the 401(k) (round 8 item 1: it used to send you to Contributions, then Net worth)
+    o.key !== "now" ? ui.h("div", { class: "rec-foot" }, ui.button(k.hasAccount ? `Use ${pct(o.pct)}` : `Start it at ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
   k401.append(ui.h("p", { class: "muted small" }, [
     `The ${d.limitsYear} limit for you is ${money(k.limit)}${k.catchUp ? `, with ${money(k.catchUp)} of catch-up for your age` : ""}. Pre-tax money skips income tax now but not Social Security or Medicare; it is taxed when you take it out.`,
     k.stateTaxed ? " Your state taxes 401(k) money anyway, so only federal tax is saved." : "",
     k.overCompLimit ? ` The match counts pay only up to ${money(k.compLimit)}.` : "",
   ].join("")));
   if (k.rothCatchUp) k401.append(ui.notice("info", `Your pay is over ${money(k.rothCatchUpWages)}, so from 2026 the catch-up part has to go in as Roth (after tax); the final IRS rules apply in full from 2027.`));
-  if (!k.hasAccount) k401.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Add the 401(k) on Contributions")));
+  if (!k.hasAccount) k401.append(ui.h("p", { class: "muted small" }, "Start it here in one tap: what goes in each paycheck is saved on Contributions, and a $0 401(k) is added to Net worth if there is none."));
   root.append(k401);
 
   // the health savings account
@@ -210,11 +230,25 @@ export function render(page, ctx) {
       ui.form(fields, values, (v) => { openFold = key; save("Saved.", (w) => apply(v, w)); }, { submitLabel: "Save" }));
   }
   function use401k(o) {
-    pending = `Your 401(k) is now ${pct(o.pct)} of pay on the Contributions page${k.tiersAssumed ? "; the employer match there is left as it was" : ""}.`;
+    // (review UX 8: "is started" claimed more than the app does: it is in the plan, and signing up at work starts it; review D2:
+    // with what the month has left after it)
+    pending = { left: true, text: k.hasAccount ? `Your 401(k) is now ${pct(o.pct)} of pay on the Contributions page${k.tiersAssumed ? "; the employer match there is left as it was" : ""}. To actually change it, set ${pct(o.pct)} with human resources or your job's benefits site.`
+      : `Added to your plan: ${pct(o.pct)} of pay, ${money(o.perCheck)} a paycheck, on the Contributions page${k.tiersAssumed ? "" : `, with ${money(o.match)} a year from your employer`}. To actually start it, sign up at ${pct(o.pct)} with human resources or your job's benefits site.` };
     store.update((p) => {
-      const accounts = p.accounts ?? [];
+      const accounts = p.accounts = p.accounts ?? [];
       const list = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && accounts.find((a) => a.id === x.accountId)?.type === "401k");
-      if (!list.length) return;
+      if (!list.length) {
+        // nothing goes into a 401(k) yet (round 8 item 1): this person's 401(k) at the job now (not one from a job left; the first
+        // adult's unowned one counts as theirs), else a new $0 one, and what goes in for this choice, each paycheck
+        const role = (p.household?.people ?? []).find((x) => x.id === pid)?.role;
+        let acct = accounts.find((a) => a.type === "401k" && !a.formerJob && (a.ownerId === pid || (role === "self" && !a.ownerId)));
+        if (!acct) { acct = { id: ui.uid(), name: `${NameOf(d.person.name)} 401(k)`, type: "401k", balance: 0, ownerId: pid, asOf: today, history: [] }; accounts.push(acct); }
+        const period = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" }[d.paychecks] ?? "annual";
+        p.retirement = p.retirement ?? {};
+        p.retirement.contributions = p.retirement.contributions ?? [];
+        p.retirement.contributions.push({ id: ui.uid(), accountId: acct.id, personId: pid, amount: Math.round((period === "annual" ? o.yearly : o.yearly / d.paychecks) * 100) / 100, period, employerMatch: k.tiersAssumed ? 0 : Math.round(o.match) });
+        return;
+      }
       // each contribution keeps its share of the total (all of it on the first when nothing goes in yet); the match only when it is the employer's own
       const now = list.reduce((t, x) => t + perYear(x.amount, x.period), 0);
       list.forEach((x, i) => {

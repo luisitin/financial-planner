@@ -26,7 +26,8 @@ test("the spare money: pay less federal and payroll tax, spending, retirement an
 
 test("the order for the family, the next step, and the dates the spare money reaches", () => {
   const d = compute(familyPlan(), { today: TODAY });
-  assert.deepEqual(d.steps.map((s) => s.id), ["bills", "starter", "protect", "match", "high-debt", "full-fund", "ira", "mid-debt", "max-401k", "goals", "rest"]);
+  // round 8 item 3: the family's four dated goals are behind their pace, so they take their monthly right after the card
+  assert.deepEqual(d.steps.map((s) => s.id), ["bills", "starter", "protect", "match", "high-debt", "goals", "full-fund", "ira", "mid-debt", "max-401k", "rest"]);
   assert.equal(d.next.id, "starter");
   // Ana's death would leave Bo and Cy short (Life insurance needs' own answer); Bo's would not: the plan holds
   const pr = step(d, "protect");
@@ -57,6 +58,9 @@ test("no expensive debt, no HSA, no 401(k): those steps are done or left out", (
   const p = familyPlan();
   p.debts = p.debts.filter((x) => x.accountId !== "a-visa"); p.accounts = p.accounts.filter((a) => a.id !== "a-visa" && a.type !== "401k");
   p.retirement.contributions = p.retirement.contributions.filter((c) => c.accountId !== "a-401");
+  // round 8 item 1: a paid adult with no 401(k) is asked whether the job matches; once both said there is no plan or no match, no step
+  assert.equal(step(compute(p, { today: TODAY }), "match").status, "check");
+  p.retirement.workPlans = { "p-ana": { match: false }, "p-bo": { match: false } };
   const d = compute(p, { today: TODAY });
   assert.equal(step(d, "high-debt").status, "done");
   assert.equal(step(d, "match"), undefined); assert.equal(step(d, "max-401k"), undefined); assert.equal(step(d, "hsa"), undefined);
@@ -108,7 +112,10 @@ test("review: a gap under half a dollar is done; Open enrollment's match tiers a
   assert.ok(!step(compute(q, { today: T }), "match") || step(compute(q, { today: T }), "match").status === "done", "no match typed on Open enrollment");
   q.whatIfs.benefits["p-bo"].matchTiers = [{ rate: 0.5, upTo: 0.06 }];
   q.retirement.workPlans = { "p-bo": { match: false } };
-  assert.equal(step(compute(q, { today: T }), "match").status, "check", "a match typed there wins over an older no");
+  // (review UX 3: Bo's 401(k) is on file with nothing going in, and the match typed: the step gives the answer, not the question)
+  const bo = step(compute(q, { today: T }), "match");
+  assert.ok(bo && bo.status !== "done" && bo.status !== "check", "a match typed there wins over an older no");
+  assert.match(bo.detail, /Bo's employer adds 50% of what Bo puts in, up to 6% of pay: put in 6%/);
 });
 
 test("protection: done once the cover on file reaches the need; no step for a household nobody depends on", () => {
@@ -351,12 +358,19 @@ test("costly debt first in line: the same date as Pay off debts' offer for the s
   p.debts = [{ id: "d1", accountId: "store", rate: 0.269, minPayment: 40, extra: 0 }, { id: "d2", accountId: "visa", rate: 0.239, minPayment: 160, extra: 0 }];
   p.income = [{ id: "pay", name: "Pay", type: "salary", personId: "me", amount: 4200, period: "monthly", taxable: true }];
   p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1500, period: "monthly", essential: true }, { id: "food", name: "Food", category: "groceries", amount: 500, period: "monthly", essential: true }, { id: "fun", name: "Fun", category: "fun", amount: 600, period: "monthly", essential: false }];
+  // (round 8 item 1: Riley's job is asked about a match, but only after the cards: a match that may not exist waits for a
+  // sure 24%; the question takes no money, so the cards' date is the same either way)
+  const asked = compute(p, { today });
+  const ids = asked.steps.map((s) => s.id);
+  assert.ok(ids.indexOf("match") === ids.indexOf("high-debt") + 1, ids.join(","));
+  p.retirement.workPlans = { me: { match: false } };
   const d = compute(p, { today });
   const hd = d.steps.find((s) => s.id === "high-debt");
   assert.equal(d.next.id, "high-debt", "the cushion's first month is there, so the cards come first");
   const o = offer(p, { today, amount: d.spare.monthly, stepId: "high-debt" });
   assert.ok(o?.soon);
   assert.equal(hd.doneDate.slice(0, 7), o.soon.slice(0, 7));
+  assert.equal(asked.steps.find((s) => s.id === "high-debt").doneDate, hd.doneDate);
   // paying from the spare money alone (the old reckoning) would have read later
   const naive = Math.ceil(hd.gap / d.spare.monthly);
   const offerMonths = Math.round((Date.parse(`${o.soon.slice(0, 7)}-15`) - Date.parse("2026-11-15")) / (30.44 * 864e5));
@@ -507,4 +521,377 @@ test("C3 spare.waits: the bills step asks for the real spending, no step is date
   assert.match(d.next.detail, /is our guesses, so what is left each month is not known yet\. With our guesses it would be about \$[\d,]+ (spare|short)\./);
   assert.ok(d.steps.every((s) => s.startDate === null && s.monthly === null && s.capacity === null && (s.doneDate === null || s.doneDate === TODAY)));
   assert.ok(plain.steps.some((s) => s.startDate || s.doneDate), "the same plan typed has dated steps");
+});
+
+// Round 8 item 1: the match step for a paid adult with no 401(k) on file yet (renter-debt-2, couple-home-3)
+/** A worker household like the round-8 testers': adults with pay, a checking account, rent, no 401(k) yet. */
+function workers(people, { state = "OH", filingStatus = "single" } = {}) {
+  const p = emptyPlan();
+  p.household = { people: people.map((x, i) => ({ id: x.id, name: x.name, role: i ? "partner" : "self", birthDate: x.birthDate ?? "1995-03-15" })), filingStatus, state };
+  p.income = people.filter((x) => x.pay).map((x) => ({ id: `i-${x.id}`, name: `${x.name}'s pay`, type: x.type ?? "salary", personId: x.id, amount: x.pay, period: "annual", growth: 0, taxable: true }));
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 3000, ownerId: "", asOf: "2026-11-01", history: [] }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1400, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "food", amount: 500, period: "monthly", essential: true }];
+  return p;
+}
+const T8 = "2026-11-06";
+
+test("round 8 item 1: a match typed on Work benefits with no 401(k) yet: the step gives the answer, before the IRA", () => {
+  const p = workers([{ id: "p-j", name: "Jasmine", pay: 39000, birthDate: "2002-03-15" }]);
+  p.whatIfs = { benefits: { "p-j": { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 } } };
+  const d = compute(p, { today: T8 });
+  const ids = d.steps.map((s) => s.id);
+  const m = step(d, "match");
+  assert.ok(m, "a match step without a 401(k) account");
+  assert.ok(ids.indexOf("match") < ids.indexOf("ira"), ids.join(","));
+  assert.ok(ids.indexOf("match") > ids.indexOf("starter"), ids.join(","));
+  // 3% of 39,000 = 1,170 a year; 1,170 / 26 paychecks = 45; take-home falls by 45 less the 12% federal and the state's
+  // tax it saves (Work benefits' own costPerCheck)
+  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck, about \$3\d less take-home pay\) to get \$1,170 a year\./);
+  assert.notEqual(m.status, "done"); assert.notEqual(m.status, "check");
+  assert.deepEqual(m.ask.map((a) => [a.personId, a.noAccount, a.kind]), [["p-j", true, "known"]]);
+  near(m.ask[0].match.match, 1170, 0.5); near(m.ask[0].match.perCheck, 45, 0.01);
+});
+
+test("round 8 item 1: two paid adults, no 401(k), nothing known: one question with a common match's worth for each", () => {
+  const p = workers([{ id: "p-p", name: "Priya", pay: 58000, birthDate: "1997-03-15" }, { id: "p-t", name: "Tom", pay: 64000, birthDate: "1995-08-15" }], { state: "NC", filingStatus: "married_joint" });
+  const d = compute(p, { today: T8 });
+  const m = step(d, "match");
+  assert.ok(m); assert.equal(m.status, "check");
+  const ids = d.steps.map((s) => s.id);
+  assert.ok(ids.indexOf("match") < ids.indexOf("ira"));
+  // 50% on the first 6% of pay (the most used formula, Vanguard How America Saves 2025): 58,000 x 3% = 1,740; 64,000 x 3% = 1,920
+  assert.match(m.detail, /^Does Priya's job or Tom's job match retirement savings\? Ask human resources at work, or look on each job's benefits site\. A common match, 50% of what you put in up to 6% of pay, would be about \$1,740 a year for Priya and \$1,920 for Tom\./);
+  assert.deepEqual(m.ask.map((a) => [a.personId, a.kind]), [["p-p", "ask"], ["p-t", "ask"]]);
+});
+
+test("round 8 item 1: business-only income gets no match step; 'no plan or no match' removes it; 'yes' reads as a plan with a match", () => {
+  const biz = workers([{ id: "p-f", name: "Rae", pay: 70000, type: "business" }]);
+  assert.equal(step(compute(biz, { today: T8 }), "match"), undefined, "a freelancer has no employer to match");
+  // a freelancer's year-end client bonus is no job either (the qa self-employed household: Nadia was asked about "her job")
+  biz.income.push({ id: "i-bonus", name: "Year-end client bonus", type: "bonus", personId: "p-f", amount: 6000, period: "annual", growth: 0, taxable: true });
+  assert.equal(step(compute(biz, { today: T8 }), "match"), undefined, "a bonus alone is no job with a plan");
+  const p = workers([{ id: "p-x", name: "Me", pay: 50000 }]);
+  assert.match(step(compute(p, { today: T8 }), "match").detail, /^Does your job match retirement savings\?/);
+  p.retirement.workPlans = { "p-x": { match: false } };
+  assert.equal(step(compute(p, { today: T8 }), "match"), undefined, "no plan or no match at this job");
+  p.retirement.workPlans = { "p-x": { match: true } };
+  const m = step(compute(p, { today: T8 }), "match");
+  assert.notEqual(m.status, "check");
+  assert.match(m.detail, /^Your job has a retirement plan with a match: ask human resources at work how much it adds\. With a common match, 50% of what you put in up to 6% of pay, putting in 6% \(\$115 a paycheck\) would get \$1,500 a year\./);
+  // Get started writes the $0 401(k) on Yes: from then the step is the one for a 401(k) with nothing going in
+  p.accounts.push({ id: "a-k", name: "401(k)", type: "401k", balance: 0, ownerId: "p-x" });
+  const m2 = step(compute(p, { today: T8 }), "match");
+  assert.equal(m2.ask[0].noAccount, undefined); assert.deepEqual(m2.ask[0].accounts, ["a-k"]);
+});
+
+// Round 8 items 3 and 18: a dated goal is funded from today, before the open-ended steps (couple-home-1); a goal whose date
+// has passed is due now, not a month's saving (equity-5)
+/** Priya and Tom (invented, as the round-8 tester's plan): two pays, $25,000 in cash, $64,000 of student loans at 6.5%, a house in 3 years. */
+function couple({ linked = true } = {}) {
+  const p = workers([{ id: "p-p", name: "Priya", pay: 58000, birthDate: "1997-03-15" }, { id: "p-t", name: "Tom", pay: 64000, birthDate: "1995-08-15" }], { state: "NC", filingStatus: "married_joint" });
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 3000, ownerId: "", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 22000, ownerId: "", history: [] },
+    { id: "a-sl", name: "Student loans", type: "student_loan", balance: 64000, ownerId: "", history: [] }];
+  p.debts = [{ id: "d-sl", accountId: "a-sl", rate: 0.065, minPayment: 727, extra: 0 }];
+  p.expenses = [{ id: "e-home", name: "Rent", category: "housing", amount: 2100, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 900, period: "monthly", essential: true },
+    { id: "e-loan", name: "Student loan payment", category: "debt", amount: 727, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 950, period: "monthly", essential: false }];
+  p.goals = [{ id: "g-home", name: "House down payment", icon: "🏡", target: 60000, targetDate: "2029-11-06", priority: 2, saved: 0, fundedBy: linked ? ["a-sav"] : [], monthly: 0, rate: null, inflates: true }];
+  p.retirement.workPlans = { "p-p": { match: false }, "p-t": { match: false } };   // item 1 aside
+  return p;
+}
+
+test("round 8 item 3: a dated goal 3 years out with $64,000 of loans at 6.5%: the goal gets its monthly from this month, before the loans", async () => {
+  const { compute: goalsOf } = await import("../../goals/goals/compute.js");
+  const { compute: prioritizer } = await import("../../goals/prioritizer/compute.js");
+  for (const linked of [true, false]) {
+    const p = couple({ linked });
+    const d = compute(p, { today: T8 });
+    const ids = d.steps.map((s) => s.id);
+    const g = step(d, "goals"), need = goalsOf(p, { today: T8 }).goals[0].neededMonthly;
+    assert.ok(ids.indexOf("goals") < ids.indexOf("mid-debt") && ids.indexOf("goals") < ids.indexOf("ira") && ids.indexOf("goals") < ids.indexOf("full-fund"), ids.join(","));
+    assert.equal(g.startDate.slice(0, 7), T8.slice(0, 7), "from this month");
+    near(g.monthly, need, 0.01);
+    // Goal prioritizer gives it the same monthly
+    near(prioritizer(p, { today: T8 }).rows[0].allocated, need, 0.01);
+    assert.doesNotMatch(g.detail, /on track/);
+    assert.match(g.detail, new RegExp(`^House down payment needs about \\$${(Math.round(need / 10) * 10).toLocaleString("en-US")} a month from now to be ready by November 2029\\.`));
+    // the loans wait for what is left once the goal has its share
+    assert.ok(step(d, "mid-debt").doneDate > "2030", step(d, "mid-debt").doneDate);
+  }
+});
+
+test("round 8 item 3: a goal the order cannot reach in time says when it would be ready, and what keeps its date", () => {
+  const p = couple();
+  // costly debt first: a $60,000 card at 24% takes the spare money for years
+  p.accounts.push({ id: "a-card", name: "Visa", type: "credit", balance: 60000, ownerId: "", history: [] });
+  p.debts.push({ id: "d-card", accountId: "a-card", rate: 0.24, minPayment: 900, extra: 0 });
+  p.expenses.push({ id: "e-card", name: "Visa payment", category: "debt", amount: 900, period: "monthly", essential: true });
+  const d = compute(p, { today: T8 });
+  const g = step(d, "goals");
+  assert.ok(g.startDate > T8.slice(0, 7), g.startDate);
+  assert.match(g.detail, /In this order House down payment waits until about \w+ 20\d\d; to keep November 2029, put about \$[\d,]+ a month toward it from now\./);
+  assert.doesNotMatch(g.detail, /on track/);
+});
+
+test("round 8 item 18: a goal whose date has passed is due now, never a month's saving", () => {
+  const p = couple();
+  p.goals.push({ id: "g-old", name: "Child 2's college", icon: "🎓", target: 103000, targetDate: "2023-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true });
+  const g = step(compute(p, { today: T8 }), "goals");
+  assert.doesNotMatch(g.detail, /103,0\d0 a month|105,/);
+  // (review UX 4: "mark it done" was said where no button does it)
+  assert.match(g.detail, /Child 2's college: its date has passed, with about \$103,000 still to go\. Set a new date for it on Goals, or lower its amount if less is needed\./);
+});
+
+// Round 8 item 40 (widow-4): a retiree in November is told about the required withdrawal due December 31 before the cushion;
+// the cushion's reason for a retired household is surprise bills, and "retire earlier" is not offered
+/** Ruth (invented, as the round-8 tester's plan): 74, a pension and Social Security, $410,000 in an IRA, $12,000 in cash. */
+function retiree() {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-r", name: "Ruth", role: "self", birthDate: "1952-03-15", retirementAge: 74 }], filingStatus: "single", state: "FL" };
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 12000, ownerId: "", asOf: "2026-11-06", history: [] },
+    { id: "a-ira", name: "Ruth's retirement", type: "ira", balance: 410000, ownerId: "p-r", asOf: "2026-11-06", history: [] }];
+  p.income = [{ id: "i-pen", name: "Pension", type: "pension", personId: "p-r", amount: 1900, period: "monthly" }, { id: "i-ss", name: "Social Security", type: "social", personId: "p-r", amount: 2300, period: "monthly" }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 700, period: "monthly", essential: true }, { id: "e-bills", name: "Bills", category: "utilities", amount: 1650, period: "monthly", essential: true },
+    { id: "e-fun", name: "Fun", category: "fun", amount: 650, period: "monthly", essential: false }];
+  return p;
+}
+
+test("round 8 item 40: the required withdrawal is the first move from October while it is not taken; the cushion keeps its date", () => {
+  const p = retiree();
+  const d = compute(p, { today: "2026-11-06" });
+  // $410,000 / 25.5 (the Uniform Lifetime Table at 74, IRS Pub. 590-B, Table III) = $16,078.43
+  assert.equal(d.next.id, "rmd");
+  // (review UX 9: "from Ruth's retirement" read as a life stage: an account name that does not say what it is gets "account")
+  assert.match(d.next.detail, /^Take at least \$16,078 from Ruth's retirement account \(worked out from today's balance\) by December 31\./);
+  assert.match(d.next.detail, /hold back tax/);
+  const ff = d.steps.find((s) => s.id === "full-fund");
+  const taken = retiree(); taken.retirement = { ...(taken.retirement ?? {}), rmdTaken: { 2026: { "p-r": "2026-11-01" } } };
+  assert.equal(ff.doneDate, compute(taken, { today: "2026-11-06" }).steps.find((s) => s.id === "full-fund").doneDate, "the step takes no money");
+  assert.match(ff.why, /surprise bills/); assert.doesNotMatch(ff.why, /job loss/);
+  assert.doesNotMatch(d.steps.find((s) => s.id === "rest").detail, /retire earlier/);
+  // still working past the age: a job loss still counts
+  const w = retiree(); w.income.push({ id: "i-pay", name: "Pay", type: "salary", personId: "p-r", amount: 1500, period: "monthly", taxable: true });
+  assert.match(compute(w, { today: "2026-11-06" }).steps.find((s) => s.id === "full-fund").why, /job loss/);
+  // before October, and once marked taken, no step
+  assert.equal(compute(retiree(), { today: "2026-09-06" }).steps.some((s) => s.id === "rmd"), false);
+  p.retirement = { ...(p.retirement ?? {}), rmdTaken: { 2026: { "p-r": "2026-11-01" } } };
+  assert.equal(compute(p, { today: "2026-11-06" }).steps.some((s) => s.id === "rmd"), false);
+});
+
+test("round 8 item 3: a step after the goals says it gets what is left once the goals have theirs, not the whole spare money", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => T8 }, plan: couple(), store: { update() {} } });
+  const text = root.textContent.replace(/\s+/g, " ");
+  assert.match(text, /more reaches 6 months of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d with what is left each month once the goals have theirs\./);
+  assert.doesNotMatch(text, /more reaches 6 months of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$/);
+  assert.match(text, /reaches one month of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$[\d,]+ a month\./, "a step before the goals keeps its words");
+});
+
+test("round 8 item 3: the emergency fund goal stays with the cushion steps; alone behind, the goals step is last and reads as before", () => {
+  // (review D6: only a goal ticked as the emergency fund is the cushion, as Liquidity counts it; the family's is ticked here)
+  const tick = (p) => { p.goals.find((g) => g.id === "g-ef").isEmergencyFund = true; return p; };
+  const d = compute(tick(familyPlan(TODAY)), { today: TODAY });
+  const g = step(d, "goals"), ids = d.steps.map((s) => s.id);
+  assert.ok(ids.indexOf("goals") < ids.indexOf("full-fund"), "the car, college and trip move up");
+  assert.match(g.detail, /^Replace Bo's car, Cy's college and Japan trip need about \$[\d,]+ a month in all from now to be ready by their dates\. Emergency fund is filled by the emergency fund steps, not this one\.$/);
+  // only the emergency fund goal behind: last, before "your choice", "puts them on track" as before round 8
+  const p = tick(familyPlan(TODAY)); p.goals = p.goals.filter((x) => x.id === "g-ef");
+  const e = compute(p, { today: TODAY }), eg = step(e, "goals");
+  assert.equal(e.steps[e.steps.length - 2].id, "goals");
+  assert.match(eg.detail, /^Emergency fund: about \$[\d,]+ a month more in all puts them on track\.$/);
+  assert.equal(eg.status === "now" || eg.status === "later", true);
+});
+
+// ---- Round 8 batch 2 review fixes (2026-11-06) ----
+/** Jasmine (invented, as the round-8 renter): $39,000 in Ohio, a Visa card with $50 a month extra on a saved debt plan, the
+ * match typed on Work benefits (100% up to 3%), no 401(k) yet; `other` sets how much of the month is spare. */
+function jasmine(other = 690) {
+  const p = workers([{ id: "p-j", name: "Jasmine", pay: 39000, birthDate: "2002-03-15" }]);
+  p.whatIfs = { benefits: { "p-j": { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 } } };
+  p.accounts.push({ id: "a-visa", name: "Visa card", type: "credit", balance: 4000, ownerId: "p-j", history: [] });
+  p.debts = [{ id: "d-visa", accountId: "a-visa", rate: 0.249, minPayment: 120, extra: 0 }];
+  p.debtPlan = { extra: 50, order: "avalanche", customOrder: [] };
+  p.expenses.push({ id: "e-card", name: "Visa payment", category: "debt", amount: 120, period: "monthly", essential: true }, { id: "e-other", name: "Other", category: "other", amount: other, period: "monthly", essential: false });
+  return p;
+}
+
+// money D2: putting in 3% lowers take-home pay by $38.36 a paycheck ((1,170 - 12% federal - 2.75% Ohio) / 26; Social Security and
+// Medicare still apply, IRC 3121(v)(1)(A)), $83.12 a month over 26 paychecks; the move must count it and say where it comes from
+test("round 8 review D2: the match move counts what it takes from take-home pay, and says where it comes from when the month has less", () => {
+  const d = compute(jasmine(690), { today: T8 });
+  near(d.spare.monthly, 3.36, 0.05);
+  const m = step(d, "match");
+  near(m.monthlyCost, 38.3625 * 26 / 12, 0.05);
+  assert.match(m.detail, /This takes about \$83 a month from take-home pay, and about \$3 is left each month: put the \$50 a month extra on Visa card \(Pay off debts\) toward it instead \(the match adds 100%, more than any debt costs\) and trim about \$30 a month of spending\./);
+  // the order is the prime directive's: the starter cushion is done here, so the match comes next, before the cards
+  // with the month to spare, no such sentence, and the steps after it get what is left once it has its $83
+  const roomy = compute(jasmine(200), { today: T8 });
+  assert.doesNotMatch(step(roomy, "match").detail, /take-home pay, and about/);
+  const none = jasmine(200); none.whatIfs = {}; none.retirement.workPlans = { "p-j": { match: false } };
+  const without = compute(none, { today: T8 });
+  assert.equal(step(without, "match"), undefined);
+  assert.ok(step(roomy, "full-fund").doneDate > step(without, "full-fund").doneDate, `${step(roomy, "full-fund").doneDate} vs ${step(without, "full-fund").doneDate}`);
+  // 9,120 / (493.36 - 83.12) = 22.2, so it is done in the 23rd month from November 2026; 9,120 / 493.36 = 18.5, the 19th
+  assert.equal(step(roomy, "full-fund").doneDate.slice(0, 7), "2028-10");
+  assert.equal(step(without, "full-fund").doneDate.slice(0, 7), "2028-06");
+});
+
+// money D3: a Roth 401(k) at work is filed as type "roth"; Contributions counts it with the 401(k) when it has a match or its name
+// says 401(k) (IRC 402A(c)(2)), so the match move must too
+test("round 8 review D3: a Roth 401(k) at work with a match on file is not asked about as if there were no plan", () => {
+  const p = workers([{ id: "p-a", name: "Ana", pay: 78000 }], { state: "NC" });
+  p.accounts.push({ id: "a-r", name: "Roth 401(k)", type: "roth", balance: 15000, ownerId: "p-a", history: [] });
+  p.retirement.contributions = [{ id: "c1", accountId: "a-r", personId: "p-a", amount: 234, period: "biweekly", employerMatch: 2340 }];
+  const m = step(compute(p, { today: T8 }), "match");
+  assert.ok(!m || !(m.ask ?? []).some((a) => a.noAccount), JSON.stringify(m?.ask));
+  // by its name alone, with nothing going in yet, the same
+  p.retirement.contributions = [];
+  const m2 = step(compute(p, { today: T8 }), "match");
+  assert.ok(!m2 || !(m2.ask ?? []).some((a) => a.noAccount), JSON.stringify(m2?.ask));
+});
+
+// money D5: a plan's own required withdrawal can wait until the year its owner retires from that job (IRC 401(a)(9)(C); IRS,
+// Retirement plan and IRA required minimum distributions FAQs, read 2026-11-06: not for a 5% owner); an IRA's cannot
+test("round 8 review D5: still working at 75: the 401(k) at the job now waits, the IRA's withdrawal does not", () => {
+  const p = workers([{ id: "p-a", name: "Ana", pay: 78000, birthDate: "1951-02-01" }], { state: "NC" });
+  p.accounts.push({ id: "a-k", name: "Work 401(k)", type: "401k", balance: 300000, ownerId: "p-a", history: [] }, { id: "a-i", name: "IRA", type: "ira", balance: 100000, ownerId: "p-a", history: [] });
+  p.retirement.contributions = [{ id: "c1", accountId: "a-k", personId: "p-a", amount: 500, period: "biweekly", employerMatch: 3000 }];
+  const r = step(compute(p, { today: T8 }), "rmd");
+  // 100,000 / 24.6 (the Uniform Lifetime Table at 75) = 4,065.04
+  assert.match(r.detail, /^Take at least \$4,065 from IRA \(worked out from today's balance\) by December 31\./);
+  assert.match(r.detail, /Ana's 401\(k\) at the job now \(Work 401\(k\)\) can usually wait until Ana retires \(check the plan's rules; not if Ana owns 5% or more of the business\)\./);
+  // only the 401(k) at the job now: nothing to take this year
+  p.accounts = p.accounts.filter((a) => a.id !== "a-i");
+  assert.equal(step(compute(p, { today: T8 }), "rmd"), undefined);
+});
+
+// money D6: Liquidity counts a goal's money as the cushion only when it is ticked as the emergency fund; a goal only named like
+// one is money set apart, so the cushion steps never fill it and it must stay with the dated goals
+test("round 8 review D6: a cushion-named goal not ticked as the emergency fund stays with the dated goals", () => {
+  const p = workers([{ id: "p-a", name: "Ana", pay: 78000 }], { state: "NC" });
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 4000, ownerId: "", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 3000, ownerId: "", history: [] }];
+  p.goals = [{ id: "g-rd", name: "Rainy day fund", icon: "☔", target: 12000, targetDate: "2027-12-01", priority: 2, saved: 0, fundedBy: ["a-sav"], monthly: 0, rate: null, inflates: false },
+    { id: "g-trip", name: "Trip to see family", icon: "✈️", target: 3000, targetDate: "2027-09-01", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false }];
+  const g = step(compute(p, { today: T8 }), "goals");
+  assert.doesNotMatch(g.detail, /filled by the emergency fund steps/);
+  assert.match(g.detail, /Rainy day fund/);
+  // ticked as the emergency fund: its money is the cushion, and the cushion steps fill it
+  p.goals[0].isEmergencyFund = true;
+  assert.match(step(compute(p, { today: T8 }), "goals").detail, /Rainy day fund is filled by the emergency fund steps, not this one\./);
+});
+
+// UX 3: a 401(k) on file with nothing going in, and the match typed on Work benefits: the same answer as with no 401(k)
+// ("Start it at 3%"), not "check whether the employer matches"; after "Yes" (a plan with a match), the plan's words
+test("round 8 review UX 3: a 401(k) on file with nothing going in and a typed match: the answer, not the question", () => {
+  const p = jasmine(200);
+  p.accounts.push({ id: "a-k", name: "Work 401(k)", type: "401k", balance: 0, ownerId: "p-j", history: [] });
+  const m = step(compute(p, { today: T8 }), "match");
+  assert.equal(m.status, "now");
+  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck, about \$38 less take-home pay\) to get \$1,170 a year\./);
+  assert.doesNotMatch(m.detail, /no contribution on file/);
+  assert.deepEqual(m.ask.map((a) => [a.personId, a.kind, a.noAccount, a.accounts]), [["p-j", "known", undefined, ["a-k"]]]);
+  // "Yes, there is a plan with a match" and the $0 401(k) it adds: the plan's words, a figure to start from, no question
+  const q = workers([{ id: "p-x", name: "Priya", pay: 58000 }], { state: "NC" });
+  q.accounts.push({ id: "a-k", name: "Priya's 401(k)", type: "401k", balance: 0, ownerId: "p-x", history: [] });
+  q.retirement.workPlans = { "p-x": { match: true } };
+  const m2 = step(compute(q, { today: T8 }), "match");
+  assert.match(m2.detail, /^Priya's job has a retirement plan with a match: ask human resources at work how much it adds\./);
+  assert.deepEqual(m2.ask.map((a) => [a.kind, a.noAccount, a.accounts]), [["plan", undefined, ["a-k"]]]);
+});
+
+// UX 6: an ongoing step's first month can be the crumbs of the step before it finishing; the month after counts too, for what
+// it gets as well as what reaches it ("about $660 a month of the $1,250 it could take" read as all the IRA would ever get)
+test("round 8 review UX 6: an ongoing step's monthly is what it gets once it has started, not its first month's crumbs", () => {
+  // $18,000 in savings: the full cushion finishes in July 2027 with $1,049 left that month, then the IRA has its $1,250
+  const p = couple(); p.accounts.find((a) => a.id === "a-sav").balance = 18000;
+  const d = compute(p, { today: T8 });
+  const ira = step(d, "ira");
+  assert.ok(ira.startDate, "the IRA starts within the run");
+  assert.ok(ira.capacity >= ira.roomYearly / 12 - 0.01, `${ira.capacity} reaches it`);
+  near(ira.monthly, ira.roomYearly / 12, 0.01);
+});
+
+/** Marcus and Lin (invented, as the round-8 equity tester's plan): $240,000 of pay, $55,000 in cash, two children in college,
+ * each with a goal for 2026-27's spring bill as Education writes it, and a car in 2029. */
+function collegeFamily() {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-m", name: "Marcus", role: "self", birthDate: "1972-03-15" }, { id: "p-l", name: "Lin", role: "partner", birthDate: "1974-05-15" },
+    { id: "k-1", name: "Child 1", role: "dependent", birthDate: "2007-07-15" }, { id: "k-2", name: "Child 2", role: "dependent", birthDate: "2005-07-15" }], filingStatus: "married_joint", state: "WA" };
+  p.income = [{ id: "i-m", name: "Pay", type: "salary", personId: "p-m", amount: 210000, period: "annual", growth: 0, taxable: true }, { id: "i-l", name: "Pay", type: "salary", personId: "p-l", amount: 30000, period: "annual", growth: 0, taxable: true }];
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 15000, ownerId: "", history: [] }, { id: "a-sav", name: "Savings", type: "savings", balance: 40000, ownerId: "", history: [] }];
+  p.expenses = [{ id: "e-home", name: "Mortgage", category: "housing", amount: 3200, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 1500, period: "monthly", essential: true }, { id: "e-fun", name: "Everything else", category: "fun", amount: 6000, period: "monthly", essential: false }];
+  p.retirement.workPlans = { "p-m": { match: false }, "p-l": { match: false } };
+  p.goals = [{ id: "g-c1", name: "Child 1's college, 2026-27", icon: "🎓", target: 12930, targetDate: "2027-01-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false },
+    { id: "g-c2", name: "Child 2's college, 2026-27", icon: "🎓", target: 12930, targetDate: "2027-01-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false },
+    { id: "g-car", name: "New car", icon: "🚗", target: 30000, targetDate: "2029-06-01", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false }];
+  return p;
+}
+
+// UX 1: a bill two months away that the month cannot save for, with the cash to pay it: "pay it from savings", not "$6,460 a
+// month" (with Education's goal buttons the equity family read "$12,910 a month" for each child, $28,404 on Goals)
+test("round 8 review UX 1: a goal due within 3 months that the month cannot reach, and cash covers: pay it from savings", () => {
+  const d = compute(collegeFamily(), { today: T8 });
+  const g = step(d, "goals");
+  assert.deepEqual(g.fromCash.map((x) => [x.id, Math.round(x.amount)]), [["g-c1", 12930], ["g-c2", 12930]]);
+  assert.doesNotMatch(g.detail, /6,4\d0 a month/);
+  assert.match(g.detail, /Child 1's college, 2026-27 \(about \$12,930 by January 15, 2027\) and Child 2's college, 2026-27 \(about \$12,930 by January 15, 2027\) are due sooner than a month can save for them\. Your usable cash, about \$55,000, covers them: pay them from savings when they are due\./);
+  assert.match(g.detail, /New car needs about \$980 a month from now to be ready by June 2029\./);
+  // the cushion counts what the bills take from the cash: $55,000 - $25,860 = $29,140, over the 6 months of $4,700 ($28,200)
+  assert.equal(step(d, "full-fund").status, "done");
+  // with $20,000 of cash, one bill can come from it (keeping a month of must-pay bills, $4,700), the other stays a month's saving
+  const thin = collegeFamily(); thin.accounts[1].balance = 5000;
+  assert.deepEqual(step(compute(thin, { today: T8 }), "goals").fromCash.map((x) => x.id), ["g-c1"]);
+  // with $15,000, none: $10,300 above that month does not cover a bill
+  thin.accounts[1].balance = 0;
+  assert.equal(step(compute(thin, { today: T8 }), "goals").fromCash ?? null, null);
+});
+
+// UX 4: a goal whose date has passed and that Education plans points to Education's figure; "mark it done" was said where no
+// button does it
+test("round 8 review UX 4: a past-due college goal points to Education's figure; no 'mark it done'", () => {
+  const p = collegeFamily();
+  p.goals = [{ id: "g-old", name: "Child 2's college", icon: "🎓", target: 103000, targetDate: "2023-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true },
+    { id: "g-boat", name: "Boat", icon: "⛵", target: 8000, targetDate: "2026-06-01", priority: 3, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false }];
+  const g = step(compute(p, { today: T8 }), "goals");
+  assert.match(g.detail, /Child 2's college: its date has passed\. Education says the next bill is about \$12,930 \(the spring half of 2026-27, due January 15, 2027\): tap Update on Education to set this goal to it\./);
+  assert.match(g.detail, /Boat: its date has passed, with about \$8,000 still to go\. Set a new date for it on Goals, or lower its amount if less is needed\./);
+  assert.doesNotMatch(g.detail, /mark it done|103,000/);
+});
+
+// money D2 on the page: the match step's words say what it takes; no "From ...: about $X a month of the $83 it could take" line
+// beside it (it would read as a choice of how much to put in)
+test("round 8 review D2: the match step on the page has its cost in words, no 'it could take' line", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => T8 }, plan: jasmine(200), store: { update() {} } });
+  const text = root.textContent.replace(/\s+/g, " ");
+  assert.match(text, /This takes about \$83 a month from take-home pay\./);
+  assert.doesNotMatch(text, /From \w+ 20\d\d: about \$8\d a month/);
+});
+
+// Round 8 verify (2026-11-06): the match step takes its take-home cost from the spare money first (review D2), so the cards get
+// the rest each month; their date was still Pay off debts' at the whole spare money, a month later than Pay off debts gives for
+// what is left once the 401(k) is started
+test("round 8 verify: with a known match ahead of the cards, the cards' date is Pay off debts' for what reaches them", async () => {
+  const { offer } = await import("../../debt/payoff/compute.js");
+  const p = emptyPlan();
+  p.household = { people: [{ id: "a", name: "Ana", role: "self", birthDate: "1990-04-01" }], filingStatus: "single", state: "NC" };
+  p.income = [{ id: "i1", name: "Pay", type: "salary", personId: "a", amount: 60000, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "e1", name: "Rent", category: "housing", amount: 1500, period: "monthly", essential: true }, { id: "e2", name: "Food", category: "groceries", amount: 600, period: "monthly", essential: true }];
+  p.accounts = [{ id: "c", name: "Checking", type: "checking", balance: 2500, ownerId: "a", history: [] }, { id: "v", name: "Visa", type: "credit", balance: 6000, ownerId: "a", history: [] }];
+  p.debts = [{ id: "d1", accountId: "v", rate: 0.24, minPayment: 180, extra: 0 }];
+  p.whatIfs = { ...(p.whatIfs ?? {}), benefits: { a: { matchTiers: [{ rate: 1, upTo: 0.04 }] } } };
+  const d = compute(p, { today: "2026-11-06" });
+  const m = d.steps.find((s) => s.id === "match"), h = d.steps.find((s) => s.id === "high-debt");
+  assert.equal(m.status, "now"); assert.ok(m.monthlyCost > 100, String(m.monthlyCost));
+  const o = offer(p, { today: "2026-11-06", amount: d.spare.monthly - m.monthlyCost, stepId: "high-debt" });
+  assert.equal(h.doneDate.slice(0, 7), o.soon.slice(0, 7));
 });

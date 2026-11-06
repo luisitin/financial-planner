@@ -29,7 +29,7 @@ export function render(page, ctx) {
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const span = (m) => (m >= 12 ? `${Math.round(m / 12 * 10) / 10} years` : `${Math.round(m)} month${Math.round(m) === 1 ? "" : "s"}`);
 
-  if (!d.count) {
+  if (!d.count && !d.pastDue) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which goal first?"),
       ui.h("p", { class: "lede" }, "With more than one goal, the money left each month has to be shared. This page shares it out by what matters most and what comes first, and shows which goals arrive on time."),
       ui.row(ui.h("a", { class: "btn", href: "#/goals/goals" }, "Add your goals"))));
@@ -51,7 +51,10 @@ export function render(page, ctx) {
       pending = "Monthly amounts set on your goals.";
       store.update((p) => { for (const r of d.rows) { const g = (p.goals ?? []).find((y) => y.id === r.id); if (g) g.monthly = Math.round(r.allocated); } });
     }), ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")),
-    d.leftover > 0 ? ui.h("p", { class: "muted small" }, `${money(d.leftover)} a month is left after every goal: Next best action says where it does the most good.`) : null));
+    d.leftover > 0 ? ui.h("p", { class: "muted small" }, `${money(d.leftover)} a month is left after every goal: Next best action says where it does the most good.`) : null,
+    // a date that has passed: due now, not shared out (round 8 item 18)
+    // (review UX 4: "mark it done" was said where no button does it)
+    ...(d.pastDue ?? []).map((x) => ui.h("p", { class: "small" }, `${x.name}: its date has passed, with ${money(x.dueNow)} still to go. Set a new date for it on Goals, or lower its amount if less is needed.`))));
 
   const s = plan.whatIfs?.prioritizer ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How much for goals"), ui.h("span", { class: "fold-status" }, d.override !== null ? "set by you" : "from your plan"), ui.h("span", { class: "fold-chev" }, "›")),

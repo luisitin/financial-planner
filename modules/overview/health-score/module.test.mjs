@@ -27,7 +27,9 @@ test("the family: each part from its page, the total is the sum, the gains large
   assert.equal(part(d, "retirement").points, 25, "133% of planned spending");
   assert.equal(part(d, "saving").points, 15);
   const pr = part(d, "protection"); assert.equal(pr.points, 10, "4 of 6 life shocks"); assert.match(pr.detail, /"Ana can never work again"/);
-  assert.equal(part(d, "goals").points, 0);
+  // round 8 batch 2: dated goals are funded from today, so the Japan trip (nothing in, due October 2027) waits a one-month
+  // turn after the Visa instead of being behind: 1 of 4 goals on track, 5 x 1/4 = 1.25, shown as 1.3
+  assert.equal(part(d, "goals").points, 1.3);
   for (let i = 1; i < d.gains.length; i++) assert.ok(d.gains[i - 1].max - d.gains[i - 1].points >= d.gains[i].max - d.gains[i].points);
   assert.equal(d.gains[0].id, "cushion");
 });

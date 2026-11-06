@@ -84,3 +84,39 @@ worked examples, whose arithmetic and source are in each row's note.
 
 ## Review 2026-11-06 (round 7): you and your
 - Review 2026-11-06 (round 7): the match question and its answers (view.js) say you/your for the unnamed first adult and "your spouse" for Get started's partner ("Does your spouse's job add money when your spouse saves ..."), via `core/words.js`; record titles ("Me: 401(k) / 403(b)") keep the name as a label. No compute change.
+
+## Round 8 (2026-11-06): no 401(k) on file yet (item 1)
+Next best action's match step now also lists a paid adult with no 401(k) of their own (`ask[]` entries with
+`noAccount: true`, `kind` "known" | "plan" | "ask" and Work benefits' figures in `match`). The question card for one:
+- match known (tiers typed on Work benefits): "Start Jasmine's 401(k) and get the whole match", with what it takes ("Putting
+  in 3% of pay ($45 a paycheck, about $38 less take-home pay) gets $1,170 a year from the employer") and one button,
+  "Start it at 3%": a $0 401(k) named "Jasmine's 401(k)" (ownerId that person, dated today) and the contribution row
+  (amount = the year's amount / paychecks to the cent, period by paychecks: 52 weekly, 26 biweekly, 24 twice a month, 12
+  monthly, else once a year with the year's amount; employerMatch = the match a year). Notice: "Jasmine's 401(k) is
+  started: $45 a paycheck goes in (3% of pay) and the employer adds $1,170 a year. Tell human resources or the benefits site the same 3%."
+- otherwise: "Does Priya's job have a retirement plan with a match?" with a common match's worth, and three answers: "Yes:
+  start Priya's 401(k)" (the $0 401(k), then the add form opens on it with Priya and every two weeks; no amount is saved
+  until one is typed), "No plan or no match at Priya's job" (`retirement.workPlans[id].match = false`), and "Not sure"
+  (shows where to look; nothing is saved).
+The card is shown for the match step whatever its status but done (it was only for "check"). The hero says "No retirement
+account yet: the question below starts a 401(k) at work in one tap" and the empty form card is gone while there is no
+account (it showed an empty card under "First add the retirement accounts themselves on the Net worth page"). Tests:
+module.test.mjs "round 8 item 1".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review" and the updated item 1 tests.
+- **Words that say what the app does (UX 8).** The hero: "No retirement account yet: one tap below adds your 401(k) to the
+  plan." After a start: "Added to your plan: $45 a paycheck (3% of pay), and the employer adds $1,170 a year. To actually start
+  it, sign up at 3% with human resources or your job's benefits site." The button for "is there a plan?" is "Yes: add X's 401(k)".
+- **The cost before the tap, the month after it (UX 2, money D2).** When the month has less than starting the match takes
+  (Next best action's `costShort`), the card shows Next best action's sentence ("This takes about $83 a month from take-home
+  pay, and about $3 is left each month: put the $50 a month extra on Visa card (Pay off debts) toward it instead ... and trim
+  about $30 a month of spending"). The confirmation adds `leftWords`: "Each month is now about $80 short: lower the $50 extra on
+  debts (Pay off debts) or trim spending to make up for it."
+- **No question after "Yes" (UX 3).** "Yes: add X's 401(k)" adds the $0 401(k) and saves `retirement.workPlans[id].match =
+  true` (the answer Get started saves to the same question; "A plan with a match at X's job" can be taken back with Change).
+  From then, and for any 401(k) on file with nothing going in and a typed match, the card is "Start what goes into X's 401(k)
+  and get the whole match" (typed) or "How much goes into X's 401(k)?" (a plan, the match not typed), with "Start it at 6%" (a
+  contribution on that 401(k): the year's amount at the match's share of pay / paychecks, to the cent; the employer's match
+  only when typed on Work benefits, else 0 and "type what the employer adds once you know it") and "Type my own amount" (the
+  form, filled in with that amount, and a line saying so). No "That 401(k) is from a job X left" about the 401(k) just added.

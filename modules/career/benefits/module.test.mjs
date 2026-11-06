@@ -481,3 +481,61 @@ test("Review 2026-11-06: on a separate return the business owner's account saves
     near(ana.federal, 825, 0.005); near(ana.saved, 1111.875, 0.005);
   });
 });
+
+test("round 8 item 1: with nothing going into a 401(k), 'Start it at 3%' adds the $0 401(k) and the contribution in one tap", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-1", name: "Jasmine", role: "self", birthDate: "2002-03-15" }], filingStatus: "single", state: "OH" };
+  p.income = [{ id: "i-1", name: "Pay", type: "salary", personId: "p-1", amount: 39000, period: "annual", growth: 0, taxable: true }];
+  p.whatIfs = { benefits: { "p-1": { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 } } };
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, remove() {}, querySelector() { return null; }, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  let n = 0;
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), uid: () => `new-${++n}` };
+  const all = (x, out = []) => { if (typeof x !== "object") return out; if (x.tag === "button") out.push(x); for (const c of x.kids) all(c, out); return out; };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan: p, store: { update(fn) { fn(p); } } });
+  assert.doesNotMatch(root.textContent, /Add the 401\(k\) on Contributions/, "no trip to another page");
+  const btn = all(root).find((b) => /^Start it at 3%/.test(b.textContent));
+  assert.ok(btn); btn.onClick();
+  const k = p.accounts.find((a) => a.type === "401k");
+  assert.deepEqual([k.name, k.balance, k.ownerId], ["Jasmine's 401(k)", 0, "p-1"]);
+  assert.deepEqual(p.retirement.contributions.map((c) => [c.accountId, c.amount, c.period, c.employerMatch]), [[k.id, 45, "biweekly", 1170]]);
+  // the page now reads the 401(k) as there: the whole match is got
+  assert.equal(compute(p, { today: NOV }).k401.leftBehind, 0);
+});
+
+// Round 8 batch 2 review (UX 7, UX 8, money D2): the filled button is the limit only when the month can carry what it takes;
+// the confirmation says it is added to the plan, that signing up at work starts it, and what the month has left
+test("round 8 review UX 7 / UX 8 / D2: the limit is a filled button only when the month can carry it; the words after the tap", async () => {
+  const { render } = await import("./view.js");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const fmt = await import("../../../core/format.js");
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-1", name: "Jasmine", role: "self", birthDate: "2002-03-15" }], filingStatus: "single", state: "OH" };
+  p.income = [{ id: "i-1", name: "Pay", type: "salary", personId: "p-1", amount: 39000, period: "annual", growth: 0, taxable: true }];
+  p.whatIfs = { benefits: { "p-1": { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 } } };
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 3000, ownerId: "", history: [] }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1400, period: "monthly", essential: true }, { id: "e-other", name: "Other", category: "other", amount: 1150, period: "monthly", essential: false }];
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, remove() {}, querySelector() { return null; }, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  let n = 0;
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn, o) => node("button", [l], { onClick: fn, opts: o ?? {} }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), uid: () => `new-${++n}` };
+  const all = (x, out = []) => { if (typeof x !== "object") return out; if (x.tag === "button") out.push(x); for (const c of x.kids) all(c, out); return out; };
+  const draw = () => { const root = node("root"); render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan: p, store: { update(fn) { fn(p); } }, computeOf: (id, prm) => (id === "overview/next-best-action" ? nba(p, prm) : null) }); return root; };
+  const spare = nba(p, { today: NOV }).spare.monthly;
+  assert.ok(spare > 100 && spare < 400, String(spare));
+  let root = draw();
+  const start = all(root).find((b) => /^Start it at 3%/.test(b.textContent));
+  assert.notEqual(start.opts.class, "secondary", "the whole match is the filled button");
+  start.onClick();
+  root = draw();
+  const after = root.textContent.replace(/\s+/g, " ");
+  assert.match(after, /Added to your plan: 3% of pay, \$45 a paycheck, on the Contributions page, with \$1,170 a year from your employer\. To actually start it, sign up at 3% with human resources or your job's benefits site\./);
+  assert.match(after, /Each month now has about \$\d+ left after tax, spending and saving\./);
+  // the limit takes far more than the month has: outlined, and said so
+  const max = all(root).find((b) => /^Use \d+(\.\d)?%/.test(b.textContent) && !/^Use 3%/.test(b.textContent));
+  assert.equal(max.opts.class, "secondary");
+  assert.match(after, /Only if your month has about \$[\d,]+ spare: it has about \$\d+\./);
+});

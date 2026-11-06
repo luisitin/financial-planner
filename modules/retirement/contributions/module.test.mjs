@@ -163,3 +163,126 @@ test("hsaPicture: self-only cover not chosen goes to the one adult whose HSA row
   p.taxes.hsa.coveredId = "a"; h = hsaPicture(p, 2026);
   assert.equal(h.coveredId, "a"); assert.equal(h.people.find((x) => x.id === "b").over, 3000);
 });
+
+// Round 8 item 1: no 401(k) on file yet -- one tap on this page starts it (the path was Benefits, Contributions, Net worth, back)
+/** The page with a stand-in UI kit that keeps the buttons' handlers, and a store that changes the plan in place. */
+async function page(plan, today = "2026-11-06") {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, remove() {}, querySelector() { return null; }, scrollIntoView() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  let n = 0;
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: (f, values) => node("form", [], { values }), uid: () => `new-${++n}` };
+  const draw = () => { const root = node("root"); render(root, { ui, fmt: { ...fmt, today: () => today }, plan, store: { update(fn) { fn(plan); } }, computeOf: (id, p) => (id === "overview/next-best-action" ? nba(plan, p) : null) }); return root; };
+  const all = (x, tag, out = []) => { if (typeof x !== "object") return out; if (x.tag === tag) out.push(x); for (const c of x.kids) all(c, tag, out); return out; };
+  return { draw, all };
+}
+function worker(name, pay, benefits) {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-1", name, role: "self", birthDate: "2002-03-15" }], filingStatus: "single", state: "OH" };
+  p.income = [{ id: "i-1", name: "Pay", type: "salary", personId: "p-1", amount: pay, period: "annual", growth: 0, taxable: true }];
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 3000, ownerId: "", history: [] }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 1400, period: "monthly", essential: true }];
+  if (benefits) p.whatIfs = { benefits: { "p-1": benefits } };
+  return p;
+}
+
+test("round 8 item 1: a match typed on Work benefits and no 401(k): 'Start it at 3%' adds the $0 401(k) and what goes in, in one tap", async () => {
+  const p = worker("Jasmine", 39000, { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 });
+  const { draw, all } = await page(p);
+  const root = draw();
+  assert.match(root.textContent, /Start Jasmine's 401\(k\) and get the whole match/);
+  assert.match(root.textContent, /gets \$1,170 a year from the employer/);
+  assert.equal(all(root, "card").filter((c) => c.kids.length === 0).length, 0, "no empty card while there is no account");
+  const btn = all(root, "button").find((b) => /^Start it at 3%/.test(b.textContent));
+  assert.ok(btn, "one button");
+  btn.onClick();
+  const k = p.accounts.find((a) => a.type === "401k");
+  assert.deepEqual([k.name, k.balance, k.ownerId], ["Jasmine's 401(k)", 0, "p-1"]);
+  assert.deepEqual(p.retirement.contributions.map((c) => [c.accountId, c.personId, c.amount, c.period, c.employerMatch]), [[k.id, "p-1", 45, "biweekly", 1170]]);
+  // (review UX 8: "is started" claimed more than the app does)
+  assert.match(draw().textContent, /Added to your plan: \$45 a paycheck \(3% of pay\), and the employer adds \$1,170 a year/);
+});
+
+test("round 8 item 1: no match known: Yes starts the 401(k) and opens the form on it; No saves 'no plan or no match'", async () => {
+  const p = worker("Priya", 58000);
+  const { draw, all } = await page(p);
+  const root = draw();
+  assert.match(root.textContent, /Does Priya's job have a retirement plan with a match\?/);
+  assert.match(root.textContent, /about \$1,740 a year for Priya/);
+  assert.ok(all(root, "button").some((b) => b.textContent === "Not sure"));
+  // (review UX 3 and 8: "Yes: add", and the next card is a start, not the form; see the review's test below)
+  all(root, "button").find((b) => /^Yes: add Priya's 401\(k\)/.test(b.textContent)).onClick();
+  const k = p.accounts.find((a) => a.type === "401k");
+  assert.ok(k && k.balance === 0 && k.ownerId === "p-1");
+  assert.equal((p.retirement.contributions ?? []).length, 0, "no amount was typed, so none is saved");
+  const q = worker("Priya", 58000);
+  const pq = await page(q);
+  pq.all(pq.draw(), "button").find((b) => /^No plan or no match/.test(b.textContent)).onClick();
+  assert.deepEqual(q.retirement.workPlans, { "p-1": { match: false } });
+});
+
+// ---- Round 8 batch 2 review (2026-11-06) ----
+/** Jasmine (invented, as the round-8 renter): $39,000 in Ohio, about $3 spare a month after a $50 extra on her Visa card. */
+function renter() {
+  const p = worker("Jasmine", 39000, { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 });
+  p.expenses.push({ id: "e-food", name: "Food", category: "food", amount: 500, period: "monthly", essential: true }, { id: "e-card", name: "Visa payment", category: "debt", amount: 120, period: "monthly", essential: true },
+    { id: "e-other", name: "Other", category: "other", amount: 690, period: "monthly", essential: false });
+  p.accounts.push({ id: "a-visa", name: "Visa card", type: "credit", balance: 4000, ownerId: "p-1", history: [] });
+  p.debts = [{ id: "d-visa", accountId: "a-visa", rate: 0.249, minPayment: 120, extra: 0 }];
+  p.debtPlan = { extra: 50, order: "avalanche", customOrder: [] };
+  return p;
+}
+
+// UX 2 and money D2: the card says what the match takes from take-home pay before the tap when the month has less, and the
+// confirmation gives the month after it; UX 8: the words say it is added to the plan, and that signing up at work starts it
+test("round 8 review D2 / UX 2 / UX 8: the cost before the tap, the month after it, and 'added to your plan'", async () => {
+  const p = renter();
+  const { draw, all } = await page(p);
+  const root = draw();
+  assert.match(root.textContent, /No retirement account yet: one tap below adds your 401\(k\) to the plan\./);
+  assert.match(root.textContent, /This takes about \$83 a month from take-home pay, and about \$3 is left each month: put the \$50 a month extra on Visa card \(Pay off debts\) toward it instead/);
+  all(root, "button").find((b) => /^Start it at 3%/.test(b.textContent)).onClick();
+  const after = draw().textContent;
+  assert.match(after, /Added to your plan: \$45 a paycheck \(3% of pay\), and the employer adds \$1,170 a year\. To actually start it, sign up at 3% with human resources or your job's benefits site\./);
+  assert.match(after, /Each month is now about \$80 short: lower the \$50 extra on debts \(Pay off debts\) or trim spending to make up for it\./);
+  assert.doesNotMatch(after, /is started/);
+});
+
+// UX 3: a 401(k) on file with nothing going in and the match typed on Work benefits: the same one-tap start, on that 401(k)
+test("round 8 review UX 3: a 401(k) on file and a typed match: 'Start it at 3%' on that 401(k), no question", async () => {
+  const p = worker("Jasmine", 39000, { matchTiers: [{ rate: 1, upTo: 0.03 }], paychecks: 26, planYear: 2027 });
+  p.accounts.push({ id: "a-k", name: "Work 401(k)", type: "401k", balance: 0, ownerId: "p-1", history: [] });
+  const { draw, all } = await page(p);
+  const root = draw();
+  assert.doesNotMatch(root.textContent, /Does Jasmine's job add money/);
+  assert.match(root.textContent, /Start what goes into Jasmine's 401\(k\) and get the whole match/);
+  all(root, "button").find((b) => /^Start it at 3%/.test(b.textContent)).onClick();
+  assert.equal(p.accounts.filter((a) => a.type === "401k").length, 1, "no second 401(k)");
+  assert.deepEqual(p.retirement.contributions.map((c) => [c.accountId, c.amount, c.period, c.employerMatch]), [["a-k", 45, "biweekly", 1170]]);
+});
+
+// UX 3: after "Yes", the question is not asked again: the 401(k) is added, the job's plan is noted as having a match
+// (retirement.workPlans[id].match = true, the field Get started writes), and the next card offers a start at a common match or
+// one's own amount, never "That 401(k) is from a job Priya left" about the account just added
+test("round 8 review UX 3: after 'Yes: add Priya's 401(k)', a start at a common match or one's own amount, not the question again", async () => {
+  const p = worker("Priya", 58000);
+  const { draw, all } = await page(p);
+  all(draw(), "button").find((b) => /^Yes: add Priya's 401\(k\)/.test(b.textContent)).onClick();
+  const k = p.accounts.find((a) => a.type === "401k");
+  assert.ok(k && k.balance === 0 && k.ownerId === "p-1");
+  assert.deepEqual(p.retirement.workPlans, { "p-1": { match: true } });
+  const after = draw();
+  const text = after.textContent;
+  assert.match(text, /Priya's 401\(k\) is added to the plan \(at \$0, on Net worth\)\./);
+  assert.doesNotMatch(text, /Does Priya's job add money|from a job Priya left/);
+  assert.match(text, /How much goes into Priya's 401\(k\)\?/);
+  all(after, "button").find((b) => /^Type my own amount/.test(b.textContent)).onClick();
+  const form = all(draw(), "form")[0];
+  assert.ok(form, "the form is open");
+  assert.deepEqual([form.values.accountId, form.values.personId, form.values.period, form.values.amount], [k.id, "p-1", "biweekly", 133.85]);
+  all(draw(), "button").find((b) => /^Start it at 6%/.test(b.textContent)).onClick();
+  assert.deepEqual(p.retirement.contributions.map((c) => [c.accountId, c.amount, c.period, c.employerMatch]), [[k.id, 133.85, "biweekly", 0]]);
+  assert.match(draw().textContent, /Added to your plan: \$134 a paycheck \(6% of pay\)\. Type what the employer adds on it below once you know it\./);
+});

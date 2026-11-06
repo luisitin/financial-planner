@@ -172,3 +172,30 @@ No red or amber verdict rests mostly on guesses (spec 8.1). Tests: `module.test.
 After the C3 UX review (item 12): `spend-guessed` says the shortfall to the $10, as the Dashboard and the done screen say
 it, and `emergency-guessed` says the months as "about" (whole months, one decimal under 2, as Emergency fund says them). The life-cover alerts take Life insurance
 needs' words, which are rough while the spending is mostly ours (see that README).
+
+## Round 8 (2026-11-06)
+- Order (item 40, widow-4): chores last, then by level, and within a level an alert with a date (`due`, ISO) first, the
+  nearest first; the others keep their order. Only the required withdrawal has a date so far (`due`: December 31, or April
+  1 of the next year in the first year), so a retiree in November sees "Ruth's required withdrawal: at least $16,078 by
+  December 31" before "Emergency fund is getting there" (both "check").
+- Goals waiting their turn (item 3): Next best action's goals step now comes right after costly debt, before the full
+  cushion, and starts this month when there is no costly debt. `goalsBehind` is unchanged, but the turn it reads is
+  earlier and the step's capacity bigger: on the family plan the turn is December 2026 with $3,884 a month (was December
+  2027 with $1,911), so the Japan trip waits a one-month turn instead of being behind, and the most a wedding by December
+  2029 can reach is about $115,900 (was about $21,100). In a household with no costly debt nothing waits a turn: each goal
+  behind is behind, and Next best action says what it needs from now.
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review".
+- Required withdrawal (money D5): from Next best action's `rmdNow`: someone still working has the 401(k)s at that job left out
+  (IRC 401(a)(9)(C)), the amount is the rest's (balance / Uniform Lifetime factor), and the alert names the 401(k) that can wait;
+  with only that 401(k), no alert. Account names read as Next best action says them ("Ruth's retirement account").
+- Goals waiting their turn (money D6): only the goal ticked as the emergency fund (`isEmergencyFund`) stays out of the turn, as
+  Next best action and Liquidity read it; the family's untagged "Emergency fund" goal now catches up with the dated goals, so
+  the largest wedding by December 2029 that can wait is about $109,800 (was about $115,900).
+- Bills paid from savings (UX 1): a goal in Next best action's goals step `fromCash` is not in `goalsBehind` (so not in "N goals
+  are behind ... a month", nor the Dashboard's goals tile); one info alert, "Pay N goals from savings", names each with its
+  amount and date. `goalsBehind` returns `fromCash`.
+- A past-due college goal (UX 4): Education's next bill, in Next best action's words (`collegeBills`, `collegeWords`), going to
+  Education. The Goals page's warning now reads "The date for X has passed", so the check that drops it beside its own alert
+  looks for the name anywhere in it.

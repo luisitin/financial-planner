@@ -38,6 +38,15 @@ export function render(root, ctx) {
   const figureOf = (g, gr) => { const pl = plannerFor(g); return pl ? plannerFigure(g, gr, pl.page, of(pl.page), plan) : null; };
   const differs = plannerDiffers;
   const openGoal = (id) => { editing = plan.goals.find((y) => y.id === id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  // bills Next best action pays from savings (due within 3 months, more than a month can save, the cash covers it; review UX 1):
+  // not a month's saving here either
+  const nbaNow = d.count ? of("overview/next-best-action") : null;
+  const fromCash = new Map(((nbaNow?.ready ? nbaNow.steps.find((x) => x.id === "goals")?.fromCash : null) ?? []).map((x) => [x.id, x]));
+  const cashMonthly = d.goals.filter((g) => fromCash.has(g.id)).reduce((t, g) => t + (Number(g.neededMonthly) || 0), 0);
+  // a passed date the goal's own page has a figure for (Education's next bill for a child in college; round 8 verify, UX 4's
+  // rest): that figure, on the row's link, is what is due, so the goal's whole amount ("$103,000 is due now") is not said
+  const lateFigure = (g) => { if (g.status !== "past due") return null; const f = figureOf((plan.goals ?? []).find((y) => y.id === g.id) ?? g, g); return f && f.amount > 0 ? f : null; };
+  const dueNowSaid = d.goals.filter((g) => g.status === "past due" && g.dueNow > 0 && !lateFigure(g)).reduce((t, g) => t + g.dueNow, 0);
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -49,7 +58,9 @@ export function render(root, ctx) {
     root.append(ui.card(null, ui.row(
       ui.stat("Goals", String(d.count), d.done ? `${d.done} reached` : "none reached yet"),
       ui.stat("Saved so far", fmt.money(d.totalFunded, cur), `of ${fmt.money(d.totalTarget, cur)} in total`),
-      ui.stat("Needed each month", fmt.money(d.neededMonthly, cur), d.contributing ? `you are putting in ${fmt.money(d.contributing, cur)}` : "to reach every dated goal on time"),
+      ui.stat("Needed each month", fmt.money(Math.max(0, d.neededMonthly - cashMonthly), cur), [
+        d.dueNow > 0 ? (dueNowSaid > 0 ? `for the goals still ahead; ${fmt.money(dueNowSaid, cur)} is due now on goals whose date has passed` : "for the goals still ahead; a goal's date has passed (below)") : d.contributing ? `you are putting in ${fmt.money(d.contributing, cur)}` : "to reach every dated goal on time",
+        fromCash.size ? `; bills due soon (${fmt.money([...fromCash.values()].reduce((t, x) => t + x.amount, 0), cur)}) come from savings` : ""].join("")),
     )));
   }
   for (const w of d.warnings) {
@@ -114,14 +125,17 @@ export function render(root, ctx) {
     const gb = goalsBehind(d, { nba: ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) ?? null, today: fmt.today() });
     const waiting = new Set(gb.queued.map((g) => g.id));
     const turn = gb.turn ? new Date(`${gb.turn}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "";
-    const pill = (g) => waiting.has(g.id) ? ["", "starts later"] : ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["warn", "no amount"] })[g.status] ?? ["", g.status];
+    const pill = (g) => waiting.has(g.id) ? ["", "starts later"] : fromCash.has(g.id) ? ["", "from savings"] : ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["warn", "no amount"] })[g.status] ?? ["", g.status];
     const sub = (g) => {
       // the amount as typed first; what rising prices make it by the date after (a typed $30,000 read as "$0 of $32,782")
       const grown = g.targetThen > g.target * 1.005 && g.targetDate;
       const bits = [`${fmt.money(g.funded, cur)} of ${fmt.money(g.target, cur)}`];
       if (g.targetDate) bits.push(grown ? `about ${fmt.money(Math.round(g.targetThen / 100) * 100, cur)} by ${fmt.date(g.targetDate)} with rising prices` : `by ${fmt.date(g.targetDate)}`);
       if (waiting.has(g.id)) bits.push(`its turn comes in ${turn}, after the steps before it on Next best action`);
+      else if (fromCash.has(g.id)) bits.push("paid from savings when it is due (Next best action)");
       else if (g.status === "behind" || g.status === "on track") bits.push(`needs ${fmt.money(g.neededMonthly, cur)} a month${g.status === "behind" && g.monthly > 0 ? `; you put in ${fmt.money(g.monthly, cur)}` : ""}`);
+      // a date that has passed: what is left is due now, not a month's saving (round 8 item 18)
+      else if (g.status === "past due" && g.dueNow > 0 && !lateFigure(g)) bits.push(`due now: ${fmt.money(g.dueNow, cur)}`);
       if (g.fundedFrom.length) bits.push(`in ${g.fundedFrom.join(", ")}${g.sharedWith.length ? ` (shared with ${g.sharedWith.join(", ")})` : ""}`);
       return bits.join(" · ");
     };

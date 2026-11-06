@@ -166,3 +166,5 @@ stand-in AI that answers late), not by a unit test.
 - Optionally let goals go as "Goal 1 (education)"... for a household that chose an online AI service.
 
 Review 2026-11-06 (round 7): the stand-in key ("On this page Adult 1 is you, Adult 2 is your spouse, ...") says you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only). Not changed: `restore` puts the real name back into the AI's answer, so an answer can still read "Me has ..." (verbs cannot be fixed by swapping a word).
+
+Round 8 (2026-11-06, item 3): Next best action's goals step now comes right after costly debt, so on the family plan the Japan trip waits a one-month turn: the fact sheet's Goals line reads "Emergency fund, Replace Adult 2's car, Child 1's college need more each month (see the Goals page). Japan trip: saving for it starts in November 2026, when its turn comes on Next best action." No change to this page's compute.

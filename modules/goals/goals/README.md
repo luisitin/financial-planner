@@ -61,3 +61,30 @@ No date: needed/projected are null, status "no date". Date in the past and not d
 ## Ideas / not yet
 - Several funding accounts per goal in the form (the data shape already allows it).
 - Goal-seek ("what date can I afford?") and priority-based allocation of a fixed monthly amount (phase 9 `scenarios/goal-seek`).
+
+## Round 8 (2026-11-06): a date that has passed is due now (item 18, equity-5)
+A goal whose date has passed (`status: "past due"`) has `neededMonthly: null` and `dueNow` = what it still needs
+(`remaining`), and is left out of the total `neededMonthly` ("Needed each month"); the result carries `dueNow` (their sum)
+only when there is one, so a plan without one reads exactly as before. Before, n = 0 months made the whole remainder a
+month's saving: one college goal dated 2023-08-15 with $103,000 left read "$105,576 needed each month" (2,576 for the
+goals still ahead + 103,000). The goal's line says "due now: $103,000" and the stat "for the goals still ahead; $103,000 is
+due now on goals whose date has passed". Goal prioritizer leaves it out of the sharing and lists it apart; Next best
+action's goals step says it apart. A goal due this month (0 months left) keeps its whole remainder as this month's figure.
+Test: module.test.mjs "past due, no amount, own rate, and totals".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review".
+- A passed date's warning: "The date for Child 2's college has passed. Set a new date, or lower its amount to what is still
+  needed." (it said "Child 2's college's date ... or mark it done", and no button marks a goal done).
+- Education's figure for a child already in college (`plannerFigure`): the next bill, as Education's Update button writes it
+  (its `nextYearCost` to the $10, "for its next bill (the spring half of 2026-27, January 15, 2027)"), not four years in the
+  dollars of those years ($103,000 beside a $25,850 goal).
+- The page reads Next best action's goals step `fromCash` (bills due within 3 months that the month cannot save for and the
+  cash covers): those goals are out of "Needed each month" (it subtracts their `neededMonthly`; the stat's line says the bills
+  come from savings), and their row says "paid from savings when it is due (Next best action)" with a "from savings" pill.
+
+## Round 8 verify (2026-11-06)
+- The rest of review UX 4: a goal whose date has passed and whose own page has a figure for it (Education's next bill for a
+  child in college) is not said as its whole amount due now ("$103,000 is due now" in the header, "due now: $103,000" on the
+  row, next to the row's own "Education works it out at $12,930 for its next bill"). The header says "a goal's date has passed
+  (below)"; other passed goals keep "$X is due now". Test: module.test.mjs "round 8 verify".

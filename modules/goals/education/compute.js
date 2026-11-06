@@ -7,6 +7,7 @@ import { compute as computeGoals } from "../goals/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { monthsBetween } from "../../../core/math/dates.js";
+import { compute as computeFederal } from "../../taxes/federal/compute.js";
 
 /** A year of college in 2025-26, published prices: tuition and fees plus room and board (College Board, Trends in College Pricing and Student Aid 2025). */
 export const COSTS = {
@@ -27,6 +28,18 @@ const wordsOf = (t) => ` ${String(t ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+
  * ED" name Ed; "Education fund" does not ("ed" inside "education"), nor does "University fund" name Ty.
  */
 export const namesPerson = (text, name) => { const n = wordsOf(name).trim(); return n !== "" && wordsOf(text).includes(` ${n} `); };
+/** A school year runs from its fall bill (August 15 of its first year) to its spring bill (January 15 of the next). */
+export const BILLS = { fall: "08-15", spring: "01-15" };
+/**
+ * The American Opportunity tax credit (IRC 25A(b), (d), (i); IRS Publication 970, 2025, chapter 2, read 2026-11-06): up to
+ * $2,500 a year for each student in the first four years of college, shrinking from $80,000 to $90,000 of modified AGI
+ * ($160,000 to $180,000 on a joint return; the law's own figures, not indexed), none on a separate return.
+ */
+export const AOTC = { perStudent: 2500, years: 4, single: [80000, 90000], joint: [160000, 180000] };
+/** The FAFSA for a school year must open by October 1 of the year before it (20 U.S.C. 1090(d)(4)(A), read 2026-11-06). */
+export const FAFSA_OPENS = "10-01";
+const label = (y) => `${y}-${String(y + 1).slice(2)}`;
+
 /** A figure as this page shows it, to the $10: other pages quote it through this. */
 export const shownAmount = (n) => Math.round(n / 10) * 10;
 
@@ -34,7 +47,17 @@ export const shownAmount = (n) => Math.round(n / 10) * 10;
  * compute(plan, { today }) -> {
  *   growth, returnRate, children: [{ id, name, age, startYear, type, typeLabel, yearlyNow, years, share, costs: [{ year, cost }], total (in the dollars of those years),
  *     totalToday (in today's money), atStart (what the four years cost, discounted to the first bill), goal, saved, monthly, monthsLeft,
- *     neededMonthly (to cover the share by the first bill), coveredShare (what today's saving covers) }]
+ *     neededMonthly (to cover the share by the first bill), coveredShare (what today's saving covers),
+ *     and once college has begun (round 8 item 18): left [{ year, label: "2026-27", cost }] (the school years still to pay: a
+ *     year whose fall bill has come due has its spring half left, cost = half the year's and part: "spring", review D7;
+ *     before, a year that had begun counted in full until its spring bill), stillToPay (their cost x share), nextBill
+ *     ("YYYY-MM-DD": the spring bill of a year under way, else the next fall bill; null when none is left), nextYearCost
+ *     (what is left of the first year x share: the next bill's amount), finished (no year left);
+ *     fafsa? { year, label, opens, open } (the next school year still to begin, when its form opens within a year or is open) }],
+ *   aotc? { status: "full"|"partial", students, perStudent, magi, range } (a child in the first four years of college this
+ *     year or the next, and the household's income under the credit's limit; never on a separate return),
+ *   generic? { id, name } (an education goal naming nobody in the household and no child's own, not reached: the page offers
+ *     to make it a child's goal instead of adding a second one)
  * }
  */
 export function compute(plan, params = {}) {
@@ -76,7 +99,51 @@ export function compute(plan, params = {}) {
     const r = returnRate / 12;
     const neededMonthly = monthsLeft > 0 ? Math.max(0, pmtToReach(r, monthsLeft, target, saved)) : null;
     const reach = fv(r, monthsLeft, monthly, saved);
-    return { id: k.id, name: k.name, age: year - birthYear, startYear, type, typeLabel: COSTS[type].label, yearlyNow, years, share, costs, total, totalToday, atStart, goal: goal ? { id: goal.id, name: goal.name } : null, saved, monthly, monthsLeft, neededMonthly, coveredShare: atStart > 0 ? Math.min(1, reach / atStart) : 1, started: monthsLeft <= 0 };
+    const started = monthsLeft <= 0;
+    // once college has begun, what is left of it (round 8 item 18: the page said "0% covered" for children already in
+    // college and its goal button wrote the first bill's date, 2023)
+    const inCollege = {};
+    if (started && today) {
+      // a school year whose fall bill has come due has its spring half left (the two-bill model above: half of the year on each
+      // bill; review D7, 2026-11-06: it counted in full, so the goal for the January bill asked for the whole year)
+      // each school year at its own price (round 8 verify, 2026-11-06): `costs` prices a year already begun at this calendar
+      // year's price, so on January 1 the spring half of a year under way rose by the growth rate ($12,925 in December, $13,442
+      // on January 14 for the same January 15 bill); a published price grows by school year, so the year is priced as its own
+      // (a typed price is the one typed, as before)
+      const own = (x) => (type === "custom" ? x.cost : COSTS[type].yearly * Math.pow(1 + growth, Math.max(0, x.year - COST_YEAR - 1)));
+      const left = costs.filter((x) => today < `${x.year + 1}-${BILLS.spring}`).map((x) => (today >= `${x.year}-${BILLS.fall}` ? { year: x.year, label: label(x.year), cost: own(x) / 2, part: "spring" } : { year: x.year, label: label(x.year), cost: own(x) }));
+      const first = left[0] ?? null;
+      Object.assign(inCollege, { left, stillToPay: left.reduce((t, x) => t + x.cost, 0) * share, nextYearCost: first ? first.cost * share : 0, finished: !left.length,
+        nextBill: !first ? null : today >= `${first.year}-${BILLS.fall}` ? `${first.year + 1}-${BILLS.spring}` : `${first.year}-${BILLS.fall}` });
+    }
+    // the FAFSA for the next school year still to begin: said once its form is open, or opens within a year
+    const nextStart = costs.find((x) => !today || `${x.year}-${BILLS.fall}` > today);
+    let fafsa = null;
+    if (today && nextStart) {
+      const opens = `${nextStart.year - 1}-${FAFSA_OPENS}`;
+      if (monthsBetween(today, opens) <= 12) fafsa = { year: nextStart.year, label: label(nextStart.year), opens, open: today >= opens };
+    }
+    return { id: k.id, name: k.name, age: year - birthYear, startYear, type, typeLabel: COSTS[type].label, yearlyNow, years, share, costs, total, totalToday, atStart, goal: goal ? { id: goal.id, name: goal.name } : null, saved, monthly, monthsLeft, neededMonthly, coveredShare: atStart > 0 ? Math.min(1, reach / atStart) : 1, started,
+      ...inCollege, ...(fafsa ? { fafsa } : {}) };
   });
-  return { growth, returnRate, inflation, children, costYear: COST_YEAR };
+  // the American Opportunity credit: students in their first four years of college this school year or the next, and the
+  // household's income (AGI, the Federal estimate's) under the limit; worked only then (the Federal estimate is not cheap)
+  let aotc = null;
+  const students = today ? children.filter((c) => [year - 1, year].some((y) => y >= c.startYear && y < c.startYear + Math.min(c.years, AOTC.years) && `${y + 1}-${BILLS.spring}` > today)).length : 0;
+  const status = plan.household?.filingStatus ?? "single";
+  if (students && status !== "married_separate") {
+    let magi = null;
+    try { magi = computeFederal(plan, { today }).result.agi; } catch { magi = null; }
+    const range = status === "married_joint" ? AOTC.joint : AOTC.single;
+    if (magi !== null && magi < range[1]) aotc = { status: magi <= range[0] ? "full" : "partial", students, perStudent: AOTC.perStudent, magi, range };
+  }
+  // an education goal that names nobody in the household and is no child's own ("Education", from Get started): with several
+  // children it is none of theirs, so a per-child goal beside it would count college twice; the page offers to turn it into a
+  // child's goal (review UX 1, 2026-11-06)
+  // Only while every child has begun college (round 8 verify, 2026-11-06): with a child still to start, a goal naming nobody
+  // may well be that child's ("College fund", $150,000 by 2036 for a 8-year-old), and the filled button turned it into the
+  // older child's spring bill, $12,930 by January, with its saving
+  const claimed = new Set(children.map((c) => c.goal?.id).filter(Boolean));
+  const g0 = children.every((c) => c.started) ? goals.find((g) => EDUCATION_GOAL.test(g.name ?? "") && !claimed.has(g.id) && !others.some((o) => namesPerson(g.name, o.name)) && g.status !== "done") : null;
+  return { growth, returnRate, inflation, children, costYear: COST_YEAR, ...(aotc ? { aotc } : {}), ...(kids.length && g0 ? { generic: { id: g0.id, name: g0.name } } : {}) };
 }

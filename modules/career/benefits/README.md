@@ -171,3 +171,23 @@ fallback), not ready (no pay, pay linked to nobody, pay of 0).
   own return says".
 
 Review 2026-11-06 (round 7): the lede ("Your workplace benefits for 2027", "Your spouse's ...") says you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).
+
+## Round 8 (2026-11-06): one tap starts the 401(k) (item 1)
+With nothing going into a 401(k) for this person (`k401.hasAccount` false), the 401(k) choices keep their buttons, worded
+"Start it at 3%": one tap adds the contribution on Contributions (the year's amount / paychecks to the cent, every two
+weeks for 26 paychecks; the match a year as employerMatch when the match is typed here, 0 while it is the assumed common
+one) and, when the person has no 401(k) at a current job, a $0 one on Net worth ("Jasmine's 401(k)"). It used to send you to
+Contributions, which sent you to Net worth and back. The figures are this page's own (`fullMatchAt`, `costPerCheck`).
+Next best action's match step for an adult with no 401(k) reads this compute too (`freshMatch`, `paycheck: false`). Test:
+module.test.mjs "round 8 item 1".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Test: module.test.mjs "round 8 review UX 7 / UX 8 / D2".
+- **The filled button is one the month can carry (UX 7).** A choice takes `(its costPerCheck - now's costPerCheck) x
+  paychecks / 12` more from take-home pay a month; the filled button is the whole match while some is left behind, else the
+  first choice that fits Next best action's spare money (within $5). One that does not fit is outlined, with "Only if your
+  month has about $X spare: it has about $Y." (A renter with $0 spare had "Use 62.8%" as the filled button.)
+- **The words after a tap (UX 8, money D2):** "Added to your plan: 3% of pay, $45 a paycheck, on the Contributions page, with
+  $1,170 a year from your employer. To actually start it, sign up at 3% with human resources or your job's benefits site."
+  (a change: "To actually change it, set 6% with human resources ..."), then Next best action's `leftWords`, what each month has
+  left now; that confirmation stays on the page.

@@ -119,7 +119,9 @@ test("the fact sheet: stand-ins and birthday-aware ages, the health score's part
   assert.equal(s.lines[0], "Household: Adult 1 (age 36), Adult 2 (age 37), Child 1 (age 6); files taxes as married filing jointly; lives in TX.", "Bo turns 38 on 2 November");
   const all = s.lines.join("\n");
   assert.match(all, /Plan health score: \d+ of 100/);
-  for (const t of ["Cash cushion (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (credit card 1).", "Emergency fund, Replace Adult 2's car, Child 1's college, Japan trip need more each month",
+  for (const t of ["Cash cushion (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (credit card 1).", "Emergency fund, Replace Adult 2's car, Child 1's college need more each month",
+    // round 8 item 3: the goals step comes right after the card now, so the trip waits a month's turn instead of being behind
+    "Japan trip: saving for it starts in November 2026, when its turn comes on Next best action.",
     "Will and other legal papers: 0 of 11 done. Missing for each adult: Will, Financial power of attorney, Health care power of attorney, Living will and Medical records release (HIPAA). Missing for the household: Guardian for the children.",
     "Warning about the legal papers: No guardian is named for Child 1. If both parents died, a court would choose who raises Child 1."]) assert.ok(all.includes(t), `has "${t}"`);
   assert.ok(!/\(fine\)[^\n]*To fix:/.test(all), "a part that is fine is not followed by 'To fix'");
@@ -191,7 +193,8 @@ test("full names, lower-case names and accounts named in goals are hidden there;
   p.goals.find((g) => g.id === "g-trip").name = "Pay off Chase Sapphire Preferred";
   const s = sheet(p), all = s.lines.join("\n");
   for (const n of ["Ana", "Bo", "Cyrus", "Lopez", "Chase", "Sapphire"]) assert.ok(!word(n).test(all), `"${n}" is not sent`);
-  assert.ok(all.includes("replace Adult 2's car, Child 1'S COLLEGE, Pay off credit card 1 need more each month"));
+  assert.ok(all.includes("replace Adult 2's car, Child 1'S COLLEGE need more each month"));
+  assert.ok(all.includes("Pay off credit card 1: saving for it starts"), "round 8 item 3: the trip goal waits its turn");
   assert.deepEqual(readAnswer('[{"title":"Help adult 2 replace the car","why":"Credit card 1 costs the most."}]', [], s.names),
     [{ title: "Help Bo Lopez replace the car", why: "Credit card 1 (Chase Sapphire Preferred) costs the most.", page: null, level: "medium" }]);
 });

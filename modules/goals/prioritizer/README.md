@@ -18,3 +18,14 @@
 
 ## Tests
 `module.test.mjs`: no goals, the family all on time (order, amounts equal to need, leftover), too little money (who waits and how long, the shortfall), an undated goal getting what is left.
+
+## Round 8 (2026-11-06): past-due goals (item 18)
+A goal whose date has passed is due now (Goals' `dueNow`), not a month's share: it is left out of the rows and listed in
+`pastDue: [{ id, name, icon, dueNow, targetDate }]` (only when there is one), and the page says "Child 2's college: its
+date has passed, and $103,000 is due now. Set a new date on Goals, or mark it done." Before, its whole remainder was its
+"needed a month" and took the money first. Next best action's dated-goal step gives each goal behind its pace the same
+`neededMonthly` this page allocates (round 8 item 3), so both pages say one monthly figure. Test: module.test.mjs "round 8".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+A goal whose date has passed reads "Boat: its date has passed, with $8,000 still to go. Set a new date for it on Goals, or lower
+its amount if less is needed." ("mark it done" was said where no button does it). Test: module.test.mjs "round 8 review UX 4".

@@ -6,11 +6,11 @@ import { compute as netWorth } from "../../balance/net-worth/compute.js";
 import { compute as people } from "../../household/people/compute.js";
 import { compute as income } from "../../cashflow/income/compute.js";
 import { compute as expenses } from "../../cashflow/expenses/compute.js";
-import { compute as goals, plannerFor } from "../../goals/goals/compute.js";
+import { compute as goals } from "../../goals/goals/compute.js";
 import { compute as liquidity } from "../../balance/liquidity/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
-import { compute as nextBest, cushionLater, monthWords } from "../next-best-action/compute.js";
+import { compute as nextBest, cushionLater, monthWords, dayWords, rmdNow, waitWords, accountWords, collegeBills, collegeWords } from "../next-best-action/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -19,7 +19,6 @@ import { compute as estateDocs } from "../../estate/documents/compute.js";
 import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
 import { pmtToReach, fv } from "../../../core/math/finance.js";
 import { nameOf, NameOf, NameIn, verbFor } from "../../../core/words.js";
-import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
 export const LEVELS = { bad: { label: "fix", order: 0 }, warn: { label: "check", order: 1 }, info: { label: "to do", order: 2 } };
@@ -45,13 +44,18 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   // later month, after the cards and the cushion), is waiting its turn, not behind: a goal set a minute ago is not late
   const step = nba?.ready ? (nba.steps ?? []).find((x) => x.id === "goals") : null;
   const turn = step?.startDate && today && step.startDate.slice(0, 7) > today.slice(0, 7) ? step.startDate : null;
-  const all = goals.filter((g) => g.status === "behind");
+  // a bill Next best action pays from savings (due within 3 months, more than a month can save, the cash covers it: its goals
+  // step's `fromCash`, review UX 1) is not behind by a month's saving; it is said as a bill to pay (compute, below)
+  const fromCash = new Set((step?.fromCash ?? []).map((x) => x.id));
+  const all = goals.filter((g) => g.status === "behind" && !fromCash.has(g.id));
   // only a goal dated after its turn can wait for it (one due sooner stays behind, review 2026-11-02), and never the
   // emergency fund: Next best action fills the cushion in its own earlier steps, not with the goals step
   // and only while it can still be reached from then, out of the spare money that reaches the goals step once it starts
   // (a trip due a month after the turn cannot wait for it, review 2026-11-02)
   const room = Number(step?.capacity ?? (Number(step?.roomYearly) || 0) / 12) || 0;
-  const afterTurn = (g) => g.targetDate && String(g.targetDate) > turn && plannerFor(g)?.page !== "goals/emergency-fund";
+  // (the emergency fund is the goal ticked as it, as Next best action and Liquidity read it, review D6: one only named like it
+  // is with the dated goals there, so it waits for the goals step's turn like them)
+  const afterTurn = (g) => g.targetDate && String(g.targetDate) > turn && !g.isEmergencyFund;
   // checked month by month from the turn (review 2026-11-02, round 5, third pass: one level figure counted a short-dated
   // goal's catch-up as if it lasted until every waiting goal's date, so goals that can be reached read "behind")
   const monthsLeft = (g) => Math.max(0, monthsBetween(turn, g.targetDate) ?? 0);   // whole months the step can work on it
@@ -88,7 +92,7 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   });
   const behind = all.filter((g) => !queued.includes(g)).sort((a, b) => (a.monthly > 0) - (b.monthly > 0));
   const need = behind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
-  return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn };
+  return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn, fromCash: step?.fromCash ?? [] };
 }
 
 export function compute(plan, params = {}) {
@@ -204,21 +208,34 @@ export function compute(plan, params = {}) {
     const idleText = !idle.length ? "" : idle.length === behindGoals.length ? `; nothing is going in to ${idle.length === 2 ? "either" : "any"} of them yet` : `; nothing is going in to ${idleNames.length > 1 ? `${idleNames.slice(0, -1).join(", ")} or ${idleNames[idleNames.length - 1]}` : idleNames[0]} yet`;
     add("goals-behind", "info", `${behindGoals.length} goals are behind`, `${list} need about ${money(need)} more a month in all${idleText}.${nba?.ready && nba.spare.monthly > 0 ? ` You have about ${money(nba.spare.monthly)} left over each month.` : ""}`, ["goals", "goals"]);
   }
+  // bills Next best action pays from savings (review UX 1): one line, as a bill to pay, never a month's saving
+  const cashGoals = nba?.ready ? (nba.steps ?? []).find((x) => x.id === "goals")?.fromCash ?? [] : [];
+  if (cashGoals.length) {
+    const many = cashGoals.length > 1, list = cashGoals.map((x) => `${x.name} (about ${money(Math.round(x.amount / 10) * 10)} by ${dayWords(x.due)})`);
+    add("goals-from-cash", "info", many ? `Pay ${cashGoals.length} goals from savings` : `Pay ${cashGoals[0].name} from savings`,
+      `${list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0]} ${many ? "are" : "is"} due sooner than a month can save for ${many ? "them" : "it"}; your usable cash covers ${many ? "them" : "it"}. Pay ${many ? "them" : "it"} from savings when ${many ? "they are" : "it is"} due.`, ["goals", "goals"]);
+  }
+  // a past-due college goal of a child in college: Education's next bill, as Next best action says it (review UX 4)
+  const bills = collegeBills(plan, today, gl.goals);
   for (const g of gl.goals) {
-    if (g.status === "past due") add(`goal-late-${g.id}`, "warn", `${g.name}: the date has passed`, `${money(g.remaining)} still to go. Set a new date or adjust the amount.`, ["goals", "goals"]);
+    if (g.status === "past due" && bills.has(g.id)) add(`goal-late-${g.id}`, "warn", `${g.name}: the date has passed`, collegeWords(bills.get(g.id), (n) => money(Math.round(n / 10) * 10)), ["goals", "education"]);
+    else if (g.status === "past due") add(`goal-late-${g.id}`, "warn", `${g.name}: the date has passed`, `${money(g.remaining)} still to go. Set a new date or adjust the amount.`, ["goals", "goals"]);
     else if (g.status === "behind" && behindGoals.length === 1 && behindGoals.includes(g)) add(`goal-behind-${g.id}`, "info", `${g.name} is behind`, g.monthly > 0 ? `Needs about ${money(g.neededMonthly)} a month; you put in ${money(g.monthly)}.` : `Needs about ${money(g.neededMonthly)} a month; nothing is going in yet.`, ["goals", "goals"]);
   }
   // a goal past its date already has its own alert above: its warning from the Goals page would say the same thing again
   const late = gl.goals.filter((g) => g.status === "past due").map((g) => g.name);
-  for (const [i, w] of gl.warnings.entries()) if (!late.some((n) => n && w.startsWith(n) && /date has passed/.test(w))) add(`goals-${i}`, "warn", "Goals: something to check", w, ["goals", "goals"]);
+  // (the Goals page's warning names the goal inside it since round 8's wording, "The date for X has passed")
+  for (const [i, w] of gl.warnings.entries()) if (!late.some((n) => n && w.includes(n) && /date .*has passed|date has passed/.test(w))) add(`goals-${i}`, "warn", "Goals: something to check", w, ["goals", "goals"]);
   // this year's required withdrawal, from October while it is not marked taken (December 31; the first year may wait to
   // April 1): missing it costs 25% of what was not taken (IRS, Retirement topics: RMDs, reviewed 2026-04-08)
-  if (today && Number(today.slice(5, 7)) >= 10) for (const r of rmdThisYear(plan, { today }).due) {
+  // Someone still working: the 401(k) at that job can wait until they retire (Next best action's rmdNow, review D5), so the
+  // amount is what cannot wait, and the alert says which account waits; with only that 401(k), no alert
+  if (today && Number(today.slice(5, 7)) >= 10) for (const r of rmdNow(plan, { today })) {
     const dec = Number(today.slice(5, 7)) === 12;
     add(`rmd-${r.id}-${today.slice(0, 4)}`, r.first ? "info" : dec ? "bad" : "warn",
       `${r.name === "You" ? "Your" : NameOf(r.name)} required withdrawal: at least ${money(r.amount)} by ${r.first ? `April 1, ${Number(today.slice(0, 4)) + 1}` : `December 31`}`,
-      `From ${r.accounts.map((a) => a.name).join(" and ")}${r.estimated ? ", worked out from today's balance" : ""}. ${r.first ? `The first year may wait until April 1, but then two fall in ${Number(today.slice(0, 4)) + 1}.` : "Missing it costs 25% of what was not taken."} Tap "I've taken it" there once it is done.`,
-      ["retirement", "rmd"]);
+      `From ${r.accounts.map((a) => accountWords(a.name)).join(" and ")}${r.estimated ? ", worked out from today's balance" : ""}.${waitWords(r)} ${r.first ? `The first year may wait until April 1, but then two fall in ${Number(today.slice(0, 4)) + 1}.` : "Missing it costs 25% of what was not taken."} Tap "I've taken it" there once it is done.`,
+      ["retirement", "rmd"], { due: r.first ? `${Number(today.slice(0, 4)) + 1}-04-01` : r.deadline });
   }
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
   for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${NameIn(p.name)} ${verbFor(p.name, "retires", "retire")} ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
@@ -229,7 +246,9 @@ export function compute(plan, params = {}) {
   for (const [i, w] of exp.warnings.filter((w) => !w.includes("more each month")).entries()) add(`expenses-${i}`, "warn", "Expenses: something to check", w, ["cashflow", "expenses"]);
   for (const [i, w] of asm.warnings.entries()) add(`assumptions-${i}`, "warn", "Assumptions: something to check", w, ["system", "assumptions"]);
 
-  alerts.sort((a, b) => (!!a.chore - !!b.chore) || LEVELS[a.level].order - LEVELS[b.level].order);
+  // within a level, one with a date (`due`) first, the nearest first (round 8 item 40: a required withdrawal due December 31
+  // came after "Emergency fund is getting there"); the others keep their order
+  alerts.sort((a, b) => (!!a.chore - !!b.chore) || LEVELS[a.level].order - LEVELS[b.level].order || (!a.due - !b.due) || (a.due && b.due ? a.due.localeCompare(b.due) : 0));
   const counts = { bad: 0, warn: 0, info: 0 };
   for (const a of alerts) if (!a.chore) counts[a.level]++;
   const total = counts.bad + counts.warn + counts.info;

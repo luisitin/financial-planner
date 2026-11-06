@@ -3,11 +3,15 @@
 import { compute } from "./compute.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
 import { BUCKET_OF } from "../projection/compute.js";
-import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+import { leftWords } from "../../overview/next-best-action/compute.js";
 
 let pending = null;
 // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
 let prefill = null;
+let prefillNote = null;   // a line over the form saying what it was filled in with
+/** A contribution's period for a number of paychecks a year (Work benefits' `paychecks`); anything else goes in once a year. */
+const PERIOD_FOR = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -24,10 +28,18 @@ export function render(root, ctx) {
     { key: "employerMatch", label: "Employer adds, a year", type: "money", min: 0, help: "the match or profit sharing, per year; blank for none" },
   ];
 
+  // The Dashboard's next move can be "Check if Bo's job matches retirement saving": a 401(k) and pay with nothing going in,
+  // or (round 8) pay and no 401(k) on file at all. One question, three answers, so the move can be done here.
+  const nba = ctx.computeOf?.("overview/next-best-action", { today: fmt.today() });
+  const ask = nba?.ready ? (nba.steps.find((s) => s.id === "match" && s.status !== "done")?.ask ?? []) : [];
+  const startable = ask.some((a) => a.noAccount);
+  const matchStep = nba?.ready ? nba.steps.find((s) => s.id === "match" && s.status !== "done") ?? null : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
     ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The Projection page adds these every year until each person retires.` : "What you put into 401(k)s, IRAs, Roths and HSAs each pay period, plus what an employer adds. The projection needs it to know how the pot grows before retirement."),
-    !accounts.length ? ui.h("p", { class: "muted small" }, "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), " (401(k), IRA, Roth, HSA, brokerage).") : null,
+    // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
+    // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
+    !accounts.length ? ui.h("p", { class: "muted small" }, startable ? "No retirement account yet: one tap below adds your 401(k) to the plan. An IRA, Roth or HSA goes on the " : "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), startable ? "." : " (401(k), IRA, Roth, HSA, brokerage).") : null,
     d.hasData ? enoughLine() : null,
   ));
   // "are we saving enough?": the share of pay, then the plan's own answer (Will the money last?), the same one the
@@ -53,20 +65,84 @@ export function render(root, ctx) {
     // an answer to the match question: say what the next move is now, from the Dashboard's own list
     const mv = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing?.moves?.[0] ?? null;
     const n = ui.notice("ok", pending.text);
+    // what the month has left now, after a start that takes from take-home pay (review D2)
+    if (pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
     if (mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
     out.append(n); pending = null;
   } else if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
 
-  // The Dashboard's next move can be "Check if Bo's job matches retirement saving": a 401(k) and pay with nothing going in.
-  // One question, three answers, so the move can be done here: add what goes in, no match at that job, or an old job's 401(k).
-  const nba = ctx.computeOf?.("overview/next-best-action", { today: fmt.today() });
-  const ask = nba?.ready ? (nba.steps.find((s) => s.id === "match" && s.status === "check")?.ask ?? []) : [];
+  // the answers: add what goes in, no match at that job, or an old job's 401(k)
   const formCard = ui.card(null);
   for (const a of ask.slice(0, 1)) {
     // the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
     const whose = nameOf(a.name), who = nameIn(a.name), Who = NameIn(a.name), verb = (one, you) => verbFor(a.name, one, you);
+    const money = (n) => fmt.money(Math.round(n), cur);
+    const pctOf = (x) => `${Number((x * 100).toFixed(1))}%`;
+    // what goes in each paycheck at the match's share of pay (Work benefits' figures), and the words after the tap: added to the
+    // plan, and that signing up at work is what starts it (review UX 8), with the month after it (review D2)
+    const periodOf = (m) => (m ? PERIOD_FOR[m.paychecks] ?? "annual" : "biweekly");
+    const eachOf = (m) => (m ? Math.round((periodOf(m) === "annual" ? m.yearly : m.yearly / m.paychecks) * 100) / 100 : null);
+    const addedWords = (m, known) => `Added to your plan: ${money(eachOf(m))} ${periodOf(m) === "annual" ? "a year" : "a paycheck"} (${pctOf(m.pct)} of pay)${known ? `, and the employer adds ${money(m.match)} a year` : ""}.${known ? "" : " Type what the employer adds on it below once you know it."} To actually start it, sign up at ${pctOf(m.pct)} with human resources or your job's benefits site.`;
+    // the month has less than starting it takes: said before the tap (review UX 2), in Next best action's words
+    const costNote = () => (matchStep?.costShort && matchStep.costWords && a.monthlyCost > 0.5 ? ui.notice("warn", matchStep.costWords) : null);
+    const contribute = (draft, accountId, m, known) => { draft.retirement.contributions = draft.retirement.contributions ?? []; draft.retirement.contributions.push({ id: ui.uid(), accountId, personId: a.personId, amount: eachOf(m), period: periodOf(m), employerMatch: known ? Math.round(m.match) : 0 }); };
+    // a 401(k) on file with nothing going in, and the match typed on Work benefits or a plan with a match said (Get started, or
+    // "Yes" below): one tap starts what goes in, on that 401(k); or one's own amount in the form (review UX 3: the app asked
+    // "Does Priya's job add money?" again right after "Yes", about the account it had just added)
+    if (!a.noAccount && (a.kind === "known" || a.kind === "plan") && a.match) {
+      const m = a.match, known = a.kind === "known";
+      const cur401 = (a.accounts ?? []).map((id) => (plan.accounts ?? []).find((x) => x.id === id)).filter(Boolean);
+      const acct = cur401.find((x) => !/\b(old|former|previous|prior|rollover)\b/i.test(x.name ?? "")) ?? cur401[0];
+      if (acct) {
+        root.append(ui.h("section", { class: "card" },
+          ui.h("h2", {}, known ? `Start what goes into ${whose} 401(k) and get the whole match` : `How much goes into ${whose} 401(k)?`),
+          ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
+            : `${NameOf(a.name)} job has a plan with a match. A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}: putting in ${pctOf(m.pct)} (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets all of it. Human resources can say what the real match is.`),
+          costNote(),
+          ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+            ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; store.update((p) => contribute(p, acct.id, m, known)); }),
+            ui.button("Type my own amount", () => {
+              prefill = { personId: a.personId, accountId: acct.id, period: periodOf(m), amount: eachOf(m) };
+              prefillNote = `Filled in with ${pctOf(m.pct)} of pay, ${money(eachOf(m))} a paycheck: change it to yours${known ? "" : ", and add what the employer puts in when you know it"}.`;
+              editing = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" });
+            }, { class: "secondary" })),
+          known ? ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "The match is the one typed on ", ui.h("a", { href: "#/career/benefits" }, "Work benefits"), ".") : null));
+        continue;
+      }
+    }
     const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
+    // no 401(k) on file at all (round 8 item 1): one tap starts it -- a $0 401(k) for this person on Net worth, plus what goes
+    // in when the match is known (typed on Work benefits), else the add form opened on it
+    if (a.noAccount) {
+      const m = a.match, known = a.kind === "known" && m;
+      // known: the $0 401(k) and what goes in; otherwise "Yes": the $0 401(k), and the job's plan noted as having a match
+      // (retirement.workPlans[id].match = true, the answer Get started saves), so the next card offers the start, not this
+      // question again (review UX 3)
+      const start = () => {
+        const id = ui.uid();
+        pending = known ? { text: addedWords(m, true), left: true } : { text: `${NameOf(a.name)} 401(k) is added to the plan (at $0, on Net worth).` };
+        store.update((p) => {
+          p.accounts = p.accounts ?? [];
+          p.accounts.push({ id, name: `${NameOf(a.name)} 401(k)`, type: "401k", balance: 0, ownerId: a.personId, asOf: fmt.today(), history: [] });
+          if (known) contribute(p, id, m, true);
+          else p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: true } };
+        });
+      };
+      const help = ui.h("p", { class: "muted small", style: { marginTop: "10px" }, hidden: true }, `Ask human resources at work, or look on ${whose} job's benefits site or pay stub for "401(k)" or "403(b)". The question stays on Next best action until it is answered.`);
+      root.append(ui.h("section", { class: "card" },
+        ui.h("h2", {}, known ? `Start ${whose} 401(k) and get the whole match` : a.kind === "plan" ? `Start ${whose} 401(k) at work` : `Does ${whose} job have a retirement plan with a match?`),
+        ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
+          : `Many employers add money when you save for retirement through work, in a 401(k) or 403(b): free money worth getting in full.${m ? ` A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}.` : ""}`),
+        known ? costNote() : null,
+        ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+          ui.button(known ? `Start it at ${pctOf(m.pct)}` : `Yes: add ${whose} 401(k)`, start),
+          known ? null : ui.button(`No plan or no match at ${whose} job`, noPlanAnswer, { class: "secondary" }),
+          known ? null : ui.button("Not sure", () => { help.hidden = false; }, { class: "secondary" })),
+        help,
+        known ? ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "The match is the one typed on ", ui.h("a", { href: "#/career/benefits" }, "Work benefits"), ".") : null));
+      continue;
+    }
     // every 401(k) on file is from a job left: ask about the job now, whose plan is not in the plan yet
     if (a.newJob) {
       const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -109,6 +185,7 @@ export function render(root, ctx) {
   // what was answered, so it can be taken back
   const answered = [
     ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false).map((p) => ({ text: `No match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
+    ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === true).map((p) => ({ text: `A plan with a match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
     ...(plan.accounts ?? []).filter((x) => x.formerJob).map((x) => ({ text: `${x.name}: from a job left`, undo: (draft) => { const y = (draft.accounts ?? []).find((z) => z.id === x.id); if (y) delete y.formerJob; } })),
   ];
   if (answered.length) root.append(ui.card(null, ...answered.map((x) => ui.h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
@@ -124,7 +201,7 @@ export function render(root, ctx) {
   ));
 
   const formHost = ui.h("div");
-  let showForm = !d.hasData;
+  let showForm = !d.hasData || !!prefill;
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!accounts.length) return;
@@ -134,12 +211,13 @@ export function render(root, ctx) {
     const values = editing ? { ...editing } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),
+      !editing && prefill && prefillNote ? ui.h("p", { class: "muted small" }, prefillNote) : null,
       ui.form(FIELDS, values, (v) => {
         const clean = { accountId: v.accountId, personId: v.personId || "", amount: v.amount ?? 0, period: v.period, employerMatch: v.employerMatch ?? 0 };
         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
         store.update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) { const i = p.retirement.contributions.findIndex((c) => c.id === editing.id); if (i >= 0) p.retirement.contributions[i] = { ...p.retirement.contributions[i], ...clean }; } else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
-        editing = null; prefill = null;
-      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; showForm = !d.hasData; drawForm(); } : null }),
+        editing = null; prefill = null; prefillNote = null;
+      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; showForm = !d.hasData; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; store.update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
     ));
   };
@@ -153,5 +231,6 @@ export function render(root, ctx) {
       ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"))))),
   ));
   formCard.append(formHost);
-  root.append(formCard);
+  // no account yet: the form has nothing to show, so no empty card (round 8)
+  if (accounts.length) root.append(formCard);
 }

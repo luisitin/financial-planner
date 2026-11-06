@@ -13,8 +13,10 @@ export const GOAL_ICONS = ["🎯", "🛟", "🏠", "🚗", "✈️", "🎓", "�
  * compute(plan, { today }) -> {
  *   goals: [{ ...goal, priorityLabel, monthsLeft, yearsLeft, rate, targetThen, funded, remaining, neededMonthly,
  *             projected, shortfall, progress, status: "done"|"on track"|"behind"|"no date"|"past due"|"no amount",
+ *             dueNow (a goal whose date has passed: what it still needs, due now; its neededMonthly is null),
  *             fundedFrom: [account names], sizeLabel }],
- *   count, done, totalTarget, totalFunded, neededMonthly (sum for open dated goals), contributing (sum of monthly),
+ *   count, done, totalTarget, totalFunded, neededMonthly (sum for open dated goals still ahead), dueNow? (sum for goals
+ *   whose date has passed; only when there is one), contributing (sum of monthly),
  *   warnings: [text]
  * }
  * Money set aside = goal.saved + balances of the accounts in goal.fundedBy. Growth rate =
@@ -70,10 +72,13 @@ export function compute(plan, params = {}) {
     else if (monthly > 0 && projected >= targetThen - 0.5) status = "on track";
     else status = "behind";
     if (Number(g.target) < 0) warnings.push(`${g.name || "A goal"} has a negative amount. It is left out of the totals until it is fixed.`);
-    if (today && g.targetDate && String(g.targetDate) < today && status !== "done") warnings.push(`${g.name || "A goal"}'s date has passed. Set a new date or mark it done by raising what is set aside.`);
+    // a date that has passed: what is left is due now, not a month's saving (round 8 item 18: one college goal dated 2023
+    // added its whole $103,000 to "Needed each month")
+    const dueNow = status === "past due" ? remaining : undefined;
+    if (today && g.targetDate && String(g.targetDate) < today && status !== "done") warnings.push(`The date for ${g.name || "a goal"} has passed. Set a new date, or lower its amount to what is still needed.`);
     return {
       ...g, target, priorityLabel: PRIORITIES[g.priority] ?? PRIORITIES[2], monthsLeft, yearsLeft, rate, targetThen, funded, remaining,
-      neededMonthly, projected, shortfall, progress: targetThen > 0 ? Math.min(1, funded / targetThen) : 0, status, monthly,
+      neededMonthly: status === "past due" ? null : neededMonthly, ...(dueNow !== undefined ? { dueNow } : {}), projected, shortfall, progress: targetThen > 0 ? Math.min(1, funded / targetThen) : 0, status, monthly,
       fundedFrom: accts.map((x) => x.name), sharedWith: sharedWith.get(g.id) ?? [],
     };
   });
@@ -84,6 +89,8 @@ export function compute(plan, params = {}) {
     goals, count: goals.length, done: counted.filter((g) => g.status === "done").length,
     totalTarget: sum(counted, "targetThen"), totalFunded: counted.reduce((s, g) => s + Math.max(0, Math.min(g.funded, g.targetThen)), 0),
     neededMonthly: sum(open.filter((g) => g.neededMonthly !== null), "neededMonthly"),
+    // (only when there is one, so a plan without a passed date reads exactly as before)
+    ...(open.some((g) => g.status === "past due") ? { dueNow: sum(open.filter((g) => g.status === "past due"), "dueNow") } : {}),
     contributing: sum(open, "monthly"),
     warnings,
   };
@@ -122,6 +129,12 @@ export function plannerFigure(g, gr, page, r, plan = null) {
   const grows = g.inflates !== false;
   if (page === "goals/education") {
     const c = (r.children ?? []).find((x) => (x.goal?.id ?? x.goal) === g.id);
+    // a child already in college (review UX 4): the next bill, as Education's own Update button writes it (to the $10, in the
+    // dollars of its date), not four years "in the dollars of those years" ($103,000 beside a $25,850 goal)
+    if (c?.started && c.left?.length) {
+      const first = c.left[0], day = (iso) => { const [y, m, dd] = String(iso).split("-").map(Number); return `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m - 1]} ${dd}, ${y}`; };
+      return { amount: Math.round((Number(c.nextYearCost) || 0) / 10) * 10, words: `for its next bill (${first.part === "spring" ? `the spring half of ${first.label}` : first.label}, ${day(c.nextBill)})`, monthly: null };
+    }
     if (!c || !(c.totalToday > 0)) return null;
     const name = String(g.name ?? "").toLowerCase();
     const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent" && p.name).map((p) => p.name.toLowerCase());

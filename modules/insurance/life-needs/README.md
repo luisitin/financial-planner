@@ -461,3 +461,66 @@ figures that moved are single parents with term cover that ends.
 - Child benefits to 19 while in high school; the survivor's widow(er)'s benefit from 60 before retirement.
 
 Review 2026-11-06 (round 7): `sayName` / `sayWhose` are now core/words.js's `nameIn` / `nameOf` (so "My husband" and "My wife" read "your husband", "your wife's" too), and every sentence on the page that used a raw name says you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse": the run-out age, "How it is worked out" ("Your savings pass to your spouse", "Before your spouse retires"), the lifetime-earnings rule ("what you would have spent on yourself"), Social Security for the family ("On your record ...", "because your spouse earns"), the survivor's "your pay and your savings" (it read "you's pay"), a couple's ending cover ("Your $300,000 term policy ends"), the missing-birth-date notes, the hero for two people ("You and your spouse need more life cover") and "Name yourself as the beneficiary". Typed names read as before. Words only: no figure or rule changed. Test: "the first adult left unnamed ("Me"): sayName and sayWhose are core/words.js's ...".
+
+## Round 8 (2026-11-06): a plan short either way, and federal student loans (item 14, couple-home-4)
+- When the plan with both alive fails anyway, the survivor's plan passes when it lasts as late a calendar year (as before)
+  or as many years of retirement, each from its own retirement start: ok(lump) = success, or survivor's failYear >=
+  household's failYear, or (survivor's failYear - survivor's retireYear) >= (household's failYear - household's retireYear).
+  Either measure is "doing as well", so the change only ever lowers a need (a survivor who retires later than the household,
+  as in the qa blended family, is not asked for more). It compared calendar years only: Tom alone retires in 2060, two years before the household's
+  plan starts drawing in 2062 (Priya's retirement), so "fail no earlier than 2062" asked $28,000 of cover for two years the
+  survivor's plan never had to carry, while every living-cost gap (`gapYears`) was $0 and nobody else depends on them.
+- And with no children and every `gapYears` amount at $0, the need is 0 outright: what is short is retirement itself,
+  whoever lives (a funeral the survivor's pay absorbs). `plan.eitherWay: true` marks a plan that fails anyway.
+- Couple-home (plan-after-setup, 2026-11-06): Priya 28,000 -> 0, Tom 0 -> 0; no protection gap, so Next best action's
+  "Protect the people who count on you" is gone and the first move is not life insurance.
+- The page never says "on track" next to a plan that runs out: "No life cover needed for this: your plan is short for
+  retirement either way, whoever lives.", "With or without cover, Tom's money would run out at about 65, and so would your
+  plan together: it is short for retirement either way. Will the money last? shows what fixes it", the headline "No life cover needed now" (not "Your family is covered" when no policy is on
+  file) over "Your plan is short for retirement either way, whoever lives, so life cover would not fix it", and "How it is worked out: ... keeps
+  Tom's plan going as many years into retirement as your plan together goes".
+- The debts a death leaves (the rule of thumb's "debts", and the single parent's answer): a federal student loan is cancelled
+  when its borrower dies (34 CFR 685.212(a)(1), read 2026-11-06; a Parent PLUS loan too), so it is left out unless the
+  loan is marked private (`debts[].private: true`, optional). Couple-home's rule of thumb: $72,300 -> $8,300 (the funeral).
+Tests: module.test.mjs "round 8 item 14".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review" and the updated item 14 tests.
+- **No shortcut to $0 (money D1).** "No children and no living-cost gap, short either way" set the need to 0, but `gapYears`
+  stops at the survivor's retirement (empty for a survivor already retired) and never sees the pay, saving or pension the death
+  takes after it. The either-way test alone decides: need = the smallest lump sum with ok(lump) = success, or the survivor's
+  failYear >= the household's, or the survivor's years of retirement >= the household's. It still gives $0 for the round-8
+  couple (both deaths), and keeps qa household 02-couple-no-kids / turns-retirement-age-today ($1,038,000 if Tom dies: Priya
+  would run out in 2029, the plan together in 2058) and 08-retired / extra-bigger-than-balance ($225,000 if Sam dies: his
+  pension stops and Ruth runs out in 2038, the plan together in 2045). With $0 saved, the funeral alone is a need ($9,000).
+- **Only the borrower's own federal loan ends with them (money D4).** 34 CFR 685.212(a)(1) (Cornell LII, read 2026-11-06): "If
+  a borrower ... dies, the Secretary discharges the obligation of the borrower"; a spouse's death cancels nothing the survivor
+  owes. `keptAtDeath(r, deadId, oneAdult)`: a non-private student loan leaves "the debts a death leaves" only when its account's
+  `ownerId` is the person who dies, or it has no owner and the household has one adult; with two adults an unowned loan stays
+  for both deaths. DIME's `debts` and the single parent's debts are per death. Couple-home's unowned $64,000: back in both
+  rules of thumb ($72,300).
+- **Short either way, said plainly (UX 5).** With no cover asked for, the card's verdict is plain text, not a green "good"; the
+  warning says "Tom's money would run out at about 65 if Priya died, and so would your plan together: a death does not make it
+  run out sooner, so life cover is not the fix" (it said "With or without cover", which is true of no amount of cover but the
+  $0 worked out). "No life cover needed now" and "short for retirement either way" only when every person's need is 0.
+
+## Round 8 verify (2026-11-06): the survivor is held to the plan together's calendar year again
+Tests: module.test.mjs "round 8 verify" and the updated item 14 / UX 5 tests.
+- **The "years of retirement" measure is gone.** need = the smallest lump sum with ok(lump) = the survivor's plan succeeds, or,
+  when the plan together runs out too, the survivor's failYear >= the plan together's failYear (the measure before round 8).
+  "As many years of retirement, each from its own retirement start" compared different things when the survivor retires
+  before the household's retirement year (the first adult's): the years the dead partner's pay would have carried counted as
+  retirement the plan together had too. Example (the test): a childless couple, Priya 40 retiring in 2053, Tom 54 retiring at 60
+  in 2032, the plan together running out in 2051: if Priya died, the page said "no life cover needed" while Tom alone runs out
+  in 2032; the calendar measure asks for the lump sum that keeps him to 2051. On the 1,411 qa plans (2026-11-06) the years
+  measure had lowered 367 people's needs, 188 of them by $100,000 or more (largest $1,085,000), 184 in households with
+  children. Like for like is the same person running out no earlier.
+- **What item 14 asked is kept in words and order, not by a $0.** Couple-home: Priya's need is $28,000 again (Tom alone retires
+  in 2060 and runs out then; the plan together runs out in 2062: two years of Tom's retirement Priya's pay would have carried);
+  Tom's is $0. `plan.eitherWay` and `plan.jointFailYear` mark a plan that runs out anyway; the card says "would need about
+  $28,000 to last as long as your plan together does", "How it is worked out: ... keeps Tom's plan going as long as your plan
+  together's, which runs out in 2062 either way", never "on track". protectionGaps marks such a gap `eitherWay` and its sentence
+  adds "It keeps Tom's money lasting as long as your plan together's; your plan is short for retirement either way (Will the
+  money last?)." Next best action puts that cover after costly debt and the match when no child depends on anyone (see its
+  README), so it is not the couple's first move.
+- The warning's link reads "Will the money last? ›" (it read "Will the money last? shows what is ›").

@@ -45,7 +45,10 @@ test("the family: debts in payoff order, debt-free with the last one, goals with
   const goals = d.events.filter((e) => e.kind === "goal");
   assert.deepEqual(goals.map((e) => e.title), ["Emergency fund", "Japan trip", "Replace Bo's car", "Cy's college"]);
   assert.equal(ev(d, "goal-g-ef").icon, "🛟", "a goal keeps its own icon");
-  assert.ok(goals.every((g) => g.tone === "warn" || g.tone === "ok"));
+  // round 8 item 3: the goals step starts in December 2026, right after the Visa, so the Japan trip (nothing going in yet, due
+  // October 2027) waits that turn; the others are behind
+  assert.ok(goals.every((g) => g.tone === "warn" || g.tone === "ok" || /when its turn comes on Next best action\.$/.test(g.detail)));
+  assert.match(ev(d, "goal-g-trip").detail, /Saving for it starts in \w+ 2026, when its turn comes/);
 });
 
 test("order, years and counts: nothing before today, sorted, quiet years counted, every topic counted once", () => {
@@ -124,7 +127,9 @@ test("a goal waiting its turn on Next best action says when it starts, not 'Behi
   const p = familyPlan(T); p.goals.find((g) => g.id === "g-col").monthly = 0;   // college, due 2038, nothing going in yet
   const ev = compute(p, { today: T }).events.find((e) => e.id === "goal-g-col");
   assert.match(ev.detail, /Saving for it starts in \w+ \d{4}, when its turn comes on Next best action\.$/); assert.doesNotMatch(ev.detail, /Behind/); assert.notEqual(ev.tone, "warn");
-  // a goal due before that turn is still behind
+  // a goal due within that turn's first month is still behind (round 8 item 3: the turn is December 2026 now, right after the
+  // Visa, so the trip is dated December 20, 2026 to stay before it; October 2027 now waits its turn too)
+  p.goals.find((g) => g.id === "g-trip").targetDate = "2026-12-20";
   const trip = compute(p, { today: T }).events.find((e) => e.id === "goal-g-trip");
   assert.match(trip.detail, /Behind/); assert.equal(trip.tone, "warn");
 });
@@ -158,11 +163,12 @@ test("a goal behind by less than $100 a month says its need to the $10, never 'a
   assert.equal(needWords(1234), "about $1,200"); assert.equal(needWords(95), "about $100");
   assert.equal(needWords(49), "about $50"); assert.equal(needWords(94), "about $90"); assert.equal(needWords(5), "about $10");
   assert.equal(needWords(3), "under $10"); assert.equal(needWords(0), "under $10");
-  // the family plan with a $36,000 wedding and a $6,000 boat for 2035, both behind: the boat needs about $60 a month
+  // the family plan with a $150,000 wedding and a $6,000 boat for 2035, both behind: the boat needs about $60 a month (round 8
+  // item 3: the goals step starts in December 2026 now, and a $36,000 wedding fits in it, so the wedding here is $150,000)
   const T = "2026-11-02";
   const p = familyPlan(T); p.goals = p.goals.filter((x) => x.id !== "g-trip");
   const g = (id, name, target, targetDate) => ({ id, name, icon: "", target, targetDate, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false });
-  p.goals.push(g("g-wed", "Wedding", 36000, "2029-12-01"), g("g-boat", "Boat", 6000, "2035-06-01"));
+  p.goals.push(g("g-wed", "Wedding", 150000, "2029-12-01"), g("g-boat", "Boat", 6000, "2035-06-01"));
   const boat = ev(compute(p, { today: T }), "goal-g-boat");
   assert.match(boat.detail, /^\$6,000 due\. Behind: about \$\d0 a month is needed\.$/); assert.doesNotMatch(boat.detail, /about \$0 a month/);
 });

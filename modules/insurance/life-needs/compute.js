@@ -57,6 +57,15 @@ export const CHILDCARE = /day ?care|child ?care|nanny|after[- ]?school/i;
 /** An education goal: the Education page's own pattern (college, university, school, tuition, education, 529) or the 🎓 icon. */
 const isEducationGoal = (g) => EDUCATION_GOAL.test(g?.name ?? "") || g?.icon === "🎓";
 const MORTGAGE_TYPES = ["mortgage", "heloc"];
+/**
+ * keptAtDeath(r, deadId, oneAdult) -> a debt the death of `deadId` leaves the family to pay (Debts' rows): not the home's loans,
+ * nor that person's own federal student loan, which is discharged at its borrower's death (34 CFR 685.212(a)(1), read
+ * 2026-11-06: "If a borrower ... dies, the Secretary discharges the obligation of the borrower"), unless the loan is marked
+ * private. Only the borrower's own: a spouse's death cancels nothing the survivor owes (review D4). A loan with no owner is the
+ * borrower's only in a one-adult household; with two adults it could be either one's, so it stays.
+ */
+const keptAtDeath = (r, deadId, oneAdult) => !MORTGAGE_TYPES.includes(r.type)
+  && (r.type !== "student_loan" || r.detail?.private === true || !(r.ownerId ? r.ownerId === deadId : oneAdult));
 /** The savings that pass to a child: cash and taxable investment accounts, and 529 plans (already the child's college money). Retirement accounts are left out. */
 export const passesOn = (a) => { const t = ACCOUNT_TYPES[a.type]; return !!t && t.side === "asset" && (t.taxBucket === "taxable" || a.type === "529"); };
 
@@ -354,7 +363,12 @@ export function compute(plan, params = {}) {
   const spendingYearly = exp.yearly;
   const li = computeLiabilities(plan, { today });
   const mortgage = li.rows.filter((r) => MORTGAGE_TYPES.includes(r.type)).reduce((s, r) => s + r.owed, 0);
-  const debts = li.rows.filter((r) => !MORTGAGE_TYPES.includes(r.type)).reduce((s, r) => s + r.owed, 0);
+  // the debts a death leaves the family (round 8 item 14): not the mortgage (the home, apart), and not a federal student loan,
+  // which is cancelled when its borrower dies (34 CFR 685.212(a)(1); a Parent PLUS loan too); a private one is kept (marked
+  // `debts[].private` on the loan)
+  // (per death: only the borrower's own federal loan ends with them, review D4)
+  const oneAdult = people.filter((q) => q.role !== "dependent").length <= 1;
+  const debtsOf = (deadId) => li.rows.filter((r) => keptAtDeath(r, deadId, oneAdult)).reduce((s, r) => s + r.owed, 0);
   // the education goals: the Education page's pattern or the 🎓 icon, not one naming an adult (their own degree ends with them)
   const adultNames = people.filter((q) => q.role !== "dependent" && q.name).map((q) => q.name);
   const namesAdult = (g) => adultNames.some((a) => namesPerson(g.name, a));
@@ -471,11 +485,12 @@ export function compute(plan, params = {}) {
   // the single parent's need over time: the debts on the payoff plan's schedule and the savings that pass to the children
   // (cash and taxable accounts as the retirement projection grows them, 529 plans as Net worth over time grows them) at the
   // start of each year, in today's money (the plan's price level for the year before)
-  const projected = () => {
+  const projected = (deadId) => {
+    const debts = debtsOf(deadId);
     const pay = computePayoff(plan, { today });
     const sched = pay.hasData ? payoffPlan(pay.debts, { extra: pay.extra, order: pay.order, customOrder: pay.customOrder }) : null;
     const scheduled = new Set((pay.debts ?? []).map((x) => x.id));
-    const own = li.rows.filter((r) => !MORTGAGE_TYPES.includes(r.type));
+    const own = li.rows.filter((r) => keptAtDeath(r, deadId, oneAdult));
     const monthsLeft = 12 - (Number(String(today).slice(5, 7)) || 12);
     const rows = project(I).rows;
     const priceAt = (y) => rows[y - startYear - 1]?.priceLevel ?? Math.pow(1 + I.rates.inflation, Math.max(0, y - startYear - 1));
@@ -508,6 +523,7 @@ export function compute(plan, params = {}) {
     const workYears = pay > 0 ? Math.max(0, d.retireAge - age) : 0;
 
     // 2. DIME
+    const debts = debtsOf(d.id);
     const income = children.length ? pay * yearsTo18 : 0;
     const dime = { debts, finalExpenses: FUNERAL, income, incomeYears: children.length ? yearsTo18 : 0, mortgage, education: children.length ? education : 0 };
     dime.total = dime.debts + dime.finalExpenses + dime.income + dime.mortgage + dime.education;
@@ -533,7 +549,15 @@ export function compute(plan, params = {}) {
         gapYears.push({ year: y, amount, benefits });
       }
       S.events = [...(S.events ?? []), { year: startYear, amount: FUNERAL, label: "funeral" }, ...gapYears.filter((g) => g.amount > 0).map((g) => ({ year: g.year, amount: g.amount, label: "living costs the pay does not cover" }))];
-      // the plan with both alive: the survivor's plan should do as well (when it fails anyway, last at least as long)
+      // the plan with both alive: the survivor's plan should do as well; when it fails anyway, last at least as late a calendar
+      // year. (Round 8 verify, 2026-11-06: "as many years of retirement, each from its own retirement start" was taken as
+      // as well too, but a survivor who retires before the household's retirement year then had the years the dead
+      // partner's pay would have carried counted as retirement the plan together also had: a childless couple, Tom 54
+      // retiring at 60 in 2032, Priya 40 retiring in 2053, the plan together running out in 2051, was told "no life cover
+      // needed" if Priya died, while Tom alone runs out in 2032; on the qa households it lowered 367 people's needs, 188 of
+      // them by $100,000 or more, children or not. The same person running out later is the like-for-like measure. Item 14's
+      // couple keeps its $28,000 for Priya (two years of Tom's retirement her pay would have carried); what item 14 asked is
+      // in the words (never "on track") and in Next best action, which puts such cover after costly debt and the match.)
       const base = project(I);
       const ok = (lump) => {
         const T = copyInputs(S);
@@ -543,6 +567,9 @@ export function compute(plan, params = {}) {
       };
       let hi = 1e6;
       while (!ok(hi) && hi < 1e9) hi *= 4;
+      // (review D1, 2026-11-06: no shortcut to $0 for "no children and no living-cost gap": the gaps stop at the survivor's
+      // retirement and never see the pay, saving or pension the death takes after it, so a survivor already retired, or one
+      // who would run out decades before the plan together, was told "no cover needed"; the either-way test alone decides)
       const need = smallestWhere(ok, 0, hi, 50);
       const withCover = (() => { const T = copyInputs(S); T.events.push({ year: startYear, amount: -cover, label: "life insurance" }); const r = project(T); return { success: r.success, failAge: r.failAge ?? null, failYear: r.failYear ?? null }; })();
       const fb0 = pia > 0 && children.length ? familyBenefits({ pia, year: startYear, deathYear: startYear, children, parentPay: sPay }) : null;
@@ -552,6 +579,8 @@ export function compute(plan, params = {}) {
         gapYears, firstGap: gapYears[0]?.amount ?? 0, withCover,
         benefits: fb0 ? { childMonthly: fb0.children / 12, parentMonthly: fb0.parent / 12, familyMaxMonthly: fb0.familyMaxMonthly, childUntil } : null,
         survivorRetireYear: S.retireYear, survivorPay: sPay,
+        // the plan together runs out too: life cover cannot fix that, and the page says so (no "on track"); jointFailYear: when
+        ...(base.success ? {} : { eitherWay: true, jointFailYear: base.failYear ?? null }),
       };
       const sRetire = sPerson?.birthDate ? Number(sPerson.birthDate.slice(0, 4)) + (S.people[0]?.retireAge ?? 65) : null;
       termUntil = youngest ? { year: Number(youngest.birthDate.slice(0, 4)) + SCHOOL_DONE, why: `${youngest.name} turns ${SCHOOL_DONE}`, who: youngest.name, event: `turns ${SCHOOL_DONE}` } : sRetire ? { year: sRetire, why: `${sv.survivor.name} retires`, who: sv.survivor.name, event: "retires" } : null;
@@ -581,7 +610,7 @@ export function compute(plan, params = {}) {
       const latest = ends.reduce((a, x) => (x.year > a.year || (x.year === a.year && x.birthDate > a.birthDate) ? x : a));
       const tied = ends.filter((x) => x.year === latest.year && x.event === latest.event).map((x) => x.who);
       const end = tied.length > 1 ? { ...latest, who: listOf(tied), event: latest.event === "turns 18" ? "turn 18" : latest.event } : latest;
-      const pr = projected();
+      const pr = projected(d.id);
       const later = childSeries({ kids: ci.kidsInfo, startYear: startYear + 1, lastYear: end.last, realDiscount, spending: ci.spending, childcare: ci.childcare, pia, collegeAt: ci.collegeAt, debtsAt: pr.debtsAt, savingsAt: (y) => pr.savingsAt(y, ci.savings), funeral: FUNERAL });
       const needByYear = [{ year: startYear, need: now.need, net: now.net, total: now.total, kidsShort: now.kidsShort, costs: now.costs, college: now.college, benefits: now.benefits, benefitsCounted: now.benefitsCounted, debts: now.debts, savings: now.savings, children: now.children }, ...(end.last > startYear ? later : [])];
       // the largest in today's money (the earliest year of it), and whether the need only ever goes down from now
@@ -783,7 +812,9 @@ export function childParts(c, who = "you", rough = false) {
 
 /**
  * protectionGaps(plan, { today }) -> [{ id, personId, name, who, whose, need, cover, gap, depends: [names], dependsWords,
- *   termUntil, until, method, endsSoon, unassignedCover, title, sentence }]
+ *   termUntil, until, method, endsSoon, unassignedCover, title, sentence, eitherWay? }]
+ * eitherWay: the plan together runs out too (the plan's answer): the cover only keeps the survivor's money lasting as long
+ * as the plan together's, and the sentence says so (round 8 verify).
  * The earners whose death would leave the people who depend on them short by MIN_GAP or more, today or once term cover
  * that ends is gone (within a year; for a single parent, any time before the children's needs end) (this page's own
  * answer: the plan's lump sum, the single parent's answer, else the rule of thumb, rounded to $1,000),
@@ -866,12 +897,14 @@ export function protectionGaps(plan, params = {}) {
     } else {
       title = p.cover > 0 ? `${cap(whose)} life cover is about ${big(gap)} short` : `No life insurance on ${who}: ${dw} would be about ${big(gap)} short`;
       sentence = `If ${who} died this year, ${dw} would be about ${big(gap)} short${p.cover > 0 ? ` even with the ${dollars(p.cover)} of cover on file` : ""}. ${p.cover > 0 ? "More" : "Term life"} cover on ${who}${term} closes it.`;
+      // the plan together runs out too (round 8 verify): what the cover does, and what it does not
+      if (p.method === "plan" && p.plan?.eitherWay) sentence += ` It keeps ${sayWhose(p.survivorName ?? dw)} money lasting as long as your plan together's; your plan is short for retirement either way (Will the money last?).`;
     }
     return {
       id: p.id, personId: p.id, name: p.name, who, whose, need: p.need, cover: p.cover, gap, depends, dependsWords: dw,
       termUntil: p.termUntil, until: p.termUntil?.year ?? null, method: p.method, endsSoon: p.endsSoon, unassignedCover: d.unassignedCover,
       title: title + (d.unassignedCover > 0 ? ` (a ${dollars(d.unassignedCover)} policy names nobody)` : ""), sentence: sentence + restsOn + unassigned,
-      ...(rough ? { rough: true } : {}),
+      ...(rough ? { rough: true } : {}), ...(p.method === "plan" && p.plan?.eitherWay ? { eitherWay: true } : {}),
     };
   });
 }

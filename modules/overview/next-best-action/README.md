@@ -216,3 +216,155 @@ The view's "Each month's money" says "Spending (about $3,000 of it our guesses)"
 $380 short" in the calm colour (never red), and links to question 6; the step is numbered ✎, not 0 (UX 1, 12). Life cover for two people whose answer
 rests on our guesses of the spending (Life insurance needs' `RESTS_ON`) says that once, after both sentences. Tests: setup
 `module.test.mjs` "C3 UX 3", "C3 UX 7 and 12".
+
+## Round 8 (2026-11-06): the right moves first
+
+### The match step for a paid adult with no 401(k) on file (item 1, renter-debt-2 + couple-home-3)
+The match step used to exist only once a 401(k)/403(b) account did, so a worker with nothing in it yet was never asked
+(`whatIfs.benefits[id].matchTiers` was read only to rule a match out). Now every adult with a salary (a business owner or
+freelancer has no employer to match, and a bonus alone, such as a freelancer's year-end client bonus, is no job to ask about) who has no 401(k) of their own at all, and has not said there is no
+plan or no match (`retirement.workPlans[id].match === false`, or match tiers typed with no rate on Work benefits), joins
+the step. A known match (typed tiers, or "Yes" to a plan with a match) keeps the step's usual place (after the starter
+cushion and life cover, before costly debt); so does a 401(k) on file with no contribution. When all the step has is the
+question (`kind: "ask"` for everyone in it), it comes right after costly debt instead: a sure 20% or more on a card today
+beats a match that may not exist (before the dated goals, the full cushion, the IRA and middling debt still).
+`freshMatch(plan, person, today)` gives each one's figures from Work benefits' own compute (career/benefits, chosen for
+that person, `paycheck: false`):
+- `kind: "known"` (tiers typed on Work benefits): the answer, status `now`: "Jasmine's employer adds 100% of what Jasmine
+  puts in, up to 3% of pay: put in 3% ($45 a paycheck, about $38 less take-home pay) to get $1,170 a year."
+  Formula: pct = the top of the last tier with a rate (`fullMatchAt`); a year = pct x pay (to the 401(k) limit); a
+  paycheck = that / paychecks (26 when the pay is a yearly figure); take-home falls by the paycheck less the federal and
+  state income tax it saves (Work benefits' `costPerCheck`; Social Security and Medicare still apply to a 401(k)
+  deferral, IRC 3121(v)(1)(A)); the match = Work benefits' `matchDollars` (pay counted up to the 401(a)(17) limit).
+  Hand check (renter plan, OH, single, $39,000): 3% = $1,170 a year, $45 a paycheck; federal 12% bracket (2026 single:
+  $16,100 standard deduction, 12% from $12,400 to $50,400 of taxable income) saves $140.40 and Ohio's 2.75% (above
+  $26,050) $32.18: (1,170 - 140.40 - 32.18) / 26 = $38.36.
+- `kind: "plan"` (`retirement.workPlans[id].match === true`, Get started's "Retirement plan at work? Yes"): status `now`,
+  "Your job has a retirement plan with a match: ask human resources at work how much it adds. With a common match, 50% of what you put in up to
+  6% of pay, putting in 6% ($115 a paycheck) would get $1,500 a year."
+- `kind: "ask"`: status `check`, one question for everyone: "Does Priya's job or Tom's job match retirement savings? Ask
+  human resources at work, or look on each job's benefits site. A common match, 50% of what you put in up to 6% of pay, would be about $1,740 a
+  year for Priya and $1,920 for Tom." (58,000 x 3% and 64,000 x 3%.)
+The common match is Work benefits' `DEFAULT_TIERS`: $0.50 per dollar on the first 6% of pay, the formula most used in
+Vanguard plans (13% of plans with a match in 2024; Vanguard, How America Saves 2025, Figure 8, read 2026-11-06).
+Each one is in `ask` as `{ personId, name, accounts: [], noAccount: true, kind, match }`; Retirement contributions turns
+it into its question card with a one-tap start (a $0 401(k) for that person, plus the contribution row when the match is
+known), and Work benefits' "Start it at 3%" does the same. A household with no such adult reads exactly as before.
+The step takes no spare money in the month-by-month run (as before for the 401(k) question): the money goes in once the
+contribution is saved, and the spare money then shrinks by what take-home falls by.
+
+### A dated goal is funded from today (item 3, couple-home-1)
+The goals came last, so $64,000 of loans at 6.5% took every spare dollar until two months before a 3-year house goal's
+date, and the step said "puts them on track". Now each goal behind its pace (`status: "behind"`, date still ahead) takes
+its extra a month from the spare money right after costly debt, before the full cushion and the open-ended steps (HSA, IRA,
+middling debt, the 401(k)): a date is a promise, a goal that starts late needs more each month, and the cushion and those
+steps lose nothing by taking a little longer. The order (starter cushion, past-due tax, costly debt first) is the r/
+personalfinance prime directive's; putting dated goals before the full cushion is our own choice, noted here.
+- The step ("Catch up the goals") moves there only while a goal is behind; with none behind it stays last, as before.
+- The emergency fund goal (Goals' planner `goals/emergency-fund`: the life-ring icon, "ticked as your emergency fund", or a
+  name like "emergency", "rainy day", "cushion") is the cushion itself: the starter and full emergency fund steps fill it, as
+  Needs attention already reads it. It is not moved up (its money would be counted twice and the full cushion's date pushed
+  out by money that builds the same cushion); with dated goals moved up it reads "Emergency fund is filled by the emergency
+  fund steps, not this one."; when it is the only goal behind, the step stays last and reads exactly as before ("Emergency
+  fund: about $510 a month more in all puts them on track.").
+- extra = Goals' `neededMonthly` (pmtToReach at the goal's rate, from today to its date) - what already goes in.
+- In the run, each month each goal (Goal prioritizer's order: priority, then the nearest date) takes what it needs to hold
+  its amount by its date from where it stands: `pmtToReach(rate/12, monthsLeft - m, targetThen, have) - monthly` (its extra
+  while it gets all of it; more, to catch up, after the steps before it took a month's money); `have = have x (1 + r) +
+  monthly + given` (end-of-month saving, as Goals works it). Past its date (the order made it late) it takes what reaches
+  it until it holds its amount, which gives the date it is ready.
+- On time = it holds its amount at its date (a date past the 120-month run: it kept its pace in the run's last month).
+- Words: "House down payment needs about $1,070 a month from now to be ready by November 2029." (on time; several: "... need
+  about $2,090 a month in all from now to be ready by their dates."); "In this order House down payment waits until about
+  March 2030; to keep November 2029, put about $1,070 a month toward it from now." (late: the couple with a $60,000 card at
+  24% paid first, the test); "In this order X is not ready by
+  ...; to keep that date, put about ...". "On track" is never said of a goal that is not. While the spending is mostly our
+  guesses (`spare.waits`), only what each needs.
+- `startDate` / `monthly` / `capacity` as for an account step (the month after the first counts too, as a first month can
+  be the crumbs of a step finishing). Goal prioritizer allocates the same `neededMonthly`, so both pages give one figure.
+- Couple-home (plan.json, savings linked to the goal): the goal $1,068 a month from November 2026 (was September 2029); the
+  full cushion done about August 2027 (was June 2027); the IRA from about July 2027 (was May 2027); the loans, with what is
+  left after the goal and the IRA (about $1,210 a month once both are going), done about January 2031 (was October 2029).
+
+### A goal whose date has passed is due now (item 18, equity-5)
+Goals (goals/goals) now gives a past-due goal `neededMonthly: null` and `dueNow` (what is left), and leaves it out of
+"Needed each month" (one college goal dated 2023 read "$105,576 needed each month"). This step says it apart: "Child 2's
+college: its date has passed, and about $103,000 is due now. Set a new date on Goals, or mark it done." A goal due this
+month: "X is due this month, and about $Y is still needed." Neither takes a month's money.
+
+### Life cover not first for a couple whose plan is short either way (item 14)
+The protect step reads Life insurance needs' `protectionGaps`, which now gives no need when the plan together runs short
+anyway and the survivor's plan lasts as many years of retirement (insurance/life-needs README, round 8). Couple-home's
+first move is no longer life insurance.
+
+### The required withdrawal before the cushion (item 40, widow-4)
+From October, while this year's required withdrawal is not marked taken (Required withdrawals' `thisYear(plan).due`, the
+same list Needs attention shows), a step `rmd` comes right after the bills and the tax steps, before the cushion: "Take at
+least $16,078 from Ruth's retirement (worked out from today's balance) by December 31. You can ask the account to hold back
+tax from it (Form W-4R), so less is owed in April. Tap "I've taken it" on Required withdrawals once it is done." A first
+year says "by April 1, <next year>, or by December 31 so two do not fall in <next year>". It takes none of the spare money,
+so no other step's date moves. Sources (read 2026-11-06): IRS, Retirement plan and IRA required minimum distributions FAQs
+("an excise tax of 25%, 10% if the RMD is timely corrected within two years"; first year by April 1 of the next year);
+IRS, About Form W-4R (the payer withholds federal income tax from a nonperiodic payment as the form asks). Hand check
+(widow plan): $410,000 / 25.5 (Uniform Lifetime Table at 74, Pub. 590-B Table III) = $16,078.43.
+When every adult is past their retirement age (People's `retired`) and no one has pay from work (salary, bonus or a
+business; someone still working past the age keeps the job-loss reason), the full cushion's reason is "Enough must-pay bills in
+cash for surprise bills, without selling investments in a bad year." (not a job loss), and "Then: your choice" no longer
+offers "retire earlier".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review" (each failed before its fix).
+- **The match costs take-home pay (money D2).** For each adult the step offers to start (a typed match, or a plan with a
+  match said, with or without a 401(k) on file), `monthlyCost = take x paychecks / 12`, where `take` is Work benefits'
+  `costPerCheck` (what goes in a paycheck less the federal and state income tax it saves; Social Security and Medicare still
+  apply, IRC 3121(v)(1)(A)). The step carries `monthlyCost` and `roomYearly = monthlyCost x 12`, so the month-by-month run
+  takes it from the spare money in its place in the order and every step after it moves by it. Renter (Ohio, $39,000, 100%
+  up to 3%): 3% x 39,000 = 1,170; take = (1,170 - 12% x 1,170 - 2.75% x 1,170) / 26 = $38.36; x 26 / 12 = $83.12 a month.
+  When the month has $5 or more less than that (`costShort`), the words say where it comes from: the saved extra on debts
+  first (the match adds 50% or 100% at once, more than any debt's interest), then trimming spending:
+  short = 83.12 - 3.36 = 79.76; from the extra min(50, 79.76) = 50; trim 29.76 -> "trim about $30". The starter cushion
+  comes before the match in the order (the prime directive's), so its date does not move; the cards, the full cushion and
+  the IRA do. The page shows no "From ...: about $X a month" line for the match (its words say it). `leftWords(nba)` is the
+  sentence Contributions and Work benefits add to their confirmation after a start: spare, just about even (within $5), or
+  short with the way out.
+- **A Roth 401(k) at work (money D3).** An adult with a "roth" account named 401(k), 403(b), 457 or TSP, or a contribution
+  Contributions counts as a 401(k) (`limitKind`, IRC 402A(c)(2)), is not asked "Does X's job match?" as if there were no plan.
+- **The required withdrawal of someone still working (money D5).** `rmdNow(plan)`: Required withdrawals' `thisYear(plan).due`,
+  but for an owner with a salary the 401(k)s at that job (not `formerJob`) wait: a workplace plan's own required withdrawal can
+  wait until the year its owner retires (IRC 401(a)(9)(C); IRS, Retirement plan and IRA RMD FAQs, read 2026-11-06; not a 5%
+  owner); an IRA's cannot. The amount is then the other accounts' sum of balance / the Uniform Lifetime factor (core/math/rmd.js):
+  $100,000 IRA at 75 -> 100,000 / 24.6 = $4,065; with only the 401(k) at the job, no step. The words name the 401(k) that waits.
+  Needs attention uses the same `rmdNow` and words.
+- **Only the goal ticked as the emergency fund is the cushion (money D6).** `isCushion = g.isEmergencyFund === true`, the test
+  Liquidity uses: a goal only named like one ("Rainy day fund") is money Liquidity keeps apart, so the cushion steps never
+  fill it, and it stays with the dated goals.
+- **A bill a few months off, paid from savings (UX 1).** A dated goal behind its pace with `FROM_CASH_MONTHS` (3) or fewer
+  months left, whose catch-up a month is more than the spare money, is paid from savings when the usable cash above a month of
+  must-pay bills (less what pays costly debt from savings) covers what it still needs (targetThen - funded), in the goals'
+  order while the cash lasts. Such goals leave the month-by-month run, are listed in the goals step's `fromCash: [{ id, name,
+  amount, due }]` with "pay them from savings when they are due", and the full cushion's gap counts the cash they take:
+  gap = max(0, target - (usable cash - their sum)). Equity family: two $12,930 January bills, $55,000 of cash, $7,410 a month
+  of must-pay bills: 55,000 - 7,410 = 47,590 covers both. Needs attention, the Dashboard's goals tile and Goals read `fromCash`.
+- **A past-due college goal (UX 4).** `collegeBills(plan, today, goals)`: for a past-due goal that is a child-in-college's
+  goal on Education, Education's next bill (its `nextYearCost`): "Education says the next bill is about $12,930 (the spring
+  half of 2026-27, due January 15, 2027): tap Update on Education to set this goal to it." Other past-due goals: "Set a new
+  date for it on Goals, or lower its amount if less is needed" (no "mark it done": no button does it).
+- **A 401(k) on file with nothing going in, and a typed match or a plan said (UX 3):** the same answer as with no 401(k)
+  (`kind` "known" | "plan", its 401(k) in `accounts`, status now), not "check whether the employer matches".
+- **An ongoing step's monthly (UX 6):** the month after its first counts for what it gets as well as what reaches it, so an
+  IRA that has its whole $1,250 from August reads $1,250, not the $1,049 left in July when the cushion finished.
+- **Words (UX 9):** "a smallest amount you must take out"; "ask the account to hold back tax from it (they will have a
+  form)"; an account name that does not say what it is gets "account" ("Ruth's retirement account"); the retired cushion's
+  reason "Cash for surprise bills, so you never sell investments in a bad year."
+
+## Round 8 verify (2026-11-06)
+Tests: module.test.mjs "round 8 verify"; insurance/life-needs "round 8 item 14".
+- **The cards' date with a match ahead of them.** The match step takes its take-home cost first (review D2), so the costly-debt
+  date is Pay off debts' offer for what reaches the cards: offer(spare - what the "now" steps before it take a month), and the
+  run's budget for it is that amount x the offer's months. It was the offer at the whole spare money while the run gave the
+  cards the rest: on a $6,000 card at 24% with $1,762 spare and a $168 match cost, April 2027 here against March 2027 on Pay
+  off debts once the 401(k) is started.
+- **Life cover that only matches the plan together's run-out comes later.** When every protection gap is `eitherWay` (Life
+  insurance needs: the plan together runs out too) and nobody in the household is a dependant, "Protect the people who count
+  on you" comes after costly debt and the match (right after where the match question goes), not after the starter cushion.
+  Couple-home after setup: the next move is the match question; the $28,000 for Priya follows it, with the words above.

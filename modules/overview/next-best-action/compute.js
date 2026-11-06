@@ -8,8 +8,9 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
-import { compute as computeContributions } from "../../retirement/contributions/compute.js";
-import { compute as computeGoals } from "../../goals/goals/compute.js";
+import { compute as computeContributions, limitKind } from "../../retirement/contributions/compute.js";
+import { compute as computeGoals, plannerFor } from "../../goals/goals/compute.js";
+import { compute as computeEducation } from "../../goals/education/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { protectionGaps, RESTS_ON } from "../../insurance/life-needs/compute.js";
 import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/compute.js";
@@ -17,7 +18,12 @@ import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { offer as payoffOffer, savedPlan } from "../../debt/payoff/compute.js";
 import { yearTaxes, heldAfterTax, aboutTen, fullKind } from "../../cashflow/budget-percent/compute.js";
 import { compute as computeBusiness } from "../../career/business/compute.js";
+import { compute as computeBenefits, DEFAULT_TIERS } from "../../career/benefits/compute.js";
+import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
+import { compute as computePeople } from "../../household/people/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
+import { rmdAmount } from "../../../core/math/rmd.js";
+import { pmtToReach } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
 
@@ -42,6 +48,8 @@ export const MODERATE_RATE = 0.04;
 export const FICA = { ss: 0.062, medicare: 0.0145, selfEmployed: 0.153, seBase: 0.9235 };
 /** How many months the simulation looks ahead. */
 export const HORIZON_MONTHS = 120;
+/** A goal due within this many months that the month cannot save for, with the cash to pay it, is paid from savings (review UX 1). */
+export const FROM_CASH_MONTHS = 3;
 
 /**
  * compute(plan, { today }) -> {
@@ -202,6 +210,28 @@ export function compute(plan, params = {}) {
       detail: `About ${money(liq.taxOwed)} of your cash is federal tax on what you have earned this year, so the steps below leave it out. Put about ${money(owed.monthly)} a month aside for this tax${nextWords ? `; the next payment is ${nextWords}` : ""}.`, go: ["taxes", "estimated"] });
   }
 
+  // 0c. this year's required withdrawal (round 8 item 40): a dated must-do, shown from October while it is not marked taken,
+  // as Needs attention shows it (Required withdrawals' thisYear: amount, accounts, deadline). Missing it costs 25% of what was
+  // not taken, 10% if put right within two years (IRS, Retirement plan and IRA required minimum distributions FAQs, read
+  // 2026-11-06). It takes none of the spare money, so it changes no other step's date; it comes before the cushion because
+  // its date is fixed. Before, a retiree in November was told to build the cushion and never told about December 31.
+  // Someone still working: the 401(k) at that job can wait until they retire (review D5, rmdNow below), so the amount is the
+  // rest's, and the words say which account waits
+  const rmdDue = today && Number(String(today).slice(5, 7)) >= 10 ? rmdNow(plan, { today }) : [];
+  if (rmdDue.length) {
+    const y = Number(String(today).slice(0, 4));
+    const whose = (r) => (rmdDue.length > 1 ? `${isYou(r.name) ? "Yours" : r.name}: ` : "");
+    add({ id: "rmd", title: rmdDue.length > 1 ? "Take this year's required withdrawals" : "Take this year's required withdrawal",
+      why: "From your 70s the law sets a smallest amount you must take out of retirement accounts each year; missing it costs 25% of what was not taken.", status: "now",
+      detail: `${rmdDue.map((r) => `${whose(r)}take at least ${exact(r.amount)} from ${listWords(r.accounts.map((a) => accountWords(a.name)))}${r.estimated ? " (worked out from today's balance)" : ""} by ${r.first ? `April 1, ${y + 1}, or by December 31 so two do not fall in ${y + 1}` : "December 31"}.${waitWords(r)}`).join(" ").replace(/^t/, "T")} You can ask the account to hold back tax from it (they will have a form), so less is owed in April. Tap "I've taken it" on Required withdrawals once it is done.`,
+      go: ["retirement", "rmd"] });
+  }
+  // every adult retired (People: past the retirement age) and no one paid for work: the cushion is for surprise bills, not a
+  // job loss (item 40); someone still working past the age keeps the job-loss reason
+  const ppl = computePeople(plan, { today });
+  const paidWork = (inc.active ?? []).some((x) => x.type === "salary" || x.type === "bonus" || x.type === "business");
+  const allRetired = !paidWork && ppl.people.some((p) => p.role !== "dependent") && ppl.people.filter((p) => p.role !== "dependent").every((p) => p.retired === true);
+
   // 1. a starter emergency fund: one month of must-pay bills in cash you can use
   const essential = liq.expenses?.essentialMonthly ?? exp.essentialMonthly;
   // under half a dollar short is done: the page shows whole dollars, so typing the amount it asks for must finish the step
@@ -219,12 +249,17 @@ export function compute(plan, params = {}) {
   // 1b. the people who count on an earner: life cover for the gap Life insurance needs works out (its own answer: the
   // survivor's plan kept whole), right after the starter cushion; an action, not a sum to save, so no gap is filled
   const gaps = protectionGaps(plan, { today });
+  // no child, and the plan together runs out anyway (Life insurance needs' eitherWay): the cover only keeps the survivor's
+  // money lasting as long as the plan together's, so it comes after costly debt and the match, not first (round 8 item 14,
+  // kept when the verify put the need back: Priya's $28,000 is real, but it is not the couple's first move)
+  const protectLater = gaps.length > 0 && gaps.every((g) => g.eitherWay) && !(plan.household?.people ?? []).some((q) => q.role === "dependent");
   // the words come from Life insurance needs (protectionGaps' title and sentence), so every page says the same thing
-  if (gaps.length) add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term cover is the cheap way to buy it.", status: "now", gap: null,
+  const protectStep = () => add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term cover is the cheap way to buy it.", status: "now", gap: null,
     people: gaps.map((g) => ({ personId: g.id, name: g.name, who: g.who, whose: g.whose, gap: g.gap, cover: g.cover, until: g.until, depends: g.depends, ending: g.endsSoon.length > 0, title: g.title, sentence: g.sentence })),
     // resting on our guesses of the spending: said once, after every person's sentence (C3 fix walk)
     detail: (gaps.length > 1 && gaps.some((g) => g.rough) ? gaps.map((g) => g.sentence.replace(RESTS_ON, "")).join(" ") + RESTS_ON : gaps.map((g) => g.sentence).join(" ")) + " Cover you already have, through work too, goes on Policies.",
     go: ["insurance", "life-needs"] });
+  if (gaps.length && !protectLater) protectStep();
 
   // 2. the employer match: a 401(k) marked as from a job left (`formerJob`) takes no new money, and a person who said their
   // job has no plan or no match (`retirement.workPlans[id].match === false`) has nothing to check
@@ -237,21 +272,82 @@ export function compute(plan, params = {}) {
   // a paid adult whose every 401(k) is from a job left: the job now may have a plan with a match, so it is still asked
   // (unless they said there is none); `newJob` in the ask, with no accounts to put money in yet
   const leftOnly = adults.filter((p) => { const own = ownOf(p); return own.length && own.every((a) => a.formerJob) && paid(p) && !noMatch(p.id); });
-  if (atWork.length || leftOnly.length) {
+  // a paid adult (salary or bonus: a business owner or freelancer has no employer to match) with no 401(k) or 403(b) on file
+  // at all: the job may have a plan with a match (round 8 item 1: the step only existed once a 401(k) account did, so a
+  // worker with nothing in it yet was never asked). Each one's figures are Work benefits' own (career/benefits, light: no
+  // paycheck runs): the typed match, else the common one (50% up to 6%), the share of pay that gets all of it, a paycheck's
+  // amount and what take-home pay falls by
+  // (a salary: a bonus alone, such as a freelancer's year-end client bonus, is no job with a plan to ask about)
+  const salaried = (p) => inc.active.some((x) => x.personId === p.id && x.type === "salary");
+  // a Roth 401(k) at work is filed as type "roth": Contributions counts it with the 401(k) when it has a match or its name says
+  // 401(k), 403(b), 457 or TSP (limitKind, IRC 402A(c)(2)), and so does this step: an adult with one is not asked as if there
+  // were no plan (review D3, 2026-11-06)
+  const workRoth = (p) => accounts.some((a) => a.type === "roth" && !a.formerJob && (a.ownerId === p.id || (p.role === "self" && !a.ownerId)) && limitKind(a.type, a.name, 0) === "401k")
+    || (con.items ?? []).some((c) => c.personId === p.id && c.limitKind === "401k");
+  const fresh = adults.filter((p) => !ownOf(p).length && !workRoth(p) && salaried(p) && !noMatch(p.id)).map((p) => ({ p, ...freshMatch(plan, p, today) }));
+  let matchStep = null;   // set when the match step waits until after costly debt
+  if (atWork.length || leftOnly.length || fresh.length) {
     const owners = adults.filter((p) => atWork.some((a) => a.ownerId === p.id) || (p.role === "self" && atWork.some((a) => !a.ownerId)));
     const working = owners.filter((p) => !noMatch(p.id) && paid(p));
     const contributing = working.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && k401.some((a) => a.id === c.accountId)));
     const matched = contributing.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && Number(c.employerMatch) > 0));
-    const missingMatch = working.filter((p) => !contributing.includes(p));
+    const missing = working.filter((p) => !contributing.includes(p));
+    // a 401(k) on file with nothing going in, whose match is typed on Work benefits or who said the job has a plan with a match
+    // (Get started, or "Yes" on Contributions): the same answer as with no 401(k) ("put in 3% ... to get $1,170"), with its
+    // 401(k) to start, not the question again (review UX 3: the app forgot a typed match once the account was on file, and
+    // asked "Does Priya's job match?" right after "Yes")
+    const onFile = missing.map((p) => ({ p, ...freshMatch(plan, p, today) })).filter((x) => x.kind !== "ask");
+    const missingMatch = missing.filter((p) => !onFile.some((x) => x.p === p));
     const toAsk = [...missingMatch, ...leftOnly];
+    const accountsOf = (p) => atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id);
+    // what starting it takes from take-home pay a month (review D2): the amount a paycheck less the income tax it saves (Work
+    // benefits' costPerCheck; Social Security and Medicare still apply, IRC 3121(v)(1)(A)), times the paychecks, over 12. The
+    // month-by-month run below takes it from the spare money in the step's place, so every step after it moves by it
+    const starting = [...onFile, ...fresh].filter((x) => x.kind !== "ask" && x.match);
+    const monthlyCost = starting.reduce((t, x) => t + (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0), 0) / 12;
     const leftNames = leftOnly.map((p) => p.name);
     const left = !leftOnly.length ? "" : leftNames.every(asTyped) ? ` ${leftNames.join(" and ")}'s 401(k) is from a job left: check whether the job now has a plan with a match.`
       : leftNames.length === 1 ? ` ${NameOf(leftNames[0])} 401(k) is from a job left: check whether the job now has a plan with a match.`
       : ` ${leftNames.map((n, i) => (i ? nameOf(n) : NameOf(n))).join(" and ")} 401(k)s are from jobs left: check whether the jobs now have a plan with a match.`;
-    if (working.length || leftOnly.length) add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length ? "check" : "done",
-      detail: toAsk.length ? `${missingMatch.length ? `${whoLeads(missingMatch.map((p) => p.name))} ${missingMatch.length === 1 ? verbFor(missingMatch[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : `${whoLeads(matched.map((p) => p.name)) || "Everyone with a 401(k)"} ${matched.length > 1 || (matched.length === 1 && isYou(matched[0].name)) ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
-      ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id) })),
-        ...leftOnly.map((p) => ({ personId: p.id, name: p.name, accounts: [], newJob: true, old: ownOf(p).map((a) => a.id) }))], go: ["retirement", "contributions"] });
+    const had = working.length || leftOnly.length;
+    const before = !had ? "" : toAsk.length ? `${missingMatch.length ? `${whoLeads(missingMatch.map((p) => p.name))} ${missingMatch.length === 1 ? verbFor(missingMatch[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : !contributing.length ? ""
+      // (with a 401(k) still to start, "Everyone with a 401(k)" would not be true: those who put money in, by name)
+      : (() => { const who = matched.length ? matched : onFile.length ? contributing : []; return `${whoLeads(who.map((p) => p.name)) || "Everyone with a 401(k)"} ${who.length > 1 || (who.length === 1 && isYou(who[0].name)) ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`; })();
+    const asking = fresh.filter((x) => x.kind === "ask");
+    // only a question (no 401(k) on file, no typed match, no plan we know of, and nothing to do for a 401(k) on file): it is
+    // asked right after costly debt, not before it -- a sure 20%+ on a card today beats a match that may not exist (round 8
+    // item 1); a known match, or a 401(k) on file with no contribution, keeps its place ahead of the cards
+    const onlyAsk = !toAsk.length && !onFile.length && fresh.length > 0 && asking.length === fresh.length;
+    // the month has less than starting it takes (review D2: following the move made the renter's month $80 short with no word):
+    // where the money comes from -- the saved extra on debts first (the match adds 50% or 100% at once, more than any debt's
+    // interest costs), then trimming spending; while the spending is mostly our guesses, only what it takes
+    const costWords = () => {
+      if (monthlyCost < 0.5) return "";
+      const has = Math.max(0, spare.monthly), short = monthlyCost - has;
+      // (to the dollar: these are small sums, and $83 against $3 is the point)
+      const first = `${starting.every((x) => x.kind === "known") ? "This takes" : "That would take"} about ${exact(monthlyCost)} a month from take-home pay`;
+      if (spare.waits || short < 5) return `${first}.`;
+      const rate = Math.max(...starting.map((x) => Math.max(0, ...(x.match.tiers ?? []).map((t) => Number(t.rate) || 0))));
+      const fromExtra = Math.min(spare.debtExtra || 0, short), trim = short - fromExtra;
+      const names = debtPlan?.names?.length && debtPlan.names.length <= 2 ? listWords(debtPlan.names) : "debts";
+      const extraWords = fromExtra >= 5 ? `put ${fromExtra < spare.debtExtra - 5 ? `about ${exact(fromExtra)} of ` : ""}the ${exact(spare.debtExtra)} a month extra on ${names} (Pay off debts) toward it instead${rate > 0 ? ` (the match adds ${share(rate)}, more than any debt costs)` : ""}` : "";
+      const trimWords = trim >= 5 ? `trim about ${exact(trim)} a month of spending` : "";
+      return `${first}, and ${has >= 1 ? `about ${exact(has)} is left each month` : "the month has nothing spare"}: ${[extraWords, trimWords].filter(Boolean).join(" and ")}.`;
+    };
+    matchStep = () => add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length || asking.length ? "check" : fresh.length || onFile.length ? "now" : "done",
+      detail: [before, freshWords([...onFile, ...fresh], { exact, money }), costWords()].filter(Boolean).join(" "),
+      // the take-home pay it takes a month, and the same a year for the run below (a step with room takes up to it a month)
+      ...(monthlyCost >= 0.5 ? { monthlyCost, roomYearly: monthlyCost * 12 } : {}),
+      ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: accountsOf(p) })),
+        ...leftOnly.map((p) => ({ personId: p.id, name: p.name, accounts: [], newJob: true, old: ownOf(p).map((a) => a.id) })),
+        // a 401(k) on file and the match known or a plan said: Contributions starts what goes in, in one tap
+        ...onFile.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: accountsOf(x.p), kind: x.kind, match: x.match, monthlyCost: x.match ? (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0) / 12 : 0 })),
+        // no 401(k) on file: Retirement contributions asks, and one tap there starts the 401(k) (round 8)
+        ...fresh.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: [], noAccount: true, kind: x.kind, match: x.match, monthlyCost: x.kind !== "ask" && x.match ? (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0) / 12 : 0 }))],
+      // (for Contributions' and Work benefits' cards: the sentence, and whether the month has less than it takes)
+      ...(monthlyCost >= 0.5 ? { costWords: costWords(), costShort: !spare.waits && monthlyCost - Math.max(0, spare.monthly) >= 5 } : {}), go: ["retirement", "contributions"] });
+    if (!had && !fresh.length) matchStep = null;
+    else if (!onlyAsk) { matchStep(); matchStep = null; }
   }
 
   // 3. expensive debt, most expensive first (mortgages left out)
@@ -301,11 +397,56 @@ export function compute(plan, params = {}) {
       gap: Math.max(0, highGap - fromSavings), fromSavings, doneDate: full ? today : null, detail, go: ["debt", "payoff"] });
   }
 
+  if (matchStep) matchStep();   // the match question, right after costly debt (above)
+  if (protectLater) protectStep();   // cover that only matches the plan together's run-out (above)
+
+  // 3b. goals with a date (round 8 item 3): each one behind its pace takes its extra a month (what it needs from today to its
+  // date, Goals' neededMonthly, less what already goes in) from the spare money right after costly debt, before the full
+  // cushion and the open-ended steps (HSA, IRA, middling debt, the 401(k)): a date is a promise, and a goal that starts late
+  // needs more each month, while the cushion and those steps lose nothing by taking a little longer. Before, the goals came
+  // last, so $64,000 of loans at 6.5% took every spare dollar until two months before a 3-year house goal's date. In the
+  // Goal prioritizer's order (priority, then the nearest date). A goal whose date has passed is due now: no month's saving
+  // (item 18). With no goal behind, the step stays last, as before.
+  // The emergency fund goal is the cushion: the starter and full emergency fund steps fill it (as Needs attention reads it),
+  // so it is not moved up with the dated goals (its money would be counted twice, and the full cushion's date pushed out by
+  // money that builds the same cushion). With no other goal behind, the step stays last and reads as before.
+  // (the goal ticked as the emergency fund on Emergency fund: Liquidity counts only its money as the cushion; one only named
+  // like it, "Rainy day fund", is money set apart, so the cushion steps never fill it and it stays with the dated goals,
+  // review D6, 2026-11-06)
+  const isCushion = (g) => g.isEmergencyFund === true;
+  const goalsDueNow = gl.goals.filter((g) => g.status === "past due" || (g.status === "behind" && !(g.monthsLeft > 0)));
+  const cushionBehind = gl.goals.filter((g) => g.status === "behind" && g.monthsLeft > 0 && isCushion(g));
+  const goalPlanAll = gl.goals.filter((g) => g.status === "behind" && g.monthsLeft > 0 && !isCushion(g))
+    .map((g) => ({ g, extra: Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), months: g.monthsLeft, have: Number(g.funded) || 0, r: (Number(g.rate) || 0) / 12, mon: Number(g.monthly) || 0, target: Number(g.targetThen ?? g.target) || 0, start: null, reached: null, atDate: null }))
+    .filter((x) => x.extra > 0.005)
+    .sort((a, b) => (Number(a.g.priority) || 2) - (Number(b.g.priority) || 2) || String(a.g.targetDate).localeCompare(String(b.g.targetDate)));
+  // a bill a few months off that the month cannot save for (review UX 1, 2026-11-06: Education's goal for a January college bill
+  // read "put about $12,910 a month toward it" for a family with $55,000 in cash): due within FROM_CASH_MONTHS, its catch-up
+  // more than the spare money, and the usable cash above a month of must-pay bills (less what pays costly debt from savings)
+  // covers it -- paid from savings when it is due, in the goals' order while the cash lasts; no month's saving is asked for it,
+  // and the full cushion's gap counts what it takes from the cash. Never on bills that are mostly our guesses (spec 8.1)
+  let cashFree = guessedBills ? 0 : Math.max(0, (liq.now ?? 0) - essential - (steps.find((s) => s.id === "high-debt")?.fromSavings ?? 0));
+  const fromCash = [];
+  for (const x of goalPlanAll) {
+    const amount = Math.max(0, x.target - x.have);
+    if (x.months <= FROM_CASH_MONTHS && x.extra > Math.max(0, spare.monthly) && amount > 0.5 && amount <= cashFree) { fromCash.push({ id: x.g.id, name: x.g.name, amount, due: x.g.targetDate }); cashFree -= amount; }
+  }
+  const goalPlan = goalPlanAll.filter((x) => !fromCash.some((y) => y.id === x.g.id));
+  const cashUsed = fromCash.reduce((t, x) => t + x.amount, 0);
+  const cushionExtra = cushionBehind.reduce((t, g) => t + Math.max(0, (Number(g.neededMonthly) || 0) - (Number(g.monthly) || 0)), 0);
+  // moved up: the dated goals' extra; last (no other goal behind): the emergency fund goal's, as before
+  const goalExtra = goalPlan.length ? goalPlan.reduce((t, x) => t + x.extra, 0) : cushionExtra;
+  const goalStep = () => add({ id: "goals", title: "Catch up the goals", why: "What you are saving for, by when: behind now means short later.", status: goalPlan.length || goalsDueNow.length || cushionExtra > 0 || fromCash.length ? "now" : "done", roomYearly: goalExtra * 12,
+    ...(goalPlan.length ? { goalPlan } : {}), ...(fromCash.length ? { fromCash } : {}), detail: goalPlan.length || goalsDueNow.length || cushionExtra > 0 || fromCash.length ? "" : "Every goal with a date is on track.", go: ["goals", "goals"] });
+  if (goalPlan.length || fromCash.length) goalStep();
+
   // 4. the full emergency fund
-  const fullGap = (liq.gap ?? 0) < 0.5 ? 0 : liq.gap;
-  add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: "Enough must-pay bills in cash to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
+  // (a bill paid from savings above takes its cash from the cushion: the gap counts it)
+  const gapNow = cashUsed > 0 ? Math.max(0, (liq.target ?? 0) - ((liq.now ?? 0) - cashUsed)) : liq.gap ?? 0;
+  const fullGap = gapNow < 0.5 ? 0 : gapNow;
+  add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: allRetired ? "Cash for surprise bills, so you never sell investments in a bad year." : "Enough must-pay bills in cash to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
     ...(guessedBills ? { waits: true } : {}),
-    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of must-pay bills (${cushionMoney(liq.target)}${byGuess}).` : `Usable cash covers ${guessedBills ? "about " : ""}${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
+    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of must-pay bills (${cushionMoney(liq.target)}${byGuess})${cashUsed > 0 && (liq.gap ?? 0) < fullGap - 0.5 ? ", once the bills above are paid from savings" : ""}.` : `Usable cash covers ${guessedBills ? "about " : ""}${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
 
   // 5. the HSA, for those who have one and a high-deductible plan this year (none: nobody may put money in, IRC 223(c)(1))
   const hsaUsed = (con.byPerson ?? []).flatMap((p) => p.limits).filter((l) => l.kind === "hsa").reduce((s, l) => s + l.used, 0);
@@ -362,16 +503,13 @@ export function compute(plan, params = {}) {
     why: `${optional}A business can put far more aside than an IRA allows, and every dollar comes off this year's tax.`, optional: !!optional, status: "now", roomYearly: bizPlan.room,
     detail: `${bizPlan.label}: up to ${money(bizPlan.room)} for ${bz.year}; filling it would cut that year's tax by about ${money(bizPlan.saved)}.${bizPlan.key === "solo" ? " A new one can still be set up for this year until the April tax-filing deadline." : bizPlan.key === "sep" ? " It can be opened and filled up to the tax-filing deadline." : ""}`, go: ["career", "business"] });
 
-  // 9. goals that are behind: the extra a month they need
-  const behind = gl.goals.filter((g) => g.status === "behind" || g.status === "past due");
-  const goalExtra = behind.reduce((s, g) => s + Math.max(0, g.neededMonthly - (Number(g.monthly) || 0)), 0);
-  if (gl.goals.length) add({ id: "goals", title: "Catch up the goals", why: "What you are saving for, by when: behind now means short later.", status: goalExtra > 0 ? "now" : "done", roomYearly: goalExtra * 12,
-    detail: goalExtra > 0 ? `${behind.map((g) => g.name).join(", ")}: about ${money(goalExtra)} a month more in all puts them on track.` : "Every goal with a date is on track.", go: ["goals", "goals"] });
+  // 9. the goals, here when none is behind its pace (one behind is placed after costly debt, 3b above)
+  if (gl.goals.length && !goalPlan.length && !fromCash.length) goalStep();
 
   // 10. the rest: a choice
   const mortgage = debts.find((d) => d.type === "mortgage");
   add({ id: "rest", title: "Then: your choice", why: "Past this point there is no wrong answer, only priorities.", status: "later",
-    detail: `Invest in a brokerage account, pay the mortgage down early${mortgage?.rate ? ` (a sure ${pct(mortgage.rate)})` : ""}, a 529 for a child, retire earlier, give. The Goal seek page shows what each would buy.`, go: ["scenarios", "goal-seek"] });
+    detail: `Invest in a brokerage account, pay the mortgage down early${mortgage?.rate ? ` (a sure ${pct(mortgage.rate)})` : ""}, a 529 for a child, ${allRetired ? "" : "retire earlier, "}give. The Goal seek page shows what each would buy.`, go: ["scenarios", "goal-seek"] });
 
   // the spare money, month by month: one-off gaps in order, then this year's room, ongoing
   const avail0 = Math.max(0, spare.monthly);
@@ -383,17 +521,24 @@ export function compute(plan, params = {}) {
   {
     const i = steps.findIndex((s) => s.id === "high-debt");
     const first = i >= 0 && steps.slice(0, i).every((s) => !(s.status === "now" && s.gap > 0.5));
-    if (first && steps[i].status === "now" && steps[i].gap > 0.5 && !(steps[i].fromSavings > 0) && avail0 >= 25) {
+    // what reaches the cards: the spare money less what a step before them takes every month (the match's take-home cost,
+    // review D2; round 8 verify, 2026-11-06: the date was Pay off debts' at the whole spare money while the run gave the cards
+    // the rest, so it read a month or more later than Pay off debts gives for what is left once the 401(k) is started)
+    const ahead = i >= 0 ? steps.slice(0, i).filter((s) => s.status === "now" && !s.gap && s.roomYearly > 0).reduce((t, s) => t + s.roomYearly / 12, 0) : 0;
+    const reach = Math.max(0, avail0 - ahead);
+    if (first && steps[i].status === "now" && steps[i].gap > 0.5 && !(steps[i].fromSavings > 0) && reach >= 25) {
       let o = null;
-      try { o = payoffOffer(plan, { today, amount: avail0, stepId: "high-debt" }); } catch { o = null; }
+      try { o = payoffOffer(plan, { today, amount: reach, stepId: "high-debt" }); } catch { o = null; }
       const months = o?.soon ? Math.max(1, Math.round((Date.parse(`${o.soon.slice(0, 7)}-15`) - Date.parse(`${today.slice(0, 7)}-15`)) / (30.44 * 864e5))) : null;
-      if (months) left[i] = avail0 * months - 0.01;   // the spare money it takes until that month, whatever the balance today
+      if (months) left[i] = reach * months - 0.01;   // the spare money it takes until that month, whatever the balance today
     }
   }
   // once the saved debt plan's debts are gone, its extra is free again and joins the spare money
   const freed = debtPlan && debtPlan.months !== null ? debtPlan.months : Infinity;
   const startM = steps.map(() => null);
+  let ran = 0;
   for (let m = 0; m < HORIZON_MONTHS && (avail0 > 0 || freed < HORIZON_MONTHS); m++) {
+    ran = m + 1;
     let avail = Math.max(0, spare.monthly + (m >= freed ? debtPlan.extra : 0));
     steps.forEach((s, i) => {
       if (avail <= 0 || s.status !== "now") return;
@@ -401,14 +546,67 @@ export function compute(plan, params = {}) {
         if (left[i] <= 0) return;
         const put = Math.min(left[i], avail); left[i] -= put; avail -= put;
         if (left[i] <= 0.5 && !s.doneDate) s.doneDate = addMonths(today, m + 1);
+      } else if (s.goalPlan) {
+        // each goal behind its pace takes what it needs a month to hold its amount by its date from where it stands (its extra
+        // from today while it gets all of it; more, to catch up, after a month the steps before it took the money), growing at
+        // its own rate with what already goes in, as Goals works it (end-of-month saving, pmtToReach); past its date, when
+        // the order made it late, whatever reaches it until it holds its amount
+        const before = avail;
+        for (const x of s.goalPlan) {
+          if (x.reached !== null) continue;
+          const need = Math.max(0, pmtToReach(x.r, Math.max(1, x.months - m), x.target, x.have) - x.mon);
+          const give = Math.min(need, avail); avail -= give;
+          x.full = give >= need - 0.005;   // kept its pace this month (a date past the run is judged by the run's last month)
+          if (give > 0.005 && x.start === null) x.start = m;
+          x.have = x.have * (1 + x.r) + x.mon + give;
+          if (m + 1 === x.months) x.atDate = x.have;
+          if (x.have >= x.target - 0.5) { x.reached = m + 1; if (x.atDate === null && m + 1 <= x.months) x.atDate = x.have; }
+        }
+        const put = before - avail;
+        // its first month can be the crumbs of a step finishing: the month after counts too, for what it gets and what reaches it
+        if (startM[i] === m - 1) { s.capacity = Math.max(s.capacity, before); s.monthly = Math.max(s.monthly, put); }
+        if (put > 0.005 && !s.startDate) { s.startDate = addMonths(today, m); s.monthly = put; s.capacity = before; startM[i] = m; }
       } else if (s.roomYearly) {
-        // what reaches it: its first month can be the crumbs of a step finishing, so the month after counts too
-        if (startM[i] === m - 1) s.capacity = Math.max(s.capacity, avail);
+        // what reaches it: its first month can be the crumbs of a step finishing, so the month after counts too, for what
+        // reaches it and what it gets (review UX 6: "about $660 a month of the $1,250 it could take" for an IRA that has its
+        // whole $1,250 from the next month)
         const put = Math.min(s.roomYearly / 12, avail);
+        if (startM[i] === m - 1) { s.capacity = Math.max(s.capacity, avail); s.monthly = Math.max(s.monthly, put); }
         if (put > 0 && !s.startDate) { s.startDate = addMonths(today, m); s.monthly = put; s.capacity = avail; startM[i] = m; }
         avail -= put;
       }
     });
+  }
+  // the goals step's words, from the run above: "needs about $1,070 a month from now to be ready by November 2029" for the
+  // goals the order reaches by their dates (Goals' own pace from today), "In this order ... waits until about 2031;
+  // to keep November 2029, put about $1,070 a month toward it from now" for one it does not; "on track" is never said of a
+  // goal that is not. While the spending is mostly our guesses, only what each needs. A date that has passed: due now.
+  { const gs = steps.find((x) => x.id === "goals");
+    if (gs && gs.status !== "done") {
+      const out = [];
+      const onTime = (x) => !spare.waits && ran > 0 && (x.months <= ran ? x.atDate !== null && x.atDate >= x.target - 0.5 : x.full === true);
+      const ok = spare.waits ? goalPlan : goalPlan.filter(onTime), late = spare.waits ? [] : goalPlan.filter((x) => !onTime(x));
+      if (ok.length === 1) out.push(`${ok[0].g.name} needs about ${money(ok[0].extra)} a month from now to be ready by ${monthWords(ok[0].g.targetDate)}.`);
+      else if (ok.length) out.push(`${listWords(ok.map((x) => x.g.name))} need about ${money(ok.reduce((t, x) => t + x.extra, 0))} a month in all from now to be ready by their dates.`);
+      for (const x of late) out.push(x.reached !== null ? `In this order ${x.g.name} waits until about ${monthWords(addMonths(today, x.reached))}; to keep ${monthWords(x.g.targetDate)}, put about ${money(x.extra)} a month toward it from now.`
+        : `In this order ${x.g.name} is not ready by ${monthWords(x.g.targetDate)}; to keep that date, put about ${money(x.extra)} a month toward it from now.`);
+      // the emergency fund goal: with dated goals moved up, the cushion steps fill it; alone, the step is last, as before
+      if (cushionExtra > 0) out.push(goalPlan.length ? `${listWords(cushionBehind.map((g) => g.name))} ${cushionBehind.length === 1 ? "is" : "are"} filled by the emergency fund steps, not this one.`
+        : `${cushionBehind.map((g) => g.name).join(", ")}: about ${money(cushionExtra)} a month more in all puts them on track.`);
+      // bills a few months off, paid from savings (review UX 1)
+      if (fromCash.length) { const many = fromCash.length > 1; out.push(`${listWords(fromCash.map((x) => `${x.name} (about ${money(x.amount)} by ${dayWords(x.due)})`))} ${many ? "are" : "is"} due sooner than a month can save for ${many ? "them" : "it"}. Your usable cash, about ${money(liq.now)}, covers ${many ? "them" : "it"}: pay ${many ? "them" : "it"} from savings when ${many ? "they are" : "it is"} due.`); }
+      // a date that has passed (review UX 4): a college goal points to Education's next bill for that child ("$103,000 is due
+      // now" stood against Education's $25,850); the others say what to do on Goals, never "mark it done" where no button does it
+      const bills = collegeBills(plan, today, goalsDueNow);
+      for (const g of goalsDueNow) {
+        const c = bills.get(g.id);
+        out.push(g.status !== "past due" ? `${g.name} is due this month, and about ${money(g.remaining)} is still needed.`
+          : c ? `${g.name}: its date has passed. ${collegeWords(c, money)}`
+          : `${g.name}: its date has passed, with about ${money(g.dueNow ?? g.remaining)} still to go. Set a new date for it on Goals, or lower its amount if less is needed.`);
+      }
+      gs.detail = out.join(" ");
+    }
+    if (gs?.goalPlan) delete gs.goalPlan;
   }
   // the spending is mostly our guesses: no step is dated or given a monthly figure from the spare money (spec 8.1: "once
   // your spending is in"); what savings or the cash kept for tax pays today stays
@@ -419,6 +617,113 @@ export function compute(plan, params = {}) {
   if (next) for (const s of steps) if (s !== next && s.status === "now") s.status = "later";
   return { ready: true, missing: [], spare, steps, next, drawing, debtPlan };
 }
+
+/** A share as words: 1 -> "100%", 0.03 -> "3%", 0.045 -> "4.5%". */
+const share = (x) => `${Number((x * 100).toFixed(1))}%`;
+/** Match tiers as words: "100% of what Jasmine puts in, up to 3% of pay" (then ", then 50% up to 5%" for a second tier). */
+function tierWords(tiers, name) {
+  const t = [...(tiers ?? [])].filter((x) => x.rate > 0 && x.upTo > 0).sort((a, b) => a.upTo - b.upTo);
+  if (!t.length) return "";
+  return `${share(t[0].rate)} of what ${nameIn(name)} ${verbFor(name, "puts", "put")} in, up to ${share(t[0].upTo)} of pay${t.slice(1).map((x) => `, then ${share(x.rate)} up to ${share(x.upTo)}`).join("")}`;
+}
+/** The common match the words name (Work benefits' DEFAULT_TIERS: 50% on the first 6% of pay, Vanguard How America Saves 2025, Figure 8). */
+const COMMON = `${share(DEFAULT_TIERS[0].rate)} of what you put in up to ${share(DEFAULT_TIERS[0].upTo)} of pay`;
+
+/**
+ * freshMatch(plan, person, today) -> { kind, match } for a paid adult with no 401(k) on file (round 8 item 1).
+ * kind: "known" (match tiers typed on Work benefits, `whatIfs.benefits[id].matchTiers`), "plan" (said yes, there is a plan
+ * with a match: `retirement.workPlans[id].match === true`, Get started's question), else "ask".
+ * match: Work benefits' own figures for this person (career/benefits compute with them chosen, `paycheck: false`): { tiers,
+ * pct (the share of pay that gets all of it), yearly (what goes in a year), perCheck, take (what take-home pay falls by a
+ * paycheck: the amount less the federal and state income tax it saves; Social Security and Medicare still apply, IRC
+ * 3121(v)(1)(A)), match (the employer's money a year), paychecks, planYear } -- the typed tiers, else the common match;
+ * null when Work benefits cannot see this person's pay (a bonus with no salary).
+ */
+export function freshMatch(plan, person, today) {
+  const tiers = plan.whatIfs?.benefits?.[person.id]?.matchTiers;
+  const known = Array.isArray(tiers) && tiers.some((x) => Number(x.rate) > 0 && Number(x.upTo) > 0);
+  const kind = known ? "known" : plan.retirement?.workPlans?.[person.id]?.match === true ? "plan" : "ask";
+  let b = null;
+  try { b = computeBenefits({ ...plan, whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...(plan.whatIfs?.benefits ?? {}), personId: person.id } } }, { today, paycheck: false }); } catch { b = null; }
+  const o = b?.ready && b.person?.id === person.id ? b.k401.options.find((x) => x.key === "match") : null;
+  const match = o ? { tiers: b.k401.tiers, pct: o.pct, yearly: o.yearly, perCheck: o.perCheck, take: o.costPerCheck, match: b.k401.fullMatch, paychecks: b.paychecks, planYear: b.planYear } : null;
+  return { kind, match };
+}
+
+/** The match step's words for adults with no 401(k) on file: the answer when the match is typed, else the question. */
+function freshWords(fresh, { exact, money }) {
+  const out = [];
+  for (const x of fresh.filter((y) => y.kind === "known" && y.match)) out.push(`${NameOf(x.p.name)} employer adds ${tierWords(x.match.tiers, x.p.name)}: put in ${share(x.match.pct)} (${exact(x.match.perCheck)} a paycheck, about ${exact(x.match.take)} less take-home pay) to get ${exact(x.match.match)} a year.`);
+  for (const x of fresh.filter((y) => y.kind === "plan" || (y.kind === "known" && !y.match))) out.push(`${NameOf(x.p.name)} job has a retirement plan with a match: ask human resources at work how much it adds.${x.match ? ` With a common match, ${COMMON}, putting in ${share(x.match.pct)} (${exact(x.match.perCheck)} a paycheck) would get ${money(x.match.match)} a year.` : ""} Put in at least enough to get all of it.`);
+  const ask = fresh.filter((y) => y.kind === "ask");
+  if (ask.length) {
+    const jobs = ask.map((y) => `${nameOf(y.p.name)} job`);
+    const worth = ask.filter((y) => y.match);
+    // "about $1,740 a year for Priya and $1,920 for Tom"; one person: "about $1,500 a year"
+    const each = worth.length === 1 && ask.length === 1 ? ` would be about ${money(worth[0].match.match)} a year` : worth.length ? ` would be about ${listWords(worth.map((y, i) => `${money(y.match.match)}${i ? "" : " a year"} for ${nameIn(y.p.name)}`))}` : ` adds ${share(DEFAULT_TIERS[0].rate * DEFAULT_TIERS[0].upTo)} of pay a year`;
+    out.push(`Does ${jobs.length > 1 ? `${jobs.slice(0, -1).join(", ")} or ${jobs[jobs.length - 1]}` : jobs[0]} match retirement savings? Ask human resources at work, or look on ${ask.length > 1 ? "each" : "the"} job's benefits site. A common match, ${COMMON},${each}.`);
+  }
+  return out.join(" ");
+}
+
+/**
+ * rmdNow(plan, { today }) -> this year's required withdrawals still to take (Required withdrawals' thisYear(plan).due), each with
+ * what must come out by its deadline: [{ ...that person's entry, amount, accounts, estimated (of the accounts that must pay it
+ * now), waits: [the 401(k)s at the job they still work at] }], only those with an amount left.
+ * A workplace plan's own required withdrawal can wait until the year its owner retires from that job (IRC 401(a)(9)(C); IRS,
+ * Retirement plan and IRA required minimum distributions FAQs, read 2026-11-06: "Retirement plan account owners can delay
+ * taking their RMDs until the year in which they retire", not a 5% owner); an IRA's cannot. The 401(k) at the job is one not
+ * marked as from a job left (`formerJob`), as everywhere else; each account's part is its balance / the Uniform Lifetime
+ * factor (core/math/rmd.js), as Required withdrawals works it (review D5: a still-working 75-year-old was told to take $16,260
+ * when $4,065 was due, from the IRA).
+ */
+export function rmdNow(plan, { today }) {
+  const out = [];
+  for (const r of rmdThisYear(plan, { today }).due) {
+    const atJob = (a) => !!r.working && a.type === "401k" && !(plan.accounts ?? []).find((x) => x.id === a.id)?.formerJob;
+    const waits = r.accounts.filter(atJob), now = r.accounts.filter((a) => !atJob(a));
+    if (!waits.length) { out.push({ ...r, waits }); continue; }
+    const amount = Math.round(now.reduce((t, a) => t + rmdAmount(a.balance, r.age), 0));
+    if (amount >= 1) out.push({ ...r, amount, accounts: now, estimated: now.some((a) => a.estimated), waits });
+  }
+  return out;
+}
+/**
+ * collegeBills(plan, today, goals) -> Map(goal id -> { amount, label, due }): for each past-due college goal of a child already
+ * in college, Education's next bill for that child (its nextYearCost, the label of what it is for, its date), the figure its
+ * own Update button writes (review UX 4: "$103,000 is due now" stood against Education's $25,850). Education is worked out
+ * only when there is such a goal.
+ */
+export function collegeBills(plan, today, goals) {
+  const out = new Map();
+  if (!(goals ?? []).some((g) => g.status === "past due" && plannerFor(g)?.page === "goals/education")) return out;
+  let edu = null;
+  try { edu = computeEducation(plan, { today }); } catch { return out; }
+  for (const c of edu?.children ?? []) if (c.goal?.id && c.started && c.left?.length) out.set(c.goal.id, { amount: c.nextYearCost, label: c.left[0].part === "spring" ? `the spring half of ${c.left[0].label}` : c.left[0].label, due: c.nextBill });
+  return out;
+}
+/** "Education says the next bill is about $12,930 (the spring half of 2026-27, due January 15, 2027): tap Update on Education to set this goal to it." */
+export const collegeWords = (c, money) => `Education says the next bill is about ${money(c.amount)} (${c.label}, due ${dayWords(c.due)}): tap Update on Education to set this goal to it.`;
+/**
+ * leftWords(nba, currency) -> what the month has left now, in one sentence, for the confirmation after a change that takes from
+ * take-home pay (Contributions' and Work benefits' one-tap 401(k) start, review D2: the renter's month went $80 short with no
+ * word): spare, just about even (within $5), or short with the way out; while the spending is mostly our guesses, said so.
+ */
+export function leftWords(nba, cur = "USD") {
+  if (!nba?.ready) return "";
+  const m = nba.spare.monthly, dollars = (n) => fmtMoney(Math.round(n), cur);
+  if (nba.spare.waits) return `With our guesses of your spending, each month would have about ${dollars(Math.abs(m))} ${m < 0 ? "too little" : "left"}.`;
+  if (m >= 5) return `Each month now has about ${dollars(m)} left after tax, spending and saving.`;
+  if (m > -5) return "Each month now just about breaks even.";
+  return `Each month is now about ${dollars(-m)} short: ${nba.spare.debtExtra > 0.5 ? `lower the ${dollars(nba.spare.debtExtra)} extra on debts (Pay off debts) or trim spending` : "trim spending"} to make up for it.`;
+}
+/** The 401(k) that waits, said: "Ana's 401(k) at the job now (Work 401(k)) can usually wait until Ana retires (...)." */
+export function waitWords(r) {
+  if (!r.waits?.length) return "";
+  return ` ${NameOf(r.name)} ${r.waits.length > 1 ? "401(k)s" : "401(k)"} at the job now (${listWords(r.waits.map((a) => a.name))}) can usually wait until ${nameIn(r.name)} ${verbFor(r.name, "retires", "retire")} (check the plan's rules; not if ${nameIn(r.name)} ${verbFor(r.name, "owns", "own")} 5% or more of the business).`;
+}
+/** An account's name as a place money comes from: "Ruth's retirement" reads as a life stage, so "account" is added to a name that does not say what it is. */
+export const accountWords = (n) => (/\b(account|ira|401|403|457|tsp|plan|roth|fund)/i.test(String(n ?? "")) ? n : `${n} account`);
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 /** "2028-01-15" -> "January 2028" (pure: no locale). */

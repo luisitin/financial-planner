@@ -1353,3 +1353,151 @@ test("the first adult left unnamed (\"Me\"): sayName and sayWhose are core/words
   assert.ok(g && /^No life insurance on your spouse: you and Cy would be about/.test(g.title), g?.title);
   assert.doesNotMatch(`${g.title} ${g.sentence}`, /\bMe\b|My spouse/);
 });
+
+// Round 8 item 14 (couple-home-4): a childless two-income couple whose plan is short for retirement either way is not told to
+// buy life insurance first; "on track" is never said next to "runs out"; federal student loans end with the borrower
+/** Two earners, no children (invented, as the round-8 tester's plan): the older retires two years before the household does. */
+function twoEarners({ payA = 58000, payB = 64000, cash = 25000, loan = 64000 } = {}) {
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-a", name: "Priya", role: "self", birthDate: "1997-03-15" }, { id: "p-b", name: "Tom", role: "partner", relation: "spouse", birthDate: "1995-08-15" }], filingStatus: "married_joint", state: "NC" };
+  p.income = [{ id: "i-a", name: "Pay", type: "salary", personId: "p-a", amount: payA, period: "annual", growth: 0, taxable: true }, { id: "i-b", name: "Pay", type: "salary", personId: "p-b", amount: payB, period: "annual", growth: 0, taxable: true }];
+  p.accounts = [{ id: "a-sav", name: "Savings", type: "savings", balance: cash, ownerId: "", history: [] }, ...(loan ? [{ id: "a-sl", name: "Student loans", type: "student_loan", balance: loan, ownerId: "", history: [] }] : [])];
+  p.debts = loan ? [{ id: "d-sl", accountId: "a-sl", rate: 0.065, minPayment: 727, extra: 0 }] : [];
+  p.expenses = [{ id: "e-home", name: "Rent", category: "housing", amount: 2100, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 900, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 950, period: "monthly", essential: false }];
+  p.retirement = { ...p.retirement, spendingMonthly: 3950, socialSecurity: { "p-a": { monthlyAtFRA: 2324 }, "p-b": { monthlyAtFRA: 2484 } } };
+  return p;
+}
+const R8 = "2026-11-06";
+
+test("round 8 item 14: a childless couple whose plan is short either way: the cover is said for what it is, and it is not the first move", async () => {
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const { protectionGaps } = await import("./compute.js");
+  // (review D1: the second household of this test, with $0 saved, now needs the funeral; see "the funeral alone" below)
+  // (round 8 verify, 2026-11-06: the need is the calendar one again: Tom alone retires in 2060 and runs out then, the plan
+  // together in 2062, two years of Tom's retirement Priya's pay would have carried: $28,000. Item 14's ask is kept in the
+  // words and the order: the plan is short either way, and the cover is not the first move)
+  for (const p of [twoEarners()]) {
+    const d = compute(p, { today: R8 });
+    assert.ok(d.people.every((x) => x.plan && x.plan.eitherWay === true), "the plan together is short either way");
+    assert.deepEqual(d.people.map((x) => [x.name, x.need, x.gap]), [["Priya", 28000, 28000], ["Tom", 0, 0]]);
+    const g = protectionGaps(p, { today: R8 });
+    assert.deepEqual(g.map((x) => [x.name, x.gap, x.eitherWay]), [["Priya", 28000, true]]);
+    assert.match(g[0].sentence, /lasting as long as your plan together's; your plan is short for retirement either way/);
+    const n = nba(p, { today: R8 });
+    const ids = n.steps.map((s) => s.id);
+    assert.notEqual(n.next?.id, "protect");
+    assert.ok(ids.indexOf("protect") > ids.indexOf("high-debt") && ids.indexOf("protect") > ids.indexOf("match"), ids.join(","));
+  }
+});
+
+test("round 8 item 14: federal student loans are not a debt the family keeps (34 CFR 685.212(a)); a private one is", () => {
+  // (review D4: only the borrower's own death cancels it, so the loan is Priya's here and both deaths are checked)
+  const p = twoEarners();
+  p.accounts.find((a) => a.id === "a-sl").ownerId = "p-a";
+  assert.deepEqual(compute(p, { today: R8 }).people.map((x) => x.dime.debts), [0, 64000]);
+  p.debts[0].private = true;
+  assert.deepEqual(compute(p, { today: R8 }).people.map((x) => x.dime.debts), [64000, 64000]);
+});
+
+test("round 8 item 14: the page never says 'on track' next to a plan that runs out", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, replaceChildren(...k) { x.kids = []; x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const root = node("root"), plan = twoEarners();
+  render(root, { ui, fmt: { ...fmt, today: () => R8 }, plan, store: { update() {} }, computeOf: () => null, computeRemote: (key, prm) => Promise.resolve(compute(plan, prm)) });
+  await new Promise((r) => setTimeout(r, 0));
+  const text = root.textContent.replace(/\s+/g, " ");
+  assert.doesNotMatch(text, /on track/);
+  // (round 8 verify: Priya's $28,000 is back, said as what it buys; no policy on file: not "Your family is covered" either)
+  assert.match(text, /to last as long as your plan together does/);
+  assert.match(text, /going as long as your plan together's, which runs out in 2062 either way/);
+  assert.doesNotMatch(text, /is covered/);
+});
+
+// Round 8 batch 2 review (money D1, 2026-11-06): "no children, no living-cost gap, short either way" is not "the death changes
+// nothing". The living-cost gaps stop at the survivor's retirement, so a survivor already retired has none at all, and they never
+// see the pay, saving or pension the death takes after it. Only the either-way test decides (as late a calendar year, or as many
+// years of retirement as the plan together): it still gives $0 for the round-8 tester's couple (test above) and keeps these.
+test("round 8 review D1: a childless couple short either way still needs cover when the death makes the survivor run out sooner (qa households)", async () => {
+  const { ARCHETYPES, COMMON_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const qa = (id, pack, slug) => { const p = ARCHETYPES.find((a) => a.id === id).build(); COMMON_PACKS[pack].find((v) => v.slug === slug).apply(p); return migrate(p); };
+  // Priya (born 1961) retires today; Tom, 37, earns $70,800: if Tom dies, Priya runs out in 2029, the plan together in 2058
+  const a = compute(qa("02-couple-no-kids", "ages-and-dates", "turns-retirement-age-today"), { today: R8 });
+  const tom = a.people.find((x) => x.name === "Tom");
+  assert.equal(tom.plan.eitherWay, true);
+  assert.equal(tom.need, 1038000);
+  // retired, no children: if Sam dies, his pension and part of the rent stop, and Ruth runs out in 2038 (the plan together 2045)
+  const b = compute(qa("08-retired", "debts", "extra-bigger-than-balance"), { today: R8 });
+  const sam = b.people.find((x) => x.name === "Sam");
+  assert.equal(sam.plan.eitherWay, true);
+  assert.equal(sam.need, 225000);
+});
+
+test("round 8 review D1: with $0 saved, the funeral alone is a need even when the plan is short either way", () => {
+  const d = compute(twoEarners({ payA: 60000, payB: 60000, cash: 0, loan: 0 }), { today: R8 });
+  assert.deepEqual(d.people.map((x) => [x.name, x.need]), [["Priya", 9000], ["Tom", 9000]]);
+});
+
+// Round 8 batch 2 review (money D4): a federal loan is discharged only on its own borrower's death (34 CFR 685.212(a)(1), read
+// 2026-11-06: "If a borrower ... dies, the Secretary discharges the obligation of the borrower"); a spouse's death cancels
+// nothing the survivor owes. A loan with no owner in a two-adult household may be either one's, so it stays in for both.
+test("round 8 review D4: a federal student loan leaves the debts only for its own borrower's death", () => {
+  const p = twoEarners({ loan: 50000 });
+  p.accounts.find((a) => a.id === "a-sl").ownerId = "p-b";   // Tom's loan
+  const d = compute(p, { today: R8 });
+  assert.deepEqual(d.people.map((x) => [x.name, x.dime.debts]), [["Priya", 50000], ["Tom", 0]]);
+  // no owner, two adults: it could be either one's, so it stays a debt for both deaths
+  p.accounts.find((a) => a.id === "a-sl").ownerId = "";
+  assert.deepEqual(compute(p, { today: R8 }).people.map((x) => x.dime.debts), [50000, 50000]);
+  // one adult: an unowned loan is theirs, and it ends with them
+  const one = twoEarners({ loan: 50000 });
+  one.household.people = one.household.people.slice(0, 1); one.income = one.income.slice(0, 1);
+  assert.equal(compute(one, { today: R8 }).people[0].dime.debts, 0);
+});
+
+// Round 8 batch 2 review (UX 5): a green "No life cover needed for this" sat over "With or without cover, Tom's money would run
+// out at about 65", and "with or without cover" is not true of any cover, only of the $0 worked out
+test("round 8 review UX 5: short either way: the verdict is not green and the warning says a death does not make it shorter", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const node = (tag, kids = [], attrs = {}) => { const x = { tag, attrs, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, replaceChildren(...k) { x.kids = []; x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const all = (n, out = []) => { if (n && typeof n === "object") { out.push(n); for (const k of n.kids ?? []) all(k, out); } return out; };
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k], isAttrs(a) ? a : {}), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t], { level: lv }), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const root = node("root"), plan = twoEarners();
+  render(root, { ui, fmt: { ...fmt, today: () => R8 }, plan, store: { update() {} }, computeOf: () => null, computeRemote: (key, prm) => Promise.resolve(compute(plan, prm)) });
+  await new Promise((r) => setTimeout(r, 0));
+  const verdicts = all(root).filter((n) => String(n.attrs?.class ?? "").startsWith("ln-verdict"));
+  assert.ok(verdicts.length >= 2, "a verdict on each card");
+  // (round 8 verify: Priya's death leaves Tom $28,000 short of the plan together's run-out; Tom's leaves Priya none short)
+  const none = verdicts.filter((v) => /No life cover needed for this/.test(v.textContent));
+  assert.equal(none.length, 1, "Tom's card");
+  for (const v of none) assert.doesNotMatch(v.attrs.class, /\bok\b/);
+  const text = root.textContent.replace(/\s+/g, " ");
+  assert.doesNotMatch(text, /With or without cover/);
+  assert.match(text, /if Tom died, and so would your plan together: a death does not make it run out sooner, so life cover is not the fix/);
+});
+
+// Round 8 verify (2026-11-06): "as many years of retirement, each from its own retirement start" was also taken as "as well".
+// A survivor who retires years before the household's retirement year (the first adult's) then had the years the dead
+// partner's pay would have carried counted as retirement the plan together had too. A childless couple: Priya 40, retiring
+// in 2053; Tom 54, retiring at 60 in 2032. The plan together runs out in 2051. If Priya died, the page said "no life cover
+// needed" while Tom alone runs out in 2032, at 60.
+test("round 8 verify: with the cover the page asks for, a survivor who retires first never runs out before the plan together", () => {
+  const p = twoEarners({ payA: 90000, payB: 80000, cash: 60000, loan: 0 });
+  p.household.people = [{ id: "p-a", name: "Priya", role: "self", birthDate: "1986-03-15" }, { id: "p-b", name: "Tom", role: "partner", relation: "spouse", birthDate: "1972-08-15", retirementAge: 60 }];
+  p.expenses = [{ id: "e-home", name: "Rent", category: "housing", amount: 2400, period: "monthly", essential: true }, { id: "e-food", name: "Food", category: "groceries", amount: 1100, period: "monthly", essential: true }, { id: "e-fun", name: "Fun", category: "fun", amount: 1500, period: "monthly", essential: false }];
+  p.retirement = { ...p.retirement, spendingMonthly: undefined, socialSecurity: { "p-a": { monthlyAtFRA: 2600 }, "p-b": { monthlyAtFRA: 2400 } } };
+  const d = compute(p, { today: R8 });
+  const priya = d.people.find((x) => x.name === "Priya");
+  assert.equal(priya.plan.eitherWay, true);
+  assert.ok(priya.need > 100000, String(priya.need));
+  // with exactly that cover on Priya, Tom lasts as long as the plan together does
+  const q = structuredClone(p);
+  q.insurance = { ...(q.insurance ?? {}), policies: [{ id: "t1", kind: "term", name: "Term", personId: "p-a", benefit: priya.need, premium: 0, period: "monthly" }] };
+  const w = compute(q, { today: R8 }).people.find((x) => x.name === "Priya").plan.withCover;
+  assert.ok(w.success || w.failYear >= priya.plan.jointFailYear, `Tom runs out ${w.failYear}, the plan together ${priya.plan.jointFailYear}`);
+});

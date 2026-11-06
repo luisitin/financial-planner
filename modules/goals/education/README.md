@@ -31,3 +31,56 @@
 
 ## Tests
 `module.test.mjs`: the prices, no children, Cy's years and costs by hand (at the first bill, the monthly needed, the share covered, the goal found), per-child settings (private, half, five years, custom) and 529 accounts without a goal; the whole-word tie ("Education fund" with Ed and Ann, "University fund" with Ty, "Ed's college", a 529 account not named for a child shared), a "Cy 529" goal, `shownAmount`; the one-child fallback skipping a goal that names someone else ("Mia college" with Mia undated, listed first or second, or alone; "Ana's night school" listed first).
+
+## Round 8 (2026-11-06): children already in college (item 18, equity-5)
+For a child whose college has begun (`started`), the page led with "0% covered" and its goal button wrote the first bill's
+date (2023-08-15), so Goals read "$105,576 needed each month". Now:
+- A school year runs from its fall bill (August 15 of its first year) to its spring bill (January 15 of the next): `BILLS`.
+  `left` = the school years still to pay: those whose spring bill is still ahead (a year that has begun counts in full,
+  since what is paid of it is not known; the page says to take off what is). `stillToPay` = their cost x the share;
+  `nextBill` = the spring bill of a year under way, else the next year's fall bill; `nextYearCost` = the first year left x
+  the share; `finished` once none is left. These are only on a child whose college has begun.
+- The equity household on 2026-11-06: Child 2 (from 2023) has 2026-27 left: $25,850 (the page's 2025-26 price, College
+  Board Trends 2025, $11,950 + $13,900; prices start rising from the year after `COST_YEAR` + 1, as before), next bill
+  January 15, 2027. Child 1 (from 2025): 2026-27, 2027-28, 2028-29 = 25,850 + 26,884 + 27,959 = $80,693.
+- The card leads with "Still to pay" and "Next bill"; the button makes or updates the goal for the next school year
+  ("Child 1's college, 2026-27"): its cost (to the $10), dated at its next bill, in that year's dollars (`inflates: false`),
+  never a past date; a name this page wrote for an earlier year moves on to the current one.
+- The FAFSA (`fafsa`: the next school year still to begin, once its form is open or opens within 12 months): the form for a
+  school year must open by October 1 of the year before it (20 U.S.C. 1090(d)(4)(A), read 2026-11-06; the 2027-28 form
+  opened September 23, 2026). "The free federal student aid form for 2027-28 is open now at studentaid.gov: it decides grants,
+  work-study and federal student loans, and some aid goes to those who file first." (the FAFSA, spelled out on screen)
+- The American Opportunity tax credit (`aotc`), only with a student in the first four years of college this school year or
+  the next, not on a separate return, and only when the household's AGI (the Federal estimate's) is under the limit: up to
+  $2,500 a year per student, for four years, shrinking from $80,000 to $90,000 of modified AGI ($160,000 to $180,000 on a
+  joint return), none on a separate return (IRS Publication 970 (2025), chapter 2; IRC 25A(b), (d); read 2026-11-06; the
+  ranges are the law's own, not indexed). `status` "full" up to the lower figure, "partial" in the range. The equity
+  household's $213,000 AGI is over $180,000: nothing is said.
+Tests: module.test.mjs "round 8 item 18".
+
+## Round 8 batch 2 review fixes (2026-11-06)
+Tests: module.test.mjs "round 8 review" and the updated item 18 tests.
+- **The spring half (money D7).** By the page's own two-bill model (`BILLS`: August 15 and January 15, half a school year on
+  each), once a year's fall bill has come due what is left of it is the spring half: its `left` entry is `{ cost: year's cost
+  / 2, part: "spring" }`, so `stillToPay`, `nextYearCost` (now "what is left of the first year x share", the next bill's
+  amount) and the goal button follow. The page says so: "The August bill for 2026-27 is taken as paid; the spring half, about
+  $12,930, is due by January 15, 2027." Equity, 2026-11-06: Child 2 has 25,850 / 2 = $12,925 left (shown $12,930); Child 1
+  12,925 + 25,850 x 1.04 + 25,850 x 1.04^2 = $67,768.36. Before the fall bill, the whole year is ahead, due from it.
+- **One goal for each child (UX 1).** `generic`: an education goal naming nobody in the household and no child's own (Get
+  started's "Education"), not reached. With it, a child in college's card offers `Use "Education" for Child 2` first: that goal
+  becomes the child's (its name, the next bill's amount and date; its id, what is set aside and what goes in kept), so college
+  is not counted twice; "Add a new goal instead" is the other choice.
+- Pre-existing, not changed: a school year is priced at the year before's published price (`COST_YEAR` + 1 is "this year's").
+  The 2026-27 year costs the 2025-26 price here; at 4% it would be 25,850 x 1.04 (the owner's call; no golden key covers it).
+
+## Round 8 verify (2026-11-06)
+Tests: module.test.mjs "round 8 verify".
+- **A goal naming nobody is offered to a child in college only while every child has begun college.** With a younger child
+  still to start, "College fund" ($150,000 by 2036, $20,000 saved) is most likely that child's; the filled button
+  `Use "College fund" for Child 1` turned it into the older child's spring bill ($12,930 by January 15, 2027) with its saving.
+  The equity family (both children in college) still gets the offer.
+- **A school year is priced as its own.** `left` (still to pay, the next bill) prices each school year y at
+  published x (1 + growth)^max(0, y - COST_YEAR - 1), the same as `costs` for a year still ahead; `costs` priced a year
+  already begun at this calendar year's price, so on January 1 the spring half of 2026-27 rose from $12,925 to $13,442 for the
+  same January 15 bill. A typed (custom) price is used as typed, as before. `costs`, `total`, `totalToday` and `atStart` are
+  unchanged.
