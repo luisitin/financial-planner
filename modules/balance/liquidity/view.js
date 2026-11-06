@@ -18,7 +18,11 @@ export function render(root, ctx) {
   // Whole months; one decimal only under 2 months, where the difference matters (design log 2026-09-15).
   const months = (m) => m === null ? "-" : m >= 100 ? "100+" : m < 2 ? (Math.round(m * 10) / 10).toString() : String(Math.round(m));
   const monthsOf = (m) => `${months(m)} month${months(m) === "1" ? "" : "s"}`;
-  // amounts that rest on our guesses of the must-pay bills: to $100, as Next best action and Get started's cushion say them
+  // amounts that rest on our guesses of the bills you have to pay: to $100, as Next best action and Get started's cushion say them
+  // "About 0 months" says nothing: with our guesses of the bills, no cash at all is "none yet", under a month is "under 1 month"
+  const aboutMonths = (m) => (m === null ? "-" : m < 0.05 ? "None yet" : m < 1 ? "Under 1 month" : `About ${monthsOf(m)}`);
+  const targetNote = () => ui.h("div", { class: "muted small" }, ui.h("p", { style: { margin: "0" } }, `The target is ${d.targetMonths} months of the bills you have to pay.`),
+    ui.h("div", { class: "lq-links" }, ui.h("a", { href: "#/system/assumptions", class: "lq-link" }, "Change how many months \u203a"), ui.h("a", { href: "#/cashflow/expenses", class: "lq-link" }, "Choose which bills you have to pay \u203a")));
   const billMoney = (n) => fmt.money(d.waits ? Math.round(n / 100) * 100 : n, cur);
 
   if (!d.accounts.length) {
@@ -41,8 +45,8 @@ export function render(root, ctx) {
     const mv = ctx.computeOf?.("overview/setup", { today, screen: "done" })?.standing?.moves?.[0] ?? null;
     const done = step && step.status === "done";
     const lead = was.text ?? "Saved.";
-    const text = done ? `${lead} ${was.step === "starter" ? "One month of must-pay bills is covered" : `${d.targetMonths} months of must-pay bills are covered`} ✓`
-      : `${lead} Your cash now covers ${monthsOf(d.runwayMonths)} of must-pay bills${step?.gap ? `; ${fmt.money(step.gap, cur)} more to go` : ""}.`;
+    const text = done ? `${lead} ${was.step === "starter" ? "One month of the bills you have to pay is covered" : `${d.targetMonths} months of the bills you have to pay are covered`} ✓`
+      : `${lead} Your cash now covers ${monthsOf(d.runwayMonths)} of the bills you have to pay${step?.gap ? `; ${fmt.money(step.gap, cur)} more to go` : ""}.`;
     const n = ui.notice("ok", text);
     if (done && mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
     root.append(n);
@@ -84,8 +88,8 @@ export function render(root, ctx) {
     moveCard = ui.h("section", { class: "card", "aria-labelledby": "lq-move-h" },
       ui.h("h2", { id: "lq-move-h" }, move.id === "starter" ? "Your next move: one month of bills in cash" : `Your next move: ${d.targetMonths} months of bills in cash`),
       ui.h("p", {}, move.id === "starter"
-        ? `${billMoney(move.gap)} more in cash you can use gets you to one month of must-pay bills (${billMoney(essential)}${d.waits ? ", by our guesses of them" : ""}).${when}`
-        : `${billMoney(move.gap)} more in cash you can use gets you to ${d.targetMonths} months of must-pay bills (${billMoney(d.target)}${d.waits ? ", by our guesses of them" : ""}).${when}`),
+        ? `${billMoney(move.gap)} more in cash you can use gets you to one month of the bills you have to pay (${billMoney(essential)}${d.waits ? ", by our guesses of them" : ""}).${when}`
+        : `${billMoney(move.gap)} more in cash you can use gets you to ${d.targetMonths} months of the bills you have to pay (${billMoney(d.target)}${d.waits ? ", by our guesses of them" : ""}).${when}`),
       efGoal ? ui.h("div", { class: "notice info", style: { marginTop: "10px" } },
         ui.h("p", { style: { margin: 0 } }, `Your "${efGoal.name}" goal saves in ${(efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean).join(" and ")}, so that money counts as set aside for the goal, not as your cushion. If that goal is your cushion, count it:`),
         ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Count "${efGoal.name}" as my cushion`, () => {
@@ -99,19 +103,19 @@ export function render(root, ctx) {
   const later = (d.status === "bad" || d.status === "warn") ? cushionLater(nba) : null;
   const statusText = later ? "enough for now" : { ok: "covered", warn: "getting there", bad: "thin", unknown: "" }[d.status];
   // The fund card comes first with the months as the headline; the tiles follow.
-  // While the must-pay bills are mostly our guesses (d.waits, spec 8.1) the months are said "about", to one decimal, by our
+  // While the bills you have to pay are mostly our guesses (d.waits, spec 8.1) the months are said "about", to one decimal, by our
   // guesses, with no pill and a calm bar: no green, amber or red, and no money move, rests on figures the person never gave.
   if (d.target && d.waits) {
     // (whole months, one decimal under 2: the owner's rule for this page, DESIGN_LOG 2026-09-15 round 13)
     root.append(ui.card("Emergency fund",
       ui.h("div", { class: "fund-head" },
-        ui.h("div", {}, ui.h("div", { class: "stat-value" }, `About ${monthsOf(d.runwayMonths)}`),
-          ui.h("div", { class: "muted small" }, `by our guesses of your must-pay bills; target: ${d.targetMonths} months`))),
+        ui.h("div", {}, ui.h("div", { class: "stat-value" }, aboutMonths(d.runwayMonths)),
+          ui.h("div", { class: "muted small" }, `by our guesses of the bills you have to pay; target: ${d.targetMonths} months`))),
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: "var(--muted)" } })),
-      ui.h("p", { class: "small" }, `Most of your must-pay bills are our guesses for now, so how many months your cash covers isn't known yet. Type your real bills and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`),
+      ui.h("p", { class: "small" }, `Most of the bills you have to pay are our guesses for now, so how many months your cash covers isn't known yet. Type your real bills and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Type your bills on Expenses \u203a")),
       d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of the cushion.`) : null,
-      ui.h("p", { class: "muted small" }, "The target is months x your must-pay expenses. Change the months on the Assumptions page; mark expenses as must-pay on the Expenses page."),
+      targetNote(),
     ));
   } else if (d.target) {
     const above = d.now - d.target;
@@ -121,21 +125,21 @@ export function render(root, ctx) {
           ui.h("div", { class: "muted small" }, `target: ${d.targetMonths} months (${fmt.money(d.target, cur)})`)),
         ui.h("span", { class: `pill ${d.status === "ok" ? "ok" : "warn"}` }, statusText)),
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: d.status === "ok" ? "var(--ok)" : d.status === "warn" || later ? "var(--warn)" : "var(--bad)" } })),
-      later ? ui.h("p", { class: "small" }, `Your usable cash covers ${monthsOf(d.runwayMonths)} of must-pay bills: enough for now. Your plan puts the money left over each month on costly debt first${later.until ? `; once it is paid off (about ${monthWords(later.until)})` : "; after that"} it builds this to ${d.targetMonths} months.`) : null,
+      later ? ui.h("p", { class: "small" }, `Your usable cash covers ${monthsOf(d.runwayMonths)} of the bills you have to pay: enough for now. Your plan puts the money left over each month on costly debt first${later.until ? `; once it is paid off (about ${monthWords(later.until)})` : "; after that"} it builds this to ${d.targetMonths} months.`) : null,
       later ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
       later ? null : ui.h("p", { class: "small" },
-        d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of must-pay bills; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
+        d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of the bills you have to pay; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
         : `Your usable cash covers ${months(d.runwayMonths)} of the ${d.targetMonths} months the plan aims for. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
       d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of the cushion. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue && !d.tax.paidTyped ? `No payments typed yet: type what you paid (if none, ${fmt.money(d.tax.overdue.amount, cur)} is past due)` : d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
-      ui.h("p", { class: "muted small" }, "The target is months x your must-pay expenses. Change the months on the Assumptions page; mark expenses as must-pay on the Expenses page."),
+      targetNote(),
     ));
   }
   if (moveCard) root.append(moveCard);
   root.append(ui.card(null, ui.row(
     ui.stat("Usable today", fmt.money(d.now, cur), [TIERS.now.desc, d.earmarked ? `${fmt.money(d.earmarked, cur)} more is set aside for goals` : null, d.taxOwed > 0.5 ? `${fmt.money(d.taxOwed, cur)} more is this year's tax, not paid yet` : null].filter(Boolean).join("; ")),
-    d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of must-pay bills after them` : ""}`) : null,
-    d.expenses ? ui.stat("Months of must-pay bills", d.waits ? `About ${months(d.runwayMonths)}` : months(d.runwayMonths), d.waits ? "by our guesses of your bills" : d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
-    d.target ? ui.stat("Emergency fund target", billMoney(d.target), d.waits ? `${d.targetMonths} months of must-pay bills, by our guesses of them` : `${d.targetMonths} months of must-pay bills; ${d.gap ? `${fmt.money(d.gap, cur)} to go` : "you have it"}`) : null,
+    d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of the bills you have to pay after them` : ""}`) : null,
+    d.expenses ? ui.stat("Months of bills covered", d.waits ? aboutMonths(d.runwayMonths) : months(d.runwayMonths), d.waits ? "by our guesses of your bills" : d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
+    d.target ? ui.stat("Emergency fund target", billMoney(d.target), d.waits ? `${d.targetMonths} months of the bills you have to pay, by our guesses of them` : `${d.targetMonths} months of the bills you have to pay; ${d.gap ? `${fmt.money(d.gap, cur)} to go` : "you have it"}`) : null,
     ui.stat("Sellable within a week", fmt.money(d.week, cur), TIERS.week.desc),
   )));
   for (const w of d.warnings) root.append(ui.notice("info", w));
@@ -150,7 +154,7 @@ export function render(root, ctx) {
         ui.h("span", { class: "st" }, fmt.money(a.balance, cur))))),
     ));
   }
-  root.append(ui.h("p", { class: "muted small" }, "Balances come from your accounts on the Net worth page."), ui.row(ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update my balances")));
+  root.append(ui.h("p", { class: "muted small" }, "Balances come from the accounts on ", ui.h("a", { href: "#/balance/net-worth", class: "lq-link" }, "What you own"), "."), ui.row(ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update my balances")));
   // scoped style for the fund headline row and the move's balance boxes
-  root.append(ui.h("style", {}, ".fund-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; } .fund-head .pill { margin-top: 6px; } .lq-row { display: block; margin-top: 8px; } .lq-name { display: block; font-weight: 600; margin-bottom: 4px; }"));
+  root.append(ui.h("style", {}, ".fund-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; } .fund-head .pill { margin-top: 6px; } .lq-links { display: flex; flex-direction: column; } .lq-link { display: inline-flex; align-items: center; min-height: 44px; } .lq-row { display: block; margin-top: 8px; } .lq-name { display: block; font-weight: 600; margin-bottom: 4px; }"));
 }

@@ -1,6 +1,6 @@
 // modules/retirement/projection/view.js -- DOM only. The verdict, the money over time, what the
 // plan assumes, and the settings that every retirement page shares (folded, saved with a green line).
-import { compute, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure } from "./compute.js";
+import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure } from "./compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
@@ -21,21 +21,25 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today(), showHealth: true });   // showHealth: with the box ticked, still say what cover would cost
   const rt = plan.retirement ?? {};
+  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 3px; margin: -14px 0; }"));
   const money = (n) => fmt.money(n, cur);
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Will the money last?"),
       ui.h("p", { class: "lede" }, "This page runs your plan year by year to the end: what you have, what you add, what Social Security and pensions bring in, what you spend, and what is left each year. It needs a few things first:"),
-      ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))),
+      ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, String(m).replace("your accounts on the Net worth page", "what you own (add your accounts)")))),
       ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Accounts"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses")),
     ));
     root.append(settingsCard(ctx, d));
     return;
   }
   // "(Contributions page)" and the like are links to that page, not plain text to go and find
-  const PAGES = { Contributions: "#/retirement/contributions", "Social Security": "#/retirement/social-security", Assumptions: "#/system/assumptions", Taxes: "#/taxes/federal" };
-  const linked = (text) => String(text).split(/\((Contributions|Social Security|Assumptions|Taxes) pages?\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part] }, `${part} page`), ")"] : part);
+  const PAGES = { "What you save for retirement": "#/retirement/contributions", "Social Security page": "#/retirement/social-security", "Numbers we assume": "#/system/assumptions", "Taxes pages": "#/taxes/federal" };
+  // (the links are 44 px tall: inline links on a phone are hard to hit)
+  const linked = (text) => String(text).split(/\((What you save for retirement|Social Security page|Numbers we assume|Taxes pages)\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part], class: "pj-link" }, part), ")"] : part);
+  // plain words for the way spending is carried: the engine's labels say "adjusted for inflation"
+  const plainWay = (label) => String(label).replace("adjusted for inflation", "in today's dollars").replace("Inflation-adjusted,", "Rising with prices,");
   // the line below is markets doing exactly as well as average every year; the careful figure (9 of 10 markets, from the
   // Monte Carlo page's engine) fills in under it once worked out (round 5, 2026-11-02: the average figure lasts in only
   // about 4 of 10 markets, and every page called it the most you could spend)
@@ -50,16 +54,19 @@ export function render(root, ctx) {
   // above stays the average-market verdict that the Dashboard, Quick answers, Timeline and Goal seek also show; review 2026-11-05)
   const fewer = (share) => (share !== null && share < CAREFUL_CHANCE ? ui.h("span", { class: "pill warn" }, "fewer than 9 in 10") : null);
   const careWords = (y, mo, share, shareN = null) => steady
-    ? ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}. At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of them (", ui.h("a", { href: "#/retirement/monte-carlo" }, "Chance the money lasts"), ").", fewer(shareN)]
-    : ["In 9 of 10 markets the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}, spent the same every year. Your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."];
+    ? ["Even in a bad run of years (only 1 in 10 is worse), the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}. At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of the runs we tried (", ui.h("a", { href: "#/retirement/monte-carlo", class: "pj-link" }, "Chance the money lasts"), ").", fewer(shareN)]
+    : ["Even in a bad run of years (only 1 in 10 is worse), the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}, spent the same every year. Your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy", class: "pj-link" }, "How much to take out"), ")."];
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
   const noCare = !(d.affordable >= 1);
-  const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts in 9 of 10 markets. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
+  const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts even in a bad run of years. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
   const careSub = `a year${onTop}, today's dollars; ${money(d.affordable)} if markets do as well as average`;
-  const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`) : ui.stat("Spending that lasts in 9 of 10 markets", "...", careSub));
-  const headline = ui.h("h1", {}, d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`);
+  const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`) : ui.stat("Spending that lasts, even in a bad run of years", "...", careSub));
+  // nothing saved for retirement is on file and the income alone does not carry the spending: the page cannot say the money
+  // runs out, only that it does not know yet (review UX 3: a 26-year-old who never mentioned savings read "Runs out in 2065")
+  const unknownYet = savingsUnknown(d);
+  const headline = ui.h("h1", {}, unknownYet ? "We don't know yet" : d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`);
   if (!noCare) whenCareful(ctx, careLine, (c) => {
     // nothing worked out, or nothing lasts in 9 of 10 markets even at $0: no careful line, the average figure named as such
     if (!c || !(c.yearly > 0)) { careLine.remove(); careStat.replaceChildren(ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
@@ -68,7 +75,7 @@ export function render(root, ctx) {
     careLine.removeAttribute("aria-busy");
     // the share rounded down, so a figure just under 9 in 10 never reads "90%" (review 2026-11-05)
     careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly)), `${Math.floor(c.planned * 100)}%`, c.planned).filter((x) => x !== null));   // replaceChildren writes a null as the text "null"
-    careStat.replaceChildren(ui.stat("Spending that lasts in 9 of 10 markets", money(c.yearly), careSub));
+    careStat.replaceChildren(ui.stat("Spending that lasts, even in a bad run of years", money(c.yearly), careSub));
   });
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,
   // or nobody ("nobody in the plan works now")
@@ -79,14 +86,15 @@ export function render(root, ctx) {
   const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
-    ui.h("p", { class: "lede" }, verdictText),
-    careLine,
+    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. ", ui.h("a", { href: "#/balance/net-worth", class: "pj-link" }, "What you own")) : ui.h("p", { class: "lede" }, verdictText),
+    unknownYet ? null : careLine,
     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
-    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${startWho}); the plan runs to ${d.atEnd.year}. Expected returns, ${STRATEGIES[d.strategy].toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`), ...(d.otherLeft?.length ? [" ", ...leftWords(ui, money, d.otherLeft)] : [])),
+    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${startWho}); the plan runs to ${d.atEnd.year}. Expected returns, ${plainWay(STRATEGIES[d.strategy]).toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`), ...(d.otherLeft?.length ? [" ", ...leftWords(ui, money, d.otherLeft)] : [])),
     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away
     ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›")),
   ));
-  root.append(ui.card(null, ui.row(
+  // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
+  if (!unknownYet) root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
     careStat,
     // all the income that comes in that year, named by what it is (recheck 2026-11-05: "Guaranteed income ... Social Security,
@@ -106,13 +114,13 @@ export function render(root, ctx) {
       // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
       ["People", d.people.map((p, i) => (rb.stopped && rb.id === p.id ? `${(i ? nameIn : NameIn)(p.name)}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : `${(i ? nameIn : NameIn)(p.name)}: ${verbFor(p.name, "retires", "retire")} at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
       ["Retirement money today", `${money(d.inputs.balances.cash + d.inputs.balances.taxable + d.inputs.balances.deferred + d.inputs.balances.free)}: ${money(d.inputs.balances.cash)} cash, ${money(d.inputs.balances.taxable)} taxable, ${money(d.inputs.balances.deferred)} pre-tax, ${money(d.inputs.balances.free)} tax-free`],
-      ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (Contributions page)` : "nothing entered (Contributions page)"],
+      ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (What you save for retirement)` : "nothing entered (What you save for retirement)"],
       // each line by its own name, with its ages or years (incomeWords: rent says "from 2033", never its owner's age)
       // the lines named for the unnamed first adult say "your Social Security": a capital only at the start of the record
       ["Income counted", d.inputs.incomes.length ? incomeWords(d.inputs, money).join("; ").replace(/^your /, "Your ") : "none entered (Social Security page)"],
       ...(d.otherLeft?.length ? [["Not counted", d.otherLeft.map((x) => `${x.name}: ${money(x.yearly)} a year, ${leftWhy(x)}`).join("; ")]] : []),
       ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" || d.health?.fromSetup ? ` (${d.health?.fromSetup ? "the figure from Get started" : "today's expenses"}${d.health?.removedMonthly > 0 ? `, less ${money(d.health.removedMonthly)} a month of health insurance` : ""})` : ""}${healthOn ? ", on top of health cover" : d.health?.included ? ", health cover included" : ""}`],
-      ["Growth and inflation", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, ${fmt.pct(d.inputs.rates.inflation, 1)} inflation (Assumptions page); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
+      ["Growth and rising prices", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, prices rising ${fmt.pct(d.inputs.rates.inflation, 1)} a year (Numbers we assume); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${d.orderLabel.toLowerCase()}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals from ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from pre-tax accounts; withdrawals ${d.orderLabel.toLowerCase()}; required withdrawals from ${d.inputs.rmd.startAge}`],
     ].flatMap(([k, v]) => [ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, linked(v))),
       // health cover right under the spending it goes on top of (by its name: the "Not counted" row comes and goes above it)

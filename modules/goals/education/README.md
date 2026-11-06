@@ -84,3 +84,6 @@ Tests: module.test.mjs "round 8 verify".
   already begun at this calendar year's price, so on January 1 the spring half of 2026-27 rose from $12,925 to $13,442 for the
   same January 15 bill. A typed (custom) price is used as typed, as before. `costs`, `total`, `totalToday` and `atStart` are
   unchanged.
+
+## Plain words (path part 3, 2026-11-06)
+"Prices have risen faster than inflation" reads "College prices have risen faster than prices in general". No figure changed.

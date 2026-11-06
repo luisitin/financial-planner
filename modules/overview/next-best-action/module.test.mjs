@@ -219,7 +219,7 @@ test("costly debt is paid from savings above the full cushion, today; only the r
   assert.ok(lq.nowAfterOneOffs - lq.target >= 6400, "the cash above six months covers the Visa");
   assert.equal(hd.fromSavings, 6400); assert.equal(hd.gap, 0); assert.equal(hd.doneDate, T);
   assert.equal(hd.title, "Pay off expensive debt from savings");
-  assert.match(hd.detail, /^Pay the Visa card's \$6,400 from savings now: you would still have [\d.]+ months of must-pay bills in cash \(the plan aims for 6\)\. Paying it is a sure 23\.9% return\./);
+  assert.match(hd.detail, /^Pay the Visa card's \$6,400 from savings now: you would still have [\d.]+ months of the bills you have to pay in cash \(the plan aims for 6\)\. Paying it is a sure 23\.9% return\./);
   // part of it: what is above the cushion now, the rest from the monthly left-over
   p.accounts.find((a) => a.id === "a-sav").balance = 48000;
   const l2 = liquidity(p, { today: T }), h2 = step(compute(p, { today: T }), "high-debt");
@@ -256,7 +256,7 @@ test("one cushion verdict: the starter month in cash and costly debt paid first 
   assert.ok(!al.some((a) => a.id === "emergency-bad" || a.id === "emergency-warn"), "no red 'thin' beside the plan's own order");
   const it = al.find((a) => a.id === "emergency-later");
   assert.equal(it.level, "info"); assert.equal(it.title, "Emergency fund: enough for now");
-  assert.match(it.detail, /^Usable cash covers 3 months of must-pay bills: enough for now\. Costly debt comes first; once it is paid off \(about \w+ \d{4}\), the plan builds this to 6 months\.$/);
+  assert.match(it.detail, /^Usable cash covers 3 months of the bills you have to pay: enough for now\. Costly debt comes first; once it is paid off \(about \w+ \d{4}\), the plan builds this to 6 months\.$/);
   assert.deepEqual(standing(p, { today: T }).cushionLater, later);
   // a saved debt plan on the card: the date is Pay off debts' own
   const q = familyPlan(T); q.accounts.find((a) => a.id === "a-sav").balance = 30000; q.debtPlan = { extra: 410, order: "avalanche", targets: ["a-visa"] };
@@ -686,9 +686,9 @@ test("round 8 item 3: a step after the goals says it gets what is left once the 
   const root = node("root");
   render(root, { ui, fmt: { ...fmt, today: () => T8 }, plan: couple(), store: { update() {} } });
   const text = root.textContent.replace(/\s+/g, " ");
-  assert.match(text, /more reaches 6 months of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d with what is left each month once the goals have theirs\./);
-  assert.doesNotMatch(text, /more reaches 6 months of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$/);
-  assert.match(text, /reaches one month of must-pay bills \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$[\d,]+ a month\./, "a step before the goals keeps its words");
+  assert.match(text, /more reaches 6 months of the bills you have to pay \(\$[\d,]+\)\. Done by about \w+ 20\d\d with what is left each month once the goals have theirs\./);
+  assert.doesNotMatch(text, /more reaches 6 months of the bills you have to pay \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$/);
+  assert.match(text, /reaches one month of the bills you have to pay \(\$[\d,]+\)\. Done by about \w+ 20\d\d at \$[\d,]+ a month\./, "a step before the goals keeps its words");
 });
 
 test("round 8 item 3: the emergency fund goal stays with the cushion steps; alone behind, the goals step is last and reads as before", () => {
@@ -842,7 +842,7 @@ test("round 8 review UX 1: a goal due within 3 months that the month cannot reac
   assert.match(g.detail, /New car needs about \$980 a month from now to be ready by June 2029\./);
   // the cushion counts what the bills take from the cash: $55,000 - $25,860 = $29,140, over the 6 months of $4,700 ($28,200)
   assert.equal(step(d, "full-fund").status, "done");
-  // with $20,000 of cash, one bill can come from it (keeping a month of must-pay bills, $4,700), the other stays a month's saving
+  // with $20,000 of cash, one bill can come from it (keeping a month of the bills you have to pay, $4,700), the other stays a month's saving
   const thin = collegeFamily(); thin.accounts[1].balance = 5000;
   assert.deepEqual(step(compute(thin, { today: T8 }), "goals").fromCash.map((x) => x.id), ["g-c1"]);
   // with $15,000, none: $10,300 above that month does not cover a bill

@@ -117,6 +117,8 @@ const ROW = {
   retire(S) {
     const a = S.retire(), st = S.st();
     if (!a) { const g = S.gap(); return open(g?.what ?? "your Social Security", g ? `#/${g.go.join("/")}` : "#/retirement/social-security"); }
+    // no retirement savings on file: calm and "not known yet", never "runs out"; it is not a gap that holds the plan unfinished
+    if (a.verdict === "unknown") return { value: "Not known yet", line: a.line, status: "calm", figure: a.headline, fixHref: "#/balance/net-worth" };
     const g = !!st?.retireGuessed;
     const value = a.verdict === "on track" ? "The money lasts" : a.verdict === "tight" ? "It lasts, just" : `Runs out at ${a.shortAge}`;
     const short = a.verdict === "on track" ? "the money lasts" : a.verdict === "tight" ? "the money lasts, just" : `the money runs out at ${a.shortAge}`;

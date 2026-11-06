@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildInputs, compute, BUCKET_OF } from "./compute.js";
 import { project } from "../../../core/math/retirement.js";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
@@ -1483,4 +1485,27 @@ test("C3 a retirement figure in the guesses' ledger is used as saved; the same f
   markGuess(p, "retirement.spendingMonthly", { key: "overview/setup:retireSpend", value: 4100, unit: "month", sigma: null, dataAsOf: "2026-11-02" }, H);
   const kept = buildInputs(p, { today: H });
   assert.equal(kept.setupMonthly, 4100); assert.equal(kept.health.fromSetup, live.health.fromSetup);
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ['Even in a bad run of years', "in today's dollars", 'What you save for retirement', 'pj-link']) assert.ok(view.includes(w), w);
+  for (const w of ['9 of 10 markets', 'Contributions page', 'Assumptions page']) assert.ok(!view.includes(w), w);
+});
+
+// review fix (UX 3): no retirement savings on file is "not known yet", never "runs out"
+test("part 3 review: savingsUnknown is true only with no investments, nothing added, retirement ahead and an income that does not carry the spending", async () => {
+  const { savingsUnknown } = await import("./compute.js");
+  const mk = (verdict, balances, contributions = [], atYear = 2060) => ({ ready: true, verdict, atRetirement: { year: atYear }, inputs: { startYear: 2026, balances: { cash: 9000, taxable: 0, deferred: 0, free: 0, ...balances }, contributions } });
+  assert.equal(savingsUnknown(null), false);
+  assert.equal(savingsUnknown({ ready: false }), false);
+  assert.equal(savingsUnknown(mk("short", {})), true, "only cash: not retirement savings");
+  assert.equal(savingsUnknown(mk("short", { deferred: 5000 })), false, "a retirement account on file");
+  assert.equal(savingsUnknown(mk("short", {}, [{ yearly: 1 }])), false, "something is being added");
+  assert.equal(savingsUnknown(mk("on track", {})), false, "income carries it: a real answer");
+  assert.equal(savingsUnknown(mk("short", {}, [], 2026)), false, "already retired: runs out is the answer");
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("We don't know yet") && view.includes("savingsUnknown(d)"));
 });

@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { compute, COSTS, DEFAULT_GROWTH } from "./compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { pmtToReach, fv } from "../../../core/math/finance.js";
@@ -243,4 +245,12 @@ test("round 8 verify: the spring bill of a year under way keeps its price across
   near(dec.nextYearCost, 12925, 0.01); near(jan.nextYearCost, 12925, 0.01); assert.equal(jan.nextBill, "2027-01-15");
   // Child 1 in January: the spring half of 2026-27, then 2027-28 and 2028-29 as before
   near(compute(inCollege(), { today: "2027-01-14" }).children[0].stillToPay, 12925 + 25850 * 1.04 + 25850 * 1.04 ** 2, 0.01);
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ['faster than prices in general']) assert.ok(view.includes(w), w);
+  for (const w of ['faster than inflation']) assert.ok(!view.includes(w), w);
 });

@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { compute } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -99,4 +101,12 @@ test("C3 waits: half or more of the must-pay bills are our guesses; no key on a 
   assert.deepEqual([compute(p, {}).waits, compute(p, {}).guessedShare], [false, 0.25]);
   markGuess(p, "expenses[setup-x-housing].amount", { key: "spend.housing", value: 1200, unit: "month", sigma: 0.25, dataAsOf: "2026-11-02" }, "2026-11-02");
   assert.equal(compute(p, {}).waits, true);
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ['the bills you have to pay', 'Change how many months', 'None yet', 'Under 1 month']) assert.ok(view.includes(w), w);
+  for (const w of ['must-pay', 'Assumptions page', 'About ${months(d.runwayMonths)}']) assert.ok(!view.includes(w), w);
 });

@@ -30,7 +30,7 @@ export function render(page, ctx) {
 
   root.append(ui.h("section", { class: d.children.length ? "card" : "card accent hero" },
     d.children.length ? null : ui.h("h1", {}, "Saving for college"),
-    ui.h("p", { class: d.children.length ? "" : "lede" }, `A year of a public college in your state costs about ${money(COSTS.public.yearly)} with room and board; a private one about ${money(COSTS.private.yearly)} (${d.costYear}-${String(d.costYear + 1).slice(2)} published prices). Prices have risen faster than inflation; the plan assumes ${(d.growth * 100).toFixed(1)}% a year. Many families pay less after grants.`),
+    ui.h("p", { class: d.children.length ? "" : "lede" }, `A year of a public college in your state costs about ${money(COSTS.public.yearly)} with room and board; a private one about ${money(COSTS.private.yearly)} (${d.costYear}-${String(d.costYear + 1).slice(2)} published prices). College prices have risen faster than prices in general; the plan assumes ${(d.growth * 100).toFixed(1)}% a year. Many families pay less after grants.`),
     d.children.length ? null : ui.h("p", { class: "muted small" }, "Add your children on People with their birth dates."),
     d.children.length ? null : ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"))));
 

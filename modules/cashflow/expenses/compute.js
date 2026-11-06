@@ -72,6 +72,18 @@ export const guessedSetupRow = (plan, x) => typeof x?.id === "string" && x.id.st
   && Object.prototype.hasOwnProperty.call(plan.guesses, `expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`);
 
 /**
+ * Does the bill list open on its own? (path part 3, review UX 1.) Short lists (5 or fewer) stay open. A longer one opens
+ * only when the person listed at least half the bills themselves, counted by bills, not dollars. Rows Get started spread
+ * from one total or a split (ids "setup-x-...") and rows that are our guesses are not bills the person listed here.
+ */
+export function billsFoldOpen(plan, items) {
+  const rows = items ?? [];
+  if (rows.length <= 5) return true;
+  const own = rows.filter((x) => !(typeof x.id === "string" && (x.id.startsWith("setup-x-") || isGuess(plan, `expenses[${x.id}].amount`)))).length;
+  return own * 2 >= rows.length;
+}
+
+/**
  * compute(plan, { today }) -> {
  *   items: [{ ...expense, categoryLabel, icon, periodLabel, monthly, yearly, active, upcoming, ended, essential, inflates }],
  *   active, count, monthly, yearly, essentialMonthly, optionalMonthly, inflatingMonthly,

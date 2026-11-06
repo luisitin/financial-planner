@@ -1095,6 +1095,28 @@ export const SPEND_TAPS = ["health-cover", "childcare", "hoa"];
 /** Rows the person typed as 0 on Q6 (guide.setup.spendZero): theirs, never guessed. */
 const zeroRows = (p) => (Array.isArray(setupOf(p).spendZero) ? setupOf(p).spendZero : []);
 /**
+ * Q6's "Your best guess for a normal month" (part 3 of the path): one figure for the month, shared out over the rows. The rows
+ * typed (in the "Split it up" fold) stay as typed and come off the figure; what is left is shared over the blank rows in the
+ * proportions of our guesses for them (`guessOf(row)` -> { value } | null, the guess the screen shows grey). Whole dollars, the
+ * biggest row takes the odd dollars, so the rows add up to the figure. A typed split above the figure wins (nothing is left to
+ * share). With no guess to share by, the rest is returned as `rest` (one rough row). -> null when no figure was typed, else
+ * { rows: { [key]: dollars }, rest, typed, left }
+ */
+export function sumSplit(rows, args, sum, guessOf) {
+  if (!(sum > 0)) return null;
+  const typed = rows.reduce((t, s) => t + (args?.rows?.[s.key] > 0 ? args.rows[s.key] : 0), 0);
+  const left = sum - typed;
+  const out = {};
+  if (!(left > 0)) return { rows: out, rest: 0, typed, left: 0 };
+  const blanks = rows.filter((s) => args?.rows?.[s.key] === null).map((s) => ({ key: s.key, g: Number(guessOf(s)?.value) })).filter((x) => x.g > 0);
+  const total = blanks.reduce((t, x) => t + x.g, 0);
+  if (!(total > 0)) return { rows: out, rest: Math.round(left), typed, left };
+  let used = 0, big = blanks[0];
+  for (const x of blanks) { out[x.key] = Math.floor(left * x.g / total); used += out[x.key]; if (x.g > big.g) big = x; }
+  out[big.key] += Math.round(left) - used;
+  return { rows: out, rest: 0, typed, left };
+}
+/**
  * Q6 with our guesses (the view passes ctx.guess; spec 10, 7.A): a row typed is the person's (any guess on it goes); a 0
  * typed is their 0 (no row, remembered in guide.setup.spendZero so it is never guessed); a box left blank gets our guess,
  * written through markGuess. "One rough total" typed is written as before; left blank, the rows are written as guesses.
@@ -1108,17 +1130,27 @@ function applySpendGuessed(draft, v, today, guess) {
   const s = draft.guide.setup;
   const mode = args.mode;
   if ((s.spendMode ?? "rows") !== mode || !s.spendMode) s.spendMode = mode;
-  const ask = (key, path) => { let e = null; try { e = guess(key, { path, args }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
+  const ask = (key, path, a = args) => { let e = null; try { e = guess(key, { path, args: a }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
   const keep = new Set(), zero = [];
+  let split = null, figure = null;
   const line = { period: "monthly", inflates: true, startDate: "", endDate: "" };
   const mortgage = hasMortgage(draft);
   if (args.total) { keep.add("setup-x-total"); put(draft.expenses, "setup-x-total", { amount: args.total }, { name: "Monthly spending (rough)", category: "other", essential: true, ...line }); clearGuess(draft, "expenses[setup-x-total].amount"); }
   else {
+    // "Your best guess for a normal month" (v.sum, part 3): one figure for the month. The rows the person typed stay theirs; what
+    // is left of the figure is shared out over the blank rows in the proportions of our guesses for them (the same split the
+    // survey writes when nothing is typed), so the rows add up to the figure. Those rows are the person's figure shared out,
+    // not our guesses, so they carry no guess mark (a month the person gave is never "mostly our guesses").
+    // (whole dollars: a decimal figure is rounded once here, so the rows and the retirement guess are worked from the same number)
+    figure = mode === "rows" && pos(v.sum) ? Math.max(1, Math.round(pos(v.sum))) : null;
+    // (and a decimal group typed beside it is rounded once too, so the rows add up to the figure exactly)
+    if (figure) for (const k of Object.keys(args.rows)) if (args.rows[k] > 0) args.rows[k] = Math.max(1, Math.round(args.rows[k]));
+    split = sumSplit(spendRows(draft), args, figure, (row) => ask(`spend.${row.key}`, `expenses[setup-x-${row.key}].amount`));
     for (const row of spendRows(draft)) {
       const id = `setup-x-${row.key}`, path = `expenses[${id}].amount`, typed = args.rows[row.key];
       if (typed === 0) { zero.push(row.key); continue; }
-      const e = typed === null ? ask(`spend.${row.key}`, path) : null;
-      const amount = typed ?? (e && e.value > 0 ? e.value : null);
+      const e = typed === null && !split ? ask(`spend.${row.key}`, path) : null;
+      const amount = typed ?? (split ? split.rows[row.key] ?? null : e && e.value > 0 ? e.value : null);
       if (!amount) continue;
       keep.add(id);
       put(draft.expenses, id, { amount }, { name: row.key === "housing" ? (mortgage ? "Home costs" : housingWords(draft).name) : row.label, category: row.key, essential: row.group === "must" && CATEGORIES[row.key]?.essential !== false, ...line });
@@ -1129,8 +1161,14 @@ function applySpendGuessed(draft, v, today, guess) {
       if (own && own.name === row.label) own.name = "Home costs";
       if (e && typed === null) markGuess(draft, path, e, today); else clearGuess(draft, path);
     }
+    // nothing of ours to share the rest by (no row has a guess): the rest is one rough row, as "One rough total" writes it
+    if (split?.rest > 0) { keep.add("setup-x-total"); put(draft.expenses, "setup-x-total", { amount: split.rest }, { name: "Monthly spending (rough)", category: "other", essential: true, ...line }); clearGuess(draft, "expenses[setup-x-total].amount"); }
   }
   draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
+  // the figure given in the top box is remembered (guide.setup.spendSum) with the groups typed beside it, so reopening can put it back
+  // and share it out again; gone when the box is left empty (or a total is typed the old way)
+  const sumNow = split && split.left > 0 && figure ? { sum: figure, typed: spendRows(draft).filter((row) => args.rows[row.key] > 0).map((row) => row.key) } : null;
+  if (JSON.stringify(s.spendSum ?? null) !== JSON.stringify(sumNow)) { if (sumNow) s.spendSum = sumNow; else delete s.spendSum; }
   if (JSON.stringify(zeroRows(draft)) !== JSON.stringify(zero)) { if (zero.length) s.spendZero = zero; else delete s.spendZero; }
   for (const [k, x] of Object.entries(args.taps)) if (s.taps?.[k] !== x) s.taps = { ...(s.taps ?? {}), [k]: x };
   if (allRetired(draft)) return;
@@ -1142,7 +1180,7 @@ function applySpendGuessed(draft, v, today, guess) {
     if ((s.retireAuto ?? null) !== false) s.retireAuto = false;
     return;
   }
-  const e = ask("overview/setup:retireSpend", path);
+  const e = ask("overview/setup:retireSpend", path, split ? { ...args, rows: { ...args.rows, ...split.rows } } : args);
   if (e && e.value > 0) { if (draft.retirement.spendingMonthly === undefined) draft.retirement.spendingMonthly = null; markGuess(draft, path, e, today); }
 }
 /** The month on Q6 once saved: the rows the screen asks (typed and ours), how many are ours, and their total. */
@@ -1512,7 +1550,12 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     // a row that is one of our guesses reopens empty (the screen shows it grey); a row typed as 0 reopens as 0
     const rowOf = (key) => { const x = byId(L(plan, "expenses"), `setup-x-${key}`); return x ? (isGuess(plan, `expenses[${x.id}].amount`) ? "" : x.amount) : zeroRows(plan).includes(key) ? 0 : ""; };
     const ours = !!plan?.guesses?.["retirement.spendingMonthly"] && isGuess(plan, "retirement.spendingMonthly");
-    return { mode: s.spendMode ?? "rows", rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOf(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
+    // the figure given in the top box, while the bills still add up to it and the groups typed beside it are still there; an edit made
+    // on Expenses since (a bill changed or removed) and the screen does not pretend: it opens as for typed rows
+    const ss = s.spendSum, mine = L(plan, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
+    const held = ss && ss.sum > 0 && Array.isArray(ss.typed) && ss.typed.every((k) => byId(mine, `setup-x-${k}`)) && Math.round(mine.reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0)) === ss.sum && mine.every((x) => x.period === "monthly");
+    const rowOr = (key) => (held && !ss.typed.includes(key) && byId(mine, `setup-x-${key}`) ? "" : rowOf(key));
+    return { mode: s.spendMode ?? "rows", ...(held ? { sum: ss.sum } : {}), rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOr(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
   }
   if (screen === "goals") return picks(plan, "goals");
   if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => {
@@ -1820,7 +1863,7 @@ export const estimators = {
     page: () => "#/goals/goals",
     fn(plan, { today }) {
       const c = cushion(plan, null, today);
-      return c.essentialAll > 0 ? { value: c.target, rounded: true, why: `${c.months} months of your must-pay bills`, uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
+      return c.essentialAll > 0 ? { value: c.target, rounded: true, why: `${c.months} months of the bills you have to pay`, uses: { spending: "typed" }, sharperWith: [], tables: [], dataAsOf: RULES_ON, basis: "yours" } : null;
     },
   },
   "overview/setup:cushionFunds": {

@@ -41,27 +41,27 @@ export function render(page, ctx) {
   const host = ui.h("div");
   root.append(host);
   const load = () => {
-    host.replaceChildren(ui.notice("info", "Solving each lever for your goal..."));
+    host.replaceChildren(ui.notice("info", "Working out each change for your goal..."));
     ctx.computeRemote("scenarios/goal-seek", { today: fmt.today(), legacy }).then(draw, (e) => host.replaceChildren(ui.notice("error", `Goal seek could not run: ${e}. Reload the page; if it keeps happening, check Will the money last? first.`)));
   };
   const draw = (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Goal seek"),
-        ui.h("p", { class: "lede" }, "Set the goal (the money lasts, and leaves what you want to leave) and see what each lever would have to be: what you can spend, when you can retire, what to save, the return it needs. It needs the basics of your plan first:"),
+        ui.h("p", { class: "lede" }, "Set the goal (the money lasts, and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, the return it needs. It needs the basics of your plan first:"),
         ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, d.meets ? "Your plan gets there, with room" : "What it would take"),
       ui.h("p", { class: "lede" }, d.meets
-        ? `As it stands the money lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each lever could move and still get there.`
-        : d.success ? `As it stands the money lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each lever would have to be.` : `As it stands the money runs out in ${d.failYear}. Below: what each lever would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`)));
+        ? `As it stands the money lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
+        : d.success ? `As it stands the money lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `As it stands the money runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`)));
 
     // the goal
     const box = ui.input({ type: "number", inputmode: "decimal", min: "0", step: "1000", value: legacy || "", placeholder: "0", "aria-label": "Leave at least" });
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The goal"),
-      ui.h("p", { class: "muted small" }, "The money lasts to the end of the plan, and is still there in this amount at the end (today's dollars): for heirs, for a cushion, for whatever comes."),
+      ui.h("p", { class: "muted small" }, "Do you want money left over at the end? Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, [0, 250000, 500000, 1000000].map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
       ui.h("form", { class: "gs-goal", onSubmit: (e) => { e.preventDefault(); legacy = Math.max(0, Number(box.value) || 0); load(); } }, ui.field("Or leave at least", box), ui.h("button", { type: "submit", class: "secondary" }, "Use this"))));
 
@@ -69,8 +69,8 @@ export function render(page, ctx) {
     // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
     const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(l.value) : l.unit === "once" ? money(l.value) : l.unit === "rate" ? `${(Math.round(l.value * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : l.nowForAll && l.value === l.nowAge ? "now" : `age ${ageWords(l.value)}`;
     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
-    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each lever could move" : "What each lever would have to be"),
-      ui.h("p", { class: "muted small" }, "Each answer moves that one lever alone and keeps everything else as your plan has it. Move two at once and each needs to move less.",
+    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each change could go" : "What each change would have to be"),
+      ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less.",
         // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05)
         ...(d.strategy && d.strategy !== "fixed-real" ? [` What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
       ui.h("div", { class: "grid" }, d.levers.map((l) => {
@@ -87,9 +87,9 @@ export function render(page, ctx) {
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
-        ui.h("li", {}, "Every lever runs your plan's own year-by-year engine (Will the money last?) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
-        ui.h("li", {}, `Spending: the most a month, steady after inflation. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
-        ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The 9-in-10 figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
+        ui.h("li", {}, "Every change is run through your plan's own year-by-year engine (Will the money last?) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
+        ui.h("li", {}, `Spending: the most a month, steady, in today's dollars. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
+        ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
       ))));
   };
   load();
@@ -101,7 +101,7 @@ export function render(page, ctx) {
  * "room to spare" right above a careful figure lower than the plan spends). */
 function carefulLine(ctx, legacy, money, planned, pill) {
   const { ui } = ctx;
-  const words = (v, less = 0) => [ui.h("strong", {}, "In 9 of 10 markets:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `: ${money(less)} less than the ${money(planned)} the plan spends` : ""}`];
+  const words = (v, less = 0) => [ui.h("strong", {}, "Even in a bad run of years:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `: ${money(less)} less than the ${money(planned)} the plan spends` : ""}`];
   const el = ui.h("div", { class: "gs-s", "aria-live": "polite" }, ...words("..."));
   whenCareful(ctx, el, (c) => {
     if (!c || !(c.yearly >= 1200)) { el.remove(); return; }

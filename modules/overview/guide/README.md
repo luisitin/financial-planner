@@ -212,3 +212,6 @@ one guide whose steps come and go with the household (`pathVariant` in journeys.
   guide.journeys/active/activeAt/chosen/meta).
 - **Words**: no banned word (Monte Carlo, assumptions, net worth, RMD, inflation, ...) in the path's text; the test lists them.
 - **Not blocked**: no `needs`. A step whose page cannot answer yet (`waits`) says what it needs and still lets Next through.
+
+## The step card keeps clear of the page's last button (path part 3)
+`.gn-root.card { margin-top: 20px }` in the frame's own STYLE.

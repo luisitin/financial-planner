@@ -77,3 +77,6 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
 ## Ideas / not yet
 - The Dashboard could import `goalsWords` from here (or from overview/alerts) instead of building the line inline.
 - A row for Medicare, Social Security and stress tests as links, not steps.
+
+## Path part 3, review fixes
+- The retirement row reads "Not known yet" (calm; not a gap, so the plan is not held unfinished) when Quick answers' retire answer has `verdict: "unknown"` (`savingsUnknown` in retirement/projection).

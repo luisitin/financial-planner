@@ -839,7 +839,7 @@ export function buildInputs(plan, params = {}) {
     inputs.events = [...(inputs.events ?? []), ...h.events];
     health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
-  if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (Contributions page), so nothing is added until retirement.");
+  if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (What you save for retirement), so nothing is added until retirement.");
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
@@ -1096,4 +1096,18 @@ export function drawingAsPlanned(plan, params = {}) {
   const v = savingVerdict(plan, params);
   if (!v || v.verdict === "short") return null;
   return { verdict: v.verdict, spendingMonthly: v.spendingYearly / 12, affordableMonthly: v.affordable / 12 };
+}
+
+/**
+ * Nothing saved for retirement is on file (no investments or retirement accounts, nothing being added, retirement still ahead) and the income alone does not
+ * carry the spending: the plan cannot say the money runs out, only that it does not know yet (path part 3 review, UX 3: a
+ * young renter who never mentioned retirement savings read "Runs out in 2065"). A plan whose income covers the spending
+ * ("on track") is still a real answer, so it is not unknown.
+ */
+export function savingsUnknown(d) {
+  if (!d || !d.ready || d.verdict === "on track") return false;
+  const b = d.inputs?.balances ?? {};
+  const invested = (b.taxable ?? 0) + (b.deferred ?? 0) + (b.free ?? 0);   // cash alone is not retirement savings
+  const working = d.atRetirement && d.inputs && d.atRetirement.year > d.inputs.startYear;   // retirement is still ahead
+  return !!working && !(invested > 0) && !(d.inputs?.contributions?.length);
 }

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Every step on the way to Your plan opens in plain words: "bills you have to pay" instead of "must-pay", "even in a bad run of years" instead of "9 of 10 markets", "once prices rise" instead of "inflation", "accounts you haven't paid tax on yet" instead of "pre-tax", "change" instead of "lever"; small links on those screens are now full-size tap targets.
+- [builder:claude-b] Expenses opens short when most of it is our guesses: the month's total, what is left, and one "See or change each bill" button (236 px instead of 2,000 for a new plan); a save keeps the list open and shows its confirmation.
+- [builder:claude-b] Get started's spending question asks for one figure first, "Your best guess for a normal month", with the groups under "Split it up (optional)". The figure is shared over the groups so they add up to it, comes back when you return, and can be lowered as well as raised.
+- [builder:claude-b] Will the money last? says "We don't know yet" instead of "Runs out in 2067" when no savings or retirement accounts are on file and nothing is being added.
 - [builder:claude-b] One year's tax on every tax page: the Federal estimate now counts what the plan already knows (this year's required withdrawal and other IRA or 401(k) withdrawals, with the 10% early tax and the rule of 55; stock pay; business income and its 20% deduction; rentals with the $25,000 allowance; student loan interest; the IRA deduction limit), each as its own line under "What the plan already knows". Withholding check, Estimated payments, Quick answers, the Tax report, Bracket explorer, Capital gains and Needs attention all read that same return.
 - [builder:claude-b] A retiree whose IRA withdrawal is not taxed yet is told one thing everywhere: "Have about $3,600 of tax held back from your IRA withdrawal by December 31" (it counts as paid through the whole year), instead of "No estimated payments needed" on one page and "pay the past-due part" on another.
 - [builder:claude-b] The 0% room for long-term gains is worked on the real return: a widow is no longer told $27,340 of gains fit at 0% when 11,262 do.

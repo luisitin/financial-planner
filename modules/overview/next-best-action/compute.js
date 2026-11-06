@@ -232,7 +232,7 @@ export function compute(plan, params = {}) {
   const paidWork = (inc.active ?? []).some((x) => x.type === "salary" || x.type === "bonus" || x.type === "business");
   const allRetired = !paidWork && ppl.people.some((p) => p.role !== "dependent") && ppl.people.filter((p) => p.role !== "dependent").every((p) => p.retired === true);
 
-  // 1. a starter emergency fund: one month of must-pay bills in cash you can use
+  // 1. a starter emergency fund: one month of the bills you have to pay in cash you can use
   const essential = liq.expenses?.essentialMonthly ?? exp.essentialMonthly;
   // under half a dollar short is done: the page shows whole dollars, so typing the amount it asks for must finish the step
   const starterGap = essential - liq.now < 0.5 ? 0 : essential - liq.now;
@@ -242,9 +242,9 @@ export function compute(plan, params = {}) {
   const byGuess = guessedBills ? ", by our guesses of your bills" : "";
   // (and the amounts to $100, as Get started's cushion says them: they are not known to the $10)
   const cushionMoney = guessedBills ? (n) => fmtMoney(Math.round(n / 100) * 100, cur) : money;
-  add({ id: "starter", title: "A starter emergency fund", why: "One month of must-pay bills in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
+  add({ id: "starter", title: "A starter emergency fund", why: "One month of the bills you have to pay in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
     ...(guessedBills ? { waits: true } : {}),
-    detail: starterGap <= 0 ? (guessedBills ? `Usable cash ${money(liq.now)} covers about ${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months of must-pay bills${byGuess}.` : `Usable cash ${money(liq.now)} covers a month of must-pay bills (${money(essential)}).`) : `${cushionMoney(starterGap)} more in usable cash reaches one month of must-pay bills (${cushionMoney(essential)}${byGuess}).`, go: ["balance", "liquidity"] });
+    detail: starterGap <= 0 ? (guessedBills ? `Usable cash ${money(liq.now)} covers about ${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months of the bills you have to pay${byGuess}.` : `Usable cash ${money(liq.now)} covers a month of the bills you have to pay (${money(essential)}).`) : `${cushionMoney(starterGap)} more in usable cash reaches one month of the bills you have to pay (${cushionMoney(essential)}${byGuess}).`, go: ["balance", "liquidity"] });
 
   // 1b. the people who count on an earner: life cover for the gap Life insurance needs works out (its own answer: the
   // survivor's plan kept whole), right after the starter cushion; an action, not a sum to save, so no gap is filled
@@ -386,7 +386,7 @@ export function compute(plan, params = {}) {
     const fromSavings = !savingsCover || payOwed <= 0 ? 0 : above >= payOwed ? payOwed : Math.floor(above / 10) * 10;
     const full = fromSavings > 0 && fromSavings >= payOwed - 0.5;
     const leftMonths = fromSavings ? (cash - fromSavings) / essential : null;
-    const keep = `you would still have ${Math.round(leftMonths * 10) / 10} months of must-pay bills in cash (the plan aims for ${liq.targetMonths})`;
+    const keep = `you would still have ${Math.round(leftMonths * 10) / 10} months of the bills you have to pay in cash (the plan aims for ${liq.targetMonths})`;
     const rates = [...new Set(pays.map((d) => pct(d.rate)))].join(" and ");
     const rest = Math.max(0, payOwed - fromSavings);
     const detail = !fromSavings && highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
@@ -422,7 +422,7 @@ export function compute(plan, params = {}) {
     .sort((a, b) => (Number(a.g.priority) || 2) - (Number(b.g.priority) || 2) || String(a.g.targetDate).localeCompare(String(b.g.targetDate)));
   // a bill a few months off that the month cannot save for (review UX 1, 2026-11-06: Education's goal for a January college bill
   // read "put about $12,910 a month toward it" for a family with $55,000 in cash): due within FROM_CASH_MONTHS, its catch-up
-  // more than the spare money, and the usable cash above a month of must-pay bills (less what pays costly debt from savings)
+  // more than the spare money, and the usable cash above a month of the bills you have to pay (less what pays costly debt from savings)
   // covers it -- paid from savings when it is due, in the goals' order while the cash lasts; no month's saving is asked for it,
   // and the full cushion's gap counts what it takes from the cash. Never on bills that are mostly our guesses (spec 8.1)
   let cashFree = guessedBills ? 0 : Math.max(0, (liq.now ?? 0) - essential - (steps.find((s) => s.id === "high-debt")?.fromSavings ?? 0));
@@ -444,9 +444,9 @@ export function compute(plan, params = {}) {
   // (a bill paid from savings above takes its cash from the cushion: the gap counts it)
   const gapNow = cashUsed > 0 ? Math.max(0, (liq.target ?? 0) - ((liq.now ?? 0) - cashUsed)) : liq.gap ?? 0;
   const fullGap = gapNow < 0.5 ? 0 : gapNow;
-  add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: allRetired ? "Cash for surprise bills, so you never sell investments in a bad year." : "Enough must-pay bills in cash to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
+  add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: allRetired ? "Cash for surprise bills, so you never sell investments in a bad year." : "Enough cash for the bills you have to pay to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
     ...(guessedBills ? { waits: true } : {}),
-    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of must-pay bills (${cushionMoney(liq.target)}${byGuess})${cashUsed > 0 && (liq.gap ?? 0) < fullGap - 0.5 ? ", once the bills above are paid from savings" : ""}.` : `Usable cash covers ${guessedBills ? "about " : ""}${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
+    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of the bills you have to pay (${cushionMoney(liq.target)}${byGuess})${cashUsed > 0 && (liq.gap ?? 0) < fullGap - 0.5 ? ", once the bills above are paid from savings" : ""}.` : `Usable cash covers ${guessedBills ? "about " : ""}${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
 
   // 5. the HSA, for those who have one and a high-deductible plan this year (none: nobody may put money in, IRC 223(c)(1))
   const hsaUsed = (con.byPerson ?? []).flatMap((p) => p.limits).filter((l) => l.kind === "hsa").reduce((s, l) => s + l.used, 0);
@@ -735,7 +735,7 @@ function pct(x) { return `${(Math.round(x * 1000) / 10).toFixed(1)}%`; }
 
 /**
  * cushionLater(nba) -> { until ("YYYY-MM-DD" | null: when costly debt is paid off by the plan), targetMonths? } | null.
- * The full cushion waits on purpose: the starter month of must-pay bills is in cash, and costly debt (10% or more) is being
+ * The full cushion waits on purpose: the starter month of the bills you have to pay is in cash, and costly debt (10% or more) is being
  * paid first, by the spare money (its step comes before the full fund's) or by a saved debt plan already on it. Needs attention, Emergency fund and the Dashboard
  * then say "enough for now" (amber) instead of a red "thin", so no page contradicts the order here.
  */

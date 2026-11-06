@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { compute, largestWhere, smallestWhere } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -210,4 +212,12 @@ test("review D4: #/scenarios/goal-seek?target=last opens on \"Just last\", even 
   // opened from the score's hint: the money lasting, leaving nothing
   const b = await renderPage(view, p, "2026-11-06", { computeRemote: notReady, route: { rest: [], query: { target: "last" } } });
   assert.equal(b.remote.find((r) => r.key === "scenarios/goal-seek").params.legacy, 0);
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ['each change would have to be', 'Even in a bad run of years:']) assert.ok(view.includes(w), w);
+  for (const w of ['lever would', 'each lever', 'lever alone']) assert.ok(!view.includes(w), w);
 });

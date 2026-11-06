@@ -55,3 +55,8 @@ must-pay bills" (whole months, one decimal under 2, the owner's rule for this pa
 your bills on Expenses › and we'll tell you whether you have more than you need." The tiles and the move card say "by our
 guesses" too, with the target and the amounts to $100 ($15,660 -> $15,700), as Next best action and Get started's cushion
 say them.
+
+## Plain words on the first screen (path part 3, 2026-11-06)
+"Must-pay bills" is "the bills you have to pay" everywhere on the page; the target note links "Change how many months" (the Assumptions page)
+and Expenses at 44 px; "Months of must-pay bills" is "Months of bills covered". While the bills are our guesses the months read
+"None yet" (no usable cash), "Under 1 month", or "About N months", never "About 0 months". No figure changed.

@@ -368,3 +368,6 @@ Tests: module.test.mjs "round 8 verify"; insurance/life-needs "round 8 item 14".
   insurance needs: the plan together runs out too) and nobody in the household is a dependant, "Protect the people who count
   on you" comes after costly debt and the match (right after where the match question goes), not after the starter cushion.
   Couple-home after setup: the next move is the match question; the $28,000 for Priya follows it, with the words above.
+
+## Path part 3, review fixes
+- On-screen "must-pay bills" is now "the bills you have to pay" in the starter and full-fund lines (also Alerts, Health score, Benchmarks, Goals): words only, no figure changes.

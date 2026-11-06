@@ -6,7 +6,7 @@
 //   line     one sentence: what the answer holds
 //   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
-import { compute as projection, retirementKnown, healthAdded } from "../../retirement/projection/compute.js";
+import { compute as projection, retirementKnown, healthAdded, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -52,6 +52,8 @@ export function answerFor(guide, plan, params = {}) {
     if (!retirementKnown(plan, params.today ?? null)) return null;
     const d = projection(plan, params);
     if (!d.ready || !d.verdict) return null;
+    // no retirement savings on file: not "runs out", only "not known yet" (Your plan asks for what you own)
+    if (savingsUnknown(d)) return { headline: "We don't know yet", line: "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see.", status: "calm", verdict: "unknown", shortAge: null };
     return {
       headline: d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`,
       // the carried figure is markets doing exactly as well as average (about a 4 in 10 chance); Will the money last? gives the

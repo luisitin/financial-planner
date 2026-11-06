@@ -110,7 +110,7 @@ export const LEGACY_WORDS = {
 const LEGACY_SETUP = {
   "overview/setup:ss": { label: "Social Security at full retirement age", why: "worked out from the pay on file with Social Security's formula", weight: "big" },
   "overview/setup:retireSpend": { label: "Spending a month once work stops", why: "today's bills without childcare, plus loans still running then", weight: "big" },
-  "overview/setup:cushionTarget": { label: "Safety cushion to aim for", why: "months of your must-pay bills (Assumptions says how many)", weight: "small" },
+  "overview/setup:cushionTarget": { label: "Safety cushion to aim for", why: "months of the bills you have to pay (Assumptions says how many)", weight: "small" },
   "overview/setup:cushionFunds": { label: "Accounts that hold the cushion", why: "your checking, savings and cash accounts", weight: "small" },
 };
 

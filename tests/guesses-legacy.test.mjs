@@ -48,7 +48,7 @@ test("the page lists today's older guesses: the typical rates and payments, Soci
   assert.equal(row("Mortgage: payment a month").stale, false, "the rate and the balance are the ones it was worked out from");
   assert.equal(row("Ana's Social Security at full retirement age").why, "worked out from the pay on file with Social Security's formula");
   assert.equal(row("Ana's Social Security at full retirement age").basis, "yours");
-  assert.equal(row("Emergency fund: safety cushion to aim for").why, "3 months of your must-pay bills");
+  assert.equal(row("Emergency fund: safety cushion to aim for").why, "3 months of the bills you have to pay");
   assert.equal(row("Emergency fund: accounts that hold the cushion").kind, "list");
   assert.ok(d.rows.every((r) => r.legacy && r.why.length <= 70 && r.href), "each legacy, with a why of at most 70 characters and a page");
   assert.deepEqual([d.big.length, d.small.length], [7, 2]);

@@ -24,7 +24,7 @@ Address: `#/overview/setup/<screen>`, so the phone's Back button works. Get star
 | 4b | `have-amounts` | about how much in each; retirement per adult with through work / on my own (then "Which kind of IRA?" Traditional / Roth / Not sure), a month from pay, the employer's match | `accounts` (`setup-have-<kind>`, `setup-have-retire-<person>`; "Through work" into question 2's `setup-workplan-<person>` when it is there), `retirement.contributions` (`setup-contrib-<person>`) |
 | 5 | `owe` | tiles: credit cards, car loan, student loans, mortgage, another loan, or "No, I'm debt free" | `guide.setup.picks.owe` |
 | 5b | `owe-amounts` | cards first: "Do you pay the whole bill every month?"; then how much you owe, the payment a month, the rate if you know it; with a mortgage and no home in the plan, what the home would sell for | liability `accounts` (`setup-owe-<kind>`), `debts` (`setup-debt-<kind>`), `setup-have-home` |
-| 6 | `spend` | a typical month in rows (must-pay, with the loan payments shown read-only, and everything else, with subtotals) or one rough total; the total with its parts; then "once you stop working, about how much a month?" | `expenses` (`setup-x-<category>`, `setup-x-total`), `retirement.spendingMonthly` |
+| 6 | `spend` | one box, "Your best guess for a normal month" (the grey guess in it); under "Split it up (optional)": the groups (bills you have to pay, with the loan payments shown read-only, and everything else, with subtotals), the health cover tap, and "once you stop working, about how much a month?"; the total with its parts under the box | `expenses` (`setup-x-<category>`, `setup-x-total`), `retirement.spendingMonthly` |
 | 7 | `goals` | tiles: a safety cushion, paying off debt, buying a home, retiring well, education, a big trip, a car, something else | `guide.setup.picks.goals`, `guide.setup.focus` |
 | 7b | `goal-details` | how much and by when (1, 2, 3, 5 years or a date); "Is any of your savings already for this?" (the cash accounts as pills, or None of it); the cushion: how many months (1 to 12), with what counts toward it | `goals` (`setup-goal-<kind>`, `fundedBy`), `assumptions.emergencyMonths` |
 | | `done` | where you stand (four figures; one not known yet links to the question that fills it), your first three moves, what is not counted yet, the plan's guesses | `assumptions.reviewedAt` ("These sound fine") |
@@ -536,7 +536,7 @@ figure, the cushion and the retirement check rested on it. Now every row of Q6 s
     guess childcare"; a second Skip goes on); and with our spending in, a child under 13 and the tap not answered Yes or No,
     `standing()` adds `childcareMissing` and a "Not counted yet" row "Childcare: do you pay for it, or for after-school
     care? Tell us and it's counted", and the left-over tile adds "Childcare is not counted yet."
-  - *When typing moves our other figures, the screen says so* (UX 2; R10 as the spec has it): "As you type, our other
+  - *When typing moves our other figures, the screen says so, under the total* (UX 2; R10; part 3 review): "We changed our other guesses to fit what you typed (was: As you type, our other
     figures adjust, so the month stays near what households like yours usually spend in all."
   - *The under-50 line says only what applies* (UX 12): "today's costs" with "without childcare" only when there is any,
     and the loans that run on or end by then only when there are any; "on the "Will the money last?" page".
@@ -662,3 +662,18 @@ Six laypeople went through Get started (round 8). What they hit here, and what c
   for employer pay, no second 401(k), an unanswered screen writes nothing; question 4 keeping the plan at work; the
   savings link, None of it, an answer left alone, cash only, the cushion's own accounts and its guess agreeing; the unpaid
   tax sentence and Emergency fund's target; the IRA kinds; the Social Security and down-payment help.
+
+## Q6 opens with one box (path part 3, 2026-11-06)
+`valuesFor(plan, "spend")` is unchanged; the view adds `v.sum`, "Your best guess for a normal month". `applySpend(..., { guess })` reads
+`v.sum` through `sumSplit(rows, args, sum, guessOf)` (pure, exported): rows typed in the fold stay theirs and come off the figure;
+what is left is shared over the blank rows in the proportions of our guesses for them (whole dollars, the biggest row takes the odd
+dollars), so the rows add up to the figure. Those rows carry **no guess mark**: the figure is the person's own, so the month is not
+"mostly our guesses" and the verdicts do not wait; they reopen as typed rows with the box empty. A split typed above the figure wins
+(nothing is left to share; the screen says so). With no guess to share by, the rest is one "Monthly spending (rough)" row. A zero
+typed is the person's zero and takes no share. The retirement guess is worked out from the rows as shared out. Left empty, nothing
+changes: every blank row is our guess, as before. A plan saved with the old "One rough total" reopens with that figure in the box
+(saving it again writes rows instead of the one row); `mode: "total"` stays supported in compute for old callers and tests.
+The "Skip: use our guesses" childcare reminder opens the fold. "Must-pay bills" is "Bills you have to pay" on screen. Tests: "part 3 ...".
+
+## Q6 remembers the figure (path part 3 fix, 2026-11-06)
+The top box's figure is saved as `guide.setup.spendSum: { sum, typed }` (whole dollars; `typed` = the groups typed in the fold). Reopening puts `sum` back in the box, keeps the typed groups as typed and shows the rest as the share of the figure (grey). A new figure re-shares only the blank groups, so the rows always add up to it and no "Monthly spending (rough)" row appears unless nothing can be shared. The figure is read back only while the setup bills still add up to `sum`; if a bill was changed or removed on Expenses, the screen opens as for typed rows and never overwrites it. Leaving the box empty removes `spendSum` and the blank groups go back to our marked guesses. A decimal figure is rounded once, so the rows and the retirement guess agree. A decimal group typed beside the figure is rounded the same way (at least $1), so the sum always matches. While a figure is given, the line under the box says the grey figures are the figure shared out.

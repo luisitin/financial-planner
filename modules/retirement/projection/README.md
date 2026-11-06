@@ -651,3 +651,12 @@ back (a share of savings or guardrails worked out as if its income were not ther
 (`withdrawal-strategy/compute.js` `wayOptionsFor(d.inputs, chosen)`: the ways whose expected run never plans on less than the
 plan's spending in the first year or than the year's guaranteed income in any year, plus the one in use), with a line saying
 how many are left out and where to read why. Test: `withdrawal-strategy/module.test.mjs` (UX 7).
+
+## Plain words on the first screen (path part 3, 2026-11-06)
+"In 9 of 10 markets" reads "Even in a bad run of years (only 1 in 10 is worse)"; the stat is "Spending that lasts, even in a bad run of
+years"; "adjusted for inflation" (the engine's label, core/math/retirement.js, untouched) is shown as "in today's dollars";
+"(Contributions page)" is "(What you save for retirement)", "(Assumptions page)" is "(Numbers we assume)", and, in the view only (a golden file pins the compute text), the missing-input line
+"your accounts on the Net worth page" is "what you own (add your accounts)". The inline links are 44 px (`.pj-link`). No figure changed.
+
+## Path part 3, review fixes
+- `savingsUnknown(d)` (compute.js): nothing saved for retirement on file (no first-year balance, nothing being added) and the verdict is not "on track". The page then heads "We don't know yet" with a link to What you own, and the careful line is not run. Quick answers' retire answer (`verdict: "unknown"`) and Your plan's row ("Not known yet", calm, not a gap) follow. No figure changes.

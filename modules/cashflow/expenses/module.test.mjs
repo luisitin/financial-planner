@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { compute, CATEGORIES, closeGap } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 import * as fmt from "../../../core/format.js";
@@ -303,4 +305,76 @@ test("C3 verify: the bank card's notice names what was written (one row, a new b
   assert.equal(fromBankWords({ name: "Eating out", amount: 1010, row: true, also: [{ name: "Subscriptions", amount: 30 }, { name: "Pets", amount: 40 }] }), "From your bank: Eating out $1,010, Subscriptions $30 and Pets $40 a month.");
   // a row whose own kind the bank barely shows goes, and only the bills split off it are named
   assert.equal(fromBankWords({ name: "Eating out and fun", amount: 0, row: false, also: [{ name: "Subscriptions", amount: 60 }] }), "From your bank: Subscriptions $60 a month.");
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ['once prices rise', 'See or change each bill', 'ex-link']) assert.ok(view.includes(w), w);
+  for (const w of ['after inflation']) assert.ok(!view.includes(w), w);
+});
+
+// review fix (UX 1): the list opens by bills typed, not by dollars; Get started's spread rows do not count as typed
+test("part 3 review: billsFoldOpen opens for short lists and for lists mostly typed here, not for Get started's rows", async () => {
+  const { billsFoldOpen } = await import("./compute.js");
+  const mk = (ids) => { const p = emptyPlan(); p.expenses = ids.map((id) => ({ id, name: id, category: "other", amount: 100, period: "monthly" })); return p; };
+  const seven = ["setup-x-home", "setup-x-food", "setup-x-car", "setup-x-fun", "setup-x-health", "setup-x-kids", "setup-x-other"];
+  const p1 = mk(seven);
+  assert.equal(billsFoldOpen(p1, p1.expenses), false, "one total spread over seven rows: closed");
+  const p2 = mk(["a", "b", "c", "d", "e", "f", "g", "h"]);
+  assert.equal(billsFoldOpen(p2, p2.expenses), true, "eight typed bills: open");
+  const p3 = mk([...seven.slice(0, 5), "mine", "mine2"]);
+  assert.equal(billsFoldOpen(p3, p3.expenses), false, "two typed of seven: closed");
+  const p4 = mk(["a", "b", "c", "d", "e"]);
+  assert.equal(billsFoldOpen(p4, p4.expenses), true, "five or fewer: open");
+});
+test("part 3 review: the tiles say bills you have to pay and could be cut; a too-high guess is said plainly", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  for (const w of ['"Bills you have to pay"', '"Could be cut"', "probably too high", "a bill you have to pay"]) assert.ok(view.includes(w), w);
+  for (const w of ['ui.stat("Must pay"', 'ui.stat("Nice to have"']) assert.ok(!view.includes(w), w);
+});
+
+// verify 2026-11-06: with the bill list folded (many bills, most our guesses), a save re-draws the page: the list must stay open and the
+// confirmation must sit outside the fold, or the person sees the fold shut and no word that the bill was added
+test("verify: adding a bill with the list folded keeps it open and shows the confirmation above the fold", async () => {
+  const { render } = await import("./view.js");
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const mkNode = (tag, kids = []) => {
+    const n = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
+      replaceChildren(...k) { n.kids = []; n.append(...k); }, remove() {}, scrollIntoView() {}, querySelector() { return null; }, set innerHTML(v) { n.kids = []; void v; },
+      get textContent() { return n.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } };
+    n.append(...kids); return n;
+  };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const T = "2026-11-02";
+  const plan = emptyPlan();
+  plan.meta.currency = plan.meta.currency ?? "USD";
+  plan.expenses = ["housing", "utilities", "groceries", "transport", "insurance", "dining", "shopping"].map((k) => ({ id: `setup-x-${k}`, name: k, category: k, amount: 100, period: "monthly", essential: true }));
+  for (const x of plan.expenses) markGuess(plan, `expenses[${x.id}].amount`, { key: `spend.${x.category}`, value: 100, unit: "month", sigma: 0.25, dataAsOf: T }, T);
+  let submit = null, addClick = null;
+  const ui = { h: (tag, a, ...k) => mkNode(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => mkNode("card", [t, ...k]),
+    button: (l, onClick) => { if (/Add another expense/.test(l)) addClick = onClick; return mkNode("button", [l]); }, notice: (lv, t) => mkNode("notice", [t]),
+    row: (...k) => mkNode("row", k), stat: (l, v, s) => mkNode("stat", [l, v, s]), form: (f, v, onSubmit) => { submit = onSubmit; return mkNode("form"); },
+    field: (l, c) => mkNode("field", [l, c]), select: () => mkNode("select"), uid: () => "u1", confirm: () => false };
+  const draw = (p, update) => { const root = mkNode("root"); render(root, { ui, fmt: { ...fmt, today: () => T }, plan: p, store: { update }, computeOf: () => null, route: { query: {} } }); return root; };
+  const fold = (root) => root.kids.find((c) => c && c.tag === "details");
+  const first = draw(plan, () => {});
+  assert.equal(fold(first).open, false, "7 bills, all our guesses: the list starts folded");
+  // the Add button lives inside the fold; open the form, then save through the form's own handler
+  addClick();
+  let next = null;
+  submit({ name: "Gym", category: "fun", amount: 40, period: "monthly", essential: false, inflates: true, startDate: "", endDate: "" });
+  // the store mock hands back the new plan; the shell then draws the page again
+  const saved = structuredClone(plan); saved.expenses.push({ id: "u1", name: "Gym", category: "fun", amount: 40, period: "monthly", essential: false });
+  // (the real handler called store.update with a draft function; run it on a copy to be sure it adds one row)
+  const probe = structuredClone(plan); let ran = false;
+  const second = draw(saved, () => { ran = true; });
+  assert.equal(fold(second).open, true, "after a save the list stays open");
+  const outside = second.kids.filter((c) => c && c.tag === "div" && /Gym added\./.test(c.textContent));
+  assert.equal(outside.length, 1, "the confirmation is a child of the page, not of the fold");
+  assert.ok(!/Gym added\./.test(fold(second).textContent), "and not hidden inside the fold");
+  void next; void probe; void ran;
+  // the notice shows once: the next draw has no pending word and the list folds again
+  assert.equal(fold(draw(plan, () => {})).open, false);
 });

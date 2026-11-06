@@ -508,7 +508,7 @@ test("C3 a thin cushion measured against guessed must-pay bills is said by our g
   assert.ok(!ids(d).some((i) => /^emergency-(bad|warn|later)$/.test(i)));
   const a = d.alerts.find((x) => x.id === "emergency-guessed");
   assert.deepEqual([a.level, a.title, a.go], ["info", "Emergency fund: by our guesses", ["cashflow", "expenses"]]);
-  assert.match(a.detail, /^By our guesses of your must-pay bills, usable cash covers about 0\.5 months; the plan aims for \d+\. Type your real bills to know for sure\.$/);
+  assert.match(a.detail, /^By our guesses of the bills you have to pay, usable cash covers about 0\.5 months; the plan aims for \d+\. Type your real bills to know for sure\.$/);
 });
 
 test("round 8 item 40: within a level, an alert with a date comes first: the required withdrawal before the cushion", async () => {

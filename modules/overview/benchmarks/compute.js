@@ -1,7 +1,7 @@
 // modules/overview/benchmarks/compute.js -- PURE. How the household compares: net worth against the
 // median family whose head is the same age (Federal Reserve, Survey of Consumer Finances), retirement
 // savings against Fidelity's multiple of salary for the age, and the rules of thumb most planners use:
-// 15% of pay saved for retirement, 3 to 6 months of must-pay bills in cash, housing under 28% of
+// 15% of pay saved for retirement, 3 to 6 months of the bills you have to pay in cash, housing under 28% of
 // gross income, all debt payments under 36%.
 import { compute as computePeople } from "../../household/people/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
@@ -96,14 +96,14 @@ export function compute(plan, params = {}) {
     else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).`;
   }
 
-  // 4. cash: months of must-pay bills, against the plan's own aim (liquidity's targetMonths: assumptions.emergencyMonths, the
+  // 4. cash: months of the bills you have to pay, against the plan's own aim (liquidity's targetMonths: assumptions.emergencyMonths, the
   // Emergency fund page's): at or past it "ahead", from 3 months (the planners' least) up to it "on par", under 3 "behind"
   // (round 8, 2026-11-06: 5.1 months read "ahead" of 3 while every other page aims for 6)
   const liq = computeLiquidity(plan, { today });
   if (liq.runwayMonths !== null) {
     const m = liq.runwayMonths, aim = Number(liq.targetMonths) > 0 ? Number(liq.targetMonths) : RULES.cashMax;
     add({ id: "cash", title: "Cash for emergencies", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
-      sentence: `Usable cash covers ${m.toFixed(1)} months of must-pay bills; your plan aims for ${Math.round(aim * 10) / 10} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
+      sentence: `Usable cash covers ${m.toFixed(1)} months of the bills you have to pay; your plan aims for ${Math.round(aim * 10) / 10} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
   }
 
   // 5. housing and 6. all debt payments, against gross income. One rule on these rows (round 8 review, 2026-11-06): over the

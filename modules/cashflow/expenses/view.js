@@ -1,7 +1,7 @@
 // modules/cashflow/expenses/view.js -- DOM only. Totals, a breakdown by category with bars,
 // a tappable list of expenses, one form to add or edit.
 import { bankVsPlan } from "../income-statement/compute.js";
-import { compute, CATEGORIES, closeGap, addFromBank, fromBankWords, BANK_SPREAD } from "./compute.js";
+import { compute, billsFoldOpen, CATEGORIES, closeGap, addFromBank, fromBankWords, BANK_SPREAD } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { spendMissing, spendSaidComplete, spendAskAgain, spendBankNote, fillOffers } from "../../overview/guesses/compute.js";
@@ -49,7 +49,7 @@ export function render(root, ctx) {
     // (the full-month figure to the nearest $10, as every page says it: Next best action's spare.fullAbout; round 5)
     // within $5 of $0 the full month "only just about breaks even" (spare.fullKind), never "about $0" (round 5)
     // most of the spending is our guesses (spec 8.1): the figure waits for the real spending, said calmly
-    if (nba?.ready && nba.spare.waits) return linked(ui.stat("Left over", "Depends on your spending", `With our guesses, about ${fmt.money(Math.round(Math.abs(nba.spare.monthly) / 10) * 10, cur)} ${nba.spare.monthly < 0 ? "short" : "spare"} each month. Type yours in the list below.`, { link: true }));
+    if (nba?.ready && nba.spare.waits) return linked(ui.stat("Left over", "Depends on your spending", nba.spare.monthly < 0 ? `Our guess is more than comes in, so it is probably too high. Open "See or change each bill" to type your real month.` : `With our guesses, about ${fmt.money(Math.round(Math.abs(nba.spare.monthly) / 10) * 10, cur)} spare each month. Open "See or change each bill" to type yours.`, { link: true }));
     // the list is far below what households like this spend ("Is something missing?" just below): the figure waits on it, calm
     // (C7 UX review 2: "$4,368 Left over" right above the question read as money to spare)
     if (nba?.ready && miss) return linked(ui.stat("Left over", "Depends on your spending", `Your list may be missing about ${fmt.money(Math.round(miss.rest / 10) * 10, cur)} a month. See "Is something missing?" just below.`, { link: true }));
@@ -63,14 +63,14 @@ export function render(root, ctx) {
     if (!(nba?.ready && nba.spare.monthly < 0) || nba.spare.waits) return null;   // never what to cut on our guesses
     // retired and living on savings as the plan intends: a calm line, not a list of things to cut
     if (nba.drawing) return ui.h("section", { class: "card" }, ui.h("h2", {}, "Drawn from savings"),
-      ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. If markets do as well as average, your plan can carry ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less).`),
+      ui.h("p", {}, `About ${fmt.money(-nba.spare.monthly, cur)} a month comes from your savings. If your investments do about average, your plan can carry ${fmt.money(nba.drawing.affordableMonthly, cur)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less).`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last? ›")));
     const g = closeGap(d.items, -nba.spare.monthly, { goalSaving: nba.spare.goalSaving });
     const m = (v) => fmt.money(v, cur);
     // short only on the careful month (Side income's "count on"): a month that brings the Income page's amount leaves money,
     // so good months make up for lean ones and no must-pay has to go (review 2026-11-02)
     const held = nba.spare.held > 0.5, kind = nba.spare.fullKind, lean = held && kind === "ahead";
-    const open = (id) => { const x = plan.expenses.find((y) => y.id === id); if (!x) return; editing = x; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    const open = (id) => { const x = plan.expenses.find((y) => y.id === id); if (!x) return; editing = x; showForm = true; openFold(); drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); };
     const row = (x, detail) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => open(x.id),
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name), ui.h("div", { class: "d" }, detail)),
@@ -86,9 +86,9 @@ export function render(root, ctx) {
       ui.notice("warn", held ? `About ${m(g.gap)} a month more goes out than comes in, after tax and saving, counting uneven pay at what you can count on (Side income). ${lean ? `A month that brings the Income page's amount leaves about ${m(nba.spare.fullAbout)}, so this is about the lean months.` : kind === "even" ? "Even a month that brings the Income page's amount only just about breaks even. This is the first thing to fix." : `Even a month that brings the Income page's amount is about ${m(-nba.spare.fullAbout)} short. This is the first thing to fix.`}`
         : `About ${m(g.gap)} a month more goes out than comes in, after tax and what goes to saving. This is the first thing to fix.`),
       ui.h("p", {}, lead),
-      g.picks.length ? ui.h("ul", { class: "page-list" }, g.picks.map((x) => row(x, x.trimBy ? `nice to have \u00b7 ${trimText(x)}` : "nice to have"))) : null,
+      g.picks.length ? ui.h("ul", { class: "page-list" }, g.picks.map((x) => row(x, x.trimBy ? `could be cut \u00b7 ${trimText(x)}` : "could be cut"))) : null,
       must ? ui.h("p", { class: "small", style: { margin: "12px 0 0" } }, g.picks.length ? "The rest has to come from a must-pay. The biggest:" : "The biggest must-pays:") : null,
-      must ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "must pay \u00b7 a cheaper version closes part of it"))) : null,
+      must ? ui.h("ul", { class: "page-list" }, g.bigMustPays.map((x) => row(x, "a bill you have to pay \u00b7 a cheaper version closes part of it"))) : null,
       g.goalSaving > 0 ? ui.h("p", { class: "muted small" }, `Or for now: ${m(g.goalSaving)} a month goes to your goals, and pausing some of it closes ${g.goalSaving >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/goals/goals" }, "Goals \u203a")) : null,
       // the saved debt plan's extra counts as spoken for; when it is what tips the month over, lowering it is a way out too
       nba.spare.debtExtra > 0 ? ui.h("p", { class: "muted small" }, `Or: ${m(nba.spare.debtExtra)} a month extra goes to debts on top of the required payments, and lowering it closes ${nba.spare.debtExtra >= g.gap ? "the gap" : "part of the gap"}. `, ui.h("a", { href: "#/debt/payoff" }, "Pay off debts ›")) : null,
@@ -97,6 +97,16 @@ export function render(root, ctx) {
   };
 
   const out = ui.h("div");
+  // the bills fold under one button when there are many and most are our guesses (part 3 of the path: the page opens short);
+  // short lists and lists the person has mostly typed stay open. Every action that needs the list or the form opens it.
+  // (billsFoldOpen in compute.js: counted by bills, so a plan fresh from Get started opens short)
+  const shortOpen = billsFoldOpen(plan, d.items);
+  const foldBody = ui.h("div", { class: "fold-body" });
+  const fold = ui.h("details", { class: "fold ex-fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "See or change each bill"), ui.h("span", { class: "fold-status" }, `${d.count} ${d.count === 1 ? "bill" : "bills"}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")), foldBody);
+  // a save, edit or remove just happened inside the list: keep it open after the re-render, and show the confirmation above the
+  // fold (inside a closed fold it was hidden: verify 2026-11-06)
+  fold.open = shortOpen || !!pending;
+  const openFold = () => { fold.open = true; };
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
   if (d.count === 0) {
@@ -117,14 +127,12 @@ export function render(root, ctx) {
   } else {
     root.append(ui.card(null, ui.row(
       ui.stat("Per month", fmt.money(d.monthly, cur), d.guessedMonthly > 0 ? (d.monthly - d.guessedMonthly < 5 ? "all of it our guesses for now" : `about ${fmt.money(Math.round(d.guessedMonthly / 10) * 10, cur)} of it our guesses for now`) : `${fmt.money(d.yearly, cur)} a year`),
-      ui.stat("Must pay", fmt.money(d.essentialMonthly, cur), "per month, the bills that cannot wait"),
-      ui.stat("Nice to have", fmt.money(d.optionalMonthly, cur), "per month, could be cut in a pinch"),
       leftTile(),
     ),
     // Next year and one-time amounts as one sentence under the tiles (design log 2026-09-16, pass 3).
     ui.h("p", { class: "muted small", style: { marginTop: "10px" } },
       // (with our guesses in the month, to three figures: it is not known to the dollar)
-      `Next year about ${fmt.money(d.guessedMonthly > 0 ? Number(d.nextYear.toPrecision(3)) : d.nextYear, cur)} after inflation.` +
+      `Next year about ${fmt.money(d.guessedMonthly > 0 ? Number(d.nextYear.toPrecision(3)) : d.nextYear, cur)} once prices rise.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
     // "Is something missing?" (spec 11.6): the list typed here is far below what households like this spend; one question with
@@ -184,7 +192,7 @@ export function render(root, ctx) {
           const y = new Date(`${fmt.today()}T12:00:00`); y.setDate(y.getDate() - 1);
           const before = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
           store.update((p) => { const e = (p.expenses ?? []).find((z) => z.id === x.id); if (e) e.endDate = before; });
-        }), ui.button("It is something else", () => { const e = plan.expenses.find((z) => z.id === x.id); if (!e) return; editing = e; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" }))));
+        }), ui.button("It is something else", () => { const e = plan.expenses.find((z) => z.id === x.id); if (!e) return; editing = e; showForm = true; openFold(); drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" }))));
     }
     // a kind that is only Get started's rows is named as the row ("Eating out and fun", "Home costs"), and one that is only
     // our guesses says so, its bar in the calm colour (a guess never looks like a figure the person gave)
@@ -194,14 +202,20 @@ export function render(root, ctx) {
       const xs = c.virtual ? [] : ofKind(c), setupOnly = xs.length > 0 && xs.every((x) => String(x.id ?? "").startsWith("setup-x-"));
       return { label: setupOnly ? xs.map((x) => x.name).join(", ") : c.label, ours: xs.length > 0 && xs.every(isOurs), bank: xs.length > 0 && xs.every(isBank) };
     };
-    if (d.byCategory.length) root.append(ui.card("Where it goes",
+    foldBody.append(ui.row(
+      ui.stat("Bills you have to pay", fmt.money(d.essentialMonthly, cur), "per month, the bills that cannot wait"),
+      ui.stat("Could be cut", fmt.money(d.optionalMonthly, cur), "per month, nice to have but not needed")));
+    root.append(out, fold);
+    const activeCount = d.items.filter((x) => x.active).length;
+    // one row per kind (Get started's seven rows): "Where it goes" would only repeat the list below it
+    if (d.byCategory.length && d.byCategory.length < activeCount) foldBody.append(ui.card("Where it goes",
       ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => { const b = barOf(c); return ui.h("li", {},
         ui.h("span", { class: "ic" }, c.icon),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, b.label), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(c.share * 100)}%`, ...(b.ours ? { background: "var(--muted)" } : {}) } }))),
         ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.monthly, cur)), ui.h("div", { class: "muted small" }, b.ours ? `a month \u00b7 our guess` : b.bank ? `a month \u00b7 from your bank` : `a month \u00b7 ${c.percent}%`)),
       ); })),
       // a payment kept only on the Debts page is counted, and said by name, so the total is never short of it
-      d.fromDebts?.length ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, `Counted from the Debts page, as no expense here is ${d.fromDebts.length === 1 ? "its" : "their"} payment: ${d.fromDebts.map((x) => `${x.name} ${fmt.money(x.monthly, cur)} a month`).join(", ")}. `, ui.h("a", { href: "#/balance/liabilities" }, "Debts \u203a")) : null,
+      d.fromDebts?.length ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, `Counted from the Debts page, as no expense here is ${d.fromDebts.length === 1 ? "its" : "their"} payment: ${d.fromDebts.map((x) => `${x.name} ${fmt.money(x.monthly, cur)} a month`).join(", ")}. `, ui.h("a", { href: "#/balance/liabilities", class: "ex-link" }, "Debts \u203a")) : null,
     ));
   }
   // the before-tax "you spend more than comes in" gives way to the after-tax figure the tile shows, whichever way it falls
@@ -251,27 +265,27 @@ export function render(root, ctx) {
   if (d.count > 0) {
     const sub = (x) => {
       const ours = typeof x.id === "string" && isGuess(plan, `expenses[${x.id}].amount`);
-      const bits = [...(ours ? [isBank(x) ? "From your bank files: tap to type yours" : "Our guess for now: tap to type yours"] : []), `${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.categoryLabel, x.essential ? "must pay" : "nice to have"];
+      const bits = [...(ours ? [isBank(x) ? "From your bank files: tap to type yours" : "Our guess for now: tap to type yours"] : []), `${fmt.money(x.amount, cur)} ${x.periodLabel.toLowerCase()}`, x.categoryLabel, x.essential ? "a bill you have to pay" : "could be cut"];
       if (x.upcoming) bits.push(`starts ${fmt.date(x.startDate)}`);
       if (x.ended) bits.push(`ended ${fmt.date(x.endDate)}`);
       else if (x.endDate) bits.push(`until ${fmt.date(x.endDate)}`);
       return bits.join(" · ");
     };
     const rows = [...d.items].sort((a, b) => Number(b.active) - Number(a.active) || b.monthly - a.monthly);
-    root.append(ui.card("Expenses",
+    foldBody.append(ui.card("Expenses",
       ui.h("ul", { class: "page-list" }, rows.map((x) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer", opacity: x.active ? 1 : 0.6 },
-        onClick: () => { editing = plan.expenses.find((y) => y.id === x.id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
+        onClick: () => { editing = plan.expenses.find((y) => y.id === x.id); showForm = true; openFold(); drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, x.icon),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x))),
         ui.h("span", { class: "st amount" }, !x.active ? ui.h("div", { class: "muted" }, x.upcoming ? "not yet" : "ended") : ui.h("div", {}, x.period === "once" ? fmt.money(x.amount, cur) : fmt.money(x.monthly, cur)), !x.active ? null : ui.h("div", { class: "muted small" }, x.period === "once" ? "one time" : "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a")),
       ))),
       ui.h("p", { class: "muted small" }, d.guessedMonthly > 0 ? "Tap an expense to change it. Our guesses fill in what you haven't typed; as you type yours, the rest may adjust so the month stays near what households like yours spend in all." : "Tap an expense to change it."),
-      out, formHost,
+      formHost,
     ));
   } else {
     formCard.append(out, formHost);
     root.append(formCard);
   }
-  root.append(ui.h("style", {}, ".st.amount { text-align: right; }"));
+  root.append(ui.h("style", {}, ".st.amount { text-align: right; } .ex-fold { margin: 0 0 14px; } .ex-fold > summary { border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 6px 14px; background: var(--panel); } .ex-fold[open] > summary { margin-bottom: 12px; } .ex-fold .fold-body { padding-top: 12px; } .ex-fold .fold-body > .row { margin-bottom: 12px; } .ex-fold .fold-title { color: var(--accent-ink); } .ex-link { display: inline; padding: 14px 4px; margin: -14px 0; }"));
 }

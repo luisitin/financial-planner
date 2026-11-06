@@ -14,7 +14,7 @@ export default {
   needs: ["household", "accounts", "retirement"],
   writes: [],
   heavy: false,
-  purpose: "When the tax rules make you take money out of pre-tax accounts, and how big those withdrawals look.",
+  purpose: "When the tax rules make you take money out of accounts you haven't paid tax on yet, and how big those withdrawals look.",
   aliases: ["rmd", "required minimum distribution", "age 73", "age 75", "forced withdrawals"],
   compute,
   render,

@@ -10,7 +10,7 @@ import {
   existingHave, existingOwe, existingPay, askOwners, oweTaken, goalTaken, askHomeWithMortgage, spendRows,
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
-  applyGoalPicks, applyGoalDetails, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
+  applyGoalPicks, applyGoalDetails, sumSplit, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
@@ -119,6 +119,10 @@ select.su-in { font-size: var(--fs-md); }
 .su-row .su-money > span { font-size: var(--fs-md); left: 12px; }
 .su-row .su-money > input { padding-left: 26px; }
 .su-row .su-fixed { text-align: right; font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; padding-right: 14px; }
+.su-fold { margin: 14px 0 0; }
+.su-fold > summary { border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 6px 14px; background: var(--panel); }
+.su-fold[open] > summary { margin-bottom: 12px; }
+.su-fold .fold-title { color: var(--accent-ink); }
 .su-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; margin: 8px 0 0; border-radius: var(--radius-sm); background: var(--panel-2); font-weight: 650; }
 .su-total b { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
 .su-parts { color: var(--text-2); font-size: var(--fs-sm); text-align: right; margin: 6px 4px 20px; font-variant-numeric: tabular-nums; }
@@ -127,7 +131,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-have b { color: var(--text); font-weight: 600; }
 .su-basis { margin: 4px 0 12px; font-size: var(--fs-sm); }
 .su-first { margin: 0 0 8px; font-weight: 600; color: var(--text); font-size: var(--fs-sm); }
-.su-basis[hidden], .su-first[hidden], .su-tap[hidden], .su-adjust[hidden] { display: none; }
+.su-basis[hidden], .su-first[hidden], .su-tap[hidden], .su-adjust[hidden], .su-over[hidden] { display: none; }
 .su-tap { padding: 0 0 12px; }
 .su-tap .su-field { margin: 0; }
 .su-tap .su-label { font-size: var(--fs-sm); font-weight: 600; }
@@ -884,13 +888,13 @@ export function render(page, ctx) {
       const mode = tileGroup("How to answer", [{ key: "rows", icon: "📋", label: "A few groups", line: "Rent, food, car..." }, { key: "total", icon: "✏️", label: "One rough total", line: "If you're not sure" }],
         { radio: true, isOn: (o) => (o.key === "total") === (v.mode === "total"), onPick: (o) => { v.mode = o.key; drawBody(); } });
       const drawBody = () => {
-        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }), "Home, food, car, fun: everything. It counts as must-pay, to be safe."));
+        if (v.mode === "total") swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", moneyIn(v.total, (val) => { v.total = val; upd(); }), "Home, food, car, fun: everything. It counts as bills you have to pay, to be safe."));
         else {
           sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
           const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
           const loanRow = base.loanPayments > 0 ? ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("span", { class: "su-label" }, "Loan and card payments"), ui.h("span", { class: "su-sub" }, "From question 5, already counted")), ui.h("span", { class: "su-fixed" }, money(base.loanPayments))) : null;
           swap(body,
-            must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Must-pay bills", sums.must), ...must.map(row), loanRow) : null,
+            must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Bills you have to pay", sums.must), ...must.map(row), loanRow) : null,
             other.length ? ui.h("div", { class: "su-group" }, ui.h("div", { class: "su-gh" }, "Everything else", sums.else), ...other.map(row)) : null,
             rows.length ? null : ui.h("p", { class: "su-sub" }, "Every kind of bill is already in your plan."));
         }
@@ -915,8 +919,13 @@ export function render(page, ctx) {
       if (!applies(plan)) { UI.spendPlain(); return; }
       const v = draft(() => valuesFor(plan, "spend"));
       v.taps = v.taps ?? {};
+      // one box first (part 3 of the path): "Your best guess for a normal month". A plan saved with "One rough total" reopens with
+      // that figure in the box; the groups sit in a fold below, which opens by itself when the plan already has typed groups
+      if (v.mode === "total") { v.sum = v.total; v.mode = "rows"; }
+      v.sum = v.sum ?? "";
+      v.mode = "rows";
       const base = spendBase(plan), rows = spendRows(plan), mortgage = hasMortgage(plan), loansLater = loansAfterWork(plan, today);
-      head("🛒", "What do you spend in a typical month?", "Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone like you.");
+      head("🛒", "What do you spend in a typical month?", "A rough number is fine. Leave the box empty and we'll use the grey figure: what's typical for someone like you.");
       if (base.existingCount) add(card, ui.h("p", { class: "su-have" }, "Already in your plan: ", ui.h("b", {}, `${money(base.existing)} a month`), ` in ${base.existingCount} bill${base.existingCount === 1 ? "" : "s"}. Add only what's missing.`));
       if (base.loanPayments > 0) add(card, ui.h("p", { class: "su-have" }, "Leave out loan and card payments: we already have them (", ui.h("b", {}, `${money(base.loanPayments)} a month`), ") and add them to the total below."));
       const basis = ui.h("p", { class: "su-sub su-basis" });
@@ -927,7 +936,7 @@ export function render(page, ctx) {
       // R10 (spec 2.2): a box typed moves the other grey figures so the month stays near what households like this spend in
       // all; when it does, one line says so (C3 UX review 2: the figures moved and nothing said why)
       // (su-adjust: .su-sub's display would otherwise override [hidden], and the line showed before anything was typed; C3 verify)
-      const adjustEl = ui.h("p", { class: "su-sub su-adjust", hidden: true },"As you type, our other figures adjust, so the month stays near what households like yours usually spend in all.");
+      const adjustEl = ui.h("p", { class: "su-sub su-adjust", hidden: true },"We changed our other guesses to fit what you typed, so the month stays near what households like yours spend. Type a total in the top box to set the whole month yourself.");
       let blankBase = null, blankKey = null;
       const baseGrey = (args) => {
         const key = JSON.stringify(args.taps ?? {});
@@ -952,21 +961,16 @@ export function render(page, ctx) {
         grey = {};
         for (const s of rows) {
           const b = boxes[s.key];
-          const blank = v.mode === "total" ? args.total === null : args.rows[s.key] === null;
+          const blank = args.rows[s.key] === null;
           const g = blank ? ctx.guess(`spend.${s.key}`, { path: `expenses[setup-x-${s.key}].amount`, args }) : null;
           grey[s.key] = g && typeof g.value === "number" ? g.value : 0;
-          if (b?.input) {
-            const shown = grey[s.key] > 0 ? groupDigits(String(Math.round(grey[s.key]))) : "";
-            b.input.placeholder = shown;
-            b.input.setAttribute("aria-label", `${b.name}${shown ? `, blank uses our guess of about ${symbol}${shown}` : ""}`);
-          }
           // a tap the row's guess asks (how health cover is had, childcare, an HOA fee), kept on screen once answered
           if (b?.tap) {
             const q = g?.ask ?? null, said = v.taps[b.tapKey] ?? null;
             // at most two "does this exist" taps on the screen (spec P9): with childcare asked, the HOA fee is not asked
             // (blank takes the likelier side, as Not sure does)
             const room = b.tapKey !== "hoa" || !rows.some((r) => r.key === "childcare") || !!said;
-            const want = v.mode !== "total" && blank && (!!q || !!said) && room;
+            const want = blank && (!!q || !!said) && room;
             if (want && !b.tapBuilt && (q || b.ask)) {
               const ask = q ?? b.ask;
               b.ask = ask;
@@ -977,26 +981,44 @@ export function render(page, ctx) {
             if (said) b.tap.querySelector(".su-care-again")?.remove();
           }
         }
-        const typedOf = (s) => (v.mode === "total" ? 0 : num(v.rows[s.key]));
-        const rowFig = (s) => typedOf(s) || (args.rows?.[s.key] === 0 ? 0 : grey[s.key] ?? 0);
-        const typedSum = v.mode === "total" ? (args.total ?? 0) : rows.reduce((t, s) => t + typedOf(s), 0);
-        const ours = v.mode === "total" && args.total !== null ? 0 : rows.reduce((t, s) => t + (typedOf(s) || args.rows?.[s.key] === 0 ? 0 : grey[s.key] ?? 0), 0);
-        if (totalInput) { const t = rows.reduce((x, s) => x + (grey[s.key] ?? 0), 0); totalInput.placeholder = t > 0 ? groupDigits(String(Math.round(t))) : ""; totalInput.setAttribute("aria-label", `All your spending in a month${t > 0 ? `, blank uses our guess of about ${symbol}${groupDigits(String(Math.round(t)))}` : ""}`); }
-        totalEl.textContent = money(typedSum + ours + base.existing + base.loanPayments);
-        partsEl.textContent = ours > 0 || base.loanPayments > 0 || base.existing > 0
-          ? [typedSum > 0 ? `${money(typedSum)} you typed` : null, ours > 0 ? `${money(ours)} our guesses` : null, base.existing > 0 ? `${money(base.existing)} already in your plan` : null, base.loanPayments > 0 ? `${money(base.loanPayments)} loan payments` : null].filter(Boolean).join(" + ") : "";
+        // the best-guess figure shares itself over the blank groups in the proportions of our guesses (sumSplit, what saving writes)
+        const sumTyped = Math.round(num(v.sum));
+        const split = sumTyped > 0 ? sumSplit(rows, args, sumTyped, (s) => ({ value: grey[s.key] })) : null;
+        const shown = (s) => (split ? split.rows[s.key] ?? 0 : grey[s.key] ?? 0);
+        for (const s of rows) {
+          const b = boxes[s.key];
+          if (!b?.input) continue;
+          const fig = args.rows[s.key] === null ? shown(s) : 0;
+          const text = fig > 0 ? groupDigits(String(Math.round(fig))) : "";
+          b.input.placeholder = text;
+          b.input.setAttribute("aria-label", `${b.name}${text ? `, blank uses ${split ? "your best guess shared out, about" : "our guess of about"} ${symbol}${text}` : ""}`);
+        }
+        const typedOf = (s) => num(v.rows[s.key]);
+        const rowFig = (s) => typedOf(s) || (args.rows?.[s.key] === 0 ? 0 : shown(s));
+        const typedSum = rows.reduce((t, s) => t + typedOf(s), 0);
+        const ours = split ? 0 : rows.reduce((t, s) => t + (typedOf(s) || args.rows?.[s.key] === 0 ? 0 : grey[s.key] ?? 0), 0);
+        const own = split ? Math.max(sumTyped, typedSum) : typedSum;
+        if (totalInput) {
+          const t = Math.round(typedSum + rows.reduce((x, s) => x + (grey[s.key] ?? 0), 0));
+          totalInput.placeholder = t > 0 ? groupDigits(String(t)) : "";
+          totalInput.setAttribute("aria-label", `Your best guess for a normal month${t > 0 ? `, blank uses our guess of about ${symbol}${groupDigits(String(t))}` : ""}`);
+        }
+        totalEl.textContent = money(own + ours + base.existing + base.loanPayments);
+        partsEl.textContent = ours > 0 || split || base.loanPayments > 0 || base.existing > 0
+          ? [own > 0 ? `${money(own)} ${split ? "your best guess" : "you typed"}` : null, ours > 0 ? `${money(ours)} our guesses` : null, base.existing > 0 ? `${money(base.existing)} already in your plan` : null, base.loanPayments > 0 ? `${money(base.loanPayments)} loan payments` : null].filter(Boolean).join(" + ") : "";
+        overNote.hidden = !(split && typedSum > sumTyped);
         if (sums.must) sums.must.textContent = money(rows.filter((s) => s.group === "must").reduce((t, s) => t + rowFig(s), 0) + base.loanPayments);
         if (sums.else) sums.else.textContent = money(rows.filter((s) => s.group === "else").reduce((t, s) => t + rowFig(s), 0));
         // the one basis line (spec 5.6), and the rent first while rent is ours
-        const typedAny = v.mode !== "total" && rows.some((s) => args.rows?.[s.key] !== null && args.rows?.[s.key] !== undefined);
-        adjustEl.hidden = !(typedAny && rows.some((s) => args.rows?.[s.key] === null && Math.abs((grey[s.key] ?? 0) - (baseGrey(args)[s.key] ?? 0)) >= 10));
+        const typedAny = rows.some((s) => args.rows?.[s.key] !== null && args.rows?.[s.key] !== undefined);
+        adjustEl.hidden = !(!split && typedAny && rows.some((s) => args.rows?.[s.key] === null && Math.abs((grey[s.key] ?? 0) - (baseGrey(args)[s.key] ?? 0)) >= 10));
         const anyGrey = Object.values(grey).some((x) => x > 0);
-        basis.textContent = anyGrey ? spendBasis(plan, { today }) : "";
+        basis.textContent = anyGrey ? (split ? `The grey figures are your ${money(sumTyped)} shared out the way a household like yours usually spends it. Type your own to change one.` : spendBasis(plan, { today })) : "";
         basis.hidden = !basis.textContent;
-        first.hidden = !(v.mode !== "total" && renting && rows.some((s) => s.key === "housing") && args.rows?.housing === null && grey.housing > 0);
+        first.hidden = !(renting && rows.some((s) => s.key === "housing") && args.rows?.housing === null && grey.housing > 0);
         // retirement: our figure follows the rows until it is typed
         if (!allRetired(plan)) {
-          const g = later.typed ? null : ctx.guess("overview/setup:retireSpend", { path: "retirement.spendingMonthly", args });
+          const g = later.typed ? null : ctx.guess("overview/setup:retireSpend", { path: "retirement.spendingMonthly", args: split ? { ...args, rows: { ...args.rows, ...split.rows } } : args });
           const fig = g && g.value > 0 ? g.value : null;
           if (laterInput) {
             laterInput.placeholder = fig ? groupDigits(String(Math.round(fig))) : "";
@@ -1020,37 +1042,40 @@ export function render(page, ctx) {
         boxes[s.key] = { input, name, tap, tapKey, tapBuilt: false, ask: null };
         return [ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("label", { class: "su-label", for: id }, name), describe(input, help)), box), tap];
       };
-      const mode = tileGroup("How to answer", [{ key: "rows", icon: "📋", label: "A few groups", line: "Rent, food, car..." }, { key: "total", icon: "✏️", label: "One rough total", line: "If you're not sure" }],
-        { radio: true, isOn: (o) => (o.key === "total") === (v.mode === "total"), onPick: (o) => { v.mode = o.key; drawBody(); } });
       const drawBody = () => {
         for (const k of Object.keys(boxes)) delete boxes[k];
-        totalInput = null;
-        if (v.mode === "total") {
-          const box = moneyIn(v.total, (val) => { v.total = val; refresh(); });
-          totalInput = box.querySelector("input");
-          swap(body, field(base.existingCount ? "Everything else, in a month" : "All your spending in a month", box, "Home, food, car, fun: everything. It counts as must-pay, to be safe. Leave it empty and we'll use the grey figure, our guesses for each group added up."));
-        } else {
-          sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
-          const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
-          const loanRow = base.loanPayments > 0 ? ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("span", { class: "su-label" }, "Loan and card payments"), ui.h("span", { class: "su-sub" }, "From question 5, already counted")), ui.h("span", { class: "su-fixed" }, money(base.loanPayments))) : null;
-          swap(body,
-            must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Must-pay bills", sums.must), ...must.flatMap(row), loanRow) : null,
-            other.length ? ui.h("div", { class: "su-group" }, ui.h("div", { class: "su-gh" }, "Everything else", sums.else), ...other.flatMap(row)) : null,
-            rows.length ? null : ui.h("p", { class: "su-sub" }, "Every kind of bill is already in your plan."));
-        }
+        sums.must = ui.h("span", { class: "sum" }); sums.else = ui.h("span", { class: "sum" });
+        const must = rows.filter((s) => s.group === "must"), other = rows.filter((s) => s.group === "else");
+        const loanRow = base.loanPayments > 0 ? ui.h("div", { class: "su-row" }, ui.h("span", {}, ui.h("span", { class: "su-label" }, "Loan and card payments"), ui.h("span", { class: "su-sub" }, "From question 5, already counted")), ui.h("span", { class: "su-fixed" }, money(base.loanPayments))) : null;
+        swap(body,
+          must.length || loanRow ? ui.h("div", { class: "su-group first" }, ui.h("div", { class: "su-gh" }, "Bills you have to pay", sums.must), ...must.flatMap(row), loanRow) : null,
+          other.length ? ui.h("div", { class: "su-group" }, ui.h("div", { class: "su-gh" }, "Everything else", sums.else), ...other.flatMap(row)) : null,
+          rows.length ? null : ui.h("p", { class: "su-sub" }, "Every kind of bill is already in your plan."));
         refresh();
       };
-      add(card, mode, basis, first, body, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl, adjustEl);
+      // the one box: your best guess for a normal month, with the grey guess in it; the groups are optional, in the fold below
+      const sumBox = moneyIn(v.sum, (val) => { v.sum = val; refresh(); });
+      totalInput = sumBox.querySelector("input");
+      const overNote = ui.h("p", { class: "su-sub su-over", hidden: true, "aria-live": "polite" }, "The groups below add up to more than this, so we use the groups. Clear a box below to use your figure.");
+      add(card, field("Your best guess for a normal month", sumBox, base.loanPayments > 0 ? "Home, food, car, fun: everything except the loan and card payments we already have." : "Home, food, car, fun: everything. Leave it empty to use the grey figure."), basis, overNote);
+      add(card, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl, adjustEl);
+      // "Split it up (optional)": the groups, the health cover question (it sits under its group) and what you'll spend once you stop working
+      const fold = ui.h("details", { class: "fold su-fold" },
+        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Split it up (optional)"), ui.h("span", { class: "fold-status" }, "rent, food, car..."), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")),
+        ui.h("div", { class: "fold-body" }, first, body));
+      const typedRows = rows.some((s) => num(v.rows[s.key]) > 0 || v.rows[s.key] === 0) || base.existingCount > 0;
+      fold.open = typedRows;
+      add(card, fold);
       if (!allRetired(plan)) {
         if (laterBox) {
           const box = moneyIn(later.typed ? later.value : "", (val) => { later.value = val; later.typed = parseMoney(val) !== null; refresh(); });
           laterInput = box.querySelector("input");
           laterSub = ui.h("span", { class: "su-sub", "aria-live": "polite" });
           const id = `su-h-${++uid}`; laterSub.id = id; laterInput.setAttribute("aria-describedby", id);
-          add(card, group(null, ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, "Once you stop working, about how much a month?"), box), laterSub)));
+          fold.querySelector(".fold-body").append(group(null, ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, "Once you stop working, about how much a month?"), box), laterSub)));
         } else {
           laterLine = ui.h("p", { class: "su-sub su-laterline", "aria-live": "polite" });
-          add(card, laterLine);
+          fold.querySelector(".fold-body").append(laterLine);
         }
       }
       drawBody();
@@ -1080,10 +1105,11 @@ export function render(page, ctx) {
       // Childcare is never guessed without its tap (spec E06), so a Skip with the childcare tap unanswered asks it once more
       // first (C3 UX review 4: a parent who skipped had no childcare counted, and nothing said so); a second Skip goes on.
       let askedCare = false;
-      const careOpen = () => { const b = boxes.childcare; return !!b?.tap && !b.tap.hidden && !(v.taps.childcare) && v.mode !== "total"; };
+      const careOpen = () => { const b = boxes.childcare; return !!b?.tap && !b.tap.hidden && !(v.taps.childcare); };
       actions("Continue", { skipLabel: "Skip: use our guesses", onSkip: () => {
         if (careOpen() && !askedCare) {
           askedCare = true;
+          fold.open = true;
           const b = boxes.childcare;
           b.tap.querySelector(".su-care-again")?.remove();
           b.tap.prepend(ui.h("p", { class: "su-sub su-care-again", role: "status" }, "One thing first: we never guess childcare. Do you pay for it? Tap Yes, No or Not sure, or Skip again to leave it out."));
@@ -1126,7 +1152,7 @@ export function render(page, ctx) {
         const drawNote = () => {
           const also = [...sel].map((id) => { const o = shownGoals.filter((y) => y.key !== g.key && (v[y.key]?.funds ?? []).includes(id)); const a = choices.find((c) => c.id === id); return o.length && a ? `${a.name} is also for ${o.map((y) => goalWords({ id: `setup-goal-${y.key}`, name: v[y.key]?.name || y.label })).join(" and ")}.` : null; }).filter(Boolean);
           let have = null;
-          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your cushion now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of must-pay bills. Aim for ${c.months}.`; }
+          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your cushion now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of the bills you have to pay. Aim for ${c.months}.`; }
           swap(note, also.length ? ui.h("p", { class: "su-live" }, `${also.join(" ")} The goal due first fills first.`) : null, have ? ui.h("p", { class: "su-live" }, have) : null);
         };
         notes.push(drawNote);
@@ -1148,17 +1174,17 @@ export function render(page, ctx) {
           const live = ui.h("div", { "aria-live": "polite" });
           const drawC = () => {
             const pv = preview(), c = cushion(pv, x.months, today);
-            // Emergency fund's own target (months x must-pay bills), and why the cash it counts is less than the accounts hold
+            // Emergency fund's own target (months x bills you have to pay), and why the cash it counts is less than the accounts hold
             const share = c.exact > 0 ? Math.min(1, c.now / c.exact) : 0;
             swap(live, c.essential > 0
-              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.exact)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in must-pay bills${loans ? " and loan payments" : ""}.`)
-              : ui.h("p", { class: "su-live" }, "Your must-pay bills (question 6) set the amount."),
+              ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.exact)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in bills you have to pay${loans ? " and loan payments" : ""}.`)
+              : ui.h("p", { class: "su-live" }, "The bills you have to pay (question 6) set the amount."),
               c.essential > 0 ? ui.h("p", { class: "su-live" }, cushionHave(pv, c)) : null,
               c.essential > 0 ? ui.h("div", { class: "su-meter", role: "img", "aria-label": `${Math.round(share * 100)}% of the cushion` }, ui.h("span", { style: { width: `${Math.round(share * 100)}%` } })) : null);
           };
           drawC();
           redrawCushion = drawC;
-          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of must-pay bills?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of must-pay bills"), "Three to six months is the usual advice; more if your pay goes up and down."), live));
+          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of the bills you have to pay?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of the bills you have to pay"), "Three to six months is the usual advice; more if your pay goes up and down."), live));
           continue;
         }
         const dateBox = ui.h("div", {});
@@ -1223,8 +1249,8 @@ export function render(page, ctx) {
     // the cash is held for the owner's own "Emergency fund" goal, not ticked as the cushion: where to say it is (F-034)
     const heldAsk = cushionHeldAsk(st);
     const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
-      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `${held ? `${held} ` : ""}By our guesses of your must-pay bills. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
-      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of must-pay bills in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
+      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
+      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
       : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", "Partly our guesses. Type what you spend ›", "● Our guesses for now", setupHref("spend"))

@@ -125,3 +125,9 @@ figures the page does not show. Test: `module.test.mjs` ("review D4"), failing b
   saving lever is tested on that rule and says "Nothing more", while its spending and retirement-age levers are worked on steady
   spending; the score now asks on steady spending throughout. Making the page's saving lever steady too would change the page
   for those plans; left for its owner to decide.
+
+## Plain words on the first screen (path part 3, 2026-11-06)
+"lever" is "change" on screen (the compute still calls them `levers`); "In 9 of 10 markets:" is "Even in a bad run of years:". No figure changed.
+
+## Path part 3, review fixes
+- The goal card opens with "Do you want money left over at the end? Most people choose Just last", not "for heirs".

@@ -560,7 +560,7 @@ test("the first moves are in plain words: no 'each of you' for one adult, no 'ba
   const text = moves.map((m) => `${m.title} ${m.detail ?? ""}`).join(" | ");
   // $20,000 in checking is more than six months of her $2,500 bills: the card is paid from savings today (2026-11-02)
   assert.equal(moves[0].title, "Pay off the cards from your savings");
-  assert.match(moves[0].detail, /from savings now: you would still have [\d.]+ months of must-pay bills in cash.*The rate is a typical one: type yours on What you owe\./);
+  assert.match(moves[0].detail, /from savings now: you would still have [\d.]+ months of the bills you have to pay in cash.*The rate is a typical one: type yours on What you owe\./);
   // with no cash above the cushion, the card is paid down from the monthly left-over, in the same plain words
   const low = S.revealWords({ id: "high-debt", detail: "x" }, p);
   assert.equal(low.title, "Pay down the cards first");
@@ -2223,4 +2223,145 @@ test("review fixes: the reveal's list numbers only the steps and ends on an unnu
   assert.match(view, /You're set up\. The numbers come next\./);
   // opened from a row of Your plan: Back and Save go back there, and the address keeps the mark
   assert.match(view, /const keepQuery = backDone \? `\?back=done\$\{fromPlan \? "&from=plan" : ""\}` : ""/);
+});
+
+// ---- path part 3: Q6 opens with one box, "Your best guess for a normal month" (v.sum), the groups in a fold
+test("part 3: a best guess for the month is shared over the blank groups in the proportions of our guesses, and the rows add up to it", () => {
+  const p = persona("sam");
+  const blank = persona("sam");
+  const { grey } = spendWithGuesses(blank, { mode: "rows", rows: {} });
+  const guessTotal = Object.values(grey).reduce((t, x) => t + (x ?? 0), 0);
+  const { later, settled } = spendWithGuesses(p, { mode: "rows", rows: {}, sum: "3,000" });
+  const keys = ROWS.filter((k) => row(p, k));
+  assert.equal(keys.reduce((t, k) => t + row(p, k).amount, 0), 3000, "the rows add up to the figure typed");
+  // in the proportions of our guesses
+  for (const k of keys) assert.ok(Math.abs(row(p, k).amount - (grey[k] / guessTotal) * 3000) <= 15, `${k} ${row(p, k).amount} ${grey[k]} ${guessTotal}`);   // (our guesses are not whole dollars: a few dollars of rounding)
+  // the figure is the person's: no guess marks, so the month is not "mostly our guesses"
+  assert.equal(Object.keys(p.guesses ?? {}).some((k) => k.startsWith("expenses[setup-x-")), false);
+  assert.deepEqual(settled, { changed: [], dropped: [] }, "the settle after moves nothing");
+  // (the retirement figure is worked out from the rows as shared out, so it is not the helper's `later`, which reads the unshared guesses)
+  assert.ok(later > 0 && p.retirement.spendingMonthly > 0 && isGuess(p, "retirement.spendingMonthly"), "the retirement figure is still ours");
+  assert.ok(!p.expenses.some((x) => x.id === "setup-x-total"));
+});
+
+test("part 3: rows typed in the fold stay theirs and come off the figure; a split above the figure wins; no figure keeps today's behaviour", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: { housing: "1,200" }, sum: "3,000" });
+  assert.equal(row(p, "housing").amount, 1200);
+  assert.equal(ROWS.filter((k) => row(p, k)).reduce((t, k) => t + row(p, k).amount, 0), 3000);
+  assert.equal(isGuess(p, "expenses[setup-x-housing].amount"), false);
+  const q = persona("sam");
+  spendWithGuesses(q, { mode: "rows", rows: { housing: "2,000" }, sum: "1,500" });
+  assert.equal(row(q, "housing").amount, 2000);
+  assert.deepEqual(ROWS.filter((k) => k !== "housing" && row(q, k)), [], "nothing is left to share: the split wins");
+  // a 0 typed is the person's 0 and takes no share
+  const z = persona("sam");
+  spendWithGuesses(z, { mode: "rows", rows: { dining: 0 }, sum: "3,000" });
+  assert.equal(row(z, "dining"), null);
+  assert.equal(ROWS.filter((k) => row(z, k)).reduce((t, k) => t + row(z, k).amount, 0), 3000);
+  // no figure: as before, every row ours
+  const n = persona("sam"); spendWithGuesses(n, { mode: "rows", rows: {}, sum: "" });
+  assert.equal(isGuess(n, "expenses[setup-x-groceries].amount"), true);
+  // the helper alone
+  const rows = [{ key: "a" }, { key: "b" }, { key: "c" }];
+  const out = S.sumSplit(rows, { rows: { a: null, b: null, c: 100 } }, 1001, (r) => ({ value: r.key === "a" ? 1 : 2 }));
+  assert.deepEqual(out.rows, { a: 300, b: 601 }); assert.equal(out.typed, 100);
+  assert.deepEqual(S.sumSplit(rows, { rows: { a: null } }, 500, () => null).rest, 500);
+  assert.equal(S.sumSplit(rows, { rows: {} }, 0, () => null), null);
+});
+
+// ---- part 3 fix: the figure given is remembered (guide.setup.spendSum) and reopens in the top box
+const monthOf = (p) => p.expenses.filter((x) => x.id.startsWith("setup-x-")).reduce((t, x) => t + x.amount, 0);
+const reopen = (p, over = {}) => { const o = S.valuesFor(p, "spend"); return { mode: "rows", rows: o.rows, sum: o.sum ?? "", ...over }; };
+const typedKeys = (o) => ROWS.filter((k) => o.rows[k] !== "" && o.rows[k] !== undefined);
+
+test("part 3 fix: a total is remembered; reopening holds it, no group typed, and a lower or higher total re-shares the rows", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: {}, sum: "2,800" });
+  assert.equal(monthOf(p), 2800);
+  assert.deepEqual(p.guide.setup.spendSum, { sum: 2800, typed: [] });
+  const o = S.valuesFor(p, "spend");
+  assert.equal(o.sum, 2800, "the top box holds the figure");
+  assert.deepEqual(typedKeys(o), [], "no group shown as typed");
+  spendWithGuesses(p, reopen(p, { sum: "2000" }));
+  assert.equal(monthOf(p), 2000); assert.equal(row(p, "total"), null, "no rough row");
+  assert.equal(p.guide.setup.spendSum.sum, 2000);
+  spendWithGuesses(p, reopen(p, { sum: "3200" }));
+  assert.equal(monthOf(p), 3200); assert.equal(row(p, "total"), null, "no rough row");
+  assert.equal(Object.keys(p.guesses ?? {}).some((k) => k.startsWith("expenses[setup-x-")), false);
+});
+
+test("part 3 fix: groups typed in the fold stay theirs on reopen; a new total re-shares only the blank ones", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: { groceries: "900" }, sum: "4,000" });
+  assert.equal(monthOf(p), 4000);
+  assert.deepEqual(p.guide.setup.spendSum, { sum: 4000, typed: ["groceries"] });
+  const o = S.valuesFor(p, "spend");
+  assert.equal(o.sum, 4000); assert.deepEqual(typedKeys(o), ["groceries"]); assert.equal(o.rows.groceries, 900);
+  spendWithGuesses(p, reopen(p, { sum: "3000" }));
+  assert.equal(row(p, "groceries").amount, 900);
+  assert.equal(monthOf(p), 3000); assert.equal(row(p, "total"), null);
+  assert.equal(ROWS.filter((k) => k !== "groceries" && row(p, k)).reduce((t, k) => t + row(p, k).amount, 0), 2100, "the rest is shared out to 2,100");
+});
+
+test("part 3 fix: a bill changed on Expenses since is not hidden, and saving never overwrites it", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: {}, sum: "2,800" });
+  row(p, "groceries").amount += 77;                       // edited on Expenses
+  const o = S.valuesFor(p, "spend");
+  assert.equal(o.sum, undefined, "the figure is not restored");
+  assert.ok(typedKeys(o).includes("groceries"), "opens as for typed rows");
+  const edited = row(p, "groceries").amount;
+  spendWithGuesses(p, reopen(p, {}));
+  assert.equal(row(p, "groceries").amount, edited, "the Expenses edit survives the save");
+  assert.equal(p.guide.setup.spendSum, undefined);
+  const q = persona("sam");
+  spendWithGuesses(q, { mode: "rows", rows: {}, sum: "2,800" });
+  q.expenses = q.expenses.filter((x) => x.id !== "setup-x-dining");   // removed on Expenses
+  assert.equal(S.valuesFor(q, "spend").sum, undefined);
+});
+
+test("part 3 fix: a decimal total is rounded once; the rows and the retirement guess agree", () => {
+  const a = persona("sam"), b = persona("sam");
+  spendWithGuesses(a, { mode: "rows", rows: {}, sum: "2800.75" });
+  spendWithGuesses(b, { mode: "rows", rows: {}, sum: "2801" });
+  assert.equal(monthOf(a), 2801); assert.equal(a.guide.setup.spendSum.sum, 2801);
+  assert.equal(a.retirement.spendingMonthly, b.retirement.spendingMonthly, "worked from 2,801");
+});
+
+test("part 3 fix 2: a decimal group typed beside a figure is rounded once; the rows add up to the figure and it is remembered", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: { groceries: "900.5" }, sum: "4000" });
+  assert.equal(monthOf(p), 4000, "rows add up to the figure");
+  assert.equal(S.valuesFor(p, "spend").sum, 4000, "the figure reopens in the top box");
+  assert.deepEqual(p.guide.setup.spendSum.typed, ["groceries"]);
+  assert.equal(Number.isInteger(row(p, "groceries").amount), true);
+});
+
+test("part 3 fix 2: the basis line names the person's figure once one is given, not a household like theirs", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("shared out the way a household like yours usually spends it"));
+});
+
+test("part 3 fix: the box left empty after a figure forgets it, and the blank groups go back to our marked guesses", () => {
+  const p = persona("sam");
+  spendWithGuesses(p, { mode: "rows", rows: {}, sum: "2,800" });
+  spendWithGuesses(p, reopen(p, { sum: "" }));
+  assert.equal(p.guide.setup.spendSum, undefined);
+  assert.equal(isGuess(p, "expenses[setup-x-groceries].amount"), true);
+});
+
+test("part 3: the spend screen opens with the one box and a fold, in plain words (no must-pay)", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes('"Your best guess for a normal month"') && view.includes('"Split it up (optional)"') && view.includes('"Bills you have to pay"'));
+  assert.doesNotMatch(view.replace(/\/\/.*$/gm, ""), /Must-pay|must-pay bills/);
+});
+
+// review fix (UX 7): the note that our other guesses were lowered sits under the total, not at the bottom of the fold
+test("part 3 review: the adjust note sits under the total and says what happened", async () => {
+  const fs = await import("node:fs"); const { fileURLToPath } = await import("node:url");
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("We changed our other guesses to fit what you typed"));
+  assert.ok(view.includes('partsEl, adjustEl);'), "shown right under the total");
+  assert.ok(!view.includes("first, body, adjustEl"), "no longer last in the fold");
 });

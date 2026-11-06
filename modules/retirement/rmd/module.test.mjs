@@ -1,6 +1,8 @@
 // The full checks for this page are in tests/retirement-pages.test.mjs (fixture qa/fixtures/retirement-plan.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { compute } from "./compute.js";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -236,4 +238,21 @@ test("verify: a withdrawal this year is priced on top of the pay the first adult
   kid.income.push({ id: "kj", name: "Kim's summer job", type: "salary", personId: "k", amount: 600, period: "monthly", growth: 0, taxable: true });
   assert.equal(payThisYear(kid, today), 0, "a child's job is the child's");
   assert.equal(payThisYear(p, null), 0);
+});
+
+// path part 3: the first screen says things in plain words (the path walk's banned-word check, qa/flows/path-walk.js, runs it in the browser)
+test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
+  const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
+  for (const w of ["you haven't paid tax on yet", 'Not taxed yet, today']) assert.ok(view.includes(w), w);
+  for (const w of ['pre-tax accounts', 'Pre-tax money today', 'Net worth page']) assert.ok(!view.includes(w), w);
+});
+
+// review fix: the Roth sentence and the IRS source line stay on the page when no account is on file (they sit under the notice)
+test("part 3 review: the Roth sentence and the source line show in the none-on-file state and in the fold", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.match(view, /const ROTH_SOURCE = "Rules from IRS Publication 590-B and the SECURE 2\.0 Act\. Roth accounts \(money you already paid tax on\)/);
+  assert.equal((view.match(/ROTH_SOURCE/g) || []).length, 3, "defined once, used under the notice and in the fold");
+  const none = view.split("\n").find((l) => l.includes("if (!d.hasDeferred)"));
+  assert.ok(none.includes("ROTH_SOURCE"));
 });

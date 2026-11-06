@@ -146,3 +146,15 @@ After the C3 reviews (est/c3/c3-fix.md):
   (R10).
 Tests: setup `module.test.mjs` "C3 review D1", "D1b", "D3", "C3 verify: 'Use' on a row of ours that holds two kinds ..."; this
 module's "C3 review D6" and "C3 verify: the bank card's notice names what was written ...".
+
+## Opens short (path part 3, 2026-11-06)
+With bills on file the top is the month's total, what is left over and "Next year about ... once prices rise". The rest (must pay and
+nice to have, where it goes, the list, the add and edit form) folds under one outlined "See or change each bill", closed when there
+are more than 5 bills and half or more of the month is our guesses, open otherwise. Every action that needs the list (a Close-the-gap
+row, "It is something else", tapping a row) opens it first. "Debts >" is a 44 px link. Young renter, all guesses: the page body 1,999 px -> 338 px (plus the step card). Nothing in compute changed.
+
+## Path part 3, review fixes
+- The bill list opens by **bills typed, not dollars** (`billsFoldOpen` in compute.js): 5 or fewer bills, or at least half listed by the person here. Rows Get started wrote (ids `setup-x-...`, from one total or a split) and rows that are our guesses do not count as typed, so a plan fresh from Get started opens short.
+- The tiles read "Bills you have to pay" and "Could be cut"; each bill's note says "a bill you have to pay" or "could be cut".
+- "Where it goes" is left out when it would only repeat the list (one row per kind, as Get started writes them).
+- When our guess is more than comes in, the left-over tile says so plainly ("probably too high") instead of "about $X short".

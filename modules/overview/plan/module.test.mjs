@@ -52,7 +52,7 @@ test("the numbers agree: every row's figure is the figure its page's own compute
       assert.equal(r.retire.figure, a.headline);
       assert.ok(r.retire.line.includes(a.line.replace(/\s*\([^()]*shows how much less\)/, "")));   // (without the page-title pointer, see the review-fix tests)
       if (a.verdict === "short") assert.equal(r.retire.value, `Runs out at ${a.shortAge}`);
-      assert.equal(r.retire.status === "bad" || r.retire.status === "calm", a.verdict === "short" || !!st.retireGuessed || false, `${name}: red only when short`);
+      assert.equal(r.retire.status === "bad" || r.retire.status === "calm", a.verdict === "short" || a.verdict === "unknown" || !!st.retireGuessed || false, `${name}: red only when short`);
     }
     if (r.taxes && r.taxes.status !== "open") { const a = answerFor("taxes", p, { today: T }); assert.equal(r.taxes.figure, a.headline); }
     if (r.protect) { const g = protectionGaps(p, { today: T }); assert.equal(r.protect.figure, g.reduce((t, x) => t + x.gap, 0)); }
@@ -308,4 +308,20 @@ test("rows that open a setup screen carry &from=plan, and setup leads back to Yo
 
 test("the muted 'Not yet' value is grey, not a link colour", () => {
   assert.match(src("view.js"), /\.pl-v\.open \{ font-weight: 600; color: var\(--text-2\); \}/);
+});
+
+// review fix (UX 3): a household with no retirement savings on file is "Not known yet", calm, never "Runs out", and not a gap
+test("part 3 review: no retirement savings on file reads Not known yet (calm), not Runs out, and does not hold the plan unfinished", () => {
+  let seen = 0;
+  for (const [name, p] of Object.entries(HOUSEHOLDS())) {
+    const a = answerFor("retire", p, { today: T });
+    if (a?.verdict !== "unknown") continue;
+    seen++;
+    const r = rowsOf(compute(p, { today: T })).retire;
+    assert.equal(r.value, "Not known yet", name);
+    assert.equal(r.status, "calm", name);
+    assert.equal(r.fixHref, "#/balance/net-worth", name);
+    assert.ok(!/runs out/i.test(r.line + r.value), name);
+  }
+  assert.ok(seen >= 1, "at least one test household has no retirement savings on file (the family persona)");
 });

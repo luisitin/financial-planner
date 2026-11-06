@@ -55,6 +55,7 @@ const STYLE = `
 .gn-root .gn-links .gn-back { margin-right: auto; }
 .gb-quick .gb-back { margin: -6px 0 0; }
 .gb-quick .gb-task { margin-top: 4px; color: var(--text-2); }
+.gn-root.card { margin-top: 20px; }
 .gn-root > h2.gn-k { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin: 0 0 8px; font-variant-numeric: tabular-nums; }
 .gn-root .gn-state { margin: 0 0 12px; }
 .gn-root .gn-main { display: flex; flex-direction: column; gap: 8px; }

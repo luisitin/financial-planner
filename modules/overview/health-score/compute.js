@@ -47,10 +47,10 @@ export function compute(plan, params = {}) {
     parts.push({ id, title, max, points: Math.round(s * max * 10) / 10, share: share === null ? null : s, status: status ?? (share === null ? "unknown" : s >= 0.9 ? "ok" : s >= 0.5 ? "warn" : "bad"), detail, fix: s >= 0.999 ? null : fix, go });
   };
 
-  // 1. the cash cushion: months of must-pay bills in usable cash against the plan's target
+  // 1. the cash cushion: months of the bills you have to pay in usable cash against the plan's target
   const liq = computeLiquidity(plan, { today });
-  if (liq.runwayMonths === null) add("cushion", "Cash cushion", null, "No must-pay expenses yet, so the cushion cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
-  else add("cushion", "Cash cushion", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${Math.round(liq.runwayMonths * 10) / 10} months of must-pay bills; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
+  if (liq.runwayMonths === null) add("cushion", "Cash cushion", null, "No bills you have to pay yet, so the cushion cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
+  else add("cushion", "Cash cushion", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${Math.round(liq.runwayMonths * 10) / 10} months of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
 
   // 2. saving: retirement, goals and what is left over, as a share of income after tax
   const nb = computeNext(plan, { today });

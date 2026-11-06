@@ -156,7 +156,7 @@ export function plannerFigure(g, gr, page, r, plan = null) {
     if (!r.goal.isEmergencyFund) return { amount: null, note: "Its money counts toward the cushion only once it is ticked as your emergency fund on that page." };
     const other = Math.max(0, (Number(r.now) || 0) - (Number(gr?.funded) || 0));
     const amount = Math.max(0, r.target - other);
-    return amount > 0 ? { amount, words: `for ${r.months} months of must-pay bills${other > 0 ? `, less the $${Math.round(other).toLocaleString("en-US")} of other cash that counts` : ""}`, monthly: null } : null;
+    return amount > 0 ? { amount, words: `for ${r.months} months of the bills you have to pay${other > 0 ? `, less the $${Math.round(other).toLocaleString("en-US")} of other cash that counts` : ""}`, monthly: null } : null;
   }
   if (page === "goals/house") return r.goal?.id === g.id && r.cash?.total > 0 ? { amount: r.cash.total, words: "down payment, closing and reserves", monthly: r.neededMonthly ?? null } : null;
   return null;

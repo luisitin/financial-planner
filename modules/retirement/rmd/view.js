@@ -7,6 +7,8 @@ import { rmdFactor } from "../../../core/math/rmd.js";
 import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 // the states with no income tax (taxes/state's own list): there the hold-back is the federal tax only (round 8 review D5)
 import { NO_WAGE_TAX } from "../../taxes/state/compute.js";
+// the Roth sentence and the source line, in the IRS-table fold and under the "none on file" notice (they are not on the first screen)
+const ROTH_SOURCE = "Rules from IRS Publication 590-B and the SECURE 2.0 Act. Roth accounts (money you already paid tax on) have no required withdrawals while you are alive.";
 const unnamed = (n) => (n === "You" ? "" : n);
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
@@ -59,18 +61,17 @@ export function render(root, ctx) {
   }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Required withdrawals"),
-    ui.h("p", { class: "lede" }, "From a certain age the tax rules make you take money out of pre-tax accounts (401(k), traditional IRA) every year, and pay income tax on it, whether you need it or not. This page says when that starts for you and how big it looks."),
-    ui.h("p", { class: "muted small" }, "Roth IRAs and, since 2024, Roth 401(k)s have no required withdrawals while you are alive. Rules from IRS Publication 590-B and the SECURE 2.0 Act."),
+    ui.h("p", { class: "lede" }, "From a certain age the tax rules make you take money out of accounts you haven't paid tax on yet (like a 401(k) or a traditional IRA) every year, and pay income tax on it, whether you need it or not. This page says when that starts for you and how big it looks."),
   ), ...now);
   if (!d.people.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), "."))); return; }
   root.append(ui.card(null, ui.row(
     ...d.people.map((p) => ui.stat(`${NameIn(p.name)} ${verbFor(p.name, "starts", "start")} at ${p.startAge}`, String(p.startYear), p.yearsUntil ? `in ${p.yearsUntil} year${p.yearsUntil === 1 ? "" : "s"}` : "already")),
-    ui.stat("Pre-tax money today", money(d.deferredNow), d.deferredAccounts.map((a) => a.name).join(", ") || "none on file"),
+    ui.stat("Not taxed yet, today", money(d.deferredNow), d.deferredAccounts.map((a) => a.name).join(", ") || "none on file"),
   )));
   // started for someone who has pre-tax money (round 8 review D3: a 75-year-old with none read that conversions now come after
   // "this year's required withdrawal" while the IRA was a 66-year-old's, with none due until 2035)
   const started = d.people.some((p) => p.yearsUntil === 0 && p.deferredNow > 0);
-  if (!d.hasDeferred) { root.append(ui.notice("info", "No pre-tax retirement accounts on file, so no required withdrawals. If you have a 401(k) or traditional IRA, add it on the Net worth page.")); return; }
+  if (!d.hasDeferred) { root.append(ui.notice("info", ui.h("span", {}, "No accounts you haven't paid tax on yet are on file, so no required withdrawals. If you have a 401(k) or a traditional IRA, add it on ", ui.h("a", { href: "#/balance/net-worth" }, "What you own"), ".")), ui.h("p", { class: "muted small" }, ROTH_SOURCE)); return; }
   // each year's withdrawals at their owners' own ages and factors (a younger spouse's IRA read "age 84, factor 16.8" at 75)
   const couple = d.people.length > 1;
   const owned = (r) => (r.owners?.length ? r.owners : [{ name: d.people[0]?.name, age: r.age, factor: r.factor }]);
@@ -79,7 +80,7 @@ export function render(root, ctx) {
   const first0 = d.schedule.length ? owned(d.schedule[0])[0] : null;
   if (!d.ready) { root.append(ui.notice("info", ui.h("span", {}, "The size of the withdrawals comes from the projection, which needs a few more inputs: ", ui.h("a", { href: "#/retirement/projection" }, "Projection page"), "."))); }
   else if (d.schedule.length) root.append(ui.card("What they look like, from the projection",
-    ui.h("p", { class: "muted small" }, `Each year's required amount is the pre-tax balance divided by the IRS factor for ${first0 ? `${nameOf(first0.name)} age (${first0.factor} at ${first0.age})` : "the owner's age"}. The tax is what each one adds to that year's federal income tax, on top of the plan's other income, Social Security included. In today's dollars.`),
+    ui.h("p", { class: "muted small" }, `Each year's required amount is the balance in those accounts divided by the IRS factor for ${first0 ? `${nameOf(first0.name)} age (${first0.factor} at ${first0.age})` : "the owner's age"}. The tax is what each one adds to that year's federal income tax, on top of the plan's other income, Social Security included. In today's dollars.`),
     ui.h("ul", { class: "records" }, d.schedule.slice(0, 12).map((r) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${whoAges(r)}`), ui.h("span", { class: "rec-value" }, money(r.rmdReal))),
       ui.h("div", { class: "rec-sub" }, r.extraTaxReal !== null ? `${factors(r)} · adds about ${money(r.extraTaxReal)} of federal tax` : `${factors(r)} · about ${money(r.taxes / (r.rmd / r.rmdReal || 1))} of tax (the plan's ${fmt.pct(d.taxRate, 0)}, while you still work)`)))),
@@ -90,5 +91,5 @@ export function render(root, ctx) {
       : ui.h("p", { class: "small" }, "Big required withdrawals push you into higher tax brackets. Moving money to a Roth in the low-income years before they start (a Roth conversion) is the usual fix; the Roth conversions page works it out."),
   ));
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "The IRS table"), ui.h("span", { class: "fold-status" }, "ages 72 to 100"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Divide the balance at the end of the previous year by the factor for the age you reach this year."), ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))))));
+    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Divide the balance at the end of the previous year by the factor for the age you reach this year. " + ROTH_SOURCE), ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))))));
 }

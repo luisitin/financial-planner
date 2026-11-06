@@ -132,7 +132,7 @@ export function compute(plan, params = {}) {
     const h = healthAdded(b.health);
     const onTop = h ? " on top of health cover" : "", before = h ? " before health cover" : "";
     add({ id: "spending", icon: "🛒", title: "What you can spend", value: m, current: spendingMonthly, unit: "month", status: best === null ? "cannot" : m >= spendingMonthly ? "room" : "needs",
-      sentence: best === null ? `Even spending nothing in retirement${h ? " but health cover" : ""} does not reach the goal: look at the other levers.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m)} a month${onTop}, ${fmt(m - spendingMonthly)} more than the ${fmt(spendingMonthly)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m)} a month${onTop}: ${fmt(spendingMonthly - m)} less than the ${fmt(spendingMonthly)} the plan spends${before}.`, go: ["retirement", "projection"] });
+      sentence: best === null ? `Even spending nothing in retirement${h ? " but health cover" : ""} does not reach the goal: look at the other changes.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m)} a month${onTop}, ${fmt(m - spendingMonthly)} more than the ${fmt(spendingMonthly)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m)} a month${onTop}: ${fmt(spendingMonthly - m)} less than the ${fmt(spendingMonthly)} the plan spends${before}.`, go: ["retirement", "projection"] });
   }
 
   // 2. the earliest retirement age that reaches the goal, for the adult Financial independence asks about (review 2026-11-06,
@@ -191,7 +191,7 @@ export function compute(plan, params = {}) {
       add({ id: "lump", icon: "💰", title: "Room today", value: spare ?? 0, current: 0, unit: "once", status: "room", sentence: `About ${fmt(spare ?? 0)} could come out of savings today and the plan would still get there. Not a suggestion to spend it: a measure of the cushion.`, go: ["balance", "net-worth"] });
     } else {
       const short = smallestWhere((x) => meets(withLump(x)), 0, 1e7, 50);
-      add({ id: "lump", icon: "💰", title: "What it is short today", value: short, current: 0, unit: "once", status: short === null ? "cannot" : "needs", sentence: short === null ? "More than ten million dollars today: look at the other levers." : `About ${fmt(short)} more in savings today would get there (an inheritance, a sale, a bonus).`, go: ["balance", "net-worth"] });
+      add({ id: "lump", icon: "💰", title: "What it is short today", value: short, current: 0, unit: "once", status: short === null ? "cannot" : "needs", sentence: short === null ? "More than ten million dollars today: look at the other changes." : `About ${fmt(short)} more in savings today would get there (an inheritance, a sale, a bonus).`, go: ["balance", "net-worth"] });
     }
   }
 

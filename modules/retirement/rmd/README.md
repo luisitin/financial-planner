@@ -172,3 +172,10 @@ not IRS tax rates or forecasts. The second method uses exact rational products
 of retained shares to check the decimal annual ledger.
 
 Review 2026-11-06 (round 7): "You start at 75", "This is your first year", "your 2026 withdrawal is taken" and the 401(k) note say you/your for the unnamed first adult ("Me", or "You" from `thisYear` when no name is typed), with the verb to match; typed names read as before (core/words.js). Words only.
+
+## Plain words on the first screen (path part 3, 2026-11-06)
+"pre-tax accounts" is "accounts you haven't paid tax on yet (like a 401(k) or a traditional IRA)"; the stat is "Not taxed yet, today";
+the Roth sentence and its source moved into the folded IRS table, below the first screen. No figure changed.
+
+## Path part 3, review fixes
+- With no account you haven't paid tax on yet, the Roth sentence and the IRS source line show under the notice (`ROTH_SOURCE` in view.js, also in the IRS-table fold); they are below the first screen.
