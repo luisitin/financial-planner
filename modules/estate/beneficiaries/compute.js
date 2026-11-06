@@ -14,6 +14,9 @@ const RETIREMENT = ["401k", "ira", "roth"];
 export const REVIEW_YEARS = 5;
 export const ESTATE = /^(my |the )?estate$/i;
 
+/** A child under 18 named on an account cannot take it: without a custodian (the state's Uniform Transfers to Minors Act) or a trust named, a court appoints someone. */
+export const minorWords = (name) => `${name} is under 18 and can't receive this directly: name a custodian under your state's Uniform Transfers to Minors Act (UTMA), or a trust`;
+
 /** One beneficiary list as stored (an array of { name, share, personId }) or, from older rows, a plain name. */
 export function listOf(v) {
   if (!v) return [];
@@ -23,7 +26,8 @@ export function listOf(v) {
 
 /**
  * compute(plan, { today }) -> {
- *   items: [{ key, source: "account"|"policy", id, name, ownerId, typeLabel, form, value, primary, contingent, reviewedAt, flags: [text], ok }],
+ *   items: [{ key, source: "account"|"policy", id, name, ownerId, typeLabel, form, value, primary, contingent, reviewedAt, flags: [text],
+ *     minors: [{ name, personId, level: "primary"|"contingent", text }] (a household child under 18 named on it; its flag's words), ok }],
  *   count, named (with a primary), missingValue (money with no one named), married, warnings
  * }
  */
@@ -33,7 +37,8 @@ export function compute(plan, params = {}) {
   const adults = people.filter((p) => p.role !== "dependent");
   const married = ["married_joint", "married_separate", "qualifying_surviving"].includes(plan.household?.filingStatus) || adults.length > 1;
   const minors = people.filter((p) => p.role === "dependent" && p.birthDate && today && ageOn(p.birthDate, today) < 18);
-  const isMinor = (b) => minors.some((m) => m.id === b.personId || m.name.toLowerCase() === b.name.toLowerCase());
+  // a household child under 18: by the person the entry was picked from when it has one, else by the name typed
+  const minorOf = (b) => minors.find((m) => (b.personId ? m.id === b.personId : String(m.name ?? "").toLowerCase() === b.name.toLowerCase())) ?? null;
   const rows = plan.estate?.beneficiaries ?? [];
   const sources = [
     ...(plan.accounts ?? []).filter((a) => NAMED[a.type]).map((a) => ({ key: `account:${a.id}`, source: "account", id: a.id, name: a.name, typeLabel: ACCOUNT_TYPES[a.type]?.label ?? a.type, form: NAMED[a.type], value: countedBalance(a), type: a.type, ownerId: a.ownerId ?? "" })),
@@ -44,6 +49,7 @@ export function compute(plan, params = {}) {
     const primary = listOf(r?.primary), contingent = listOf(r?.contingent);
     const reviewedAt = r?.reviewedAt ?? "";
     const flags = [];
+    const minorsNamed = [];
     const sumOf = (l) => l.reduce((t, b) => t + (b.share ?? (l.length === 1 ? 1 : 0)), 0);
     if (!primary.length) flags.push(`no one is named: it would go through the will or the courts${RETIREMENT.includes(s.type) ? ", and a retirement account left to an estate usually has to be emptied faster, with more tax" : ""}`);
     else {
@@ -51,8 +57,13 @@ export function compute(plan, params = {}) {
       if (!contingent.length) flags.push("no backup (contingent) beneficiary, if the first one dies first");
       else if (Math.abs(sumOf(contingent) - 1) > 0.005) flags.push(`the backup shares add up to ${Math.round(sumOf(contingent) * 100)}%, not 100%`);
     }
-    for (const b of [...primary, ...contingent]) {
-      if (isMinor(b)) flags.push(`${b.name} is under 18 and cannot take the money directly: a court would appoint someone. Name a trust, or a custodian "for ${b.name} under the Uniform Transfers to Minors Act"`);
+    for (const [level, l] of [["primary", primary], ["contingent", contingent]]) for (const b of l) {
+      const m = minorOf(b);
+      if (m) {
+        const text = minorWords(b.name);
+        minorsNamed.push({ name: b.name, personId: m.id, level, text });
+        flags.push(text);
+      }
       if (ESTATE.test(b.name)) flags.push("the estate is named: the money goes through probate, and retirement money loses time to spread the tax");
     }
     // ERISA: a married participant's 401(k) goes to the spouse unless the spouse signed a waiver
@@ -62,7 +73,7 @@ export function compute(plan, params = {}) {
       if (ageOn(reviewedAt, today) >= REVIEW_YEARS) flags.push(`checked ${ageOn(reviewedAt, today)} years ago`);
       for (const p of people) if (p.birthDate && p.birthDate > reviewedAt) flags.push(`${p.name} was born after it was last checked`);
     }
-    return { key: s.key, source: s.source, id: s.id, name: s.name, ownerId: s.ownerId, typeLabel: s.typeLabel, form: s.form, value: s.value, primary, contingent, reviewedAt, flags, ok: flags.length === 0 };
+    return { key: s.key, source: s.source, id: s.id, name: s.name, ownerId: s.ownerId, typeLabel: s.typeLabel, form: s.form, value: s.value, primary, contingent, reviewedAt, flags, minors: minorsNamed, ok: flags.length === 0 };
   });
   const missing = items.filter((x) => !x.primary.length);
   const warnings = [];

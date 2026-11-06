@@ -18,7 +18,17 @@ export const COST_YEAR = 2025;
 /** Published prices have risen faster than prices in general: about 4% a year is a common planning figure. */
 export const DEFAULT_GROWTH = 0.04;
 export const DEFAULTS = { type: "public", share: 1, years: 4, startAge: 18 };
-const EDUCATION = /college|university|school|tuition|education|529/i;
+/** An education goal's name: college, university, school, tuition, education or 529 (Life insurance needs reads the same one). */
+export const EDUCATION_GOAL = /college|university|school|tuition|education|529/i;
+/** A text as whole words: lower case, anything but letters and digits a space, one space at each end. */
+const wordsOf = (t) => ` ${String(t ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+/**
+ * Whether a text names a person: their name as a whole word (or words), case-insensitive. "Ed's college" and "COLLEGE FOR
+ * ED" name Ed; "Education fund" does not ("ed" inside "education"), nor does "University fund" name Ty.
+ */
+export const namesPerson = (text, name) => { const n = wordsOf(name).trim(); return n !== "" && wordsOf(text).includes(` ${n} `); };
+/** A figure as this page shows it, to the $10: other pages quote it through this. */
+export const shownAmount = (n) => Math.round(n / 10) * 10;
 
 /**
  * compute(plan, { today }) -> {
@@ -35,6 +45,8 @@ export function compute(plan, params = {}) {
   const inflation = Number(plan.assumptions?.inflation ?? 0.03);
   const returnRate = planReturn(plan);
   const kids = (plan.household?.people ?? []).filter((p) => p.role === "dependent" && p.birthDate);
+  // everyone else in the household with a name, adults and dependents alike (with or without a birth date)
+  const others = (plan.household?.people ?? []).filter((p) => p.name);
   const goals = computeGoals(plan, { today }).goals;
   const accounts529 = (plan.accounts ?? []).filter((a) => a.type === "529");
   const children = kids.map((k) => {
@@ -51,8 +63,12 @@ export function compute(plan, params = {}) {
     // what the bills are worth at the first one: later years discounted at the plan's return (money keeps growing meanwhile)
     const atStart = costs.reduce((t, x, i) => t + x.cost / Math.pow(1 + returnRate, i), 0);
     // set aside: the child's college goal, else the 529 accounts named for the child, else an equal share of them all
-    const goal = goals.find((g) => EDUCATION.test(g.name ?? "") && (g.name ?? "").toLowerCase().includes(k.name.toLowerCase())) ?? (kids.length === 1 ? goals.find((g) => EDUCATION.test(g.name ?? "")) : null) ?? null;
-    const named = accounts529.filter((a) => (a.name ?? "").toLowerCase().includes(k.name.toLowerCase()));
+    // the child's name as a whole word ("Ed's college", never "Education fund" for Ed); with one child, the first education
+    // goal that names nobody else in the household (an adult's "Jo's night school", or "Mia college" for a dependent with or
+    // without a birth date, is never the child's)
+    const namesOther = (g) => others.some((o) => o.id !== k.id && namesPerson(g.name, o.name));
+    const goal = goals.find((g) => EDUCATION_GOAL.test(g.name ?? "") && namesPerson(g.name, k.name)) ?? (kids.length === 1 ? goals.find((g) => EDUCATION_GOAL.test(g.name ?? "") && !namesOther(g)) : null) ?? null;
+    const named = accounts529.filter((a) => namesPerson(a.name, k.name));
     const saved = goal ? goal.funded : (named.length ? named : accounts529).reduce((t, a) => t + countedBalance(a), 0) / (named.length ? 1 : Math.max(1, kids.length));
     const monthly = goal ? Number(goal.monthly) || 0 : 0;
     const monthsLeft = today ? Math.max(0, monthsBetween(today, `${startYear}-08-15`)) : (startYear - year) * 12;

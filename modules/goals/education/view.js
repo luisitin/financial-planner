@@ -1,7 +1,7 @@
 // modules/goals/education/view.js -- DOM only. Each child's college: what it would cost when they get
 // there, what is set aside, the monthly saving that covers the share you choose, and how much today's
 // saving covers; the kind of college and the share per child in a fold; a button to set the goal.
-import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH } from "./compute.js";
+import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -14,7 +14,8 @@ const STYLE = `
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
-  const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
+  // to the $10, as Life insurance needs quotes this page's figures (`shownAmount`)
+  const money = (n) => fmt.money(shownAmount(n), cur);
   const pct = (x) => `${Math.round(x * 100)}%`;
   const d = compute(plan, { today: fmt.today() });
   const root = ui.h("div", { class: "ed2-root" }, ui.h("style", {}, STYLE));

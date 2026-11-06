@@ -16,6 +16,7 @@ const STYLE = `
 .eb-root .eb-t { font-weight: 600; }
 .eb-root .eb-d { color: var(--text-2); font-size: var(--fs-sm); }
 .eb-root .eb-f { color: var(--warn); font-size: var(--fs-sm); }
+.eb-root .eb-f + .eb-f { margin-top: 4px; }
 .eb-root .eb-v { flex: none; white-space: nowrap; font-size: var(--fs-sm); color: var(--muted); }
 .eb-root .eb-edit { padding: 0 0 14px; }
 .eb-root .eb-line { display: grid; grid-template-columns: 1fr 84px 44px; gap: 8px; align-items: end; margin: 6px 0; }
@@ -54,12 +55,17 @@ export function render(page, ctx) {
   for (const x of d.items) {
     const li = ui.h("li");
     const names = (l) => l.map((b) => `${b.name}${l.length > 1 && b.share !== null ? ` ${Math.round(b.share * 100)}%` : ""}`).join(", ");
+    // a child under 18 named on it gets a line of its own (what to name instead); the other flags share one line
+    const minorText = new Set((x.minors ?? []).map((m) => m.text));
+    const rest = x.flags.filter((f) => !minorText.has(f));
+    const sentence = (f) => f[0].toUpperCase() + f.slice(1) + ".";
     const draw = () => {
       li.replaceChildren(ui.h("button", { type: "button", class: "eb-row", "aria-expanded": openKey === x.key ? "true" : "false", onClick: () => { openKey = openKey === x.key ? null : x.key; draw(); } },
         ui.h("span", { class: "eb-ic" }, !x.primary.length ? "⬜" : x.ok ? "✅" : "⚠️"),
         ui.h("span", { class: "eb-body" }, ui.h("div", { class: "eb-t" }, x.name),
           ui.h("div", { class: "eb-d" }, x.primary.length ? `${names(x.primary)}${x.contingent.length ? `; then ${names(x.contingent)}` : ""}` : `${x.typeLabel}: ${x.form}`),
-          x.flags.length && x.primary.length ? ui.h("div", { class: "eb-f" }, x.flags.map((f) => f[0].toUpperCase() + f.slice(1)).join(". ") + ".") : null),
+          x.primary.length ? [...minorText].map((t) => ui.h("div", { class: "eb-f eb-minor" }, sentence(t))) : null,
+          rest.length && x.primary.length ? ui.h("div", { class: "eb-f" }, rest.map((f) => f[0].toUpperCase() + f.slice(1)).join(". ") + ".") : null),
         ui.h("span", { class: "eb-v" }, money(x.value))));
       if (openKey === x.key) li.append(editor(x, () => { openKey = null; draw(); }));
     };

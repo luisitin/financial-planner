@@ -45,4 +45,24 @@ test("the flags: shares, no backup, a minor named directly, the estate, a spouse
 test("a clean row: no flags", () => {
   const d = compute(withRows([{ accountId: "a-401", primary: [{ name: "Bo", personId: "p-bo", share: 1 }], contingent: [{ name: "Cy's trust", share: 1 }], reviewedAt: "2026-01-01" }]), { today: TODAY });
   assert.equal(item(d, "account:a-401").ok, true);
+  assert.deepEqual(item(d, "account:a-401").minors, []);
+});
+
+test("a child under 18 named on an account: its own line of what to name instead, matched by the person picked, else by the name typed", () => {
+  const d = compute(withRows([
+    { accountId: "a-401", primary: [{ name: "Cy", personId: "p-cy", share: 1 }], contingent: [{ name: "Bo", personId: "p-bo", share: 1 }], reviewedAt: "2026-01-01" },
+    { accountId: "a-roth", primary: [{ name: "cy", share: 1 }], contingent: [{ name: "Cy", personId: "p-cy", share: 1 }], reviewedAt: "2026-01-01" },
+    // picked from the household as Bo, then retyped: the person picked wins over the name
+    { accountId: "a-bk401", primary: [{ name: "Cy", personId: "p-bo", share: 1 }], contingent: [{ name: "Ana", personId: "p-ana", share: 1 }], reviewedAt: "2026-01-01" },
+  ]), { today: TODAY });
+  const a = item(d, "account:a-401");
+  assert.deepEqual(a.minors, [{ name: "Cy", personId: "p-cy", level: "primary", text: "Cy is under 18 and can't receive this directly: name a custodian under your state's Uniform Transfers to Minors Act (UTMA), or a trust" }]);
+  assert.ok(a.flags.includes(a.minors[0].text)); assert.equal(a.ok, false);
+  const r = item(d, "account:a-roth");
+  assert.deepEqual(r.minors.map((m) => [m.name, m.level]), [["cy", "primary"], ["Cy", "contingent"]], "by name when no person was picked");
+  assert.deepEqual(item(d, "account:a-bk401").minors, []);
+  // 18 or over: nothing
+  const grown = familyPlan(TODAY); grown.household.people.find((x) => x.id === "p-cy").birthDate = "2000-03-03";
+  grown.estate.beneficiaries = [{ accountId: "a-401", primary: [{ name: "Cy", personId: "p-cy", share: 1 }], contingent: [{ name: "Bo", personId: "p-bo", share: 1 }], reviewedAt: "2026-01-01" }];
+  assert.deepEqual(item(compute(grown, { today: TODAY }), "account:a-401").minors, []);
 });
