@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { compute, amt, amtRoom, stockPayTax, esppSale, saleTax, isoSplit, dayAfter, ISO_LIMIT, PAYROLL } from "./compute.js";
 import { AMT, amtFor } from "./data/amt.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { federalTax, taxOnQualified, paramsFor } from "../../../core/math/tax.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -17,6 +18,8 @@ const NSO = { id: "n", kind: "option", name: "Options", granted: "2024-03-01", v
 const LOT = { id: "e1", offeringDate: "2025-01-01", purchaseDate: "2025-06-30", shares: 100, fmvOffering: 40, fmvPurchase: 45, price: 34, discount: 0.15 };
 const withEquity = (grants, espp = [], extra = {}) => { const p = familyPlan(TODAY); p.equity = { symbol: "ACME", price: 50, priceAsOf: TODAY, personId: "p-ana", grants, espp, ...extra }; return p; };
 const ti = (p = familyPlan(TODAY)) => taxInputs(p, { today: TODAY });
+// the Federal estimate's return without this year's units (the page adds them itself): the family's business at its profit is in it
+const tv = (p = familyPlan(TODAY)) => taxView(p, { today: TODAY }, { without: "stock" });
 
 test("the AMT tables: 2026's exemptions, the phase-out at 50 cents a dollar, the 28% line", () => {
   const A = amtFor(2026);
@@ -149,7 +152,7 @@ test("the family with units, incentive and nonqualified options: this year's ves
   const iso = d.options.find((o) => o.id === "i"), nso = d.options.find((o) => o.id === "n");
   assert.equal(iso.type, "iso"); assert.equal(nso.type, "nso");
   assert.equal(iso.vested, 3500); assert.equal(iso.nsoShares, 0); near(iso.iso.spread, 3500 * 30); near(iso.cost, 70000);
-  const t = ti(p); const A = amtFor(2026);
+  const t = tv(p); const A = amtFor(2026);
   const now = { ...t.inputs, wages: t.inputs.wages + 52500 };
   near(iso.iso.amtAll, amt(now, t.params, A, { preference: 105000 }).amt);
   near(d.isoRoom, amtRoom(now, t.params, A), 1e-6); assert.equal(iso.iso.roomShares, Math.floor(d.isoRoom / 30));
@@ -204,7 +207,8 @@ test("next year's units use next year's Social Security limit ($192,300 in 2027)
   const y27 = compute(p, { today: TODAY }).rsuYears[1];
   near(y27.value, 30000);
   // Ana's 182,000 leaves 10,300 under 2027's base (2026's would leave 2,500); with Bo's 62,400 the couple passes $250,000 by 24,400
-  near(y27.tax.payroll, PAYROLL.ss * (192300 - 182000) + 30000 * PAYROLL.medicare + PAYROLL.extraMedicare * (182000 + 62400 + 30000 - 250000), 1e-6);
+  near(y27.tax.payroll, PAYROLL.ss * (192300 - 182000) + 30000 * PAYROLL.medicare + PAYROLL.extraMedicare * (182000 + 62400 + 30000 - 250000) + 50.4, 1e-6);
+  // plus the 0.9% on Bo's business profit (Form 8959 part II: its threshold is what the household's pay leaves of 250,000): 59.84 with the units, 9.44 without, the Federal estimate's self-employment row (Review 9)
 });
 
 test("not ready without grants, a symbol or purchase-plan shares", () => {

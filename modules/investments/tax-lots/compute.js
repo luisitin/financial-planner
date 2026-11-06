@@ -4,7 +4,9 @@
 // carries to next year, what a recent purchase cancels), and the order to sell in when you need
 // cash (the smallest gain per share first).
 import { compute as computeHoldings } from "../holdings/compute.js";
-import { taxInputs, lossCarryover, todaysReturn } from "../../taxes/federal/compute.js";
+import { lossCarryover, todaysReturn } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
+import { fullSteps } from "../../taxes/withholding/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween, isoOf } from "../../../core/math/dates.js";
 
@@ -89,19 +91,29 @@ export function lotsOf(h, today) {
  *   harvest: [{ symbol, account, lot, loss, taxSaved (the loss at its rate, orders the list), allowed, disallowed, washedBy }], harvestTotal (every loss),
  *   taxSavedTotal (what selling them all today cuts this year's federal tax by), disallowedTotal / allowedTotal (wash sales),
  *   carry: { short, long, total } (the loss carried to next year if harvested), carryAdded (the part the harvest adds), capLimit, returns (2 filing separately as two returns),
- *   sellFirst: [{ symbol, account, lot }] (taxable, lowest gain per share first), shortLosses, longLosses, marginal, gainsRate, notes
+ *   sellFirst: [{ symbol, account, lot }] (taxable, lowest gain per share first), shortLosses, longLosses, marginal (1,000 more short-term gain), shortRate (a short-term gain: the Federal estimate's next dollar plus the 3.8% where it applies), payRate, payIs ("pay", or "business": the Federal estimate's headline next dollar, of business profit when there is no pay), gainsRate, notes
  * }
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const h = computeHoldings(plan, params);
   const yr = todaysReturn(plan, today);
-  const ti = taxInputs(yr.plan, params);
+  const ti = taxView(yr.plan, params);
   // the tax on $1,000 more of short- or long-term gain, the 3.8% on investment income included (a true 0% stays 0%)
-  const base = federalTax(ti.inputs, ti.params).totalTax;
+  const base = ti.result.totalTax;
   const invested = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
   const rateOn = (more) => Math.max(0, (federalTax({ ...ti.inputs, ...more, investmentIncome: invested }, ti.params).totalTax - base) / 1000);
   const marginal = rateOn({ otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000 });
+  // the rates the page quotes (Verify b1f). Pay: the Federal estimate's headline next dollar, so both pages say one figure: with a
+  // business and no pay, what the next dollar the business makes costs (income and self-employment tax, fullSteps' se.nextDollar);
+  // else the next dollar of income over whole child care credit steps (known()'s nextDollar). A short-term gain raises income like
+  // that dollar (no self-employment tax: it is not business profit) and is also investment income, so it adds the 3.8% (IRC 1411)
+  const bizNext = ti.known?.se && !(Number(ti.result.income?.wages) > 0) ? fullSteps(yr.plan, ti.known.fed, params, ti.known).se?.nextDollar ?? null : null;
+  const payIs = bizNext !== null ? "business" : "pay";
+  const payRate = bizNext ?? ti.nextDollar ?? marginal;
+  const o1 = { ...ti.inputs, otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000 };
+  const niitOf = (inp) => Number(federalTax(inp, ti.params).niit) || 0;
+  const shortRate = ti.nextDollar === undefined || ti.nextDollar === null ? marginal : ti.nextDollar + Math.max(0, (niitOf({ ...o1, investmentIncome: invested }) - niitOf(o1)) / 1000);
   const gainsRate = rateOn({ qualifiedIncome: (Number(ti.inputs.qualifiedIncome) || 0) + 1000 });
   const ownerOf = new Map((plan.accounts ?? []).map((a) => [a.id, a.ownerId || null]));   // filing separately, a sale is on its owner's return
   const holdings = h.items.map((x) => {
@@ -116,7 +128,7 @@ export function compute(plan, params = {}) {
   // loss added to the year's sales, short or long by its term. The engine nets it against the year's gains (short against
   // short, long against long, then across) and lets a net loss take at most 3,000 (1,500 filing separately) off other income
   // (IRC 1211(b), 1222; Schedule D); the rest carries to next year (1212(b)) and saves nothing this year.
-  const baseCarry = lossCarryover(ti, federalTax(ti.inputs, ti.params));
+  const baseCarry = lossCarryover(ti, ti.result);
   let taxSavedTotal = 0, carry = baseCarry;
   // one sale row per term and owner (filing separately, each spouse's own losses are on their own return)
   const rows = [];
@@ -127,7 +139,7 @@ export function compute(plan, params = {}) {
   if (harvest.length) {
     const p2 = structuredClone(yr.plan);
     p2.taxes = { ...(p2.taxes ?? {}), gains: [...(p2.taxes?.gains ?? []), ...rows] };
-    const t2 = taxInputs(p2, params), r2 = federalTax(t2.inputs, t2.params);
+    const t2 = taxView(p2, params), r2 = t2.result;
     taxSavedTotal = Math.max(0, base - r2.totalTax);
     carry = lossCarryover(t2, r2);
   }
@@ -143,5 +155,5 @@ export function compute(plan, params = {}) {
   if (harvest.length) notes.push("Buying the same fund within 30 days before or after you sell it at a loss, in any of your accounts (an IRA too) or your spouse's, cancels the loss on that many shares (the wash-sale rule). Buy something similar but not the same, such as another company's total-market fund, or wait 31 days.");
   const capLimit = ti.filingStatus === "married_separate" ? 1500 : 3000;
   const returns = ti.separate?.length || 1;   // filing separately as two returns: the limit is on each
-  return { ready: h.hasData, returns, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
+  return { ready: h.hasData, returns, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, shortRate, payRate, payIs, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
 }

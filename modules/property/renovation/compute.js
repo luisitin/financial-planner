@@ -6,7 +6,8 @@
 import { pmt } from "../../../core/math/finance.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
-import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
+import { marginalRate, federalTax } from "../../../core/math/tax.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 
@@ -73,9 +74,19 @@ export function compute(plan, params = {}) {
   const home = homes.length ? (() => { const value = countedBalance(homes[0]), owed = mortgage?.owed ?? 0; return { name: homes[0].name, value, mortgage: owed, equity: value - owed, borrowable: Math.max(0, value * x.cltv - owed) }; })() : null;
 
   // the tax rate interest is deducted at, if the household itemizes (home interest on money used to improve the home is deductible)
-  const fed = computeFederal(plan, { today });
+  const fed = taxView(plan, { today });
   const itemizes = fed.result.deduction?.used === "itemized";
-  const marginal = fed.marginal ?? 0.22;
+  // what one more dollar of itemized deduction saves. Usually the bracket rate the next dollar of income costs (a true 0 stays 0:
+  // a household with no income tax gets nothing back). A retiree in the Social Security band, or with the senior deduction, is
+  // different: a deduction does not lower provisional income or the AGI the senior deduction is tested on, so a dollar of it
+  // saves the bracket rate only (Pub. 915 worksheet), not the 22.2 cents a dollar of income costs (Review 2026-11-06)
+  let marginal = marginalRate(fed.inputs, fed.params);
+  const inc = fed.result.income ?? {}, dedn = fed.result.deduction ?? {};
+  if (itemizes && ((inc.taxableSocialSecurity ?? 0) > 0 || (dedn.senior ?? 0) > 0)) {
+    const lessItemized = Math.max(0, (Number(fed.inputs.itemized) || 0) - 1000);
+    const less = federalTax({ ...fed.inputs, itemized: lessItemized }, fed.params);
+    if (less.deduction.used === "itemized") marginal = Math.max(0, (less.totalTax - fed.result.totalTax) / (((Number(fed.inputs.itemized) || 0) - lessItemized) || 1));
+  }
   const ded = (interest) => (itemizes ? interest * marginal : 0);
   // only the interest on home debt up to $750,000 ($375,000 filing separately) is deductible, and only on money used to buy,
   // build or improve the home (IRC 163(h)(3)(B), (F); Pub. 936): so not on closing costs rolled into a refinance

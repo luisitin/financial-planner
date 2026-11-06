@@ -5,7 +5,8 @@
 // the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
 // years as it grows and the mortgage shrinks.
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
-import { taxInputs, todaysReturn, addIncome } from "../../taxes/federal/compute.js";
+import { todaysReturn, addIncome } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { longOn } from "../../investments/tax-lots/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
@@ -93,7 +94,7 @@ export function compute(plan, params = {}) {
 
   // selling today: the federal tax on the gain, worked through the federal estimate in today's tax year
   const yr = todaysReturn(plan, today);
-  const ti = taxInputs(yr.plan, { today });
+  const ti = taxView(yr.plan, { today });
   const status = ti.filingStatus;
   // filing separately (two returns), the gain is on the return of the spouse whose name the home is in, with their own
   // $250,000; in neither name, half on each return, each half with its own $250,000 (26 CFR 1.121-2(a)(2), Joint owners: "each
@@ -121,7 +122,7 @@ export function compute(plan, params = {}) {
   // the lesser of the investment income and the income over the line (1(h), 1411(a)(1))
   const longFrom = date ? longOn(date) : null;
   const term = longFrom && today && today < longFrom ? "short" : "long";
-  const r0 = federalTax(ti.inputs, ti.params);
+  const r0 = ti.result;
   const withGain = pieces.reduce((inp, x) => x.taxable > 0 ? addIncome(inp, x.id, { [term === "short" ? "otherOrdinary" : "qualifiedIncome"]: x.taxable, investmentIncome: x.taxable }) : inp, ti.inputs);
   const r1 = taxable > 0 ? federalTax(withGain, ti.params) : r0;
   const tax = Math.max(0, r1.totalTax - r0.totalTax), niit = Math.max(0, (r1.niit || 0) - (r0.niit || 0));

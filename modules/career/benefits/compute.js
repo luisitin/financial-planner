@@ -4,9 +4,9 @@
 // spending accounts and commuter benefits with the tax each saves; the employer stock purchase plan's discount after
 // tax; and the tax on life cover through work above $50,000. The limits are the plan year's (next year from October).
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
+import { careInputsWith, addIncome } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { compute as computePaycheck, w4StatusFor } from "../../cashflow/paycheck/compute.js";
-import { withBusiness } from "../../taxes/withholding/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
@@ -67,16 +67,19 @@ export function groupLifeImputed(cover, age, paid = 0) {
 
 /**
  * The tax a pre-tax payroll deduction of `amount` saves. Federal: the household's income tax with wages lowered by it
- * (the 0.9% extra Medicare tax is not counted: it is worked on Medicare wages). Payroll (`fica`): Social Security on
+ * (the 0.9% extra Medicare tax goes in `payroll`: cafeteria-plan money comes off Medicare wages). Payroll (`fica`): Social Security on
  * the part under the wage base and Medicare 1.45%, when it comes out of the paycheck before payroll tax (not a
  * 401(k), IRC 3121(v)(1)(A)). State: its rate unless `state` is false (a state that taxes it).
  */
-export function taxSaved(amount, { inputs, params, personPay, wageBase, stateRate, fica = true, state = true }) {
+export function taxSaved(amount, { inputs, params, personPay, wageBase, stateRate, fica = true, state = true, personId = null }) {
   if (!(amount > 0)) return { federal: 0, payroll: 0, state: 0, total: 0 };
-  const a = federalTax(inputs, params), b = federalTax({ ...inputs, wages: Math.max(0, (Number(inputs.wages) || 0) - amount) }, params);
+  // cafeteria-plan money (not a 401(k)) is out of Medicare wages too (IRC 3121(a)(2)(B), (a)(5)(G); W-2 box 5), so it lowers the
+  // household's 0.9% extra Medicare tax (Form 8959) once its Medicare wages pass the threshold
+  // filing separately it comes off its holder's own return (Pub. 501), at that return's bracket and its own 0.9% threshold
+  const a = federalTax(inputs, params), b = federalTax(addIncome(inputs, personId, { wages: -Math.min(amount, Number(inputs.wages) || 0), ...(fica ? { medicareWages: -amount } : {}) }), params);
   const federal = (a.totalTax - a.additionalMedicare) - (b.totalTax - b.additionalMedicare);
   const ssPart = Math.max(0, Math.min(personPay, wageBase) - Math.min(Math.max(0, personPay - amount), wageBase));
-  const payroll = fica ? ssPart * PAYROLL.ss + amount * PAYROLL.medicare : 0;
+  const payroll = fica ? ssPart * PAYROLL.ss + amount * PAYROLL.medicare + (a.additionalMedicare - b.additionalMedicare) : 0;
   const st = state ? amount * (stateRate || 0) : 0;
   return { federal, payroll, state: st, total: federal + payroll + st };
 }
@@ -100,11 +103,12 @@ export function dcWorth(plan, { today, planYear, person, settings = {}, elect = 
   const all = plan.whatIfs?.benefits ?? {};
   const at = (amount) => {
     const p = { ...plan, taxes: { ...(plan.taxes ?? {}), year: planYear }, whatIfs: { ...(plan.whatIfs ?? {}), benefits: { ...all, [person.id]: { ...settings, dcfsaElect: amount, planYear } } } };
-    const t = taxInputs(p, { today });
-    // a business at its profit on its owner's return, half its self-employment tax and its 20% deduction off (withholding
-    // withBusiness), as the Federal estimate's year tax and Budget work it (Review 2026-11-06: Bo's separate return counted his
-    // photography in full, across the 12%/22% line, so his 3,750 looked worth 760 of federal tax, not 575.31)
-    return { t, r: federalTax(withBusiness(p, t.inputs, { today, year: planYear }), t.params), a: t.care?.account ?? null };
+    const t = taxView(p, { today });
+    // the Federal estimate's own return (taxView: known()), which has a business at its profit on its owner's return, half its
+    // self-employment tax and its 20% deduction off, as Budget does (Review 2026-11-06: Bo's separate return counted his
+    // photography in full, across the 12%/22% line, so his 3,750 looked worth 760 of federal tax, not 575.31), and this
+    // year's withdrawals, stock pay and rentals
+    return { t, r: t.result, a: t.care?.account ?? null };
   };
   const W = at(elect), O = at(0);
   const fed = (x) => x.r.totalTax - x.r.additionalMedicare;
@@ -243,7 +247,7 @@ export function compute(plan, params = {}) {
   const hsaAhead = limitsYear !== planYear && LF.kindYear.hsa === planYear;
   if (limitsYear !== planYear) notes.push(`The ${planYear} limits${hsaAhead ? " for the 401(k), the flexible spending accounts and commuting" : ""} are not in the app yet, so ${limitsYear}'s are shown; the IRS publishes them in October and November.${hsaAhead ? ` The health savings account's ${planYear} limits are in.` : ""}`);
 
-  const ti = taxInputs(plan, { today });
+  const ti = taxView(plan, { today });
   const st = computeState(plan, { today });
   const stateRate = st.rate ?? 0;
   const code = String(plan.household?.state ?? "").toUpperCase();
@@ -256,7 +260,7 @@ export function compute(plan, params = {}) {
   // the child care account put back in wages and no child care account (careInputsWith with no elections), so each choice is
   // worked from none; the child care account itself is worked on its own (`dcWorth`)
   const careT = careInputsWith(ti, {}, {});
-  const T = { inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + (ti.fsa?.offWages ?? 0) + (ti.wagesTyped ? 0 : ti.care?.offWages ?? 0), ...(careT ? { care: careT } : {}) }, params: ti.params, personPay: pay, wageBase, stateRate };
+  const T = { inputs: { ...ti.inputs, wages: (Number(ti.inputs.wages) || 0) + (ti.fsa?.offWages ?? 0) + (ti.wagesTyped ? 0 : ti.care?.offWages ?? 0), ...(careT ? { care: careT } : {}) }, params: ti.params, personPay: pay, wageBase, stateRate, personId: person.id };
   const light = params.paycheck === false;
   const L = LF.kinds;
   const B = yearTable(BENEFITS, planYear);

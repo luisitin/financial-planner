@@ -11,7 +11,7 @@
 // The order is the law's: the rentals' allowance is worked on modified AGI before the IRA and student loan deductions
 // (469(i)(3)(E)); the IRA's after the rentals and before the student loan interest (219(g)(3)(A)); the student loan
 // interest's after both (221(b)(2)(C)). README "What the plan already knows (round 8)".
-import { compute as computeFederal, businessOn, addIncome, withReturns, walk, ratePct, nextDollarOf, careMovesNextDollar } from "./compute.js";
+import { compute as computeFederal, taxInputs, businessOn, addIncome, withReturns, walk, ratePct, nextDollarOf, careMovesNextDollar } from "./compute.js";
 import { marginalRate, careStep } from "../../../core/math/tax.js";
 import { federalTax, SEPARATE_FIELDS } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
@@ -583,8 +583,10 @@ const extraTaxes = (out) => {
  */
 export function knownWithout(plan, params = {}, fed = null, key = "rental") {
   const f = fed ?? computeFederal(plan, params);
-  const swap = { rental: (ctx) => { const r = rentalStep(ctx); return { inputs: r.rental ? r.rental.before : ctx.inputs }; } };
-  const steps = STEPS.map((x) => (x === rentalStep && swap[key] ? swap[key] : x));
+  // "stock": the units vesting this year left out of the wages (the Equity compensation page adds them itself, to show what they cost)
+  const swap = { rental: (ctx) => { const r = rentalStep(ctx); return { inputs: r.rental ? r.rental.before : ctx.inputs }; }, stock: (ctx) => ({ inputs: ctx.inputs }), ira: (ctx) => ({ inputs: ctx.inputs }) };
+  const target = { rental: rentalStep, stock: stockStep, ira: iraStep }[key];
+  const steps = STEPS.map((x) => (x === target && swap[key] ? swap[key] : x));
   const ctx = { plan, fed: f, inputs: f.inputs, params };
   const { out } = runSteps(ctx, steps);
   const result = ctx.inputs === f.inputs ? f.result : federalTax(ctx.inputs, f.params);
@@ -713,4 +715,31 @@ function pageWalk(f, result, inputs, out, { seTax, earlyTax = 0, total, rate, ne
     steps.splice(at, 1, ...rows, { ...last, amount: total, sub: total < -0.5 ? `the credits are more than the tax: ${fmtInt(-total)} comes back as a refund` : sub });
   }
   return steps;
+}
+
+/**
+ * taxView(plan, params, { without }) -> what taxInputs(plan, params) gives (inputs, params, year, filingStatus, gains, hsa, care...)
+ * with `inputs` and `result` (and `marginal`, `nextDollar`) the Federal estimate's own return: known()'s, so a page that
+ * speaks about this household's tax year (a marginal rate, AGI, "your tax") quotes the figures the Federal estimate does
+ * (round 8 batch 1 follow-up: Tax-lot harvesting said 22% where the Federal estimate said 12%). `without: "stock"` leaves the
+ * units vesting this year out of the wages for a page that adds them itself (Equity compensation); `without: "rental"` or `"ira"` as
+ * knownWithout ("ira": the IRA deduction as the plan assumes it, not cut by the income limits for someone covered at work: the HSA
+ * page's answer key counts the saving that way). Without `params.today` there is nothing to count this year's withdrawals against, so it is taxInputs' own
+ * return. `tax` is the income tax (known().total adds the self-employment tax and the extra 10%; `total` here).
+ */
+export function taxView(plan, params = {}, { without = null } = {}) {
+  if (!params.today) {
+    const b = taxInputs(plan, params), result = federalTax(b.inputs, b.params);
+    return { ...b, result, known: null, total: result.totalTax };
+  }
+  const f = computeFederal(plan, params);
+  if (without) {
+    const w = knownWithout(plan, params, f, without);
+    const { steps: _s, sources: _r, ...g } = f;   // the old return's walk is not this return's
+    const nd = nextDollarOf(w.inputs, f.params);
+    return { ...g, inputs: w.inputs, result: w.result, marginal: marginalRate(w.inputs, f.params), nextDollar: nd, nextDollarNoCare: w.inputs.care ? marginalRate({ ...w.inputs, care: undefined }, f.params) : nd, careSets: null, careFalls: null, known: null, total: w.total };
+  }
+  const k = known(plan, params, f);
+  const { steps: _s, sources: _r, ...g } = f;
+  return { ...g, inputs: k.inputs, result: k.result, marginal: marginalRate(k.inputs, f.params), nextDollar: k.nextDollar, nextDollarNoCare: k.inputs.care ? marginalRate({ ...k.inputs, care: undefined }, f.params) : k.nextDollar, careSets: k.careSets, careFalls: k.careFalls, known: k, total: k.total };
 }

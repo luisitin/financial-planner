@@ -6,7 +6,8 @@
 import { compute as computeHoldings } from "../holdings/compute.js";
 import { lotsOf, washSales, todaysReturn } from "../tax-lots/compute.js";
 import { compute as computeNetWorth, countedBalance } from "../../balance/net-worth/compute.js";
-import { taxInputs, lossCarryover } from "../../taxes/federal/compute.js";
+import { lossCarryover } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween, isoOf } from "../../../core/math/dates.js";
 
@@ -80,13 +81,13 @@ export function compute(plan, params = {}) {
   const yr = todaysReturn(plan, today);
   const P0 = yr.plan;
   const ownerOf = new Map((plan.accounts ?? []).map((a) => [a.id, a.ownerId || null]));
-  const ti = taxInputs(P0, { today });
-  const r0 = federalTax(ti.inputs, ti.params);
+  const ti = taxView(P0, { today });
+  const r0 = ti.result;
   const base = r0.totalTax;
   const withSales = (sales) => {
     const extra = sales.filter((x) => Math.abs(x.gain) > 0.005).map((x, n) => ({ id: `crypto-${n}`, name: "crypto", proceeds: Math.max(0, x.gain), basis: Math.max(0, -x.gain), held: x.held, ...(x.personId ? { personId: x.personId } : {}) }));
-    const t2 = taxInputs({ ...P0, taxes: { ...(P0.taxes ?? {}), gains: [...(P0.taxes?.gains ?? []), ...extra] } }, { today });
-    const r2 = federalTax(t2.inputs, t2.params);
+    const t2 = taxView({ ...P0, taxes: { ...(P0.taxes ?? {}), gains: [...(P0.taxes?.gains ?? []), ...extra] } }, { today });
+    const r2 = t2.result;
     return { change: r2.totalTax - base, carry: lossCarryover(t2, r2), short: t2.gains.netShort - ti.gains.netShort, long: t2.gains.netLong - ti.gains.netLong };
   };
   // the rates shown: the tax on $1,000 more pay-like income or long-term gain, the 3.8% included (as Tax lots)

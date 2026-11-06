@@ -87,3 +87,7 @@ Tests: module.test.mjs "round 8 verify".
 
 ## Plain words (path part 3, 2026-11-06)
 "Prices have risen faster than inflation" reads "College prices have risen faster than prices in general". No figure changed.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** The American Opportunity credit is cut by modified AGI. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. MAGI is `taxView(...).result.agi`, the Federal estimate's AGI. The landlord household's rent after costs is 154,400, not the 179,600 the rows alone gave, which moves the credit from "partial" to "full".

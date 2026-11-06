@@ -7,7 +7,7 @@ import { compute as computeGoals } from "../goals/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { monthsBetween } from "../../../core/math/dates.js";
-import { compute as computeFederal } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 
 /** A year of college in 2025-26, published prices: tuition and fees plus room and board (College Board, Trends in College Pricing and Student Aid 2025). */
 export const COSTS = {
@@ -133,7 +133,7 @@ export function compute(plan, params = {}) {
   const status = plan.household?.filingStatus ?? "single";
   if (students && status !== "married_separate") {
     let magi = null;
-    try { magi = computeFederal(plan, { today }).result.agi; } catch { magi = null; }
+    try { magi = taxView(plan, { today }).result.agi; } catch { magi = null; }
     const range = status === "married_joint" ? AOTC.joint : AOTC.single;
     if (magi !== null && magi < range[1]) aotc = { status: magi <= range[0] ? "full" : "partial", students, perStudent: AOTC.perStudent, magi, range };
   }

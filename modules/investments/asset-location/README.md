@@ -20,3 +20,7 @@ One kind of account only: nothing to place, a note says so. The tax on selling i
 
 ## Ideas / not yet
 - The foreign tax credit as a bonus for international funds in taxable; state tax; growth-adjusted (Roth) placement.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** It places bonds and stocks by the household's marginal rate (`taxInputs` before). Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The ordinary rate is `marginalRate()` on the Federal estimate's inputs (never under 10%), the qualified-dividend rate the cost of the next 1,000 on the same return. Interest and non-qualified dividends are net investment income (IRC 1411(c)(1)(A)(i)), so both probes carry the 3.8% (equity household: 27.8% and 18.8%, as Tax-lot harvesting says). A household with no income tax is shown at the 10% floor, not 22%.

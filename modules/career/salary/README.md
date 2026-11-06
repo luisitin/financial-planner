@@ -85,3 +85,7 @@ on the lines of its chain that start after it (the pay still to come); a line th
 settings were copied to the ending line, and a change made before the start date was lost on it. Test: `module.test.mjs`.
 
 Review 2026-11-06 (round 7): "When you retire (2055)", "held to prices (you are past 55)", "You have reached the retirement age" and the warning "You have no birth date on People" say you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner, with the verb to match; typed names read as before (core/words.js). Income names are stored data and stay as typed ("My spouse's salary"). Test: "Review 2026-11-06 (round 7): a missing birth date says you ...".
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** What a raise keeps after tax stacks on the household's real income. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. `keepOfRaise()` runs on the Federal estimate's inputs: a raise for a household in the 24% bracket keeps 76 cents less payroll tax, not 78. The 0.9% extra Medicare tax uses the Federal estimate's Medicare wages (the stock units in), and Social Security wages count the units for the person who holds them. Filing separately, a raise is on its earner's own return (`personId`).

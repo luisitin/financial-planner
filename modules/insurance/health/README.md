@@ -30,3 +30,7 @@
 ## Ideas / not yet
 - Copays per visit and prescription tiers; the family's own last-year bills from the bank files.
 - A Monte Carlo of the year's bills instead of three fixed years.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** The HSA plan's saving is a marginal rate on this household's income. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The rate is the tax a year's HSA limit takes off the Federal estimate's return, per dollar, plus 7.65% payroll tax (a freelancer pays self-employment tax instead; not changed here). Round 8 follow-up: the rate works `known()` again with the HSA limit as an adjustment (not a static probe on the final inputs), as the HSA page does, so a rental loss the lower AGI frees (IRC 469(i)(3)(F): the HSA deduction is not added back) is in it (the landlord: 25.9 cents, not 22). The payroll part is the holder's own: 6.2% only under the Social Security base, 1.45% Medicare, and none for someone self-employed with no pay (Schedule SE is not lowered by the HSA deduction). Not in it: the 0.9% extra Medicare tax the HSA money would take off (the HSA page counts it), and the HSA page's IRA deduction (the Health page keeps the IRA as the plan assumes).

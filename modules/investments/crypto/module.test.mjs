@@ -175,7 +175,9 @@ test("a lot sold on its own takes its own wash-sale match (not the one it gets w
   const [a, b] = ["la", "lb"].map((id) => d.harvest.find((h) => h.lot.id === id));
   near(a.disallowed, 250); near(b.disallowed, 0);   // together: the older lot is washed
   near(a.saved, 250 * 0.22); near(b.saved, 250 * 0.22);   // alone: each is
-  near(d.harvestSaved, 750 * 0.22);
+  // 750 off pay at 22%, and the child care credit 30 more: on the Federal estimate's return (the business at its profit) AGI is
+  // 158,271 and 750 less crosses the 158,000 step (IRC 21(a)(2))
+  near(d.harvestSaved, 750 * 0.22 + 30);
 });
 
 test("filing separately: a coin in one spouse's account is on that spouse's return, with its own $1,500 limit (Pub. 501; IRC 1211(b))", () => {

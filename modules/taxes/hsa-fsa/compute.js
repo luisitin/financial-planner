@@ -5,13 +5,16 @@
 // against its limit, what is unspent, and the use-it-or-lose-it deadline.
 import { limitsFor } from "../../retirement/contributions/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
-import { taxInputs } from "../federal/compute.js";
-import { federalTax } from "../../../core/math/tax.js";
+import { taxView } from "../federal/known.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 /** Employee payroll tax: Social Security 6.2% up to the year's pay limit (IRC 3101(a), 3121(a)(1)), Medicare 1.45% on all pay (3101(b)(1)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
+// The tax saved is worked on the Federal estimate's return except for one step: the traditional IRA deduction stays as the plan assumes
+// it, not cut again by the income limits for someone covered at work, because the answer key (tests/golden/limits) counts the saving so.
+// The HSA lowers income, which can lift that cut a little: asked of the owner in build.md.
+const IRA_AS_ASSUMED = { without: "ira" };
 const FICA = PAYROLL.ss + PAYROLL.medicare;   // with no pay on file, money kept out of pay saves the full 7.65%
 
 /**
@@ -59,7 +62,7 @@ const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
-  const b = taxInputs(plan, params);
+  const b = taxView(plan, params, IRA_AS_ASSUMED);
   const year = b.year;
   // each kind from the newest year that has it: a 2027 date has 2027's HSA limits and 2026's FSA ones
   const LF = limitsFor(year), L = LF.kinds;
@@ -75,10 +78,10 @@ export function compute(plan, params = {}) {
   // excess is worked again on the employer's money alone; only money within the limit was kept out of income (106(d)(1))
   // typed wages (W-2 box 1) already leave the money out: without it box 1 is higher by the own money kept out (payroll less
   // the excess) plus any employer excess that the own money's absence changes
-  let b0 = taxInputs(withoutHsaPayroll(plan), params);
-  if (b.wagesTyped) b0 = taxInputs(withoutHsaPayroll(plan, { wagesAddBack: Math.max(0, hh.payroll - hh.excess) + b0.hsa.picture.household.excess }), params);
-  const withIt = federalTax(b.inputs, b.params).totalTax;
-  const without = federalTax(b0.inputs, b0.params).totalTax;
+  let b0 = taxView(withoutHsaPayroll(plan), params, IRA_AS_ASSUMED);
+  if (b.wagesTyped) b0 = taxView(withoutHsaPayroll(plan, { wagesAddBack: Math.max(0, hh.payroll - hh.excess) + b0.hsa.picture.household.excess }), params, IRA_AS_ASSUMED);
+  const withIt = b.result.totalTax;
+  const without = b0.result.totalTax;
   const taxSaved = Math.max(0, without - withIt);
   // payroll tax, per person: payroll-tax wages = pay - the health FSA (on the pay of the adult marked "Me") - own HSA money
   // from pay + own HSA money over the limit (3121(a)(5)(G); Pub. 15-B "Up to specified dollar limits"); 401(k) money stays in
@@ -92,7 +95,10 @@ export function compute(plan, params = {}) {
     const ficaWith = pay - fsaOff - p.payroll + p.excess, ficaWithout = pay - fsaOff + (p0?.excess ?? 0);
     // no pay on the Income page: where the pay sits against the Social Security limit is not known, so the money within the
     // limit saves the full 7.65%
-    const s = knownPay ? payrollTaxSaved(ficaWithout, ficaWith, wageBase) : { socialSecurity: PAYROLL.ss * Math.max(0, ficaWithout - ficaWith), medicare: PAYROLL.medicare * Math.max(0, ficaWithout - ficaWith) };
+    // a self-employed person's HSA money goes in outside a cafeteria plan and the deduction does not lower self-employment income
+    // (Schedule 1 line 13; Schedule SE): with no pay on file and a business, no payroll tax is saved
+    const bizOnly = !knownPay && b.k401.people.some((x) => x.compensation - x.pay > 0);
+    const s = bizOnly ? { socialSecurity: 0, medicare: 0 } : knownPay ? payrollTaxSaved(ficaWithout, ficaWith, wageBase) : { socialSecurity: PAYROLL.ss * Math.max(0, ficaWithout - ficaWith), medicare: PAYROLL.medicare * Math.max(0, ficaWithout - ficaWith) };
     const aboveWageBase = knownPay && ficaWithout > wageBase && ficaWithout - ficaWith > 0;
     return { id: p.id, name: p.name, role: p.role, age: p.age, eligible: p.eligible, catchUp: p.catchUp, limit: p.limit, payroll: p.payroll, employer: p.employer, used: p.used, room: p.room, over: p.over, excess: p.excess,
       pay, ficaWith, ficaWithout, socialSecuritySaved: s.socialSecurity, medicareSaved: s.medicare, ficaSaved: s.socialSecurity + s.medicare, aboveWageBase, fsaOff };
@@ -128,8 +134,8 @@ export function compute(plan, params = {}) {
   if (excluded > 0) {
     const t = plan.taxes ?? {}, ty = t.thisYear ?? {};
     const typedWages = b.wagesTyped ? { thisYear: { ...ty, wages: Number(ty.wages) + excluded } } : {};
-    const bf = taxInputs({ ...plan, taxes: { ...t, ...typedWages, hsa: { ...(t.hsa ?? {}), fsa: 0, fsaPartner: 0 } } }, params);
-    fsaIncomeSaved = Math.max(0, federalTax(bf.inputs, bf.params).totalTax - withIt);
+    const bf = taxView({ ...plan, taxes: { ...t, ...typedWages, hsa: { ...(t.hsa ?? {}), fsa: 0, fsaPartner: 0 } } }, params, IRA_AS_ASSUMED);
+    fsaIncomeSaved = Math.max(0, bf.result.totalTax - withIt);
     // payroll tax, each person's own FSA against their own pay and the Social Security limit (pay unknown: the full 7.65%)
     for (const x of fsaPeople) {
       const pp = people.find((q) => q.id !== null && q.id === x.id);

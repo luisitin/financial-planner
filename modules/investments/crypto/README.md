@@ -93,3 +93,7 @@ independent review's hand-worked ones (2026-10-31).
 ## Ideas / not yet
 - Prices fetched by the PC server from a public price feed (needs a network setting and a source).
 - Staking income (taxed as income when received).
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** Sales and losses are taxed on this year's return. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. Same helper as Tax-lot harvesting (`taxView()`), with and without the coins sold.

@@ -32,9 +32,10 @@ test("no plans: nothing to compare; the defaults", () => {
 
 test("the family's three plans: the cheapest for the usual year, the three years, where another wins", () => {
   const d = compute(planWith({ tier: "family", expected: 6000, plans: [PPO, HSA, HMO] }), { today: "2026-10-30" });
-  // over the 8,750 HSA limit: 22%, and the child care credit on Cy's care two points higher (AGI 158,780 -> 150,030: from
-  // 32% to 34% of 3,000, +60; IRC 21(a)(2) takes a point per 4,000 over 150,000)
-  const rate = 0.22 + 60 / 8750;
+  // over the 8,750 HSA limit: 22%, and the child care credit on Cy's care three points higher: on the Federal estimate's return
+  // the business counts at its profit (AGI 158,271, not 158,780), so 8,750 less is 149,521: three 4,000 steps from 158,000, from
+  // 32% to 35% of 3,000, +90 (IRC 21(a)(2) takes a point per 4,000 over 150,000)
+  const rate = 0.22 + 90 / 8750;
   assert.equal(d.hsaLimit, 8750); near(d.marginal, rate); near(d.taxRate, rate + FICA);
   assert.equal(d.best, "hsa");
   const x = Object.fromEntries(d.plans.map((p) => [p.id, p]));

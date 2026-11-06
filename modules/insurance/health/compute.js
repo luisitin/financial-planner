@@ -4,7 +4,9 @@
 // in a quiet year, your usual year and a bad year. Which plan wins at which level of bills, and which
 // plans can have an HSA.
 import { limitsFor } from "../../retirement/contributions/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxView, known } from "../../taxes/federal/known.js";
+import { compute as computeFederal, addIncome } from "../../taxes/federal/compute.js";
+import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 
 /** A quiet year (a check-up, a prescription) and a bad year (a hospital stay or surgery), in the bills the plan is charged. */
@@ -66,7 +68,7 @@ export function compute(plan, params = {}) {
   const h = plan.insurance?.health ?? {};
   const tier = h.tier === "family" ? "family" : "self";
   const expected = Number(h.expected) >= 0 && h.expected !== null && h.expected !== "" && h.expected !== undefined ? Number(h.expected) : 5000;
-  const b = taxInputs(plan, params);
+  const b = taxView(plan, params);
   // the year's rules: the HSA plan limits and how much can go in (the contributions page's table when it has the year)
   const limitsYear = hdhpYear(b.year);
   const rules = HDHP_BY_YEAR[limitsYear][tier];
@@ -76,9 +78,30 @@ export function compute(plan, params = {}) {
   // contributions from pay. Worked over the limit, not over $1,000, since a credit that falls in steps of income (the
   // child care credit: a point per 4,000 over 150,000 joint) would make a small probe land on a step or miss it
   const probe = hsaLimit > 0 ? hsaLimit : 1000;
-  const t0 = federalTax(b.inputs, b.params).totalTax, t1 = federalTax({ ...b.inputs, adjustments: (b.inputs.adjustments ?? 0) + probe }, b.params).totalTax;
+  const t0 = b.result.totalTax;
+  // the deduction works the Federal estimate's steps again (known(): a rental loss the allowance frees, the IRA deduction's
+  // limits, the student loan interest), as the HSA page does: the HSA deduction is not added back in the rental allowance's
+  // modified AGI (IRC 469(i)(3)(F)). Without a day there is no year to work, so the return alone gets the probe
+  let t1 = federalTax({ ...b.inputs, adjustments: (b.inputs.adjustments ?? 0) + probe }, b.params).totalTax;
+  if (params.today) {
+    const f = computeFederal(plan, params);
+    const f1 = { ...f, inputs: addIncome(f.inputs, f.inputs.separateTo ?? null, { adjustments: probe }) };
+    f1.result = federalTax(f1.inputs, f.params);
+    t1 = known(plan, params, f1).result.totalTax;
+  }
   const marginal = Math.max(0, (t0 - t1) / probe);
-  const taxRate = marginal + FICA;
+  // payroll tax the HSA money saves when it comes from pay: 6.2% only under the Social Security base, 1.45% Medicare; nothing for
+  // someone self-employed with no pay (Schedule SE is not lowered by the HSA deduction). The holder: the adult marked "Me",
+  // or the best paid when "Me" has no pay on file
+  const kp = b.k401?.people ?? [];
+  const holder = kp.find((x) => x.id === (plan.household?.people ?? []).find((q) => q.role === "self")?.id) ?? kp[0] ?? null;
+  const top = kp.reduce((a, x) => (x.pay > (a?.pay ?? 0) ? x : a), null);
+  const earner = holder && holder.pay > 0 ? holder : top;
+  const baseOf = maximumEarnings(limitsYear);
+  const payroll = earner && earner.pay > 0
+    ? (0.062 * Math.max(0, Math.min(earner.pay, baseOf) - Math.min(Math.max(0, earner.pay - probe), baseOf)) + 0.0145 * probe) / probe
+    : kp.some((x) => x.compensation - x.pay > 0) ? 0 : FICA;
+  const taxRate = marginal + payroll;
   const opts = { hsaRoom: hsaLimit, taxRate };
   const warnings = [];
   const $ = (n) => `$${n.toLocaleString("en-US")}`;

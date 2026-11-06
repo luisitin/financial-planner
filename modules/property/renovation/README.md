@@ -69,3 +69,7 @@ gets no refinance, and points, mortgage insurance premiums and the average-balan
 
 ## Ideas / not yet
 - Energy projects: tax credits (the residential clean energy credit) and the bills they save.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** Home-loan interest is worth the household's marginal rate only if it itemizes. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. `itemizes` and the rate are read from the Federal estimate's return (`taxView()` and `marginalRate()` on its inputs). A household with no income tax gets 0 back (the rate is not floored at 22%). A retiree in the Social Security band, or with the senior deduction, is valued at what a dollar of itemized deduction saves on the Federal estimate's return (the bracket rate: 12%, Pub. 915 worksheet; a deduction does not lower provisional income), not the 22.2 cents a dollar of income costs. Open question for the owner: should every itemizer be valued at what a deduction saves (IRC 68 makes it 35% at the top, not 37%)? That changes 178 keyed checks of the property-goals key, so the keyed top-rate value is kept.

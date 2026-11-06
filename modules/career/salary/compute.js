@@ -3,10 +3,11 @@
 // and in today's money. With it: what the next raise keeps after tax, the pay still to come before retiring, what one
 // more percent a year or a raise won now is worth over the career, and the average growth to put on the Income page.
 import { compute as computeIncome, chainId } from "../../cashflow/income/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
+import { addIncome } from "../../taxes/federal/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { NameIn, verbFor } from "../../../core/words.js";
 import { BENCHMARKS } from "./data/benchmarks.js";
@@ -69,11 +70,13 @@ export const lifetime = (rows) => ({ nominal: rows.reduce((s, r) => s + r.pay * 
  * plus 0.9% on the part of the household's Medicare wages (pay before 401(k) saving, IRC 3121(v)(1)(A)) above the
  * filing status's threshold (IRC 3101(b)(2)); and the state's rate when one is known.
  */
-export function keepOfRaise(amount, { inputs, params, personWages = 0, wageBase = Infinity, stateRate = 0, medicareWages = null }) {
+export function keepOfRaise(amount, { inputs, params, personWages = 0, wageBase = Infinity, stateRate = 0, medicareWages = null, personId = null }) {
   if (!(amount > 0)) return { amount: 0, federal: 0, payroll: 0, extraMedicare: 0, state: 0, keep: 0, share: null };
-  const before = federalTax(inputs, params), after = federalTax({ ...inputs, wages: (Number(inputs.wages) || 0) + amount }, params);
+  // filing separately the raise is on its earner's own return (Pub. 501), at that return's bracket and its own 0.9% threshold
+  const own = personId != null && Array.isArray(inputs.separate) ? inputs.separate.find((x) => x.personId === personId) ?? null : null;
+  const before = federalTax(inputs, params), after = federalTax(addIncome(inputs, own ? personId : null, { wages: amount }), params);
   const federal = (after.totalTax - after.additionalMedicare) - (before.totalTax - before.additionalMedicare);
-  const med = medicareWages ?? (Number(inputs.wages) || 0);
+  const med = medicareWages ?? (Number((own ?? inputs).medicareWages ?? (own ?? inputs).wages) || 0);   // the Federal estimate's Medicare wages (pay before 401(k) saving, the stock units in)
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
   const extraMedicare = ADDITIONAL_MEDICARE * (Math.max(0, med + amount - th) - Math.max(0, med - th));
   const ssPart = Math.max(0, Math.min(personWages + amount, wageBase) - Math.min(personWages, wageBase));
@@ -118,7 +121,7 @@ export function compute(plan, params = {}) {
   const salaries = inc.active.filter((x) => x.type === "salary" && x.period !== "once" && x.yearly > 0);
   const warnings = [];
   if (!salaries.length) return { ready: false, year, inflation, jobs: [], total: { pay: 0, lifetimeReal: 0, lifetimeNominal: 0 }, state: null, benchmarks: BENCHMARKS, warnings };
-  const tax = taxInputs(plan, { today });
+  const tax = taxView(plan, { today });
   const st = computeState(plan, { today });
   const stateRate = st.rate ?? 0;
   const wageBase = maximumEarnings(year);
@@ -150,11 +153,12 @@ export function compute(plan, params = {}) {
     const n = last ? last.year - year : 0;
     const avgGrowth = n > 0 ? Math.pow(last.pay / x.yearly, 1 / n) - 1 : raise;
     const extraPercent = lifetime(payPath({ ...base, raise: raise + 0.01 })).real - life.real;
-    const personWages = inc.active.filter((y) => y.personId === x.personId && ["salary", "bonus"].includes(y.type)).reduce((t, y) => t + y.yearly, 0);
-    const medicareWages = inc.active.filter((y) => ["salary", "bonus"].includes(y.type) && y.taxable !== false).reduce((t, y) => t + y.yearly, 0);
+    // Social Security wages: the holder's pay and, when they are the one holding the stock units, the units vesting this year
+    const units = tax.known?.stock && tax.known.stock.personId === x.personId ? Number(tax.known.stock.value) || 0 : 0;
+    const personWages = inc.active.filter((y) => y.personId === x.personId && ["salary", "bonus"].includes(y.type)).reduce((t, y) => t + y.yearly, 0) + units;
     // the next raise as the path has it (a promotion next year, or a level-off age already reached, changes it)
     const nextAmount = rows.length > 1 ? rows[1].pay - rows[0].pay : 0;
-    const nextRaise = { ...keepOfRaise(nextAmount, { inputs: tax.inputs, params: tax.params, personWages, wageBase, stateRate, medicareWages }), rate: rows.length > 1 ? rows[1].pay / rows[0].pay - 1 : null, promoted: !!rows[1]?.promoted };
+    const nextRaise = { ...keepOfRaise(nextAmount, { inputs: tax.inputs, params: tax.params, personWages, wageBase, stateRate, personId: x.personId || null }), rate: rows.length > 1 ? rows[1].pay / rows[0].pay - 1 : null, promoted: !!rows[1]?.promoted };
     const name = person?.name ?? "";
     const realGrowth = (1 + avgGrowth) / (1 + inflation) - 1;
     if (realGrowth < -1e-9) warnings.push(`${x.name || "A salary"} rises less than prices (${(inflation * 100).toFixed(1)}% a year): in today's money it shrinks over the years.`);

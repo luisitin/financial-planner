@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] The tax rate other pages quote is the Federal estimate's own: HSA and FSA savings, Health's HSA rate, Tax-lot harvesting, Crypto, Asset location, Benefits, a raise on Salary, Offer compare, Education's credit, Home and Renovation now read the same return. The freelancer is no longer told 22% on one page and 12% on another; the widow's HSA and harvesting figures match her return.
+- [builder:claude-b] Stock pay's card on Equity adds up: the extra 0.9% Medicare tax owed and held back has its own row, so federal tax less what was held back equals what to set aside.
 - [builder:claude-b] Every step on the way to Your plan opens in plain words: "bills you have to pay" instead of "must-pay", "even in a bad run of years" instead of "9 of 10 markets", "once prices rise" instead of "inflation", "accounts you haven't paid tax on yet" instead of "pre-tax", "change" instead of "lever"; small links on those screens are now full-size tap targets.
 - [builder:claude-b] Expenses opens short when most of it is our guesses: the month's total, what is left, and one "See or change each bill" button (236 px instead of 2,000 for a new plan); a save keeps the list open and shows its confirmation.
 - [builder:claude-b] Get started's spending question asks for one figure first, "Your best guess for a normal month", with the groups under "Split it up (optional)". The figure is shared over the groups so they add up to it, comes back when you return, and can be lowered as well as raised.

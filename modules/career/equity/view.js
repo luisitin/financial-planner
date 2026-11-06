@@ -75,7 +75,12 @@ export function render(page, ctx) {
         ui.h("li", {}, ui.h("span", {}, "Taxed as pay"), ui.h("span", {}, money(t.value))),
         ui.h("li", {}, ui.h("span", {}, "Federal tax on it"), ui.h("span", {}, money(t.federal))),
         ui.h("li", {}, ui.h("span", {}, "Held back for federal tax"), ui.h("span", {}, money(t.withheldFederal))),
-        ui.h("li", {}, ui.h("span", {}, "Social Security and Medicare"), ui.h("span", {}, money(t.payroll))),
+        // the 0.9% Medicare tax is owed on the household's pay past the line and held back on this person's pay past $200,000, so the two
+        // differ (round 8 follow-up: the rows did not add up to "set aside"); shown so that tax less held back, plus this, is the figure below
+        Math.abs(t.extraMedicare - t.extraWithheld) >= 1 ? ui.h("li", {}, ui.h("span", {}, `Extra 0.9% Medicare tax: ${money(t.extraMedicare)} owed, ${money(t.extraWithheld)} held back`), ui.h("span", {}, `${t.extraMedicare < t.extraWithheld ? "\u2212" : ""}${money(Math.abs(t.extraMedicare - t.extraWithheld))}`)) : null,
+        ui.h("li", {}, ui.h("span", {}, "Social Security and Medicare"), ui.h("span", {}, money(t.payroll - (t.selfEmployment || 0)))),
+        // with a business, these units fill the Social Security limit its owner pays on, so the business's own tax changes (usually falls)
+        Math.abs(t.selfEmployment || 0) >= 1 ? ui.h("li", {}, ui.h("span", {}, "Your business's self-employment tax changes by"), ui.h("span", {}, `${t.selfEmployment < 0 ? "\u2212" : ""}${money(Math.abs(t.selfEmployment))}`)) : null,
         t.state > 0 ? ui.h("li", {}, ui.h("span", {}, "State tax"), ui.h("span", {}, money(t.state))) : null),
       ui.h("p", { class: "eq-say" }, `${t.gap > 50 ? `Set aside about ${money(t.gap)} more for the tax return: what is held back falls short of your rate.` : t.gap < -50 ? `What is held back is about ${money(-t.gap)} more than the tax: a refund, or less to set aside elsewhere.` : "What is held back about covers the tax."}${wholeReturn(y.year)}`),
       ui.h("p", { class: "muted small" }, `At today's price; the real value is the price on each vest day. For federal tax the employer holds back 22% of the value (37% above ${money(1000000)} in a year), whatever your own rate.${y.estimated ? ` The IRS has not published ${y.year}'s tax tables yet, so ${y.year}'s figures use the latest ones raised for inflation.` : ""}`)));

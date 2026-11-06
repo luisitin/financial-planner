@@ -123,3 +123,7 @@ the key both follow the printed table, as payroll software does.
   account keeps its words. Test: "the child care account's note says the part taxed as pay too".
 
 Review 2026-11-06 (round 7): "Your paycheck", the fold "Your W-4 and deductions" (`w4Title`, also quoted by the notes), "set how often you are paid", "Your child care account takes ...", "shared with your account ..., so yours pays back" say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Jo: W-4 and deductions"; core/words.js). Test: "Review 2026-11-06 (round 7): the notes and the W-4 fold say you/your ...".
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(b) Not a statement about the household's return.** The federal line is what an employer holds back from one paycheck from the W-4 and the IRS withholding tables (Publication 15-T), or what is typed; it uses the return only for the year, the filing status and the child care account, none of which `known()` changes. It is left on `taxInputs()` on purpose.

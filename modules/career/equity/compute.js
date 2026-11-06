@@ -6,7 +6,7 @@
 // The grants are the Employer stock page's (`equity.grants`, `vestSchedule`); this page adds `optionType` and `equity.espp`.
 import { compute as computeEmployerStock, vestSchedule, SUPPLEMENTAL, DEFAULT_GRANT } from "../../investments/employer-stock/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
+import { taxView, known, knownWithout } from "../../taxes/federal/known.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { federalTax, taxOnQualified, largestAtOrUnder } from "../../../core/math/tax.js";
@@ -74,19 +74,24 @@ export function amtRoom(inputs, params, A, opts = {}) {
  * the state's rate. Withheld: 22% of the value for federal tax (37% above $1 million), Social Security and Medicare in
  * full, the 0.9% only on this person's pay above $200,000, the state's rate (assumed).
  */
-export function stockPayTax(value, { inputs, params, personWages = 0, medicareWages = 0, wageBase = Infinity, stateRate = 0 }) {
-  if (!(value > 0)) return { value: 0, federal: 0, payroll: 0, state: 0, owed: 0, withheldFederal: 0, withheld: 0, gap: 0 };
-  const federal = fedOnly(federalTax({ ...inputs, wages: (Number(inputs.wages) || 0) + value }, params)) - fedOnly(federalTax(inputs, params));
+export function stockPayTax(value, { inputs, params, personWages = 0, medicareWages = 0, wageBase = Infinity, stateRate = 0, federalIs = null, selfEmployment = 0 }) {
+  if (!(value > 0)) return { value: 0, federal: 0, payroll: 0, state: 0, owed: 0, withheldFederal: 0, withheld: 0, gap: 0, extraMedicare: 0, extraWithheld: 0, selfEmployment: 0 };
+  // `federalIs` and `selfEmployment` (a business: the units fill the Social Security base and push taxable income past the 20% deduction's
+  // line, which a fixed return cannot show) are the Federal estimate's return with the units less without them, when it has them
+  const federal = federalIs !== null ? federalIs : fedOnly(federalTax({ ...inputs, wages: (Number(inputs.wages) || 0) + value }, params)) - fedOnly(federalTax(inputs, params));
   const ss = PAYROLL.ss * Math.max(0, Math.min(personWages + value, wageBase) - Math.min(personWages, wageBase));
   const th = params.additionalMedicareThreshold?.[inputs.filingStatus] ?? 200000;
   const extra = PAYROLL.extraMedicare * (Math.max(0, medicareWages + value - th) - Math.max(0, medicareWages - th));
   const extraWithheld = PAYROLL.extraMedicare * (Math.max(0, personWages + value - PAYROLL.extraWithheldOver) - Math.max(0, personWages - PAYROLL.extraWithheldOver));
-  const payroll = ss + value * PAYROLL.medicare + extra;
+  const payroll = ss + value * PAYROLL.medicare + extra + selfEmployment;
   const state = value * (stateRate || 0);
   const withheldFederal = SUPPLEMENTAL.rate * Math.min(value, SUPPLEMENTAL.over) + SUPPLEMENTAL.high * Math.max(0, value - SUPPLEMENTAL.over);
   const withheld = withheldFederal + ss + value * PAYROLL.medicare + extraWithheld + state;
   const owed = federal + payroll + state;
-  return { value, federal, payroll, state, owed, withheldFederal, withheld, gap: owed - withheld };
+  // extraMedicare (owed, inside `payroll`) and extraWithheld (held back, inside `withheld`) are the 0.9% Medicare tax: owed on the
+  // household's wages past the line, held back on this person's pay past 200,000; their difference is part of `gap`, so a page
+  // can show the rows adding up (federal - withheldFederal + extraMedicare - extraWithheld = gap while Social Security and 1.45% match)
+  return { value, federal, payroll, state, owed, withheldFederal, withheld, gap: owed - withheld, extraMedicare: extra, extraWithheld, selfEmployment };
 }
 
 /**
@@ -191,7 +196,7 @@ export function compute(plan, params = {}) {
 
   const personWages = inc.active.filter((x) => (!whoId || x.personId === whoId) && ["salary", "bonus"].includes(x.type) && x.period !== "once").reduce((t, x) => t + x.yearly, 0);
   const medicareWages = inc.active.filter((x) => ["salary", "bonus"].includes(x.type) && x.taxable !== false && x.period !== "once").reduce((t, x) => t + x.yearly, 0);
-  const ti = taxInputs(plan, { today });
+  const ti = taxView(plan, { today }, { without: "stock" });   // the Federal estimate's return without the units vesting this year: this page adds them
   const st = computeState(plan, { today });
   const stateRate = st.rate ?? 0;
   const A = amtFor(year);
@@ -203,14 +208,25 @@ export function compute(plan, params = {}) {
   // this page said 498 to set aside for 2027 where Employer stock said 352): this year on the plan's return, a later year on
   // that year's figures (the latest tables raised for inflation until the IRS publishes them; `estimated` says so)
   const setYear = Number(plan.taxes?.year) || null;
-  const tiOf = (y) => (y === year ? ti : y === setYear ? taxInputs(plan, { today }) : taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), year: y, gains: [] } }, { today }));
+  const tiOf = (y) => (y === year ? ti : y === setYear ? taxView(plan, { today }, { without: "stock" }) : taxView({ ...plan, taxes: { ...(plan.taxes ?? {}), year: y, gains: [] } }, { today }, { without: "stock" }));
   const rsuYears = [year, year + 1].map((y) => {
     const vests = [];
     for (const g of grants.filter((x) => x.kind === "rsu")) for (const e of g.schedule) if (Number(e.date.slice(0, 4)) === y) vests.push({ date: e.date, grant: g.name, shares: e.shares, value: e.shares * price, past: e.date <= today });
     vests.sort((a, b) => a.date.localeCompare(b.date));
     const value = vests.reduce((t, v) => t + v.value, 0);
     const t = value > 0 ? tiOf(y) : ti;
-    return { year: y, value, vests, estimated: !!t.params.indexed, tax: stockPayTax(value, { inputs: t.inputs, params: t.params, personWages, medicareWages, wageBase: maximumEarnings(y), stateRate }) };
+    // the units against none on the Federal estimate's own return for that year (known() with them and without), so a business's
+    // 20% deduction and self-employment tax are worked again with them in
+    let federalIs = null, selfEmployment = 0;
+    if (value > 0) {
+      const planY = y === year || y === setYear ? plan : { ...plan, taxes: { ...(plan.taxes ?? {}), year: y, gains: [] } };
+      const w = known(planY, { today }), o = knownWithout(planY, { today }, null, "stock");
+      if (w.stock && Math.abs(w.stock.value - value) < 0.01) {
+        federalIs = (w.result.totalTax - w.result.additionalMedicare) - (o.result.totalTax - o.result.additionalMedicare);
+        selfEmployment = (w.total - w.result.totalTax) - (o.total - o.result.totalTax);
+      }
+    }
+    return { year: y, value, vests, estimated: !!t.params.indexed, tax: stockPayTax(value, { inputs: t.inputs, params: t.params, personWages, medicareWages, wageBase: maximumEarnings(y), stateRate, federalIs, selfEmployment }) };
   });
   // this year's other figures stand on this year's pay with the units vesting this year in it
   const rsuNow = rsuYears[0].value;

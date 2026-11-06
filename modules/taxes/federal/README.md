@@ -398,3 +398,7 @@ Review 2026-11-06 (round 7): the notes ("Filing separately is two returns: yours
   business income listed. Kept: someone who stops work mid-year with pay still listed has the draw left out of that year.
 - "Has a plan at work" for the IRA deduction (219(g)) is read from 401(k)-type contributions (an amount or a match). A
   pension-only plan at work is not seen yet; a checkbox is on the backlog.
+
+## One return for every page that says "your tax" (round 8, batch 1 follow-up)
+
+`taxView(plan, params, { without })` in `known.js` is `taxInputs()` on the Federal estimate's own return: `inputs`, `result`, `nextDollar` and `total` are `known()`'s, and everything else `taxInputs()` gives (year, filing status, gains, HSA, care) is carried along, so a page changes one line. HSA and FSA, Health (HSA saving), Tax-lot harvesting, Crypto, Asset location, Benefits, Salary, Offer compare, Education (American Opportunity credit), Home (sale tax), Renovation and Equity compensation read it; Paycheck does not (it is the employer's withholding table, not the return). `without: "stock"` leaves this year's vesting units out of the wages for Equity compensation, which adds them itself. Without `params.today` it is `taxInputs()` as before.

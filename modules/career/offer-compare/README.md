@@ -122,3 +122,7 @@ whose job, offers taking the job now's blanks, the HSA money's owner, a state ra
 - "1 years" reads "1 year".
 - Tests: "the money the child care account would lose is not kept", "filing separately, Bo's job is on his own return
   with his business at its profit and its deductions".
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** The offer's own figures are typed (a what-if, so (b) for the pay), but the rest of the household's income it is stacked on is the household's: withdrawals, rentals after costs, the business at its profit (not the stock vesting at the job being compared: that is the job's own pay, from its grants, `taxView(..., { without: "stock" })`). Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. `taxView(..., { without: "stock" })` replaces `taxInputs()` + `withBusiness()`: the job's own units are added from its grants, so they must not also be in the other income. When the units belong to the other adult (not the person being compared) they stay in the household's other income, for federal tax and for the 0.9% Medicare tax.

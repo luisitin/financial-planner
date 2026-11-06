@@ -191,3 +191,7 @@ Test: module.test.mjs "round 8 review UX 7 / UX 8 / D2".
   $1,170 a year from your employer. To actually start it, sign up at 3% with human resources or your job's benefits site."
   (a change: "To actually change it, set 6% with human resources ..."), then Next best action's `leftWords`, what each month has
   left now; that confirmation stays on the page.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** What each pre-tax choice (FSA, HSA, commuting, 401(k), child care account, ESPP, group life) saves is the tax on this household's return for the plan year (this year until October, then next year). Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. `taxView()` replaces `taxInputs()` + `withBusiness()` (the business is a step of `known()`), for the plan year; the withdrawals step applies only to today's tax year. Cafeteria-plan money (HSA, health FSA, commuter, child care) also comes off Medicare wages (IRC 3121(a)(2)(B), (a)(5)(G)), so it lowers the household's 0.9% extra Medicare tax once Medicare wages pass the line (the equity household's HSA 4,400: 1,159.40, the HSA page's figure); a 401(k) deferral does not. Filing separately, a choice comes off its holder's own return (`personId`). From October the page works the household's set return (`taxView(plan, { today })`) with next year's limits; only the child care account (`dcWorth`) uses the plan year.

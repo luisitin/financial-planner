@@ -78,3 +78,7 @@ flat rate with 2025's lines, and the 3.8% on the whole gain.
 ## Ideas / not yet
 - Refinance and recast live on Debt > Mortgage; a link from here when rates fall below the mortgage's.
 - Property tax appeals: the assessment against the value typed here.
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** The tax on selling the home is the tax it adds to this year's return. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The gain is stacked on the Federal estimate's return (`taxView()`), so a retiree's Social Security and withdrawals are in the bracket the gain starts from.

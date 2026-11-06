@@ -3,8 +3,8 @@
 // the health premiums you pay; then after the household's tax (the job's pay swapped into the federal estimate, Social
 // Security and Medicare, the state's rate), less commuting, per hour of your time, and over the years you compare.
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { taxInputs, careInputsWith } from "../../taxes/federal/compute.js";
-import { withBusiness } from "../../taxes/withholding/compute.js";
+import { careInputsWith } from "../../taxes/federal/compute.js";
+import { taxView } from "../../taxes/federal/known.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
@@ -147,11 +147,11 @@ export function compute(plan, params = {}) {
   }));
   if (!hasJob && !offersIn.length) return { ready: false, person: person ? { id: pid, name: person.name } : null, years, hasJob, options: [], notes };
 
-  const tiPlan = taxInputs(plan, { today });
-  // a business at its profit on its owner's return, half its self-employment tax and its 20% deduction off (withholding
-  // withBusiness), as the Federal estimate's year tax and Budget have it (Review 2026-11-06: counted in full as ordinary
-  // income, Bo's job now was 5,722 of federal tax, 5,500.37 on his own return)
-  const ti0 = { ...tiPlan, inputs: withBusiness(plan, tiPlan.inputs, { today }) };
+  const tiPlan = taxView(plan, { today }, eq ? { without: "stock" } : {});   // the job's own stock pay is added below from the grants (stockAt), so it is not in the other income; the other adult's units stay in it (Review 2026-11-06)
+  // the household's other income as the Federal estimate has it (taxView: known()): a business at its profit on its owner's
+  // return, half its self-employment tax and its 20% deduction off (Review 2026-11-06: counted in full as ordinary income,
+  // Bo's job now was 5,722 of federal tax, 5,500.37 on his own return), this year's withdrawals, rentals after costs (not the stock pay of the job being compared: that is the job's, from its grants)
+  const ti0 = tiPlan;
   // filing separately, the job's pay is on this person's own return (IRS Pub. 501): the engine puts a change to the household's
   // wages on the return `separateTo` names (care fourth pass: Bo's job now was worked on Ana's return, 9,109.87, not 5,722)
   const own = ti0.inputs.separate?.find((x) => x.personId === pid) ?? null;
@@ -166,7 +166,7 @@ export function compute(plan, params = {}) {
   const otherWages = (Number(ti.inputs.wages) || 0) - planSalary - planBonus;
   const careEp = ti.care?.earnedPeople?.find((x) => x.id === pid) ?? null;
   const othersElected = (ti.care?.account?.people ?? []).filter((x) => x.id !== pid).reduce((t, x) => t + x.elected, 0);
-  const otherMedicare = own ? 0 : inc.active.filter((x) => ["salary", "bonus"].includes(x.type) && x.taxable !== false && x.period !== "once").reduce((t, x) => t + x.yearly, 0) - planSalary - planBonus - othersElected;
+  const otherMedicare = own ? 0 : inc.active.filter((x) => ["salary", "bonus"].includes(x.type) && x.taxable !== false && x.period !== "once").reduce((t, x) => t + x.yearly, 0) - planSalary - planBonus - othersElected + (eq ? 0 : Number(ti.known?.stock?.value) || 0);
   // each year compared uses its own tax tables (indexed past the last published year) and wage base
   const yearTax = Array.from({ length: years }, (_, t) => {
     const P = t === 0 ? ti.params : paramsFor(FEDERAL, year + t, { inflation });

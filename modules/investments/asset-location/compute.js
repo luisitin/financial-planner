@@ -5,8 +5,8 @@
 // the yearly tax drag of the current placement, works out the ideal placement with the same
 // overall mix and the same account sizes, and lists the swaps that get there.
 import { compute as computeHoldings, ASSET_CLASSES } from "../holdings/compute.js";
-import { taxInputs } from "../../taxes/federal/compute.js";
-import { marginalRate, federalTax } from "../../../core/math/tax.js";
+import { taxView } from "../../taxes/federal/known.js";
+import { federalTax } from "../../../core/math/tax.js";
 
 export const BUCKETS = { taxable: "Taxable (brokerage)", deferred: "Pre-tax (401(k), IRA)", free: "Roth and HSA" };
 // how much of a class's income is taxed as ordinary income in a taxable account (the rest at the gains rate); "other" is gold (collectibles) or crypto, taxed like ordinary on sale
@@ -21,10 +21,12 @@ const ORDER_FOR_DEFERRED = ["bonds", "cash", "real_estate", "other", "balanced",
  */
 export function compute(plan, params = {}) {
   const h = computeHoldings(plan, params);
-  const ti = taxInputs(plan, params);
-  const marginal = Math.max(0.10, marginalRate(ti.inputs, ti.params) || 0.22);
-  const base = federalTax(ti.inputs, ti.params).totalTax;
-  const gainsRate = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: ti.inputs.qualifiedIncome + 1000 }, ti.params).totalTax - base) / 1000);   // what the next 1,000 of qualified dividends costs you
+  const ti = taxView(plan, params);
+  const invested1 = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
+  const base = ti.result.totalTax;
+  // interest and dividends are net investment income (IRC 1411(c)(1)(A)(i)): the 3.8% is in what 1,000 more of them costs
+  const marginal = Math.max(0.10, Math.max(0, (federalTax({ ...ti.inputs, otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000, investmentIncome: invested1 }, ti.params).totalTax - base) / 1000));
+  const gainsRate = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: ti.inputs.qualifiedIncome + 1000, investmentIncome: invested1 }, ti.params).totalTax - base) / 1000);   // what the next 1,000 of qualified dividends costs you
   const buckets = Object.keys(BUCKETS).map((key) => ({ key, label: BUCKETS[key], value: 0, classes: {} }));
   const byClass = {};
   const yieldOf = {};

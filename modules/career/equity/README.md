@@ -121,3 +121,7 @@ Until the IRS publishes a later year's tables, they are the latest ones raised f
 
 Figures for 2027: federal tax on 60,000 is 13,642 on 2027's tables against 13,788 on 2026's, so both pages say 352.
 Test: "next year's units are worked on next year's tax tables".
+
+## Which return it reads (round 8, batch 1 follow-up)
+
+**(a) This household's own tax year.** What the vesting units cost is this household's tax. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The base is the Federal estimate's return without this year's units (`taxView(..., { without: "stock" })`, `knownWithout(..., "stock")`): the Federal estimate has them in its wages already and this page adds them itself, so they must not be counted twice. The card now shows the extra 0.9% Medicare tax row (owed on the household's pay past the line, held back on the person's pay past 200,000), so "federal tax on it", "held back" and that row add up to "set aside". With a business, "Federal tax on it" is the Federal estimate's return with the units less without them (known() and knownWithout(), so the 20% business deduction and half the self-employment tax are worked again), and a row shows the change in the business's self-employment tax (the units fill the Social Security base, and move the 0.9% on the business's profit).
