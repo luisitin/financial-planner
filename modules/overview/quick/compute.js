@@ -75,11 +75,24 @@ export function answerFor(guide, plan, params = {}) {
     if (!a) return null;
     const rate = `${(Math.round(a.effectiveRate * 1000) / 10).toFixed(1)}% of your income`;
     const from = a.from === "paycheck" ? "estimated from your pay" : a.from === "mixed" ? "partly estimated from pay" : "from your pay stubs";
+    // the year's tax in words; credits above the tax read as no tax and what they come to, never "About $0 of federal tax
+    // (-1.9% of your income)" (round 8 fix: the Federal estimate's total and rate are negative when refundable credits are
+    // more than the tax; Bracket explorer says it the same way)
+    // (taxAnswer's totalTax is at least 0; `creditsBack` is the refundable credits past the tax)
+    const back = Number(a.creditsBack) || 0;
+    const yearTax = (tail) => (a.totalTax >= 0.5 ? `About ${m(a.totalTax)} of federal tax for ${a.year}${tail}`
+      : back >= 0.5 ? `No federal income tax for ${a.year}: the credits are about ${m(back)} more than the tax` : `No federal income tax for ${a.year}: the credits cover it`);
     if (a.from === "none") {
       // no pay with tax taken out (retired, self-employed): the tax is paid by quarterly estimates
       let e = null;
       try { e = estimatedOf(plan, params); } catch { e = null; }
+      // a retiree whose tax is on this year's IRA withdrawals: having tax held back from a withdrawal before December 31
+      // counts as paid through the whole year (IRC 6654(g)), so that comes first, the quarters as the other way, never
+      // "past due" beside it (round 8 review: the widow read "$2,676 of it is past due" here and "hold back" on two pages)
+      if (e?.needsEstimates && e.remaining > 0 && e.holdBack) return { headline: `Have about ${m(e.holdBack.amount)} of tax held back from your IRA withdrawal by December 31`,
+        line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${rate}), and no tax held back is on file. Tax held back from a withdrawal counts as paid through the whole year, so the quarters already past are covered too${e.holdBack.whole > e.holdBack.amount + 50 ? `; about ${m(e.holdBack.whole)} leaves nothing to pay in April` : ""}. Paying by quarters works too: the Estimated payments page has both.`, status: "warn" };
       if (e?.needsEstimates && e.remaining > 0) return { headline: `About ${m(e.remaining)} left to pay in estimates for ${a.year}`, line: `About ${m(a.totalTax)} of federal tax (${rate}) and no paycheck takes it out${e.behind > 0 ? `; ${m(e.behind)} of it is past due` : ""}. The Estimated payments page splits it into four payments.`, status: e.behind > 0 ? "warn" : "ok" };
+      if (a.totalTax < 0.5 && a.seTax < 1) return { headline: `No federal income tax for ${a.year}`, line: `${yearTax("")}. Type what a paycheck withholds to see the refund.`, status: "ok" };
       return { headline: `About ${m(a.totalTax)} of federal tax for ${a.year}`, line: `${rate} overall. Type what a paycheck withholds to see the refund or bill.`, status: "ok" };
     }
     // filing separately, each return settles on its own: one return's refund cannot pay the other's bill (withholding
@@ -91,13 +104,13 @@ export function answerFor(guide, plan, params = {}) {
       return {
         headline: owe.length && back.length ? `${owe[0].name} owes about ${m(owe[0].balance)}; ${back[0].name} gets about ${m(-back[0].balance)} back`
           : owe.length ? `${owe.length > 1 ? "Owe" : `${owe[0].name} owes`} about ${m(sum(owe))} in April` : back.length ? `${back.length > 1 ? "About" : `${back[0].name} gets about`} ${m(-sum(back))} back in April` : "About right: no big bill or refund",
-        line: `Filing separately, each return settles on its own. About ${m(a.totalTax)} of federal tax for ${a.year} in all (${a.seTax >= 1 ? `self-employment tax included` : rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
+        line: `Filing separately, each return settles on its own. ${yearTax(` in all (${a.seTax >= 1 ? `self-employment tax included` : rate})`)}; your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
         status: owe.length ? "warn" : "ok",
       };
     }
     return {
       headline: a.verdict === "owe" ? `Owe about ${m(a.balance)} in April` : a.verdict === "refund" ? `About ${m(-a.balance)} back in April` : "About right: no big bill or refund",
-      line: `About ${m(a.totalTax)} of federal tax for ${a.year} (${a.seTax >= 1 ? `self-employment tax included` : rate}); your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
+      line: `${yearTax(` (${a.seTax >= 1 ? `self-employment tax included` : rate})`)}; your paychecks take out about ${m(a.projected)}, ${from}${a.paid > 0 ? `, and ${m(a.paid)} is already paid` : ""}.`,
       status: a.verdict === "owe" ? "warn" : "ok",
     };
   }

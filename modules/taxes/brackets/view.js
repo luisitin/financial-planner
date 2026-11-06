@@ -21,8 +21,8 @@ export function render(root, ctx) {
     ui.stat("Bracket", fmt.pct(d.bracketRate, 0), `${statusLabel(d.filingStatus).toLowerCase()}, ${d.year}`),
     ui.stat("Room left", Number.isFinite(d.roomInBracket) ? money(d.roomInBracket) : "no limit", Number.isFinite(d.roomInBracket) ? `before ${fmt.pct(d.nextRate, 0)}` : "the top rate"),
     ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? (d.careMoves ? "more than the bracket: the child care credit gets smaller" : "more than the bracket: benefits or gains get pulled along")
-      : d.marginal < d.bracketRate - 0.005 && d.careMoves ? (Math.round(d.marginal * 100) === 0 ? (d.careCoversTax ? "less than the bracket: the child care credit covers the tax on more pay" : "less than the bracket: with the child care credit, the credits cover the tax on more pay") : "less than the bracket: the child care credit covers part of the tax on more pay") : "what it really costs"),
-    ui.stat("Deductions", money(d.deduction), "come off before the ladder"),
+      : d.marginal < d.bracketRate - 0.005 && d.careMoves ? (Math.round(d.marginal * 100) === 0 ? (d.careCoversTax ? "less than the bracket: the child care credit covers the tax on more pay" : "less than the bracket: with the child care credit, the credits cover the tax on more pay") : "less than the bracket: the child care credit covers part of the tax on more pay") : d.marginal < d.bracketRate - 0.005 && d.businessDeduction > 0.5 ? "less than the bracket: the 20% business deduction grows with it" : "what it really costs"),
+    ui.stat("Deductions", money(d.deduction + (d.businessDeduction || 0)), d.businessDeduction > 0.5 ? `the usual ${money(d.deduction)} and the business ${money(d.businessDeduction)}, before the ladder` : "come off before the ladder"),
   )));
   if (d.hasIncome && d.separate) root.append(ui.card("Two returns",
     ui.h("ul", { class: "records" }, d.separate.map((x) => ui.h("li", {},

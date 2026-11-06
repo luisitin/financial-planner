@@ -370,3 +370,15 @@ test("filing separately: each return's own business, half its self-employment ta
   // filing jointly nothing moves: 14,722.60 as before
   near(yearTaxes(familyPlan(NOV), { today: NOV }).federal + yearTaxes(familyPlan(NOV), { today: NOV }).se, 14722.60, 0.02);
 });
+
+test("round 8 review UX 5: the month's federal tax is the Federal estimate's on the same money (rentals after costs, student loan interest)", async () => {
+  const { landlordPlan, studentLoanPlan, widowPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const T = "2026-11-06";
+  // the landlord: the condo's rent after its costs, so 14,108 a year (1,176 a month), not 19,652 on the gross rent
+  assert.ok(Math.abs(yearTaxes(landlordPlan(), { today: T }).federal - 14108) < 0.01);
+  // the couple paying student loans: 9,980 with the 2,500 deduction, not 10,280
+  assert.ok(Math.abs(yearTaxes(studentLoanPlan(), { today: T }).federal - 9980) < 0.01);
+  // the widow's required withdrawal is not in the month's money (its tax is held back from it): her month's tax stays on the
+  // pension and Social Security
+  assert.ok(Math.abs(yearTaxes(widowPlan(), { today: T }).federal - computeFederal(widowPlan(), { today: T }).result.totalTax) < 0.01);
+});

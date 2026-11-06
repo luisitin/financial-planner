@@ -520,8 +520,32 @@ test("round 8 item 40: within a level, an alert with a date comes first: the req
   p.income = [{ id: "i-pen", name: "Pension", type: "pension", personId: "p-r", amount: 1900, period: "monthly" }, { id: "i-ss", name: "Social Security", type: "social", personId: "p-r", amount: 2300, period: "monthly" }];
   p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 700, period: "monthly", essential: true }, { id: "e-bills", name: "Bills", category: "utilities", amount: 1650, period: "monthly", essential: true }];
   const a = compute(p, { today: "2026-11-06" }).alerts.filter((x) => !x.chore);
-  assert.deepEqual(a.map((x) => x.id).slice(0, 2), ["rmd-p-r-2026", "emergency-warn"]);
+  // (round 8 batch 1: the withdrawal is in the year's tax now, so the tax to have held back from it follows, also due
+  // December 31, before the cushion)
+  assert.deepEqual(a.map((x) => x.id).slice(0, 3), ["rmd-p-r-2026", "estimates-holdback", "emergency-warn"]);
   assert.equal(a[0].due, "2026-12-31");
+});
+
+// Round 8 batch 1 verify, item 4: with this year's required withdrawal in the tax, Needs attention says what every tax page
+// says (have the tax held back from the withdrawal by December 31), never "pay the past-due part"
+test("round 8 batch 1: a withdrawal's tax is held back from it: one instruction, no past-due line", async () => {
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const { compute: est } = await import("../../taxes/estimated/compute.js");
+  const p = emptyPlan();
+  p.household = { people: [{ id: "p-r", name: "Ruth", role: "self", birthDate: "1952-03-15", retirementAge: 74 }], filingStatus: "single", state: "FL" };
+  p.accounts = [{ id: "a-chk", name: "Checking", type: "checking", balance: 12000, ownerId: "", asOf: "2026-11-06", history: [] },
+    { id: "a-ira", name: "Ruth's retirement", type: "ira", balance: 410000, ownerId: "p-r", asOf: "2026-11-06", history: [] }];
+  p.income = [{ id: "i-pen", name: "Pension", type: "pension", personId: "p-r", amount: 1900, period: "monthly" }, { id: "i-ss", name: "Social Security", type: "social", personId: "p-r", amount: 2300, period: "monthly" }];
+  p.expenses = [{ id: "e-rent", name: "Rent", category: "housing", amount: 700, period: "monthly", essential: true }, { id: "e-bills", name: "Bills", category: "utilities", amount: 1650, period: "monthly", essential: true }];
+  const e = est(p, { today: "2026-11-06" });
+  assert.ok(e.holdBack, "Estimated payments offers the hold-back");
+  const all = compute(p, { today: "2026-11-06" }).alerts;
+  const a = all.find((x) => x.id === "estimates-holdback");
+  assert.ok(a, "the hold-back alert is there");
+  assert.equal(a.title, `Have about $${e.holdBack.amount.toLocaleString("en-US")} of tax held back from your IRA withdrawal by December 31`);
+  assert.equal(a.due, "2026-12-31");
+  assert.equal(all.some((x) => x.id === "estimates-behind"), false);
+  assert.doesNotMatch(all.map((x) => `${x.title} ${x.detail}`).join(" "), /past[- ]due/i);
 });
 
 // Round 8 batch 2 review (money D5): a workplace plan's own required withdrawal can wait until its owner retires from that job

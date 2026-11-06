@@ -156,3 +156,54 @@ test("Review 2026-11-06: filing separately, the safe-amount words say 75,000 of 
   assert.ok(sep.includes("110% if last year's income was over 75,000") && sep.includes("over 75,000 raises") && !sep.includes("150,000"), sep);
   assert.ok(joint.includes("110% if last year's income was over 150,000") && joint.includes("over 150,000 raises") && !joint.includes("75,000"), joint);
 });
+
+// ---- round 8, Batch 1: the year's tax is the Federal estimate's with what the plan knows (taxes/federal known.js)
+const R8 = "2026-11-06";
+const H8 = () => import("../../../qa/fixtures/round8-households.mjs");
+const near8 = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
+
+test("round 8 item 5 (landlord-1): the condo counted after its costs: 14,108 of tax, a safe amount of 12,697, about 2,889 more to pay in", async () => {
+  const { landlordPlan } = await H8();
+  const d = compute(landlordPlan(), { today: R8 });
+  near8(d.totalTax, 14108); near8(d.harbour.required, 0.9 * 14108);
+  // the paychecks' withholding is estimated from pay; the safe amount less it is what the estimates must bring
+  near8(d.toPayByEstimates, 0.9 * 14108 - d.withholding); assert.ok(d.toPayByEstimates > 2800 && d.toPayByEstimates < 3000);
+  near8(d.balanceAtFiling, 14108 - d.withholding); assert.ok(d.balanceAtFiling > 4250 && d.balanceAtFiling < 4350, "about 4,300 in April, not the 9,844 the gross rent made it");
+});
+
+test("round 8 item 6 (widow-2): the required withdrawal's tax needs paying in: have about 3,600 held back from the IRA withdrawal", async () => {
+  const { widowPlan } = await H8();
+  const d = compute(widowPlan(), { today: R8 });
+  near8(d.totalTax, 3964.5, 1); assert.equal(d.needsEstimates, true, "not \"No estimated payments needed\"");
+  // nothing withheld: the safe amount is 90% of 3,964.5 = 3,568, rounded up to 3,600 to hold back from the withdrawal
+  near8(d.harbour.required, 0.9 * d.totalTax); assert.equal(d.holdBack.amount, 3600); assert.equal(d.holdBack.withdrawal, 16078);
+  // the withdrawal already marked taken, and nothing else coming out: no hold-back to ask for
+  const t = widowPlan(); t.retirement.rmdTaken = { 2026: { me: "2026-10-01" } };
+  assert.equal(compute(t, { today: R8 }).holdBack, undefined);
+  // no withdrawal at all: none either (the key stays out of the result)
+  assert.equal("holdBack" in compute(taxPlan(), { today: R8 }), false);
+});
+
+test("round 8 items 12 and 23: stock pay and student loan interest reach the quarterly figures", async () => {
+  const { equityPlan, studentLoanPlan } = await H8();
+  const e = compute(equityPlan(), { today: R8 });
+  // 53,643 of tax against the pay's withholding plus 24,045 held back from the vests: about 6,338 still to pay
+  near8(e.totalTax, 53643); assert.ok(e.withholding > 24045);
+  const s = compute(studentLoanPlan(), { today: R8 });
+  near8(s.totalTax, 9980); assert.ok(s.balanceAtFiling > 4000 && s.balanceAtFiling < 4100, "about 4,060 in April");
+});
+
+test("round 8 review 4: a household living on IRA withdrawals before 59½ is told the tax with the extra 10%, not 'No income on file'", async () => {
+  const { earlyRetireePlan } = await H8();
+  const d = compute(earlyRetireePlan(), { today: R8 });
+  assert.equal(d.hasIncome, true); assert.ok(!d.notes.some((n) => /No income on file/.test(n)));
+  assert.ok(Math.abs(d.totalTax - 14126.52) < 2, String(d.totalTax));
+  // no required withdrawal at 50: the hold-back names the draw, required 0 (the page's button then says "Your IRA withdrawals")
+  assert.equal(d.holdBack.required, 0); assert.ok(d.holdBack.withdrawal > 60000);
+});
+
+test("round 8 review UX 11: the widow is told what to hold back to clear the penalty and what leaves nothing to pay in April", async () => {
+  const { widowPlan } = await H8();
+  const d = compute(widowPlan(), { today: R8 });
+  assert.equal(d.holdBack.amount, 3600); assert.equal(d.holdBack.whole, 4000);
+});

@@ -17,12 +17,15 @@
 // interest. Both pages run on the row's `today`.
 //
 // What is compared, by part (each row is one test per part; the key leaves every 2025-2026-only column blank on its 100
-// rows of 2027, so k401, ira, roth, taxsaved, payroll and fsa skip them):
+// rows of 2027, so k401, ira, deduct, roth, taxsaved, payroll and fsa skip them):
 //   people    the limits page lists the row's adults (A, and B on a married row), each with the age the key gives (year
 //             minus birth year)
 //   k401      per adult, the limits page's 401(k) row: limit (the page's includes the catch-up) against k401_limit +
 //             k401_catch_up, catchUp, used, room and over against k401_catch_up, _used, _room, _over, within a cent
 //   ira       the same for the IRA row against ira_limit + ira_catch_up, ira_catch_up, _used, _room, _over
+//   deduct    per adult, the IRA row's deductible part (deduct.deductible: IRC 219(g), the limit cut for someone with a plan
+//             at work or married to someone with one, rounded up to $10 with the $200 floor) against trad_ira_deductible,
+//             within a cent (round 8: the page took up the real deduction; the column was a contrast before)
 //   hsa       per adult, the limits page's HSA row: limit, used, room and over against hsa_limit, _used, _room, _over, and
 //             catchUp against $1,000 for an adult the key marks eligible and 55 or over (the key has no catch-up column;
 //             223(b)(3)(B), not indexed), within a cent
@@ -48,7 +51,8 @@
 // income_tax_without (the page returns only their difference); fica_saved_ss and fica_saved_medicare (one figure);
 // fsa_forfeit (the page says only that unspent money above the carryover is lost); the key's contrasts
 // fica_saved_flat (7.65% of the household's HSA payroll money: the HSA page's old model, compared as part "flat" until
-// 2026-10-31, when the page took up the law's payroll-tax saving), trad_ira_deductible, agi_real_deduction, annual_additions, limit_415c, over_415c, exceeds_415c and active_participant;
+// 2026-10-31, when the page took up the law's payroll-tax saving), agi_real_deduction (the household AGI; the page's
+// figure is each adult's deductible part, compared as part "deduct"), annual_additions, limit_415c, over_415c, exceeds_415c and active_participant;
 // the pages' 401(k) and 529 deadlines, totals, notes other than the FSA one, growth figures and fsa.taxSaved / daysLeft
 // (the key has none); and the note column.
 //
@@ -74,8 +78,8 @@ const num = (v) => Number(v) || 0;
 const show = (x) => x === null || x === undefined ? "none" : typeof x !== "number" ? String(x) : Number.isInteger(x) ? String(x) : x.toFixed(2);
 const CENT = 0.01;
 
-const PARTS = ["people", "k401", "ira", "hsa", "roth", "year", "hsapage", "taxsaved", "payroll", "fsa"];
-const ONLY_2025_2026 = new Set(["k401", "ira", "roth", "taxsaved", "payroll", "fsa"]);
+const PARTS = ["people", "k401", "ira", "deduct", "hsa", "roth", "year", "hsapage", "taxsaved", "payroll", "fsa"];
+const ONLY_2025_2026 = new Set(["k401", "ira", "deduct", "roth", "taxsaved", "payroll", "fsa"]);
 const runs = (row, part) => !(ONLY_2025_2026.has(part) && row.year === "2027");
 
 // Where the pages and the key part ways (tests/golden/limits/RULES.md section 12 and tools/golden_limits/README.md).
@@ -147,6 +151,15 @@ function mismatches(row, part) {
       if (!r) { out.push(`${x}: no ${part} row on the page`); return; }
       near(out, `${x}_${part}_limit + ${x}_${part}_catch_up`, r.limit, num(row[`${x}_${part}_limit`]) + num(row[`${x}_${part}_catch_up`]), CENT);
       for (const k of ["catch_up", "used", "room", "over"]) near(out, `${x}_${part}_${k}`, r[k === "catch_up" ? "catchUp" : k], row[`${x}_${part}_${k}`], CENT);
+    });
+  }
+  if (part === "deduct") {
+    // the traditional IRA money that comes off income (IRC 219(g)), which the page shows on its IRA row (`deduct`, from the
+    // Federal estimate's figures; round 8): absent without traditional IRA money, which the key's 0 is
+    xs.forEach((x, i) => {
+      const r = rowOf(i, "ira");
+      if (!r) { out.push(`${x}: no ira row on the page`); return; }
+      near(out, `${x}_trad_ira_deductible`, r.deduct ? r.deduct.deductible : 0, row[`${x}_trad_ira_deductible`], CENT);
     });
   }
   if (part === "hsa") {

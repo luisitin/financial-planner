@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { migrate, ownersToIds } from "../core/schema/migrate.js";
 import { compute as computeFederal, taxInputs } from "../modules/taxes/federal/compute.js";
+import { known } from "../modules/taxes/federal/known.js";
 import { compute as computeGains } from "../modules/taxes/capital-gains/compute.js";
 import { compute as computeCrypto } from "../modules/investments/crypto/compute.js";
 import { familyPlan } from "../qa/fixtures/family-plan.mjs";
@@ -50,9 +51,13 @@ test("filing separately, the gains figures are each return's own: Ana's 10,000 g
 
 test("Capital gains: the short-term tax takes Ana's 10,000 off Ana's return, not the household's 5,000 off whoever", () => {
   const p = owned(), g = computeGains(p, { today: TODAY });
-  // without her sale (her pay is under the 125,000 line, so no 3.8% either way)
+  // without her sale (her pay is under the 125,000 line, so no 3.8% either way), on the return the page works on: the Federal
+  // estimate's (known(): the family's 7,200 of business profit in, round 8 verify). Ana's taxable income goes 73,080 to
+  // 83,080, all inside the separate 22% bracket (50,400 to 105,700, Rev. Proc. 2025-32 sec. 4.01): 2,200. Taking the
+  // household's net 5,000 off whoever would say about 1,100.
   const withoutAna = { ...p, taxes: { ...p.taxes, gains: p.taxes.gains.filter((x) => x.id !== "ga") } };
-  near(g.shortTax, g.taxWith - computeFederal(withoutAna, { today: TODAY }).result.totalTax);
+  near(g.shortTax, g.taxWith - known(withoutAna, { today: TODAY }).result.totalTax);
+  near(g.shortTax, 2200);
   near(g.gains.carryForward, -3500);
 });
 

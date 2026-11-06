@@ -123,7 +123,11 @@ test("review: the year's tax counts self-employment tax on business income, as t
   const p = familyPlan("2026-11-02");   // Bo's weekend photography: $600 a month of business income
   const d = compute(p, T), fed = fedOf(p, T).result.totalTax, se = seOf(p, T);
   assert.ok(se.ready && se.seTotal > 0);
-  assert.equal(d.incomeTax, fed); assert.equal(d.totalTax, se.taxWith);
+  // the business at its profit with its 20% deduction after AGI (Form 1040 line 13: the Federal estimate's figures, known.js,
+  // round 8 item 20); the Self-employment page takes the deduction off AGI, so its AGI is 1,338 lower and the family's child
+  // care credit one point higher: 30 less tax than the law gives (taxes/federal README, care section)
+  const { known } = await import("../federal/known.js");
+  assert.equal(d.incomeTax, fed); assert.equal(d.totalTax, known(p, T).total); assert.ok(Math.abs(d.totalTax - (se.taxWith + 30)) < 0.01);
   assert.ok(d.seTax > 0 && d.seTax < se.seTotal, "the 15.3% tax less what its two deductions save");
   assert.equal(taxAnswer(p, T).seTax, d.seTax);
   assert.equal(estOf(p, T).totalTax, d.totalTax, "Estimated payments uses the same year's tax");
@@ -140,12 +144,16 @@ test("fullSteps: the business rows go in before Federal tax, which ends at yearT
   const p = famOf("2026-11-02"), fed = fedOf(p, { today: "2026-11-02" });
   const f = fullSteps(p, fed, { today: "2026-11-02" });
   const labels = f.steps.map((x) => x.label);
-  assert.deepEqual(labels.slice(-3), ["Tax saved by business deductions", "Self-employment tax", "Federal tax"]);
+  // round 8 item 20: the walk is worked with the business at its profit (half its self-employment tax under Adjustments, the
+  // 20% deduction after the standard one), so the "Tax saved by business deductions" patch line is gone
+  assert.deepEqual(labels.slice(-3), ["Child and dependent care credit", "Self-employment tax", "Federal tax"]);
+  assert.ok(labels.includes("Business deduction (20%)")); assert.ok(!labels.includes("Tax saved by business deductions"));
   const ft = f.steps[f.steps.length - 1];
   assert.equal(ft.amount, taxAnswer(p, { today: "2026-11-02" }).totalTax); assert.equal(f.total, ft.amount);
-  // the rows add up: the engine's income tax, plus the business change, plus the self-employment tax
-  const biz = f.steps[f.steps.length - 3].amount, se = f.steps[f.steps.length - 2].amount;
-  assert.ok(Math.abs(fed.result.totalTax + biz + se - f.total) < 0.01);
+  // the rows add up: the income tax after the credits, plus the self-employment tax
+  const credits = f.steps.filter((x) => /credit/i.test(x.label)).reduce((t, x) => t + x.amount, 0);
+  const incomeTax = f.steps.find((x) => x.label === "Income tax").amount, se = f.steps[f.steps.length - 2].amount;
+  assert.ok(Math.abs(incomeTax + credits + se - f.total) < 0.01);
   assert.equal(fed.steps.find((x) => x.label === "Federal tax").amount, fed.result.totalTax, "the engine's own walk is untouched");
   p.income = p.income.filter((x) => x.type !== "business");
   const g = fullSteps(p, fedOf(p, { today: "2026-11-02" }), { today: "2026-11-02" });
@@ -406,9 +414,10 @@ test("Review 2026-11-06: Withholding check says the self-employment tax itself, 
   near(d.seOwn, fullSteps(mfsOf(), fed, { today: NOV6 }).se.tax, 1e-6);
   const text = await viewText(mfsOf(), NOV6);
   assert.ok(text.includes("$1,017 of it self-employment tax"), text.slice(0, 2400)); assert.ok(!text.includes("$796"));
-  // filing jointly: 1,017 too (the business's effect is 581)
+  // filing jointly: 1,017 too (the business's effect is 611: 581 before round 8, when the 20% deduction came off AGI and
+  // raised the child care credit by 30)
   const j = compute(famOf(NOV6), { today: NOV6 });
-  near(j.seOwn, 1017.33, 0.01); near(j.seTax, 581.01, 0.01);
+  near(j.seOwn, 1017.33, 0.01); near(j.seTax, 611.01, 0.01);
   assert.ok((await viewText(famOf(NOV6), NOV6)).includes("$1,017 of self-employment tax"));
 });
 
@@ -416,4 +425,42 @@ test("Review 2026-11-06: Estimated payments, when the credits are more than the 
   const text = await viewText(jo({ pay: 30000 }), NOV6, "../estimated/view.js");
   assert.ok(text.includes("no federal tax, and about $1,700 of credits come back on top of the $585 withheld from pay"), text.slice(0, 500));
   assert.ok(!text.includes("about $0 of federal tax"));
+});
+
+// ---- round 8, Batch 1: stock vesting's withholding counts (taxes/federal known.js stockStep)
+test("round 8 item 12 (equity-2): what is held back from vesting stock counts toward the year's withholding", async () => {
+  const { equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { withholdingEstimate } = await import("./compute.js");
+  const T8 = { today: "2026-11-06" };
+  const p = equityPlan(), d = compute(p, T8);
+  const noStock = equityPlan(); noStock.equity.grants = [];
+  const pay = withholdingEstimate(noStock, T8).projected;
+  // the whole year: 22% of 105,000 and the 0.9% Medicare tax on the 105,000 past Mo's 200,000 of pay (945)
+  assert.ok(Math.abs(d.estimate.projected - (pay + 23100 + 945)) < 0.01);
+  assert.ok(Math.abs(d.totalTax - 53643) < 0.01); assert.equal(d.estimate.verdict, "owe");
+  assert.ok(Math.abs(d.estimate.balance - (53643 - pay - 24045)) < 0.01);
+  // the year so far typed (it holds the vests already paid): only the December vest's is added
+  const y = equityPlan(); y.taxes.thisYear.withheld = 40000; y.taxes.thisYear.withheldTyped = true;
+  const so = withholdingEstimate(y, T8), base = withholdingEstimate((() => { const q = equityPlan(); q.taxes.thisYear.withheld = 40000; q.taxes.thisYear.withheldTyped = true; q.equity.grants = []; return q; })(), T8);
+  assert.ok(Math.abs(so.projected - (base.projected + 0.22 * 15000 + 0.009 * 15000)) < 0.01);
+});
+
+test("round 8 review 3: the share of income on Withholding check and Quick answers is the Federal estimate's (with the withdrawal, the stock pay)", async () => {
+  const { widowPlan, equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known } = await import("../federal/known.js");
+  const T = "2026-11-06";
+  // the widow: 3,964.52 of 22,800 + 16,078 + 27,600 = 66,478 of income, 6.0% (it read 1.1%, the keys' return without the withdrawal)
+  const a = taxAnswer(widowPlan(), { today: T });
+  assert.ok(Math.abs(a.effectiveRate - 3964.52 / 66478) < 1e-4, String(a.effectiveRate));
+  assert.equal(a.effectiveRate, known(widowPlan(), { today: T }).rate);
+  // the stock couple: 53,643 of 318,000 + the rest, 16.9% (it read 13.2%)
+  const e = taxAnswer(equityPlan(), { today: T });
+  assert.ok(Math.abs(e.effectiveRate - known(equityPlan(), { today: T }).rate) < 1e-12); assert.ok(e.effectiveRate > 0.165 && e.effectiveRate < 0.172, String(e.effectiveRate));
+});
+
+test("round 8 review 4: a retiree living on IRA withdrawals has income on Withholding check (no 'No income on file')", async () => {
+  const { earlyRetireePlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const d = compute(earlyRetireePlan(), { today: "2026-11-06" });
+  assert.equal(d.hasIncome, true); assert.ok(!d.notes.some((n) => /No income on file/.test(n)));
+  assert.ok(taxAnswer(earlyRetireePlan(), { today: "2026-11-06" }) !== null);
 });

@@ -136,3 +136,18 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
   on each return's own pay and self-employment earnings against 125,000 (Form 8959). The family with 3,750 each: 7,764.60 +
   5,500.37 + 1,017.33 = 14,282.30, no 0.9% (it said 14,439.15 with 341.54 of 0.9%); no accounts: 15,682.61. Pay or a
   business linked to no one is on Me's return. Filing jointly nothing changed.
+
+## The month's tax counts what the Federal estimate knows about the same money (round 8 review, 2026-11-06)
+- **What `yearTaxes` runs:** after building its Income-page return, it runs the Federal estimate's `rentalStep`, `iraStep`,
+  `loanStep` and `qbiStep` (`taxes/federal/known.js`) on it:
+  - the Income page's rent for a property on Rental analysis is counted after its costs, loan interest and depreciation,
+    through the passive-loss allowance (IRC 469);
+  - the traditional IRA deduction is limited as IRC 219(g) allows;
+  - student loan interest comes off (IRC 221);
+  - the 20% business deduction is cut by its income limits (IRC 199A(b)(3)).
+- **What stays out:** this year's IRA withdrawals and stock pay. They are not in the month's money: the tax on a withdrawal
+  is held back from it, and the tax on stock is held back in shares.
+- **Examples** (`qa/fixtures/round8-households.mjs`):
+  - the landlord's federal tax is 14,108 a year, 1,176 a month (it read 19,652, 1,640 a month);
+  - the couple with student loans: 9,980 (it read 10,280);
+  - the widow's stays on her pension and Social Security.

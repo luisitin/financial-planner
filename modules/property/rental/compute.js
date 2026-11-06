@@ -6,10 +6,11 @@
 // year and what waits), and what the rentals add to this year's federal tax, worked through the federal estimate.
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeFederal } from "../../taxes/federal/compute.js";
-import { federalTax } from "../../../core/math/tax.js";
+import { federalTax, marginalRate } from "../../../core/math/tax.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
-import { yearOfPayments } from "../../cashflow/statement/compute.js";
+import { yearOfPayments } from "../../../core/math/finance.js";
+import { withoutIncomeRent, known, knownWithout } from "../../taxes/federal/known.js";
 
 /** Defaults for what is not typed: vacancy 5% of rent, maintenance 1% of the value a year, land 20% of the price (not depreciated), appreciation 3.5%. */
 export const DEFAULTS = { vacancy: 0.05, maintenance: 0.01, management: 0, landShare: 0.2, appreciation: 0.035 };
@@ -100,6 +101,26 @@ export function passiveLosses(taxables, allowance) {
 }
 
 /**
+ * rentalsFor(plan, { today, year }) -> each rental on the property list worked by `analyse` for tax year `year`: its rent less
+ * the empty months, its costs, the year's loan interest and depreciation, its taxable result (`taxable`). The loan and the
+ * value as compute() takes them. The Federal estimate's figures (taxes/federal known.js) net these with passiveLosses
+ * against the allowance at their own modified AGI. [] without a rental.
+ */
+export function rentalsFor(plan, { today = null, year } = {}) {
+  const list = (plan.property ?? []).filter((x) => x.kind === "rental");
+  if (!list.length) return [];
+  const li = computeLiabilities(plan, { today });
+  const accounts = plan.accounts ?? [];
+  return list.map((r) => {
+    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
+    const row = r.loanAccountId ? li.rows.find((x) => x.id === r.loanAccountId) : null;
+    const loan = row ? { name: row.name, balance: row.owed, rate: row.rate ?? 0, payment: row.payment || 0 }
+      : Number(r.loanBalance) > 0 ? { name: "Loan", balance: Number(r.loanBalance), rate: Number(r.loanRate) || 0, payment: Number(r.loanPayment) || 0 } : null;
+    return analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { marginal: 0, state: 0, allowance: 0, year });
+  });
+}
+
+/**
  * compute(plan, { today }) -> { ready, year, rentals: [analyse(...)], totals: { rent, noi, cashFlow, afterTax, equity, value }, rates (with magi,
  *   niitLine, onReturn), rule ({ max, from, to }: the allowance's figures for the filing status), lossRoom,
  *   passive (passiveLosses), separateTogether, tax: { federal, niit, state, total } (what the rentals add to this year's tax) }
@@ -112,25 +133,34 @@ export function compute(plan, params = {}) {
   if (!list.length) return { ready: false, rentals: [] };
   const fed = computeFederal(plan, { today });
   const st = computeState(plan, { today });
-  // modified AGI for the allowance: AGI without the taxable Social Security and the IRA deduction (469(i)(3)(E): "without
-  // regard to (i) any amount includible in gross income under section 86, ... (iii) the amounts allowable as a deduction
-  // under sections 219, 221, and 250, and (iv) any passive activity loss"), never below 0 (Form 8582 line 6)
-  // filing separately as two returns, the rentals' result goes on the return the estimate puts added income on (the adult
-  // marked Me) and the allowance is worked on that return's own modified AGI (469(i)(5)(A); Form 8582 is one per return)
-  const parts = fed.result.separate ?? null;
-  const on = parts ? parts.find((x) => x.personId === fed.inputs.separateTo) ?? parts[0] : null;
-  const ret = on ?? fed.result;
+  // the allowance, its modified AGI and the netting are the Federal estimate's own (taxes/federal known.js rentalStep), so
+  // the two pages say the same (round 8 review: Rental analysis worked MAGI on the business at its gross, 170,000, while the
+  // Federal estimate had 140,000): modified AGI is AGI without the taxable Social Security, the IRA deduction, the deductible
+  // half of self-employment tax, the student loan interest and the passive losses (469(i)(3)(E); Form 8582 instructions
+  // (2025) line 6), worked after the plan's withdrawals, stock pay and business at its profit, the Income page's rent for
+  // these rentals taken out (it is counted once, after costs: round 8, landlord-1). Filing separately, on the return the
+  // estimate puts added income on (the adult marked Me), each return its own Form 8582 (469(i)(5)(A)).
+  let k = null;
+  try { k = known(plan, { today }, fed); } catch { k = null; }
+  const kr = k?.rental ?? null;
+  const noRent = kr ? { inputs: kr.before, removed: kr.removed } : withoutIncomeRent(plan, fed, { today });
+  const baseResult = noRent.inputs === fed.inputs ? fed.result : federalTax(noRent.inputs, fed.params);
+  const parts = baseResult.separate ?? null;
+  const on = parts ? parts.find((x) => x.personId === noRent.inputs.separateTo) ?? parts[0] : null;
+  const ret = on ?? baseResult;
   const iraOn = on ? (fed.ira?.people ?? []).find((x) => x.id === on.personId)?.deductible || 0 : fed.ira?.deductible || 0;
-  const magi = Math.max(0, ret.agi - (ret.income?.taxableSocialSecurity || 0) + iraOn);
+  const magi = kr ? kr.magi : Math.max(0, ret.agi - (ret.income?.taxableSocialSecurity || 0) + iraOn);
   const separate = fed.filingStatus === "married_separate", separateTogether = separate && fed.livedApart !== true;
   const status = fed.filingStatus;
-  const rates = { marginal: fed.marginal ?? 0.22, state: st.effective ?? 0, magi, separate, year: fed.year, niitLine: fed.params?.niitThreshold?.[status] ?? 200000, onReturn: on?.name ?? null };
+  // the next dollar's cost before the rentals, on the same figures (the keys' return when no step moved it)
+  const marginal = noRent.inputs === fed.inputs ? fed.marginal : marginalRate(noRent.inputs, fed.params);
+  const rates = { marginal: marginal ?? 0.22, state: st.effective ?? 0, magi, separate, year: fed.year, niitLine: fed.params?.niitThreshold?.[status] ?? 200000, onReturn: on?.name ?? null };
   // the allowance's figures as they apply (for the page's sentences): $25,000 from $100,000 to $150,000, or half of each filing separately
   const rule = separate ? { max: ALLOWANCE.max / 2, from: ALLOWANCE.from / 2, to: ALLOWANCE.to / 2 } : { ...ALLOWANCE };
   const li = computeLiabilities(plan, { today });
   const accounts = plan.accounts ?? [];
   // filing separately while living together at any time in the year: no allowance at all (469(i)(5)(B))
-  const room = separateTogether ? 0 : lossAllowance(magi, { separate });
+  const room = kr ? kr.allowance : separateTogether ? 0 : lossAllowance(magi, { separate });
   const rentals = list.map((r) => {
     const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
     const row = r.loanAccountId ? li.rows.find((x) => x.id === r.loanAccountId) : null;
@@ -139,15 +169,24 @@ export function compute(plan, params = {}) {
     return analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { ...rates, allowance: room });
   });
   // the losses netted across the rentals, then the allowance, spread pro rata
-  const passive = passiveLosses(rentals.map((x) => x.taxable), room);
+  const passive = kr ? kr.passive : passiveLosses(rentals.map((x) => x.taxable), room);
   // what the rentals add to this year's federal tax: the estimate with their allowed net result added (a profit as
   // ordinary income and as investment income for the 3.8% tax, IRC 1411(c)(1)(A)(i); a loss off income) less without,
   // so it crosses brackets and the standard deduction; the state's share at its effective rate on top
-  const base = fed.result.totalTax, inp = fed.inputs;
-  const withNet = passive.net >= 0
-    ? federalTax({ ...inp, otherOrdinary: (Number(inp.otherOrdinary) || 0) + passive.net, investmentIncome: (Number(inp.investmentIncome) || 0) + passive.net }, fed.params)
-    : federalTax({ ...inp, adjustments: (Number(inp.adjustments) || 0) - passive.net }, fed.params);
-  const federal = withNet.totalTax - base, niit = (withNet.niit || 0) - (fed.result.niit || 0), state = passive.net * rates.state;
+  // the Federal estimate's year's tax with the rentals less the same without their result (knownWithout: the later steps,
+  // the IRA and student loan limits, move with it), so "what the rentals add" is the difference on that page
+  const base = baseResult.totalTax, inp = noRent.inputs;
+  let federal, niit;
+  if (kr) {
+    const w = knownWithout(plan, { today }, fed, "rental");
+    federal = k.total - w.total; niit = (k.result.niit || 0) - (w.result.niit || 0);
+  } else {
+    const withNet = passive.net >= 0
+      ? federalTax({ ...inp, otherOrdinary: (Number(inp.otherOrdinary) || 0) + passive.net, investmentIncome: (Number(inp.investmentIncome) || 0) + passive.net }, fed.params)
+      : federalTax({ ...inp, adjustments: (Number(inp.adjustments) || 0) - passive.net }, fed.params);
+    federal = withNet.totalTax - base; niit = (withNet.niit || 0) - (baseResult.niit || 0);
+  }
+  const state = passive.net * rates.state;
   // each rental's line: the profits' side is the tax with the profits alone added (shared by the size of each profit); the
   // losses' side is the rest of the household's change (shared by each rental's allowed loss). The two add up to the change
   // and stay steady when the profits and losses nearly cancel (dividing the change by a net result near 0 would not)
@@ -161,5 +200,5 @@ export function compute(plan, params = {}) {
     a.afterTax = a.cashFlow - a.tax;
   });
   const sum = (k) => rentals.reduce((s, x) => s + (x[k] ?? 0), 0);
-  return { ready: true, year: rates.year, rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, rule, lossRoom: room, passive, separateTogether, tax: { federal, niit, state, total: federal + state } };
+  return { ready: true, year: rates.year, ...(noRent.removed > 0 ? { incomeRent: noRent.removed } : {}), rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, rule, lossRoom: room, passive, separateTogether, tax: { federal, niit, state, total: federal + state } };
 }

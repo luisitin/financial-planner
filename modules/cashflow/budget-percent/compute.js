@@ -13,6 +13,7 @@ import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { QBI_MINIMUM, forYear } from "../../career/business/data/business.js";
 import { savedPlan } from "../../debt/payoff/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
+import { rentalStep, iraStep, loanStep, qbiStep } from "../../taxes/federal/known.js";
 
 /** The rule's split of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All Your Worth", 2005): needs 50%, wants 30%, savings 20%. */
 export const RULE = { needs: 0.5, wants: 0.3, savings: 0.2 };
@@ -78,10 +79,10 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
   const biz = taxed.filter((x) => x.type === "business");
   const bizGross = biz.reduce((t, x) => t + x.yearly, 0);
   const bizExpenses = biz.length ? pos(plan.whatIfs?.selfEmployment?.expenses) : 0;
-  const owners = new Map();
-  for (const x of biz) { const id = known.has(x.personId) ? x.personId : self; owners.set(id, (owners.get(id) ?? 0) + x.yearly); }
+  const owners0 = new Map();
+  for (const x of biz) { const id = known.has(x.personId) ? x.personId : self; owners0.set(id, (owners0.get(id) ?? 0) + x.yearly); }
   let profit = 0, se = 0, seHalf = 0, seBase = 0;
-  for (const [id, g] of owners) {
+  for (const [id, g] of owners0) {
     const net = Math.max(0, g - (bizGross > 0 ? bizExpenses * g / bizGross : 0));
     const t = seTax(net, { wages: earners.get(id) ?? 0, wageBase });
     profit += net; se += t.total; seHalf += t.half; seBase += t.base;
@@ -95,7 +96,7 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
   const returnOf = (id) => (parts ? (parts.findIndex((x) => x.personId === id) >= 0 ? parts.findIndex((x) => x.personId === id) : meAt) : 0);
   const byReturn = (parts ?? [null]).map(() => ({ fica: 0, seBase: 0, profit: 0, half: 0 }));
   for (const [id, w] of earners) byReturn[returnOf(id)].fica += w;
-  for (const [id, g] of owners) {
+  for (const [id, g] of owners0) {
     const net = Math.max(0, g - (bizGross > 0 ? bizExpenses * g / bizGross : 0));
     const t = seTax(net, { wages: earners.get(id) ?? 0, wageBase });
     const R = byReturn[returnOf(id)]; R.seBase += t.base; R.profit += net; R.half += t.half;
@@ -128,7 +129,25 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
     selfEmployment: profit - seHalf, adjustments: (Number(ti.inputs.adjustments) || 0) + seHalf,
     qbiDeduction: QBI.rate * qbiBase, qbiMinimum: qbiBase >= M.from ? M.amount : 0,
   };
-  const r = federalTax(inputs, ti.params);
+  // what the Federal estimate knows about this money (taxes/federal known.js), so the month's tax is that page's on the same
+  // income (round 8 review: the landlord's month took 1,640 of federal tax where the Federal estimate's year is 14,108): the
+  // Income page's rent for a property on Rental analysis counted after its costs, interest and depreciation (rentalStep), the
+  // traditional IRA deduction as the income limits allow it (iraStep), student loan interest (loanStep), and the 20% business
+  // deduction cut by its income limits (qbiStep). This year's IRA withdrawals and stock pay are left out: they are not in the
+  // month's money (the tax on a withdrawal is held back from it; the tax on stock is held back in shares).
+  const owners = [...owners0.entries()].map(([id, g]) => {
+    const net = Math.max(0, g - (bizGross > 0 ? bizExpenses * g / bizGross : 0));
+    const t = seTax(net, { wages: earners.get(id) ?? 0, wageBase }), qb = Math.max(0, net - t.half);
+    return { personId: id, tentative: QBI.rate * qb, qbiMinimum: qb >= M.from ? M.amount : 0 };
+  });
+  const sepHalves = parts ? parts.map((x, i) => ({ personId: x.personId, half: byReturn[i].half })) : null;
+  const ctx = { plan, fed: ti, inputs, params: { today }, out: { se: owners.length ? { owners, half: seHalf, returns: sepHalves } : null } };
+  for (const step of [rentalStep, iraStep, loanStep, qbiStep]) {
+    let res = null;
+    try { res = step(ctx); } catch { res = null; }
+    if (res?.inputs) ctx.inputs = res.inputs;
+  }
+  const r = federalTax(ctx.inputs, ti.params);
   const federal = r.totalTax - r.additionalMedicare;
 
   // the state: the State page's tax as a share of its income, on this income (as the Paycheck page does)

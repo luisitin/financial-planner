@@ -82,3 +82,16 @@ missing).
 
 ## Health cover (2026-11-02)
 The retirement line says "You plan on $84,000 a year plus health cover" when Will the money last? adds its health line (marketplace cover to 65, then Medicare) on top of the spending figure, so the carried figure it quotes is read the same way there and here.
+
+## A retiree's tax answer leads with the hold-back (round 8 review, 2026-11-06)
+- **The headline:** with Estimated payments' `holdBack` (tax on this year's IRA withdrawals, no paycheck), it is "Have
+  about $X of tax held back from your IRA withdrawal by December 31". Tax held back counts as paid through the whole year
+  (IRC 6654(g); Pub. 505).
+- **The line:** it gives the year's tax, the rate as the Federal estimate says it, the amount that leaves nothing to pay in
+  April, and the quarters as the other way.
+- **Why.** The widow read "$2,676 of it is past due" here and "hold back" on two other pages.
+- **Credits above the tax (round 8 fix, 2026-11-06).** When refundable credits are more than the tax, `taxAnswer`'s
+  `totalTax` is 0 and the Federal estimate's rate is negative. The line said "About $0 of federal tax for 2026 (-1.9% of
+  your income)". It now says "No federal income tax for 2026: the credits are about $1,510 more than the tax" (from
+  `creditsBack`), or "the credits cover it". Bracket explorer words it the same way. Test: "credits above the tax read as no
+  federal income tax".

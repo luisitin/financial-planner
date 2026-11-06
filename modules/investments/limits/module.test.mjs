@@ -85,7 +85,9 @@ test("filing separately: each spouse's own income, the other income halved; apar
   // other income the Income page puts on one spouse is that spouse's; only the unnamed rest is halved
   const named = household({ status: "married_separate", interest: 1000, a: { pay: 90000 }, b: { pay: 7200 } });
   named.income.push({ id: "biz", name: "Photography", type: "business", personId: "b", amount: 7200, period: "annual", growth: 0, taxable: true }, { id: "div", name: "Dividends", type: "investment", amount: 400, period: "annual", growth: 0, taxable: true });
-  assert.deepEqual(compute(named, { today: "2026-10-31" }).roth.people.map((r) => r.magi), [90000 + 700, 7200 + 7200 + 700]);
+  // b's business at its profit with half its self-employment tax off b's own return (round 8: the Federal estimate's figures,
+  // known.js; 7,200 x 92.35% x 15.3% / 2 = 508.66), where the business used to count in full
+  assert.deepEqual(compute(named, { today: "2026-10-31" }).roth.people.map((r) => r.magi), [90000 + 700, Math.round((7200 + 7200 + 700 - 7200 * 0.9235 * 0.153 / 2) * 100) / 100]);
   // zero on the separate range
   const zero = compute(household({ status: "married_separate", a: { pay: 50000 }, b: { birth: "1970-01-01", pay: 0, rothIra: 8600 } }), { today: "2026-10-31" });
   assert.deepEqual(pick(zero.roth.people[1], "magi", "status", "allowed", "over"), { magi: 0, status: "ok", allowed: 8600, over: 0 });
@@ -162,4 +164,44 @@ test("Review 2026-11-06 (round 7): the Roth IRA warning says your for the unname
   const e = compute(one, { today: "2026-10-31" });
   assert.ok(e.warnings.some((w) => /^Your 3,000 is going into a Roth IRA, but none is allowed directly this year/.test(w)), e.warnings.join(" | "));
   assert.ok(!e.warnings.some((w) => /^Me\b/.test(w)));
+});
+
+// ---- round 8, Batch 1 (equity-3, landlord-3): the IRA deduction's income limits (IRC 219(g)) and the income the plan knows
+import { iraDeduction, coveredAtWork } from "./compute.js";
+test("round 8 item 9: iraDeduction, the traditional IRA deduction for someone covered at work (2026: 129,000 to 149,000 joint)", () => {
+  const at = (magi, o = {}) => iraDeduction({ traditional: 7500, full: 7500, magi, covered: true, filingStatus: "married_joint", year: 2026, ...o });
+  assert.equal(at(213000).deductible, 0, "213,000 joint, covered: none");
+  // 140,000: 7,500 x (149,000 - 140,000) / 20,000 = 3,375, rounded up to 3,380 (Pub. 590-A Worksheet 1-2 line 7)
+  assert.equal(at(140000).deductible, 3380); assert.equal(at(140000).deductible % 10, 0);
+  assert.equal(at(120000).deductible, 7500, "under the range: all of it");
+  assert.equal(at(148990).deductible, 200, "the $200 floor until the range's end (219(g)(2)(B))");
+  // single 81,000 to 91,000; not covered but married to someone covered 242,000 to 252,000 (219(g)(7))
+  assert.equal(at(86000, { filingStatus: "single" }).deductible, 3750);
+  assert.equal(at(213000, { covered: false, spouseCovered: true }).deductible, 7500);
+  assert.equal(at(247000, { covered: false, spouseCovered: true }).deductible, 3750);
+  // separately: 0 to 10,000; living apart all year, the single range (219(g)(4))
+  assert.equal(at(5000, { filingStatus: "married_separate" }).deductible, 3750);
+  assert.equal(at(50000, { filingStatus: "married_separate", livedApart: true }).deductible, 7500);
+  // nobody covered: all of it at any income
+  assert.equal(at(900000, { covered: false }).deductible, 7500);
+  // 2025's own range (126,000 to 146,000)
+  assert.equal(at(136000, { year: 2025, full: 7000, traditional: 7000 }).deductible, 3500);
+});
+
+test("round 8 items 9 and 12: Limits says how much of the IRA money comes off, and stock pay closes the direct Roth IRA", async () => {
+  const { equityPlan, freelancerPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const p = equityPlan();
+  assert.equal(coveredAtWork(p, "mo"), true); assert.equal(coveredAtWork(p, "lin"), true); assert.equal(coveredAtWork(freelancerPlan(), "me"), false);
+  // 213,000 of AGI from pay alone, 318,000 with the 105,000 of stock vesting: over 252,000, no direct Roth IRA for either
+  const d = compute(p, { today: "2026-11-06" });
+  assert.equal(d.roth.magi, 318000); assert.deepEqual(d.roth.people.map((x) => x.allowed), [0, 0]);
+  p.accounts.push({ id: "ira-mo", name: "Mo's IRA", type: "ira", balance: 0, ownerId: "mo" });
+  p.retirement.contributions.push({ id: "c-ira", accountId: "ira-mo", personId: "mo", period: "annual", amount: 7500, employerMatch: 0 });
+  const row = compute(p, { today: "2026-11-06" }).people[0].rows.find((r) => r.kind === "ira");
+  assert.equal(row.deduct.deductible, 0); assert.equal(row.deduct.rule, "covered"); assert.deepEqual(row.deduct.range, [129000, 149000]);
+  // the freelancer has no plan at work: all 3,000 comes off
+  const f = compute(freelancerPlan(), { today: "2026-11-06" }).people[0].rows.find((r) => r.kind === "ira");
+  assert.equal(f.deduct.deductible, 3000); assert.equal(f.deduct.rule, "none");
+  // no traditional IRA money: no deduct figure at all
+  assert.equal("deduct" in compute(equityPlan(), { today: "2026-11-06" }).people[0].rows.find((r) => r.kind === "ira"), false);
 });

@@ -166,3 +166,35 @@ test("the 3.8% line comes from the engine: $250,000 for a qualifying surviving s
   assert.equal(compute(p, { today: "2026-11-16" }).rates.niitLine, 250000);
   assert.deepEqual(compute(keyHousehold("single", 2026, 90000, [JUN_A]), { today: "2026-11-16" }).rule, { max: 25000, from: 100000, to: 150000 });
 });
+
+// ---- round 8, Batch 1 (landlord-1): the Income page's rent is not in the allowance's income
+test("round 8 item 5: the loss allowance is worked on income without the Income page's gross rent (MAGI 154,400, not 179,600)", async () => {
+  const { landlordPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const d = compute(landlordPlan(), { today: "2026-11-06" });
+  // wages 167,000 less 12,600 to the 401(k)s; the 25,200 of rent on Income left out
+  assert.equal(d.rates.magi, 154400); assert.equal(d.incomeRent, 25200); assert.equal(d.lossRoom, 0);
+  assert.ok(Math.abs(d.passive.suspended - 1546.79) < 0.01); assert.equal(d.tax.federal, 0);
+  // the same household with the rent only on Rental analysis computes the same
+  const q = landlordPlan(); q.income = q.income.filter((x) => x.type !== "rental");
+  const e = compute(q, { today: "2026-11-06" });
+  assert.equal(e.rates.magi, 154400); assert.equal("incomeRent" in e, false);
+});
+
+test("round 8 review 1: Rental analysis takes the allowance, its modified AGI and the netting from the Federal estimate's figures", async () => {
+  const { landlordBusinessPlan, landlordPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known, knownWithout } = await import("../../taxes/federal/known.js");
+  const T = "2026-11-06";
+  // the business at its profit (140,000), the half of its self-employment tax left in modified AGI: 5,000 of the loss counts,
+  // on both pages (it read MAGI 170,000 and 0 here, 130,109 and 9,945 on the Federal estimate)
+  const p = landlordBusinessPlan(), d = compute(p, { today: T }), k = known(p, { today: T });
+  assert.ok(Math.abs(d.rates.magi - 140000) < 0.01, String(d.rates.magi)); assert.ok(Math.abs(d.lossRoom - 5000) < 0.01);
+  assert.ok(Math.abs(d.passive.net - k.rental.net) < 1e-9); assert.equal(d.incomeRent, 14400);
+  // what the rentals add is the Federal estimate's year's tax with them less without their result
+  const w = knownWithout(p, { today: T }, null, "rental");
+  assert.ok(Math.abs(d.tax.federal - (k.total - w.total)) < 1e-6, `${d.tax.federal} vs ${k.total - w.total}`);
+  // 5,000 less income at 22%, less the 1,000 it takes off the 20% business deduction (held to 20% of taxable income): 880
+  assert.ok(Math.abs(d.tax.federal - -0.22 * 4000) < 1, String(d.tax.federal));
+  // the tester's landlord is unchanged: MAGI 154,400 and the 1,547 loss waits
+  const l = compute(landlordPlan(), { today: T });
+  assert.equal(l.rates.magi, 154400); assert.equal(l.lossRoom, 0);
+});

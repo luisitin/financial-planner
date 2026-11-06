@@ -78,3 +78,25 @@ of ordinary income pays 14%" and "4.9% of income" (it said 12% from the 1,000 pr
   brackets are each return's own".
 
 Review 2026-11-06 (round 7): filing separately, the lead ("on your return ...; on your spouse's, ..."), the rates columns and ladders ("Yours", "Yours in it", "Your return: ..."), and the paying lines ("Your return: a refund ...", "Estimated payments on your return") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).
+
+## The report's rates are the return its total is worked on (round 8 review, 2026-11-06)
+- **Figures:** `thisYear.agi`, `taxableIncome`, `bracketRate`, `roomInBracket`, `nextRate`, `marginal` and `nextDollar` come
+  from `known(plan).result` and `known().nextDollar`, the Federal estimate's figures with what the plan knows.
+- **The ladder:** it comes from Brackets, which builds on the same inputs.
+- **Why.** The widow's report said 35,104 taxable and 22 cents in its walk, and the 10% bracket, 19% and a ladder adding
+  up to 536 in "The rates".
+- **Paying it:** for a retiree whose tax is on this year's IRA withdrawals (`paying.holdBack`, Estimated payments' figure),
+  it leads with having tax held back from a withdrawal before December 31. That counts as paid through the whole year
+  (IRC 6654(g)). The quarters come second as "or pay by quarters instead", not "not marked as paid".
+
+## Gains on the same return (round 8 verify, 2026-11-06)
+- **What:** "Gains and the HSA" says the 0% room and the tax this year's sales add on the return the walk shows. The
+  figures are still the Capital gains page's (`taxOnGains`, `zeroRoom`); that page now works on `known(plan)`'s return (see
+  its README), so the report, the page and the walk agree.
+- **How:** more long-term gain until taxable income reaches the 0% line (Rev. Proc. 2025-32 sec. 4.03 for 2026: 49,450
+  single, 98,900 joint), worked again up to four times because each dollar can pull Social Security into tax (IRC 86); the
+  sales' tax is the return with them less the return without them.
+- **Why:** the widow's report said "About 27,340 of long-term gains could still be taken this year at 0%" beside its own
+  35,104 of taxable income. On that return 11,262 fit (3,628 of gain pulls the last 3,084 of her Social Security into tax,
+  then 7,634 more reaches 49,450); selling 27,340 would have added about 3,020. With a 10,000 sale the report says it adds
+  370.04 (Social Security taxed 23,460, AGI 72,338, taxable 48,188, all of the gain under the 0% line).

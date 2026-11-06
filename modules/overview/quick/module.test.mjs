@@ -90,6 +90,30 @@ test("Review 2026-11-06: the tax answer, filing separately, says each return's o
   const a = answerFor("taxes", p, { today: T });
   assert.equal(a.headline, "Bo owes about $1,660; Ana gets about $2,200 back");
   assert.equal(a.status, "warn"); assert.match(a.line, /^Filing separately, each return settles on its own\./);
-  // filing jointly the household's answer stays
-  assert.match(answerFor("taxes", familyPlan(T), { today: T }).headline, /^Owe about \$5,223 in April$/);
+  // filing jointly the household's answer stays (5,253 since round 8: the 20% business deduction comes after AGI, as Form 1040
+  // line 13 takes it, so the family's AGI is 1,338 higher and the child care credit a step lower: 30 more tax; it read 5,223)
+  assert.match(answerFor("taxes", familyPlan(T), { today: T }).headline, /^Owe about \$5,253 in April$/);
+});
+
+test("round 8 review UX 3: the widow's tax answer leads with having tax held back, not 'past due', and says her rate as the Federal estimate does", async () => {
+  const { answerFor } = await import("./compute.js");
+  const { widowPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const a = answerFor("taxes", widowPlan(), { today: "2026-11-06" });
+  assert.equal(a.headline, "Have about $3,600 of tax held back from your IRA withdrawal by December 31");
+  assert.ok(!/past due/.test(a.line), a.line);
+  assert.match(a.line, /^About \$3,965 of federal tax for 2026 \(6\.0% of your income\), and no tax held back is on file\./);
+  assert.match(a.line, /about \$4,000 leaves nothing to pay in April/);
+});
+
+test("round 8 fix: credits above the tax read as no federal income tax and what comes back, never \"About $0 ... (-5.7% of your income)\"", () => {
+  // Jo, head of household, 30,000 of pay, one child, 900 a month of care (the Bracket explorer's case): the care credit takes
+  // all 585 of income tax and 1,700 of the child tax credit is refundable, so the year's tax is -1,700
+  const p = emptyPlan(); p.household.filingStatus = "head_of_household"; p.household.state = "OH";
+  p.household.people = [{ id: "jo", name: "Jo", role: "self", birthDate: "1993-03-15" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+  p.income = [{ id: "pay", name: "Jo's pay", type: "salary", personId: "jo", amount: 30000, period: "annual", growth: 0, taxable: true }];
+  p.expenses = [{ id: "care", name: "Daycare", category: "childcare", amount: 900, period: "monthly" }];
+  const a = compute(p, { today: "2026-11-02" }).answers.find((x) => x.guide === "taxes");
+  assert.ok(a, "a tax answer");
+  assert.ok(a.line.startsWith("No federal income tax for 2026: the credits are about $1,700 more than the tax"), a.line);
+  assert.ok(!/-\d+(\.\d)?%/.test(a.line) && !a.line.includes("About $0"), a.line);
 });

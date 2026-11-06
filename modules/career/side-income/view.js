@@ -56,15 +56,19 @@ export function render(page, ctx) {
     const e = d.estimates;
     root.append(ui.card("Tax to set aside", ui.row(
       ui.stat("Of every payment", pct(s.rate), `what comes in, before expenses: self-employment and federal income tax${s.state ? ", and state tax" : ""}`),
-      ui.stat("This income adds", money(s.yearly), `of tax a year, ${money(s.quarter)} a quarter`),
-    ), ui.h("p", {}, !e.needed || (!e.nextDue && !e.overdue) ? "Your whole return does not need quarterly payments now: what is already withheld covers enough (the Quarterly payments page checks)."
-      : e.overdue ? `Your whole return needs quarterly payments, and ${money(e.overdue.amount)} that was due from ${longDate(e.overdue.due)} on is not marked as paid: see the Quarterly payments page.${e.nextDue ? ` Then ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.` : ""}`
-        : `Your whole return needs quarterly payments: the next is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)} (the Quarterly payments page).`),
+      // a share to put aside as the money comes in, not a quarterly figure: what to send the IRS and when is the Estimated
+      // payments page's one answer, said in the sentence below (round 8 review: "$3,514 a quarter to the IRS" sat above
+      // "$3,577 by January 15" on one card)
+      ui.stat("This income adds", money(s.yearly), `of tax a year: set aside about ${money(s.yearly / 12)} a month`),
+    ), ui.h("p", {}, !e.needed || (!e.nextDue && !e.overdue) ? "Your whole return does not need quarterly payments now: what is already withheld covers enough (the Estimated payments page checks)."
+      : e.overdue ? `Your whole return needs quarterly payments to the IRS, and ${money(e.overdue.amount)} that was due from ${longDate(e.overdue.due)} on is not marked as paid: pay it now${e.nextDue ? `, then ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}` : ""}.`
+        : `Your whole return needs quarterly payments to the IRS: the next is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.`),
+    e.needed && (e.nextDue || e.overdue) ? ui.h("p", { class: "muted small" }, `These come from the Estimated payments page, worked on the Income page's ${money(d.items.reduce((t, it) => t + it.monthly, 0))} a month: the safe amount is ${e.harbour === "90% of this year's" || !e.harbour ? "90% of this year's tax" : e.harbour}, paid in four parts, and the rest is due in April.`) : null,
     ui.h("p", { class: "muted small" }, [
       "Nobody holds back tax from side income, so it is paid during the year, or covered by more withholding at a job.",
       s.onAverage ? " Worked on what came in on average over the months typed, not on the careful figure the plan counts on." : " Worked on the Income page's figure; type the months for what really comes in.",
     ].join("")),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Quarterly payments"), ui.h("a", { class: "btn secondary", href: "#/taxes/self-employment" }, "Self-employment tax"))));
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments"), ui.h("a", { class: "btn secondary", href: "#/taxes/self-employment" }, "Self-employment tax"))));
   }
   rulesCard();
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/emergency-fund" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/career/business" }, "Small business"))));
@@ -78,7 +82,7 @@ export function render(page, ctx) {
   // from this page once the months ran out while it kept lowering the left-over figure (review 2026-11-02)
   function countedSay(it) {
     const better = it.enough && it.countOn > 0 && Math.abs(it.counted - it.countOn) >= 1 && it.countOn < it.monthly - 0.5;
-    return [ui.h("p", { class: "si-say" }, `Your plan counts on ${money(it.counted)} a month from this for spending and saving (the left-over figure and the forecast). The tax pages (Quarterly payments, the April bill) still use the Income page's ${money(it.monthly)} a month; what comes in above ${money(it.counted)} is a bonus to save.`),
+    return [ui.h("p", { class: "si-say" }, `Your plan counts on ${money(it.counted)} a month from this for spending and saving (the left-over figure and the forecast). The tax pages (Estimated payments, the April bill) still use the Income page's ${money(it.monthly)} a month; what comes in above ${money(it.counted)} is a bonus to save.`),
       ui.row(better ? ui.button(`Count on ${money(it.countOn)} instead`, () => setCount(it, Math.round(it.countOn)), { class: "secondary" }) : null,
         ui.button(`Count the full ${money(it.monthly)} again`, () => setCount(it, null), { class: "secondary" }))];
   }

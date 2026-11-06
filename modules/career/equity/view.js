@@ -4,6 +4,7 @@
 // and the purchased shares edited in folds.
 import { compute, DEFAULT_GRANT, ESPP_DISCOUNT, ISO_AFTER_LEAVING, ISO_LIMIT } from "./compute.js";
 import { nameIn } from "../../../core/words.js";
+import { taxAnswer } from "../../taxes/withholding/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let editing = null;   // the grant or lot whose form is open
@@ -56,6 +57,14 @@ export function render(page, ctx) {
       ui.row(ui.h("a", { class: ok ? "btn secondary" : "btn", href: "#/investments/employer-stock" }, ok ? "Employer stock" : "How to bring it down"))));
     }
 
+    // the stock's own set-aside is not the April bill: with the paychecks counted too, the Federal estimate's answer for this
+    // year's return (round 8 review: "set aside $1,398" here while the whole return owes $6,338 in April)
+    let ans = null;
+    try { ans = taxAnswer(plan, { today: fmt.today() }); } catch { ans = null; }
+    const wholeReturn = (year) => (!ans || ans.year !== year || ans.from === "none" ? ""
+      : ans.verdict === "owe" ? ` With your pay counted too, the whole ${year} return comes to about ${money(ans.balance)} to pay in April (the Federal estimate).`
+      : ans.verdict === "refund" ? ` With your pay counted too, the whole ${year} return comes out about ${money(-ans.balance)} back (the Federal estimate).`
+      : ` With your pay counted too, the whole ${year} return comes out about right (the Federal estimate).`);
     // units, by the year they vest in
     for (const y of d.rsuYears) if (y.vests.length) {
       const t = y.tax;
@@ -68,8 +77,8 @@ export function render(page, ctx) {
         ui.h("li", {}, ui.h("span", {}, "Held back for federal tax"), ui.h("span", {}, money(t.withheldFederal))),
         ui.h("li", {}, ui.h("span", {}, "Social Security and Medicare"), ui.h("span", {}, money(t.payroll))),
         t.state > 0 ? ui.h("li", {}, ui.h("span", {}, "State tax"), ui.h("span", {}, money(t.state))) : null),
-      ui.h("p", { class: "eq-say" }, t.gap > 50 ? `Set aside about ${money(t.gap)} more for the tax return: what is held back falls short of your rate.` : t.gap < -50 ? `What is held back is about ${money(-t.gap)} more than the tax: a refund, or less to set aside elsewhere.` : "What is held back about covers the tax."),
-      ui.h("p", { class: "muted small" }, `At today's price; the real value is the price on each vest day. For federal tax the employer holds back 22% of the value (37% above ${money(1000000)} in a year), whatever your own rate.`)));
+      ui.h("p", { class: "eq-say" }, `${t.gap > 50 ? `Set aside about ${money(t.gap)} more for the tax return: what is held back falls short of your rate.` : t.gap < -50 ? `What is held back is about ${money(-t.gap)} more than the tax: a refund, or less to set aside elsewhere.` : "What is held back about covers the tax."}${wholeReturn(y.year)}`),
+      ui.h("p", { class: "muted small" }, `At today's price; the real value is the price on each vest day. For federal tax the employer holds back 22% of the value (37% above ${money(1000000)} in a year), whatever your own rate.${y.estimated ? ` The IRS has not published ${y.year}'s tax tables yet, so ${y.year}'s figures use the latest ones raised for inflation.` : ""}`)));
     }
 
     // the room before the alternative minimum tax, once for all incentive options

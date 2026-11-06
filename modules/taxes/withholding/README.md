@@ -58,6 +58,29 @@ page, Estimated payments, the Tax report and Next best action now say the same; 
 $1,700 of credits come back" instead of a tax below zero. The rate in the walk goes through the Federal estimate's
 `ratePct`, one rounding for the same figure.
 
+## The year's tax is what the plan knows (round 8)
+`yearTax(plan, fed, params, k?)` -> `{ total, income, se, seOwn, owed, back, known }` now takes the year's tax from the
+Federal estimate's figures (`taxes/federal/known.js` `known()`): the answer keys' return with this year's IRA and 401(k)
+withdrawals, stock pay vesting this year, a business at its profit (half its self-employment tax and its 20% deduction
+off, the deduction after AGI as Form 1040 line 13 takes it), rentals after costs, the IRA deduction as IRC 219(g) allows
+it and student loan interest put in (taxes/federal README "What the plan already knows"). `total` = `known().total`;
+`se` = `total - known().totalAtGross` (the business's whole effect); `seOwn` = its self-employment tax with the 0.9%
+Additional Medicare tax. Without any of those it is the Federal estimate's `totalTax` itself. The 20% deduction now
+comes after AGI (it was taken off AGI, `adjustments`), so on the sample family (7,200 of photography profit, joint AGI in
+the child care credit's phase-down) the total is 14,722.61, 30 more than before (14,692.61): the child care credit is one
+step lower at the right AGI.
+`fullSteps(plan, fed, params, k?)` returns `known().steps` (half the self-employment tax named under Adjustments, a
+"Business deduction (20%)" line before Taxable income, "Self-employment tax" before "Federal tax"; the "Tax saved by
+business deductions" line is gone), `total`, `rate`, `returns` and `se` (`tax`, `half`, `qbi`, `expenses`,
+`nextDollar` from the Self-employment page's keep-per-100).
+`withholdingEstimate(plan, params, k?)` adds what the employer holds back from stock vesting this year (`known().stock`:
+22% supplemental, IRC 3402 and Treas. Reg. 31.3402(g)-1, Pub. 15 section 7; plus the 0.9% Medicare on wages past $200,000,
+IRC 3102(f)) to what the paychecks take out (`stock`); with the year so far typed from pay stubs only the vests still to
+come are added. Mo and Lin (equity household): paychecks 23,260 + stock 24,045 = 47,305 by December, against 53,643 of
+tax: about 6,338 at filing. (The ranked figure was 6,248: the 90 between them is the 0.9% Medicare on Mo's own pay past
+200,000, which the paycheck estimate leaves out for every earner; not changed here.) `taxAnswer` carries `stock` when
+there is some.
+
 ## Edge cases
 "About right" is within 500 either way. Without a paycheck figure the verdict is unknown. The paychecks-left count is by calendar days, not the employer's actual pay dates.
 
@@ -122,3 +145,11 @@ $1,700 of credits come back" instead of a tax below zero. The rate in the walk g
   "the self-employment tax itself", "credits more than the tax" (Estimated payments' words).
 
 Review 2026-11-06 (round 7): the estimate line ("you about $244 a paycheck, your spouse about $261"), "on your W-4: Step 4(c)", the separate returns ("Your spouse would likely owe ...; you would likely get ...", "Your spouse's return", "withheld from your spouse's pay", "your spouse's W-4") and the form labels ("Your federal tax taken per paycheck", "How often you are paid") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Bo: paid how often"; core/words.js; view only). Short stat labels that just name who ("Me: refund", "Me: $100 x 3 left") stay.
+
+## The rate and "income on file" are the Federal estimate's (round 8 review, 2026-11-06)
+- **The rate:** `effectiveRate` is `known().rate`, the year's tax over income as the Federal estimate says it. It used to
+  be the keys' return. Quick answers reads it through `taxAnswer`.
+- **The wages:** `wages` is `known().result.income.wages`, stock pay included.
+- **Income on file:** `hasIncome` is `known().hasIncome`, so a retiree living on IRA withdrawals has income here.
+- **Why.** The review found the widow's "1.1% of income" beside the Federal estimate's 6.0%, and a retiree with no Income
+  lines told "No income on file" beside 6,953 of tax.

@@ -13,14 +13,22 @@ test("no income: not ready", () => {
   assert.equal(compute(emptyPlan(), { today: TODAY }).ready, false);
 });
 
-test("this year's figures are the Federal estimate's; the ladder covers every bracket and marks the current one", () => {
+test("this year's figures are the Federal estimate's; the ladder covers every bracket and marks the current one", async () => {
   const d = compute(familyPlan(), { today: TODAY });
   const f = federal(familyPlan(), { today: TODAY });
   // the whole year's tax (self-employment tax included), as Withholding check and the Federal estimate's headline say;
   // the walk gains the business rows and ends at it (round 4, 2026-11-02)
   const a = taxAnswer(familyPlan(), { today: TODAY });
-  assert.equal(d.thisYear.totalTax, a.totalTax); assert.equal(d.thisYear.incomeTax, f.result.totalTax);
-  assert.equal(d.thisYear.steps.length, f.steps.length + 2);
+  // the income tax is the Federal estimate's (known.js: the business at its profit), not the answer keys' return (round 8
+  // review: the report's rates and bracket came from that return while its walk and total did not)
+  const { known } = await import("../../taxes/federal/known.js");
+  const k = known(familyPlan(), { today: TODAY });
+  assert.equal(d.thisYear.totalTax, a.totalTax); assert.equal(d.thisYear.incomeTax, k.result.totalTax);
+  assert.equal(d.thisYear.taxableIncome, k.result.taxableIncome); assert.equal(d.thisYear.bracketRate, k.result.bracketRate); assert.equal(d.thisYear.nextDollar, k.nextDollar);
+  // round 8 item 20: worked with the business at its profit: an Adjustments row (half the self-employment tax), the 20%
+  // deduction and the self-employment tax join the walk
+  assert.equal(d.thisYear.steps.length, f.steps.length + 3);
+  assert.ok(["Adjustments", "Business deduction (20%)", "Self-employment tax"].every((l) => d.thisYear.steps.some((x) => x.label === l)));
   assert.equal(d.thisYear.steps.find((x) => x.label === "Federal tax").amount, a.totalTax);
   assert.ok(d.thisYear.seTax > 1000 && d.thisYear.seTax < 1100, "the family's 7,200 of photography: about 1,017");
   assert.equal(d.ladder.length, 7); assert.equal(d.ladder.filter((l) => l.current).length, 1);
@@ -108,7 +116,9 @@ test("Review 2026-11-06: filing separately, the rates and the brackets are each 
   const t = await reportText(p);
   assert.ok(!t.includes("The next dollar of ordinary income pays"), "not the household's one line: " + t.slice(0, 600));
   const d = compute(p, { today: TODAY });
-  const f = federal(p, { today: TODAY });
+  // each return as the Federal estimate works it (known.js: Bo's business at its profit on his return)
+  const { known } = await import("../../taxes/federal/known.js");
+  const kp = known(p, { today: TODAY }), f = { result: kp.result, nextDollar: kp.nextDollar, inputs: kp.inputs, params: kp.fed.params };
   const rets = d.thisYear.returns;
   assert.equal(rets.length, 2); assert.deepEqual(rets.map((x) => x.name), f.result.separate.map((x) => x.name));
   for (const x of rets) {
@@ -169,4 +179,47 @@ test("Review 2026-11-06: every report finishes when its figures cannot be worked
     const src = fs.readFileSync(new URL(`../${m}/view.js`, import.meta.url), "utf8");
     assert.ok(/settleReport\(ctx\.computeRemote\(/.test(src) && !/ctx\.computeRemote\([^)]*\)\.then\(/.test(src), `${m}: its compute's answer is drawn through settleReport`);
   }
+});
+
+test("round 8 review 3: the report's rates, bracket, room and ladder are the return its total is worked on (the Federal estimate's)", async () => {
+  const { widowPlan, freelancerPlan, equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const T = "2026-11-06";
+  // the widow with this year's required withdrawal: taxable 35,104.30 in the 12% bracket; the ladder adds up to her 3,964.52
+  const w = compute(widowPlan(), { today: T });
+  assert.equal(w.thisYear.bracketRate, 0.12); assert.ok(Math.abs(w.thisYear.taxableIncome - 35104.3) < 0.05, String(w.thisYear.taxableIncome));
+  assert.ok(Math.abs(w.ladder.reduce((t, x) => t + x.tax, 0) - 3964.52) < 0.05, String(w.ladder.reduce((t, x) => t + x.tax, 0)));
+  assert.equal(w.thisYear.nextDollar, w.thisYear.marginal); assert.ok(Math.abs(w.thisYear.nextDollar - 0.222) < 0.002, String(w.thisYear.nextDollar));
+  // the hold-back leads the paying lines' figures (no "past due" route first)
+  assert.equal(w.paying.holdBack.amount, 3600);
+  // the freelancer with the business at its profit: 42,711.58 taxable, the 12% bracket (it read 22% and 58,900)
+  const f = compute(freelancerPlan(), { today: T });
+  assert.equal(f.thisYear.bracketRate, 0.12); assert.ok(Math.abs(f.thisYear.taxableIncome - 42711.58) < 0.05);
+  // the stock couple: the 24% bracket
+  assert.equal(compute(equityPlan(), { today: T }).thisYear.bracketRate, 0.24);
+});
+
+// --- round 8, batch 1 verify (2026-11-06) ------------------------------------------------------------------------------
+test("round 8 verify: the 0% gain room and the tax sales add are worked on the return the report's walk shows", async () => {
+  const { widowPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known } = await import("../../taxes/federal/known.js");
+  const { compute: gainsPage } = await import("../../taxes/capital-gains/compute.js");
+  const R8 = "2026-11-06";
+  const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
+  // Ruth: 35,104 of taxable income with her required withdrawal; the 0% line is 49,450 (Rev. Proc. 2025-32 sec. 4.03), and
+  // each dollar of gain also makes 85 cents of her Social Security taxable until 85% of it is (23,460, 3,084 more): 3,628 of
+  // gain pulls that in (6,712 of taxable income), then 7,634 more reaches the line: 11,262, not the 27,340 the keys' return
+  // (no withdrawal, 5,360 taxable) leaves
+  const d = compute(widowPlan(), { today: R8 });
+  assert.equal(d.thisYear.taxableIncome, known(widowPlan(), { today: R8 }).result.taxableIncome);
+  near(d.gains.zeroRoom, 11262, 1);
+  // a 10,000 long-term sale: Social Security taxed 23,460 (3,083.70 more), AGI 72,338, taxable 48,188 (all of the gain under
+  // the 0% line), ordinary tax 1,240 + 12% x 25,788 = 4,334.56: the sale adds 370.04 (the Social Security it pulls in)
+  const p = widowPlan(); p.taxes = { ...(p.taxes ?? {}), gains: [{ id: "g1", name: "Fund", proceeds: 30000, basis: 20000, held: "long" }] };
+  const s = compute(p, { today: R8 });
+  near(s.gains.taxOnGains, 370.04, 0.01);
+  near(s.gains.taxOnGains, known(p, { today: R8 }).total - known(widowPlan(), { today: R8 }).total, 1e-6);
+  // a household none of the plan's steps change keeps the Capital gains page's figures exactly
+  const t = compute(taxPlan(), { today: TODAY }), g = gainsPage(taxPlan(), { today: TODAY });
+  assert.equal(known(taxPlan(), { today: TODAY }).changed, false);
+  assert.equal(t.gains.zeroRoom, g.zeroRoom); assert.equal(t.gains.taxOnGains, g.taxOnGains);
 });

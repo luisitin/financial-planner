@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fv, pv, pmt, pmtToReach, nper, amortization, cagr, realRate, inflate, deflate, typicalPayment, TYPICAL_TERMS } from "../core/math/finance.js";
+import { fv, pv, pmt, pmtToReach, nper, amortization, cagr, realRate, inflate, deflate, typicalPayment, TYPICAL_TERMS, yearOfPayments } from "../core/math/finance.js";
 
 const close = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 
@@ -53,4 +53,14 @@ test("typicalPayment: a loan's level payment over its usual term, a card's inter
   assert.equal(typicalPayment("student", 12000, 0), 100, "no interest: a straight split over 120 months");
   assert.equal(typicalPayment("boat", 6000, 0.12), Math.round(pmt(0.01, 60, 6000)), "an unknown kind: 5 years");
   assert.equal(typicalPayment("mortgage", 0, 0.07), 0);
+});
+
+test("yearOfPayments: a year of payments split into interest and principal, stopping once paid off (round 8)", async () => {
+  // 1,000 at 12%, 600 a month: month 1 interest 10.00, 410 left; month 2 interest 4.10, the last 414.10 paid
+  const y = yearOfPayments(1000, 0.12, 600);
+  assert.ok(Math.abs(y.paid - 1014.10) < 1e-9 && Math.abs(y.interest - 14.10) < 1e-9 && Math.abs(y.principal - 1000) < 1e-9);
+  assert.deepEqual(yearOfPayments(5000, 0.05, 0), { paid: 0, interest: 0, principal: 0 });
+  // the same figures as the Income statement's copy (cashflow/statement), which the Federal estimate no longer loads
+  const { yearOfPayments: statementCopy } = await import("../modules/cashflow/statement/compute.js");
+  for (const [b, r, p] of [[64000, 0.065, 730], [150000, 0.045, 851], [3000, 0.22, 90], [500, 0, 100]]) assert.deepEqual(yearOfPayments(b, r, p), statementCopy(b, r, p));
 });

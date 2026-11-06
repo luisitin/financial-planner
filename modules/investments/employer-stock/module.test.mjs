@@ -304,3 +304,27 @@ test("addIncome puts an amount on one spouse's return and keeps the total in ste
   assert.equal(x.wages, 110); assert.equal(x.separate[1].wages, 50); assert.equal(x.separate[0].wages, 60);
   assert.equal(addIncome(inputs, "z", { wages: 5 }).separate, inputs.separate, "no such return: the engine's separateTo takes it");
 });
+
+// ---- round 8, Batch 1 (equity-2): the set-aside for today's tax year covers all its vests, as Equity compensation's does
+test("round 8 item 12: the year's set-aside counts every vest dated in it: 1,398, the same as Equity compensation's", async () => {
+  const { equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { compute: equityOf } = await import("../../career/equity/compute.js");
+  const p = equityPlan(), d = compute(p, { today: "2026-11-06" }), q = equityOf(p, { today: "2026-11-06" });
+  // the vests still to come (December's 75 units) leave 300 short; the year's 525 units leave 1,398
+  assert.equal(Math.round(d.vestYears.find((y) => y.year === 2026).gap), 300, "vestYears stays as the answer key has it");
+  assert.equal(d.wholeYear.year, 2026); assert.equal(d.wholeYear.value, 105000); assert.equal(d.wholeYear.earlier, 90000);
+  assert.ok(Math.abs(d.wholeYear.withheld - (23100 + 945)) < 0.01);
+  assert.ok(Math.abs(d.wholeYear.gap - q.rsuYears[0].tax.gap) < 0.5, `${d.wholeYear.gap} vs ${q.rsuYears[0].tax.gap}`);
+  assert.equal(Math.round(d.wholeYear.gap), 1398);
+});
+
+test("round 8 review UX 4: next year's set-aside counts every vest dated in that year, as Equity compensation does", async () => {
+  const { equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const d = compute(equityPlan(), { today: "2026-11-06" });
+  const y27 = d.vestYears.find((y) => y.year === 2027), w27 = d.wholeYears.find((y) => y.year === 2027);
+  // the next 12 months reach only the March, June and September 2027 vests; the whole year has December's too
+  assert.ok(w27.value > y27.value, `${w27.value} vs ${y27.value}`);
+  const all27 = d.grants.filter((g) => g.kind === "rsu").flatMap((g) => g.schedule.filter((e) => e.date.startsWith("2027"))).reduce((t, e) => t + e.shares * d.price, 0);
+  assert.equal(w27.value, all27); assert.equal(w27.vests, 4);
+  assert.equal(d.wholeYears.find((y) => y.year === 2026).gap, d.wholeYear.gap);
+});

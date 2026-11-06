@@ -161,7 +161,8 @@ export function isoSplit(grants) {
 /**
  * compute(plan, { today }) -> {
  *   ready, needsPrice, year, symbol, price, priceAsOf, person, personWages, stake: { share, level, exposure, invested, owned, unvested, vestedUnits },
- *   grants, rsuYears: [{ year, value, vests: [{ date, grant, shares, value, past }], tax }],
+ *   grants, rsuYears: [{ year, value, vests: [{ date, grant, shares, value, past }], estimated (worked on tables raised for
+ *   inflation), tax }],
  *   options: [{ id, name, type, vested, unvested, next, strike, spreadEach, spread, cost, expires,
  *     nsoShares, nso: stockPayTax | null (nonqualified options, and incentive options over the $100,000 rule),
  *     iso: { shares, spread, amtAll, room, roomShares, unlimited, holdUntil, sameYearTax } | null }],
@@ -198,12 +199,18 @@ export function compute(plan, params = {}) {
   if (st.rate === null) notes.push("Your state's income tax is not counted: set its rate on the State tax page.");
 
   // restricted stock units by the calendar year they vest in (this year's earlier vests too), at today's price; each year's wage base
+  // each year on its own tax tables, as Employer stock works it (round 8 review: 2027's units were worked on 2026's tables, so
+  // this page said 498 to set aside for 2027 where Employer stock said 352): this year on the plan's return, a later year on
+  // that year's figures (the latest tables raised for inflation until the IRS publishes them; `estimated` says so)
+  const setYear = Number(plan.taxes?.year) || null;
+  const tiOf = (y) => (y === year ? ti : y === setYear ? taxInputs(plan, { today }) : taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), year: y, gains: [] } }, { today }));
   const rsuYears = [year, year + 1].map((y) => {
     const vests = [];
     for (const g of grants.filter((x) => x.kind === "rsu")) for (const e of g.schedule) if (Number(e.date.slice(0, 4)) === y) vests.push({ date: e.date, grant: g.name, shares: e.shares, value: e.shares * price, past: e.date <= today });
     vests.sort((a, b) => a.date.localeCompare(b.date));
     const value = vests.reduce((t, v) => t + v.value, 0);
-    return { year: y, value, vests, tax: stockPayTax(value, { inputs: ti.inputs, params: ti.params, personWages, medicareWages, wageBase: maximumEarnings(y), stateRate }) };
+    const t = value > 0 ? tiOf(y) : ti;
+    return { year: y, value, vests, estimated: !!t.params.indexed, tax: stockPayTax(value, { inputs: t.inputs, params: t.params, personWages, medicareWages, wageBase: maximumEarnings(y), stateRate }) };
   });
   // this year's other figures stand on this year's pay with the units vesting this year in it
   const rsuNow = rsuYears[0].value;

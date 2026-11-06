@@ -35,6 +35,21 @@ For a household that pays its tax itself, part of the cash in the bank is this y
 
 My choices (no owner input): it applies only when the plan has income from the household's own business or freelance work that is going today, estimates are needed (this page's `needsEstimates`), and withholding covers under half of the year's tax. A household whose paychecks withhold most of the tax is left to Withholding check, because its withholding is often estimated from pay. Only federal tax counts: the State page has a rate, not payments. In January to April last year's balance is not in it (the plan holds one tax year).
 
+## Tax held back from an IRA withdrawal (round 8)
+The year's tax is the Federal estimate's figures (`yearTax`, taxes/withholding: this year's required withdrawal, stock
+pay, a business at its profit, rentals after costs, the IRA and student loan deductions as the law allows them). For a
+retiree whose tax comes from this year's IRA or 401(k) withdrawals, tax held back from a withdrawal counts as paid evenly
+through the year (IRC 6654(g)(1); Pub. 505 chapter 4: withholding "is considered paid ... in four equal amounts"), so the
+page leads with asking the firm to hold back what is still short from a withdrawal before December 31 instead of paying
+the quarters already past: `holdBack` = `{ amount: min(remaining rounded up to 100, the withdrawal), short, withdrawal,
+required, people }` when estimates are needed, something is still to pay, it is today's tax year, the withdrawal comes
+from the plan (not typed) and part of it is not yet marked taken (or the projection draws for spending). Ruth (widow
+household, 2026): tax 3,964.52 (536 before: the 16,078 required withdrawal was not counted), safe amount 90% = 3,568.07,
+nothing withheld or paid: "Have about $3,600 of tax held back from your IRA withdrawal"; the quarters read "not paid" in a
+neutral pill, with the quarterly route (2,676.05 now, 892.02 by January 15, 2027) as the alternative, and a note to type
+what was held back under "Federal tax withheld so far" (Form 1099-R box 4) once it is. Item 6's other half (the tax on the
+withdrawal on Required withdrawals and How much to take out as the engine's difference) is Batch 5.
+
 ## Edge cases
 The annualised-income method (uneven income through the year) is not modelled; nor is the penalty itself (it runs like interest from each due date).
 
@@ -70,3 +85,11 @@ were made*, instead of "$0 is paid so far" for someone who may have paid every q
   for a married person filing separately (IRC 6654(d)(1)(C): "$75,000 in the case of a married individual filing a separate
   return"); the help under last year's income and the fold's words said 150,000 for everyone. They now say 75,000 filing
   separately (compute gives `filingStatus`). Test: "filing separately, the safe-amount words say 75,000".
+
+## Round 8 review (2026-11-06)
+- **Income on file:** `hasIncome` counts this year's IRA withdrawals the plan knows of (`known().hasIncome`). The year's
+  tax includes the extra 10% on a draw before 59½ (IRC 72(t); Form 2210 counts Schedule 2's other taxes).
+- **The hold-back:** `holdBack.whole` is the whole balance at filing, rounded up to 100 and at most the withdrawal. It is
+  what to hold back to owe nothing in April, beside `amount`, which only keeps the penalty away (90% of the year's tax).
+  The widow: 3,600 against 4,000.
+- **The button:** it says "Your IRA withdrawals" (How much to take out) when no withdrawal is required yet.

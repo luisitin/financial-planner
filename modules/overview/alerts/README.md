@@ -199,3 +199,12 @@ Tests: module.test.mjs "round 8 review".
 - A past-due college goal (UX 4): Education's next bill, in Next best action's words (`collegeBills`, `collegeWords`), going to
   Education. The Goals page's warning now reads "The date for X has passed", so the check that drops it beside its own alert
   looks for the name anywhere in it.
+
+## Tax held back from a withdrawal (round 8 batch 1, 2026-11-06)
+With batch 1 the year's federal tax counts this year's IRA and 401(k) withdrawals (`known()` in taxes/federal). When
+Estimated payments offers `holdBack` (estimates needed, something still short, a withdrawal not yet taken this year), the
+alert is `estimates-holdback` (warn, `due` December 31): "Have about $3,600 of tax held back from your IRA withdrawal by
+December 31", with the year's tax, that a hold-back counts as paid through the whole year, the quarters already past
+included (IRC 6654(g)), and what leaves nothing to pay in April. It replaces `estimates-behind` there, so the person is
+never told both to have tax held back and to "pay the past-due part" (verify item 4). It is added after the required
+withdrawal's alert, so on the same date it follows it. Test: "round 8 batch 1: a withdrawal's tax is held back from it".

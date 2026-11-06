@@ -1,7 +1,7 @@
 // modules/investments/limits/view.js -- DOM only. The room left this year first, then each
 // person's limits with a bar, what each adult may put in a Roth IRA directly, and the deadlines.
 import { compute } from "./compute.js";
-import { nameIn, NameIn, verbFor } from "../../../core/words.js";
+import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 const RETURN = {
   married_joint: "Filing jointly",
@@ -50,7 +50,30 @@ export function render(root, ctx) {
     return ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.label, r.over > 0 ? ui.h("span", { class: "pill warn" }, "over") : null), ui.h("span", { class: "rec-value" }, none ? "None this year" : `${money(r.used)} of ${money(r.limit)}`)),
       none ? null : ui.h("div", { class: "progress", style: { margin: "6px 0 2px" } }, ui.h("span", { style: { width: `${r.limit > 0 ? Math.min(100, Math.round((r.used / r.limit) * 100)) : 100}%`, background: r.over ? "var(--bad)" : "var(--ok)" } })),
-      ui.h("div", { class: "rec-sub" }, sub(p, r)));
+      ui.h("div", { class: "rec-sub" }, sub(p, r)),
+      r.kind === "ira" && r.deduct && r.deduct.traditional > 0 ? ui.h("div", { class: "rec-sub" }, deductSay(p, r.deduct)) : null);
+  };
+  // how much of the traditional IRA money comes off this year's taxable income (IRC 219(g)), as the Federal estimate counts it
+  // (round 8, equity-3: "a traditional IRA cuts this year's tax" for a household far over the limit)
+  const deductSay = (p, x) => {
+    const whose = nameOf(p.name);
+    if (x.rule === "none") return `All ${money(x.traditional)} of the traditional IRA money comes off this year's taxable income: no plan at work.`;
+    const why = x.rule === "spouse" ? "with a spouse who has a plan at work" : "with a plan at work";
+    // the limit is tested on the return's income: a couple's joint income on a joint return (round 8 review: "Sam's is about
+    // 154,400" was the couple's)
+    const incomeIs = d.roth?.filingStatus === "married_joint" ? "your joint income is" : `${whose} income is`;
+    const band = x.range ? ` (the deduction fades out between ${money(x.range[0])} and ${money(x.range[1])} of income; ${incomeIs} about ${money(x.magi)})` : "";
+    const after = Math.max(0, x.traditional - x.deductible);
+    // only what goes in after tax comes out tax-free; what it earns is taxed (Pub. 590-B): not as good as a Roth IRA
+    const basis = `The ${money(after)} put in after tax comes out tax-free later; what it earns is taxed. Keep a record of it (Form 8606).`;
+    // this year's contribution can still be moved to a Roth IRA before the return is filed (a recharacterization, IRC
+    // 408A(d)(6); Pub. 590-A), when this adult is under the Roth IRA's income limit
+    const rp = (d.roth?.people ?? []).find((y) => y.id === p.id);
+    const move = rp && rp.status !== "over" ? " You can still ask the IRA firm to move this year's contribution to a Roth IRA before you file." : "";
+    return x.deductible >= x.traditional - 0.5 ? `All ${money(x.traditional)} of the traditional IRA money comes off this year's taxable income${band}.`
+      : x.deductible > 0.5 ? `Only ${money(x.deductible)} of the ${money(x.traditional)} in a traditional IRA comes off this year's taxable income, ${why}${band}. ${basis}${move}`
+      // what does better: a Roth IRA directly when this adult is under its income limit, else the backdoor route (the Roth card)
+      : `None of the ${money(x.traditional)} in a traditional IRA comes off this year's taxable income, ${why}${band}. ${basis} ${rp?.status === "over" ? "The backdoor route below (into a traditional IRA, then converted to a Roth) usually does better." : `A Roth IRA usually does better, as its growth comes out tax-free.${move}`}`;
   };
   for (const p of d.people) root.append(ui.card(`${p.name}${p.age !== null ? `, ${p.age}` : ""}`, ui.h("ul", { class: "records" }, p.rows.map((r) => limitRow(p, r)))));
 

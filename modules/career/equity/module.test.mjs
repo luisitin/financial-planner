@@ -211,3 +211,21 @@ test("not ready without grants, a symbol or purchase-plan shares", () => {
   assert.equal(compute(emptyPlan(), { today: TODAY }).ready, false);
   assert.equal(compute(familyPlan(TODAY), { today: TODAY }).ready, false);
 });
+
+test("round 8 fix: next year's units are worked on next year's tax tables, so Equity compensation and Employer stock say one 2027 set-aside", async () => {
+  const { equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { compute: employerStock } = await import("../../investments/employer-stock/compute.js");
+  const T = { today: "2026-11-06" };
+  const p = equityPlan(), d = compute(p, T), es = employerStock(p, T);
+  const [y26, y27] = d.rsuYears;
+  // this year is unchanged: 105,000 of units, 1,398 to set aside on both pages
+  near(y26.tax.gap, es.wholeYears.find((x) => x.year === 2026).gap, 0.5); near(y26.tax.gap, 1398, 0.5);
+  // 2027: 60,000 of units on 2027's tables (the latest ones raised for inflation): federal 13,642 against 13,788 on 2026's,
+  // so the set-aside is 352 on both pages (it said 498 here and 352 on Employer stock)
+  const t27 = taxInputs({ ...p, taxes: { ...(p.taxes ?? {}), year: 2027, gains: [] } }, T);
+  assert.equal(t27.params.indexed, true);
+  near(y27.tax.federal, fedOnly(federalTax({ ...t27.inputs, wages: t27.inputs.wages + 60000 }, t27.params)) - fedOnly(federalTax(t27.inputs, t27.params)));
+  near(y27.tax.federal, 13642, 0.5);
+  near(y27.tax.gap, es.wholeYears.find((x) => x.year === 2027).gap, 0.5); near(y27.tax.gap, 352, 0.5);
+  assert.equal(y27.estimated, true); assert.equal(y26.estimated, false);
+});

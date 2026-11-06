@@ -57,6 +57,14 @@
   (wages + earlier vests − 200,000, at least 0), shared by value. Gap = owed − withheld, **a year at a time** (`vestYears[].gap`):
   tax withheld in one calendar year is credited only on that year's return (IRC 31(a)(1)), so the page says what to set aside,
   or what comes back, for each year apart. `vestGap` is still the sum, for other pages.
+- **The whole tax year** (`wholeYear`, round 8, equity-2; only when today's tax year has vests): every vest dated in today's
+  tax year, the ones already paid out too, against the federal return without any of them: owed = tax with them - tax
+  without; withheld = 22% supplemental (37% past $1 million) + the 0.9% Medicare on the employee's wages past $200,000
+  (IRC 3102(f)); gap = owed - withheld. The page's "For 2026: set aside" line uses it, so it covers the year's return as
+  Equity compensation does (Mo: 525 units x 200 = 105,000 vesting in 2026, 1,398 to set aside, the same as Equity's;
+  `vestYears` holds only the vests still to come, the December 1 vest's 300, and stays as the answer key checks it). The
+  Federal estimate counts the same vests in wages (taxes/federal `known.js` `stockStep`), and Withholding check adds their
+  withholding to what the paychecks take out.
 - **State** (`stateExtra`): the state estimate's rate on the vests above today's income (and this year's earlier vests): its
   rate above its allowance for a flat or typed rate, last year's share of income for "prior", nothing in a state without an
   income tax or one the estimate cannot work out. Shown on its own line whatever the federal gap. Filing separately it starts
@@ -127,3 +135,13 @@ hand-worked from the 2026 brackets (Rev. Proc. 2025-32). The answer key above ru
 - Incentive options and the alternative minimum tax on exercise.
 
 Review 2026-11-06 (round 7): "at the same time as your 98,000 a year of pay depends on the same company" says your for the unnamed first adult ("Me") and "your spouse's" for the unnamed partner; typed names read as before (core/words.js; view only).
+
+## Each year's set-aside covers that whole year (round 8 review, 2026-11-06)
+- **`wholeYears`:** one row per year in `vestYears`. Each works the tax on every vest dated in that year, not only those
+  in the next 12 months: the Federal estimate for that year with and without them, and what is held back (22%, plus 0.9%
+  Medicare past 200,000).
+- **Why.** "For 2027: set aside about $52" counted March to September 2027; Equity compensation counts all four 2027
+  vests. `wholeYear` is today's year's row.
+- **The whole return:** under the set-aside, the page now says what the whole return comes to with the paychecks counted
+  too (`taxAnswer`, the Federal estimate's answer). The stock's own gap is not the April bill: the equity couple's stock
+  adds 1,398, and the return owes 6,338.

@@ -9,13 +9,14 @@
 - `whatIfs.sideIncome = { [incomeId]: { months: { "YYYY-MM": amount } } }`: what came in each of the last twelve whole
   months, typed on this page (blank = not known, 0 = nothing came).
 - The Self-employment page's tax on the household's business income (`taxes/self-employment`: `businessTax`, `net`),
-  the State tax page's rate (`taxes/state`), and whether the whole return needs quarterly payments and the next one
-  (`taxes/estimated`: `needsEstimates`, `nextDue`), each worked on a copy of the plan with every side income that has
-  enough typed months at its months' average.
+  and the State tax page's rate (`taxes/state`), worked on a copy of the plan with every side income that has enough
+  typed months at its months' average (the share to set aside); and whether the whole return needs quarterly payments,
+  what is behind and the next one (`taxes/estimated`: `needsEstimates`, `overdue`, `nextDue`, `harbour`), worked on the
+  plan itself, as the Quarterly payments page works it (round 8, freelancer-2).
 - Writes `whatIfs.sideIncome`; "Count on ..." saves `income[].countOn` (the careful figure); the Income page's amount stays.
 
 ## Outputs
-`compute(plan, { today })` -> `{ ready, year, months, items: [{ id, name, personName, monthly, period, typedMonths, stats, enough, countOn, gap, below }], setAside: { rate, yearly, quarter, federal, state, stateKnown, stateAverage, onAverage } | null, estimates: { needed, nextDue }, rules, notes }`;
+`compute(plan, { today })` -> `{ ready, year, months, items: [{ id, name, personName, monthly, period, typedMonths, stats, enough, countOn, gap, below }], setAside: { rate, yearly, quarter, federal, state, stateKnown, stateAverage, onAverage } | null, estimates: { needed, nextDue, overdue, harbour }, rules, notes }`;
 `stats` = `{ n, average, median, low, high, reliable, reached, spread, cushion, deepest, zeros }`.
 
 ## Formulas
@@ -37,9 +38,15 @@
   rate × the profit. **Of every payment** = that ÷ what comes in before expenses (so expenses lower it, and the $400
   line cannot make a $100 step look like the rate). A quarter = ÷ 4. The state part is an average when it comes from
   last year's return (a note says so).
-- **Quarterly payments**: whether the whole return needs them and the next one come from the Estimated payments page
-  (Form 1040-ES 2026: $1,000 or more owed after withholding, the safe harbor); this page does not decide it from the
-  side income alone.
+- **Quarterly payments**: whether the whole return needs them, what is behind and the next one come from the Estimated
+  payments page on the real plan (`computeEstimated(plan)`; Form 1040-ES 2026: $1,000 or more owed after withholding, the
+  safe harbor of 90% of this year's tax or 100% / 110% of last year's, IRC 6654(d)(1)(B)); this page does not decide it
+  from the side income alone, and its average-based copy is used only for the share to set aside. The set-aside per
+  quarter is split "to the IRS" and "to the state" (federal / 4 and state / 4), and the rule is said once: "the safe
+  amount is 90% of this year's tax, paid in four parts, and the rest is due in April". Before, the past-due sentence and
+  the next payment came from the copy of the plan at the typed months' average (Jo: 4,833 a quarter with an inflated state
+  part, against the Quarterly payments page's 3,577); now both pages say 6,731 behind and 3,577 by January 15, 2027, with
+  or without the twelve typed months.
 - **Forms** (`data/rules.js`, 2026): clients send a 1099-NEC from $2,000 a year (IRC 6041 as amended by P.L. 119-21
   §70433; $600 before 2026; indexed from 2027); payment apps and marketplaces send a 1099-K over $20,000 and more than
   200 payments (IRC 6050W(e) as restored by §70432, third-party settlement organizations only; IRS FS-2025-08 with
@@ -82,3 +89,12 @@ line of the chain (`setCountOn(draft, item, value)`; a line of the chain that is
 Before, the figure was changed only on the line on screen and the months were copied to the ending line, so turning the
 figure off before the start date brought it back on the start date, and months typed in between disappeared then.
 Test: `module.test.mjs` ("one record for both halves").
+
+## One quarterly answer on the card (round 8 review, 2026-11-06)
+- **The tile:** "This income adds" now says the year's tax on this income as a share to set aside each month (`yearly /
+  12`), not "a quarter to the IRS".
+- **What to pay and when:** that is the Estimated payments page's one answer, said in the sentence under the tile.
+- **Why.** The card said "$3,514 a quarter to the IRS" above "$3,577 by January 15".
+- **The state part** stays inside the share. It is not said on its own until claude-a's State page works the business at
+  its profit (ranked item 15).
+- **Page name:** the page is called "Estimated payments" everywhere on this page (it said "Quarterly payments").

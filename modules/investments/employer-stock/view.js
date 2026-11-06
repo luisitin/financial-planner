@@ -4,6 +4,7 @@
 // and the grants in folds.
 import { compute, LIMIT, SUPPLEMENTAL, DEFAULT_GRANT } from "./compute.js";
 import { nameOf } from "../../../core/words.js";
+import { taxAnswer } from "../../taxes/withholding/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -66,9 +67,24 @@ export function render(page, ctx) {
     const earlier = d.vestYears.find((y) => y.earlier > 0.5);
     const two = d.vestYears.length > 1;
     // one sentence per tax year: withholding in one year cannot pay another year's tax
-    const yearLine = (y) => {
+    // today's tax year is said for all its vests, the ones already paid too (compute `wholeYear`; round 8, equity-2: "$300"
+    // here against Equity compensation's $1,398 for the same return)
+    // each year's set-aside covers every vest dated in it (compute `wholeYears`), the way Equity compensation counts it
+    const wholeFor = (year) => (d.wholeYears ?? []).find((x) => x.year === year) ?? (d.wholeYear && d.wholeYear.year === year ? d.wholeYear : null);
+    // the stock's own gap is not the April bill: with the paychecks counted too, the Federal estimate's answer (round 8
+    // review: "set aside $1,398" while the whole return owes $6,338 in April)
+    let ans = null;
+    try { ans = taxAnswer(plan, { today: fmt.today() }); } catch { ans = null; }
+    const wholeReturn = (y) => (!ans || ans.year !== y.year || ans.from === "none" ? ""
+      : ans.verdict === "owe" ? ` With your pay counted too, the whole ${y.year} return comes to about ${money(ans.balance)} to pay in April (the Federal estimate).`
+      : ans.verdict === "refund" ? ` With your pay counted too, the whole ${y.year} return comes out about ${money(-ans.balance)} back (the Federal estimate).`
+      : ` With your pay counted too, the whole ${y.year} return comes out about right (the Federal estimate).`);
+    const yearLine = (y0) => {
+      const w = wholeFor(y0.year);
+      const y = w ? { ...y0, gap: w.gap } : y0;
       const lead = two ? `For ${y.year}: ` : "";
-      if (y.gap > 1) return ui.h("p", { class: "es-flag" }, two ? `${lead}set aside about ${money(y.gap)} more by April 15, ${y.year + 1}, when that return is due.` : `Set aside about ${money(y.gap)} more for the ${y.year} return, due April 15, ${y.year + 1}.`);
+      if (w && w.earlier > 0.5 && y.gap > 1) return ui.h("p", { class: "es-flag" }, `${lead}${two ? "the" : "The"} stock adds about ${money(y.gap)} more than is held back for the ${y.year} return, due April 15, ${y.year + 1}: all ${money(w.value)} of shares vesting in ${y.year}, those already vested included, add about ${money(w.owed)} of federal tax and about ${money(w.withheld)} is held back.${wholeReturn(y)}`);
+      if (y.gap > 1) return ui.h("p", { class: "es-flag" }, two ? `${lead}set aside about ${money(y.gap)} more by April 15, ${y.year + 1}, when that return is due.${wholeReturn(y)}` : `Set aside about ${money(y.gap)} more for the ${y.year} return, due April 15, ${y.year + 1}.${wholeReturn(y)}`);
       if (y.gap < -1) return ui.h("p", { class: "es-d" }, `${lead}${two ? "the" : "The"} withholding is about ${money(-y.gap)} more than the federal tax they add: it comes back when you file in ${y.year + 1}, unless other income uses it.`);
       return ui.h("p", { class: "es-d" }, `${lead}${two ? "the" : "The"} withholding about covers the federal tax they add.`);
     };
@@ -76,7 +92,7 @@ export function render(page, ctx) {
       ui.h("p", {}, `${money(tot)} of pay in all: vesting units are taxed like wages on their value that day. Your employer withholds ${pct(SUPPLEMENTAL.rate)} for federal tax${d.vestYears.some((y) => y.over1m) ? ` (${pct(SUPPLEMENTAL.high)} on bonus-type pay past $1 million in a year)` : ""}${d.vestYears.some((y) => y.medicare > 0.5) ? ", plus 0.9% for Medicare on pay past $200,000" : ""}: ${money(withheld)} in all. Added to your other income they raise your federal tax by about ${money(owed)}${two ? `, worked in ${d.vestYears.map((y) => y.year).join(" and ")} each on its own` : ""}.`),
       d.payOnFile ? null : ui.h("p", { class: "es-d" }, `The ${pct(SUPPLEMENTAL.rate)} assumes your employer already holds back tax from your salary. There is no pay from this employer on Income: if it holds back nothing from your pay, it uses its regular tables on the vests instead, often more than ${pct(SUPPLEMENTAL.rate)}.`),
       earlier ? ui.h("p", { class: "es-d" }, `Counted on top of the ${money(earlier.earlier)} of units that already vested in ${earlier.year} (at today's price), which are wages in the same year.`) : null,
-      ...(two && d.vestYears.every((y) => Math.abs(y.gap) <= 1) ? [ui.h("p", { class: "es-d" }, "In both years the withholding about covers the federal tax they add.")] : d.vestYears.map(yearLine)),
+      ...(two && d.vestYears.every((y) => Math.abs(wholeFor(y.year)?.gap ?? y.gap) <= 1) ? [ui.h("p", { class: "es-d" }, "In both years the withholding about covers the federal tax they add.")] : d.vestYears.map(yearLine)),
       ...d.vestYears.filter((y) => y.estimated).map((y) => ui.h("p", { class: "es-d" }, `The IRS has not published ${y.year}'s tax tables yet, so ${y.year}'s figures use the latest ones raised for inflation.`)),
       stateOwed > 0.5 ? ui.h("p", { class: "es-d" }, `State income tax on them comes to about ${money(stateOwed)} more; check your pay slip for how much your employer holds back for it.`) : null,
       ui.h("p", { class: "es-d" }, "Selling units the day they vest costs no more tax: their cost is the value they were taxed at.")));

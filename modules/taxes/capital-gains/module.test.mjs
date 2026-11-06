@@ -24,3 +24,36 @@ test("capital-gains: the loss carried forward follows the carryover worksheet, s
   p.taxes.thisYear.otherOrdinary = 60000;
   assert.equal(compute(p, { today: "2026-10-31" }).gains.carryForward, -7000);
 });
+
+// --- round 8, batch 1 verify (2026-11-06) ------------------------------------------------------------------------------
+test("round 8 verify: the 0% room, the tax the sales add and one more sale are worked on the Federal estimate's return", async () => {
+  const { widowPlan, earlyRetireePlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known } = await import("../federal/known.js");
+  const { taxInputs } = await import("../federal/compute.js");
+  const { federalTax } = await import("../../../core/math/tax.js");
+  const T = "2026-11-06";
+  const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
+  // Ruth: 35,104.30 of taxable income with her required withdrawal (the Federal estimate's return); the 0% line is 49,450
+  // (Rev. Proc. 2025-32 sec. 4.03). Each dollar of gain also makes 85 cents of her Social Security taxable until 85% of it is
+  // (23,460, 3,084 more; IRC 86): 3,628 of gain pulls that in, then 7,634 more reaches the line: 11,262, not the 27,340 the
+  // keys' return (no withdrawal, 5,360 taxable) leaves
+  const d = compute(widowPlan(), { today: T });
+  assert.equal(d.taxableIncome, known(widowPlan(), { today: T }).result.taxableIncome);
+  near(d.zeroRoom, 11262, 1);
+  // one more 10,000 long-term sale: Social Security taxed 23,460, AGI 72,338, taxable 48,188 (all of the gain under the
+  // line), ordinary tax 1,240 + 12% x 25,788 = 4,334.56 against 3,964.52: it adds 370.04, the Social Security it pulls in
+  near(compute(widowPlan(), { today: T, extra: { amount: 10000, held: "long" } }).extra.tax, 370.04, 0.01);
+  // the same 10,000 on the list of sales: the tax the sales add is the same 370.04
+  const p = widowPlan(); p.taxes = { ...(p.taxes ?? {}), gains: [{ id: "g1", name: "Fund", proceeds: 30000, basis: 20000, held: "long" }] };
+  const s = compute(p, { today: T });
+  near(s.taxOnGains, 370.04, 0.01);
+  near(s.taxWith, known(p, { today: T }).result.totalTax, 1e-6);
+  // the early retiree's draw for spending is income too: the room is what is left under 49,450 on that return
+  const e = compute(earlyRetireePlan(), { today: T }), ke = known(earlyRetireePlan(), { today: T });
+  assert.ok(ke.changed);
+  near(e.zeroRoom, Math.max(0, 49450 - ke.result.taxableIncome), 1);
+  // a household none of the plan's steps change keeps the answer keys' return exactly
+  const q = taxPlan(), b = taxInputs(q, { today: "2026-09-16" });
+  assert.equal(known(q, { today: "2026-09-16" }).changed, false);
+  assert.equal(compute(q, { today: "2026-09-16" }).taxWith, federalTax(b.inputs, b.params).totalTax);
+});

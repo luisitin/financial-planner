@@ -57,7 +57,10 @@ export function render(page, ctx) {
       : section(ui, "The brackets", ladderTable(d.ladder, "Yours in it")));
     const payLines = [];
     // the same answer as Withholding check: typed figures, else withholding estimated from pay
-    const took = pay.noPay && pay.from === "none" ? `Nothing is taken out of pay${pay.estimatesPaid > 0 ? `; estimated payments so far come to ${money(pay.estimatesPaid)}` : ""}`
+    // a retiree's tax on this year's IRA withdrawals: the cheaper route first, having tax held back from a withdrawal (it
+    // counts as paid through the whole year), the quarters as the other way, not "past due" (round 8 review)
+    const hb = !Array.isArray(pay.returns) || pay.returns.length < 2 ? pay.holdBack ?? null : null;
+    const took = pay.noPay && pay.from === "none" ? `${hb ? "No tax held back is on file" : "Nothing is taken out of pay"}${pay.estimatesPaid > 0 ? `; estimated payments so far come to ${money(pay.estimatesPaid)}` : ""}`
       : `${pay.from === "typed" ? "Paychecks take out" : "Paychecks take out about"} ${money(pay.withheld)} by December${pay.from === "paycheck" ? " (estimated from pay)" : pay.from === "mixed" ? " (partly estimated from pay)" : ""}${pay.estimatesPaid > 0 ? ` and ${money(pay.estimatesPaid)} is paid in estimates` : ""}`;
     // filing separately: each return's own bill or refund, and its own estimated payments (compute `paying.returns`)
     const rets = Array.isArray(pay.returns) && pay.returns.length > 1 ? pay.returns : null;
@@ -73,8 +76,10 @@ export function render(page, ctx) {
     else if (pay.verdict === "refund") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: a refund of about ${money(-pay.balance)} next spring.`);
     else if (pay.verdict === "owe") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about ${money(pay.balance)} left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
     else payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
-    if (!rets && pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} due from ${longDate(pay.overdue.due)} on is not marked as paid.`);
-    if (!rets && pay.verdict !== "unknown" && pay.needsEstimates && pay.nextDue) payLines.push(`Estimated payments: the ${pay.nextDue.label} payment of ${money(pay.nextDue.amount)} is due ${longDate(pay.nextDue.due)}.`);
+    if (!rets && hb) payLines.push(`Have about ${money(hb.amount)} of tax held back from your IRA withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${hb.whole > hb.amount + 50 ? ` (about ${money(hb.whole)} leaves nothing to pay in April)` : ""}.`);
+    if (!rets && hb && pay.needsEstimates && (pay.overdue || pay.nextDue)) payLines.push(`Or pay by quarters instead: ${pay.overdue ? `${money(pay.overdue.amount)} now for the quarters past` : ""}${pay.overdue && pay.nextDue ? ", then " : ""}${pay.nextDue ? `${money(pay.nextDue.amount)} by ${longDate(pay.nextDue.due)}` : ""}.`);
+    if (!rets && !hb && pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} due from ${longDate(pay.overdue.due)} on is not marked as paid.`);
+    if (!rets && !hb && pay.verdict !== "unknown" && pay.needsEstimates && pay.nextDue) payLines.push(`Estimated payments: the ${pay.nextDue.label} payment of ${money(pay.nextDue.amount)} is due ${longDate(pay.nextDue.due)}.`);
     sheet.append(section(ui, "Paying it", list(ui, payLines)));
     const more = [];
     if (d.gains.hasSales) more.push(`Sales this year add about ${money(d.gains.taxOnGains)} of tax.${d.gains.carryForward < 0 ? ` ${money(-d.gains.carryForward)} of loss carries to next year.` : ""}`);

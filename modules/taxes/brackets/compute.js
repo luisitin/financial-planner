@@ -4,6 +4,7 @@
 // along), and the ladder above you.
 import { taxInputs, nextDollarOf, careMovesNextDollar } from "../federal/compute.js";
 import { federalTax, bracketsFor, marginalRate, careStep } from "../../../core/math/tax.js";
+import { known } from "../federal/known.js";
 
 /**
  * compute(plan, { today, extra }) -> {
@@ -18,8 +19,15 @@ import { federalTax, bracketsFor, marginalRate, careStep } from "../../../core/m
  * }
  */
 export function compute(plan, params = {}) {
-  const b = taxInputs(plan, params);
-  const all = federalTax(b.inputs, b.params);
+  const b0 = taxInputs(plan, params);
+  // the return the Federal estimate shows (known.js: what the plan knows put in, a business at its profit, this year's
+  // withdrawals, stock pay, rentals after costs), so the ladder, the bracket and the room are that return's (round 8 review:
+  // the freelancer read "the 22% bracket" here while the Federal estimate said 12%). Its total and rate are the Federal
+  // estimate's too (self-employment tax and the extra 10% on an early withdrawal in them).
+  let k = null;
+  try { k = known(plan, params); } catch { k = null; }
+  const b = k ? { ...b0, inputs: k.inputs } : b0;
+  const all = k ? k.result : federalTax(b.inputs, b.params);
   // filing separately: the ladder is one return's, so it shows the return that more income would land on (the adult
   // marked "Me"), and `separate` lists both
   const r = all.separate ? all.separate.find((x) => x.personId === all.separateTo) ?? all.separate[0] : all;
@@ -55,6 +63,9 @@ export function compute(plan, params = {}) {
   // dollar the page names it only then, else "the credits" (Review 2026-11-06: "covers part of the tax" was said at 0%)
   const careCoversTax = careMoves && (Number(r.credits?.careCredit) || 0) >= (Number(r.incomeTax) || 0) - 0.5;
   const qualifiedNote = r.qualifiedTaxable > 0 ? `${Math.round(r.qualifiedTaxable).toLocaleString("en-US")} of dividends and long-term gains sit on top at the gains rates, not in these brackets.` : null;
-  const separate = all.separate ? all.separate.map((x) => ({ personId: x.personId, name: x.name, taxableIncome: x.taxableIncome, bracketRate: x.bracketRate, roomInBracket: x.roomInBracket, totalTax: x.totalTax, shown: x === r })) : null;
-  return { separate, whose: all.separate ? r.name : null, year: b.year, filingStatus: b.filingStatus, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, qualifiedTaxable: r.qualifiedTaxable, qualifiedNote, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate, marginal, careMoves, careCoversTax, ladder, above: above.slice(0, 4), extra, deduction: r.deduction.amount, hasIncome: all.income.gross > 0, income: all.income.gross, totalTax: all.totalTax, effectiveRate: all.effectiveRate, isIndexed: !!b.params.indexed };
+  // each return's tax as the Federal estimate's two returns have it (a business's self-employment tax on its owner's), so the
+  // two add up to the household's total
+  const own = (x) => k?.returns?.find((y) => y.personId === x.personId) ?? null;
+  const separate = all.separate ? all.separate.map((x) => ({ personId: x.personId, name: x.name, taxableIncome: x.taxableIncome, bracketRate: x.bracketRate, roomInBracket: x.roomInBracket, totalTax: own(x)?.total ?? x.totalTax, shown: x === r })) : null;
+  return { separate, whose: all.separate ? r.name : null, year: b.year, filingStatus: b.filingStatus, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, qualifiedTaxable: r.qualifiedTaxable, qualifiedNote, bracketRate: r.bracketRate, roomInBracket: r.roomInBracket, nextRate: r.nextRate, marginal, careMoves, careCoversTax, ladder, above: above.slice(0, 4), extra, deduction: r.deduction.amount, businessDeduction: Number(r.deduction.qbi) || 0, hasIncome: all.income.gross > 0, income: all.income.gross, totalTax: k ? k.total : all.totalTax, effectiveRate: k ? k.rate : all.effectiveRate, isIndexed: !!b.params.indexed };
 }

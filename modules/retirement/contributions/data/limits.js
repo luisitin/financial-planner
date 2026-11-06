@@ -17,6 +17,10 @@ export const LIMITS = {
       fsa:    { label: "Health FSA", limit: 3300, carryover: 660 },   // Rev. Proc. 2024-40; no account type feeds it, the HSA/FSA page reads it
     },
     rothPhaseOut: { single: [150000, 165000], married_joint: [236000, 246000], married_separate: [0, 10000], head_of_household: [150000, 165000], qualifying_surviving: [236000, 246000] },   // Roth IRA income limits (MAGI), Notice 2024-80
+    // the traditional IRA deduction for someone covered by a plan at work (IRC 219(g)), by MAGI: `covered` the contributor is
+    // an active participant; `spouse` they are not but their spouse is (219(g)(7)); separate returns $0 to $10,000, not indexed.
+    // Notice 2024-80 (IR-2024-285, read 2026-11-06 at irs.gov/newsroom/401k-limit-increases-to-23500-for-2025-ira-limit-remains-7000)
+    iraDeductPhaseOut: { covered: { single: [79000, 89000], married_joint: [126000, 146000], married_separate: [0, 10000] }, spouse: { married_joint: [236000, 246000], married_separate: [0, 10000] } },
     giftExclusion: 19000,   // the yearly gift-tax exclusion, the practical limit on 529 gifts per giver per child (Rev. Proc. 2024-40)
   },
   2026: {
@@ -27,6 +31,10 @@ export const LIMITS = {
       fsa:    { label: "Health FSA", limit: 3400, carryover: 680 },   // Rev. Proc. 2025-32
     },
     rothPhaseOut: { single: [153000, 168000], married_joint: [242000, 252000], married_separate: [0, 10000], head_of_household: [153000, 168000], qualifying_surviving: [242000, 252000] },   // Notice 2025-67
+    // Notice 2025-67 (IR-2025-111, read 2026-11-06 at irs.gov/newsroom/401k-limit-increases-to-24500-for-2026-ira-limit-increases-to-7500):
+    // covered single or head of household "$81,000 and $91,000", joint "$129,000 and $149,000", not covered but married to
+    // someone covered "$242,000 and $252,000", separate "$0 and $10,000"
+    iraDeductPhaseOut: { covered: { single: [81000, 91000], married_joint: [129000, 149000], married_separate: [0, 10000] }, spouse: { married_joint: [242000, 252000], married_separate: [0, 10000] } },
     giftExclusion: 19000,   // Rev. Proc. 2025-32
   },
   2027: {   // partial: only the HSA was published by 2026-10-31

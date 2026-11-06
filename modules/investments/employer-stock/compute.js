@@ -63,7 +63,9 @@ export function vestSchedule(g) {
  *   owned (held + vested options' value), unvested, exposure, invested, share (exposure of invested wealth incl. unvested), level
  *   ("ok" | "medium" | "large", null with no share and no stake), pay (yearly salary at the company), payOnFile, stress: { drop, loss, payAtRisk },
  *   vests: [{ date, grant, shares, value, withheld, owed, gap, stateOwed }] (RSUs, the next 12 months), vestYears: [{ year, value,
- *   earlier, owed, withheld, gap, state, over1m, medicare, estimated (that year's tax tables are not published yet) }], vestGap,
+ *   earlier, owed, withheld, gap, state, over1m, medicare, estimated (that year's tax tables are not published yet) }],
+ *   wholeYear: { year (today's tax year), value (every vest dated in it, earlier ones too), vests, earlier, owed, withheld, medicare, gap } | null,
+ *   wholeYears: [the same for each year in vestYears, every vest dated in it] (the set-aside the page says per year), vestGap,
  *   diversify: { sell, fromTaxable, fromPlans, gain (negative for a loss), tax (negative when the sale lowers it), carry (the
  *   loss it adds to next year's carryover), after, stillOver } | null,
  *   rates: { marginal, state, gains }, year, otherYear
@@ -178,6 +180,25 @@ export function compute(plan, params = {}) {
     vestYears.push({ year: y, value: total, earlier, owed: owedYear, withheld, gap: owedYear - withheld, state: stateYear, over1m: supplementalSoFar > SUPPLEMENTAL.over, medicare: medicareHeld, estimated: !!t.params.indexed });
   }
 
+  // the whole of today's tax year (round 8, equity-2): every vest dated in it, the earlier ones too, against the return without
+  // any of them, so the set-aside covers the year's return as Equity compensation's does ($1,398, where `vestYears` holds
+  // only the vests still to come: $300). `vestYears` stays as the answer key checks it.
+  // each later year in view the same way (round 8 review: "For 2027: set aside about $52" counted only the 2027 vests inside
+  // the next 12 months, March to September, where Equity compensation counts all four): `wholeYears`, one per vestYears row
+  const wholeOf = (year) => {
+    if (!today || !rsus.length) return null;
+    const all = rsus.flatMap((g) => g.schedule.filter((e) => Number(e.date.slice(0, 4)) === year).map((e) => ({ date: e.date, value: e.shares * price })));
+    const total = all.reduce((s, v) => s + v.value, 0);
+    if (!(total > 0)) return null;
+    const t = year === yr.year ? ti : inputsFor(year), owed = Math.max(0, federalTax(addIncome(t.inputs, who, wagesAdd(total)), t.params).totalTax - federalTax(t.inputs, t.params).totalTax);
+    const paid = wagesOf(t);
+    const medicare = ADDITIONAL_MEDICARE.rate * (Math.max(0, paid + total - ADDITIONAL_MEDICARE.over) - Math.max(0, paid - ADDITIONAL_MEDICARE.over));
+    const withheld = supplementalWithholding(total) + medicare;
+    return { year, value: total, vests: all.length, earlier: all.filter((v) => v.date <= today).reduce((s, v) => s + v.value, 0), owed, withheld, medicare, gap: owed - withheld };
+  };
+  const wholeYear = wholeOf(yr.year);
+  const wholeYears = vestYears.map((y) => (y.year === yr.year ? wholeYear : wholeOf(y.year))).filter(Boolean);
+
   // getting under the ceiling: sell inside retirement plans first (no tax), then taxable shares (gains tax on the gain)
   let diversify = null;
   if (share !== null && share > LIMIT.ok && heldValue > 0) {
@@ -214,7 +235,7 @@ export function compute(plan, params = {}) {
   return {
     ready: true, symbol, price, priceAsOf, held, heldValue, grants, owned, unvested, exposure, invested, share, level,
     person: worker?.name ?? null, pay, payOnFile: pay > 0, stress: { drop: STRESS_DROP, loss, payAtRisk: pay },
-    vests, vestYears, vestGap: vests.reduce((s, v) => s + v.gap, 0), diversify, rates: { marginal, state: stateRate, gains }, year: yr.year, otherYear: yr.other,
+    vests, vestYears, ...(wholeYear ? { wholeYear } : {}), wholeYears, vestGap: vests.reduce((s, v) => s + v.gap, 0), diversify, rates: { marginal, state: stateRate, gains }, year: yr.year, otherYear: yr.other,
     expiringSoon: options.filter((g) => g.expires && today && g.expires <= addMonths(today, 12) && g.vested > 0),
   };
 }

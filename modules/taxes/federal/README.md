@@ -4,7 +4,7 @@
 **Purpose:** This year's federal income tax from what the plan knows and what you type: the bill or refund, your effective and marginal rates.
 
 ## Inputs
-`household` (filing status, people's birth dates for the age allowance and dependents), `income` (pay, bonuses, pensions, Social Security, self-employment, rent, "other"; items marked not taxable are skipped), `retirement.contributions` (pre-tax 401(k) money comes off wages up to the limit; IRA and HSA contributions are adjustments up to theirs), `taxes.thisYear` (figures the plan cannot see: a wages override, other ordinary income, qualified dividends, tax-exempt interest, a Social Security override, other adjustments, withheld, other payments), `taxes.itemized`, `taxes.gains` (from the Capital gains page), `taxes.estimated.paid`, `taxes.year` (null = this year), `taxes.dependentsUnder17` / `otherDependents` / `blind` (null = counted from People), `taxes.hsa` (`contribution`, `employer`, `coverage`, `coveredId`, `fsa`: the HSA and FSA page), `expenses` (care for a child, for the child and dependent care credit), `whatIfs.benefits[adultId].dcfsaElect` / `planYear` (the child care account chosen on Benefits elections).
+`household` (filing status, people's birth dates for the age allowance and dependents), `income` (pay, bonuses, pensions, Social Security, self-employment, rent, "other"; items marked not taxable are skipped), `retirement.contributions` (pre-tax 401(k) money comes off wages up to the limit; IRA and HSA contributions are adjustments up to theirs), `taxes.thisYear` (figures the plan cannot see: a wages override, IRA and 401(k) withdrawals this year (`iraWithdrawals`, round 8: blank = the plan's required withdrawal), other ordinary income, qualified dividends, tax-exempt interest, a Social Security override, other adjustments, withheld, other payments), `taxes.itemized`, `taxes.gains` (from the Capital gains page), `taxes.estimated.paid`, `taxes.year` (null = this year), `taxes.dependentsUnder17` / `otherDependents` / `blind` (null = counted from People), `taxes.hsa` (`contribution`, `employer`, `coverage`, `coveredId`, `fsa`: the HSA and FSA page), `expenses` (care for a child, for the child and dependent care credit), `whatIfs.benefits[adultId].dcfsaElect` / `planYear` (the child care account chosen on Benefits elections). The page's figures (`known.js`, round 8) also read `property` (rentals), `equity` (stock units), `debts` (student loans), the Self-employment page's expenses and the Required withdrawals page.
 
 ## Outputs
 `taxInputs()` (shared by every tax page): `year`, `params` (the year's table, indexed past the last one), `filingStatus`, `inputs` for `federalTax`, `sources[]` (each figure and where it came from), `itemized` (total after caps, lines), `people` (ages65plus, dependents), `gains` (netted), `pretax401k` (the 401(k) money taken off wages), `k401` (`people[]`: id, name, age, pay, compensation, pretax, roth, limit, catchUp, excluded, inIncome; `excluded`, `inIncome`, `year`), `ira` (`people[]`: traditional, limit, deductible; `deductible`, `over`), `fsa` (election, limit, excluded, over, `offWages`: what came off wages, 0 when wages are typed), `hsa` (`picture`: `hsaPicture` of `retirement/contributions`; `payroll`, `employer`, `excess`, `deducted`: the adjustment, `employerTaxed`: employer money over the limit added to wages), `payTotal`, `wagesTyped`, `wagesPlan` (the wages the Income page implies, the account's money off by the one rule even when box 1 is typed: Budget's yearTaxes), `care` (last; `expenses`, `persons`, `benefits`, `earnedLow` as passed to the engine in `inputs.care` when there is care and a child to count, plus `lines` (the care counted), `expensesAll` / `linesAll` (all the care paid in the year), `kids`, `turning13` ([{ id, name, until }]), `undated`, `elected`, `later` (accounts chosen for another plan year), `benefitLimit`, `offWages` (the account money taken off wages: excluded + forfeited), `forfeited`, `taxedAsPay`, `account` (`careAccountRule`), `earnedPeople` ([{ id, name, pay, wages, business, earned, typed, elected, excluded, forfeited, taxedAsPay }]), `joint`, `spouseUnknown`, `filerId`, `wagesTyped`; null for a year without the figures). `careAccountRule`, `careAccount(plan, { year, today })` and `careInputsWith(ti, changes, elections)`: the child care account's one rule and its what-ifs (see the care section). `ratePct(x)`: a rate as the page shows it. `compute()` adds `result` (`federalTax`: income, taxable Social Security, AGI, deduction used, taxable income, ordinary and gains tax, credits, NIIT, additional Medicare, total, effective rate, bracket, room, balance), `marginal` (the true cost of the next 1,000), `nextDollar` (what the page shows: over whole steps of the child care credit when it counts, else `marginal`), `careFalls`, `careSets` ("covers" | "falls" | null) and `nextDollarNoCare`, `steps[]` (the walk from income to tax), `years`, `isIndexed`.
@@ -118,7 +118,7 @@ own total and walk still leave out (their note says so); the hero then adds "Tha
 business income, which the total below leaves out." Folding it into the walk itself is left for later: it moves every page
 that reads this total (take-home, Forecast), which needs its own check against the answer keys.
 
-## One total, self-employment tax included (2026-11-02, round 4)
+## One total, self-employment tax included (2026-11-02, round 4; the walk's rows changed in round 8, below)
 The page's headline, its "Federal tax" tile and the effective rate use the whole year's federal tax (withholding
 `fullSteps` → `yearTax`): the same figure as Withholding check, Quick answers and Needs attention. The walk gains the
 business rows before its "Federal tax" line ("Tax saved by business deductions": the business taxed on its profit, half
@@ -129,14 +129,198 @@ freelancer) nothing is withheld, so what is still to pay is said from the estima
 payments, and "the next dollar" is the business's (bracket and self-employment tax, less its deductions: 100 −
 `keepPer100` from taxes/self-employment). `compute().result` and `steps` are unchanged (the answer keys check them).
 
+## What the plan already knows (round 8)
+`compute()` keeps `result`, `steps` and `sources` as they were (the answer keys in `tests/golden/taxes` check them).
+`known.js` (pure) is the estimate the page and every tax page show: `known(plan, params, fed?)` starts from `fed.inputs`
+and runs seven steps in order (the six below, then `qbiStep`, under "Round 8 review fixes"), each `({ plan, fed, inputs, params, out }) -> { inputs, line, note, <its figures> }` and each with
+its own test in `module.test.mjs` on the invented households of `qa/fixtures/round8-households.mjs`. The order is the
+law's: the rentals' allowance is worked on modified AGI before the IRA and student loan deductions (IRC 469(i)(3)(E)), the
+IRA's after the rentals and before the student loan interest (219(g)(3)(A)), the student loan interest's after both
+(221(b)(2)(C)). Without any of them `known().result` is `fed.result` itself and `total` is `fed.result.totalTax`.
+`walk(r, b, nextDollar)` (exported from `compute.js`) builds the walk from any result, so `steps` and the page's walk are
+the same code.
+
+1. **Withdrawals from pre-tax retirement accounts** (`withdrawalStep`; ranked item 6). This year's required withdrawal of
+   each owner (retirement/rmd `thisYear`: last December 31's balance over the Uniform Lifetime factor for the age reached,
+   IRS Pub. 590-B Appendix B Table III; 25.5 at 74) is ordinary income whether or not it is marked taken (IRC 72, 402(a),
+   408(d)(1); Form 1040 lines 4b and 5b); someone still working leaves out the 401(k)s (401(a)(9)(C)). With no pay or
+   business on the Income page, the retirement projection's first year, when it is this tax year and a retired one, adds
+   what it takes from pre-tax money for spending beyond that (the projection's first year is kept for the last eight plans
+   by their content and the day, `firstProjectionYear`: a retiree's pages work the year's tax several times a render, and
+   the projection is the slowest piece; a plan changed in place is worked again). Only for today's tax year. A figure typed as "IRA and 401(k)
+   withdrawals this year" (`taxes.thisYear.iraWithdrawals`, Form 1099-R box 2a) replaces it (half on each separate
+   return); "Other ordinary income" typed as well gets a note that it may count twice.
+   Hand-worked, Ruth (`widowPlan`, single, 74, 2026): 410,000 / 25.5 = 16,078.43, rounded 16,078. Pension 22,800 +
+   withdrawal 16,078 = 38,878 of other income; provisional income 38,878 + 27,600 / 2 = 52,678; taxable Social Security
+   = min(85% x 27,600 = 23,460, 85% x (52,678 - 34,000) + min(4,500, 50% x 27,600)) = min(23,460, 15,876.30 + 4,500) =
+   20,376.30; AGI 59,254.30; standard deduction 16,100 + 2,050 (65 or older) + the senior deduction 6,000 (AGI under
+   75,000) = 24,150; taxable 35,104.30; tax 10% x 12,400 + 12% x 22,704.30 = 1,240 + 2,724.52 = **3,964.52** (it was 536:
+   taxable 5,360). The next dollar: 12% x 1.85 = 22 cents (each dollar pulls 85 cents of benefits in).
+2. **Stock pay** (`stockStep`; item 12). Restricted stock units are wages at their value when they vest (IRC 83(a); Pub.
+   525): the Equity compensation units vesting in the tax year at the price on file (the Employer stock page's schedule),
+   in the employee's wages and Medicare wages. The employer holds back 22% (37% on the year's part past $1 million; Pub.
+   15 section 7, supplemental wages) and the 0.9% Medicare tax on the employee's wages past $200,000 (IRC 3102(f)):
+   `withheld`, which Withholding check adds to what the paychecks take out (`withheldAfter`: only the vests still to come,
+   when the year so far is typed from pay stubs). Skipped with a note when Wages this year is typed (W-2 box 1 has them) or
+   an Income pay line's name reads like stock pay (`STOCK_PAY_NAME`). Option exercises and ESPP sales are not on file.
+   Hand-worked, Mo and Lin (`equityPlan`, joint, 2026): 1,200 units from March 1, 2025, a 12-month cliff then every 3
+   months over 48: 300 on March 1, 2026, then 75 on June 1, September 1 and December 1 = 525 units x 200 = 105,000.
+   Wages 210,000 + 30,000 - 24,000 - 3,000 (pre-tax 401(k)) + 105,000 = 318,000 = AGI; taxable 318,000 - 32,200 = 285,800;
+   tax on the 2026 joint brackets (Rev. Proc. 2025-32 sec. 4.01) 10% x 24,800 = 2,480, 12% x 76,000 = 9,120, 22% x 110,600
+   = 24,332, 24% x 74,400 = 17,856: 53,788 (the 24% bracket; it read 180,800 taxable in the 22%); less the 1,000 credit for
+   the two dependents over 17 (500 each), plus 0.9% x (210,000 + 30,000 + 105,000 - 250,000) = 855 of Additional Medicare
+   tax = **53,643**. Held back from
+   the stock: 22% x 105,000 = 23,100 + 0.9% x (315,000 - 200,000 - (210,000 - 200,000)) = 945 -> 24,045.
+3. **A business at its profit** (`businessStep`; item 20). The Income page's business at its profit after the
+   Self-employment page's costs, on its owner's return (`businessOn`), half its self-employment tax off income (IRC
+   164(f)), the 20% deduction after AGI (IRC 199A; Form 1040 line 13, at most 20% of taxable income before it, with
+   199A(i)'s minimum), the self-employment tax itself (IRC 1401: 15.3% of 92.35% of the profit, the 12.4% only up to the
+   wage base left after pay) and its 0.9% Additional Medicare tax (Form 8959 Part II) added after the income tax. The walk
+   names half the self-employment tax under Adjustments, has a "Business deduction (20%)" line before Taxable income and
+   a "Self-employment tax" line before Federal tax; the old "Tax saved by business deductions" line is gone.
+   Hand-worked, Jo (`freelancerPlan`, single, 2026): profit 78,000; self-employment tax 15.3% x 92.35% x 78,000 =
+   11,021.05, half 5,510.52; IRA 3,000; AGI 78,000 - 5,510.52 - 3,000 = **69,489.48**; before the 20% deduction 69,489.48 -
+   16,100 = 53,389.48; 20% of (78,000 - 5,510.52) = 14,497.90, held to 20% of 53,389.48 = 10,677.90; taxable **42,711.58**
+   (the 12% bracket; it read 58,900 and "the 22% bracket"); income tax 1,240 + 12% x 30,311.58 = **4,877.39**; with the
+   self-employment tax **15,898.44**. Estimated payments: 90% = 14,308.60 in four parts of 3,577.15, three past with 4,000
+   paid: 6,731.45 behind, 3,577.15 by January 15, 2027; the hero and the tile now say that (the tile said "about $11,898
+   still to pay in April").
+4. **Rentals after costs** (`rentalStep`; item 5). With a rental on Rental analysis, the Income page's rent (before any
+   cost) comes out (`withoutIncomeRent`) and the rentals' allowed result goes in (property/rental `rentalsFor`, netted by
+   `passiveLosses`): rent less empty months, the running costs, the year's loan interest and depreciation (IRC 167, 168:
+   27.5 years, mid-month; Pub. 527), a loss used against other income up to the 25,000 allowance less half of modified AGI
+   over 100,000 (IRC 469(i); none filing separately while living together), the rest carried. Modified AGI: this return's
+   AGI without the rent, the taxable Social Security and the IRA deduction (469(i)(3)(E)). A profit is ordinary income and
+   investment income for the 3.8% tax (IRC 1411(c)(1)(A)(i)). Without a rental there, the rent stays at its gross and its
+   line says "before any cost: add the property on Rental analysis".
+   Hand-worked, Sam and Lee (`landlordPlan`, joint, 2026): pay 167,000 less 12,600 of pre-tax 401(k) = 154,400 = AGI
+   without the rent (it was 179,600 with 25,200 of rent); allowance 25,000 - 50% x (154,400 - 100,000) = 0 (gone at
+   150,000); the condo: 2,100 x 12 x 95% = 23,940 of rent less 4,700 + 1,200 + 4,200 (HOA) + 2,600 (1% of 260,000) =
+   12,700 of costs, 6,678 of interest (the mortgage's next 12 payments) and 210,000 x 80% / 27.5 = 6,109 of depreciation =
+   a 1,547 loss, all carried; taxable 154,400 - 32,200 = 122,200; tax 2,480 + 9,120 + 22% x 21,400 = 16,308 less the
+   2,200 child credit = **14,108** (it was 19,652). Estimated payments: 4,300 at filing, 2,889.20 to pay in during the year
+   (90% = 12,697.20 less 9,808 withheld from pay); Rental analysis works its own MAGI the same way (154,400).
+5. **The traditional IRA deduction** (`iraStep`; item 9). taxInputs deducts each adult's traditional IRA money up to the
+   IRA limit; here only what IRC 219(g) allows comes off (`investments/limits` `iraDeduction`): someone covered by a plan at
+   work (`coveredAtWork`: any 401(k)-kind money of theirs or their employer's this year; a pension at work is not on file),
+   or married to someone who is (219(g)(7)), deducts the limit less a share of it as modified AGI goes through the range
+   (2026: covered single 81,000 to 91,000, joint 129,000 to 149,000; spouse 242,000 to 252,000; separate 0 to 10,000;
+   Notice 2025-67 / IR-2025-111, read 2026-11-06; 2025: Notice 2024-80), the limit left rounded up to $10, at least $200
+   until the range's end (219(g)(2)(B), (C); Pub. 590-A Worksheet 1-2). MAGI: AGI with the rentals in and without the IRA
+   and student loan deductions (219(g)(3)(A)). The rest is after-tax money in the IRA (its basis, Form 8606), and the
+   line says so. Checked against `trad_ira_deductible` of the limits answer key on its 2,900 rows of 2025 and 2026 (part
+   "deduct" of `tests/golden-limits.test.mjs`): all agree. Worked: joint, both covered, MAGI 213,000 with 7,500 in: 0 comes
+   off; MAGI 140,000: 7,500 x (149,000 - 140,000) / 20,000 = 3,375, rounded up to 3,380; MAGI 120,000: all 7,500.
+6. **Student loan interest** (`loanStep`; item 23). Up to 2,500 of this year's interest comes off income (IRC 221(b)(1)),
+   less as modified AGI goes through the year's range (`data/adjustments.js`: 2026 single 85,000 to 100,000, joint 175,000
+   to 205,000, Rev. Proc. 2025-32 sec. 4.29, read 2026-11-06 at irs.gov/pub/irs-drop/rp-25-32.pdf; 2025 and 2024 from Rev.
+   Procs. 2024-40 and 2023-34), as the Pub. 970 worksheet works it (the deduction times (MAGI - start) / (end - start) comes
+   off). This year's interest: each "Student loan" debt with a rate and a payment, twelve payments from today's balance
+   (`yearOfPayments`, core/math/finance.js). None on a separate return (221(e)(2)); a typed "Other adjustments" replaces
+   it (with a note). Hand-worked, Ana and Bo (`studentLoanPlan`, joint, 2026): 64,000 at 6.5% with 730 a month: 4,020.45 of
+   interest in twelve payments, 2,500 counts; MAGI 122,000 is below 175,000, so all 2,500 comes off: AGI 119,500, taxable
+   87,300, tax 2,480 + 12% x 62,500 = **9,980** (it was 10,280; separately it stays 10,280, so filing jointly saves 300).
+
+The year's tax every tax page uses (Withholding check `yearTax`, Estimated payments, Quick answers, Needs attention,
+Tax report through `fullSteps`) is `known().total`; `yearTax.se` (the business's whole effect) is `total - totalAtGross`
+(the same steps with the business at its gross and no self-employment tax). Filing separately, `returns` gives each
+return's own income tax, self-employment tax and taxable income. The page's hero, tiles, walk, sources ("What the plan
+already knows": each step's line in place of the one it replaces) and next dollar read `known()`; its notes are shown.
+
+### Round 8 review fixes (2026-11-06)
+The review of the first build (`r8/b1/review-money.md`, `review-ux.md`) found nine money defects; each has its own test in
+`module.test.mjs` ("round 8 review N") on a household in `qa/fixtures/round8-households.mjs`. Sources read 2026-11-06.
+- **Seven steps now.** `qbiStep` runs last. Each step sees the figures the ones before it left (`ctx.out`).
+- **Rental MAGI leaves out half the self-employment tax.** Form 8582 instructions (2025), line 6, list "the deduction
+  allowed for the deductible part of self-employment taxes" among what modified AGI is figured without
+  (irs.gov/instructions/i8582). So `rentalStep` adds back the half that `businessStep` took off that return. Rental
+  analysis now reads the allowance, the MAGI and the netting from `known().rental`. What the rentals add is `known().total`
+  less `knownWithout(plan, params, fed, "rental")`: the same steps with the rentals' result left out and their rent still
+  taken out. Hand-worked, `landlordBusinessPlan` (single, 2026):
+  - profit 170,000 - 30,000 = 140,000; half the self-employment tax 0.5 x 15.3% x 92.35% x 140,000 = 9,890.68;
+  - MAGI 140,000, so the allowance is 25,000 - (140,000 - 100,000) / 2 = **5,000**;
+  - AGI 140,000 - 9,890.68 - 5,000 = 125,109.32; standard deduction 16,100; 20% deduction held to 20% x 109,009.32 =
+    21,801.86; taxable 87,207.45; income tax 13,897.64 + self-employment tax 19,781.37 = **33,679.01**. It read 32,808.63,
+    with MAGI 130,109 and an allowance of 9,945; Rental analysis read MAGI 170,000 and 0.
+  - What the rentals add: 5,000 off income at 22%, less the 1,000 it takes off the 20% deduction (held to 20% of taxable
+    income): 4,000 x 22% = 880 less tax.
+- **Only the rentals' own rent comes out of Income.** `withoutIncomeRent` takes out at most the rent the rentals on Rental
+  analysis collect (each `rent`, a year before empty months). An Income row is matched to a rental by name, then by amount
+  within 2%; what is left comes off the other rows in proportion. The rest of the Income page's rent stays at its gross,
+  with its own "Rent ... before any cost" source line (`left`). Hand-worked, the landlord with a duplex's 18,000 only on
+  Income: AGI 154,400 + 18,000 = 172,400; taxable 140,200; 2,480 + 9,120 + 22% x 39,400 = 20,268 less the 2,200 credit =
+  **18,068** (it read 14,108, the duplex gone).
+- **Other ordinary income typed replaces the plan's withdrawal.** The figures form said to type IRA withdrawals there before
+  this batch. So a typed figure is taken to include them, and a note says to type them in their own box if it does not. A
+  typed Other adjustments replaces the student loan interest the same way. The source line says "taken to include this
+  year's IRA and 401(k) withdrawals"; otherwise it says what the box is for now: "interest, non-qualified dividends, Roth
+  conversions". The widow with her 16,078 typed there: **3,964.52** (it read 6,695.61).
+- **The extra 10% on early withdrawals.** IRC 72(t)(1) (IRS Topic 558: "a 10% additional tax on certain early
+  distributions"; Form 5329 Part I) applies to the projection's draw for spending.
+  - Each adult takes a share of the draw by their pre-tax balances, for the part of the year before their half-birthday
+    (`shareBefore59Half`; 72(t)(2)(A)(i)).
+  - It is added after the income tax as its own walk row, "Extra 10% on early withdrawals". The required withdrawal never
+    owes it.
+  - A note names the exceptions the plan cannot see. The age-55 one is for a 401(k) left at that job, not an IRA ("The
+    exceptions below apply to distributions from a qualified plan other than an IRA", Topic 558). Equal yearly payments
+    are another.
+  - The age-55 rule the plan can see (round 8 verify, 2026-11-06): a 401(k) of someone whose retirement age on People is 55
+    or more, reached by this year, owes none of it (`leftWorkAt55`; IRC 72(t)(2)(A)(v); IRS "Retirement topics: exceptions
+    to tax on early distributions", read 2026-11-06: separation from service "during or after the year the employee reaches
+    age 55", qualified plans yes, IRAs no). Its share of the draw (by balance, as above) is left out of the 10% and a note
+    says why and that moving it into an IRA first would lose it. Ty, 57, retired at 56 with 800,000 in a 401(k): 0 (it was
+    5,170.54); the same money in an IRA, or a 401(k) left at 52: 10% of the draw; half in each: 5% of the draw.
+  - A typed withdrawal gets a note when every adult is under 59½.
+  - `known().hasIncome` counts these withdrawals, so Estimated payments, Withholding check and this page no longer say "No
+    income on file" beside the tax.
+  - Hand-worked, `earlyRetireePlan` (50): the projection draws 71,739.13; 10% = 7,173.91; income tax 6,952.61; **14,126.52**.
+- **Stock pay uses up the wage base.** The stock pay `stockStep` added is Social Security wages too (IRC 83(a), 3121(a);
+  W-2 box 3). So `businessStep` passes it with the owner's pay into `seTax`: the 12.4% stops at the contribution and benefit
+  base less wages (IRC 1402(b)(1); 2026: 184,500, SSA, read 2026-11-06). The 0.9% line is reduced by the Medicare wages
+  (W-2 box 5; IRC 1401(b)(2)(B); Form 8959 line 10), not box 1. Hand-worked, `stockAndBusinessPlan`:
+  - 150,000 + 100,000 = 250,000 of Social Security wages, past 184,500;
+  - self-employment tax 2.9% x 92.35% x 40,000 = **1,071.26** (it read 5,349.26);
+  - 0.9% x 36,940 = 332.46 of Additional Medicare tax.
+- **The 20% business deduction over its income line** (`qbiStep`, `qbiPhase`; IRC 199A(b)(3), (e)(2)).
+  - Lines and widths: Rev. Proc. 2025-32 sec. 4.26 for 2026: 201,750 (403,500 joint, 201,775 separate), with the phase-in
+    ending at 276,750 (553,500; 276,775). The widths, 75,000 and 150,000, are 199A(b)(3)(B) as P.L. 119-21 sec. 70105
+    amended it (Cornell LII, read 2026-11-06).
+  - The plan knows of no W-2 wages paid and no business property, so the 199A(b)(2)(B) limit is 0. Over the line the
+    deduction is cut by the share of the range passed (the "reduction amount" of (b)(3)(B)(ii)); past the range it is 0.
+  - The engine then holds it to 20% of taxable income and lifts it to 199A(i)'s 400 minimum (Rev. Proc. 2025-32 sec. 3.12:
+    at least 1,000 of active business income). It is worked last, on the taxable income every other step leaves.
+  - A note says a business with wages or equipment can get more, and a service business (199A(d)(3)) can get less.
+  - Hand-worked, `highFreelancerPlan` (400,000 single): AGI 383,204.70; taxable income before it 367,104.70, past 276,750;
+    the minimum 400; taxable 366,704.70; income tax 97,115.90 + self-employment tax 35,115.20 = **132,231.10** (it read
+    106,674 with 73,421 taken off).
+  - `stockAndBusinessPlan`: before it 273,364, 95.5% of the way through, so 7,893 x 4.5% = 356 would count; the 400
+    minimum is taken.
+- **Student loan interest is off AGI but not off provisional income.** The engine's new optional input
+  `studentLoanInterest` comes off AGI and is in the result's `adjustments`. It is not taken off the income Social Security
+  is tested on: Pub. 915 (2025) Worksheet 1 line 7 adds "Schedule 1 (Form 1040), lines 11 through 20, and 23 and 25", and
+  line 21 is the student loan interest deduction (2025 Schedule 1); "don't reduce your other income by ... interest on
+  education loans". `loanStep` uses it. Absent, nothing moves, so no answer key changes. Hand-worked, `parentLoanPlan`:
+  - provisional income 30,000 + 12,000 = 42,000; 4,500 + 85% x 8,000 = **11,300** taxed (it read 9,175);
+  - AGI 38,800; taxable 14,650; tax **1,510** (it read 1,255).
+- **The first required withdrawal may wait** until April 1 of next year (IRC 401(a)(9)(C); IRS RMD FAQ: "you can delay
+  taking the first RMD until April 1 of the following year"). Then it is next year's income. A note says so and how to
+  leave it out (type 0 under IRA and 401(k) withdrawals). The figure itself stays.
+- **Wording.**
+  - The walk's Income line names pensions, and "rentals 0 after costs (25,200 of rent; see below)".
+  - A rental loss the allowance cannot use is said as what it means: "at your income a rental loss cannot lower this year's
+    tax; the 1,547 waits for a year with rental profit, or the sale".
+  - The IRA line: the income is "your joint income" on a joint return. "The 7,500 put in after tax comes out tax-free later;
+    what it earns is taxed" (Pub. 590-B; only the basis is tax-free, unlike a Roth). Its amount is 0, never -0.
+  - Stock pay is said in "shares".
+
 ## Edge cases
-Not modelled: AMT, the qualified business income deduction, the earned income and education credits, self-employment tax (self-employment income is taxed as ordinary income with a note), state tax, the FICA wage base on the additional Medicare tax. The child and dependent care credit leaves out a disabled spouse or dependent, a student or disabled spouse's deemed income, the separate filer who lived apart (treated as unmarried, 21(e)(4)), care paid this year for last year (line 9b), a child care account typed on the Paycheck page only, and a self-employed person's dependent care deduction (line 24); a raise on Salary keeps the plan's lower earner (only matters when that earner makes under 6,000). See its section. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
+Not modelled: AMT, the earned income and education credits, state tax, the FICA wage base on the additional Medicare tax, stock option exercises and ESPP sales (not on file), a pension at work as "covered" for the IRA deduction, withdrawals before the required age other than the projection's draw (type them). `compute().result` alone (the answer keys') still taxes a business at its gross and leaves out its self-employment tax and 20% deduction (with a note); the page and every tax page use `known()`, which counts them. The child and dependent care credit leaves out a disabled spouse or dependent, a student or disabled spouse's deemed income, the separate filer who lived apart (treated as unmarried, 21(e)(4)), care paid this year for last year (line 9b), a child care account typed on the Paycheck page only, and a self-employed person's dependent care deduction (line 24); a raise on Salary keeps the plan's lower earner (only matters when that earner makes under 6,000). See its section. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
 
 ## Tests
 `tests/tax.test.mjs` (the engine on hand-worked 2025 cases; the care credit's three worked examples for 2025 and 2026, both 2026 rate columns and the 2025 table row by row, the limit after benefits, the earned-income cap, the tax limit and the order before the child credit, a separate return), `tests/tax-pages.test.mjs` (this page on `qa/fixtures/tax-plan.mjs`), `module.test.mjs` (also the care credit from the plan: the single parent's walk, the family's care in the year and the lower earner, which lines are care and which are not, who counts and the 13th birthday, a joint return with one adult, a separate return, the child care account off wages and the credit (example B) and its plan year, the account's one rule by hand (money lost beyond the care: Jo with 1,800 of care; the reviewer's case #1 and case #76; the family filing separately with 3,750 each; two accounts on a joint return; a spouse with no pay), `careAccount`, each spouse's account on a separate return, the next dollar over whole steps and its reason, the 14-year-old's care line, one rounding for the rate, `careInputsWith` and its `wagesChange`). `tests/golden-federal.test.mjs`: 12,000 invented returns for 2024 to 2026 (`tests/golden/taxes/federal-<year>.csv`), worked independently from the IRS figures in `tests/golden/taxes/RULES.md` (Rev. Procs. 2023-34, 2024-40, 2025-32; Pub. L. 119-21), each within $1. All 12,000 agree since 2026-10-30 (F-029 fixed the seven causes the key found; RULES.md section 11 keeps a worked example of each). A future disagreement goes into `tests/golden/taxes/federal-todo.json` by cause and runs as a `todo` test.
 
 ## Ideas / not yet
-- State tax (PolicyEngine as a local service), self-employment tax and the QBI deduction, AMT for stock-option years, a "compare with last year's return" line-by-line check.
+- State tax (PolicyEngine as a local service), AMT for stock-option years, a "compare with last year's return" line-by-line check.
 
 ## Review 2026-11-06
 - **Two returns card: the business owner's own return.** A return with a business shows its own income, taxable income,
@@ -206,3 +390,11 @@ Not modelled: AMT, the qualified business income deduction, the earned income an
   Test: brackets "one threshold".
 
 Review 2026-11-06 (round 7): the notes ("Filing separately is two returns: yours and your spouse's ... on your return", "Your health FSA election ... comes off your pay", "you have no pay or business income", "(you have none)", "Your child care account pays ... on your return", "Your pay ended on ...", "your and your spouse's child care accounts pay") and the page ("the next dollar you earn", "you would get about ... back, and your spouse would owe ...", "Your spouse's return") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js, imported as `W` beside this file's own `nameOf`). Test: "Review 2026-11-06 (round 7): the notes and the page say you/your ...".
+
+## Decisions taken without the owner (round 8 batch 1, 2026-11-06; the owner asked not to stop for questions)
+- A service business (doctor, lawyer, consultant: 199A(d)(3)) above the 199A line gets the general rule for now, and the
+  page's note says it can get less. A "service business" choice on the Business page is on the backlog.
+- The retirement projection taxes the spending draw (with the 10% before 59 1/2) only in a year with no pay, bonus or
+  business income listed. Kept: someone who stops work mid-year with pay still listed has the draw left out of that year.
+- "Has a plan at work" for the IRA deduction (219(g)) is read from 401(k)-type contributions (an amount or a match). A
+  pension-only plan at work is not seen yet; a checkbox is on the backlog.

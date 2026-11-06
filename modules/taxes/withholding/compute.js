@@ -9,6 +9,7 @@ import { QBI_MINIMUM, forYear } from "../../career/business/data/business.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { PERIODS } from "../../../core/math/periods.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { known } from "../federal/known.js";
 
 /**
  * The smallest amount of withholding plus estimated payments that avoids the underpayment penalty:
@@ -75,7 +76,23 @@ export function projectedWithholding(plan, params = {}) {
  * review on 2026-11-02 one typed earner made the other's withholding $0, and a typed year so far alone counted no more
  * paychecks.)
  */
-export function withholdingEstimate(plan, params = {}) {
+export function withholdingEstimate(plan, params = {}, k = null) {
+  const out = withholdingFromPay(plan, params);
+  // stock vesting this year (the Federal estimate's figures, known.js stockStep): the employer holds back 22% and the 0.9%
+  // Medicare tax from it; with the year so far typed (from pay stubs, which show the vests already paid) only the vests still
+  // to come are added (round 8, equity-2)
+  let kk = k;
+  if (!kk && (plan.equity?.grants ?? []).length) { try { kk = known(plan, params); } catch { kk = null; } }
+  const st = kk?.stock ?? null;
+  if (!st || !(st.withheld > 0)) return out;
+  const stock = out.detail.soFarTyped ? st.withheldAfter : st.withheld;
+  if (!(stock > 0)) return out;
+  const projected = out.projected + stock;
+  return { ...out, projected, from: out.from === "none" ? "paycheck" : out.from, stock, detail: { ...out.detail, projected } };
+}
+
+/** withholdingEstimate before stock vesting: the paychecks alone. */
+function withholdingFromPay(plan, params = {}) {
   const wh = projectedWithholding(plan, params);
   let pc = null;
   try { pc = computePaycheck(plan, params); } catch { pc = null; }
@@ -176,15 +193,20 @@ export function separateBusiness(plan, fed, params = {}) {
  * refundable child tax credit) are more than the tax, as the walk's last line has it: the refund counts them (review
  * 2026-11-02: it used to stop at 0, so a refund left them out). `owed` is the tax, at least 0; `back` the credits past it.
  */
-export function yearTax(plan, fed, params = {}) {
+export function yearTax(plan, fed, params = {}, k = null) {
   const income = Number(fed?.result?.totalTax) || 0;
-  const s = separateBusiness(plan, fed, params);
-  const total = s.ready ? Number(s.taxWith) || 0 : income;
-  // the self-employment tax itself (with its Additional Medicare tax), as the Federal estimate's walk says it (fullSteps
-  // se.tax): `se` is the business's whole effect on the tax, its deductions taken off, which alerts and the answer keys read
-  // (Review 2026-11-06: Withholding check said "$796 of it self-employment tax" against the Federal estimate's $1,017)
-  const seOwn = s.ready ? (Number(s.seTotal) || 0) + (Number(s.addlMedicare) || 0) : 0;
-  return { total, income, se: total - income, seOwn, owed: Math.max(0, total), back: Math.max(0, -total) };
+  // the year's tax as the Federal estimate shows it (known.js): the answer keys' return with what the plan knows put in (the
+  // business at its profit with its self-employment tax, rentals after costs, this year's required withdrawal, stock pay,
+  // the IRA and student loan deductions as the law allows them). Without any of those it is the keys' total itself.
+  const kk = k ?? known(plan, params, fed);
+  const total = kk.total;
+  // the self-employment tax itself (with its Additional Medicare tax), as the Federal estimate's walk says it: `se` is the
+  // business's whole effect on the tax, its deductions taken off (total less the same with the business at its gross),
+  // which alerts and the answer keys read (Review 2026-11-06: Withholding check said "$796 of it self-employment tax"
+  // against the Federal estimate's $1,017)
+  const seOwn = kk.se ? kk.seTax : 0;
+  const se = kk.se ? total - kk.totalAtGross : 0;
+  return { total, income, se, seOwn, owed: Math.max(0, total), back: Math.max(0, -total), known: kk };
 }
 
 /**
@@ -271,9 +293,9 @@ export const addJanuaryWords = (january, year, n = (v) => `$${Math.round(v).toLo
  *   perPaycheck, paychecks } when it owes, { kind: "cut", name, takeHome, paychecks, step3, january, one, all } when it gets
  *   money back (takeHomeMore on its own over-withholding), { kind: "estimates" } owing with no paycheck left, else "none".
  */
-export function byReturn(plan, fed, est, { paid = 0, priorTax = null, priorAgi = null, hasSetup = true, params = {} } = {}) {
+export function byReturn(plan, fed, est, { paid = 0, priorTax = null, priorAgi = null, hasSetup = true, params = {}, k = null } = {}) {
   if (fed?.filingStatus !== "married_separate" || !est) return null;
-  const rets = fullSteps(plan, fed, params).returns;
+  const rets = fullSteps(plan, fed, params, k).returns;
   if (!Array.isArray(rets) || rets.length < 2) return null;
   const ids = rets.map((r) => r.personId);
   const me = Math.max(0, ids.indexOf(fed.inputs?.separateTo));
@@ -357,11 +379,14 @@ export function compute(plan, params = {}) {
     text: cutTyped ? `You are lending the IRS about $${cutTyped.perPaycheck.toLocaleString("en-US")} a paycheck${cutTyped.all ? ", all of what each paycheck takes out" : ""}. ${step3Words(cutTyped, main.left, { typed: true, year: fed.year })}` : "The refund is credits that come back whatever the W-4 says: nothing to change on it." };
   else if (verdict === "owe" && !main) suggestion = { kind: "estimates", perPaycheck: 0, paychecks: 0, text: "No paycheck figure is typed yet, so the rest of the year counts nothing withheld. If tax comes out of your pay, type one paycheck's tax under What a paycheck withholds; if not, the Estimated payments page splits the bill into the four quarterly payments." };
   const notes = [];
-  if (!fed.hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
-  if (!wh.hasSetup && fed.hasIncome) notes.push("Type the federal tax taken from one paycheck (the \"Federal income tax\" line on the stub) below, and what has been withheld so far this year on the Federal estimate page.");
+  // any income counted, this year's withdrawals from the plan included (known.js), not the Income page alone (round 8 review:
+  // a retiree living on IRA withdrawals read "No income on file" beside 6,953 of tax)
+  const hasIncome = yt.known.hasIncome;
+  if (!hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
+  if (!wh.hasSetup && hasIncome) notes.push("Type the federal tax taken from one paycheck (the \"Federal income tax\" line on the stub) below, and what has been withheld so far this year on the Federal estimate page.");
   // the best answer the plan has: the typed figures, else withholding estimated from pay (`estimate`); `balance` and `verdict`
   // above stay on the typed figures only (the answer key checks them), the page leads with `estimate`
-  const est = withholdingEstimate(plan, params);
+  const est = withholdingEstimate(plan, params, yt.known);
   // other payments typed on the Federal estimate (an extension payment, last year's overpayment applied) count as paid too,
   // as the Federal estimate's own walk counts them
   const otherPaid = Math.max(0, Number(t.thisYear?.paid) || 0);
@@ -373,8 +398,11 @@ export function compute(plan, params = {}) {
   estimate.suggestion = lead && estimate.verdict === "owe" ? { kind: "add", name: lead.name, perPaycheck: Math.ceil(estBalance / lead.left), paychecks: lead.left, january: addJanuary(totalTax - est.people.reduce((t, p) => t + p.yearly, 0), lead, Math.ceil(estBalance / lead.left)) }
     : cutEst ? { kind: "cut", name: lead.name, perPaycheck: cutEst.perPaycheck, takeHome: cutEst.perPaycheck, paychecks: lead.left, step3: cutEst.step3, january: cutEst.january, one: cutEst.one, all: cutEst.all } : { kind: "none" };
   // filing separately: each return's own balance, safe amount and W-4 change (byReturn; the household figures above stay)
-  estimate.returns = byReturn(plan, fed, est, { paid: estimatedPaid + otherPaid, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, hasSetup: est.from !== "none", params });
-  return { year: fed.year, totalTax, creditsBack: yt.back, incomeTax: yt.income, seTax: yt.se, seOwn: yt.seOwn, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome: fed.hasIncome, effectiveRate: fed.result.effectiveRate, wages: fed.result.income.wages, estimate };
+  estimate.returns = byReturn(plan, fed, est, { paid: estimatedPaid + otherPaid, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, hasSetup: est.from !== "none", params, k: yt.known });
+  return { year: fed.year, totalTax, creditsBack: yt.back, incomeTax: yt.income, seTax: yt.se, seOwn: yt.seOwn, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome,
+    // the share of income the year's tax is, as the Federal estimate says it (known.js `rate`: with what the plan knows, the
+    // self-employment tax in it), not the answer keys' return (round 8 review: the widow's "1.1% of income" beside 6.0%)
+    effectiveRate: yt.known.rate, wages: yt.known.result.income.wages, estimate };
 }
 
 /**
@@ -386,29 +414,14 @@ export function compute(plan, params = {}) {
  * half the self-employment tax and the 20% business deduction off income, then the self-employment tax itself.
  * fed.result is not touched (the answer keys check it).
  */
-export function fullSteps(plan, fed, params = {}) {
-  const steps = (fed?.steps ?? []).map((x) => ({ ...x }));
-  const r = fed?.result ?? {};
-  const gross = Number(r.income?.gross) || 0;
-  const s = separateBusiness(plan, fed, params);
-  const at = steps.findIndex((x) => x.label === "Federal tax");
-  // each separate return's own tax, so the page's "the two added up" is exact: with a business, its owner's return carries
-  // its self-employment tax and deductions (separateBusiness)
-  const returns = s.returns ?? (r.separate ? r.separate.map((x) => ({ personId: x.personId, name: x.name, incomeTax: x.totalTax, se: 0, addl: 0, total: x.totalTax })) : null);
-  // the total is the walk's own last line, below zero when refundable credits are more than the tax (the refund counts them)
-  if (!s.ready || at < 0) return { steps, total: Number(r.totalTax) || 0, rate: Number(r.effectiveRate) || 0, se: null, returns };
-  const total = Number(s.taxWith) || 0;
-  const seAll = s.seTotal + s.addlMedicare;
-  const incomeAfter = total - seAll;
-  const n = (x) => Math.round(x).toLocaleString("en-US");
-  const rows = [];
-  const change = incomeAfter - (Number(r.totalTax) || 0);
-  const offs = [s.half >= 1 ? `half the self-employment tax (${n(s.half)})` : null, s.qbi >= 1 ? `the 20% business deduction (${n(s.qbi)})` : null].filter(Boolean);
-  if (Math.abs(change) >= 1) rows.push({ label: change < 0 ? `Tax saved by business ${s.expenses > 0 ? "costs and " : ""}deductions` : "Business taxed on its profit", amount: change, sub: [s.expenses > 0 ? `the business taxed on its profit, after ${n(s.expenses)} of costs` : null, offs.length ? `${offs.join(" and ")} come${offs.length === 1 ? "s" : ""} off income` : null].filter(Boolean).join("; ") || "the business counted at its profit" });
-  rows.push({ label: "Self-employment tax", amount: seAll, sub: `Social Security and Medicare for the self-employed: 15.3% of 92.35% of the profit${s.addlMedicare >= 1 ? `, plus ${n(s.addlMedicare)} of Additional Medicare tax` : ""}` });
-  const rate = gross > 0 ? total / gross : 0;
-  steps.splice(at, 1, ...rows, { ...steps[at], amount: total, sub: `income tax and self-employment tax: ${ratePct(rate)} of income` });
-  return { steps, total, rate, returns, se: { tax: seAll, half: s.half, qbi: s.qbi, expenses: s.expenses, nextDollar: Math.max(0, 100 - s.keepPer100) / 100 } };
+export function fullSteps(plan, fed, params = {}, k = null) {
+  const kk = k ?? known(plan, params, fed);
+  if (!kk.se) return { steps: kk.steps.map((x) => ({ ...x })), total: kk.total, rate: kk.rate, se: null, returns: kk.returns };
+  // the next dollar of business profit: 100 less what is kept of each 100 more (the Self-employment page's figure; filing
+  // separately, worked on the owner's return)
+  const sb = separateBusiness(plan, fed, params);
+  return { steps: kk.steps.map((x) => ({ ...x })), total: kk.total, rate: kk.rate, returns: kk.returns,
+    se: { tax: kk.seTax, half: kk.se.half, qbi: Number(kk.result.deduction?.qbi) || 0, expenses: kk.se.expenses, nextDollar: Math.max(0, 100 - (sb.keepPer100 ?? 100)) / 100 } };
 }
 
 /**
@@ -419,5 +432,7 @@ export function fullSteps(plan, fed, params = {}) {
 export function taxAnswer(plan, params = {}) {
   const d = compute(plan, params);
   if (!d.hasIncome) return null;
-  return { year: d.year, totalTax: d.totalTax, creditsBack: d.creditsBack, seTax: d.seTax, seOwn: d.seOwn, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid + d.estimate.otherPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate, people: d.estimate.people, returns: d.estimate.returns ?? null };
+  return { year: d.year, totalTax: d.totalTax, creditsBack: d.creditsBack, seTax: d.seTax, seOwn: d.seOwn, projected: d.estimate.projected, from: d.estimate.from, paid: d.estimatedPaid + d.estimate.otherPaid, balance: d.estimate.balance, verdict: d.estimate.verdict, effectiveRate: d.effectiveRate, people: d.estimate.people, returns: d.estimate.returns ?? null,
+    // stock vesting this year: what the employer holds back from it, inside `projected` (withholdingEstimate; round 8)
+    ...(d.estimate.stock > 0 ? { stock: d.estimate.stock } : {}) };
 }

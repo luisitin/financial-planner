@@ -52,3 +52,20 @@ pulled along".
   > 0.0005 here and > 0.005 there; 12 of 1,500 random households disagreed). The words only change where the figure is
   half a cent or more from the bracket, so no qa household's page text moves. Test: "Brackets and the Federal estimate use
   one threshold".
+
+## The Federal estimate's return (round 8 review, 2026-11-06)
+- **The ladder:** the ladder, the bracket, the room, the slices above and "what more income would cost" are worked on
+  `known(plan).inputs`. That is a business at its profit, this year's withdrawals, stock pay and rentals after costs.
+- **The totals:** `totalTax` and `effectiveRate` are `known().total` and `.rate` (self-employment tax and the extra 10% on
+  an early withdrawal in them).
+- **Filing separately:** each return's tax is the Federal estimate's return total (`known().returns`), so the two add up to
+  the household's.
+- **Why.** The freelancer read "the 22% bracket" here while the Federal estimate said 12%.
+- **The Deductions tile:** it shows the deduction (standard or itemized, with the senior deduction) plus the 20% business
+  deduction (`businessDeduction` = `result.deduction.qbi`, IRC 199A; taken after AGI and before the ladder). When there
+  is a business deduction, the tile names both parts, so AGI less the tile is the ladder's taxable income. For the
+  freelancer this is AGI 69,489.48 − 16,100 − 10,677.90 = 42,711.58. Test: "the Deductions tile names the business
+  deduction".
+- **The next dollar under a business deduction:** while the 20% business deduction is held to 20% of taxable income, one
+  more dollar of other income adds 80 cents of taxable income (IRC 199A(a)(2)). So the next dollar costs bracket × 0.8:
+  9.6% in the 12% bracket. The tile then says "less than the bracket: the 20% business deduction grows with it".

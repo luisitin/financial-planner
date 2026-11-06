@@ -48,8 +48,8 @@ export function monthStats(values, labels = []) {
 /**
  * compute(plan, { today }) -> {
  *   ready, year, months (labels), items: [{ id, key (chainId: where its months are kept, `whatIfs.sideIncome[key]`), name, personName, monthly (Income page), period, typedMonths, stats, enough, countOn, counted (income[].countOn on file, or null), gap, below }],
- *   setAside: { rate (of each payment received), yearly (the tax this income adds), quarter, state, stateKnown, stateAverage, onAverage } | null,
- *   estimates: { needed, nextDue: { due, label, amount } | null (the next quarter not yet past), overdue: { due, label, amount } | null (past quarters not paid) } (the whole return, from the Estimated payments page),
+ *   setAside: { rate (of each payment received), yearly (the tax this income adds), quarter, federal, state, stateKnown, stateAverage, onAverage } | null,
+ *   estimates: { needed, nextDue: { due, label, amount } | null (the next quarter not yet past), overdue: { due, label, amount } | null (past quarters not paid), harbour (the safe amount's rule) } (the whole return on the plan as it is, from the Estimated payments page),
  *   rules: { year (of the table used), stale, form1099NEC, form1099K: { apps: { amount, payments }, cards }, mileage, mileageSteps }, notes
  * }
  */
@@ -97,9 +97,12 @@ export function compute(plan, params = {}) {
     if (st.rate === null) notes.push("Your state's income tax is not in the share to set aside: set its rate on the State tax page.");
     else if (st.method === "prior") notes.push("The state part uses last year's average state rate; the tax on extra income is often higher.");
   }
-  // whether the whole return needs quarterly payments, and the next one (the Estimated payments page)
-  const est = computeEstimated(taxPlan, { today });
-  const estimates = { needed: !!est.needsEstimates, nextDue: est.nextDue ?? null, overdue: est.overdue ?? null };
+  // whether the whole return needs quarterly payments, what is behind and the next one: the Estimated payments page's own
+  // figures on the plan as it is (the Income page's amount), the one place that says what to pay the IRS and by when.
+  // The average of the months typed shapes only the share to set aside above (round 8, freelancer-2: this page worked the
+  // payments on the average and said $4,833 while Estimated payments said $3,577 by January 15)
+  const est = computeEstimated(plan, { today });
+  const estimates = { needed: !!est.needsEstimates, nextDue: est.nextDue ?? null, overdue: est.overdue ?? null, harbour: est.harbour?.label ?? null };
   return { ready: true, year, months, items, setAside, estimates, rules, notes };
 }
 

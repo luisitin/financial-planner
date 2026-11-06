@@ -182,7 +182,8 @@ export function careCredit(care, agi, status, params) {
  *   filingStatus, wages, otherOrdinary (interest, pensions, IRA withdrawals, Roth conversions, short-term gains, business),
  *   qualifiedIncome (qualified dividends + net long-term gains), socialSecurity (gross benefits), taxExemptInterest,
  *   capitalLoss (the allowed net capital loss, 0 to -3,000 or -1,500 separately: Schedule D line 21, taken off any income),
- *   adjustments (above the line: HSA, deductible IRA, ...), itemized (total itemized deductions after their caps, or 0),
+ *   adjustments (above the line: HSA, deductible IRA, ...), studentLoanInterest (the student loan interest deduction: off AGI
+ *   like an adjustment, but not off the income Social Security is tested on; optional, in the result's adjustments), itemized (total itemized deductions after their caps, or 0),
  *   charitableCash (cash gifts to charity: from 2026 deductible up to 1,000 / 2,000 joint by people who do not itemize),
  *   ages65plus (you and a spouse), blind, dependentsUnder17, otherDependents, investmentIncome (for NIIT; default qualified income),
  *   medicareWages (Medicare wages for the 0.9% additional Medicare tax: pay before pre-tax 401(k) saving, W-2 box 5; default wages),
@@ -197,13 +198,17 @@ export function federalTax(inputs, params) {
   const status = params.status[inputs.filingStatus] ? inputs.filingStatus : "single";
   const wages = pos(inputs.wages), otherOrdinary = pos(inputs.otherOrdinary), qualified = pos(inputs.qualifiedIncome), ss = pos(inputs.socialSecurity);
   const exempt = pos(inputs.taxExemptInterest), adjustments = pos(inputs.adjustments), itemized = pos(inputs.itemized);
+  // the student loan interest deduction (Schedule 1 line 21) comes off AGI but not off the income Social Security is tested
+  // on: the Social Security Benefits Worksheet adds up Schedule 1 lines 11 to 20, 23 and 25 only (Pub. 915 (2025) Worksheet 1
+  // line 7; "don't reduce your other income by ... interest on education loans"). Optional, 0 when absent.
+  const loanInterest = pos(inputs.studentLoanInterest);
   const ages65plus = Math.min(2, Math.max(0, Math.round(Number(inputs.ages65plus) || 0))), blind = Math.min(2, Math.max(0, Math.round(Number(inputs.blind) || 0)));
   const capitalLoss = Math.min(0, Number(inputs.capitalLoss) || 0), charitableCash = pos(inputs.charitableCash);
   const ordinary = wages + otherOrdinary;
   const otherIncome = ordinary + qualified + capitalLoss - adjustments;
   const taxableSS = taxableSocialSecurity(ss, otherIncome, exempt, status, params);
   const gross = ordinary + qualified + ss;
-  const agi = ordinary + qualified + capitalLoss + taxableSS - adjustments;   // Form 1040 line 11; a capital loss can take it below zero
+  const agi = ordinary + qualified + capitalLoss + taxableSS - adjustments - loanInterest;   // Form 1040 line 11; a capital loss can take it below zero
   const std = standardDeduction(status, params, { ages65plus, blind });
   // the senior deduction (2025-2028): 6,000 a person 65 or older, each person's amount cut by 6% of the income over the threshold; married people only on a joint return
   let senior = 0;
@@ -271,7 +276,9 @@ export function federalTax(inputs, params) {
   const out = {
     year: params.year ?? null, filingStatus: status,
     income: { wages, ordinary, qualified, capitalLoss, socialSecurity: ss, taxableSocialSecurity: taxableSS, taxExemptInterest: exempt, gross },
-    agi, adjustments,
+    // the student loan interest deduction is in `adjustments`; named on its own only when there is some, so a result without
+    // it keeps the shape it had before the input existed
+    agi, adjustments: adjustments + loanInterest, ...(loanInterest > 0 ? { studentLoanInterest: loanInterest } : {}),
     deduction: { standard: std, itemized: itemizedAfter, itemizedBeforeLimit: itemized, itemizedLimit, charity: useItemized ? 0 : nonItemizerCharity, used: useItemized ? "itemized" : "standard", senior, amount: deduction, qbi },
     taxableIncome, ordinaryTaxable, qualifiedTaxable,
     ordinaryTax: ord.tax, qualifiedTax, incomeTax, layers: ord.layers, qualifiedLayers: qual.layers,
@@ -285,7 +292,7 @@ export function federalTax(inputs, params) {
 }
 
 /** The amounts of `inputs` that add up across two separate returns (the others, such as ages and dependents, belong to one). */
-export const SEPARATE_FIELDS = ["wages", "medicareWages", "otherOrdinary", "qualifiedIncome", "capitalLoss", "socialSecurity", "taxExemptInterest", "adjustments", "itemized", "charitableCash", "investmentIncome", "selfEmployment", "qbiDeduction", "qbiMinimum", "withheld", "paid"];
+export const SEPARATE_FIELDS = ["wages", "medicareWages", "otherOrdinary", "qualifiedIncome", "capitalLoss", "socialSecurity", "taxExemptInterest", "adjustments", "studentLoanInterest", "itemized", "charitableCash", "investmentIncome", "selfEmployment", "qbiDeduction", "qbiMinimum", "withheld", "paid"];
 
 /**
  * Married filing separately is two returns (IRS Pub. 501: "you generally report only your own income, credits, and
@@ -312,7 +319,7 @@ function separateTax(inputs, params) {
   return {
     year: params.year ?? null, filingStatus: "married_separate",
     income: Object.fromEntries(Object.keys(me.income).map((k) => [k, sum((r) => r.income[k])])),
-    agi: sum((r) => r.agi), adjustments: sum((r) => r.adjustments),
+    agi: sum((r) => r.agi), adjustments: sum((r) => r.adjustments), ...(results.some((r) => r.studentLoanInterest > 0) ? { studentLoanInterest: sum((r) => r.studentLoanInterest || 0) } : {}),
     deduction: { standard: sum((r) => r.deduction.standard), itemized: sum((r) => r.deduction.itemized), itemizedBeforeLimit: sum((r) => r.deduction.itemizedBeforeLimit), itemizedLimit: sum((r) => r.deduction.itemizedLimit), charity: sum((r) => r.deduction.charity), used: results.some((r) => r.deduction.used === "itemized") ? "itemized" : "standard", senior: sum((r) => r.deduction.senior), amount: sum((r) => r.deduction.amount), qbi: sum((r) => r.deduction.qbi) },
     taxableIncome: sum((r) => r.taxableIncome), ordinaryTaxable: sum((r) => r.ordinaryTaxable), qualifiedTaxable: sum((r) => r.qualifiedTaxable),
     ordinaryTax: sum((r) => r.ordinaryTax), qualifiedTax: sum((r) => r.qualifiedTax), incomeTax: sum((r) => r.incomeTax), layers: me.layers, qualifiedLayers: me.qualifiedLayers,

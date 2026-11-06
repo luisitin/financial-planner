@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { compute, careExpenses, paidInYear, isCare, careInputsWith, taxInputs, ENROLL_FROM_MONTH, careAccountRule, careAccount, ratePct } from "./compute.js";
 import { taxPlan } from "../../../qa/fixtures/tax-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
+import { federalTax } from "../../../core/math/tax.js";
 
 test("federal: runs on the tax fixture and on an empty plan", () => {
   const d = compute(taxPlan(), { today: "2026-09-16" });
@@ -850,4 +851,339 @@ test("Review 2026-11-06 (round 7): the notes and the page say you/your for the u
   assert.ok(compute(kl, { today: TODAY }).notes.some((n) => n.includes("and you have no pay or business income on the Income page")));
   const acct = structuredClone(kl); acct.whatIfs = { benefits: { kim: { dcfsaElect: 5000, planYear: 2026 } } };
   assert.ok(compute(acct, { today: TODAY }).notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (you have none).")));
+});
+
+// ---- round 8, Batch 1: the page's figures count what the plan already knows (known.js). compute().result and steps stay as
+// the answer keys check them; the page, Withholding check and Estimated payments read known(). The households are in
+// qa/fixtures/round8-households.mjs, their figures worked by hand in the README ("What the plan already knows (round 8)").
+const R8 = "2026-11-06";
+const H8 = () => import("../../../qa/fixtures/round8-households.mjs");
+const K8 = () => import("./known.js");
+const near8 = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
+
+test("round 8 item 20 (freelancer-4): the business at its profit: AGI 69,489, taxable 42,711, income tax 4,877, the 12% bracket, 15,898 in all", async () => {
+  const { freelancerPlan } = await H8(), { known } = await K8();
+  const p = freelancerPlan(), d = compute(p, { today: R8 }), k = known(p, { today: R8 });
+  // the keys' return keeps the business at its gross: AGI 78,000 less the 3,000 IRA
+  assert.equal(d.result.agi, 75000); assert.equal(d.result.bracketRate, 0.22);
+  // 78,000 less half the self-employment tax (15.3% x 92.35% x 78,000 / 2 = 5,510.52) less the IRA 3,000
+  near8(k.result.agi, 78000 - 5510.5245 - 3000);
+  // less the 16,100 standard deduction and the 20% business deduction: 20% of (78,000 - 5,510.52) = 14,497.90, capped at
+  // 20% of 53,389.48 = 10,677.90
+  near8(k.result.deduction.qbi, 0.2 * (69489.4755 - 16100)); near8(k.result.taxableIncome, 42711.58);
+  near8(k.result.incomeTax, 1240 + 0.12 * (42711.58 - 12400)); assert.equal(k.result.bracketRate, 0.12);
+  near8(k.seTax, 0.153 * 0.9235 * 78000); near8(k.total, 4877.39 + 11021.05);
+  const labels = k.steps.map((s) => s.label);
+  assert.ok(labels.includes("Business deduction (20%)") && labels.includes("Self-employment tax"));
+  assert.ok(!labels.includes("Tax saved by business deductions"), "the patch line is gone");
+  assert.match(k.steps.find((s) => s.label === "Adjustments").sub, /half the self-employment tax 5,511, IRA 3,000/);
+  // the income is named by where it comes from, not "other ordinary" (the keys' walk keeps its own words)
+  assert.equal(k.steps.find((s) => s.label === "Income").sub, "business profit 78,000");
+  near8(k.steps.at(-2).amount, k.total); assert.equal(k.steps.at(-2).label, "Federal tax");
+  // the walk adds up: income less adjustments is AGI; AGI less the deductions is taxable income
+  const v = (l) => k.steps.find((s) => s.label === l).amount;
+  near8(v("Income") + v("Adjustments"), v("Adjusted gross income")); near8(v("Adjusted gross income") + v("Standard deduction") + v("Business deduction (20%)"), v("Taxable income"));
+  assert.deepEqual(d.steps, compute(freelancerPlan(), { today: R8 }).steps, "compute()'s own walk is untouched");
+});
+
+test("round 8 item 5 (landlord-1): a rental on Rental analysis counts after its costs, in place of the Income page's gross rent", async () => {
+  const { landlordPlan } = await H8(), { known, rentalStep } = await K8();
+  const p = landlordPlan(), d = compute(p, { today: R8 }), k = known(p, { today: R8 });
+  assert.equal(d.result.agi, 179600, "the keys' return still has the gross 25,200 of rent");
+  // wages 167,000 less 12,600 to the 401(k)s: AGI 154,400; the condo loses 1,547 (23,940 of rent after 5% empty months,
+  // less 12,700 of costs, about 6,678 of interest and 6,109 of depreciation), all of it suspended: the allowance is
+  // 25,000 - (154,400 - 100,000) / 2 < 0
+  assert.equal(k.result.agi, 154400); assert.equal(k.result.taxableIncome, 122200);
+  // 2,480 + 12% of 76,000 + 22% of 21,400 = 16,308, less the 2,200 child tax credit
+  near8(k.total, 14108);
+  near8(k.rental.magi, 154400); assert.equal(k.rental.allowance, 0); near8(k.rental.passive.suspended, 1546.79); assert.equal(k.rental.net, 0);
+  assert.ok(k.sources.some((s) => s.key === "rental" && /in place of the 25,200 of rent on the Income page/.test(s.detail)));
+  // a profitable rental adds its net: rent 3,000 a month brings the condo to 36,000 x 0.95 - 13,060 - interest - depreciation
+  const q = landlordPlan(); q.property[0].rentMonthly = 3000; q.income.find((x) => x.id === "rent").amount = 3000;
+  const kq = known(q, { today: R8 }), r = kq.rental.rentals[0];
+  near8(kq.rental.net, r.taxable); assert.ok(r.taxable > 0); near8(kq.result.agi, 154400 + r.taxable);
+  // without the property on Rental analysis the Income page's rent stays at its gross, said "before any cost"
+  const g = landlordPlan(); g.property = [];
+  const kg = known(g, { today: R8 });
+  assert.equal(kg.result.agi, 179600); assert.ok(kg.sources.some((s) => s.key === "rental" && /before any cost/.test(s.detail)));
+  assert.equal(rentalStep({ plan: g, fed: compute(g, { today: R8 }), inputs: compute(g, { today: R8 }).inputs, params: { today: R8 } }).line, null);
+});
+
+test("round 8 item 6 (widow-2): this year's required withdrawal is income: AGI 59,254, 20,376 of Social Security taxed, 3,965 of tax", async () => {
+  const { widowPlan } = await H8(), { known, withdrawalStep } = await K8();
+  const p = widowPlan(), d = compute(p, { today: R8 }), k = known(p, { today: R8 });
+  near8(d.result.totalTax, 536, 1);
+  // 410,000 / 25.5 (the Uniform Lifetime factor at 74) = 16,078; provisional income 22,800 + 16,078 + 13,800 = 52,678:
+  // 0.85 x (52,678 - 34,000) + 4,500 = 20,376 of Social Security taxed
+  near8(k.withdrawal.required, 16078, 0); near8(k.result.income.taxableSocialSecurity, 20376.3, 0.05);
+  near8(k.result.agi, 22800 + 16078 + 20376.3, 0.05);
+  // less 16,100 + 2,050 (65 or over) and the 6,000 senior deduction: 35,104 taxable; 1,240 + 12% of 22,704 = 3,964.5
+  near8(k.result.taxableIncome, 35104.3, 0.05); near8(k.total, 3964.5, 1);
+  assert.equal(k.steps.find((s) => s.label === "Income").sub, "IRA and 401(k) withdrawals 16,078, pension 22,800, Social Security 27,600");
+  assert.equal(k.lines[0].label, "Required withdrawal"); assert.match(k.lines[0].detail, /required withdrawal 16,078/);
+  // marked taken it is still this year's income
+  const t = widowPlan(); t.retirement.rmdTaken = { 2026: { me: "2026-10-01" } };
+  near8(known(t, { today: R8 }).total, k.total);
+  // a typed figure replaces the plan's
+  const y = widowPlan(); y.taxes.thisYear.iraWithdrawals = 20000;
+  const ky = known(y, { today: R8 });
+  assert.equal(ky.lines[0].from, "typed"); assert.equal(ky.withdrawal.total, 20000);
+  // Other ordinary income typed: it replaces the plan's withdrawal (round 8 review: the form used to say to type IRA
+  // withdrawals there), with a note saying where the withdrawals go if it does not hold them
+  const o = widowPlan(); o.taxes.thisYear.otherOrdinary = 500;
+  const ko = known(o, { today: R8 });
+  assert.ok(ko.notes.some((n) => /does not add this year's required withdrawal of 16,078/.test(n))); assert.equal(ko.withdrawal.inOther, true);
+  assert.equal(ko.lines.some((l) => l.key === "withdrawals"), false); near8(ko.total, compute(o, { today: R8 }).result.totalTax);
+  // spending past what the pension, Social Security and the required withdrawal bring in: the retirement projection's first
+  // year takes more from the IRA, and that is income too; the same plan changed in place is worked again (the projection's
+  // first year is kept by the plan's content, not by the object)
+  const sp = widowPlan(); sp.retirement.spendingMonthly = 7000;
+  const ks = known(sp, { today: R8 });
+  assert.ok(ks.withdrawal.spending > 10000, `draw ${ks.withdrawal.spending}`); near8(ks.withdrawal.total, 16078 + ks.withdrawal.spending);
+  assert.equal(ks.lines[0].label, "Withdrawals from pre-tax retirement accounts");
+  sp.retirement.spendingMonthly = 3000;
+  assert.equal(known(sp, { today: R8 }).withdrawal.spending, 0);
+  // another tax year than today's: no plan line (the withdrawal is worked for today's year)
+  const z = widowPlan(); z.taxes.year = 2025;
+  const fz = compute(z, { today: R8 });
+  assert.equal(withdrawalStep({ plan: z, fed: fz, inputs: fz.inputs, params: { today: R8 } }).line, null);
+});
+
+test("round 8 item 12 (equity-2): stock vesting this year is pay: 105,000 more wages, 53,643 of tax, the 24% bracket", async () => {
+  const { equityPlan } = await H8(), { known, stockStep } = await K8();
+  const p = equityPlan(), k = known(p, { today: R8 });
+  // 300 units at the March 2026 cliff, then 75 in June, September and December: 525 x 200 = 105,000
+  near8(k.stock.value, 105000); assert.equal(k.stock.shares, 525); assert.equal(k.stock.personId, "mo");
+  near8(k.result.agi, 213000 + 105000); near8(k.result.taxableIncome, 285800); assert.equal(k.result.bracketRate, 0.24);
+  // 2,480 + 9,120 + 22% of 110,600 + 24% of 74,400 = 53,788; less 1,000 for two older dependents; plus 0.9% of 345,000 - 250,000
+  near8(k.total, 53788 - 1000 + 855);
+  // held back: 22% of 105,000 and 0.9% of Mo's pay past 200,000 that the vests add (315,000 - 200,000 less 210,000 - 200,000)
+  near8(k.stock.withheld, 23100 + 945); near8(k.stock.withheldAfter, 0.22 * 15000 + 0.009 * 15000);
+  // wages typed: not added, and a note says so
+  const w = equityPlan(); w.taxes.thisYear.wages = 300000;
+  const fw = compute(w, { today: R8 });
+  const sw = stockStep({ plan: w, fed: fw, inputs: fw.inputs, params: { today: R8 } });
+  assert.equal(sw.line, null); assert.match(sw.note, /Wages this year is typed/);
+  // a pay line that is the stock pay already: not added twice
+  const i = equityPlan(); i.income.push({ id: "rsu", name: "RSU vesting", personId: "mo", type: "bonus", amount: 105000, period: "annual", growth: 0, startDate: "", endDate: "", taxable: true });
+  const fi = compute(i, { today: R8 });
+  const si = stockStep({ plan: i, fed: fi, inputs: fi.inputs, params: { today: R8 } });
+  assert.equal(si.line, null); assert.match(si.note, /"RSU vesting" on the Income page counts it/);
+});
+
+test("round 8 item 23 (couple-home-6): student loan interest comes off: taxable 87,300, tax 9,980; none on separate returns", async () => {
+  const { studentLoanPlan } = await H8(), { known, loanStep } = await K8();
+  const p = studentLoanPlan(), k = known(p, { today: R8 });
+  // twelve 730 payments on 64,000 at 6.5%: about 4,020 of interest, of which 2,500 counts; MAGI 122,000 is under 175,000
+  assert.ok(k.loan.interest > 3900 && k.loan.interest < 4200); assert.equal(k.loan.deduction, 2500);
+  assert.equal(k.result.taxableIncome, 87300); near8(k.total, 9980);
+  // in the phase-out: MAGI 190,000 on a joint return keeps (205,000 - 190,000) / 30,000 of it
+  const hi = studentLoanPlan(); hi.income[0].amount = 126000;
+  near8(known(hi, { today: R8 }).loan.deduction, 2500 * 15000 / 30000);
+  // a separate return gets none, with a note
+  const s = studentLoanPlan(); s.household.filingStatus = "married_separate";
+  const fs2 = compute(s, { today: R8 }), ls = loanStep({ plan: s, fed: fs2, inputs: fs2.inputs, params: { today: R8 } });
+  assert.equal(ls.line, null); assert.match(ls.note, /separate return cannot deduct it/);
+  near8(known(s, { today: R8 }).total, fs2.result.totalTax);
+  // Other adjustments typed replaces it
+  const a = studentLoanPlan(); a.taxes.thisYear.adjustments = 1000;
+  assert.equal(known(a, { today: R8 }).loan, null);
+});
+
+test("round 8 item 9 (equity-3, landlord-3): the IRA deduction is cut for someone with a plan at work by the income limits (IRC 219(g))", async () => {
+  const { equityPlan, landlordPlan, freelancerPlan } = await H8(), { known } = await K8();
+  // Mo, with a 401(k), puts 7,500 in a traditional IRA: at 318,000 (with the stock pay) none of it comes off
+  const p = equityPlan(); p.accounts.push({ id: "ira-mo", name: "Mo's IRA", type: "ira", balance: 0, ownerId: "mo" });
+  p.retirement.contributions.push({ id: "c-ira", accountId: "ira-mo", personId: "mo", period: "annual", amount: 7500, employerMatch: 0 });
+  const k = known(p, { today: R8 }), base = known(equityPlan(), { today: R8 });
+  assert.equal(compute(p, { today: R8 }).ira.deductible, 7500, "the keys' return still assumes it is deductible");
+  assert.equal(k.ira.deductible, 0); assert.equal(k.ira.basis, 7500); near8(k.result.agi, base.result.agi);
+  assert.ok(k.sources.some((s) => s.key === "ira" && /none of Mo's 7,500 comes off/.test(s.detail) && /The 7,500 put in after tax comes out tax-free later; what it earns is taxed\. Keep a record of it \(Form 8606\)/.test(s.detail)));
+  assert.match(k.steps.find((s) => s.label === "Income").sub, /^wages 318,000 \(105,000 of it stock pay\)$/);
+  // the landlord's 7,500 for Sam: at 154,400 (over 149,000) none comes off either, so the tax is the same as without it
+  const l = landlordPlan(); l.accounts.push({ id: "ira-sam", name: "Sam's IRA", type: "ira", balance: 0, ownerId: "sam" });
+  l.retirement.contributions.push({ id: "c-ira", accountId: "ira-sam", personId: "sam", period: "annual", amount: 7500, employerMatch: 0 });
+  near8(known(l, { today: R8 }).total, 14108);
+  // no plan at work (the freelancer): all of it comes off
+  const f = known(freelancerPlan(), { today: R8 });
+  assert.equal(f.ira.deductible, 3000); assert.equal(f.ira.people[0].rule, "none");
+});
+
+test("round 8: a household without any of it computes exactly as the keys' return", async () => {
+  const { known } = await K8();
+  for (const p of [taxPlan(), emptyPlan()]) {
+    const d = compute(p, { today: "2026-09-16" }), k = known(p, { today: "2026-09-16" }, d);
+    assert.equal(k.changed, false); assert.equal(k.result, d.result); assert.equal(k.total, d.result.totalTax);
+    // the rate too, to the last digit (it read total / gross, a few billionths off the engine's on some plans)
+    assert.equal(k.rate, d.result.effectiveRate);
+    assert.deepEqual(k.steps, d.steps); assert.deepEqual(k.lines.filter((l) => l.key !== "ira"), []);
+  }
+});
+
+// ---- round 8, Batch 1 review (r8/b1/review-money.md, review-ux.md): each fix with the household that showed it ----------
+test("round 8 review 1: the rental allowance's modified AGI leaves out the deductible half of self-employment tax (Form 8582 line 6)", async () => {
+  const { landlordBusinessPlan } = await H8(), { known } = await K8();
+  const p = landlordBusinessPlan(), k = known(p, { today: R8 });
+  // profit 140,000; AGI 140,000 - 9,890.68 (half the self-employment tax) - the allowed loss; MAGI adds the half back: 140,000
+  near8(k.se.half, 0.5 * 0.153 * 0.9235 * 140000); near8(k.rental.magi, 140000);
+  // 25,000 - (140,000 - 100,000) / 2 = 5,000 of the loss counts this year
+  near8(k.rental.allowance, 5000); near8(k.rental.net, -5000); near8(k.total, 33679.01);
+});
+
+test("round 8 review 2: Other ordinary income typed as the widow's withdrawal is not counted twice", async () => {
+  const { widowPlan } = await H8(), { known } = await K8();
+  const p = widowPlan(); p.taxes.thisYear.otherOrdinary = 16078;
+  const k = known(p, { today: R8 });
+  near8(k.total, 3964.52, 0.01); assert.equal(k.withdrawal.counted, 0);
+  assert.ok(k.sources.some((s) => s.key === "otherTyped" && /taken to include this year's IRA and 401\(k\) withdrawals \(the plan's 16,078 is not added again\)/.test(s.detail)));
+  assert.equal(k.sources.filter((s) => /withdrawal/i.test(s.label)).length, 0, "no second line for the same money");
+  // with nothing typed, the source line says what the box is for now
+  const q = widowPlan(); q.household.people[0].birthDate = "1980-03-15"; q.taxes.thisYear.otherOrdinary = 300;
+  assert.ok(known(q, { today: R8 }).sources.some((s) => s.key === "otherTyped" && s.detail === "interest, non-qualified dividends, Roth conversions"));
+});
+
+test("round 8 review 4: a draw for spending before 59½ owes the extra 10% (IRC 72(t)), and a household living on it has income", async () => {
+  const { earlyRetireePlan } = await H8(), { known, shareBefore59Half, EARLY_RATE } = await K8();
+  const p = earlyRetireePlan();
+  const d = compute(p, { today: R8 }), k = known(p, { today: R8 }, d);
+  assert.equal(d.hasIncome, false, "the Income page is empty"); assert.equal(k.hasIncome, true, "the IRA draw is income");
+  assert.ok(k.withdrawal.spending > 60000, `draw ${k.withdrawal.spending}`);
+  // 50 all year: all of it owes 10%, counted after the income tax as its own walk row
+  near8(k.earlyTax, EARLY_RATE * k.withdrawal.spending); near8(k.total, k.result.totalTax + k.earlyTax);
+  near8(k.total, 14126.52, 2);
+  const row = k.steps.find((s) => s.label === "Extra 10% on early withdrawals");
+  assert.ok(row); near8(row.amount, k.earlyTax); near8(k.steps.find((s) => s.label === "Federal tax").amount, k.total);
+  assert.ok(k.notes.some((n) => /before 59½ owes an extra 10% \(Form 5329\)/.test(n) && /not an IRA/.test(n)));
+  // the share of the year before the half-birthday: born 1967-01-15 reaches 59½ on 2026-07-15 (195 of 365 days before it)
+  near8(shareBefore59Half({ birthDate: "1967-01-15" }, 2026), 195 / 365, 1e-9);
+  assert.equal(shareBefore59Half({ birthDate: "1966-01-15" }, 2026), 0); assert.equal(shareBefore59Half({ birthDate: "1980-01-01" }, 2026), 1);
+  assert.equal(shareBefore59Half({ birthDate: "" }, 2026), null);
+  // a required withdrawal (the widow, 74) owes none
+  const { widowPlan } = await H8();
+  assert.equal(known(widowPlan(), { today: R8 }).earlyTax, 0);
+});
+
+test("round 8 review 5: stock pay uses up the wage base, so a business owner's self-employment tax is the 2.9% part only", async () => {
+  const { stockAndBusinessPlan } = await H8(), { known } = await K8();
+  const p = stockAndBusinessPlan();
+  const k = known(p, { today: R8 });
+  assert.equal(k.stock.value, 100000);
+  // Social Security wages 150,000 + 100,000 = 250,000, past the 184,500 base: 2.9% of 92.35% of 40,000 = 1,071.26
+  near8(k.se.total, 0.029 * 0.9235 * 40000);
+  // the 0.9% on what passes 200,000 after the Medicare wages (250,000): all 36,940 of earnings = 332.46
+  near8(k.se.addl, 0.009 * 0.9235 * 40000);
+});
+
+test("round 8 review 6: rent for a place not on Rental analysis stays income (at its gross), only the condo's rent comes out", async () => {
+  const { landlordPlan } = await H8(), { known, withoutIncomeRent } = await K8();
+  const rent8 = (id, amount, name) => ({ id, name, personId: "", type: "rental", amount, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+  const p = landlordPlan(); p.income.push(rent8("duplex", 1500, "Duplex rent"));
+  const k = known(p, { today: R8 });
+  near8(k.rental.removed, 25200); near8(k.rental.left, 18000);
+  // AGI 154,400 + 18,000; taxable 140,200: 2,480 + 9,120 + 22% of 39,400 = 20,268, less the 2,200 child tax credit
+  near8(k.result.agi, 172400); near8(k.total, 18068);
+  assert.ok(k.sources.some((s) => s.key === "rental" && s.amount === 18000 && /rent for a place not on Rental analysis/.test(s.detail)));
+  // matched by name first: a row named for the condo comes out whole, whatever its amount
+  const q = landlordPlan(); q.income.find((x) => x.id === "rent").name = "Condo rent"; q.income.find((x) => x.id === "rent").amount = 2000;
+  q.income.push(rent8("duplex", 2100, "Duplex"));
+  const f = compute(q, { today: R8 });
+  const w = withoutIncomeRent(q, f, { today: R8 });
+  assert.deepEqual(w.rows.map((x) => Math.round(x.removed)), [24000, 1200]);
+});
+
+test("round 8 review 7: the 20% business deduction shrinks over its income line (IRC 199A(b)(3)), to the 400 minimum past the range", async () => {
+  const { highFreelancerPlan } = await H8(), { known, qbiPhase } = await K8();
+  const p = highFreelancerPlan();
+  const k = known(p, { today: R8 });
+  // taxable income before it 367,105, past 201,750 + 75,000: no wages paid, no property, so only the 199A(i) minimum
+  assert.equal(k.result.deduction.qbi, 400); near8(k.total, 132231.10, 0.05);
+  assert.ok(k.notes.some((n) => /over the 201,750 where its limits start and past 276,750/.test(n) && /400 minimum for an active business is taken/.test(n)));
+  // half way through the range half of it is left; under the line all of it; joint and separate lines and widths
+  near8(qbiPhase({ tentative: 10000, taxable: 239250, filingStatus: "single", year: 2026 }).amount, 5000);
+  near8(qbiPhase({ tentative: 10000, taxable: 201750, filingStatus: "single", year: 2026 }).amount, 10000);
+  near8(qbiPhase({ tentative: 10000, taxable: 478500, filingStatus: "married_joint", year: 2026 }).amount, 5000);
+  near8(qbiPhase({ tentative: 10000, taxable: 239275, filingStatus: "married_separate", year: 2026 }).amount, 5000);
+  near8(qbiPhase({ tentative: 10000, taxable: 600000, filingStatus: "married_joint", year: 2026 }).amount, 0);
+  // the freelancer at 78,000 is far under it: unchanged
+  const { freelancerPlan } = await H8();
+  near8(known(freelancerPlan(), { today: R8 }).result.deduction.qbi, 0.2 * (69489.4755 - 16100));
+});
+
+test("round 8 review 8: student loan interest comes off AGI but not off the income Social Security is tested on (Pub. 915 Worksheet 1)", async () => {
+  const { parentLoanPlan } = await H8(), { known } = await K8();
+  const p = parentLoanPlan();
+  const k = known(p, { today: R8 });
+  // provisional income 30,000 + 12,000 = 42,000: 4,500 + 0.85 x 8,000 = 11,300 of the 24,000 taxed, the loan interest left in
+  near8(k.result.income.taxableSocialSecurity, 11300); near8(k.result.agi, 30000 + 11300 - 2500); near8(k.total, 1510);
+  // the engine: studentLoanInterest is off AGI and in the adjustments, not off provisional income
+  const P = compute(p, { today: R8 }).params;
+  const a = federalTax({ filingStatus: "single", otherOrdinary: 30000, socialSecurity: 24000, studentLoanInterest: 2500 }, P);
+  const b = federalTax({ filingStatus: "single", otherOrdinary: 30000, socialSecurity: 24000, adjustments: 2500 }, P);
+  near8(a.income.taxableSocialSecurity, 11300); near8(b.income.taxableSocialSecurity, 9175); near8(a.adjustments, 2500); near8(a.agi, 38800);
+});
+
+test("round 8 review 9: the first required withdrawal may wait until April 1 of next year, and the page says so", async () => {
+  const { firstRmdPlan } = await H8(), { known } = await K8();
+  const p = firstRmdPlan();
+  const k = known(p, { today: R8 });
+  assert.equal(k.withdrawal.people[0].first, true);
+  assert.ok(k.notes.some((n) => /first required withdrawal: it may wait until April 1, 2027, but then it is 2027's income, on top of 2027's own/.test(n)));
+  // marked taken: nothing to wait for
+  p.retirement.rmdTaken = { 2026: { me: "2026-10-01" } };
+  assert.ok(!known(p, { today: R8 }).notes.some((n) => /may wait until April 1/.test(n)));
+});
+
+test("round 8 review UX 9-11: the IRA row is $0 not -$0 and says only what was put in comes out tax-free; the walk names rent and pensions", async () => {
+  const { landlordPlan, widowPlan } = await H8(), { known } = await K8();
+  const l = landlordPlan(); l.accounts.push({ id: "ira-sam", name: "Sam's IRA", type: "ira", balance: 0, ownerId: "sam" });
+  l.retirement.contributions.push({ id: "c-ira", accountId: "ira-sam", personId: "sam", period: "annual", amount: 7500, employerMatch: 0 });
+  const k = known(l, { today: R8 }), ira = k.sources.find((s) => s.key === "ira");
+  assert.equal(Object.is(ira.amount, -0), false); assert.equal(ira.amount, 0);
+  assert.match(ira.detail, /at your joint income of about 154,400 none of Sam's 7,500 comes off/);
+  assert.match(ira.detail, /The 7,500 put in after tax comes out tax-free later; what it earns is taxed/);
+  // the rent is named in the walk's income, at its result after costs, and the loss line says what it means this year
+  assert.equal(known(landlordPlan(), { today: R8 }).steps.find((s) => s.label === "Income").sub, "wages 154,400, rentals 0 after costs (25,200 of rent; see below)");
+  assert.ok(k.sources.some((s) => s.key === "rental" && /at your income a rental loss cannot lower this year's tax; the 1,547 waits for a year with rental profit, or the sale/.test(s.detail)));
+  // stock pay is said in shares
+  const { equityPlan } = await H8();
+  assert.match(known(equityPlan(), { today: R8 }).sources.find((s) => s.key === "stock").detail, /525 shares vesting in 2026 at 200 each/);
+});
+
+// --- round 8, batch 1 verify (2026-11-06) ------------------------------------------------------------------------------
+test("round 8 verify: a 401(k) drawn after leaving work at 55 or later owes no extra 10% (IRC 72(t)(2)(A)(v)); an IRA still does", async () => {
+  const { known } = await K8();
+  // Ty, born 1969-03-03 (57 in 2026), no pay on the Income page, 800,000 in one pre-tax account, 5,000 a month of spending
+  const mk = (accounts, retirementAge, birthDate = "1969-03-03") => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "me", name: "Ty", role: "self", birthDate, retirementAge, lifeExpectancy: null }];
+    p.household.filingStatus = "single"; p.household.state = "TX"; p.income = [];
+    p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 20000, ownerId: "" }, ...accounts.map(([type, balance], i) => ({ id: `a${i}`, name: `Plan ${i}`, type, balance, ownerId: "me" }))];
+    p.retirement.spendingMonthly = 5000;
+    return p;
+  };
+  // left work at 56, money in the old job's 401(k): the separation-from-service exception (IRS, "Retirement topics:
+  // exceptions to tax on early distributions": qualified plans yes, IRAs no), so no extra 10%, and the page says why
+  const k401 = known(mk([["401k", 800000]], 56), { today: R8 });
+  assert.ok(k401.withdrawal.spending > 40000, `draw ${k401.withdrawal.spending}`);
+  assert.equal(k401.earlyTax, 0);
+  assert.equal(k401.steps.some((s) => s.label === "Extra 10% on early withdrawals"), false);
+  assert.ok(k401.notes.some((n) => /left work at 56/.test(n) && /not an IRA/.test(n)), k401.notes.join(" | "));
+  // the same money in an IRA owes it: 10% of the whole draw
+  const kIra = known(mk([["ira", 800000]], 56), { today: R8 });
+  near8(kIra.earlyTax, 0.1 * kIra.withdrawal.spending);
+  // left work at 52: no exception for the 401(k) either
+  const k52 = known(mk([["401k", 800000]], 52, "1972-03-03"), { today: R8 });
+  near8(k52.earlyTax, 0.1 * k52.withdrawal.spending);
+  // half in each, left at 56: the 10% on the IRA's half of the draw only (the draw shared by balance, as before)
+  const kMix = known(mk([["401k", 400000], ["ira", 400000]], 56), { today: R8 });
+  near8(kMix.earlyTax, 0.05 * kMix.withdrawal.spending);
+});
+
+test("round 8 verify: a retiree whose income is the plan's IRA withdrawals is not told the estimate is built only from what is typed", async () => {
+  const { earlyRetireePlan } = await H8();
+  const text = await pageText(earlyRetireePlan(), R8);
+  assert.ok(!/the estimate is built from what you type below/i.test(text), "the withdrawals are the plan's, not typed");
+  assert.match(text, /Nothing on the Income page yet: the estimate is built from this year's IRA and 401\(k\) withdrawals the plan takes \(What the plan already knows\) and what you type below\./);
+  // with nothing at all, the note is as before
+  assert.match(await pageText(emptyPlan(), R8), /Nothing on the Income page yet: the estimate is built from what you type below\./);
 });

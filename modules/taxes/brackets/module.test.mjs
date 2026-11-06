@@ -126,3 +126,36 @@ test("Review 2026-11-06: Brackets and the Federal estimate use one threshold for
     assert.equal(b.careMoves, f.careSets !== null, `household ${i}: ${f.nextDollar} vs ${f.nextDollarNoCare}`);
   }
 });
+
+test("round 8 review 3: Bracket explorer is the Federal estimate's return (the business at its profit, this year's withdrawal, stock pay)", async () => {
+  const { widowPlan, freelancerPlan, equityPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known } = await import("../federal/known.js");
+  const T = "2026-11-06";
+  const f = compute(freelancerPlan(), { today: T, extra: 10000 }), kf = known(freelancerPlan(), { today: T });
+  assert.equal(f.bracketRate, 0.12); assert.ok(Math.abs(f.taxableIncome - 42711.58) < 0.05);
+  assert.equal(f.totalTax, kf.total); assert.equal(f.effectiveRate, kf.rate); assert.equal(f.marginal, kf.nextDollar);
+  const w = compute(widowPlan(), { today: T });
+  assert.equal(w.bracketRate, 0.12); assert.ok(Math.abs(w.ladder.reduce((t, x) => t + x.tax, 0) - 3964.52) < 0.05);
+  assert.ok(Math.abs(w.effectiveRate - 3964.52 / 66478) < 1e-4, String(w.effectiveRate));
+  // 10,000 more for the stock couple stays in the 24% bracket (it said 22%)
+  const e = compute(equityPlan(), { today: T, extra: 10000 });
+  assert.equal(e.bracketRate, 0.24); assert.equal(e.extra.bracketRate, 0.24);
+});
+
+test("round 8 fix: the Deductions tile names the business deduction, so income less the deductions is the ladder's taxable income", async () => {
+  const { freelancerPlan, widowPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const { known } = await import("../federal/known.js");
+  const T = "2026-11-06";
+  const f = compute(freelancerPlan(), { today: T }), kf = known(freelancerPlan(), { today: T });
+  // 78,000 of profit; SE tax 78,000 x 0.9235 x 0.153 = 11,021.05; less 8,510.52 of adjustments (half of it, 5,510.52, and
+  // the IRA 3,000) = AGI 69,489.48; less the standard 16,100 and the business deduction 10,677.90 (20% of the taxable
+  // income before it, 53,389.48, which is less than 20% of the profit after half the SE tax) = 42,711.58
+  assert.equal(f.deduction, 16100);
+  assert.ok(Math.abs(f.businessDeduction - 10677.90) < 0.01, String(f.businessDeduction));
+  assert.ok(Math.abs(kf.result.agi - f.deduction - f.businessDeduction - f.taxableIncome) < 0.01);
+  // the business deduction is held to 20% of taxable income, so one more dollar of other income adds 80 cents of taxable
+  // income: 12% x 0.8 = 9.6% (the tile says the deduction grows with it instead of "what it really costs")
+  assert.ok(Math.abs(f.marginal - 0.096) < 1e-9, String(f.marginal)); assert.equal(f.bracketRate, 0.12);
+  // no business: nothing extra
+  assert.equal(compute(widowPlan(), { today: T }).businessDeduction, 0);
+});

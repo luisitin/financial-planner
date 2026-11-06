@@ -38,11 +38,15 @@
   least 0 (469(i)(3)(E): "without regard to (i) any amount includible in gross income under section 86, ... (iii) the
   amounts allowable as a deduction under sections 219, 221, and 250, and (iv) any passive activity loss"; Form 8582 line 6;
   quoted from the answer key's RULES.md, read 2026-10-31). The student loan interest deduction (221) is in the typed
-  adjustments, which are not split out, so it stays in. Filing separately (two returns), the rentals' result goes on the
+  adjustments, which are not split out, so it stays in. The AGI is worked without the Income page's rent (round 8,
+  `withoutIncomeRent` from taxes/federal `known.js`): Get started and the Income page list the rent before any cost, and
+  the Federal estimate counts this page's result in its place, so the allowance is no longer tested with the gross rent in
+  (landlord: 154,400, it was 179,600 with 25,200 of rent; the 1,547 loss is carried either way, the allowance being gone
+  at 150,000). `incomeRent` (only when there is some) is the rent taken out. Filing separately (two returns), the rentals' result goes on the
   return the federal estimate puts added income on (the adult marked Me), and the allowance is worked on that return's own
   modified AGI, not the two added up (469(i)(5)(A); Form 8582 is one per return). The page's sentences take the figures in
   use (`rule`: 25,000 / 100,000 / 150,000, or 12,500 / 50,000 / 75,000 filing separately).
-- **The tax** (`tax`): the federal estimate's total tax with the rentals' allowed net result added (a profit as ordinary
+- **The tax** (`tax`): the federal estimate's total tax (without the Income page's rent) with the rentals' allowed net result added (a profit as ordinary
   income and as investment income for the 3.8% tax, IRC 1411(c)(1)(A)(i), Form 8960 line 4a; a loss off income) less the
   total without, so it crosses brackets and the standard deduction and adds the 3.8% on the lesser of the net rent and the
   income over the line for the filing status (`rates.niitLine`, the engine's table: 250,000 for a qualifying surviving spouse
@@ -59,7 +63,7 @@
 
 ## Edge cases
 - No loan: no coverage ratio; cash flow = NOI. No rent or value: the form asks for them first.
-- If Income also lists the rent, the federal estimate counts it there; this page's tax line is the rental's own result.
+- If Income also lists the rent, the Federal estimate drops it and counts this page's result instead (round 8; taxes/federal README "What the plan already knows"); this page's tax line is the rental's own result. `rentalsFor(plan, { today, year })` gives the Federal estimate each rental's `analyse` for the tax year.
 - Real-estate professionals and short-term rentals follow other rules: not modelled.
 
 ## Tests
@@ -78,3 +82,19 @@ the IRS's Table A-6 differs by up to $19 in a year, both lawful (Pub. 946).
 ## Ideas / not yet
 - A ten-year hold with the sale: depreciation recapture at up to 25%, gains tax, the return over the hold.
 - The rental's rent and costs flowing into Income and the federal estimate's Schedule E line.
+
+## One set of figures with the Federal estimate (round 8 review, 2026-11-06)
+- **Where the figures come from.** The allowance, its modified AGI and the netting are the Federal estimate's own
+  (`taxes/federal/known.js` `rentalStep`, read through `known(plan).rental`). The MAGI is worked after this year's
+  withdrawals, stock pay and a business at its profit. It leaves out taxable Social Security, the IRA deduction, the
+  deductible half of self-employment tax and the student loan interest (IRC 469(i)(3)(E); Form 8582 instructions (2025),
+  line 6, read 2026-11-06 at irs.gov/instructions/i8582).
+- **What the rentals add:** `tax.federal` and `tax.niit` are `known().total` less `knownWithout(plan, params, fed,
+  "rental")`. That is the same steps with the rentals' result left out, and their rent still out of Income. The IRA and
+  student loan limits and the 20% business deduction move with it.
+- **Why.** The review found this page working MAGI on a business at its gross: 170,000 and an allowance of 0, where the
+  Federal estimate said 9,945 and the law 5,000.
+- **The marginal rate** shown is the one before the rentals, on the same figures (the keys' return when no step moved it).
+- **Unchanged:** the golden rows (typed wages only) give the same figures, and `tests/golden-property` passes unchanged.
+- **Only this rental's rent comes out of Income:** only as much as the rentals here collect (see the Federal README,
+  "Round 8 review fixes"). A second place's rent that is only on Income stays counted, before its costs.

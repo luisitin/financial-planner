@@ -101,3 +101,18 @@ export function typicalPayment(key, owed, rate) {
   const p = key === "credit" ? owed * r + owed * 0.01 : pmt(r, TYPICAL_TERMS[key] ?? 60, owed);
   return Math.round(p);
 }
+
+/**
+ * A year of payments on one debt (`months` of them, 12 by default): what is paid, how much is interest and how much pays it
+ * down, each month's interest the balance times rate / 12, the payment never more than what is owed (it stops once paid
+ * off). The same figures as the Income statement's yearOfPayments (cashflow/statement); here so the Federal estimate's
+ * student loan interest (taxes/federal known.js) and Rental analysis can work it without loading that page's imports.
+ */
+export function yearOfPayments(balance, rate, payment, months = 12) {
+  let b = balance, paid = 0, interest = 0;
+  for (let m = 0; m < months && b > 0.005 && payment > 0; m++) {
+    const i = b * (rate ?? 0) / 12, pay = Math.min(payment, b + i);
+    interest += i; paid += pay; b = b + i - pay;
+  }
+  return { paid, interest: Math.min(interest, paid), principal: Math.max(0, paid - interest) };
+}

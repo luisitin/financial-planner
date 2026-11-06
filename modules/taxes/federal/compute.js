@@ -766,36 +766,12 @@ function accountsSay(care) {
 const incomeTaxZero = (r) => !(r.incomeTax > 0.5);
 
 /**
- * compute(plan, { today }) -> {
- *   ...taxInputs, years (with tables), result (federalTax), marginal (the next 1,000's cost), nextDollar (what the page shows: over
- *   whole steps of the child care credit when it is in play), steps: [{ label, amount, sub }] the walk from income to tax,
- *   isIndexed (a year past the last table, figures inflated), hasIncome, careFalls (the child care credit shrinks as income rises),
- *   careSets ("covers" | "falls" | null: the child care credit, not the bracket, sets the next dollar's cost), nextDollarNoCare, care
- * }
+ * walk(r, b, nextDollar) -> the steps from income to tax ([{ label, amount, sub }]) for a federalTax result `r` worked on
+ * `b` (taxInputs: the people, the itemized lines, the care, the gains' carryover, the filing status) with `nextDollar` the
+ * page's next-dollar cost. compute() builds its `steps` (the answer keys' walk) with it; the page's own figures (known.js)
+ * build theirs with it and add their rows.
  */
-export function compute(plan, params = {}) {
-  const b = taxInputs(plan, params);
-  const result = federalTax(b.inputs, b.params);
-  // the loss carried to next year by the worksheet (more than the loss over 3,000 when taxable income is below zero)
-  if (b.gains.netLoss < 0) {
-    const carry = lossCarryover(b, result);
-    b.gains = { ...b.gains, carryForward: -carry.total, carryover: carry };
-    b.sources = b.sources.map((x) => x.key === "loss" ? { ...x, detail: carry.total > 0.5 ? `${fmtInt(-b.gains.netLoss)} lost in all; ${fmtInt(carry.total)} carries forward` : "Capital gains page" } : x);
-  }
-  // `marginal`: the next 1,000's cost, as before (other pages and their tests read it). `nextDollar`, what this page says the
-  // next dollar costs: with the child care credit, worked over a whole number of its steps (careStep: 4,000 joint, else
-  // 2,000), so the figure does not jump between 12 and 15 cents from one pay to the next; else the same as `marginal`
-  const marginal = marginalRate(b.inputs, b.params);
-  const step = b.inputs.care ? careStep(b.inputs.filingStatus, b.params) : 0;
-  const nextDollar = nextDollarOf(b.inputs, b.params);
-  // the child care credit getting smaller as income rises (its phase-down), which the next dollar's cost counts
-  const careFalls = step > 0 && result.credits.careCredit - federalTax({ ...b.inputs, otherOrdinary: (Number(b.inputs.otherOrdinary) || 0) + step }, b.params).credits.careCredit > 0.5;
-  // what sets the next dollar's cost when the care credit moves it: `covers` when the credit is bigger than the tax and grows
-  // with it, so more pay costs less than the bracket (down to 0); `falls` when it shrinks (careFalls); null when it does not
-  // move it (the cost without the credit, the 1,000 probe nextDollarOf starts from, is the same), so the bracket is the reason
-  const noCare = step > 0 ? marginalRate({ ...b.inputs, care: undefined }, b.params) : nextDollar;
-  const careSets = step > 0 && careMovesNextDollar(nextDollar, noCare) ? (nextDollar < noCare ? "covers" : "falls") : null;
-  const r = result;
+export function walk(r, b, nextDollar) {
   const steps = [{ label: "Income", amount: r.income.gross, sub: [r.income.wages > 0 ? `wages ${fmtInt(r.income.wages)}` : null, r.income.ordinary - r.income.wages > 0 ? `other ordinary ${fmtInt(r.income.ordinary - r.income.wages)}` : null, r.income.qualified > 0 ? `dividends and gains ${fmtInt(r.income.qualified)}` : null, r.income.socialSecurity > 0 ? `Social Security ${fmtInt(r.income.socialSecurity)}` : null].filter(Boolean).join(", ") }];
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });
   if (r.income.capitalLoss < 0) steps.push({ label: "Capital loss", amount: r.income.capitalLoss, sub: `a net loss on sales comes off any income, up to ${fmtInt(b.filingStatus === "married_separate" ? 1500 : 3000)} a year${b.separate ? " on each return" : ""}${b.gains.carryForward < 0 ? `; ${fmtInt(-b.gains.carryForward)} carries to next year` : ""}` });
@@ -827,6 +803,40 @@ export function compute(plan, params = {}) {
   if (r.additionalMedicare > 0) steps.push({ label: "Additional Medicare tax", amount: r.additionalMedicare, sub: "0.9% on wages over the threshold" });
   steps.push({ label: "Federal tax", amount: r.totalTax, sub: `${r.totalTax < -0.5 ? `the credits are more than the tax: ${fmtInt(-r.totalTax)} comes back as a refund` : `${ratePct(r.effectiveRate)} of income`}; the next dollar costs ${(nextDollar * 100).toFixed(0)}¢` });
   if (r.withheld > 0 || r.paid > 0) steps.push({ label: "Already paid", amount: -(r.withheld + r.paid), sub: [r.withheld > 0 ? `${fmtInt(r.withheld)} withheld` : null, r.paid > 0 ? `${fmtInt(r.paid)} estimated payments` : null].filter(Boolean).join(", ") });
+  return steps;
+}
+
+/**
+ * compute(plan, { today }) -> {
+ *   ...taxInputs, years (with tables), result (federalTax), marginal (the next 1,000's cost), nextDollar (what the page shows: over
+ *   whole steps of the child care credit when it is in play), steps: [{ label, amount, sub }] the walk from income to tax,
+ *   isIndexed (a year past the last table, figures inflated), hasIncome, careFalls (the child care credit shrinks as income rises),
+ *   careSets ("covers" | "falls" | null: the child care credit, not the bracket, sets the next dollar's cost), nextDollarNoCare, care
+ * }
+ */
+export function compute(plan, params = {}) {
+  const b = taxInputs(plan, params);
+  const result = federalTax(b.inputs, b.params);
+  // the loss carried to next year by the worksheet (more than the loss over 3,000 when taxable income is below zero)
+  if (b.gains.netLoss < 0) {
+    const carry = lossCarryover(b, result);
+    b.gains = { ...b.gains, carryForward: -carry.total, carryover: carry };
+    b.sources = b.sources.map((x) => x.key === "loss" ? { ...x, detail: carry.total > 0.5 ? `${fmtInt(-b.gains.netLoss)} lost in all; ${fmtInt(carry.total)} carries forward` : "Capital gains page" } : x);
+  }
+  // `marginal`: the next 1,000's cost, as before (other pages and their tests read it). `nextDollar`, what this page says the
+  // next dollar costs: with the child care credit, worked over a whole number of its steps (careStep: 4,000 joint, else
+  // 2,000), so the figure does not jump between 12 and 15 cents from one pay to the next; else the same as `marginal`
+  const marginal = marginalRate(b.inputs, b.params);
+  const step = b.inputs.care ? careStep(b.inputs.filingStatus, b.params) : 0;
+  const nextDollar = nextDollarOf(b.inputs, b.params);
+  // the child care credit getting smaller as income rises (its phase-down), which the next dollar's cost counts
+  const careFalls = step > 0 && result.credits.careCredit - federalTax({ ...b.inputs, otherOrdinary: (Number(b.inputs.otherOrdinary) || 0) + step }, b.params).credits.careCredit > 0.5;
+  // what sets the next dollar's cost when the care credit moves it: `covers` when the credit is bigger than the tax and grows
+  // with it, so more pay costs less than the bracket (down to 0); `falls` when it shrinks (careFalls); null when it does not
+  // move it (the cost without the credit, the 1,000 probe nextDollarOf starts from, is the same), so the bracket is the reason
+  const noCare = step > 0 ? marginalRate({ ...b.inputs, care: undefined }, b.params) : nextDollar;
+  const careSets = step > 0 && careMovesNextDollar(nextDollar, noCare) ? (nextDollar < noCare ? "covers" : "falls") : null;
+  const steps = walk(result, b, nextDollar);
   const { care, ...rest } = b;   // the care detail after the result, so a digest sent breadth first keeps the tax
-  return { ...rest, years: TAX_YEARS, result, marginal, nextDollar, steps, isIndexed: !!b.params.indexed, hasIncome: r.income.gross > 0, careFalls, careSets, nextDollarNoCare: noCare, care };
+  return { ...rest, years: TAX_YEARS, result, marginal, nextDollar, steps, isIndexed: !!b.params.indexed, hasIncome: result.income.gross > 0, careFalls, careSets, nextDollarNoCare: noCare, care };
 }

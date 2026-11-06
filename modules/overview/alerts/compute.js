@@ -151,11 +151,17 @@ export function compute(plan, params = {}) {
   else if (!owing && tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `About ${money(tax.balance)} of tax to pay in April`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}${(tax.seOwn ?? tax.seTax) >= 1 ? ` (${money(tax.seOwn ?? tax.seTax)} of it self-employment tax)` : ""}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : tax.from === "mixed" ? " (partly estimated from pay)" : ""}${tax.paid > 0 ? ` and ${money(tax.paid)} is already paid` : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
   // no paycheck takes tax out (a retiree, the self-employed): the bill is paid by quarterly estimates, so a payment past
   // due is the thing to fix (Estimated payments' own figure)
+  // This year's IRA or 401(k) withdrawals in the tax (Estimated payments' holdBack): having the tax held back from a withdrawal
+  // by December 31 counts as paid through the whole year, the quarters already past included (IRC 6654(g)), so the alert says
+  // that, the same as Quick answers, the Tax report and Estimated payments, never "pay the past-due part" (round 8 batch 1
+  // verify, item 4: the widow was told both). It is added after the required withdrawal's alert, which it follows.
+  let holdBack = null;
   if (tax && tax.from === "none" && !(inc.active ?? []).some((x) => x.type === "salary" || x.type === "bonus")) {
     let e = null;
     try { e = estimatedOf(plan, { today }); } catch { e = null; }
+    if (e?.needsEstimates && e.remaining > 0 && e.holdBack) holdBack = { e, h: e.holdBack };
     // nothing ever typed on Estimated payments is not "$0 paid": ask first, say what is due if none were made (review 2026-11-02)
-    if (e?.needsEstimates && e.behind > 0 && !e.paidTyped) add("estimates-behind", "warn", `Estimated tax: type what you have paid this year`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments, and none are typed yet. If none were made, about ${money(e.behind)} was due by now: type what you paid on Estimated payments, or pay the past-due part to keep the underpayment penalty small.`, ["taxes", "estimated"]);
+    else if (e?.needsEstimates && e.behind > 0 && !e.paidTyped) add("estimates-behind", "warn", `Estimated tax: type what you have paid this year`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments, and none are typed yet. If none were made, about ${money(e.behind)} was due by now: type what you paid on Estimated payments, or pay the past-due part to keep the underpayment penalty small.`, ["taxes", "estimated"]);
     else if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
   }
   // the people who count on an earner (Life insurance needs' answer, the same as Next best action's protection step), and a
@@ -236,6 +242,12 @@ export function compute(plan, params = {}) {
       `${r.name === "You" ? "Your" : NameOf(r.name)} required withdrawal: at least ${money(r.amount)} by ${r.first ? `April 1, ${Number(today.slice(0, 4)) + 1}` : `December 31`}`,
       `From ${r.accounts.map((a) => accountWords(a.name)).join(" and ")}${r.estimated ? ", worked out from today's balance" : ""}.${waitWords(r)} ${r.first ? `The first year may wait until April 1, but then two fall in ${Number(today.slice(0, 4)) + 1}.` : "Missing it costs 25% of what was not taken."} Tap "I've taken it" there once it is done.`,
       ["retirement", "rmd"], { due: r.first ? `${Number(today.slice(0, 4)) + 1}-04-01` : r.deadline });
+  }
+  if (holdBack) {
+    const { e, h } = holdBack;
+    add("estimates-holdback", "warn", `Have about ${money(h.amount)} of tax held back from your IRA withdrawal by December 31`,
+      `About ${money(e.totalTax)} of federal tax for ${e.year}, and no tax held back is on file. Tax held back from a withdrawal counts as paid through the whole year, the quarters already past included${h.whole > h.amount + 50 ? `; about ${money(h.whole)} leaves nothing to pay in April` : ""}. Ask the firm that holds the account to hold it back. Paying by quarters works too: Estimated payments has both.`,
+      ["taxes", "estimated"], { due: `${e.year}-12-31` });
   }
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
   for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${NameIn(p.name)} ${verbFor(p.name, "retires", "retire")} ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);

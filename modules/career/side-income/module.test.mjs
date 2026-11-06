@@ -65,8 +65,9 @@ test("the share to set aside: the tax this income adds over what comes in, worke
   // pressing "Count on" does not lower the tax: it is still worked on the average
   const counted = withMonths(VALS, (q) => { q.income.find((x) => x.id === "i-side").amount = 450; });
   near(compute(counted, { today: TODAY }).setAside.yearly, d.setAside.yearly);
-  // the whole return's quarterly payments come from the Estimated payments page
-  const est = computeEstimated(avgPlan, { today: TODAY });
+  // the whole return's quarterly payments come from the Estimated payments page, on the plan as it is (round 8, freelancer-2:
+  // they used to be worked on the months' average, so the two pages gave different payments)
+  const est = computeEstimated(p, { today: TODAY });
   assert.equal(d.estimates.needed, !!est.needsEstimates); assert.deepEqual(d.estimates.nextDue, est.nextDue ?? null);
 });
 
@@ -249,4 +250,22 @@ test("a raise from a later date: count on and the months are one record for both
   // saveMonths keeps what was there and adds what is typed
   saveMonths(p, { key: "i-side" }, { "2027-04": 800 });
   assert.equal(p.whatIfs.sideIncome["i-side"].months["2027-04"], 800); assert.equal(p.whatIfs.sideIncome["i-side"].months["2026-11"], 700);
+});
+
+// ---- round 8, Batch 1 (freelancer-2): what to pay the IRS and by when comes from Estimated payments on the plan as it is
+test("round 8 item 11: Side income and Estimated payments say the same 6,731 behind and 3,577 by January 15, typed months or not", async () => {
+  const { freelancerPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const T8 = { today: "2026-11-06" };
+  const p = freelancerPlan();
+  const months = { "2025-11": 5200, "2025-12": 3800, "2026-01": 2000, "2026-02": 4500, "2026-03": 9800, "2026-04": 6200, "2026-05": 2400, "2026-06": 11000, "2026-07": 7300, "2026-08": 3100, "2026-09": 8600, "2026-10": 6100 };
+  const typed = freelancerPlan(); typed.whatIfs = { sideIncome: { biz: { months } } };
+  const e = computeEstimated(p, T8);
+  for (const q of [p, typed]) {
+    const d = compute(q, T8);
+    assert.ok(Math.abs(d.estimates.overdue.amount - e.behind) < 0.01 && Math.abs(e.behind - 6731.45) < 0.01, `${d.estimates.overdue.amount}`);
+    assert.equal(d.estimates.nextDue.due, "2027-01-15"); assert.ok(Math.abs(d.estimates.nextDue.amount - 3577.15) < 0.01);
+    assert.equal(d.estimates.harbour, "90% of this year's");
+  }
+  // the months typed (70,000 a year on average) still shape the share to set aside
+  assert.ok(compute(typed, T8).setAside.yearly < compute(p, T8).setAside.yearly);
 });

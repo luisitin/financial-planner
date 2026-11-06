@@ -3,6 +3,7 @@
 // (0/15/20% for long-term, ordinary rates for short-term, the 3.8% surtax), how much long-term
 // gain still fits in the 0% band, and what one more sale would cost.
 import { taxInputs, netGains, lossCarryover, addIncome } from "../federal/compute.js";
+import { known } from "../federal/known.js";
 import { federalTax } from "../../../core/math/tax.js";
 
 /**
@@ -14,10 +15,17 @@ import { federalTax } from "../../../core/math/tax.js";
  * }
  */
 export function compute(plan, params = {}) {
-  const b = taxInputs(plan, params);
-  const withGains = federalTax(b.inputs, b.params);
-  const bare = taxInputs({ ...plan, taxes: { ...(plan.taxes ?? {}), gains: [] } }, params);
-  const without = federalTax(bare.inputs, bare.params);
+  const b0 = taxInputs(plan, params);
+  // the return the Federal estimate works on (known(): this year's IRA and 401(k) withdrawals, stock pay, the business at its
+  // profit, the rentals after costs, the IRA and student loan limits put in), so the room at 0% and what a sale adds are said
+  // on the return the rest of the tax pages show. A household none of those steps change keeps taxInputs' return exactly.
+  // Round 8 verify: the widow was told 27,340 of gains fit at 0% beside 35,104 of taxable income; 11,262 do.
+  const k = params.today ? known(plan, { today: params.today }) : null;
+  const b = k?.changed ? { ...b0, inputs: k.inputs } : b0;
+  const withGains = k?.changed ? k.result : federalTax(b.inputs, b.params);
+  const noSales = { ...plan, taxes: { ...(plan.taxes ?? {}), gains: [] } };
+  const k0 = !params.today ? null : (plan.taxes?.gains ?? []).length ? known(noSales, { today: params.today }) : k;
+  const without = k0?.changed || k?.changed ? k0.result : (() => { const bare = taxInputs(noSales, params); return federalTax(bare.inputs, bare.params); })();
   // the loss carried to next year by the Capital Loss Carryover Worksheet (Pub. 550), not just the loss over 3,000
   const g = b.gains.netLoss < 0 ? (() => { const c = lossCarryover(b, withGains); return { ...b.gains, carryForward: -c.total, carryover: c }; })() : b.gains;
   const st = b.params.status[b.filingStatus] ?? b.params.status.single;

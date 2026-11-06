@@ -63,7 +63,10 @@ export function schedule({ year, today = null, needsEstimates, toPayByEstimates,
  *   paidTyped: the payments were saved on this page (taxes.estimated.typedAt) or some are on file; else `paid` is 0 because
  *   nothing was typed, not because nothing was paid, and the pages ask instead of saying "$0 paid",
  *   returns: filing separately, each return's own (withholding byReturn, with `paid` its share of the payments, its own
- *   schedule's perQuarter, quarters, remaining, behind, overdue, nextDue, lateQuarter, balanceAtFiling and penaltyRisk); else null
+ *   schedule's perQuarter, quarters, remaining, behind, overdue, nextDue, lateQuarter, balanceAtFiling and penaltyRisk); else null,
+ *   holdBack: { amount (what is still short, rounded up to 100, at most the withdrawal), short, withdrawal, required, people
+ *   ([{ name, amount }] withdrawals not marked taken) } | null: with this year's IRA or 401(k) withdrawals in the tax and
+ *   estimates needed, the tax to have held back from a withdrawal before December 31 instead (IRC 6654(g))
  * }
  */
 export function compute(plan, params = {}) {
@@ -71,11 +74,12 @@ export function compute(plan, params = {}) {
   const fed = computeFederal(plan, params);
   // withholding: the figures typed on the Withholding check page; with none, the Paycheck page's estimate from pay
   // (withholdingEstimate, the one figure every tax page reads)
-  const est = withholdingEstimate(plan, params);
+  // the year's tax with self-employment tax (the Form 1040-ES worksheet and Form 2210 count it), as Withholding check counts
+  // it: the Federal estimate's figures with what the plan knows (taxes/federal known.js)
+  const yt = yearTax(plan, fed, params);
+  const est = withholdingEstimate(plan, params, yt.known);
   const wh = est.detail, withholdingFrom = est.from;
   const t = plan.taxes ?? {};
-  // the year's tax with self-employment tax (the Form 1040-ES worksheet and Form 2210 count it), as Withholding check counts it
-  const yt = yearTax(plan, fed, params);
   // the balances count refundable credits past the tax (yt.total below 0); `totalTax` is the tax said in words, at least 0
   const signedTax = yt.total, totalTax = yt.owed;
   const harbour = safeHarbour(totalTax, t.priorYear?.tax, t.priorYear?.agi, fed.filingStatus);
@@ -86,8 +90,20 @@ export function compute(plan, params = {}) {
   const needsEstimates = balanceAfterWithholding >= 1000 && toPayByEstimates > 0;
   const { perQuarter, quarters, remaining, behind, overdue, nextDue, lateQuarter } = schedule({ year: fed.year, today, needsEstimates, toPayByEstimates, paidList });
   const balanceAtFiling = signedTax - wh.projected - paid;
+  // a retiree whose tax comes from this year's withdrawals from an IRA or 401(k): tax held back from a withdrawal counts as
+  // paid evenly through the year (IRC 6654(g)(1); Pub. 505, "withholding is considered paid ... in four equal amounts"), so
+  // asking the firm to hold back what is still short from a withdrawal before December 31 covers the quarters already past
+  // without a penalty. Rounded up to 100. (Round 8, widow-2: "No estimated payments needed" on an RMD of 16,078.)
+  const wd = yt.known?.withdrawal ?? null;
+  const thisYearNow = today ? Number(String(today).slice(0, 4)) === fed.year : false;
+  const holdBack = needsEstimates && remaining > 0 && wd && !wd.typed && wd.total >= 1 && thisYearNow && (wd.spending > 0 || wd.people.some((x) => !x.taken))
+    ? { amount: Math.min(Math.ceil(remaining / 100) * 100, Math.ceil(wd.total)), short: remaining, withdrawal: wd.total, required: wd.required, people: wd.people.filter((x) => !x.taken).map((x) => ({ name: x.name, amount: x.amount })),
+      // what to hold back to owe nothing in April (the whole balance), beside what keeps the penalty away (`amount`)
+      whole: Math.min(Math.ceil(Math.max(0, balanceAtFiling) / 100) * 100, Math.ceil(wd.total)) } : null;
+  // any income counted, this year's withdrawals from the plan included (known.js), not the Income page alone (round 8 review)
+  const hasIncome = !!yt.known?.hasIncome || fed.hasIncome;
   const notes = [];
-  if (!fed.hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
+  if (!hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
   if (withholdingFrom === "paycheck") notes.push("Withholding is estimated from your pay on the Paycheck page. Type what your pay stubs withhold on the Withholding check page for a firmer figure.");
   else if (withholdingFrom === "mixed") notes.push(`Withholding for ${est.people.filter((x) => x.estimated).map((x) => x.name).join(" and ")} is estimated from pay on the Paycheck page. Type it from a pay stub on the Withholding check page for a firmer figure.`);
   if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
@@ -95,12 +111,12 @@ export function compute(plan, params = {}) {
   // with its own four payments: the payments typed here are divided between the returns as the couple may agree (Pub. 505),
   // box by box in the same shares (Review 2026-11-06: the household's figures said "no estimated payments needed" while Bo's
   // own return was 1,660 short). The household's figures above stay as the answer key has them.
-  const returns = byReturn(plan, fed, est, { paid, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, params })?.map((r) => {
+  const returns = byReturn(plan, fed, est, { paid, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, params, k: yt.known })?.map((r) => {
     const share = paid > 0 ? r.paid / paid : 0;
     const sch = schedule({ year: fed.year, today, needsEstimates: r.needsEstimates, toPayByEstimates: r.toPayByEstimates, paidList: paidList.map((x) => x * share) });
     return { ...r, ...sch, balanceAtFiling: r.balance, penaltyRisk: r.needsEstimates && r.paid + 1 < r.toPayByEstimates && !!sch.lateQuarter };
   }) ?? null;
-  return { year: fed.year, filingStatus: fed.filingStatus, totalTax, creditsBack: yt.back, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, paidTyped: !!t.estimated?.typedAt || paid > 0, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome: fed.hasIncome, balanceAfterWithholding, returns };
+  return { year: fed.year, filingStatus: fed.filingStatus, totalTax, creditsBack: yt.back, seTax: yt.se, withholding: wh.projected, withholdingFrom, withholdingDetail: wh, harbour, toPayByEstimates, perQuarter, quarters, paid, remaining, behind, overdue, nextDue, balanceAtFiling, lateQuarter, penaltyRisk: needsEstimates && paid + 1 < toPayByEstimates && !!lateQuarter, needsEstimates, paidTyped: !!t.estimated?.typedAt || paid > 0, hasPrior: harbour.prior !== null, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, notes, hasIncome, balanceAfterWithholding, returns, ...(holdBack ? { holdBack } : {}) };
 }
 
 /**

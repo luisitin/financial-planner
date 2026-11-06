@@ -101,3 +101,23 @@ sales worked independently from the IRS forms (`tools/golden_career`, `tests/gol
 Part III and separate-return add-back errors fixed above.
 
 Review 2026-11-06 (round 7): "rides on the company that pays you" says you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).
+
+## The whole return (round 8 review, 2026-11-06)
+Under each year's "set aside", the page now says what the whole return comes to with the paychecks counted too
+(`taxes/withholding` `taxAnswer`, the Federal estimate's answer for this year's return). The stock's own gap, 1,398 for the
+equity couple, is not the April bill, 6,338. View only; no formula changed.
+
+## Each year on its own tax tables (round 8 review fix, 2026-11-06)
+Next year's units were worked on this year's tax tables, so the two pages disagreed. For the equity couple's 2027
+units (60,000), Equity compensation said 498 to set aside and Employer stock said 352.
+
+Now each year in `rsuYears` uses its own tax inputs, the same as Employer stock's `inputsFor`:
+- this year: the plan's return (unchanged);
+- the plan's set tax year: the plan's return;
+- any other year: that year's tables with no typed gains.
+
+Until the IRS publishes a later year's tables, they are the latest ones raised for inflation (`core/math/tax.js`
+`paramsFor`). Rows built that way carry `estimated: true`, and the page says so under that year.
+
+Figures for 2027: federal tax on 60,000 is 13,642 on 2027's tables against 13,788 on 2026's, so both pages say 352.
+Test: "next year's units are worked on next year's tax tables".
