@@ -173,3 +173,41 @@ test("review 2026-11-06 (round 7): the unnamed first adult reads you, the partne
   const c = compute(p, { today: T }).levers?.find((l) => l.id === "claim");
   if (c) { assert.match(c.sentence, /^Your spouse claiming /); assert.match(c.sentence, / You already get it, so that stays as it is\.$/); }
 });
+
+// --- round 8 (2026-11-06): the Plan health score asks for its own target, on the same levers ----------------------------------
+test("round 8: spendingScale solves the levers for that many times the planned spending; bisect finds the scan's age", async () => {
+  const { earliestRetireAge } = await import("./compute.js");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const today = "2026-11-06";
+  const renter = renterDebtPlan(); renter.accounts.find((a) => a.id === "k401").balance = 100000;
+  for (const [name, plan] of [["family", familyPlan()], ["renter", renter], ["renter as is", renterDebtPlan()], ["retirement", retirementPlan()]]) {
+    for (const spendingScale of [1, 1.15]) {
+      const scan = earliestRetireAge(plan, { today, spendingScale }), half = earliestRetireAge(plan, { today, spendingScale, search: "bisect" });
+      assert.equal(half?.age ?? null, scan?.age ?? null, `${name} x${spendingScale}`);
+    }
+  }
+  // 115% of the spending: the saving it takes is more, and the spending lever's "most you can spend" does not move
+  const one = compute(renter, { today, only: ["spending", "saving"] }), more = compute(renter, { today, spendingScale: 1.15, only: ["spending", "saving"] });
+  assert.deepEqual(one.levers.map((l) => l.id), ["spending", "saving"]);
+  assert.ok(lever(more, "saving").value > lever(one, "saving").value);
+  assert.ok(Math.abs(lever(more, "spending").value - lever(one, "spending").value) < 1);
+  assert.ok(Math.abs(more.spendingMonthly - 1.15 * one.spendingMonthly) < 1e-6);
+  // left out, the page's own call: every lever, as before
+  assert.deepEqual(compute(renter, { today }).levers.map((l) => l.id), ["spending", "retire", "saving", "returns", "lump", "claim"]);
+});
+
+// --- round 8 review (2026-11-06), D4: the Plan health score's link opens Goal seek on the target its hint was worked out for --
+test("review D4: #/scenarios/goal-seek?target=last opens on \"Just last\", even with an amount on Legacy goals", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const p = renterDebtPlan(); p.estate = { ...(p.estate ?? {}), legacy: { bequests: [{ id: "b1", to: "Heirs", kind: "people", amount: 200000 }] } };
+  const view = new URL("./view.js", import.meta.url);
+  const notReady = { "scenarios/goal-seek": () => ({ ready: false, missing: [] }) };
+  // opened from the menu: Legacy goals' amount, as before
+  const a = await renderPage(view, p, "2026-11-06", { computeRemote: notReady });
+  assert.equal(a.remote.find((r) => r.key === "scenarios/goal-seek").params.legacy, 200000);
+  // opened from the score's hint: the money lasting, leaving nothing
+  const b = await renderPage(view, p, "2026-11-06", { computeRemote: notReady, route: { rest: [], query: { target: "last" } } });
+  assert.equal(b.remote.find((r) => r.key === "scenarios/goal-seek").params.legacy, 0);
+});

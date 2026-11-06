@@ -13,14 +13,77 @@ export const DEBT_ICONS = { credit: "💳", mortgage: "🏠", student_loan: "�
 export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
 
 /**
+ * The lines for debt payments against gross monthly income, which depend on whether the home is owned (round 8,
+ * 2026-11-06). CFPB, Your Money, Your Goals, "Debt-to-income calculator tool" (2018-11,
+ * https://files.consumerfinance.gov/f/documents/cfpb_your-money-your-goals_debt_income_calc_tool_2018-11_ADA.pdf, read
+ * 2026-11-06): homeowners "Consider maintaining a debt-to-income ratio for all debts of 36 percent or less. Some lenders
+ * will go up to 43 percent or higher. Your home mortgage is included in this ratio."; renters "15-20 percent or less. Your
+ * rent is not included in this ratio." `high` for renters is the app's: above the homeowners' 36%, which counts a mortgage
+ * too, debts alone are stretched. The pages graded a renter's 21% "comfortable" against the homeowners' 36%.
+ */
+export const DTI_LINES = { owner: { good: 0.36, high: 0.43 }, renter: { fine: 0.15, good: 0.2, high: 0.36 } };
+/**
+ * Fannie Mae's limits once a home lender adds the housing payment (Selling Guide B3-6-02, "Debt-to-Income Ratios", updated
+ * 2025-04-02, https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios, read 2026-11-06): 36% for loans checked
+ * by hand, up to 45% with the credit score and savings its matrix asks for; 50% at most through its automated check (DU).
+ */
+export const LENDER_DTI = { usual: 0.36, stretch: 0.45, most: 0.5 };
+/**
+ * shownShare(x) -> the share at the whole percent a page shows it (0.203 -> 0.2), or null. Round 8 review (2026-11-06): the
+ * pages graded the unrounded share and showed it rounded, so 20.3% read "20% ... the guideline is 20% or less: over". Every
+ * debt-to-income and housing line on Debts, What lenders see, How am I doing and the Plan health score is graded on it. It
+ * rounds as core/format.js pct prints (x * 100 to 12 significant digits, then to the whole percent; verify, 2026-11-06: 0.285 is
+ * stored as 0.28499999999999998, so Math.round(x * 100) gave 28 where the page printed "29%").
+ */
+export const shownShare = (x) => (x === null || x === undefined || !Number.isFinite(x) ? null : Math.round(Number((x * 100).toPrecision(12))) / 100);
+/**
+ * renterLevel(share) -> "fine" (15% or less) | "within" (to 20%) | "over" (to 36%) | "stretched" | null: a renter's required
+ * debt payments against gross income (DTI_LINES.renter), at the percent shown. One answer for the four pages.
+ */
+export function renterLevel(share) {
+  const x = shownShare(share), R = DTI_LINES.renter;
+  return x === null ? null : x <= R.fine + 1e-9 ? "fine" : x <= R.good + 1e-9 ? "within" : x <= R.high + 1e-9 ? "over" : "stretched";
+}
+/**
+ * lenderWithHousing(share, housingMonthly, currency) -> the sentence for a renter's required payments with a housing payment
+ * like the rent added (share = (required debt payments + rent) / gross income), against LENDER_DTI, at the percent shown, with a
+ * verdict (round 8 review: "50% ... 45 to 50% only with a strong credit score and savings" read as "within"): up to 36% within
+ * what most lenders want, to 45% more than most like, above it more than most accept. `guessed`: some of the rent is still our
+ * guess (a housing bill whose amount is in the guesses ledger): "the $1,200 rent we guessed for you (type yours on Expenses)".
+ */
+export function lenderWithHousing(share, housingMonthly, currency = "USD", { guessed = false } = {}) {
+  const x = shownShare(share), pc = (v) => `${Math.round(v * 100)}%`;
+  // a rent that is still our guess (core/estimate) is not "your rent" (verify, 2026-11-06)
+  const rent = guessed ? `the ${money(housingMonthly, currency)} rent we guessed for you (type yours on Expenses)` : `your ${money(housingMonthly, currency)} rent`;
+  const head = `Add a home payment like ${rent} and a lender would see ${pc(x)} of your income going to debts`;
+  if (x <= LENDER_DTI.usual + 1e-9) return `${head}: within the ${pc(LENDER_DTI.usual)} most lenders want.`;
+  if (x <= LENDER_DTI.stretch + 1e-9) return `${head}: more than the ${pc(LENDER_DTI.usual)} most lenders like; some go to ${pc(LENDER_DTI.stretch)} with a strong credit score and savings.`;
+  return `${head}: more than most lenders accept (${pc(LENDER_DTI.usual)}, or up to ${Math.round(LENDER_DTI.stretch * 100)} to ${pc(LENDER_DTI.most)} only with a strong credit score and savings).`;
+}
+/**
+ * rentsHome(plan, rows) -> true when the household has no mortgage owed and no home on file (no Real estate account): the
+ * renters' line applies to its debt payments (DTI_LINES.renter). A home owned outright or a mortgage: the homeowners' line.
+ */
+export function rentsHome(plan, rows) {
+  const mortgage = (rows ?? []).some((r) => r.type === "mortgage" && r.owed > 0);
+  const home = (plan.accounts ?? []).some((a) => a.type === "property");
+  return !mortgage && !home;
+}
+
+/**
  * compute(plan, { today }) -> {
  *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment (0 once paid off),
  *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
  *            interestMonthly, months (to payoff at `payment`; null without a payment; Infinity if it never pays off),
  *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
- *   income: monthly gross | null, dti (payments / income) | null, highest: row | null, warnings: [text]
+ *   income: monthly gross | null, dti (payments / income) | null, dtiRequired (minimums / income) | null, highest: row | null,
+ *   warnings: [text]
  * }
+ * dtiRequired (round 8 review, 2026-11-06): the required payments only, as a home lender counts them (Fannie Mae Selling Guide
+ * B3-6-05, "Monthly Debt Obligations", dated 2026-08-05, read 2026-11-06: a revolving account at the minimum payment the credit
+ * report shows, 5% of the balance when none is shown), not an extra the household chooses to pay. The renters' line is graded on
+ * it; `dti` (with the extra) is kept for the homeowners' line, which has always used it.
  * byGuesses (only when true): both what is owed and the rate are our guesses (docs/CONVENTIONS.md "Guesses"). Such a debt
  * is not called expensive (no amber pill, warning or alert): a guess never turns a figure amber by itself (smart-guesses
  * spec P7). A typed balance or rate keeps the flag as before.
@@ -69,14 +132,17 @@ export function compute(plan, params = {}) {
   const payments = sum("payment");
   const cur = plan.meta?.currency ?? "USD";
   const warnings = [];
+  // rows are highest rate first: only the first expensive debt is "first"; each later one says when (round 8 review, 2026-11-06:
+  // three notices each said "Paying it down first saves the most")
+  let before = null;
   for (const r of rows) {
     if (r.neverPaysOff) warnings.push(`${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
-    if (r.expensive) warnings.push(`${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. Paying it down first saves the most.`);
+    if (r.expensive) { warnings.push(`${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. ${before ? `Pay it down once the ${before} is paid off.` : "Paying it down first saves the most."}`); before = r.name; }
   }
   return {
     rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed,
     minimums: sum("minPayment"), payments, interestMonthly: sum("interestMonthly"), avgRate,
-    income, dti: income ? payments / income : null,
+    income, dti: income ? payments / income : null, dtiRequired: income ? sum("minPayment") / income : null,
     highest: rated[0] ?? null, warnings,
   };
 }

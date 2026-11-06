@@ -51,3 +51,17 @@ test("a goal waiting its turn on Next best action reads 'starts later' with its 
   assert.equal(d.goals.find((g) => g.name === "Replace Bo's car").status, "on track");
   assert.doesNotMatch(JSON.stringify(d.nextSteps), /college needs more each month/);
 });
+
+// --- round 8 review (2026-11-06): the summary says what the score and Goal seek say, and no cut bigger than the spending ------
+test("review UX: the summary's retirement and stress-test lines never ask for more than the whole planned spending", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const t = await pageText(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06",
+    { computeRemote: { "reports/plan-summary": (p, params) => compute(p, { ...params, maxPaths: 200 }) } });
+  // the plan carries $0 of the $2,040 planned: "spend about $2,040 a month less" is all of it, and does not make it last
+  assert.ok(!/\$2,040 a month less/.test(t), "no cut as big as the whole spending");
+  assert.match(t, /To make the money last: save about \$240 a month more/);
+  assert.match(t, /even spending nothing would not make it last/);
+  // the debts' own dates hold at today's payments ("on its own payment" read as "paying the minimum")
+  assert.match(t, /If you keep paying today's payments, the Visa card runs to/); assert.ok(!/On its own payment/.test(t));
+});

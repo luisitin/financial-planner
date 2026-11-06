@@ -102,3 +102,26 @@ nobody working there is no such lever (retirement is now). `earliestRetireAge` t
 
 ## Review 2026-11-06 (round 7): you and your
 - Review 2026-11-06 (round 7): the retirement lever's title and sentence and the claiming lever's sentence say you/your for the unnamed first adult and "your spouse" for Get started's partner ("When you can retire", "You and your spouse claiming at 70 ...", "You already get it"), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".
+
+## Arguments for the Plan health score (round 8, 2026-11-06)
+`compute(plan, { today, legacy, spendingScale, only, retireSearch })`: the page passes none of the three new ones and works
+exactly as before. The score passes them to quote Goal seek's own answers in its retirement hint:
+- `spendingScale` (default 1): every lever solved for the plan spending that many times its amount in retirement (1.15 is
+  the score's "room for bad luck"); `spendingMonthly` and each lever's `current` are then the scaled amount;
+  `earliestRetireAge(..., { spendingScale })` tests each age the same way.
+- `only`: lever ids to work (the score asks for spending, retire and saving; Social Security is not even read without
+  "claim").
+- `retireSearch: "bisect"` / `earliestRetireAge(..., { search: "bisect" })`: try the last age first (none: null at once),
+  then halve the range, about 7 projections instead of one per year of age; the same age as the scan whenever stopping
+  later never makes the plan worse (`module.test.mjs`, four fixtures, with and without the scale).
+
+## Opened on "Just last" from the score (round 8 review, 2026-11-06)
+`#/scenarios/goal-seek?target=last` (the Plan health score's retirement link, when its hint was worked out for the money
+lasting on steady spending) opens the page with the goal set to leave nothing ("Just last"), whatever Legacy goals holds; the
+page then shows the hint's own figures. Opened any other way, it starts from Legacy goals' amount as before. The score's
+115% target is not one of the page's goals, so the score says "Worked out as Goal seek does" for it instead of linking to
+figures the page does not show. Test: `module.test.mjs` ("review D4"), failing before the fix.
+- Seen, not changed here: under a spending rule that never runs out (a share of what is left, guardrails, years left) the page's
+  saving lever is tested on that rule and says "Nothing more", while its spending and retirement-age levers are worked on steady
+  spending; the score now asks on steady spending throughout. Making the page's saving lever steady too would change the page
+  for those plans; left for its owner to decide.

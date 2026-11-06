@@ -52,6 +52,36 @@ saving part's detail adds ", counting uneven pay at what you can count on (Side 
 page's amount leaves about $X" (X = spare + held; "is still about $X short" below 0). The score is unchanged. Test:
 `module.test.mjs` ("short on the careful month").
 
+## The retirement hint is Goal seek's answer (round 8, 2026-11-06)
+The hint said "about (1.15 x planned yearly spending - what the plan can carry) / 12 a month less spending, or the same in
+more saving or later retirement": a yearly gap in retirement spending put as a monthly cut and as a saving. For an invented
+renter of 24 (`qa/fixtures/renter-debt-plan.mjs`: the plan can carry $0 against $2,040 a month) it said "$2,350 a month
+less spending", more than all the planned spending, while Goal seek, which it links to, said $240 a month more saving.
+`retirementHint(plan, { today, ratio, money })` now quotes `scenarios/goal-seek` itself, for the target it names:
+- Short of lasting (ratio < 1): the money lasting, leaving nothing (Goal seek's "Just last"), then "Full marks need some room
+  for bad luck on top of that." Lasting but under 115% (`FULL_RETIREMENT`): every lever solved for 115% of the
+  planned spending (goal seek's `spendingScale: 1.15`).
+- Ways, each only when Goal seek gets there with it: "save about $X a month more" (the saving lever's value less what goes
+  in now), "retire at 67" (the retirement lever, when later than planned; with two adults, whose), "spend about $Y a month
+  less" with Y = planned - (the most it can spend) / target, the cut that makes what it can carry the target share of the
+  spending (never as much as the planned spending; dropped when spending alone cannot get there). Example: with $100,000 in
+  the 401(k) the renter's plan carries $26,222 a year against $24,480 (107%); 115% needs 2,040 - 26,222 / 12 / 1.15 = $139.9,
+  "about $140 a month less", where the old formula said (1.15 x 24,480 - 26,222) / 12 = $161.
+- Speed: Goal seek works only those three levers (`only`) and finds the age by halving (`retireSearch: "bisect"`, the same
+  age as its year-by-year scan whenever stopping later never hurts; tested on four fixtures), so the score stays about as
+  fast as before (the renter: about 0.1 s warm, against 0.6 s with the scan).
+- Tests: `module.test.mjs` ("round 8"), and `scenarios/goal-seek/module.test.mjs` for the new arguments.
+
+## A renter's debt payments (round 8, 2026-11-06)
+The debt part's third for payments grades a renter (`rentsHome`: no mortgage owed, no Real estate account) on the renters'
+line, rent not counted: full to 20%, half to 36%, none above (homeowners: 36% and 43% as before). Detail: "Required payments
+take 21% of gross income; for renters the guideline is 20% or less (rent not counted)." Source: CFPB, Your Money, Your Goals, "Debt-to-income calculator tool" (2018-11,
+https://files.consumerfinance.gov/f/documents/cfpb_your-money-your-goals_debt_income_calc_tool_2018-11_ADA.pdf, read
+2026-11-06): homeowners "36 percent or less ... Some lenders will go up to 43 percent or higher. Your home mortgage is
+included in this ratio"; renters "15-20 percent or less. Your rent is not included in this ratio." The invented renter's
+debt part goes from 5 to 2.5 points (no points for $9,800 of card debt against a quarter of a $39,000 year, and half of the
+third for 21%). The page's "How it is scored" line says the renters' line too. Test: `module.test.mjs` ("round 8").
+
 ## Ideas / not yet
 - The score over time (save it with the net-worth points); estate documents and insurance once those pages exist; a benchmark part (How am I doing).
 
@@ -60,3 +90,29 @@ The full-month figure in the saving part's detail is Next best action's `spare.f
 nearest $10), the one number every page shows for it. Test: `module.test.mjs`.
 
 A full month within $5 of $0 (review 2026-11-02, round 5, second review): `spare.fullKind` (cashflow/budget-percent `fullKind`: "ahead", "even" within $5 of $0, "short") decides the words, so it reads "only just about breaks even" instead of "leaves about $0" or "is still about $0 short". Test: `module.test.mjs`.
+
+## Round 8 review fixes (2026-11-06)
+- **Debt part, D3 and D7.** A renter's third for payments is graded on the required payments (liabilities `dtiRequired`), not
+  an extra chosen on top: $400 extra on a $150-minimum card cost 2.5 points for paying debt down faster. Source: Fannie Mae Selling Guide B3-6-05, "Monthly Debt Obligations" (dated 2026-08-05,
+https://selling-guide.fanniemae.com/sel/b3-6-05/monthly-debt-obligations, read 2026-11-06): revolving accounts are counted at
+the payment the credit report shows, with "5% of the outstanding balance" only when it shows no required minimum; nothing in
+it counts a payment the borrower chooses on top. Every
+  share is graded at the whole percent the detail shows (`shownShare`): 20.3% reads "20%" and earns the full third (a
+  homeowner at 36.0% to 36.49% likewise).
+- **D5: on steady spending.** `retirementWays` asks Goal seek on a copy of the plan with `retirement.strategy = "fixed-real"`,
+  the score's own measure (projection `affordableSpending`): under a share of what is left, guardrails or years-left spending
+  the money never runs out, so Goal seek's saving lever said "Nothing more" (or $10) and the hint dropped the saving that lifts
+  the score. The lead then says "To carry the planned spending every year".
+- **D4: the target, named, and the link opens it.** Short of lasting, on steady spending: 'Goal seek shows it (each) on "Just last".', and the
+  part carries `query: { target: "last" }`, which the page's links add (`#/scenarios/goal-seek?target=last`); Goal seek opens
+  on "Just last" whatever Legacy goals holds. Otherwise the page has no such target (115%, or the plan's own rule for saving),
+  so the hint says "Worked out as Goal seek does, for 15% more spending than you plan." or "..., spending the same every
+  year." instead of pointing at figures the page does not show.
+- **A cut of more than half the planned spending is left out** when another way gets there (a couple short only in the two
+  years before Social Security read "save about $70 a month more ... or spend about $2,040 a month less"); kept when it is the
+  only way. Goal seek still shows it.
+- The part also carries `hint` (the ways without "Full marks need some room ..."), which Plan summary uses for "how to make
+  the money last".
+- "How the score is worked out" says the debt part plainly: "Debt: most points for no card-type debt (10% interest or more);
+  the rest for payments under 36% of pay before tax, or 20% if you rent." (the thresholds are above).
+- Tests: `module.test.mjs` ("review D3 and D7", "review D5", "review D4", "review UX" x2), failing before the fix.

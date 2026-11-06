@@ -40,23 +40,31 @@ export function smallestWhere(ok, lo, hi, tol = 0.5) {
  * can spend and the 9-in-10 figures are, whatever rule the plan uses (recheck 2026-11-05: under a set share of what is left,
  * guardrails or years-left spending the money never runs out, so a 36-year-old read "stopping now would do").
  * Fifth pass: without `personId`, the adult the question is about (leadAdult), never one Get started says does not work.
+ * `spendingScale` (round 8, 2026-11-06; default 1): each age is tested spending that many times the plan's amount, so the
+ * Plan health score can ask for its 115% ("room for bad luck") on the same search. `search: "bisect"` (the score's, for speed:
+ * about 7 projections instead of one per year of age) tries the last age first (none: null at once), then halves the range;
+ * it finds the same age as the year-by-year scan whenever stopping later never makes the plan worse, the usual case.
  */
 export function earliestRetireAge(plan, params = {}) {
   const today = params.today ?? null;
   const legacy = Math.max(0, Number(params.legacy) || 0);
+  const scale = Number(params.spendingScale) > 0 ? Number(params.spendingScale) : 1;
   const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const self = (params.personId ? adults.find((p) => p.id === params.personId) : null) ?? leadAdult(plan, adults, today);
   if (!self || !today) return null;
   const ageNow = ageOn(self.birthDate, today);
   const planned = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
   if (ageNow === null || !Number.isFinite(planned) || !(ageNow < planned)) return null;
-  const meets = (inputs) => { const r = project({ ...inputs, strategy: "fixed-real" }); return r.success && r.endBalanceReal >= legacy - 0.5; };
+  const meets = (inputs) => { const r = project({ ...inputs, strategy: "fixed-real", ...(scale !== 1 ? { spending: { ...inputs.spending, yearly: inputs.spending.yearly * scale } } : {}) }); return r.success && r.endBalanceReal >= legacy - 0.5; };
   // the plan with steady spending, so the health line is priced on the withdrawals each age is tested with (review 2026-11-06:
   // priced on the plan's own rule, a set share of what is left gave the family 61 against 62 with steady spending)
   const withAge = (a) => { const p2 = JSON.parse(JSON.stringify(plan)); p2.household.people.find((q) => q.id === self.id).retirementAge = a; p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" }; return buildInputs(p2, { today }).inputs; };
   const upTo = Math.max(75, planned);
   let age = null;
-  for (let a = ageNow; a <= upTo; a++) { const inp = withAge(a); if (inp && meets(inp)) { age = a; break; } }
+  if (params.search === "bisect") {
+    const ok = (a) => { const inp = withAge(a); return !!inp && meets(inp); };
+    if (ok(upTo)) { let lo = ageNow - 1, hi = upTo; while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (ok(mid)) hi = mid; else lo = mid; } age = hi; }
+  } else for (let a = ageNow; a <= upTo; a++) { const inp = withAge(a); if (inp && meets(inp)) { age = a; break; } }
   // the engine stops work in the year that age is reached, never before this year: compare stop years, not ages (review
   // 2026-11-02: 64 now and 65 in December both stop in 2026, and were called "1 year before the plan's 65")
   const year = Number(String(today).slice(0, 4)), by = Number(String(self.birthDate).slice(0, 4));
@@ -93,14 +101,21 @@ export function leadAdult(plan, adults, today) {
  *   levers: [{ id, title, icon, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"needs"|"cannot"|"same", sentence, go }]
  * }
  * Every money figure is in today's dollars. `legacy` is what the plan should still hold at its end.
+ * Round 8 (2026-11-06), for the Plan health score's hint, both left out by the page itself (which then works as before):
+ * `spendingScale` (default 1) solves every lever for the plan spending that many times its amount in retirement (1.15:
+ * "room for bad luck"); `spendingMonthly` and each lever's `current` are then the scaled amount. `only` (lever ids) works
+ * just those levers, so a caller that needs three does not pay for the Social Security ages. `retireSearch: "bisect"`: the
+ * retirement age by halving (earliestRetireAge's `search`), for the score's speed.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const legacy = Math.max(0, Number(params.legacy) || 0);
+  const scale = Number(params.spendingScale) > 0 ? Number(params.spendingScale) : 1;
+  const want = (id) => !Array.isArray(params.only) || params.only.includes(id);
   const fmt = (n) => fmtMoney(Math.round(n / 10) * 10, plan.meta?.currency ?? "USD");
   const b = buildInputs(plan, { today });
   if (!b.inputs) return { ready: false, missing: b.missing, legacy };
-  const I = b.inputs;
+  const I = scale !== 1 ? { ...copyInputs(b.inputs), spending: { ...b.inputs.spending, yearly: b.inputs.spending.yearly * scale } } : b.inputs;
   const meets = (inputs) => { const r = project(inputs); return r.success && r.endBalanceReal >= legacy - 0.5; };
   const base = project(I);
   const ok0 = meets(I);
@@ -110,7 +125,7 @@ export function compute(plan, params = {}) {
 
   // 1. spending: the most a month that still reaches the goal, if markets do as well as average every year (the view adds the
   // figure that does it in 9 of 10 markets, Monte Carlo's careful figure for the same goal, once worked out)
-  {
+  if (want("spending")) {
     const best = largestWhere((s) => meets({ ...copyInputs(I), strategy: "fixed-real", spending: { yearly: s } }), 0, Math.max(12000, I.spending.yearly * 2), 1);
     const m = best === null ? 0 : best / 12;
     // the projection's health line (marketplace to 65, then Medicare) is paid on top of the spending figure: said so, as Will the money last? does
@@ -132,8 +147,8 @@ export function compute(plan, params = {}) {
   const ageNow = self ? ageOn(self.birthDate, today) : null;
   const retireAge = self ? Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65) : null;
   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
-  if (self && ageNow < retireAge) {
-    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id });
+  if (want("retire") && self && ageNow < retireAge) {
+    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) });
     // counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
     const sooner = found?.yearsSooner ?? null;
     const thisYear = !!found && found.plannedStopYear === found.stopYear && found.stopYear === Number(String(today).slice(0, 4));
@@ -149,7 +164,7 @@ export function compute(plan, params = {}) {
   }
 
   // 3. saving: the extra (or the cut) a month, before retirement, into the accounts already used (the first person's biggest contribution, else taxable)
-  if (I.retireYear > I.startYear) {
+  if (want("saving") && I.retireYear > I.startYear) {
     const now = I.contributions.reduce((s, c) => s + c.yearly, 0) / 12;
     const main = [...I.contributions].sort((x, y) => y.yearly - x.yearly)[0];
     const withSaving = (extra) => { const c = copyInputs(I); if (extra >= 0) c.contributions.push({ bucket: main?.bucket ?? "taxable", yearly: extra * 12, personIndex: main?.personIndex ?? 0, name: "extra" }); else { const f = now > 0 ? Math.max(0, 1 + extra / now) : 1; for (const x of c.contributions) x.yearly *= f; } return c; };
@@ -159,7 +174,7 @@ export function compute(plan, params = {}) {
   }
 
   // 4. the return it needs: stocks and bonds moved together
-  {
+  if (want("returns")) {
     const shifted = (d) => { const c = copyInputs(I); c.returns.stocks += d; c.returns.bonds += d; return c; };
     const d = smallestWhere((x) => meets(shifted(x)), -0.15, 0.2, 0.0001);
     const mix = (I.rates.stocksNow + I.rates.stocksRetired) / 2;
@@ -169,7 +184,7 @@ export function compute(plan, params = {}) {
   }
 
   // 5. a lump sum today: what it is short, or what could come out today and still get there
-  {
+  if (want("lump")) {
     const withLump = (x) => { const c = copyInputs(I); c.events.push({ year: c.startYear, amount: -x, label: "lump sum" }); return c; };
     if (ok0) {
       const spare = largestWhere((x) => meets(withLump(-x)), 0, Math.max(10000, Object.values(I.balances).reduce((s, v) => s + v, 0)), 50);
@@ -185,9 +200,9 @@ export function compute(plan, params = {}) {
   // been getting it since 66); those still choosing all claim at the same age here
   const ss = plan.retirement?.socialSecurity ?? {};
   let sp = null;
-  try { sp = computeSocialSecurity(plan, { today }); } catch { sp = null; }
+  if (want("claim")) try { sp = computeSocialSecurity(plan, { today }); } catch { sp = null; }
   const movable = (sp?.people ?? []).filter((x) => ss[x.id] && !x.claimed && !(x.ageNow !== null && x.ageNow >= 70 - 1 / 24));
-  if (I.incomes.some((x) => x.kind === "social") && movable.length) {
+  if (want("claim") && I.incomes.some((x) => x.kind === "social") && movable.length) {
     const claims = [...new Set(movable.map((x) => Number(ss[x.id].claimAge) || 67))];
     // the ages still possible: "now" (to the month, as the Social Security page offers it first), then each whole age to 70
     // (review 2026-11-02: "now" at 69 and 5 months was never tried, so "70 spends the most" could be false)

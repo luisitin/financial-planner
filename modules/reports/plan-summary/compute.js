@@ -26,7 +26,7 @@ export const MILESTONE_YEARS = 10;
  * compute(plan, { today }) -> {
  *   ready, missing, today, household: { name, people: [{ name, role, age }], filing, state },
  *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, gains } | null,
- *   retirement: { ready, verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly } ,
+ *   retirement: { ready, verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly, hint } ,
  *   protection: { passed, total, failing: [{ title, failAge, failYear }] } | null,
  *   goals: [...], debts: [...], milestones: [timeline events, next MILESTONE_YEARS], nextSteps: [{ title, detail }], assumptions
  * }
@@ -57,6 +57,9 @@ export function compute(plan, params = {}) {
     endReal: pr.atEnd.totalReal, affordableMonthly: pr.affordable / 12, spendingMonthly: pr.spendingYearly / 12,
     chance: mc?.ready ? mc.successRate : null, medianEndReal: mc?.ready ? mc.medianEndReal : null, paths: mc?.paths ?? null,
     socialSecurityMonthly: ss.householdYearly / 12,
+    // what makes the money last, in Goal seek's answers (the Plan health score's retirement hint; round 8 review, 2026-11-06:
+    // "spend about $2,040 a month less" was all of the planned spending, and did not make it last)
+    hint: health.ready ? health.parts.find((p) => p.id === "retirement")?.hint ?? null : null,
   } : { ready: false, missing: pr.missing };
 
   const nextSteps = [];

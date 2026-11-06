@@ -24,6 +24,8 @@ export function render(root, ctx) {
       ui.h("span", { class: "ic" }, r.grade ? { ok: "✅", warn: "⚠️", bad: "🛑" }[r.grade.level] : ""),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.label, " ", r.grade ? ui.h("span", { class: `pill ${r.grade.level === "ok" ? "ok" : "warn"}` }, r.grade.label) : null), ui.h("div", { class: "d" }, r.why),
         // card use over 30%: how much less, and about when at what you pay now (Credit cards' own answer; round 4, 2026-11-02)
+        // a renter's figure with a housing payment like the rent added, as a home lender counts it (round 8, 2026-11-06)
+        r.note ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, r.note) : null,
         r.key === "utilisation" && d.under && d.under.less30 > 0.5 ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, `${fmt.money(d.under.less30, cur)} less on the cards gets you under 30%${d.under.date30 ? `: about ${monthYear(d.under.date30)} at what you pay now` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null),
       ui.h("span", { class: "st", style: { fontWeight: "600" } }, r.value === null ? "-" : r.kind === "pct" ? fmt.pct(r.value, 0) : `${Math.round(r.value * 10) / 10} month${Math.round(r.value * 10) / 10 === 1 ? "" : "s"}`)))),
     ui.h("p", { class: "muted small" }, "These are rules of thumb from US lending, not a decision. A lender also looks at your credit history and what you have saved."),

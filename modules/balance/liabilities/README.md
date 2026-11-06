@@ -37,6 +37,53 @@ No liability accounts: empty state pointing to Net worth. Debt without detail: l
 ## Both payoff dates (round 4, 2026-11-02)
 A debt the payoff plan finishes sooner (debt/payoff `twoDates`) reads "paid off by January 2046 on its own payment, March 2039 on your payoff plan", and a line under the list says why (each debt's payment moves onto the next once it is paid off), with a link to Pay off debts.
 
+## A date holds only at the same payment (round 8, 2026-11-06)
+"Paid off by June 2031 on its own payment" read, for a card, as "paying the minimum", but a bank's minimum shrinks with the
+balance and takes far longer (Credit cards). Every dated debt now says the payment the date rests on, once: "29.0% · paid
+off by June 2031 if you keep paying $150 a month, August 2029 on your payoff plan" (the separate "$150 a month" is dropped
+when a date says it). Test: `module.test.mjs` ("round 8"), the page's words on `qa/fixtures/renter-debt-plan.mjs`.
+
+## Debt payments against income: the line for renters (round 8, 2026-11-06)
+`DTI_LINES`, `LENDER_DTI`, `rentsHome(plan, rows)` and `lenderWithHousing(share, rent, currency)` live here, so Debts, What
+lenders see, How am I doing and the Plan health score grade a renter alike. A renter (no mortgage owed, no Real estate
+account) is graded on 20% (rent not counted); the tile reads "over the 20% guideline for renters (rent not counted)" where it
+said "under 36%: comfortable" for 21%. Homeowners: as before. Sources: CFPB, Your Money, Your Goals, "Debt-to-income calculator tool" (2018-11,
+https://files.consumerfinance.gov/f/documents/cfpb_your-money-your-goals_debt_income_calc_tool_2018-11_ADA.pdf, read
+2026-11-06): homeowners "36 percent or less ... Some lenders will go up to 43 percent or higher. Your home mortgage is
+included in this ratio"; renters "15-20 percent or less. Your rent is not included in this ratio." Fannie Mae Selling Guide B3-6-02 "Debt-to-Income Ratios" (updated 2025-04-02,
+https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios, read 2026-11-06): "maximum total DTI ratio is 36%" for
+loans checked by hand, up to 45% with the credit score and reserves its matrix asks for; through DU "the maximum allowable DTI
+ratio is 50%". Test: `module.test.mjs` ("round 8").
+
 ## Ideas / not yet
 - Snowball vs avalanche schedules with a fixed extra budget (phase 4 `debt/payoff`).
 - Amortisation tables and refinance comparison (phase 4 `debt/mortgage`, `debt/refinance`).
+
+## Round 8 review fixes (2026-11-06)
+- **A renter's share is of the required payments.** `dtiRequired` = minimums / gross monthly income (additive; `dti` = all
+  payments, with any extra chosen on the Debts page, stays for the homeowners' line, which has always used it). A renter paying
+  $400 a month extra on a card read 22%, "over the guideline", and lost score points for paying debt down faster; a lender
+  counts the required $320: 9.8%. Source: Fannie Mae Selling Guide B3-6-05, "Monthly Debt Obligations" (dated 2026-08-05,
+https://selling-guide.fanniemae.com/sel/b3-6-05/monthly-debt-obligations, read 2026-11-06): revolving accounts are counted at
+the payment the credit report shows, with "5% of the outstanding balance" only when it shows no required minimum; nothing in
+it counts a payment the borrower chooses on top.
+- **Graded at the percent shown.** `shownShare(x)` = round(x x 100) / 100; `renterLevel(share)` -> "fine" (15% or less),
+  "within" (to 20%), "over" (to 36%), "stretched", on it. 20.3% read "20%" and "over the 20% guideline"; it is now within, as
+  it reads. The tile grades a homeowner's share on it too (36.0% to 36.49% now reads "under 36%: comfortable", as it shows).
+  Verify (2026-11-06): x x 100 is first taken to 12 significant digits, as core/format.js `pct` prints a percent: 0.285 is
+  stored as 0.28499999999999998, so round(x x 100) gave 28 while the page printed "29%" (housing of exactly 28.5% read "29%
+  comfortable" on What lenders see). Only exact half percents stored just under the half move (in a sweep of whole-dollar
+  payments on incomes of $500 to $30,000: 14.5%, 28.5%, 56.5% and 57.5%).
+- **The tile** for a renter: the required share, "within the 20% guideline for renters", with "required payments: " in front
+  when an extra is paid on top (so it is not read against the "Paying each month" tile beside it).
+- **The home lender's sentence has a verdict** (`lenderWithHousing`, at the percent shown): "Add a home payment like your $950
+  rent and a lender would see 50% of your income going to debts: more than most lenders accept (36%, or up to 45 to 50% only
+  with a strong credit score and savings)." 36% or less: "within the 36% most lenders want"; to 45%: "more than the 36% most
+  lenders like; some go to 45% with a strong credit score and savings" (Fannie Mae B3-6-02, above).
+  Verify (2026-11-06): `lenderWithHousing(..., { guessed })`: when some of the rent is still our guess (a housing bill whose
+  amount is in the guesses ledger, core/estimate `isGuess`; Get started's spending guesses fill the rent in), it is not "your
+  rent": "Add a home payment like the $1,200 rent we guessed for you (type yours on Expenses) and a lender would see 58% ...".
+- Tests: `module.test.mjs` ("review D3", "review UX"), failing before the fix.
+- **One "first".** The expensive-debt notices (rows highest rate first) say "Paying it down first saves the most" only for the
+  first; each later one "Pay it down once the Visa card is paid off" (the one before it). Three amber notices each said
+  "first". Test: "only one expensive debt is 'first'", failing before the fix.

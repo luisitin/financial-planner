@@ -31,6 +31,9 @@ const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y)
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
   if (legacy === null) legacy = legacyTarget(plan).target;
+  // opened from the Plan health score's hint (#/scenarios/goal-seek?target=last): the money lasting, leaving nothing, the
+  // target its figures were worked out for (round 8 review, 2026-11-06), whatever Legacy goals holds
+  if (ctx.route?.query?.target === "last") legacy = 0;
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
   const root = ui.h("div", { class: "gs-root" }, ui.h("style", {}, STYLE));

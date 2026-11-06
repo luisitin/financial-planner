@@ -1,6 +1,6 @@
 // modules/balance/liabilities/view.js -- DOM only. Totals, a tappable list of debts, and one
 // form for the selected debt's rate and payments.
-import { compute, HIGH_RATE } from "./compute.js";
+import { compute, HIGH_RATE, DTI_LINES, rentsHome, shownShare, renterLevel } from "./compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 
@@ -22,6 +22,11 @@ const FIELDS = [
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
+  const renterTile = (d) => {
+    const R = DTI_LINES.renter, level = renterLevel(d.dtiRequired), req = d.payments > d.minimums + 0.5 ? "required payments: " : "";
+    return ui.stat("Debt payments vs income", fmt.pct(shownShare(d.dtiRequired), 0), level === "stretched" ? `${req}above ${fmt.pct(R.high, 0)}: stretched, even before rent`
+      : level === "over" ? `${req}over the ${fmt.pct(R.good, 0)} guideline for renters (rent not counted)` : `${req}within the ${fmt.pct(R.good, 0)} guideline for renters`);
+  };
   const d = compute(plan, { today: fmt.today() });
   let selected = ctx.route.rest?.[0] ? d.rows.find((r) => r.id === ctx.route.rest[0]) ?? null : null;
 
@@ -38,7 +43,10 @@ export function render(root, ctx) {
     ui.stat("You owe", fmt.money(d.owed, cur), `${d.count} ${d.count === 1 ? "debt" : "debts"}${d.avgRate !== null ? `, average rate ${fmt.pct(d.avgRate, 1)}` : ""}`),
     ui.stat("Paying each month", fmt.money(d.payments, cur), d.payments > d.minimums ? `${fmt.money(d.minimums, cur)} required plus extra` : "the required payments"),
     d.interestMonthly ? ui.stat("Interest each month", fmt.money(d.interestMonthly, cur), "what borrowing costs you right now") : null,
-    d.dti !== null ? ui.stat("Debt payments vs income", fmt.pct(d.dti, 0), d.dti > 0.43 ? "above 43%: lenders see this as stretched" : d.dti > 0.36 ? "above 36%: on the high side" : "under 36%: comfortable") : null,
+    // a renter's required payments against the renters' line (CFPB: 15 to 20% or less, rent not counted); a homeowner's against
+    // 36% (round 8, 2026-11-06: a renter's 21% read "under 36%: comfortable"; review: a renter's share is of the required
+    // payments, as a lender counts them, and every share is graded at the percent shown)
+    d.dti !== null ? (rentsHome(plan, d.rows) ? renterTile(d) : ui.stat("Debt payments vs income", fmt.pct(shownShare(d.dti), 0), shownShare(d.dti) > 0.43 ? "above 43%: lenders see this as stretched" : shownShare(d.dti) > 0.36 ? "above 36%: on the high side" : "under 36%: comfortable")) : null,
   )));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   if (d.withDetail < d.count) root.append(ui.notice("info", `${d.count - d.withDetail} of your debts ${d.count - d.withDetail === 1 ? "has" : "have"} no rate or payment yet. Tap it below to add them.`));
@@ -73,12 +81,16 @@ export function render(root, ctx) {
   const sub = (r) => {
     if (!r.detail) return "add the rate and payment";
     // paid off: nothing is due any more, so no payment is said (it counts as $0 a month)
-    const bits = r.paidOff ? [`${fmt.pct(r.rate, 1)}`] : [`${fmt.pct(r.rate, 1)}`, `${fmt.money(r.payment, cur)} a month`];
+    // a date holds only while the same payment is kept up (round 8, 2026-11-06: a card's bank minimum shrinks with the
+    // balance, so "on its own payment" read as "paying the minimum"); the payment is said once, in the date
+    const dated = !r.paidOff && !r.neverPaysOff && r.months !== 0 && !!r.payoffDate;
+    const bits = r.paidOff || dated ? [`${fmt.pct(r.rate, 1)}`] : [`${fmt.pct(r.rate, 1)}`, `${fmt.money(r.payment, cur)} a month`];
+    const keep = `if you keep paying ${fmt.money(r.payment, cur)} a month`;
     if (r.neverPaysOff) bits.push("never pays off at this payment");
     else if (r.months === 0) bits.push("paid off");
     // the payoff plan finishes it sooner (finished debts' payments move onto it): both dates, so no page seems to disagree
-    else if (r.payoffDate && two[r.id]) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} on its own payment, ${monthYear(two[r.id].plan, plan.meta.locale)} on your payoff plan`);
-    else if (r.payoffDate) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)}`);
+    else if (r.payoffDate && two[r.id]) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} ${keep}, ${monthYear(two[r.id].plan, plan.meta.locale)} on your payoff plan`);
+    else if (r.payoffDate) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} ${keep}`);
     if (r.totalInterest) bits.push(`${fmt.money(r.totalInterest, cur)} interest to come`);
     if (r.securedBy) bits.push(`secured by ${r.securedBy}`);
     return bits.join(" · ");

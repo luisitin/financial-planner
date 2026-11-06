@@ -77,11 +77,14 @@ export function render(page, ctx) {
         ["Can carry a month if markets do as well as average", money(r.affordableMonthly)], ["Planned a month", money(r.spendingMonthly)],
         r.socialSecurityMonthly > 0 ? ["Social Security a month", money(r.socialSecurityMonthly)] : null,
       ]),
-      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can carry about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : `To last even if markets do as well as average, the plan would spend about ${money(r.spendingMonthly - r.affordableMonthly)} a month less, or save more, or retire later (Goal seek).`)));
+      // short: Goal seek's own answers (the Plan health score's hint), never planned less affordable, which can be all of the
+      // spending and still not make it last (round 8 review, 2026-11-06)
+      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can carry about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : r.hint ?? "To last even if markets do as well as average, the plan needs more saving, a later retirement or less spending: Goal seek works out each.")));
 
     if (d.protection) sheet.append(section(ui, "Protection: the stress tests",
       ui.h("p", {}, `The plan survives ${d.protection.passed} of ${d.protection.total} shocks: five real market crises, lower returns, a job loss, never working again, a death, a long life and a care home.`),
-      d.protection.failing.length ? list(ui, d.protection.failing.map((f) => ui.h("span", {}, ui.h("span", { class: "rp-bad" }, `${f.title}: `), `runs out ${f.failAge ? `at ${f.failAge}` : `in ${f.failYear}`}; about ${money(-f.roomMonthly)} a month less spending would make it last.`))) : ui.h("p", { class: "rp-ok" }, "No shock runs the money out.")));
+      // a cut as big as the planned spending is no answer: said plainly (round 8 review)
+      d.protection.failing.length ? list(ui, d.protection.failing.map((f) => ui.h("span", {}, ui.h("span", { class: "rp-bad" }, `${f.title}: `), `runs out ${f.failAge ? `at ${f.failAge}` : `in ${f.failYear}`}; ${r.ready && -f.roomMonthly >= r.spendingMonthly - 0.5 ? "even spending nothing would not make it last" : `about ${money(-f.roomMonthly)} a month less spending would make it last`}.`))) : ui.h("p", { class: "rp-ok" }, "No shock runs the money out.")));
 
     if (d.goals.length) sheet.append(section(ui, "Goals",
       rtable(ui, [{ label: "Goal", get: (g) => `${g.icon ? g.icon + " " : ""}${g.name}` }, { label: "Target", num: true, get: (g) => money(g.target) }, { label: "By", get: (g) => monthYear(g.targetDate) }, { label: "Status", get: (g) => ui.h("span", { class: g.status === "done" || g.status === "on track" ? "rp-ok" : g.status === "behind" || g.status === "past due" ? "rp-warn" : null }, g.startsIn ? `starts ${g.startsIn}` : g.status) }], d.goals)));
@@ -89,7 +92,8 @@ export function render(page, ctx) {
     if (d.debts.length) sheet.append(section(ui, "Debts",
       rtable(ui, [{ label: "Debt", get: (x) => x.name }, { label: "Owed", num: true, get: (x) => money(x.owed) }, { label: "Rate", num: true, get: (x) => (x.rate === null ? "-" : pct(x.rate, 1)) }, { label: "Payment", num: true, get: (x) => (x.payment ? money(x.payment) : "-") }, { label: "Paid off", get: (x) => monthYear(x.payoffDate) }], d.debts),
       // the payoff plan's dates: say so, and the own-payment date where it differs (the Debts page's)
-      d.debts.some((x) => x.ownPayoffDate) ? ui.h("p", { class: "small" }, `Paid off: on the payoff plan, each debt's payment moving onto the next once it is paid off. On its own payment ${d.debts.filter((x) => x.ownPayoffDate).map((x) => `the ${x.name} runs to ${monthYear(x.ownPayoffDate)}`).join(", ")}.`) : null));
+      // a date holds while the same payment is kept up ("on its own payment" read as "paying the minimum"; round 8 review)
+      d.debts.some((x) => x.ownPayoffDate) ? ui.h("p", { class: "small" }, `Paid off: on the payoff plan, each debt's payment moving onto the next once it is paid off. If you keep paying today's payments, ${d.debts.filter((x) => x.ownPayoffDate).map((x) => `the ${x.name} runs to ${monthYear(x.ownPayoffDate)}`).join(", ")}.`) : null));
 
     if (d.milestones.length) sheet.append(section(ui, "The next ten years",
       rtable(ui, [{ label: "When", get: (e) => (e.date ? monthYear(e.date) : String(e.year)) }, { label: "", get: (e) => `${e.icon} ${e.title}` }], d.milestones)));

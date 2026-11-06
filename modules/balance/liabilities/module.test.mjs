@@ -77,3 +77,77 @@ test("a debt resting on our guesses alone (balance and rate) is not flagged expe
     assert.equal(d.warnings.length, 1);
   }
 });
+
+// --- round 8 (2026-11-06), renter-debt-1: a card's date holds only if the same payment is kept up -------------------------
+test("round 8: a debt's own date says it holds only at the same payment ('if you keep paying $150 a month'), not 'on its own payment'", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const text = await pageText(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06");
+  // $4,500 at 29% at $150: 55 months (June 2031); on the payoff plan ($50 extra, highest rate first) August 2029
+  assert.match(text, /Visa card expensive 29\.0% · paid off by June 2031 if you keep paying \$150 a month, August 2029 on your payoff plan/);
+  assert.match(text, /Car loan 9\.0% · paid off by [A-Z][a-z]+ \d{4} if you keep paying \$350 a month/);
+  assert.ok(!text.includes("on its own payment"));
+});
+
+test("round 8: the debt-to-income tile grades a renter on the 20% line for renters", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { rentsHome } = await import("./compute.js");
+  const p = renterDebtPlan();
+  assert.equal(rentsHome(p, compute(p, { today: "2026-11-06" }).rows), true);
+  const text = await pageText(new URL("./view.js", import.meta.url), p, "2026-11-06");
+  assert.match(text, /21% Debt payments vs income over the 20% guideline for renters \(rent not counted\)/);
+  assert.ok(!text.includes("under 36%: comfortable"));
+  // a mortgage, or a home on file, is a homeowner: the 36% line as before
+  const q = renterDebtPlan(); q.accounts.push({ id: "h", name: "Home", type: "property", balance: 200000 });
+  assert.equal(rentsHome(q, compute(q, { today: "2026-11-06" }).rows), false);
+  assert.match(await pageText(new URL("./view.js", import.meta.url), q, "2026-11-06"), /under 36%: comfortable/);
+});
+
+// --- round 8 review (2026-11-06), D3 and D7: a renter's share is of the required payments, graded at the percent shown ------
+test("review D3: the renters' line counts the required payments, not an extra chosen on top; D7: graded at the whole percent shown", async () => {
+  const { renterDebtPlan, renterPayingExtraPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const view = new URL("./view.js", import.meta.url);
+  const p = renterPayingExtraPlan();
+  const d = compute(p, { today: "2026-11-06" });
+  // $150 + $100 + $70 required on the cards, $400 extra on the Visa: $320 of $3,250 is 9.8%; $720 paid is 22%
+  assert.equal(d.minimums, 320); assert.equal(d.payments, 720);
+  near(d.dtiRequired, 320 / 3250); near(d.dti, 720 / 3250);
+  const t = await pageText(view, p, "2026-11-06");
+  assert.match(t, /10% Debt payments vs income required payments: within the 20% guideline for renters/);
+  // $140 on the Visa instead of $150: $660 / $3,250 = 20.3%, shown as 20%: within, as it reads
+  const q = renterDebtPlan(); q.debts.find((x) => x.id === "setup-debt-credit").minPayment = 140;
+  assert.match(await pageText(view, q, "2026-11-06"), /20% Debt payments vs income within the 20% guideline for renters/);
+  // $670 / $3,250 = 20.6%, shown as 21%: over
+  assert.match(await pageText(view, renterDebtPlan(), "2026-11-06"), /21% Debt payments vs income over the 20% guideline for renters \(rent not counted\)/);
+});
+
+test("review UX: the home lender's figure has a verdict, against what lenders accept", async () => {
+  const { lenderWithHousing } = await import("./compute.js");
+  // (670 + 950) / 3,250 = 49.8%, shown as 50%
+  assert.equal(lenderWithHousing(1620 / 3250, 950), "Add a home payment like your $950 rent and a lender would see 50% of your income going to debts: more than most lenders accept (36%, or up to 45 to 50% only with a strong credit score and savings).");
+  // (320 + 950) / 3,250 = 39.1%
+  assert.equal(lenderWithHousing(1270 / 3250, 950), "Add a home payment like your $950 rent and a lender would see 39% of your income going to debts: more than the 36% most lenders like; some go to 45% with a strong credit score and savings.");
+  assert.equal(lenderWithHousing(0.3, 950), "Add a home payment like your $950 rent and a lender would see 30% of your income going to debts: within the 36% most lenders want.");
+  // 45.3% shows as 45%: within the stretch, as it reads
+  assert.match(lenderWithHousing(0.453, 950), /45% of your income going to debts: more than the 36% most lenders like/);
+});
+
+test("review (seen while checking): only one expensive debt is 'first'; the next ones say when", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const w = compute(renterDebtPlan(), { today: "2026-11-06" }).warnings;
+  assert.deepEqual(w, [
+    "Visa card costs about $109 a month in interest at 29%. Paying it down first saves the most.",
+    "Store card costs about $45 a month in interest at 27%. Pay it down once the Visa card is paid off.",
+    "Mastercard costs about $66 a month in interest at 24%. Pay it down once the Store card is paid off.",
+  ]);
+});
+
+// --- verify (2026-11-06): graded at the percent the page prints, even at 28.5% -----------------------------------------------------
+test("verify: shownShare rounds as the pages print a percent (core/format.js pct), so 28.5% is 29% in both", async () => {
+  const { shownShare } = await import("./compute.js");
+  const { pct } = await import("../../../core/format.js");
+  // 0.285 is stored as 0.28499999999999998: x * 100 rounds to 28, but the page prints "29%"; likewise 14.5%
+  for (const x of [0.145, 0.205, 0.285, 0.365, 0.435, 0.203, 0.2049, 926.25 / 3250]) assert.equal(`${Math.round(shownShare(x) * 100)}%`, pct(x, 0), String(x));
+});

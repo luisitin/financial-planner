@@ -52,3 +52,15 @@ passes `careful: false` (the careful figure is not shown here).
   when its figures cannot be worked out (settleReport)".
 
 Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spouse (38) and Cy (6)") and the assumptions ("Retirement at 65 for you, 62 for your spouse") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only, no compute change).
+
+## Round 8 review (2026-11-06): the same answers as the score and Goal seek
+- Retirement, when the plan cannot carry its spending: the Plan health score's hint (`retirement.hint`: Goal seek's own
+  answers for the money lasting, e.g. "To make the money last: save about $240 a month more. Goal seek shows it on "Just last"."), not
+  "spend about (planned - what it can carry) a month less", which for an invented renter carrying $0 of $2,040 was all of the
+  spending and still did not make it last. Without the score: "the plan needs more saving, a later retirement or less spending:
+  Goal seek works out each."
+- Stress tests: when the cut that would make a shock last is at least the whole planned spending, "even spending nothing would
+  not make it last" instead of "about $2,040 a month less spending would make it last".
+- Debts: "If you keep paying today's payments, the Visa card runs to ..." (was "On its own payment ...", read as "paying the
+  minimum"; Credit cards).
+- Test: `module.test.mjs` ("review UX"), failing before the fix.

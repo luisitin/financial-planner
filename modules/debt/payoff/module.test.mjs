@@ -123,3 +123,38 @@ test("savedPlan: the saved extra, the debts it goes to and when the last is gone
   assert.equal(savedPlan(q, { today: T }), null);
   assert.equal(savedPlan(emptyPlan(), { today: T }), null);
 });
+
+// --- round 8 (2026-11-06), renter-debt-7: what is typed moves the whole page, not only the headline ------------------------
+test("round 8: a typed extra redraws when each debt ends and the three orders from the same figures as the headline", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const page = await renderPage(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } });
+  const card = (title) => page.root.querySelectorAll(".card").find((c) => textOf(c.querySelector("h2")) === title);
+  // saved: $50 extra, highest rate first: debt-free July 2030, $7,799 of interest
+  assert.match(textOf(card("The three orders, same money")), /Highest interest rate first chosen least interest 3 years 8 months, by July 2030 \$7,799 interest/);
+  // type $150 (not saved): the headline, the list and the orders all say December 2029 and $5,865 (by hand: 4 debts, $670
+  // required + $150, avalanche; core/math/payoff.js on the same debts)
+  const box = page.root.querySelector('[name="extra"]');
+  box.value = "150"; box.dispatch("input");
+  const hero = textOf(page.root.querySelector(".hero"));
+  assert.match(hero, /Debt-free by December 2029/); assert.match(hero, /\$5,865 of interest/);
+  const ends = textOf(card("When each debt ends"));
+  assert.match(ends, /Visa card [^✅]* June 2028/); assert.match(ends, /Store card [^✅]* October 2028/); assert.match(ends, /Mastercard [^✅]* April 2029/); assert.match(ends, /Car loan [^✅]* December 2029/);
+  assert.match(textOf(card("The three orders, same money")), /Highest interest rate first chosen least interest 3 years 1 month, by December 2029 \$5,865 interest/);
+  assert.equal(page.saved.length, 0, "typing saves nothing");
+  // the Order select moves them too: smallest balance first, $6,058
+  const sel = page.root.querySelector('[aria-label="Order"]');
+  sel.value = "snowball"; sel.dispatch("change");
+  assert.match(textOf(card("The three orders, same money")), /Smallest balance first chosen 3 years 1 month, by December 2029 \$6,058 interest/);
+});
+
+// --- round 8 review (2026-11-06): "required payments only" read as a fixed minimum; say what it is ----------------------------
+test("review UX: the last line says it is today's payments with each finished debt's payment moving on, not the minimum", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const t = await pageText(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } });
+  assert.match(t, /If you pay nothing more than today's required amounts \(each finished debt's payment moving to the next\): 4 years 2 months and \$9,623 of interest\./);
+  assert.ok(!/With the required payments only/.test(t));
+});

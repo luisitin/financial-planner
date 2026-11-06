@@ -4,10 +4,11 @@
 // tests' life shocks), goals, and whether the plan knows enough and is up to date. Every part says
 // what it would take to earn the points it is missing.
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
-import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computeLiabilities, rentsHome, DTI_LINES, shownShare } from "../../balance/liabilities/compute.js";
 import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown } from "../../retirement/projection/compute.js";
 import { retirementGap } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
+import { compute as computeGoalSeek } from "../../scenarios/goal-seek/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
@@ -20,13 +21,16 @@ export const PARTS = { cushion: 15, saving: 15, debt: 15, retirement: 25, protec
 export const SAVING_TARGET = 0.2;
 /** Lenders' line for total debt payments against gross income (the qualified-mortgage rule's 43%); 36% is the comfortable one. */
 export const DTI = { good: 0.36, max: 0.43 };
+/** The retirement part's full marks: the plan can carry 115% of the spending it plans (room for bad luck). */
+export const FULL_RETIREMENT = 1.15;
 export const BANDS = [{ min: 85, label: "Strong" }, { min: 70, label: "Good" }, { min: 50, label: "Fair" }, { min: 0, label: "Needs work" }];
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
 /**
  * compute(plan, { today }) -> {
- *   ready, missing, score (0-100, whole), band, parts: [{ id, title, points, max, share, status: "ok"|"warn"|"bad"|"unknown", detail, fix, go }],
+ *   ready, missing, score (0-100, whole), band, parts: [{ id, title, points, max, share, status: "ok"|"warn"|"bad"|"unknown", detail, fix, go,
+ *            hint?, query? (retirement only: the ways without the score's words; Goal seek's target for the link) }],
  *   gains: parts sorted by points missing (largest first)
  * }
  * A part the plan cannot judge yet scores 0 with status "unknown" and a fix that says what to add.
@@ -73,8 +77,16 @@ export function compute(plan, params = {}) {
   const expensive = li.rows.filter((r) => r.owed > 0 && r.rate !== null && r.rate >= 0.1 && r.type !== "mortgage");
   const expensiveOwed = expensive.reduce((s, r) => s + r.owed, 0);
   const highShare = yearly > 0 ? 1 - Math.min(1, expensiveOwed / (yearly * 0.25)) : expensiveOwed > 0 ? 0 : 1;
-  const dtiShare = li.dti === null ? 1 : li.dti <= DTI.good ? 1 : li.dti <= DTI.max ? 0.5 : 0;
-  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", li.dti !== null ? `Payments take ${Math.round(li.dti * 100)}% of gross income${li.dti > DTI.good ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.` : ""].join(" "), expensiveOwed > 0 ? `Paying off ${expensive.map((r) => r.name).join(" and ")} earns these points back fastest.` : `Bring debt payments under ${Math.round(DTI.good * 100)}% of gross income.`, ["debt", "payoff"]);
+  // a renter's required payments against the renters' line, rent not counted (round 8, 2026-11-06; CFPB: 15 to 20% or less):
+  // full to 20%, half to 36%; a homeowner's payments against 36% (half to 43%) as before. Review (2026-11-06): a renter's share
+  // is of the required payments, as a lender counts them (an extra chosen on top cost points), and every share is graded at
+  // the whole percent the words show (liabilities shownShare: 20.3% read "20% ... 20% or less" with half marks)
+  const renter = li.dti !== null && rentsHome(plan, li.rows);
+  const line = renter ? { good: DTI_LINES.renter.good, max: DTI_LINES.renter.high } : DTI;
+  const dtiShown = shownShare(renter ? li.dtiRequired : li.dti);
+  const dtiShare = dtiShown === null ? 1 : dtiShown <= line.good + 1e-9 ? 1 : dtiShown <= line.max + 1e-9 ? 0.5 : 0;
+  const dtiWords = dtiShown === null ? "" : renter ? `Required payments take ${Math.round(dtiShown * 100)}% of gross income; for renters the guideline is ${Math.round(line.good * 100)}% or less (rent not counted).` : `Payments take ${Math.round(dtiShown * 100)}% of gross income${dtiShown > DTI.good + 1e-9 ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.`;
+  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${expensive.map((r) => r.name).join(" and ")} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of gross income.`, ["debt", "payoff"]);
 
   // 4. retirement: the spending the plan can carry against the spending it plans
   const pr = computeProjection(plan, { today });
@@ -88,7 +100,11 @@ export function compute(plan, params = {}) {
   else if (!known) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
-    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ratio < 1.15 ? `Full marks at 115% (room for bad luck): about ${money(Math.max(0, (1.15 * pr.spendingYearly - pr.affordable) / 12))} a month less spending, or the same in more saving or later retirement (Goal seek).` : null, ["scenarios", "goal-seek"]);
+    const ways = ratio < FULL_RETIREMENT ? retirementWays(plan, { today, ratio, money }) : null;
+    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
+    // the link opens Goal seek on the target the hint was worked out for ("Just last"), and the hint without the score's own
+    // words for reports that say how to make the money last (Plan summary)
+    if (ways) Object.assign(parts[parts.length - 1], { hint: ways.text, ...(ways.query ? { query: ways.query } : {}) });
   }
 
   // 5. protection: the stress tests' life shocks (job loss, never working again, a death, a care home, a long life)
@@ -141,3 +157,57 @@ export function compute(plan, params = {}) {
   const gains = [...parts].filter((p) => p.max - p.points >= 0.5).sort((a, b) => (b.max - b.points) - (a.max - a.points));
   return { ready: true, missing: [], score, band, parts, gains };
 }
+
+/**
+ * retirementWays(plan, { today, ratio, money }) -> { text, query | null, scale }: what earns the retirement part's missing
+ * points, in Goal seek's own answers for the target it names (round 8, 2026-11-06). It said "(1.15 x planned yearly - affordable)
+ * / 12 a month less spending, or the same in more saving or later retirement": a yearly gap in retirement spending put as a
+ * monthly cut (and as a saving), $2,350 for a renter whose page of levers says $240 a month more saving and whose planned
+ * spending is $2,040. Short of lasting (ratio < 1) the target is the money lasting, as Goal seek's "Just last"; lasting but
+ * under 115% it is 115% of the planned spending (Goal seek's `spendingScale`). A lever is named only when Goal seek gets there
+ * with it: more saving a month (its saving lever's value less what goes in now), a later retirement age, or less spending
+ * (planned - what the plan can carry / the target, never as much as the planned spending; dropped when spending alone cannot
+ * get there).
+ * Review (2026-11-06):
+ *  - Goal seek runs on steady spending (strategy "fixed-real"), the score's own measure (projection affordableSpending): under a
+ *    rule that never runs out (a share of what is left, guardrails, years left) its saving lever said "Nothing more" and the
+ *    hint dropped it; the lead then says "To carry the planned spending every year".
+ *  - Where the figures can be seen, in a sentence of its own: 'Goal seek shows it (each) on "Just last".' with `query`
+ *    { target: "last" } (the score's link opens Goal seek there, whatever Legacy goals holds) only when the page works them the
+ *    same way (steady spending, the money lasting); otherwise "Worked out as Goal seek does, ...", since the page has no 115%
+ *    target and works saving on the plan's own rule.
+ *  - A spending cut of more than half the planned spending is left out when another way gets there (a couple short only in the
+ *    two years before Social Security read "save about $70 ... or spend about $2,040 a month less"); Goal seek still shows it.
+ */
+export function retirementWays(plan, { today, ratio, money }) {
+  const scale = ratio < 1 ? 1 : FULL_RETIREMENT;
+  const steady = (plan.retirement?.strategy ?? "fixed-real") === "fixed-real";
+  const lead = scale !== 1 ? `Full marks at ${Math.round(FULL_RETIREMENT * 100)}% (room for bad luck)` : steady ? "To make the money last" : "To carry the planned spending every year";
+  const onPage = scale === 1 && steady;
+  // where the figures come from, in a sentence of its own (a way can end in a name in brackets: "retire at 68 (Ana)")
+  const where = (n) => onPage ? `Goal seek shows ${n === 1 ? "it" : "each"} on "Just last".` : `Worked out as Goal seek does${steady ? "" : ", spending the same every year"}${scale !== 1 ? `, for ${Math.round((FULL_RETIREMENT - 1) * 100)}% more spending than you plan` : ""}.`;
+  const query = onPage ? { target: "last" } : null;
+  const asked = steady ? plan : { ...plan, retirement: { ...(plan.retirement ?? {}), strategy: "fixed-real" } };
+  let gs = null;
+  try { gs = computeGoalSeek(asked, { today, only: ["spending", "retire", "saving"], retireSearch: "bisect", ...(scale !== 1 ? { spendingScale: scale } : {}) }); } catch { gs = null; }
+  if (!gs?.ready) return { text: `${lead}: Goal seek shows what each change would take.`, query, scale };
+  const lever = (id) => gs.levers.find((l) => l.id === id) ?? null;
+  const ways = [];
+  const save = lever("saving");
+  if (save?.status === "needs" && save.value !== null && save.value - save.current >= 5) ways.push(`save about ${money(save.value - save.current)} a month more`);
+  const ret = lever("retire");
+  // one adult: "retire at 67"; with two, whose age it is
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent").length;
+  if (ret?.status === "needs" && ret.value !== null) { const who = /^When (.+) can retire$/.exec(ret.title)?.[1]; ways.push(`retire at ${ret.value}${adults > 1 && who ? ` (${who})` : ""}`); }
+  const spend = lever("spending");
+  if (spend && spend.status !== "cannot" && spend.value !== null) {
+    const planned = gs.spendingMonthly / scale, cut = planned - spend.value / scale;
+    if (cut >= 5 && cut < planned && (cut <= planned / 2 || !ways.length)) ways.push(`spend about ${money(cut)} a month less`);
+  }
+  if (!ways.length) return { text: `${lead}: no one change gets there on its own; Goal seek shows what each would take.`, query, scale };
+  return { text: `${lead}: ${ways.length === 1 ? ways[0] : `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}`}. ${where(ways.length)}`, query, scale };
+}
+/** hintText(ways) -> the score's hint: the ways, and short of lasting, that full marks need room for bad luck on top. */
+const hintText = (w) => `${w.text}${w.scale === 1 ? " Full marks need some room for bad luck on top of that." : ""}`;
+/** retirementHint(plan, { today, ratio, money }) -> the score's hint text (retirementWays, with the score's own words). */
+export function retirementHint(plan, opts) { return hintText(retirementWays(plan, opts)); }

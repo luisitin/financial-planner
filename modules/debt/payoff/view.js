@@ -20,7 +20,6 @@ export function render(root, ctx) {
       ui.row(ui.h("a", { class: "btn", href: "#/balance/liabilities" }, d.missing.length ? "Add the rates and payments" : "Add your debts"))));
     return;
   }
-  const c = d.chosen;
   // The Dashboard's next move sends people here with an amount already worked out (Next best action's left-over after tax,
   // bills and saving). Until an extra has been saved, offer that amount and the date it gives, so the move is one tap.
   const nba = !d.extraSaved ? ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) : null;
@@ -46,6 +45,7 @@ export function render(root, ctx) {
     heroNote.hidden = !heroNote.textContent;
   };
   drawHero(d, false);
+  let drawLists = () => {};   // set below, once the cards' places are on the page
   root.append(ui.h("section", { class: "card accent hero" }, heroTitle, heroLede, heroNote,
     d.missing.length ? ui.h("p", { class: "muted small" }, `Not in the plan (no rate or payment yet): ${d.missing.join(", ")}.`) : null,
   ));
@@ -79,6 +79,7 @@ export function render(root, ctx) {
     const typed = ui.moneyValue(extraIn);
     const x = compute(plan, { today: fmt.today(), extra: typed === null ? d.extra : Math.max(0, typed), order: orderSel.value });
     drawHero(x, x.extra !== d.extra || x.order !== d.order);
+    drawLists(x);
   };
   extraIn.addEventListener("input", preview); orderSel.addEventListener("change", preview);
   root.append(ui.card("Your plan", ui.h("div", { class: "form" },
@@ -90,29 +91,39 @@ export function render(root, ctx) {
     d.targetsDone ? ui.h("p", { class: "muted small" }, `The debts the extra was aimed at are paid off, so the ${fmt.money(d.extraTyped, cur)} a month has stopped and is free for your next step.`) : null,
     out,
   ));
-  if (d.order === "custom") root.append(ui.card("My own order",
-    ui.h("p", { class: "muted small" }, "Top gets the extra first. Move a debt up with the arrow."),
-    ui.h("ul", { class: "page-list" }, c.debts.map((x, i) => ui.h("li", {},
-      ui.h("span", { class: "ic" }, String(i + 1)), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name)),
-      ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", () => store.update((p) => { const ids = c.debts.map((y) => y.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids }; }), { class: "secondary small" }) : null))))));
-  root.append(ui.card("When each debt ends",
-    ui.h("ul", { class: "page-list" }, c.debts.map((x) => { const src = d.debts.find((y) => y.id === x.id); return ui.h("li", {},
-      ui.h("span", { class: "ic" }, Number.isFinite(x.months) ? "✅" : "⚠️"),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name), ui.h("div", { class: "d" }, `${fmt.money(src.balance, cur)} at ${fmt.pct(src.rate, 1)} · ${fmt.money(src.required, cur)} a month required${src.extraSet > 0 ? ` plus ${fmt.money(src.extraSet, cur)} extra` : ""} · ${fmt.money(x.interest, cur)} interest to come`)),
-      ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600" } }, x.endDate ? monthYear(x.endDate) : monthsText(x.months)), ui.h("div", { class: "muted small" }, monthsText(x.months)))); })),
-    // the Debts and Mortgage pages give each debt's date on its own payment; say why this plan's is sooner
-    ...d.rollover.map((r) => ui.h("p", { class: "muted small" }, `${r.name}: ${monthYear(r.planEnd)} here because, as the other debts are paid off, their payments move to it. On its own payment it ends ${monthYear(r.ownEnd)}, the date on the Debts page.`)),
-  ));
-  // every order within a dollar of the least interest is "least interest"; the trophy only when one order alone wins
-  const least = ["avalanche", "snowball", "custom"].filter((k) => d.plans[k].totalInterest - d.plans[d.best].totalInterest < 1);
-  const rowFor = (k) => { const p = d.plans[k]; return ui.h("li", {},
-    ui.h("span", { class: "ic" }, least.length === 1 && k === d.best ? "🏆" : ""),
-    ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, ORDERS[k], k === d.order ? ui.h("span", { class: "pill accent" }, "chosen") : null, least.includes(k) ? ui.h("span", { class: "pill ok" }, "least interest") : null), ui.h("div", { class: "d" }, `${monthsText(p.months)}${p.endDate ? `, by ${monthYear(p.endDate)}` : ""}`)),
-    ui.h("span", { class: "st" }, `${fmt.money(p.totalInterest, cur)} interest`)); };
-  root.append(ui.card("The three orders, same money",
-    // a tie has no winner: one sentence instead of three equal rows and a trophy
-    d.tie ? ui.h("p", {}, d.debts.length === 1 ? `With one debt there is no order to choose: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.` : `Here every order costs the same: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.${d.extra + d.alreadyExtra > 0 ? "" : " The order starts to matter once there is extra money each month."}`)
-      : ui.h("ul", { class: "page-list" }, ["avalanche", "snowball", "custom"].map(rowFor)),
-    d.baseline ? ui.h("p", { class: "muted small" }, `With the required payments only: ${monthsText(d.baseline.months)} and ${fmt.money(d.baseline.totalInterest, cur)} of interest.`) : null,
-  ));
+  // "My own order", "When each debt ends" and "The three orders" follow what is typed above, as the headline does (round 8,
+  // 2026-11-06: typing $150 moved only the headline to December 2029 while the list and the orders stayed on the saved $50)
+  const customHost = ui.h("div"), endsHost = ui.h("div"), ordersHost = ui.h("div");
+  root.append(customHost, endsHost, ordersHost);
+  drawLists = (x) => {
+    const c = x.chosen;
+    customHost.replaceChildren(...[x.order === "custom" ? ui.card("My own order",
+      ui.h("p", { class: "muted small" }, "Top gets the extra first. Move a debt up with the arrow."),
+      ui.h("ul", { class: "page-list" }, c.debts.map((y, i) => ui.h("li", {},
+        ui.h("span", { class: "ic" }, String(i + 1)), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, y.name)),
+        ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", () => store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids }; }), { class: "secondary small" }) : null))))) : null].filter(Boolean));
+    endsHost.replaceChildren(ui.card("When each debt ends",
+      ui.h("ul", { class: "page-list" }, c.debts.map((y) => { const src = x.debts.find((z) => z.id === y.id); return ui.h("li", {},
+        ui.h("span", { class: "ic" }, Number.isFinite(y.months) ? "✅" : "⚠️"),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, y.name), ui.h("div", { class: "d" }, `${fmt.money(src.balance, cur)} at ${fmt.pct(src.rate, 1)} · ${fmt.money(src.required, cur)} a month required${src.extraSet > 0 ? ` plus ${fmt.money(src.extraSet, cur)} extra` : ""} · ${fmt.money(y.interest, cur)} interest to come`)),
+        ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600" } }, y.endDate ? monthYear(y.endDate) : monthsText(y.months)), ui.h("div", { class: "muted small" }, monthsText(y.months)))); })),
+      // the Debts and Mortgage pages give each debt's date on its own payment; say why this plan's is sooner
+      ...x.rollover.map((r) => ui.h("p", { class: "muted small" }, `${r.name}: ${monthYear(r.planEnd)} here because, as the other debts are paid off, their payments move to it. If you keep paying just its own payment, it ends ${monthYear(r.ownEnd)}, the date on the Debts page.`)),
+    ));
+    // every order within a dollar of the least interest is "least interest"; the trophy only when one order alone wins
+    const least = ["avalanche", "snowball", "custom"].filter((k) => x.plans[k].totalInterest - x.plans[x.best].totalInterest < 1);
+    const rowFor = (k) => { const p = x.plans[k]; return ui.h("li", {},
+      ui.h("span", { class: "ic" }, least.length === 1 && k === x.best ? "🏆" : ""),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, ORDERS[k], k === x.order ? ui.h("span", { class: "pill accent" }, "chosen") : null, least.includes(k) ? ui.h("span", { class: "pill ok" }, "least interest") : null), ui.h("div", { class: "d" }, `${monthsText(p.months)}${p.endDate ? `, by ${monthYear(p.endDate)}` : ""}`)),
+      ui.h("span", { class: "st" }, `${fmt.money(p.totalInterest, cur)} interest`)); };
+    ordersHost.replaceChildren(ui.card("The three orders, same money",
+      // a tie has no winner: one sentence instead of three equal rows and a trophy
+      x.tie ? ui.h("p", {}, x.debts.length === 1 ? `With one debt there is no order to choose: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.` : `Here every order costs the same: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.${x.extra + x.alreadyExtra > 0 ? "" : " The order starts to matter once there is extra money each month."}`)
+        : ui.h("ul", { class: "page-list" }, ["avalanche", "snowball", "custom"].map(rowFor)),
+      // today's payments with nothing extra, each finished debt's payment moving on (compute's baseline): "with the required
+      // payments only" read as paying the bank's shrinking minimum (round 8 review, 2026-11-06)
+      x.baseline ? ui.h("p", { class: "muted small" }, `If you pay nothing more than today's ${x.alreadyExtra > 0 ? "payments" : "required amounts"} (each finished debt's payment moving to the next): ${monthsText(x.baseline.months)} and ${fmt.money(x.baseline.totalInterest, cur)} of interest.`) : null,
+    ));
+  };
+  drawLists(d);
 }

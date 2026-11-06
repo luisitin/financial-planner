@@ -65,5 +65,25 @@ aimed at none, as it rolls from one to the next), when the last of them is gone 
 ends) and the chosen order's row for each (`ends`). Next best action's left-over figure and Budget (50/30/20) both take
 the extra from it (it was Next best action's own code), so the two pages leave the same money. Test: `module.test.mjs`.
 
+## What is typed moves the whole page (round 8, 2026-11-06)
+Typing an extra (or picking another order) redrew only the headline: "When each debt ends", "The three orders, same money"
+(and "My own order") stayed on the saved plan, so with $150 typed over a saved $50 the headline said December 2029 and
+$5,865 while the list said July 2030 and the orders $7,799. All of them are now drawn by one `drawLists(x)` from the same
+live `compute(plan, { today, extra, order })` as the headline, on every keystroke and order change; nothing is saved until
+"Save plan", and the headline keeps "With what you typed below. Save the plan to keep it." No formula changed. Check by hand
+(an independent loop, interest monthly on the opening balance, required payments, then all spare to the highest rate): the
+invented renter (`qa/fixtures/renter-debt-plan.mjs`: $4,500 at 29% / $150, $2,000 at 27% / $70, $3,300 at 24% / $100,
+$14,000 at 9% / $350) with $150 extra ends the Visa in month 19 (June 2028), the store card 23, the Mastercard 29 and the
+car loan 37 (December 2029), $5,864.75 of interest; smallest balance first $6,058.08. Test: `module.test.mjs` ("round 8"),
+the page typed into through `qa/fixtures/fake-dom.mjs`.
+
 ## Ideas / not yet
 - A payoff timeline drawing (designer), one-off lump sums, pausing a debt (0% promo).
+
+## What "nothing extra" means (round 8 review, 2026-11-06)
+The last line of "The three orders" said "With the required payments only: 4 years 2 months and $9,623 of interest", which read
+as paying the bank's shrinking minimum (Credit cards says that takes 16 to 19 years for one card). It is `baseline`: today's
+payments on each debt with no extra, each finished debt's payment moving to the next (`payoffPlan(debts, { extra: 0 })`). It
+now says so: "If you pay nothing more than today's required amounts (each finished debt's payment moving to the next): 4 years
+2 months and $9,623 of interest" ("today's payments" when the Debts page has an extra on a debt). The rollover note says "If
+you keep paying just its own payment, it ends ..." for "On its own payment it ends ...". Test: `module.test.mjs` ("review UX").

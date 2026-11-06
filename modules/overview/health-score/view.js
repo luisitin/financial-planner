@@ -41,9 +41,9 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, `Seven parts, each scored by the page that works it out: ${Object.entries(PARTS).map(([k, v]) => `${label(k)} ${v}`).join(", ")}. ${BANDS.slice(0, 3).map((b) => `${b.label} from ${b.min}`).join(", ")}.`)));
     if (d.gains.length) host.append(ui.card("Where the points are",
       ui.h("ol", { class: "steps" }, d.gains.slice(0, 3).map((p, i) => ui.h("li", { class: i === 0 ? "next" : null },
-        ui.h("a", { class: "step-link", href: `#/${p.go[0]}/${p.go[1]}` }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail)), ui.h("span", { class: "chev" }, "›")))))));
+        ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail)), ui.h("span", { class: "chev" }, "›")))))));
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "All seven parts"),
-      ui.h("ul", { class: "hs-parts" }, d.parts.map((p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: `#/${p.go[0]}/${p.go[1]}` },
+      ui.h("ul", { class: "hs-parts" }, d.parts.map((p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: hrefOf(p) },
         ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, fmtPts(p.points), ui.h("small", {}, ` / ${p.max}`))),
         ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${fmtPts(p.points)} of ${p.max}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
         ui.h("div", { class: "hs-d" }, p.detail),
@@ -53,7 +53,7 @@ export function render(page, ctx) {
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
         ui.h("li", {}, "Cash cushion: months of must-pay bills in usable cash, against the plan's target (Emergency fund)."),
         ui.h("li", {}, "Saving: retirement saving, goal saving and what is left over, as a share of income after federal and payroll tax; 20% earns full marks (the 20 of the 50/30/20 rule)."),
-        ui.h("li", {}, "Debt: two thirds for having no debt at 10% or more (scaled against a quarter of a year's income), one third for payments under 36% of gross income (half marks to 43%, the qualified-mortgage line)."),
+        ui.h("li", {}, "Debt: most points for no card-type debt (10% interest or more); the rest for payments under 36% of pay before tax, or 20% if you rent."),
         ui.h("li", {}, "Retirement: the steady spending the plan can carry against what it plans: nothing at 60%, full marks at 115% (room for bad luck)."),
         ui.h("li", {}, "Protection: the share of the stress tests' life shocks the money survives (a job loss, never working again, a death, a long life, a care home)."),
         ui.h("li", {}, "Goals: the share of dated goals done or on track. The plan knows enough: seven things filled in and current."),
@@ -73,5 +73,7 @@ function ring(score, band, tone) {
   s.append(e("text", { x: 66, y: 94, "text-anchor": "middle", fill: "var(--muted)", class: "sub" }, "of 100"));
   return s;
 }
+/** A part's page, with the target it was worked out for when it has one (round 8 review: Goal seek opened on "Just last"). */
+const hrefOf = (p) => `#/${p.go[0]}/${p.go[1]}${p.query ? `?${Object.entries(p.query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")}` : ""}`;
 const fmtPts = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const label = (k) => ({ cushion: "cash cushion", saving: "saving", debt: "debt", retirement: "retirement", protection: "protection", goals: "goals", knows: "a complete plan" })[k];

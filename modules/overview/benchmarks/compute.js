@@ -8,11 +8,12 @@ import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
-import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computeLiabilities, rentsHome, lenderWithHousing, DTI_LINES, shownShare, renterLevel } from "../../balance/liabilities/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
-import { savingVerdict } from "../../retirement/projection/compute.js";
+import { savingVerdict, householdRetired } from "../../retirement/projection/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { isGuess } from "../../../core/estimate/index.js";
 import { MEDIAN_NET_WORTH_BY_AGE, MEDIAN_NET_WORTH_ALL, SCF_YEAR, SAVINGS_MULTIPLE_BY_AGE } from "./data/scf.js";
 
 /** Rules of thumb: retirement saving 15% of pay with the match (Fidelity); housing 28% and all debt 36% of gross income (the lenders' front-end and back-end ratios); cash 3 to 6 months. */
@@ -31,7 +32,7 @@ export const ageGroup = (age) => MEDIAN_NET_WORTH_BY_AGE.find((g) => age >= g.fr
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, age (the head's), group, scfYear,
- *   items: [{ id, title, you, benchmark, unit: "money"|"multiple"|"share"|"months", better: "higher"|"lower"|"range", verdict: "ahead"|"on par"|"behind"|"unknown", sentence, source, go }],
+ *   items: [{ id, title, you, benchmark, unit: "money"|"multiple"|"share"|"months", better: "higher"|"lower"|"range", verdict: "ahead"|"on par"|"behind"|"rule"|"lasts"|"unknown", sentence, source, go }],
  *   ahead (count), judged (count)
  * }
  */
@@ -60,15 +61,27 @@ export function compute(plan, params = {}) {
   const pay = inc.active.filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((s, x) => s + x.yearly, 0);
   const saved = (plan.accounts ?? []).filter((a) => RETIREMENT_TYPES.includes(a.type)).reduce((s, a) => s + countedBalance(a), 0);
   const target = savingsMultiple(age);
-  if (pay > 0 && target > 0) {
+  // every adult retired (projection's householdRetired): the two pay-based rows cannot apply (round 8, 2026-11-06: a widow
+  // read "Needs pay on the Income page"); one row points to the plan's own answer instead
+  let retired = false;
+  try { retired = householdRetired(plan, { today }); } catch { retired = false; }
+  if (retired) {
+    let own = null;
+    try { own = savingVerdict(plan, { today }); } catch { own = null; }
+    // the plan lasting is this row's "ahead" (round 8 review: a grey pill, left out of the count, read as not good enough)
+    add({ id: "retirement-money", title: "Your savings in retirement", you: null, benchmark: null, unit: "share", better: "higher", verdict: !own ? "unknown" : own.verdict === "short" ? "behind" : own.verdict === "tight" ? "on par" : "lasts",
+      // the projection's "tight" (lasts, under 115% of the spending: "It lasts, just") is on par, not ahead (verify, 2026-11-06)
+      sentence: `Retired: the guidelines on pay no longer apply. ${!own ? "Will the money last? checks your savings against what you spend, once the plan has what it needs." : own.verdict === "short" ? `By your own plan the money runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).` : own.verdict === "tight" ? `By your own plan the money lasts, but only just: it can carry about ${money(own.affordable / 12)} a month against the ${money(own.spendingYearly / 12)} planned, with little room for a bad run of markets (Will the money last?).` : "By your own plan the money lasts (Will the money last?)."}`,
+      source: "Your own plan, not a rule of thumb", go: ["retirement", "projection"] });
+  } else if (pay > 0 && target > 0) {
     const mult = saved / pay;
     add({ id: "savings-multiple", title: "Retirement savings for your age", you: mult, benchmark: target, unit: "multiple", better: "higher", verdict: verdictOf(mult, target, "higher"),
       sentence: `${money(saved)} in retirement accounts is ${mult.toFixed(1)} times a year's pay (${money(pay)}); the guideline at ${age} is about ${target.toFixed(1)} times.`, source: "Fidelity's savings guideline: 1x pay by 30, 3x by 40, 6x by 50, 8x by 60, 10x by 67", go: ["retirement", "contributions"] });
-  } else add({ id: "savings-multiple", title: "Retirement savings for your age", you: null, benchmark: target || null, unit: "multiple", better: "higher", verdict: "unknown", sentence: pay > 0 ? "The guideline starts at 22." : "Needs pay on the Income page.", source: "Fidelity's savings guideline", go: ["cashflow", "income"] });
+  } else if (!retired) add({ id: "savings-multiple", title: "Retirement savings for your age", you: null, benchmark: target || null, unit: "multiple", better: "higher", verdict: "unknown", sentence: pay > 0 ? "The guideline starts at 22." : "Needs pay on the Income page.", source: "Fidelity's savings guideline", go: ["cashflow", "income"] });
 
   // 3. retirement saving rate, the match included
   const con = computeContributions(plan, { today });
-  if (pay > 0) {
+  if (pay > 0 && !retired) {
     const rate = con.totalYearly / pay;
     add({ id: "saving-rate", title: "Saving for retirement", you: rate, benchmark: RULES.saving, unit: "share", better: "higher", verdict: verdictOf(rate, RULES.saving, "higher", 0.07),
       sentence: `${money(con.totalYearly)} a year goes into retirement accounts, employer money included: ${pctW(rate)} of pay. The usual aim is ${pctW(RULES.saving)}.`, source: "Fidelity: save 15% of pay a year, the employer match included", go: ["retirement", "contributions"] });
@@ -83,28 +96,39 @@ export function compute(plan, params = {}) {
     else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).`;
   }
 
-  // 4. cash: months of must-pay bills
+  // 4. cash: months of must-pay bills, against the plan's own aim (liquidity's targetMonths: assumptions.emergencyMonths, the
+  // Emergency fund page's): at or past it "ahead", from 3 months (the planners' least) up to it "on par", under 3 "behind"
+  // (round 8, 2026-11-06: 5.1 months read "ahead" of 3 while every other page aims for 6)
   const liq = computeLiquidity(plan, { today });
   if (liq.runwayMonths !== null) {
-    const m = liq.runwayMonths;
-    add({ id: "cash", title: "Cash for emergencies", you: m, benchmark: RULES.cashMin, unit: "months", better: "range", verdict: m >= RULES.cashMin ? "ahead" : m >= RULES.cashMin * 0.7 ? "on par" : "behind",
-      sentence: `Usable cash covers ${m.toFixed(1)} months of must-pay bills; most planners say ${RULES.cashMin} to ${RULES.cashMax}${m > RULES.cashMax * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule", go: ["balance", "liquidity"] });
+    const m = liq.runwayMonths, aim = Number(liq.targetMonths) > 0 ? Number(liq.targetMonths) : RULES.cashMax;
+    add({ id: "cash", title: "Cash for emergencies", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
+      sentence: `Usable cash covers ${m.toFixed(1)} months of must-pay bills; your plan aims for ${Math.round(aim * 10) / 10} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
   }
 
-  // 5. housing and 6. all debt payments, against gross income
+  // 5. housing and 6. all debt payments, against gross income. One rule on these rows (round 8 review, 2026-11-06): over the
+  // line is "behind", as What lenders see and the Debts tile say it ("29%: on par" for housing sat above "21%: behind" for debts);
+  // within 7% under it "on par"; each graded at the whole percent shown (liabilities shownShare)
+  const lineVerdict = (x, line, band = 0.07) => { const v = shownShare(x); return v <= line * (1 - band) + 1e-9 ? "ahead" : v <= line + 1e-9 ? "on par" : "behind"; };
   const gross = inc.monthly;
   if (gross > 0) {
     const housing = exp.active.filter((x) => x.category === "housing").reduce((s, x) => s + x.monthly, 0);
-    if (housing > 0) add({ id: "housing", title: "Housing cost", you: housing / gross, benchmark: RULES.housing, unit: "share", better: "lower", verdict: verdictOf(housing / gross, RULES.housing, "lower", 0.07),
+    if (housing > 0) add({ id: "housing", title: "Housing cost", you: housing / gross, benchmark: RULES.housing, unit: "share", better: "lower", verdict: lineVerdict(housing / gross, RULES.housing),
       sentence: `${money(housing)} a month on housing is ${pctW(housing / gross)} of gross income; lenders like ${pctW(RULES.housing)} or less.`, source: "The lenders' front-end ratio (28%)", go: ["cashflow", "expenses"] });
     const li = computeLiabilities(plan, { today });
-    if (li.dti !== null) add({ id: "debt", title: "Debt payments", you: li.dti, benchmark: RULES.debt, unit: "share", better: "lower", verdict: verdictOf(li.dti, RULES.debt, "lower", 0.07),
+    // a renter: the required payments (as a lender counts them; review D3) on the renters' line, rent not counted (CFPB: 15 to 20%
+    // or less; liabilities DTI_LINES.renter): 15% or less "ahead", to 20% "on par", above "behind"; and the figure a home lender
+    // would see with a housing payment like the rent (round 8, 2026-11-06: a renter's 21% was "ahead" of the homeowners' 36%)
+    if (li.dti !== null && rentsHome(plan, li.rows)) { const R = DTI_LINES.renter, x = li.dtiRequired, lv = renterLevel(x); add({ id: "debt", title: "Debt payments", you: x, benchmark: R.good, unit: "share", better: "lower", verdict: lv === "fine" ? "ahead" : lv === "within" ? "on par" : "behind",
+      sentence: `${money(li.minimums)} a month of required payments on loans and cards is ${pctW(x)} of gross income; for renters the guideline is ${pctW(R.good)} or less, rent not counted.${housing > 0 ? ` ${lenderWithHousing((li.minimums + housing) / gross, housing, plan.meta?.currency ?? "USD", { guessed: exp.active.some((e) => e.category === "housing" && typeof e.id === "string" && isGuess(plan, `expenses[${e.id}].amount`)) })}` : ""}`, source: "Consumer Financial Protection Bureau's debt-to-income guide: renters 15 to 20% or less, rent not counted", go: ["debt", "ratios"] }); }
+    else if (li.dti !== null) add({ id: "debt", title: "Debt payments", you: li.dti, benchmark: RULES.debt, unit: "share", better: "lower", verdict: lineVerdict(li.dti, RULES.debt),
       sentence: `${money(li.payments)} a month on loans and cards is ${pctW(li.dti)} of gross income; under ${pctW(RULES.debt)} is comfortable; many mortgage lenders approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.`, source: "Fannie Mae's limit for loans checked by hand (36%; up to 45 to 50% with strong credit and savings)", go: ["debt", "ratios"] });
   }
 
   const judged = items.filter((x) => x.verdict !== "unknown");
-  return { ready: true, missing: [], age, group, scfYear: SCF_YEAR, items, ahead: judged.filter((x) => x.verdict === "ahead").length, judged: judged.length };
+  return { ready: true, missing: [], age, group, scfYear: SCF_YEAR, items, ahead: judged.filter((x) => x.verdict === "ahead" || x.verdict === "lasts").length, judged: judged.length };
 }
 
-const pctW = (x) => `${Math.round(x * 100)}%`;
+// as core/format.js pct prints a percent (x * 100 to 12 significant digits first: 0.285 is 29%, not 28; verify, 2026-11-06)
+const pctW = (x) => `${Math.round(Number((x * 100).toPrecision(12)))}%`;
 const ratio = (a, b) => (b <= 0 ? "" : a < 0 ? "Below zero, under" : a / b >= 1.1 ? `About ${(a / b).toFixed(1)} times` : a / b >= 0.9 ? "About the same as" : `About ${Math.round((a / b) * 100)}% of`);
