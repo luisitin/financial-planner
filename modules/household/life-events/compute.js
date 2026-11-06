@@ -6,6 +6,7 @@ import { EVENTS } from "./data/events.js";
 import { US_STATES, FILING_STATUSES } from "../people/compute.js";
 import { addDays } from "../../cashflow/recurring/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { nameOf } from "../../../core/words.js";
 
 const usDate = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}/${iso.slice(0, 4)}`;
 
@@ -140,7 +141,7 @@ export function applyChange(draft, eventId, change, values = {}, today = null) {
         delete next.continues;
         delete next.countOn;
         draft.income.push(next);
-        tick("pay"); return { ok: true, text: `From ${usDate(values.startDate)} ${who && who !== "Me" ? `${who}'s` : "your"} pay is ${yearly(amount)}; until then the pay on file stays. Both are on Income.` };
+        tick("pay"); return { ok: true, text: `From ${usDate(values.startDate)} ${who ? nameOf(who) : "your"} pay is ${yearly(amount)}; until then the pay on file stays. Both are on Income.` };
       }
       if (inc) { inc.amount = amount; inc.period = period; if (isDate(values.startDate)) inc.startDate = values.startDate; }
       else { inc = { id: values.id, name: name || "Pay from the new job", type: "salary", personId: text(values.personId), amount, period, growth: null, startDate: isDate(values.startDate) ? values.startDate : "", endDate: "", taxable: true }; draft.income.push(inc); }

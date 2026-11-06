@@ -1338,3 +1338,18 @@ test("verification 8b, review 2026-11-06: a couple's cover that ends by next yea
   assert.ok(one.p.includes("Covered until 6/30/2027, when $200,000 of it ends; short by about $135,000 from then."));
   assert.equal(one.lede, "Ana's $200,000 term policy ends on 6/30/2027, and Bo and Cy count on Ana until about 2042: without it they would be about $135,000 short.");
 });
+
+test("the first adult left unnamed (\"Me\"): sayName and sayWhose are core/words.js's, so every sentence says you, your, your spouse", async () => {
+  const { sayName, sayWhose, protectionGaps } = await import("./compute.js");
+  assert.equal(sayName("Me"), "you"); assert.equal(sayWhose("Me"), "your"); assert.equal(sayName(""), "you");
+  assert.equal(sayName("My spouse"), "your spouse"); assert.equal(sayWhose("My spouse"), "your spouse's");
+  assert.equal(sayName("My husband"), "your husband"); assert.equal(sayWhose("My wife"), "your wife's");
+  // any other name as typed
+  assert.equal(sayName("Bo"), "Bo"); assert.equal(sayWhose("Bo"), "Bo's");
+  // the plan with the setup's names: the survivor is "Me", the one who dies "My spouse"
+  const m = familyPlan("2026-11-02");
+  m.household.people.find((x) => x.id === "p-ana").name = "My spouse"; m.household.people.find((x) => x.id === "p-bo").name = "Me";
+  const [g] = protectionGaps(m, { today: "2026-11-02" });
+  assert.ok(g && /^No life insurance on your spouse: you and Cy would be about/.test(g.title), g?.title);
+  assert.doesNotMatch(`${g.title} ${g.sentence}`, /\bMe\b|My spouse/);
+});

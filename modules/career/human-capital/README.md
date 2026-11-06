@@ -40,3 +40,5 @@ path falling to zero against the projection with a cross year, life cover and th
 ## Ideas / not yet
 - Weight each year by the chance of being alive and working (the longevity tables).
 - Feed the after-tax value to Life needs as an alternative to its income-replacement method.
+
+Review 2026-11-06 (round 7): "No life insurance on you: the household would lose this pay if you died" says you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).

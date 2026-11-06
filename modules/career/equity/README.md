@@ -99,3 +99,5 @@ and without prices, no share price, next year's wage base, not ready.
 `tests/golden-career.test.mjs` checks `amt`, `amtRoom` and `esppSale` against 2,000 AMT rows and 1,000 purchase-plan
 sales worked independently from the IRS forms (`tools/golden_career`, `tests/golden/career/RULES.md`). It found the
 Part III and separate-return add-back errors fixed above.
+
+Review 2026-11-06 (round 7): "rides on the company that pays you" says you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).

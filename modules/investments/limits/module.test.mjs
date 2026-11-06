@@ -149,3 +149,17 @@ test("the IRA and HSA deadline is April 15 moved off a weekend or a D.C. holiday
   assert.equal(due("2025-06-01"), "2026-04-15"); assert.equal(due("2026-06-01"), "2027-04-15");
   assert.equal(due("2027-06-01"), "2028-04-18", "Saturday the 15th, Emancipation Day kept on Monday the 17th");
 });
+
+test("Review 2026-11-06 (round 7): the Roth IRA warning says your for the unnamed first adult and your spouse's for the partner", () => {
+  // the Roth IRA test's household, with the names Get started gives when none is typed
+  const p = household({ interest: 1321, a: { birth: "1981-02-01", pay: 150000, k401: 10000, rothIra: 4260 }, b: { birth: "1974-02-01", pay: 105000, trad: 6000, rothIra: 3000 } });
+  p.household.people[0].name = "Me"; p.household.people[1].name = "My spouse";
+  const d = compute(p, { today: "2026-10-31" });
+  assert.ok(d.warnings.some((w) => /^Your spouse's 3,000 is going into a Roth IRA, 400 more than the 2,600 allowed/.test(w)), d.warnings.join(" | "));
+  // one adult over the limit: "Your 3,000 is going in", no "Me:"
+  const one = household({ status: "single", a: { birth: "1981-02-01", pay: 200000, rothIra: 3000 } });
+  one.household.people[0].name = "Me";
+  const e = compute(one, { today: "2026-10-31" });
+  assert.ok(e.warnings.some((w) => /^Your 3,000 is going into a Roth IRA, but none is allowed directly this year/.test(w)), e.warnings.join(" | "));
+  assert.ok(!e.warnings.some((w) => /^Me\b/.test(w)));
+});

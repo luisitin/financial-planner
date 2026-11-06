@@ -3,6 +3,8 @@
 // year sits from it; the household's benchmark premium and which rules to use, in a fold.
 import { compute } from "./compute.js";
 import { SCHEDULES, BENCHMARK_40 } from "./data/aca.js";
+// "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
+import { isYou, nameIn, nameOf, NamesIn, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -33,18 +35,21 @@ export function render(page, ctx) {
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the years before Medicare, the plan needs: ${d.missing.join("; ")}.`))); return; }
 
   // someone with no pay and no Get started answer is taken as working until the household retires (fifth pass): say so
-  const presumedWords = (d.presumed ?? []).map((x) => `No pay is listed for ${x.name} and Get started does not say ${x.name} has stopped work, so the plan takes ${x.name} as working until ${x.untilYear}.`).join(" ");
-  if (d.onWorkPlan.length) root.append(ui.notice("info", `${d.onWorkPlan.map((y) => y.year).filter((y, i, a) => i === 0 || i === a.length - 1).join(" to ")}: ${d.onWorkPlan[0].covered.join(" and ")} can usually join ${d.onWorkPlan[0].worker}'s plan at work, so those years are not counted here.${presumedWords ? ` ${presumedWords}` : ""}`));
+  const presumedWords = (d.presumed ?? []).map((x) => `No pay is listed for ${nameIn(x.name)} and Get started does not say ${nameIn(x.name)} ${verbFor(x.name, "has", "have")} stopped work, so the plan takes ${nameIn(x.name)} as working until ${x.untilYear}.`).join(" ");
+  if (d.onWorkPlan.length) root.append(ui.notice("info", `${d.onWorkPlan.map((y) => y.year).filter((y, i, a) => i === 0 || i === a.length - 1).join(" to ")}: ${NamesIn(d.onWorkPlan[0].covered)} can usually join ${nameOf(d.onWorkPlan[0].worker)} plan at work, so those years are not counted here.${presumedWords ? ` ${presumedWords}` : ""}`));
   if (d.noBridge) {
     // the real reason, person by person (fifth pass: a retired couple of 72 and 69 read "everyone works until 65")
     const why = d.noBridgeWhy ?? [];
     const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
     const onMedicare = why.filter((w) => w.why === "medicare").map((w) => w.name);
     const said = onMedicare.length && onMedicare.length === why.length
-      ? `${list(onMedicare)} ${onMedicare.length > 1 ? "are" : "is"} 65 or over, so Medicare is the cover: no one in your plan needs the marketplace.`
-      : `In your plan no one needs marketplace cover: ${list(why.map((w) => w.why === "medicare" ? `${w.name} is 65 or over (Medicare)`
-        : w.why === "job" ? (w.endsBefore65 ? `${w.name} works to the end of the plan` : `${w.name} works until ${Math.max(65, w.retireAge)}`)
-        : `${w.name} ${w.ownUntilAge ? `works until ${w.ownUntilAge}, then is` : "is"} on ${w.worker ? `${w.worker}'s` : "a partner's"} plan at work ${w.endsBefore65 ? "to the end of the plan" : "until 65"}`))}.`;
+      ? `${NamesIn(onMedicare)} ${onMedicare.length > 1 || isYou(onMedicare[0]) ? "are" : "is"} 65 or over, so Medicare is the cover: no one in your plan needs the marketplace.`
+      : `In your plan no one needs marketplace cover: ${list(why.map((w) => {
+        const n = nameIn(w.name), is = verbFor(w.name, "is", "are"), works = verbFor(w.name, "works", "work");
+        return w.why === "medicare" ? `${n} ${is} 65 or over (Medicare)`
+          : w.why === "job" ? (w.endsBefore65 ? `${n} ${works} to the end of the plan` : `${n} ${works} until ${Math.max(65, w.retireAge)}`)
+          : `${n} ${w.ownUntilAge ? `${works} until ${w.ownUntilAge}, then ${is}` : is} on ${w.worker ? nameOf(w.worker) : "a partner's"} plan at work ${w.endsBefore65 ? "to the end of the plan" : "until 65"}`;
+      }))}.`;
     const younger = why.some((w) => w.why !== "medicare");
     root.append(ui.card(null, ui.h("p", {}, said), presumedWords && !d.onWorkPlan.length ? ui.h("p", { class: "muted small" }, presumedWords) : null,
       younger ? ui.h("p", { class: "muted small" }, "Thinking of retiring earlier? Try it on Compare what-ifs, then come back here.") : null,

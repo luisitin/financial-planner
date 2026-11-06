@@ -4,6 +4,7 @@
 // paycheck in sum; the employer's rules and the choices in folds at the end.
 import { compute, DEFAULT_TIERS } from "./compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { NameOf } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 let openFold = null;  // the settings fold just saved stays open
@@ -41,7 +42,7 @@ export function render(page, ctx) {
   const capped = (typed, used, what) => (typed > used + 0.5 ? ui.notice("warn", `You typed ${money(typed)} for ${what}; the most you can put in is ${money(used)}, so the page uses that.`) : null);
 
   if (!mineSaved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Open enrollment"),
-    ui.h("p", { class: "lede" }, `${d.person.name}'s workplace benefits for ${d.planYear}: how much to put in the 401(k), the health savings account, the flexible spending accounts and the stock plan, and what each costs a paycheck after the tax it saves.`),
+    ui.h("p", { class: "lede" }, `${NameOf(d.person.name)} workplace benefits for ${d.planYear}: how much to put in the 401(k), the health savings account, the flexible spending accounts and the stock plan, and what each costs a paycheck after the tax it saves.`),
     ui.h("p", { class: "muted small" }, "Put in your employer's match and your choices under \"Your employer's match\" and the folds after it, near the end.")));
   for (const n of d.notes) root.append(ui.notice("info", n));
 

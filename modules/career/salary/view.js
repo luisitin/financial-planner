@@ -3,6 +3,7 @@
 // percent or a raise won now is worth, the years ahead, and the raise, promotions and level-off age in a fold.
 import { compute, useAverage, DEFAULTS, RAISE_NOW } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
+import { nameIn, NameIn, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 let openJob = null;   // the job whose settings were just saved stays open
@@ -78,17 +79,18 @@ export function render(page, ctx) {
 
   function jobCard(j) {
     const s = j.settings;
-    const who = j.personName || "you";
+    const who = nameIn(j.personName);   // "you" for the unnamed first adult (or no one), else the name as typed
+    const is = (one, you) => verbFor(j.personName, one, you);
     const card = ui.card(j.name);
-    if (!j.atEnd) { card.append(ui.h("p", {}, `${who} has reached the retirement age on People, so there are no years ahead to show.`)); return card; }
-    const endLabel = j.knownAge ? `When ${who} retires (${j.retireYear})` : `In ${j.atEnd.year}`;
+    if (!j.atEnd) { card.append(ui.h("p", {}, `${NameIn(j.personName)} ${is("has", "have")} reached the retirement age on People, so there are no years ahead to show.`)); return card; }
+    const endLabel = j.knownAge ? `When ${who} ${is("retires", "retire")} (${j.retireYear})` : `In ${j.atEnd.year}`;
     card.append(ui.row(
       ui.stat("Now", money(j.pay), "a year"),
       ui.stat(endLabel, money(j.atEnd.real), `in today's money; about ${money(j.atEnd.pay)} in ${j.atEnd.year} dollars`),
     ));
     const real = j.realGrowth;
     const levelOn = s.levelAge !== null && j.knownAge;
-    const levelText = !levelOn ? "" : s.levelAge > j.ageNow ? `, then only as fast as prices from ${s.levelAge}` : `, held to prices (${who} is past ${s.levelAge})`;
+    const levelText = !levelOn ? "" : s.levelAge > j.ageNow ? `, then only as fast as prices from ${s.levelAge}` : `, held to prices (${who} ${is("is", "are")} past ${s.levelAge})`;
     const raiseText = `${pct(s.raise)} a year${s.promoEvery ? ` and ${a(pct(s.promoBump, 0))} ${pct(s.promoBump, 0)} promotion every ${s.promoEvery} years` : ""}${levelText}`;
     card.append(ui.h("p", { class: "sl-verdict" }, Math.abs(real) < 0.0005
       ? `${raiseText}: the pay only keeps up with prices, so it buys about the same all the way.`

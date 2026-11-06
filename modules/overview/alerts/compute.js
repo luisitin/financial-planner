@@ -18,6 +18,7 @@ import { protectionGaps } from "../../insurance/life-needs/compute.js";
 import { compute as estateDocs } from "../../estate/documents/compute.js";
 import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
 import { pmtToReach, fv } from "../../../core/math/finance.js";
+import { nameOf, NameOf, NameIn, verbFor } from "../../../core/words.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
 
@@ -139,7 +140,7 @@ export function compute(plan, params = {}) {
   // filing separately, a return's own bill counts: the other return's refund cannot pay it (withholding byReturn; Review
   // 2026-11-06: Bo's return owed 1,660 while the two added up came to a refund, so nothing was said)
   const owing = tax && tax.from !== "none" && Array.isArray(tax.returns) && tax.returns.length > 1 ? tax.returns.filter((x) => x.balance >= 1000) : null;
-  if (owing?.length) add("tax-bill", "warn", `About ${money(owing.reduce((t, x) => t + x.balance, 0))} of tax to pay in April on ${owing.map((x) => `${x.name}'s`).join(" and ")} return`, `Filing separately, each return settles on its own, and one return's refund cannot pay the other's bill. ${owing.map((x) => `${x.name}'s return has about ${money(x.owed)} of federal tax and ${x.name}'s pay takes out about ${money(x.withheld)}${x.paid >= 0.5 ? `, ${money(x.paid)} paid` : ""}`).join("; ")}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
+  if (owing?.length) add("tax-bill", "warn", `About ${money(owing.reduce((t, x) => t + x.balance, 0))} of tax to pay in April on ${owing.map((x) => nameOf(x.name)).join(" and ")} return`, `Filing separately, each return settles on its own, and one return's refund cannot pay the other's bill. ${owing.map((x) => `${NameOf(x.name)} return has about ${money(x.owed)} of federal tax and ${nameOf(x.name)} pay takes out about ${money(x.withheld)}${x.paid >= 0.5 ? `, ${money(x.paid)} paid` : ""}`).join("; ")}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
   else if (!owing && tax && tax.from !== "none" && tax.balance >= 1000) add("tax-bill", "warn", `About ${money(tax.balance)} of tax to pay in April`, `About ${money(tax.totalTax)} of federal tax for ${tax.year}${(tax.seOwn ?? tax.seTax) >= 1 ? ` (${money(tax.seOwn ?? tax.seTax)} of it self-employment tax)` : ""}; the paychecks take out about ${money(tax.projected)}${tax.from === "paycheck" ? " (estimated from your pay)" : tax.from === "mixed" ? " (partly estimated from pay)" : ""}${tax.paid > 0 ? ` and ${money(tax.paid)} is already paid` : ""}. A W-4 change now spreads it over the paychecks left instead of one bill in April.`, ["taxes", "withholding"]);
   // no paycheck takes tax out (a retiree, the self-employed): the bill is paid by quarterly estimates, so a payment past
   // due is the thing to fix (Estimated payments' own figure)
@@ -211,12 +212,12 @@ export function compute(plan, params = {}) {
   if (today && Number(today.slice(5, 7)) >= 10) for (const r of rmdThisYear(plan, { today }).due) {
     const dec = Number(today.slice(5, 7)) === 12;
     add(`rmd-${r.id}-${today.slice(0, 4)}`, r.first ? "info" : dec ? "bad" : "warn",
-      `${r.name === "You" ? "Your" : `${r.name}'s`} required withdrawal: at least ${money(r.amount)} by ${r.first ? `April 1, ${Number(today.slice(0, 4)) + 1}` : `December 31`}`,
+      `${r.name === "You" ? "Your" : NameOf(r.name)} required withdrawal: at least ${money(r.amount)} by ${r.first ? `April 1, ${Number(today.slice(0, 4)) + 1}` : `December 31`}`,
       `From ${r.accounts.map((a) => a.name).join(" and ")}${r.estimated ? ", worked out from today's balance" : ""}. ${r.first ? `The first year may wait until April 1, but then two fall in ${Number(today.slice(0, 4)) + 1}.` : "Missing it costs 25% of what was not taken."} Tap "I've taken it" there once it is done.`,
       ["retirement", "rmd"]);
   }
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
-  for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${p.name} retires ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
+  for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${NameIn(p.name)} ${verbFor(p.name, "retires", "retire")} ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
 
   // data problems the pages already spotted
   for (const [i, w] of ppl.warnings.entries()) add(`people-${i}`, "warn", "People: something to check", w, ["household", "people"]);

@@ -18,6 +18,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { compute as computePolicies } from "../policies/compute.js";
+import { nameIn, nameOf } from "../../../core/words.js";
 import { survivorInputs, FUNERAL, TAKE_HOME, SURVIVOR_SPENDING } from "../../scenarios/stress-tests/compute.js";
 export { FUNERAL, TAKE_HOME, SURVIVOR_SPENDING };
 import { smallestWhere } from "../../scenarios/goal-seek/compute.js";
@@ -718,10 +719,10 @@ function sizedOf(ys) {
   return { year: top.year, need: Math.ceil(Math.round(top.dollars * 100) / 100 / 1000) * 1000, real: top.need, priceLevel: top.priceLevel };
 }
 
-/** A name as it reads in a sentence: the setup's "Me" is "you", its "My spouse" is "your spouse". */
-export const sayName = (n) => (n === "Me" || !n ? "you" : String(n).replace(/^My (spouse|partner)$/, "your $1"));
-/** The possessive: "your" for "Me", else "Ana's". */
-export const sayWhose = (n) => (n === "Me" || !n ? "your" : `${sayName(n)}'s`);
+/** A name as it reads in a sentence: the setup's "Me" is "you", its "My spouse" is "your spouse" (core/words.js nameIn). */
+export const sayName = nameIn;
+/** The possessive: "your" for "Me", "your spouse's", else "Ana's" (core/words.js nameOf). */
+export const sayWhose = nameOf;
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
 const dollars = (n) => `$${Math.round(n).toLocaleString("en-US")}`;

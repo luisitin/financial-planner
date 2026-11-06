@@ -125,3 +125,5 @@ hand-worked from the 2026 brackets (Rev. Proc. 2025-32). The answer key above ru
 ## Ideas / not yet
 - ESPP: the discount, the offering and purchase dates, qualifying sales (two years from the offering, one from the purchase).
 - Incentive options and the alternative minimum tax on exercise.
+
+Review 2026-11-06 (round 7): "at the same time as your 98,000 a year of pay depends on the same company" says your for the unnamed first adult ("Me") and "your spouse's" for the unnamed partner; typed names read as before (core/words.js; view only).

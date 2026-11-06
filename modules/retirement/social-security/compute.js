@@ -5,6 +5,7 @@
 // come from ssa.tools (data/ssa.js). A typed "monthly at full retirement age" from a Social
 // Security statement works instead of a record.
 import { perYear } from "../../../core/math/periods.js";
+import { nameIn, NameIn, nameOf, verbFor, isYou } from "../../../core/words.js";
 import { WAGE_INDICES, COLA, MAXIMUM_EARNINGS, EARNINGS_PER_CREDIT, EARNINGS_PER_CREDIT_BEFORE_1978, MAX_CREDITS, SSA_EARNINGS_YEARS, FULL_RETIREMENT_AGE, BENDPOINT1_IN_1977, BENDPOINT2_IN_1977, BEFORE_BENDPOINT1_MULTIPLIER, BEFORE_BENDPOINT2_MULTIPLIER, AFTER_BENDPOINT2_MULTIPLIER } from "./data/ssa.js";
 
 const awiYears = Object.keys(WAGE_INDICES).map(Number);
@@ -300,12 +301,14 @@ const yearOf = (p) => (p.age !== null && p.age !== undefined ? p.birthYear + p.a
 export function spousalWords(person, partner, d, money, { none = false } = {}) {
   const c = d?.couple;
   if (!c || !partner || !(c.spousal[person.id] > 0.5)) return "";
-  if (person.paidLine && partner.claimed) return `Any spouse's benefit ${person.name} gets on ${partner.name}'s record is paid with ${person.name}'s own, so the ${money(person.paidLine.period === "monthly" ? person.paidLine.amount : person.monthly)} a month on the Income page already holds it.`;
+  // the unnamed first adult ("Me") reads "you", "your" (review 2026-11-06, round 7)
+  const who = nameIn(person.name), whose = nameOf(person.name), on = nameOf(partner.name);
+  if (person.paidLine && partner.claimed) return `Any spouse's benefit ${who} ${verbFor(person.name, "gets", "get")} on ${on} record is paid with ${whose} own, so the ${money(person.paidLine.period === "monthly" ? person.paidLine.amount : person.monthly)} a month on the Income page already holds it.`;
   if (c.spousalCounted[person.id] > 0.5) {
     const from = person.birthYear + c.spousalFromAge[person.id], now = yearOf(person);
-    return `On ${partner.name}'s record, ${person.name} also gets about ${money(c.spousalCounted[person.id])} a month more (a spouse's benefit)${now !== null && from > now ? ` from ${from}, once both have claimed` : ""}. The plan counts it.`;
+    return `On ${on} record, ${who} also ${verbFor(person.name, "gets", "get")} about ${money(c.spousalCounted[person.id])} a month more (a spouse's benefit)${now !== null && from > now ? ` from ${from}, once both have claimed` : ""}. The plan counts it.`;
   }
-  return `On ${partner.name}'s record, ${person.name} could get up to about ${money(c.spousal[person.id])} a month (a spouse's benefit) once both have claimed. ${none ? `The plan leaves it out, as ${person.name} won't get Social Security.` : `The plan does not count it until ${person.name}'s own figure is added below.`}`;
+  return `On ${on} record, ${who} could get up to about ${money(c.spousal[person.id])} a month (a spouse's benefit) once both have claimed. ${none ? `The plan leaves it out, as ${who} won't get Social Security.` : `The plan does not count it until ${whose} own figure is added below.`}`;
 }
 /** The hero's word on a top-up inside its yearly figure (householdYearly counts it), or "" (recheck 2026-11-05). */
 export function heroTopUpWords(d, money) {
@@ -314,7 +317,7 @@ export function heroTopUpWords(d, money) {
   if (!p) return "";
   const w = d.people.find((x) => x.id !== p.id && x.birthYear);
   const from = p.birthYear + c.spousalFromAge[p.id], now = yearOf(p);
-  return `The ${money(d.householdYearly)} a year includes about ${money(c.spousalCounted[p.id])} a month ${p.name} gets on ${w.name}'s record (a spouse's benefit)${now !== null && from > now ? ` from ${from}` : ""}.`;
+  return `The ${money(d.householdYearly)} a year includes about ${money(c.spousalCounted[p.id])} a month ${nameIn(p.name)} ${verbFor(p.name, "gets", "get")} on ${nameOf(w.name)} record (a spouse's benefit)${now !== null && from > now ? ` from ${from}` : ""}.`;
 }
 
 /** "64 and 6 months", "67": an age in years and months, as the page says it. */
@@ -326,11 +329,13 @@ export const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round(
  * benefit" beside the $1,500 Ruth gets read as a mistake).
  */
 export function survivorWords(person, partner, keeps, money) {
-  if (!(keeps > person.monthly + 0.5)) return `If ${partner.name} dies first, ${person.name} keeps their own ${money(person.monthly)} a month, and ${partner.name}'s ${money(partner.monthly)} stops.`;
-  const own = person.monthly > 0.5 ? `${person.name}'s own ${money(person.monthly)}` : "none of their own";
-  if (!(keeps > partner.monthly + 0.5)) return `If ${partner.name} dies first, ${person.name} keeps about ${money(keeps)} a month: ${partner.name}'s benefit in place of ${own}.`;
-  return `If ${partner.name} dies first, ${person.name} would get a widow's or widower's benefit on ${partner.name}'s record: about ${money(keeps)} a month in place of ${own}. `
-    + `That is more than the ${money(partner.monthly)} ${partner.name} ${partner.claimed ? "gets now" : `would get at ${ageWords(partner.claimAge)}`}, because it is worked out from ${partner.name}'s full-age amount.`;
+  // the unnamed first adult ("Me") reads "you", "your" (review 2026-11-06, round 7): "If you die first, your spouse keeps ..."
+  const dies = `If ${nameIn(partner.name)} ${verbFor(partner.name, "dies", "die")} first`, who = nameIn(person.name), theirs = isYou(person.name) ? "your" : "their";
+  if (!(keeps > person.monthly + 0.5)) return `${dies}, ${who} ${verbFor(person.name, "keeps", "keep")} ${theirs} own ${money(person.monthly)} a month, and ${nameOf(partner.name)} ${money(partner.monthly)} stops.`;
+  const own = person.monthly > 0.5 ? `${nameOf(person.name)} own ${money(person.monthly)}` : `none of ${theirs} own`;
+  if (!(keeps > partner.monthly + 0.5)) return `${dies}, ${who} ${verbFor(person.name, "keeps", "keep")} about ${money(keeps)} a month: ${nameOf(partner.name)} benefit in place of ${own}.`;
+  return `${dies}, ${who} would get a widow's or widower's benefit on ${nameOf(partner.name)} record: about ${money(keeps)} a month in place of ${own}. `
+    + `That is more than the ${money(partner.monthly)} ${nameIn(partner.name)} ${partner.claimed ? `${verbFor(partner.name, "gets", "get")} now` : `would get at ${ageWords(partner.claimAge)}`}, because it is worked out from ${nameOf(partner.name)} full-age amount.`;
 }
 
 /**

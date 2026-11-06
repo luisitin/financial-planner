@@ -85,3 +85,5 @@ family plan with a $36,000 Wedding and a $6,000 Boat.
   partner's "Social Security starts": Sam, already paid, read "Sam's spouse's benefit starts" on August 10, 2027 above
   "Ruth's Social Security starts" on August 15 ("once both have claimed"). Now both are August 15, Ruth's first. The month,
   the amount and the year are unchanged. Test: the same, "a spouse's benefit on the partner's record".
+
+Review 2026-11-06 (round 7): the person events ("You retire", "You join Medicare", "Your Social Security starts", "Your required withdrawals begin", "The plan runs until you are 95", "Your benefit as a spouse starts", "on your record"), the savings running out ("when you would be 83") and independence ("(at 45)") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js). The ages row above each year ("Me 36 · Cy 6") is a label and stays. Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."

@@ -9,6 +9,7 @@ import { compute as computeSocialSecurity } from "../../retirement/social-securi
 import { compute as computePolicies } from "../policies/compute.js";
 import { TAKE_HOME } from "../../scenarios/stress-tests/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { nameIn, nameOf, verbFor } from "../../../core/words.js";
 
 /** What most planners aim for: a benefit of 60% of gross pay (the usual group long-term disability benefit; 60 to 70% for individual cover). */
 export const TARGET_SHARE = 0.6;
@@ -83,8 +84,8 @@ export function compute(plan, params = {}) {
     };
   });
   for (const e of earners) {
-    for (const x of e.policies) if (x.untilAge < e.retireAge) warnings.push(`${x.name} stops paying at ${x.untilAge}, before ${e.name} plans to retire at ${e.retireAge}.`);
-    if (e.policies.length && e.policies.every((x) => x.throughWork)) warnings.push(`All of ${e.name}'s disability cover comes with the job: a new job may not offer it, and it ends if the job does.`);
+    for (const x of e.policies) if (x.untilAge < e.retireAge) warnings.push(`${x.name} stops paying at ${x.untilAge}, before ${nameIn(e.name)} ${verbFor(e.name, "plans", "plan")} to retire at ${e.retireAge}.`);
+    if (e.policies.length && e.policies.every((x) => x.throughWork)) warnings.push(`All of ${nameOf(e.name)} disability cover comes with the job: a new job may not offer it, and it ends if the job does.`);
   }
   return { earners, essentialMonthly, cashMonths, count: earners.length, warnings };
 }

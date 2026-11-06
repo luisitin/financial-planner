@@ -222,3 +222,14 @@ test("a raise from a later date: the job's settings are one record for both halv
   assert.equal(p.income.find((x) => x.id === "i-ana").growth, 0.03);
   assert.deepEqual(Object.keys(p.whatIfs.salary), ["i-ana"]);
 });
+
+test("Review 2026-11-06 (round 7): a missing birth date says you for the unnamed first adult, a typed name as before", () => {
+  const p = familyPlan(TODAY);
+  const ana = p.household.people.find((x) => x.id === "p-ana");
+  ana.birthDate = ""; ana.name = "Me";
+  const d = compute(p, { today: TODAY });
+  assert.ok(d.warnings.some((w) => w.startsWith("You have no birth date on People, so ")), d.warnings.join(" | "));
+  assert.ok(!d.warnings.some((w) => /\bMe (has|is)\b|Me's/.test(w)), d.warnings.join(" | "));
+  ana.name = "Ana";
+  assert.ok(compute(p, { today: TODAY }).warnings.some((w) => w.startsWith("Ana has no birth date on People, so ")));
+});

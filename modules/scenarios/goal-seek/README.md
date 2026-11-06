@@ -99,3 +99,6 @@ nobody working there is no such lever (retirement is now). `earliestRetireAge` t
   the adult who still works ("When Jo can retire", Jo listed second). The sentence is now `RETIRE_HOW` in compute.js (tested),
   naming the adult who still works and the first person stopped from this year when they have stopped and the other's pay is on
   Income.
+
+## Review 2026-11-06 (round 7): you and your
+- Review 2026-11-06 (round 7): the retirement lever's title and sentence and the claiming lever's sentence say you/your for the unnamed first adult and "your spouse" for Get started's partner ("When you can retire", "You and your spouse claiming at 70 ...", "You already get it"), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".

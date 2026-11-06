@@ -2,6 +2,7 @@
 // couple's two deaths (with and without portability), the end of the plan, and the state.
 import { compute } from "./compute.js";
 import { RATE_SCHEDULE } from "../gifting/data/transfer-tax.js";
+import { nameIn, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -32,7 +33,7 @@ export function render(page, ctx) {
       ui.h("p", {}, `At the second death: the whole estate, about ${money(s.estate)} today, against the survivor's own ${money(s.exemptionWithout)} plus what the first one did not use (portability): up to ${money(s.exemption)}. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
   }
   if (d.end) root.append(ui.card(`At the end of the plan (${d.end.year})`, ui.h("p", {}, `If the plan runs as expected, it leaves about ${money(Math.round(d.end.estate / 1000) * 1000)} in today's dollars (the investments it projects, the home and other things it keeps, whole life insurance). ${d.end.tax > 0 ? `Against ${money(exemption)} of exemption that would owe about ${money(d.end.tax)}.` : `That is under the ${money(exemption)} exemption, which rises with prices.`}`)));
-  if (d.people.some((p) => p.gifts > 0)) root.append(ui.card("Gifts already count", ui.h("p", {}, `Gifts over the yearly limit use the same exemption: ${d.people.map((p) => `${p.name} has ${money(p.exemptionLeft)} left`).join(", ")}.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Gifting"))));
+  if (d.people.some((p) => p.gifts > 0)) root.append(ui.card("Gifts already count", ui.h("p", {}, `Gifts over the yearly limit use the same exemption: ${d.people.map((p) => `${nameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.exemptionLeft)} left`).join(", ")}.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Gifting"))));
 
   // the state
   const st = d.state;

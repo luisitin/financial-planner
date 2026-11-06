@@ -12,6 +12,7 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { survival } from "../../retirement/longevity/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 /** A private nursing-home room, national median: CareScout (Genworth) Cost of Care Survey 2024. */
 export const CARE_HOME_YEARLY = 127750;
@@ -115,13 +116,14 @@ export function compute(plan, params = {}) {
   const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
   const earners = adults.map((a) => ({ ...a, pay: payOf(a.id), age: a.person?.birthDate ? ageOn(a.person.birthDate, today) : startYear - a.birthYear })).filter((a) => a.pay > 0 && a.age < a.retireAge).sort((x, y) => y.pay - x.pay);
   const ss = computeSocialSecurity(plan, { today });
+  // in a sentence the unnamed first adult ("Me") is "you", the partner "your spouse" (review 2026-11-06, round 7)
   if (earners.length) {
     const e = earners[0];
     const out = e.pay * TAKE_HOME * JOB_LOSS_MONTHS / 12;
     const j = cloneInputs(I);
     j.events.push({ year: startYear, amount: out, label: "job loss" });
     for (const c of j.contributions) if (c.personIndex === e.index) c.skipYears = [...(c.skipYears ?? []), startYear];
-    add({ id: "job-loss", group: "life", icon: "📦", title: `${e.name} is out of work for ${JOB_LOSS_MONTHS} months`, story: `About ${money(out)} of take-home pay is missing (${Math.round(TAKE_HOME * 100)}% of ${money(e.pay * JOB_LOSS_MONTHS / 12)} gross). It comes out of savings, cash first, and ${e.name}'s retirement saving stops for the year. The emergency fund is what this is for.`, go: ["balance", "liquidity"] }, run(j));
+    add({ id: "job-loss", group: "life", icon: "📦", title: `${NameIn(e.name)} ${verbFor(e.name, "is", "are")} out of work for ${JOB_LOSS_MONTHS} months`, story: `About ${money(out)} of take-home pay is missing (${Math.round(TAKE_HOME * 100)}% of ${money(e.pay * JOB_LOSS_MONTHS / 12)} gross). It comes out of savings, cash first, and ${nameOf(e.name)} retirement saving stops for the year. The emergency fund is what this is for.`, go: ["balance", "liquidity"] }, run(j));
 
     // never working again: the plan is rebuilt with that person retiring now; Social Security disability pays the full-retirement-age amount from next year
     const p2 = JSON.parse(JSON.stringify(plan));
@@ -137,7 +139,7 @@ export function compute(plan, params = {}) {
       const dis = (plan.insurance?.policies ?? []).filter((x) => x.kind === "disability" && x.personId === e.id && Number(x.benefit) > 0);
       for (const d of dis) bd.inputs.incomes.push({ name: "Disability insurance", yearly: Number(d.benefit) * 12, personIndex: k, startAge: e.age + 1, endAge: 64, cola: false, taxable: true });
       const extra = [ssdi > 0 ? `Social Security disability pays about ${money(ssdi)} a month (the full-retirement-age amount)` : "with no Social Security figure in the plan, no disability benefit is counted", dis.length ? `the disability policy ${money(dis.reduce((s, d) => s + Number(d.benefit), 0))} a month to 65` : "there is no disability insurance in the plan"].join("; ");
-      add({ id: "disability", group: "life", icon: "🦽", title: `${e.name} can never work again`, story: `From next year: ${e.name}'s pay and retirement saving stop, ${extra}. ${e.index === 0 ? "The household's spending years start now." : "The rest of the household keeps working as planned."}`, go: ["retirement", "social-security"] }, run(bd.inputs));
+      add({ id: "disability", group: "life", icon: "🦽", title: `${NameIn(e.name)} can never work again`, story: `From next year: ${nameOf(e.name)} pay and retirement saving stop, ${extra}. ${e.index === 0 ? "The household's spending years start now." : "The rest of the household keeps working as planned."}`, go: ["retirement", "social-security"] }, run(bd.inputs));
     }
   } else notes.push("No one has pay on the Income page before their retirement age, so the job-loss and disability shocks are left out.");
 
@@ -149,7 +151,7 @@ export function compute(plan, params = {}) {
       const { inputs: S, survivor, keep, kids } = sv;
       const life = (plan.insurance?.policies ?? []).filter((x) => ["term", "whole"].includes(x.kind) && x.personId === d.id).reduce((s, x) => s + (Number(x.benefit) || 0), 0);
       S.events = [...(S.events ?? []), { year: startYear, amount: FUNERAL - life, label: "funeral and life insurance" }];
-      add({ id: `death-${d.id}`, group: "life", icon: "🕯️", title: `If ${d.name} died this year`, story: `${survivor.name} goes on alone: ${d.name}'s pay and saving stop, spending drops to about ${Math.round(SURVIVOR_SPENDING * 100)}% of the couple's, ${keep > 0 ? `Social Security becomes the larger of ${survivor.name}'s own and the survivor amount, about ${money(keep)} a month` : "no Social Security figures are in the plan"}, a funeral costs about ${money(FUNERAL)}${life > 0 ? `, and life insurance pays ${money(life)}` : ", and no life insurance is in the plan"}. Tax is filed as ${kids ? "head of household" : "single"}. Before retirement the plan assumes ${survivor.name}'s pay covers the household; if it would not, that gap comes on top (Life insurance needs works it out).`, go: ["insurance", "life-needs"] }, run(S));
+      add({ id: `death-${d.id}`, group: "life", icon: "🕯️", title: `If ${nameIn(d.name)} died this year`, story: `${NameIn(survivor.name)} ${verbFor(survivor.name, "goes", "go")} on alone: ${nameOf(d.name)} pay and saving stop, spending drops to about ${Math.round(SURVIVOR_SPENDING * 100)}% of the couple's, ${keep > 0 ? `Social Security becomes the larger of ${nameOf(survivor.name)} own and the survivor amount, about ${money(keep)} a month` : "no Social Security figures are in the plan"}, a funeral costs about ${money(FUNERAL)}${life > 0 ? `, and life insurance pays ${money(life)}` : ", and no life insurance is in the plan"}. Tax is filed as ${kids ? "head of household" : "single"}. Before retirement the plan assumes ${nameOf(survivor.name)} pay covers the household; if it would not, that gap comes on top (Life insurance needs works it out).`, go: ["insurance", "life-needs"] }, run(S));
     }
   }
 
@@ -175,7 +177,7 @@ export function compute(plan, params = {}) {
     const fromYear = p0.birthYear + startAge;
     const c = cloneInputs(I);
     for (let k = 0; k < 3; k++) if (fromYear + k <= I.endYear) c.events.push({ year: fromYear + k, amount: CARE_HOME_YEARLY, label: "care home" });
-    add({ id: "care-home", group: "life", icon: "🏥", title: "Three years in a care home", story: `From ${p0.name}'s ${startAge}th birthday, three years of a private nursing-home room at the national median, about ${money(CARE_HOME_YEARLY)} a year in today's dollars (2024 survey), on top of normal spending.`, go: ["retirement", "projection"] }, run(c));
+    add({ id: "care-home", group: "life", icon: "🏥", title: "Three years in a care home", story: `From ${nameOf(p0.name)} ${startAge}th birthday, three years of a private nursing-home room at the national median, about ${money(CARE_HOME_YEARLY)} a year in today's dollars (2024 survey), on top of normal spending.`, go: ["retirement", "projection"] }, run(c));
   }
 
   const passed = scenarios.filter((s) => s.success).length;

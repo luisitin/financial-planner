@@ -1,6 +1,7 @@
 // modules/taxes/hsa-fsa/view.js -- DOM only. What the HSA saves and grows into first, the
 // room left this year, the FSA deadline, and one folded form for the figures.
 import { compute } from "./compute.js";
+import { isYou, nameIn, NameIn, NameOf } from "../../../core/words.js";
 
 let pending = null;
 
@@ -14,7 +15,7 @@ export function render(root, ctx) {
   const H = d.hsa, F = d.fsa;
   const noCover = H.coverage === "none";
   const coveredName = H.coverage === "self" && H.people.length > 1 ? H.people.find((p) => p.eligible)?.name : null;
-  const coverText = `${COVER_LABEL[H.coverage]}${coveredName ? ` for ${coveredName}` : ""}`;
+  const coverText = `${COVER_LABEL[H.coverage]}${coveredName ? ` for ${nameIn(coveredName)}` : ""}`;
   const ssLimit = Number.isFinite(d.wageBase) ? `${money(d.wageBase)} in ${d.year}` : "";
   let title, lede;
   if (H.total > 0 && noCover) {
@@ -47,7 +48,7 @@ export function render(root, ctx) {
     H.total > 0 || H.balance > 0 ? ui.stat("Tax saved", money(H.savedTotal), taxSub) : null,
     H.kept > 0 || H.balance > 0 ? ui.stat("At 65", money(H.atSixtyFive), `${H.years} years at ${fmt.pct(H.growthRate, 1)}: ${money(H.balance)} today plus ${money(H.kept)} a year`) : null,
   ),
-  H.aboveWageBase.length ? ui.h("p", { class: "muted small" }, `${H.aboveWageBase.join(" and ")} ${H.aboveWageBase.length > 1 ? "earn" : "earns"} more than the Social Security pay limit (${ssLimit}). Pay above it has no Social Security tax, so HSA money from that pay saves only the 1.45% Medicare tax, not the full 7.65%.`) : null,
+  H.aboveWageBase.length ? ui.h("p", { class: "muted small" }, `${H.aboveWageBase.map((x, i) => (i ? nameIn(x) : NameIn(x))).join(" and ")} ${H.aboveWageBase.length > 1 || isYou(H.aboveWageBase[0]) ? "earn" : "earns"} more than the Social Security pay limit (${ssLimit}). Pay above it has no Social Security tax, so HSA money from that pay saves only the 1.45% Medicare tax, not the full 7.65%.`) : null,
   ));
   if (d.hasFsa) root.append(ui.card("Flexible spending account",
     ui.row(
@@ -59,14 +60,14 @@ export function render(root, ctx) {
   ));
   const h = plan.taxes?.hsa ?? {};
   const adults = H.people.filter((p) => p.id !== null);
-  const meAdult = adults.find((p) => p.role === "self") ?? adults[0], meName = meAdult?.name ?? "Your", partnerName = adults.find((p) => p !== meAdult)?.name ?? "Partner";
+  const meAdult = adults.find((p) => p.role === "self") ?? adults[0], partnerName = adults.find((p) => p !== meAdult)?.name ?? "Partner";
   const FIELDS = [
     { key: "coverage", label: "Health plan for the HSA", type: "select", options: [{ value: "self", label: "High-deductible, self-only" }, { value: "family", label: "High-deductible, family" }, { value: "none", label: "No high-deductible plan" }], help: "only a high-deductible health plan allows an HSA" },
     adults.length > 1 ? { key: "coveredId", label: "Who the plan covers", type: "select", options: adults.map((p) => ({ value: p.id, label: p.name })), help: "with self-only cover only this person can have an HSA" } : null,
     { key: "contribution", label: "You put in this year", type: "money", min: 0, help: "your own money for the year, taken from pay; the HSA rows on the Contributions page count if they are more" },
     { key: "employer", label: "Employer puts in", type: "money", min: 0, help: "counts against the same limit" },
-    { key: "fsa", label: adults.length > 1 ? `${meName}'s FSA election this year` : "FSA election this year", type: "money", min: 0, help: "leave blank if you have no FSA" },
-    adults.length > 1 ? { key: "fsaPartner", label: `${partnerName}'s FSA election this year`, type: "money", min: 0, help: "through their own employer; each person can put in up to the limit" } : null,
+    { key: "fsa", label: adults.length > 1 ? `${NameOf(meAdult?.name)} FSA election this year` : "FSA election this year", type: "money", min: 0, help: "leave blank if you have no FSA" },
+    adults.length > 1 ? { key: "fsaPartner", label: `${NameOf(partnerName)} FSA election this year`, type: "money", min: 0, help: "through their own employer; each person can put in up to the limit" } : null,
     { key: "fsaSpent", label: "FSA spent so far", type: "money", min: 0 },
   ].filter(Boolean);
   const coveredNow = H.coveredId ?? adults.find((p) => p.role === "self")?.id ?? adults[0]?.id ?? "";

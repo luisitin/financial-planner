@@ -8,6 +8,7 @@ import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { NameIn, verbFor } from "../../../core/words.js";
 import { BENCHMARKS } from "./data/benchmarks.js";
 
 /** The settings of one job (`whatIfs.salary[key]`, key = the income's chainId); raise null = the Income page's raise, else Assumptions'. */
@@ -158,7 +159,7 @@ export function compute(plan, params = {}) {
     const realGrowth = (1 + avgGrowth) / (1 + inflation) - 1;
     if (realGrowth < -1e-9) warnings.push(`${x.name || "A salary"} rises less than prices (${(inflation * 100).toFixed(1)}% a year): in today's money it shrinks over the years.`);
     if (!person) warnings.push(`${x.name || "A salary"} is not linked to anyone on the Income page, so it is shown for ${HORIZON} years instead of to a retirement birthday.`);
-    else if (!knownAge) warnings.push(`${name || "Someone"} has no birth date on People, so ${x.name || "this pay"} is shown for ${HORIZON} years instead of to retirement${settings.levelAge ? ", and the age pay stops growing cannot be used" : ""}.`);
+    else if (!knownAge) warnings.push(`${name ? `${NameIn(name)} ${verbFor(name, "has", "have")}` : "Someone has"} no birth date on People, so ${x.name || "this pay"} is shown for ${HORIZON} years instead of to retirement${settings.levelAge ? ", and the age pay stops growing cannot be used" : ""}.`);
     return {
       incomeId: x.id, key, name: x.name || "Pay", personId: x.personId ?? "", personName: name || "", pay: x.yearly, ageNow, retireAge, retireYear, knownAge,
       settings, raiseFrom, incomeGrowth, rows,

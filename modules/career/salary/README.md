@@ -83,3 +83,5 @@ splits a line for a raise from a later date, the new pay reads the raise and pro
 (`jobs[].key`). "Use it on the Income page" (`useAverage`) writes under that key and sets the average on the job's line and
 on the lines of its chain that start after it (the pay still to come); a line that has ended keeps its raise. Before, the
 settings were copied to the ending line, and a change made before the start date was lost on it. Test: `module.test.mjs`.
+
+Review 2026-11-06 (round 7): "When you retire (2055)", "held to prices (you are past 55)", "You have reached the retirement age" and the warning "You have no birth date on People" say you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner, with the verb to match; typed names read as before (core/words.js). Income names are stored data and stay as typed ("My spouse's salary"). Test: "Review 2026-11-06 (round 7): a missing birth date says you ...".

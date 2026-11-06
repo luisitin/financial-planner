@@ -25,3 +25,5 @@
 ## Ideas / not yet
 - Pension maximisation: single life plus life insurance against the survivor option.
 - The lump sum rolled into the plan as an IRA rollover (a scenario).
+
+Review 2026-11-06 (round 7): each pension's words ("You: $1,200 a month from 65", "by your 85th birthday", "the years you are likely to live", "For your spouse after you die", "while you live") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only.

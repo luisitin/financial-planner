@@ -45,3 +45,12 @@ test("a grown child needs no guardian", () => {
   const p = familyPlan(TODAY); p.household.people.find((q) => q.id === "p-cy").birthDate = "2000-01-01";
   assert.ok(!compute(p, { today: TODAY }).items.some((x) => x.kind === "guardian"));
 });
+
+test("the first adult left unnamed (\"Me\"): a reason to look again says you, with the verb to match", () => {
+  const p = familyPlan(TODAY);
+  const me = p.household.people.find((x) => x.id === "p-ana"); me.name = "Me"; me.birthDate = "2020-01-01";   // a date typed wrong
+  p.estate.documents = [{ id: "1", kind: "will", personId: "p-ana", status: "done", updatedAt: "2019-04-01" }];
+  const reasons = item(compute(p, { today: TODAY }), "will:p-ana").reasons;
+  assert.ok(reasons.includes("you were born after it was signed"), reasons.join(" | "));
+  assert.ok(reasons.includes("Cy was born after it was signed"), "any other name as before");
+});

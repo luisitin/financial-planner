@@ -3,6 +3,7 @@
 import { compute } from "./compute.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
 import { BUCKET_OF } from "../projection/compute.js";
+import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;
 // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
@@ -63,7 +64,8 @@ export function render(root, ctx) {
   const ask = nba?.ready ? (nba.steps.find((s) => s.id === "match" && s.status === "check")?.ask ?? []) : [];
   const formCard = ui.card(null);
   for (const a of ask.slice(0, 1)) {
-    const whose = a.name === "Me" || !a.name ? "your" : `${a.name}'s`, who = a.name === "Me" || !a.name ? "you" : a.name;
+    // the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
+    const whose = nameOf(a.name), who = nameIn(a.name), Who = NameIn(a.name), verb = (one, you) => verbFor(a.name, one, you);
     const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
     // every 401(k) on file is from a job left: ask about the job now, whose plan is not in the plan yet
     if (a.newJob) {
@@ -71,7 +73,7 @@ export function render(root, ctx) {
       const old = (a.old ?? []).map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean);
       root.append(ui.h("section", { class: "card" },
         ui.h("h2", {}, `Does ${whose} job now have a retirement plan with a match?`),
-        ui.h("p", {}, `${old.length ? old.join(" and ") : `${cap(whose)} 401(k)`} ${old.length > 1 ? "are" : "is"} from a job ${who === "you" ? "you" : who} left. If the job ${who === "you" ? "you have" : `${who} has`} now offers a 401(k) with a match, putting in enough to get all of it is free money.`),
+        ui.h("p", {}, `${old.length ? old.join(" and ") : `${cap(whose)} 401(k)`} ${old.length > 1 ? "are" : "is"} from a job ${who} left. If the job ${who} ${verb("has", "have")} now offers a 401(k) with a match, putting in enough to get all of it is free money.`),
         ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
           ui.h("a", { class: "btn", href: "#/balance/net-worth" }, `Yes: add ${whose} new 401(k)`),
           ui.button(`No plan or no match at ${whose} job`, noPlanAnswer, { class: "secondary" })),
@@ -80,10 +82,10 @@ export function render(root, ctx) {
     }
     const acct = (plan.accounts ?? []).find((x) => x.id === a.accounts[0]);
     root.append(ui.h("section", { class: "card" },
-      ui.h("h2", {}, `Does ${whose} job add money when ${who === "you" ? "you save" : `${who} saves`} for retirement?`),
-      ui.h("p", {}, `${who === "you" ? "You are paid and have" : `${who} is paid and has`} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
+      ui.h("h2", {}, `Does ${whose} job add money when ${who} ${verb("saves", "save")} for retirement?`),
+      ui.h("p", {}, `${Who} ${verb("is paid and has", "are paid and have")} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
       ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
-        ui.button(`Yes: add what ${who === "you" ? "you put" : `${who} puts`} in`, () => {
+        ui.button(`Yes: add what ${who} ${verb("puts", "put")} in`, () => {
           // the 401(k) at the job now: one whose name does not say it is an old one
           const cur = a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)).filter(Boolean);
           const now = cur.find((x) => !/\b(old|former|previous|prior|rollover)\b/i.test(x.name ?? "")) ?? cur[0];
@@ -97,8 +99,8 @@ export function render(root, ctx) {
         // one button per 401(k) when there are several, so only the old one is marked
         ...(a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
           const x = (plan.accounts ?? []).find((y) => y.id === id);
-          return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who === "you" ? "you" : who} left` : `That 401(k) is from a job ${who === "you" ? "you" : who} left`, () => {
-            pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who === "you" ? "you" : who} left, so no money goes in.` };
+          return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who} left` : `That 401(k) is from a job ${who} left`, () => {
+            pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who} left, so no money goes in.` };
             store.update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
           }, { class: "secondary" });
         })),
@@ -106,7 +108,7 @@ export function render(root, ctx) {
   }
   // what was answered, so it can be taken back
   const answered = [
-    ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false).map((p) => ({ text: `No match at ${p.name === "Me" ? "your" : `${p.name}'s`} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
+    ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false).map((p) => ({ text: `No match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
     ...(plan.accounts ?? []).filter((x) => x.formerJob).map((x) => ({ text: `${x.name}: from a job left`, undo: (draft) => { const y = (draft.accounts ?? []).find((z) => z.id === x.id); if (y) delete y.formerJob; } })),
   ];
   if (answered.length) root.append(ui.card(null, ...answered.map((x) => ui.h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },

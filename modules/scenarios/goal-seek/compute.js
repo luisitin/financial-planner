@@ -8,6 +8,7 @@ import { buildInputs, healthAdded, workingNow, withStops } from "../../retiremen
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { nameIn, NamesIn, verbFor } from "../../../core/words.js";
 
 /** The largest x in [lo, hi] with ok(x) (ok true at lo, monotone), the bracket grown past hi while ok; null if ok(lo) fails. */
 export function largestWhere(ok, lo, hi, tol = 0.5) {
@@ -126,7 +127,8 @@ export function compute(plan, params = {}) {
   const wn = workingNow(plan, I, today);
   const self = wn.lead ? adults.find((p) => p.id === wn.lead.id) ?? null : null;
   const firstStops = wn.stopNow.length ? adults.find((p) => p.id === wn.stopNow[0].personId) ?? null : null;
-  const stopWords = !firstStops ? "" : ` This counts ${firstStops.name && firstStops.name !== "Me" ? firstStops.name : "you"} as ${plan.guide?.setup?.status?.[firstStops.id] === "none" ? "not working from this year on" : "stopped from this year"}.`;
+  // the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
+  const stopWords = !firstStops ? "" : ` This counts ${nameIn(firstStops.name)} as ${plan.guide?.setup?.status?.[firstStops.id] === "none" ? "not working from this year on" : "stopped from this year"}.`;
   const ageNow = self ? ageOn(self.birthDate, today) : null;
   const retireAge = self ? Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65) : null;
   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
@@ -138,9 +140,9 @@ export function compute(plan, params = {}) {
     const earliest = found?.age === null || found?.age === undefined ? null : sooner === 0 ? retireAge : found.age;
     const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
     // the age is markets doing exactly as well as average every year: said so (Financial independence adds the 9-in-10 age)
-    add({ id: "retire", icon: "🏖️", title: `When ${self.name || "you"} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : sooner > 0 ? "room" : sooner === 0 ? "same" : "needs",
+    add({ id: "retire", icon: "🏖️", title: `When ${nameIn(self.name)} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : sooner > 0 ? "room" : sooner === 0 ? "same" : "needs",
       sentence: (earliest === null ? `Not by ${found?.upTo ?? 75}, even if markets do as well as average: working longer alone does not get there.`
-        : sooner > 0 && found.now ? `If markets do as well as average, now: the money already lasts if ${self.name && self.name !== "Me" ? self.name : "you"} stopped this year, ${yrs(sooner)} before the plan's ${retireAge}.`
+        : sooner > 0 && found.now ? `If markets do as well as average, now: the money already lasts if ${nameIn(self.name)} stopped this year, ${yrs(sooner)} before the plan's ${retireAge}.`
         : sooner > 0 ? `If markets do as well as average, as early as ${earliest}, ${yrs(sooner)} before the plan's ${retireAge}.`
         : sooner === 0 ? (thisYear ? "This year, as planned." : `If markets do as well as average, at ${retireAge} as planned: not a year earlier.`)
         : `If markets do as well as average, at ${earliest}: ${yrs(-sooner)} later than the plan's ${retireAge}.`) + stopWords, go: ["household", "people"] });
@@ -206,11 +208,12 @@ export function compute(plan, params = {}) {
     const nowAt = results.find((r) => Math.abs(r.age - claims[0]) < 1 / 24) ?? null;
     const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
     const names = movable.map((x) => x.name);
-    const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    // "You and your spouse claiming at 70", never "Me and My spouse" (review 2026-11-06, round 7)
+    const who = NamesIn(names);
     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
     const isNow = (a) => a === nowAge && nowForAll;
     add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id), nowAge, nowForAll,
-      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${others.join(" and ")} already ${others.length === 1 ? "gets" : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
+      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
   return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };

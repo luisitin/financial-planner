@@ -66,3 +66,13 @@ test("someone past their retirement age, or with no pay, is not an earner; an en
   assert.deepEqual(d.earners.map((e) => e.id), ["p-ana"]);
   assert.equal(d.earners[0].benefitMonthly, 0);
 });
+
+test("the first adult left unnamed (\"Me\"): the warnings say you and your", () => {
+  const p = withPolicies([{ ...LTD, untilAge: 60 }]); p.household.people.find((x) => x.id === "p-ana").name = "Me";
+  const d = compute(p, { today: TODAY });
+  assert.ok(d.warnings.some((w) => w.includes("before you plan to retire at")), d.warnings.join(" | "));
+  assert.ok(d.warnings.some((w) => w.includes("All of your disability cover comes with the job")), d.warnings.join(" | "));
+  assert.ok(!d.warnings.some((w) => /\bMe\b/.test(w)));
+  // any other name reads as before
+  assert.ok(compute(withPolicies([{ ...LTD, untilAge: 60 }]), { today: TODAY }).warnings.some((w) => w.includes("before Ana plans to retire at")));
+});

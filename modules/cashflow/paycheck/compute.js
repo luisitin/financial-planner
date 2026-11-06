@@ -10,6 +10,7 @@ import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { compute as computeBenefits, PAYCHECKS, K401_TAXED_STATES, HSA_TAXED_STATES } from "../../career/benefits/compute.js";
 import { perYear, PERIODS } from "../../../core/math/periods.js";
 import { PCT_METHOD, forYear } from "./data/withholding.js";
+import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 /** The employee's payroll taxes (IRC 3101): Social Security to the wage base, Medicare, and the 0.9% an employer withholds on pay over $200,000 in the year (IRC 3102(f)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145, extraMedicare: 0.009, extraOver: 200000 };
@@ -17,6 +18,13 @@ export const W4_STATUSES = { single: "Single or married filing separately", marr
 export const DEFAULT_PAYCHECKS = 26;
 /** The pay period named by a number of paychecks a year (what the Withholding check page stores). */
 export const PERIOD_OF = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
+
+/**
+ * The title of a person's W-4 fold: "Your W-4 and deductions" for the first adult Get started left unnamed ("Me"), "Your
+ * spouse's W-4 and deductions" for the partner it named "My spouse", else "Ana: W-4 and deductions" as typed (Review
+ * 2026-11-06 round 7: "Me: W-4 and deductions"). The notes quote it, so the view and the notes use this one.
+ */
+export const w4Title = (name) => (nameIn(name) !== String(name ?? "") ? `${NameOf(name)} W-4 and deductions` : `${name}: W-4 and deductions`);
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const pos = (v) => Math.max(0, num(v) ?? 0);
@@ -204,7 +212,7 @@ export function compute(plan, params = {}) {
       jobs: jobs.length,
     };
   });
-  for (const x of out.filter((y) => y.paychecksFrom === "assumed")) notes.push(`${x.name}'s pay is entered as a ${x.period === "annual" ? "yearly" : x.period === "quarterly" ? "quarterly" : "single"} figure on Income, so ${DEFAULT_PAYCHECKS} paychecks a year are assumed: set how often ${x.name} is paid under "${x.name}: W-4 and deductions".`);
+  for (const x of out.filter((y) => y.paychecksFrom === "assumed")) notes.push(`${NameOf(x.name)} pay is entered as a ${x.period === "annual" ? "yearly" : x.period === "quarterly" ? "quarterly" : "single"} figure on Income, so ${DEFAULT_PAYCHECKS} paychecks a year are assumed: set how often ${nameIn(x.name)} ${verbFor(x.name, "is", "are")} paid under "${w4Title(x.name)}".`);
   const both = out.filter((x) => x.federal.from === "estimate" && x.federal.w4.status === "married_joint" && !x.federal.w4.step2);
   if (both.length > 1) notes.push(both.every((x) => x.federal.w4.typed)
     ? "You both have \"Married filing jointly\" on the W-4 without the box in Step 2 ticked: each paycheck is withheld as if it were the household's only pay, which usually leaves too little withheld. The Withholding check page checks the year."
@@ -222,12 +230,12 @@ export function compute(plan, params = {}) {
     const shared = others.length > 0 && account.care - a.care > 0.5;
     const lostWords = a.forfeited > 0.5 ? (a.care > 0.5
       ? shared
-        ? `${x.name}'s child care account takes ${n(a.elected)} out of pay this year. The ${n(account.care)} of care on Expenses is shared with ${others.map((y) => `${y.name ?? "the other"}'s`).join(" and ")} account by what each puts in, so ${x.name}'s pays back ${n(a.care)} and about ${n(a.forfeited)} would be lost.`
-        : `${x.name}'s child care account takes ${n(a.elected)} out of pay this year, but only ${n(a.care)} of care is on Expenses for it to pay back, so about ${n(a.forfeited)} would be lost.`
-      : `${x.name}'s child care account takes ${n(a.elected)} out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost.`) : null;
+        ? `${NameOf(x.name)} child care account takes ${n(a.elected)} out of pay this year. The ${n(account.care)} of care on Expenses is shared with ${others.map((y) => (y.name === null || y.name === undefined ? "the other's" : nameOf(y.name))).join(" and ")} account by what each puts in, so ${isYou(x.name) ? "yours" : nameOf(x.name)} pays back ${n(a.care)} and about ${n(a.forfeited)} would be lost.`
+        : `${NameOf(x.name)} child care account takes ${n(a.elected)} out of pay this year, but only ${n(a.care)} of care is on Expenses for it to pay back, so about ${n(a.forfeited)} would be lost.`
+      : `${NameOf(x.name)} child care account takes ${n(a.elected)} out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost.`) : null;
     const taxedWords = a.taxedAsPay > 0.5 ? (lostWords
       ? `Of the ${n(a.received)} it pays back, ${n(a.taxedAsPay)} is more than can stay out of income, so it is taxed when you file (the Federal estimate counts it).`
-      : `${x.name}'s paychecks leave all of the child care account out of tax, but ${n(a.taxedAsPay)} of it is over what can stay out of income, so it is taxed when you file (the Federal estimate counts it).`) : null;
+      : `${NameOf(x.name)} paychecks leave all of the child care account out of tax, but ${n(a.taxedAsPay)} of it is over what can stay out of income, so it is taxed when you file (the Federal estimate counts it).`) : null;
     if (lostWords || taxedWords) notes.push([lostWords, taxedWords].filter(Boolean).join(" "));
   }
   if (out.some((x) => x.state.from === "none")) notes.push("Your state's income tax is not counted: set it on the State page under Taxes, or type the figure from your pay stub.");

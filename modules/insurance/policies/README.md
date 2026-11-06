@@ -39,3 +39,5 @@ Read by the other insurance pages (life needs, disability, long-term care, prope
 ## Ideas / not yet
 - Read a declarations page (PDF or photo) with the AI and fill the form (the user clicks apply).
 - Beneficiaries per policy (estate/beneficiaries will hold them).
+
+Review 2026-11-06 (round 7): the cover tile for the unnamed first adult ("Me") reads "Your life cover" (was "Me: life cover"); typed names read as before, and the "Who it covers" picker keeps the names as labels (core/words.js). Words only (view).

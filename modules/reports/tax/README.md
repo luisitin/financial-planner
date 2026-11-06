@@ -76,3 +76,5 @@ of ordinary income pays 14%" and "4.9% of income" (it said 12% from the 1,000 pr
   the page scrolled 4 px sideways at 360 px. It is now a row a figure ("The next dollar", "Bracket", "Room left in it") with a
   column a return ("Ana's", "Bo's"): 290 px at 360, also with long names. Test: "filing separately, the rates and the
   brackets are each return's own".
+
+Review 2026-11-06 (round 7): filing separately, the lead ("on your return ...; on your spouse's, ..."), the rates columns and ladders ("Yours", "Yours in it", "Your return: ..."), and the paying lines ("Your return: a refund ...", "Estimated payments on your return") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).

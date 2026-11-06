@@ -50,3 +50,5 @@ passes `careful: false` (the careful figure is not shown here).
   and the fixtures found no other report that hung; for the four "older than 120" households (born 1900) this page's
   compute fails inside the retirement projection, and the page read "It starts from:" with nothing after it. Test: reports/tax "every report finishes
   when its figures cannot be worked out (settleReport)".
+
+Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spouse (38) and Cy (6)") and the assumptions ("Retirement at 65 for you, 62 for your spouse") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only, no compute change).

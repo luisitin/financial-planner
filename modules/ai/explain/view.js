@@ -5,6 +5,11 @@
 // One question at a time, about the page picked when it was asked (the page list is locked until it answers); the
 // answer waits in module state and shows on the next render; a render that is no longer on screen never redraws.
 import { compute, explainable, sheetFor, buildMessages, readAnswer } from "./compute.js";
+import { nameIn } from "../../../core/words.js";
+
+// who a stand-in is, in the sentence: the unnamed first adult ("Me" from Get started) is "you", the unnamed partner "your
+// spouse", a typed name as typed (round 7, 2026-11-06)
+const said = (n) => (n.kind === "person" && String(n.name ?? "").trim() ? nameIn(n.name) : n.name);
 
 let picked = null;    // the page chosen ("group/id")
 let lastRoute = null; // the address seen last time: each arrival is a new route object and picks its page again
@@ -91,7 +96,7 @@ export function render(page, ctx) {
     foldOpen = fold.open;
     if (!fold.open || foldBody.childElementCount) return;
     const s = getSheet();
-    const key = s.names.filter((n) => n.kind === "person").map((n) => `${n.alias} is ${n.name}`);
+    const key = s.names.filter((n) => n.kind === "person").map((n) => `${n.alias} is ${said(n)}`);
     foldBody.append(
       ui.h("p", { class: "muted small" }, "This is everything the AI gets about the page, word for word, plus the page's name and short description, your question and the app's rules for the AI. It is in the app's shorthand: amounts are dollars without the $ sign, and 0.12 means 12%."),
       ui.h("p", { class: "muted small" }, "People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind and a number (“credit card 1”, “mortgage 1”). Your notes, phone numbers and where you keep papers are never sent."),

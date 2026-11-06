@@ -97,3 +97,5 @@ job), and the 68/63 couple's Bo 2026-2027.
 - H-1395 (separated, not divorced): credits $15,893 -> $0, the year's cost $1,712 -> $17,606. The 68/63 couple filing
   separately (Lou on the marketplace 2026-2027): $5,036 after $29,893 of credits -> $34,930 (filing jointly: $4,975 as before).
 - Test: "seventh pass: married filing separately gets no marketplace credit"; it failed on the base.
+
+Review 2026-11-06 (round 7): "Your spouse can usually join your plan at work", "you work until 65 and your spouse works until 62, then is on your plan at work" and the presumed-at-work note ("you have stopped work") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only.

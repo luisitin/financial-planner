@@ -212,3 +212,5 @@ compute.
 ## Ideas / not yet
 - The button on every page (a link from the shell; proposed under Messages).
 - Follow-up questions in a short conversation, the earlier answer kept.
+
+Review 2026-11-06 (round 7): the stand-in key ("In the lines below, Adult 1 is you, Adult 2 is your spouse, ...") says you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).

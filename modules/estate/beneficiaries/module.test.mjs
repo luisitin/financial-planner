@@ -66,3 +66,15 @@ test("a child under 18 named on an account: its own line of what to name instead
   grown.estate.beneficiaries = [{ accountId: "a-401", primary: [{ name: "Cy", personId: "p-cy", share: 1 }], contingent: [{ name: "Bo", personId: "p-bo", share: 1 }], reviewedAt: "2026-01-01" }];
   assert.deepEqual(item(compute(grown, { today: TODAY }), "account:a-401").minors, []);
 });
+
+test("the first adult left unnamed (\"Me\") and the setup's \"My spouse\": the flags say you and your spouse", () => {
+  const rows = [{ accountId: "a-bk401", primary: [{ name: "Dana", share: 1 }], contingent: [{ name: "Cy", personId: "p-cy", share: 1 }], reviewedAt: "2015-06-01" }];
+  const p = withRows(rows); p.household.people.find((x) => x.id === "p-ana").name = "Me";
+  const f = item(compute(p, { today: TODAY }), "account:a-bk401").flags;
+  assert.ok(f.includes("you are not the main beneficiary: by federal law a married person's 401(k) goes to the spouse unless you signed a waiver"), f.join(" | "));
+  const q = withRows(rows); q.household.people.find((x) => x.id === "p-ana").name = "My spouse";
+  assert.ok(item(compute(q, { today: TODAY }), "account:a-bk401").flags.some((x) => x.startsWith("your spouse is not the main beneficiary") && x.endsWith("unless your spouse signed a waiver")));
+  // someone the first adult, born after the form was checked (a date typed wrong): "you were born", never "Me was born"
+  const r = withRows(rows); const me = r.household.people.find((x) => x.id === "p-ana"); me.name = "Me"; me.birthDate = "2016-01-01";
+  assert.ok(item(compute(r, { today: TODAY }), "account:a-bk401").flags.includes("you were born after it was last checked"));
+});

@@ -36,3 +36,6 @@ No plan basics: not ready, lists what is missing. Already retired: markets hit n
 ## Ideas / not yet
 - A shock picker: build your own (crash size, year, a cut in spending in response).
 - The Monte Carlo spread under each shock; unemployment benefits; the pre-retirement budget after a death (how many years one paycheck covers), to size life insurance (`insurance/life-needs`).
+
+## Review 2026-11-06 (round 7): you and your
+- Review 2026-11-06 (round 7): the job-loss, disability, death and care-home titles and stories say you/your for the unnamed first adult and "your spouse" for Get started's partner ("You are out of work for 6 months", "If you died this year", "Your spouse goes on alone: your pay and saving stop"), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".

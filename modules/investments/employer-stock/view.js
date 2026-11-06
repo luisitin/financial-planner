@@ -3,6 +3,7 @@
 // company, the next year's vests and the tax they add against what is withheld, how to get under 10% and what it costs; the company
 // and the grants in folds.
 import { compute, LIMIT, SUPPLEMENTAL, DEFAULT_GRANT } from "./compute.js";
+import { nameOf } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -46,7 +47,7 @@ export function render(page, ctx) {
     d.level !== "ok" ? ui.h("p", { class: d.level === "large" ? "es-bad" : "es-flag" }, d.level === "large" ? "A large bet on one company: if it struggles, your savings fall just when your job is at risk." : "Above the usual ceiling for a single company.") : ui.h("p", { class: "es-d" }, "Within the usual ceiling.")]));
 
   // the double risk
-  if (d.exposure > 0) root.append(ui.card("If the company had a bad year", ui.h("p", {}, ui.h("b", {}, `If the price halved, you would lose about ${money(d.stress.loss)}`), d.pay > 0 ? `, at the same time as ${d.person ? `${d.person}'s` : "your"} ${money(d.pay)} a year of pay depends on the same company.` : "."),
+  if (d.exposure > 0) root.append(ui.card("If the company had a bad year", ui.h("p", {}, ui.h("b", {}, `If the price halved, you would lose about ${money(d.stress.loss)}`), d.pay > 0 ? `, at the same time as ${d.person ? nameOf(d.person) : "your"} ${money(d.pay)} a year of pay depends on the same company.` : "."),
     ui.h("p", { class: "es-d" }, "Companies that fail often take their staff's savings with them: Enron's employees in 2001 lost their jobs and much of their 401(k)s, which held mostly Enron stock.")));
 
   // what is held and granted

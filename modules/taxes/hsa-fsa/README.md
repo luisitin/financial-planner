@@ -28,3 +28,5 @@ No high-deductible plan with money going in: a warning that only someone covered
 ## Ideas / not yet
 - Track receipts paid out of pocket for later tax-free reimbursement.
 - Married filing separately as two returns (waits on the Federal estimate).
+
+Review 2026-11-06 (round 7): "self-only cover for you", "Your FSA election this year", "Your spouse's FSA election this year", "You are not on the self-only health plan, so the 2,000 going into your HSA ...", "Your FSA election is over ..." and "you earn more than the Social Security pay limit" say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js). Test: "Review 2026-11-06 (round 7): the notes say you/your ...".

@@ -153,3 +153,14 @@ test("a new job from a pay that is itself a raise from a later date is its own p
   const job = salary(p, { today: "2027-07-01" }).jobs.find((x) => x.incomeId === "n4");
   assert.deepEqual([job.key, job.raiseFrom, job.settings.promoEvery], ["n4", "income", 0]);
 });
+
+test("the first adult left unnamed (\"Me\") and \"My spouse\": a new job's pay says your pay, your spouse's pay", () => {
+  const T = "2026-11-02";
+  for (const [id, name, says] of [["p-ana", "Me", "your pay"], ["p-bo", "My spouse", "your spouse's pay"]]) {
+    const p = familyPlan(T); p.household.people.find((x) => x.id === id).name = name;
+    const inc = p.income.find((x) => x.personId === id && x.type === "salary");
+    startEvent(p, { id: "j", kind: "job", date: "2027-01-04" }, T);
+    const r = applyChange(p, "j", "updatePay", { id: "n2", incomeId: inc.id, amount: 88000, period: "annual", startDate: "2027-01-04" }, T);
+    assert.ok(r.text.startsWith(`From 1/4/2027 ${says} is 88,000 a year;`), r.text);
+  }
+});

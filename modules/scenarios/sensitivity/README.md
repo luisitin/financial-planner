@@ -55,3 +55,6 @@ still choose.
 
 ## Ideas / not yet
 - Nudges sized by each input's real uncertainty (a standard deviation) instead of round steps; two inputs at once (a heat map); the Monte Carlo chance as a third measure.
+
+## Review 2026-11-06 (round 7): you and your
+- Review 2026-11-06 (round 7): the retirement row's label, the claiming row's note and `ssMethodNote` say you/your for the unnamed first adult and "your spouse" for Get started's partner ("When you retire", "your spouse only: you already get it", "Social Security: you and your spouse claiming ..."), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".

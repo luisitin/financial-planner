@@ -1,7 +1,8 @@
 // modules/cashflow/paycheck/view.js -- DOM only. Each earner's paycheck as a pay stub in plain words: pay, what comes out
 // before tax, the taxes, what comes out after, the take-home; where each $100 goes, when Social Security stops and the
 // extra Medicare starts, what the employer adds; the W-4 and the deductions in a fold.
-import { compute, W4_STATUSES, PERIOD_OF } from "./compute.js";
+import { compute, W4_STATUSES, PERIOD_OF, w4Title } from "./compute.js";
+import { nameOf, NameOf } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 let openFold = null;  // the person whose fold was just saved stays open
@@ -45,7 +46,7 @@ export function render(page, ctx) {
     const stateLine = p.state.from === "typed" ? line("State income tax", p.state.amount, { minus: true })
       : p.state.from === "rate" && p.state.amount > 0.005 ? line("State income tax (about)", p.state.amount, { minus: true })
       : p.state.from === "no-tax" ? line("State income tax (none in your state)", 0) : null;
-    const card = ui.card(`${p.name}'s paycheck`, ui.row(
+    const card = ui.card(`${NameOf(p.name)} paycheck`, ui.row(
       ui.stat("Take-home", money(p.net), p.paychecks === 12 && Math.abs(p.monthly - p.net) < 1 ? `a paycheck, ${every}` : `a paycheck, ${every}; about ${money(p.monthly)} a month`),
       ui.stat("Pay", money(p.gross), `a paycheck before anything comes out${p.jobs > 1 ? ` (${p.jobs} jobs together)` : ""}`),
     ), ui.h("ul", { class: "pc-lines" },
@@ -76,7 +77,7 @@ export function render(page, ctx) {
     const period = p.federal.period;
     if (period && p.federal.from !== "withholding" && (!p.federal.onPageMatches || Math.abs((p.federal.onPage ?? 0) - p.federal.amount) > 0.5)) {
       card.append(ui.row(ui.button(`${p.federal.onPage ? "Update" : "Use"} ${cents(p.federal.amount)} on the Withholding check page`, () => {
-        pending = `The Withholding check page now counts ${cents(p.federal.amount)} of federal tax from each of ${p.name}'s ${p.paychecks} paychecks.`;
+        pending = `The Withholding check page now counts ${cents(p.federal.amount)} of federal tax from each of ${nameOf(p.name)} ${p.paychecks} paychecks.`;
         store.update((q) => { q.taxes = q.taxes ?? {}; q.taxes.withholding = q.taxes.withholding ?? {}; q.taxes.withholding[p.key] = { perPaycheck: Math.round(p.federal.amount * 100) / 100, period }; });
       }, { class: "secondary" })), ui.h("p", { class: "muted small" }, p.federal.onPage ? `It now has ${cents(p.federal.onPage)}${p.federal.onPageMatches ? "" : " for a different number of paychecks"}.` : "So that page can say whether the year's paychecks cover the year's tax."));
     }
@@ -104,10 +105,10 @@ export function render(page, ctx) {
     ];
     const values = { ...s, paychecks: s.paychecks ? String(s.paychecks) : "", w4Status: W4_STATUSES[s.w4Status] ? s.w4Status : "", step2: !!s.step2 };
     const typed = Object.keys(s).some((k) => s[k] !== null && s[k] !== "" && s[k] !== false && s[k] !== undefined);
-    root.append(ui.h("details", { class: "card fold fold-card", open: openFold === p.id || null }, ui.h("summary", {}, ui.h("h2", {}, `${p.name}: W-4 and deductions`), ui.h("span", { class: "fold-status" }, typed ? "yours" : "from the plan"), ui.h("span", { class: "fold-chev" }, "›")),
+    root.append(ui.h("details", { class: "card fold fold-card", open: openFold === p.id || null }, ui.h("summary", {}, ui.h("h2", {}, w4Title(p.name)), ui.h("span", { class: "fold-status" }, typed ? "yours" : "from the plan"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("p", { class: "muted small" }, "Copy these from the pay stub and the W-4 you gave your employer. Anything left empty comes from the rest of the plan."),
       ui.form(fields, values, (v) => {
-        openFold = p.id; pending = `${p.name}'s paycheck saved.`;
+        openFold = p.id; pending = `${NameOf(p.name)} paycheck saved.`;
         store.update((q) => {
           q.whatIfs = q.whatIfs ?? {}; q.whatIfs.paycheck = q.whatIfs.paycheck ?? {};
           q.whatIfs.paycheck[p.id] = { ...v, paychecks: v.paychecks ? Number(v.paychecks) : null, w4Status: v.w4Status || null, step2: !!v.step2 };

@@ -82,3 +82,5 @@ end dates, goals, the kind filter; paydays from Income, the missing-start notice
 - A subscribable calendar served by the PC server, so the phone stays up to date.
 - State tax dates for the household's state.
 - Debt payment due days once loans carry a due day.
+
+Review 2026-11-06 (round 7): the required-withdrawal titles ("Your first required withdrawal deadline"; a person with no name read "Your's"), the Medicare open enrollment line ("you and Bo can change ...") and the payday note for a pay line Get started named in the first person ("Add the first payday to your spouse's salary on Income"; any other name stays quoted as typed) say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse" (core/words.js). Words only: no stored name changed. Test: "the first adult left unnamed ("Me") and "My spouse": required withdrawals, Medicare and paydays ...".

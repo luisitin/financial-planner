@@ -626,3 +626,5 @@ the supplement in the health line and the words; the business-draw names. Each f
   the People page" to `missing`; `compute` passes `noYears` on. Every page that runs the plan already waits on `missing`.
   One of a couple past the end age still runs on the other's years. Test: "round 7 (2026-11-06): everyone past the plan's
   end age ...", which runs seventeen pages' computes on that plan; each one that read the run threw before this change.
+
+Review 2026-11-06 (round 7): the page says you/your for the unnamed first adult ("Me") and "your spouse" for "My spouse", with the verb to match (core/words.js): the income names built here ("your Social Security", "your spouse's pay", `spousalName`: "your benefit as a spouse"), incomeWords, healthSummary ("You: Medicare from 2055"), onJobWords and spouseWords ("while you still work: your spouse's Medicare is counted"), noYearsWhy ("you are 126"), "Retirement starts in 2055 (you at 65)" and "You: retire at 65". Typed names read exactly as before; stored income names are untouched. Test: "Review 2026-11-06 (round 7): the unnamed first adult reads 'you' and 'your' ...".

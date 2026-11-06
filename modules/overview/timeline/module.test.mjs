@@ -218,3 +218,45 @@ test("Review 2026-11-06: a spouse's benefit on the partner's record is a Timelin
     assert.equal(evs[iS].date, "2027-08-15");
   }
 });
+
+test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you and your, the unnamed partner your spouse; typed names as before", () => {
+  const p = familyPlan(); p.household.people[0].name = "Me"; p.household.people[1].name = "My spouse";
+  const d = compute(p, { today: TODAY });
+  assert.equal(ev(d, "retire-p-ana").title, "You retire");
+  assert.equal(ev(d, "medicare-p-ana").title, "You join Medicare");
+  assert.equal(ev(d, "catchup-p-ana").title, "You can save more for retirement");
+  assert.equal(ev(d, "supercatchup-p-ana").title, "Your four bigger catch-up years");
+  assert.equal(ev(d, "social-p-ana").title, "Your Social Security starts");
+  assert.equal(ev(d, "rmd-p-ana").title, "Your required withdrawals begin");
+  assert.equal(ev(d, "end-p-ana").title, "The plan runs until you are 95");
+  assert.equal(ev(d, "retire-p-bo").title, "Your spouse retires");
+  assert.equal(ev(d, "medicare-p-bo").title, "Your spouse joins Medicare");
+  assert.equal(ev(d, "social-p-bo").title, "Your spouse's Social Security starts");
+  assert.equal(ev(d, "end-p-bo").title, "The plan runs to your spouse's 95");
+  for (const e of d.events) assert.doesNotMatch(`${e.title} ${e.detail}`, /\bMe\b|My spouse/, e.id);
+  const short = ev(d, "short");
+  if (short) assert.match(short.detail, /when you would be \d+/);
+  // independence, with the first adult's age: "(at 45)", not "(Me 45)"
+  const fi = structuredClone(p); fi.retirement.spendingMonthly = 2500;
+  assert.match(ev(compute(fi, { today: TODAY }), "fi").detail, /for good \(at \d+\)\./);
+  // typed names read exactly as before
+  const named = compute(familyPlan(), { today: TODAY });
+  assert.equal(ev(named, "retire-p-ana").title, "Ana retires"); assert.equal(ev(named, "medicare-p-bo").title, "Bo joins Medicare");
+  assert.equal(ev(named, "supercatchup-p-ana").title, "Ana's four bigger catch-up years"); assert.equal(ev(named, "end-p-ana").title, "The plan runs to Ana's 95");
+  const nfi = familyPlan(); nfi.retirement.spendingMonthly = 2500;
+  assert.match(ev(compute(nfi, { today: TODAY }), "fi").detail, /for good \(Ana \d+\)\./);
+  // a spouse's benefit: on "your record" when the partner is unnamed-you, "Your benefit as a spouse" when it is theirs
+  const today = "2026-11-05";
+  const q = emptyPlan(); q.household.filingStatus = "married_joint"; q.household.state = "AZ";
+  q.household.people = [{ id: "r", name: "Me", role: "self", birthDate: "1960-08-15", retirementAge: 62, lifeExpectancy: 100 }, { id: "s", name: "Sam", role: "partner", birthDate: "1964-09-20", retirementAge: 70, lifeExpectancy: 90 }];
+  q.retirement.socialSecurity = { r: { claimAge: 67, monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+  const e = ev(compute(q, { today }), "spousal-s");
+  assert.equal(e.title, "Sam's spouse's benefit starts");
+  assert.equal(e.detail, "About $150 a month more in today's dollars, on your record, once both have claimed. It is paid with Sam's own Social Security and rises with inflation every year after.");
+  const swap = structuredClone(q); swap.household.people[0].name = "Ruth"; swap.household.people[1].name = "Me"; swap.household.people[0].role = "partner"; swap.household.people[1].role = "self";
+  const e2 = ev(compute(swap, { today }), "spousal-s");
+  assert.equal(e2.title, "Your benefit as a spouse starts");
+  assert.match(e2.detail, /on Ruth's record, .* paid with your own Social Security/);
+  const partner = structuredClone(q); partner.household.people[1].name = "My spouse";
+  assert.equal(ev(compute(partner, { today }), "spousal-s").title, "Your spouse's benefit as a spouse starts");
+});

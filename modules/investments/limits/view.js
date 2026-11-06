@@ -1,6 +1,7 @@
 // modules/investments/limits/view.js -- DOM only. The room left this year first, then each
 // person's limits with a bar, what each adult may put in a Roth IRA directly, and the deadlines.
 import { compute } from "./compute.js";
+import { nameIn, NameIn, verbFor } from "../../../core/words.js";
 
 const RETURN = {
   married_joint: "Filing jointly",
@@ -29,10 +30,10 @@ export function render(root, ctx) {
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
-  const others = (p) => d.people.filter((q) => q !== p).map((q) => q.name).join(" and ");
+  const others = (p) => d.people.filter((q) => q !== p).map((q) => nameIn(q.name)).join(" and ");
   const noHsaWhy = (p) => d.hsa.coverage === "none"
     ? "The HSA page says there is no high-deductible health plan, and only people on one can put money in an HSA."
-    : `Only ${d.hsa.coveredName ?? "the person on the plan"} is on the self-only high-deductible health plan. If ${p.name} is covered too, set family cover on the HSA page.`;
+    : `Only ${d.hsa.coveredName ? `${nameIn(d.hsa.coveredName)} ${verbFor(d.hsa.coveredName, "is", "are")}` : "the person on the plan is"} on the self-only high-deductible health plan. If ${nameIn(p.name)} ${verbFor(p.name, "is", "are")} covered too, set family cover on the HSA page.`;
   const sub = (p, r) => {
     if (r.kind === "hsa" && !r.eligible) return r.over > 0 ? `${money(r.over)} over: ${noHsaWhy(p)} Money put in anyway is taxed as pay.` : noHsaWhy(p);
     const parts = [r.over > 0 ? `${money(r.over)} over the limit` : `${money(r.room)} of room`];
@@ -63,8 +64,9 @@ export function render(root, ctx) {
         : `Filing separately while living together, the amount shrinks between ${range} of each spouse's own income${rangeYear}, so above ${money(hi)} nothing can go in directly.`)
       : `${RETURN[r.filingStatus] ?? "On your return"}, the amount shrinks between ${range} of income${rangeYear}. The plan puts yours at about ${money(r.magi)}.`;
     const line = (x) => {
-      const who = x.name === "You" ? "You" : x.name;
-      const title = x.allowed > 0 ? `${who} can put up to ${money(x.allowed)} in a Roth IRA directly this year` : x.status === "over" ? `${who} cannot put money in a Roth IRA directly this year` : `${who} has no Roth IRA room left this year`;
+      const nm = x.name === "You" ? null : x.name;   // "You" is the compute's stand-in when no adult is on People
+      const who = NameIn(nm);
+      const title = x.allowed > 0 ? `${who} can put up to ${money(x.allowed)} in a Roth IRA directly this year` : x.status === "over" ? `${who} cannot put money in a Roth IRA directly this year` : `${who} ${verbFor(nm, "has", "have")} no Roth IRA room left this year`;
       const why = [];
       if (r.separate) why.push(`Own income about ${money(x.magi)}.`);
       why.push(x.status === "ok" ? "Under the income limit, so the full amount." : x.status === "partial" ? `Income is inside the band, so the ${money(x.full)} is cut to ${money(x.reduced)}.` : "Over the income limit. The backdoor route still works: put money in a traditional IRA without a deduction, then convert it to a Roth.");

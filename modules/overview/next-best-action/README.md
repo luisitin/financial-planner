@@ -196,3 +196,5 @@ separately the month's federal tax is Budget's two returns (each owner's busines
   has a line of its own, "Child care account money it would lose". Jo with a 5,000 account and no care: 5,170 - 120 - 360 -
   70 - 417 - 3,070 = about 1,130 a month spare, as "Spare each month" says (the lines added up to 1,550). Test: "the lines on
   screen add up to the spare money".
+
+Review 2026-11-06 (round 7): the match step ("You put money in with a match", "Your spouse has a 401(k) and pay", "Your spouse's 401(k) is from a job left") and the room left on the IRA and 401(k) steps (`roomWords`: "You have $7,500 of room left this year", "Room left this year: you $7,500, Bo $3,900") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Ana $7,500, Bo $3,900 of room left this year"; core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."

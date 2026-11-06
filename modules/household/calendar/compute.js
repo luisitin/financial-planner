@@ -8,6 +8,7 @@ import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { MARKETPLACE, MEDICARE_OPEN } from "./data/dates.js";
+import { NameOf, namesIn } from "../../../core/words.js";
 
 /** The kinds of date, in the order the filter chips show them. */
 export const KINDS = {
@@ -98,10 +99,12 @@ export function compute(plan, params = {}) {
     let d = r.next;
     for (let i = 0; i < 400 && d && d <= to; i++) { add(d, r.amount > 0 ? "pay" : "bill", r.payee, { amount: r.amount, detail: `about ${r.cadenceLabel}, from your bank lines`, go: ["cashflow", "recurring"], source: "recurring" }); d = nextAfter(d, r.cadence, d); }
   }
-  // paydays from the Income page, when the bank lines show none
+  // paydays from the Income page, when the bank lines show none. A pay line Get started named in the first person ("My pay",
+  // "My spouse's salary") is said as "your pay", "your spouse's salary"; any other name is quoted as typed
+  const payWords = (n) => { const t = String(n ?? "").trim(); return !t ? "your pay" : /^My\s/.test(t) ? t.replace(/^My\s/, "your ") : `"${t}"`; };
   if (!recurring.some((r) => r.amount > 0)) {
     for (const inc of (plan.income ?? []).filter((x) => x && ["salary", "pension", "social"].includes(x.type) && x.period !== "once")) {
-      if (!isDate(inc.startDate)) { if (inc.type === "salary") notes.push(`Add the first payday to "${inc.name || "your pay"}" on Income to see your paydays here.`); continue; }
+      if (!isDate(inc.startDate)) { if (inc.type === "salary") notes.push(`Add the first payday to ${payWords(inc.name)} on Income to see your paydays here.`); continue; }
       for (const d of periodDates(inc.startDate, inc.period, today, to)) if (!inc.endDate || d <= inc.endDate) add(d, "pay", inc.name || "Pay", { amount: Number(inc.amount) || null, detail: inc.period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
     }
   }
@@ -126,7 +129,7 @@ export function compute(plan, params = {}) {
     const end = ymd(y, ...MEDICARE_OPEN.to);
     const who = people.filter((p) => p.birthDate && ageOn(p.birthDate, end) >= 65).map((p) => p.name).filter(Boolean);
     if (!who.length) continue;
-    add(ymd(y, ...MEDICARE_OPEN.from), "health", "Medicare open enrollment opens", { detail: `Until December 7: ${who.join(" and ")} can change health or drug plans for next year.`, go: ["retirement", "medicare"] });
+    add(ymd(y, ...MEDICARE_OPEN.from), "health", "Medicare open enrollment opens", { detail: `Until December 7: ${namesIn(who)} can change health or drug plans for next year.`, go: ["retirement", "medicare"] });
     add(end, "health", "Medicare open enrollment ends", { detail: "Changes start January 1.", go: ["retirement", "medicare"] });
   }
   // Marketplace open enrollment, when the household buys its own health cover
@@ -146,8 +149,8 @@ export function compute(plan, params = {}) {
     const first = rmdStartYear(p.birthDate);
     if (!first) continue;
     for (const y of years) {
-      if (y === first + 1) add(ymd(y, 4, 1), "retire", `${p.name || "Your"}'s first required withdrawal deadline`, { detail: `For ${first}, from 401(k)s and traditional IRAs. Waiting until now means two withdrawals in ${y}.`, go: ["retirement", "rmd"] });
-      if (y >= first + 1 || (y === first && y === rmdNow.year)) add(ymd(y, 12, 31), "retire", `${p.name || "Your"}'s required withdrawal for ${y} due${y === first ? " (or by April 1 next year)" : ""}`, { go: ["retirement", "rmd"], ...(y === rmdNow.year ? rmdLine(p) : {}) });
+      if (y === first + 1) add(ymd(y, 4, 1), "retire", `${NameOf(p.name)} first required withdrawal deadline`, { detail: `For ${first}, from 401(k)s and traditional IRAs. Waiting until now means two withdrawals in ${y}.`, go: ["retirement", "rmd"] });
+      if (y >= first + 1 || (y === first && y === rmdNow.year)) add(ymd(y, 12, 31), "retire", `${NameOf(p.name)} required withdrawal for ${y} due${y === first ? " (or by April 1 next year)" : ""}`, { go: ["retirement", "rmd"], ...(y === rmdNow.year ? rmdLine(p) : {}) });
     }
   }
 

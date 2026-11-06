@@ -30,3 +30,5 @@ the covered ledger cases agree with the code within the requested half-cent tole
 
 ## Health cover (2026-11-02)
 `out.spending` is all of the year's spending: the plan's spending and its health cover (the projection's "Health cover" line, marketplace to 65 then Medicare, the engine's `eventSpending`); `out.health` is that part, and each year's record says it ("$89,805 spent ($5,805 health cover)"). Buckets reads it, so the years it sets aside include cover.
+
+Review 2026-11-06 (round 7): each year's income lines (named by the projection) say "your Social Security" and "your spouse's Social Security" for the unnamed first adult ("Me") and "My spouse", never "Me's Social Security"; this page says you/your for the unnamed first adult. Test: "Review 2026-11-06 (round 7): the year's income lines say 'your Social Security' ...".

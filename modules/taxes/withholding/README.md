@@ -120,3 +120,5 @@ $1,700 of credits come back" instead of a tax below zero. The rate in the walk g
 - Tests: "the W-4 Step 3 figure for the paychecks left, and the whole year's figure for January", "more withheld ... the
   figure for January too", "filing separately, each return settles on its own", "Estimated payments, filing separately",
   "the self-employment tax itself", "credits more than the tax" (Estimated payments' words).
+
+Review 2026-11-06 (round 7): the estimate line ("you about $244 a paycheck, your spouse about $261"), "on your W-4: Step 4(c)", the separate returns ("Your spouse would likely owe ...; you would likely get ...", "Your spouse's return", "withheld from your spouse's pay", "your spouse's W-4") and the form labels ("Your federal tax taken per paycheck", "How often you are paid") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Bo: paid how often"; core/words.js; view only). Short stat labels that just name who ("Me: refund", "Me: $100 x 3 left") stay.

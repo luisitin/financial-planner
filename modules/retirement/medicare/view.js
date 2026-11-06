@@ -3,6 +3,8 @@
 // marked, and the drug-plan and supplement premiums to plan for.
 import { tiersFor, YEAR, PART_D_BASE, PART_D_BASE_NEXT, MEDIGAP_G } from "./data/medicare.js";
 import { compute } from "./compute.js";
+// "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
+import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -34,8 +36,8 @@ export function render(page, ctx) {
     // past 65 the sign-up is done: a fact, not a window that closed years ago (round 4, 2026-11-02); the window, the
     // employer-cover note and the late penalty are for those who have not reached 65
     d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, p.age !== null && p.age >= 65
-      ? `${p.name}: Medicare age since ${monthName(p.signup.month)}. This page works out what it costs each year.`
-      : `${p.name}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
+      ? `${NameIn(p.name)}: Medicare age since ${monthName(p.signup.month)}. This page works out what it costs each year.`
+      : `${NameIn(p.name)}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
     d.people.some((p) => p.age === null || p.age < 65) ? ui.h("p", { class: "muted small" }, `Still working with cover from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`) : null));
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the costs year by year, the plan needs: ${d.missing.join("; ")}.`))); return; }
 
@@ -54,18 +56,22 @@ export function render(page, ctx) {
   if ((sy.length && !d.healthIncluded) || d.jobCoversSpouse) {
     const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
     const names = [...new Set(sy.flatMap((y) => y.names))], worker = sy[0]?.worker ?? null;
+    // the people in a sentence: "you" for the unnamed first adult, and several with you among them are "you" too
+    const who = list(names.map(nameIn)), many = names.length > 1, withYou = names.some(isYou);
+    const are = many || isYou(names[0]) ? "are" : "is", them = many ? (withYou ? "you" : "them") : nameIn(names[0]), their = many ? (withYou ? "your" : "their") : nameOf(names[0]);
+    const w = worker === null ? null : nameIn(worker), works = verbFor(worker, "works", "work"), job = worker === null ? "" : `${nameOf(worker)} job`;
     // the years as the projection says them (spouseWords): "2029", "2053 and 2054", "2026 to 2029"; years apart are listed
     const ys = sy.map((y) => y.year), apart = ys.some((y, i) => i > 0 && y !== ys[i - 1] + 1);
     const yrs = !ys.length ? "" : apart ? list(ys.map(String)) : ys.length === 1 ? `${ys[0]}` : ys.length === 2 ? `${ys[0]} and ${ys[1]}` : `${ys[0]} to ${ys.at(-1)}`;
     const box = ui.h("input", { type: "checkbox", checked: d.jobCoversSpouse ? true : null, onChange: (e) => {
       const on = e.target.checked;
-      const whose = names.length ? `${list(names)}'s Medicare` : "Medicare";
-      pending = on ? `Saved: ${whose} is left out while ${worker ?? "a husband or wife"} still works.` : `Saved: ${whose} is counted from 65.`;
+      const whose = names.length ? (many && !withYou ? `${who}'s Medicare` : `${their} Medicare`) : "Medicare";
+      pending = on ? `Saved: ${whose} is left out while ${w ?? "a husband or wife"} still ${w ? works : "works"}.` : `Saved: ${whose} is counted from 65.`;
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.medicare = { ...(p.retirement.medicare ?? {}) }; if (on) p.retirement.medicare.jobCoversSpouse = true; else delete p.retirement.medicare.jobCoversSpouse; });
     } });
     root.append(ui.card("Cover through a job",
-      sy.length ? ui.h("p", {}, `In ${yrs} ${list(names)} ${names.length > 1 ? "are" : "is"} 65 or over while ${worker} still works. ${d.healthIncluded ? "Will the money last? adds no health cover now: you said your spending figure already includes it." : d.jobCoversSpouse ? `You said a plan through ${worker}'s job covers ${names.length > 1 ? "them" : names[0]}, so Will the money last? leaves ${names.length > 1 ? "their" : `${names[0]}'s`} Medicare out ${ys.length === 1 ? "that year" : "in those years"}.` : `Will the money last? counts ${names.length > 1 ? "their" : `${names[0]}'s`} Medicare ${ys.length === 1 ? "that year" : "in those years"} unless you say a plan through ${worker}'s job covers ${names.length > 1 ? "them" : names[0]}.`}`) : ui.h("p", {}, "Nobody is 65 or over while a husband or wife still works in your plan now."),
-      ui.h("label", { style: { display: "flex", gap: "10px", alignItems: "center", minHeight: "44px", fontSize: "var(--fs-sm)" } }, box, ui.h("span", {}, sy.length ? `A plan through ${worker}'s job covers ${list(names)}` : "A plan through a husband's or wife's job covers the one who is 65 or over")),
+      sy.length ? ui.h("p", {}, `In ${yrs} ${who} ${are} 65 or over while ${w} still ${works}. ${d.healthIncluded ? "Will the money last? adds no health cover now: you said your spending figure already includes it." : d.jobCoversSpouse ? `You said a plan through ${job} covers ${them}, so Will the money last? leaves ${their} Medicare out ${ys.length === 1 ? "that year" : "in those years"}.` : `Will the money last? counts ${their} Medicare ${ys.length === 1 ? "that year" : "in those years"} unless you say a plan through ${job} covers ${them}.`}`) : ui.h("p", {}, "Nobody is 65 or over while a husband or wife still works in your plan now."),
+      ui.h("label", { style: { display: "flex", gap: "10px", alignItems: "center", minHeight: "44px", fontSize: "var(--fs-sm)" } }, box, ui.h("span", {}, sy.length ? `A plan through ${job} covers ${who}` : "A plan through a husband's or wife's job covers the one who is 65 or over")),
       ui.h("p", { class: "muted small" }, "Check with the plan first: when the employer has fewer than 20 workers, Medicare usually has to pay first.")));
   }
 

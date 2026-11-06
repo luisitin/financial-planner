@@ -7,6 +7,7 @@ import { isLiability } from "../../balance/net-worth/compute.js";
 import { KINDS as POLICY_KINDS } from "../../insurance/policies/compute.js";
 import { KINDS as DOC_KINDS } from "../../estate/documents/compute.js";
 import { listOf } from "../../estate/beneficiaries/compute.js";
+import { NameIn, NameOf, verbFor, isYou } from "../../../core/words.js";
 
 export const ROLES = {
   self:      { label: "Me",        icon: "🙂" },
@@ -59,10 +60,11 @@ export function compute(plan, params = {}) {
   if (adults.length >= 2 && (plan.household?.filingStatus ?? "single") === "single") warnings.push("Two adults but the tax filing status is Single. Change it if you file together.");
   if (adults.length === 1 && MARRIED.includes(plan.household?.filingStatus)) warnings.push(`One adult but the tax filing status is ${FILING_STATUSES[plan.household.filingStatus]}. Change it if you no longer file as a married couple.`);
   for (const p of people) {
-    const who = p.name || "Someone";
-    if (p.age !== null && p.age < 0) warnings.push(`${who} has a birth date in the future.`);
+    // a name in a sentence: "You" for the unnamed first adult ("Me"), "Your spouse", the name, or "Someone" with none
+    const named = !!String(p.name ?? "").trim(), who = named ? NameIn(p.name) : "Someone", has = named ? verbFor(p.name, "has", "have") : "has";
+    if (p.age !== null && p.age < 0) warnings.push(`${who} ${has} a birth date in the future.`);
     if (p.age !== null && p.age > 120) warnings.push(`${who} would be ${p.age}. Check the birth date.`);
-    if (p.role !== "dependent" && p.age !== null && p.retirementAge > p.planEndAge) warnings.push(`${who}: the retirement age (${p.retirementAge}) is past the plan's end age (${p.planEndAge}).`);
+    if (p.role !== "dependent" && p.age !== null && p.retirementAge > p.planEndAge) warnings.push(named && isYou(p.name) ? `Your retirement age (${p.retirementAge}) is past the plan's end age (${p.planEndAge}).` : `${who}: the retirement age (${p.retirementAge}) is past the plan's end age (${p.planEndAge}).`);
   }
   return {
     people, count: people.length, adults: adults.length, dependents: dependents.length,
@@ -97,7 +99,7 @@ export function tiedTo(plan, personId) {
   for (const a of accounts) { const owed = isLiability(a.type); items.push({ kind: "account", id: a.id, name: a.name, amount: Math.abs(Number(a.balance) || 0), every: owed ? "owed" : "balance", where: owed ? "Debts" : "Net worth", href: owed ? "#/balance/liabilities" : "#/balance/net-worth" }); }
   for (const c of plan.retirement?.contributions ?? []) if (c.personId === personId && !accIds.has(c.accountId)) items.push({ kind: "contribution", id: c.id, name: `Saving into ${nameOf(c.accountId)}`, amount: perMonth(c.amount, c.period), every: "a month", where: "Retirement contributions", href: "#/retirement/contributions" });
   const ss = plan.retirement?.socialSecurity?.[personId];
-  if (ss && (Number(ss.monthlyAtFRA) > 0 || (ss.record ?? []).length)) items.push({ kind: "socialSecurity", id: personId, name: `${person?.name || "Their"}'s Social Security`, amount: Number(ss.monthlyAtFRA) || null, every: Number(ss.monthlyAtFRA) > 0 ? "a month" : null, where: "Social Security", href: "#/retirement/social-security", always: true });
+  if (ss && (Number(ss.monthlyAtFRA) > 0 || (ss.record ?? []).length)) items.push({ kind: "socialSecurity", id: personId, name: `${person?.name ? NameOf(person.name) : "Their"} Social Security`, amount: Number(ss.monthlyAtFRA) || null, every: Number(ss.monthlyAtFRA) > 0 ? "a month" : null, where: "Social Security", href: "#/retirement/social-security", always: true });
   for (const x of plan.retirement?.pensions ?? []) if (x.personId === personId) items.push({ kind: "pension", id: x.id, name: x.name || "Pension", amount: Number(x.monthly) || 0, every: "a month", where: "Pensions", href: "#/retirement/pensions" });
   for (const x of plan.retirement?.annuities ?? []) if (x.personId === personId) items.push({ kind: "annuity", id: x.id, name: x.name || "Annuity quote", amount: Number(x.monthly) || 0, every: "a month", where: "Annuities", href: "#/retirement/annuities" });
   for (const x of plan.insurance?.policies ?? []) if (x.personId === personId) items.push({ kind: "policy", id: x.id, name: x.name || (POLICY_KINDS[x.kind] ?? POLICY_KINDS.other).label, amount: Number(x.benefit) || 0, every: "cover", where: "Policies", href: "#/insurance/policies" });
@@ -172,7 +174,7 @@ export function removePerson(draft, personId, { keep = false } = {}) {
     draft.estate.documents = goes(draft.estate.documents.filter((x) => !own(x)).map((x) => ({ ...x, name: DOC_KINDS[x.kind]?.label ?? "Document" })), (x) => x.personId === personId, (x) => { x.personId = ""; }).map(({ name, ...x }) => x);
   }
   // records that only mean something with the person
-  if (r?.socialSecurity?.[personId]) { delete r.socialSecurity[personId]; removed.push(`${t.person.name}'s Social Security`); }
+  if (r?.socialSecurity?.[personId]) { delete r.socialSecurity[personId]; removed.push(`${NameOf(t.person.name)} Social Security`); }
   for (const map of [r?.workPlans, r?.longevity, draft.whatIfs?.humanCapital, draft.whatIfs?.paycheck, draft.whatIfs?.benefits, draft.whatIfs?.college, draft.guide?.setup?.status, draft.guide?.setup?.ss, draft.guide?.setup?.ssWrote]) if (map && typeof map === "object") delete map[personId];
   for (const holder of [draft.whatIfs?.benefits, draft.whatIfs?.offers, draft.equity]) if (holder?.personId === personId) holder.personId = "";
   for (const g of draft.taxes?.gains ?? []) if (g.personId === personId) g.personId = "";

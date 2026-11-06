@@ -72,3 +72,22 @@ test("someone already retired: markets hit now and there is no job to lose", () 
   assert.equal(d.scenarios.some((s) => s.id === "job-loss" || s.id === "disability"), false);
   assert.ok(d.notes.some((n) => n.includes("job-loss")));
 });
+
+test("review 2026-11-06 (round 7): the unnamed first adult reads you and your, the partner your spouse; names as before", () => {
+  const named = (a, b) => { const p = familyPlan(); p.household.people.find((q) => q.role === "self").name = a; p.household.people.find((q) => q.role === "partner").name = b; return p; };
+  const me = compute(named("Me", "My spouse"), { today: TODAY });
+  assert.equal(sc(me, "job-loss").title, `You are out of work for ${JOB_LOSS_MONTHS} months`);
+  assert.match(sc(me, "job-loss").story, /cash first, and your retirement saving stops for the year\./);
+  assert.equal(sc(me, "disability").title, "You can never work again");
+  assert.match(sc(me, "disability").story, /^From next year: your pay and retirement saving stop,/);
+  assert.equal(sc(me, "death-p-ana").title, "If you died this year");
+  assert.match(sc(me, "death-p-ana").story, /^Your spouse goes on alone: your pay and saving stop,.* the larger of your spouse's own and the survivor amount,.* assumes your spouse's pay covers the household/);
+  assert.equal(sc(me, "death-p-bo").title, "If your spouse died this year");
+  assert.match(sc(me, "death-p-bo").story, /^You go on alone: your spouse's pay and saving stop,.* the larger of your own and the survivor amount,.* assumes your pay covers the household/);
+  assert.match(sc(me, "care-home").story, /^From your 85th birthday,/);
+  for (const s of me.scenarios) assert.doesNotMatch(`${s.title} ${s.story}`, /\bMe\b|My spouse/, s.id);
+  // a typed name reads exactly as before
+  assert.equal(sc(fam, "job-loss").title, `Ana is out of work for ${JOB_LOSS_MONTHS} months`);
+  assert.match(sc(fam, "death-p-ana").story, /^Bo goes on alone: Ana's pay and saving stop,/);
+  assert.match(sc(fam, "care-home").story, /^From Ana's 85th birthday,/);
+});

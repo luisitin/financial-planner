@@ -19,6 +19,20 @@ import { yearTaxes, heldAfterTax, aboutTen, fullKind } from "../../cashflow/budg
 import { compute as computeBusiness } from "../../career/business/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
+
+// the unnamed first adult ("Me" from Get started) and the unnamed partner ("My spouse") read "you" and "your spouse" in a
+// sentence; any other name reads as typed, exactly as before (round 7, 2026-11-06)
+const asTyped = (name) => !isYou(name) && nameIn(name) === String(name);
+/** names leading a sentence: "Ana and Bo" as before, "You and Bo" when one is the unnamed first adult */
+const whoLeads = (names) => (names.every(asTyped) ? names.join(" and ") : NamesIn(names));
+/** room left per person: "Ana $7,000, Bo $3,900 of room left this year" as before; "You have $7,500 of room left this
+ * year" for one unnamed adult; "Room left this year: you $7,500, Bo $3,900" for several with one unnamed */
+function roomWords(list, money) {
+  if (list.every((x) => asTyped(x.name))) return `${list.map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year`;
+  if (list.length === 1) return `${NameIn(list[0].name)} ${verbFor(list[0].name, "has", "have")} ${money(list[0].room)} of room left this year`;
+  return `Room left this year: ${list.map((x) => `${nameIn(x.name)} ${money(x.room)}`).join(", ")}`;
+}
 
 /** Debt at this rate or above is "expensive": pay it before investing beyond the match (r/personalfinance wiki: above about 10%). */
 export const HIGH_RATE = 0.10;
@@ -216,9 +230,12 @@ export function compute(plan, params = {}) {
     const matched = contributing.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && Number(c.employerMatch) > 0));
     const missingMatch = working.filter((p) => !contributing.includes(p));
     const toAsk = [...missingMatch, ...leftOnly];
-    const left = leftOnly.length ? ` ${leftOnly.map((p) => p.name).join(" and ")}'s 401(k) is from a job left: check whether the job now has a plan with a match.` : "";
+    const leftNames = leftOnly.map((p) => p.name);
+    const left = !leftOnly.length ? "" : leftNames.every(asTyped) ? ` ${leftNames.join(" and ")}'s 401(k) is from a job left: check whether the job now has a plan with a match.`
+      : leftNames.length === 1 ? ` ${NameOf(leftNames[0])} 401(k) is from a job left: check whether the job now has a plan with a match.`
+      : ` ${leftNames.map((n, i) => (i ? nameOf(n) : NameOf(n))).join(" and ")} 401(k)s are from jobs left: check whether the jobs now have a plan with a match.`;
     if (working.length || leftOnly.length) add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length ? "check" : "done",
-      detail: toAsk.length ? `${missingMatch.length ? `${missingMatch.map((p) => p.name).join(" and ")} ${missingMatch.length === 1 ? "has" : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : `${matched.map((p) => p.name).join(" and ") || "Everyone with a 401(k)"} ${matched.length > 1 ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
+      detail: toAsk.length ? `${missingMatch.length ? `${whoLeads(missingMatch.map((p) => p.name))} ${missingMatch.length === 1 ? verbFor(missingMatch[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : `${whoLeads(matched.map((p) => p.name)) || "Everyone with a 401(k)"} ${matched.length > 1 || (matched.length === 1 && isYou(matched[0].name)) ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`,
       ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id) })),
         ...leftOnly.map((p) => ({ personId: p.id, name: p.name, accounts: [], newJob: true, old: ownOf(p).map((a) => a.id) }))], go: ["retirement", "contributions"] });
   }
@@ -296,7 +313,7 @@ export function compute(plan, params = {}) {
   let rothNear = false;
   try { const r = computeLimits(plan, { today }).roth; rothNear = !!r && (r.status === "partial" || r.status === "over"); } catch { rothNear = false; }
   if (earners.length) add({ id: "ira", title: earners.length > 1 ? "An IRA for each of you" : "An IRA of your own", why: `${optional}Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.`, status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional, people: iraRoom.filter((x) => x.room > 0).length,
-    detail: iraTotal > 0 ? `${iraRoom.filter((x) => x.room > 0).map((x) => `${x.p.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(iraRoom[0].limit)}${iraRoom.length > 1 ? " each" : ""}).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
+    detail: iraTotal > 0 ? `${roomWords(iraRoom.filter((x) => x.room > 0).map((x) => ({ name: x.p.name, room: x.room })), money)} (limit ${money(iraRoom[0].limit)}${iraRoom.length > 1 ? " each" : ""}).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
 
   // 7. moderate debt (not the mortgage)
   const mid = debts.filter((d) => d.rate !== null && d.rate >= MODERATE_RATE && d.rate < HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);
@@ -313,7 +330,7 @@ export function compute(plan, params = {}) {
     const k = (con.byPerson ?? []).filter((p) => earners.some((e) => e.id === p.personId)).map((p) => { const l = p.limits.find((x) => x.kind === "401k"); return l ? { name: p.name, room: Math.max(0, l.limit - l.used), limit: l.limit } : null; }).filter(Boolean);
     const room = k.reduce((s, x) => s + x.room, 0);
     if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: `${optional}Tax-sheltered growth on every dollar the law allows.`, optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
-      detail: room > 0 ? `${k.filter((x) => x.room > 0).map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
+      detail: room > 0 ? `${roomWords(k.filter((x) => x.room > 0), money)} (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
   }
 
   // 8b. a one-person business: its own retirement plan (Small business's best: a solo 401(k), a SEP-IRA or a SIMPLE IRA), far

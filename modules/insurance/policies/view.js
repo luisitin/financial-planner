@@ -2,6 +2,7 @@
 // tappable list grouped by what each protects, one form to add or edit.
 import { compute, KINDS, GROUPS } from "./compute.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
+import { isYou } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
 
@@ -37,7 +38,7 @@ export function render(root, ctx) {
   } else {
     root.append(ui.card(null, ui.row(
       ui.stat("Premiums a year", money(d.premiumYearly), `${money(d.premiumMonthly)} a month`),
-      ...d.byPerson.filter((p) => p.life > 0 || p.disabilityMonthly > 0).map((p) => ui.stat(`${p.name}: life cover`, money(p.life), p.disabilityMonthly ? `disability ${money(p.disabilityMonthly)} a month` : "no disability cover on file")),
+      ...d.byPerson.filter((p) => p.life > 0 || p.disabilityMonthly > 0).map((p) => ui.stat(isYou(p.name) ? "Your life cover" : `${p.name}: life cover`, money(p.life), p.disabilityMonthly ? `disability ${money(p.disabilityMonthly)} a month` : "no disability cover on file")),
     )));
   }
   for (const w of d.warnings) root.append(ui.notice("warn", w));

@@ -90,3 +90,16 @@ test("529s: one total per giver, child and year; nothing to spread at or under t
   assert.equal(big.lifetimeUsed["p-ana"], 95000); assert.equal(big.warnings.length, 1);
   assert.deepEqual(big.byYear.filter((b) => b.needs709).map((b) => b.year), [2026]);
 });
+
+test("the first adult left unnamed (\"Me\") in a couple: the 529 warning and note say from you", () => {
+  const meIs = (p) => { p.household.people.find((x) => x.id === "p-ana").name = "Me"; return p; };
+  const big = compute(meIs(withGifts([
+    { id: "1", to: "Cy", from: "p-ana", amount: 95000, year: 2026, kind: "529", superfund: true },
+    { id: "2", to: "Cy", from: "p-ana", amount: 95000, year: 2026, kind: "529", superfund: true },
+  ])), { today: TODAY });
+  assert.match(big.warnings[0], /^Cy's 529 from you in 2026: only 5 x the yearly limit/);
+  const small = compute(meIs(withGifts([{ id: "1", to: "Cy", from: "p-ana", amount: 15000, year: 2026, kind: "529", superfund: true }])), { today: TODAY });
+  assert.ok(small.notes.some((n) => n.startsWith("Cy's 529 from you in 2026 is $15,000")), small.notes.join(" | "));
+  // any other name as before
+  assert.ok(compute(withGifts([{ id: "1", to: "Cy", from: "p-ana", amount: 15000, year: 2026, kind: "529", superfund: true }]), { today: TODAY }).notes.some((n) => n.startsWith("Cy's 529 from Ana in 2026")));
+});

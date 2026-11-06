@@ -148,3 +148,21 @@ test("review 2026-11-02: their own papers and Social Security go either way; the
   remove(r, "p-bo", { keep: false });
   assert.deepEqual(r.holdings.map((h) => h.id), ["h2"]); assert.deepEqual(r.transactions, []);
 });
+
+test("the first adult left unnamed (\"Me\") and \"My spouse\": warnings and Social Security say you, your, your spouse", () => {
+  const d = compute(planWith([
+    { id: "p1", name: "Me", role: "self", birthDate: "2030-01-01" },
+    { id: "p2", name: "My spouse", role: "partner", birthDate: "1990-01-01", retirementAge: 99, lifeExpectancy: 90 },
+  ], { filingStatus: "married_joint" }), { today: TODAY });
+  assert.ok(d.warnings.includes("You have a birth date in the future."), d.warnings.join(" | "));
+  assert.ok(d.warnings.includes("Your spouse: the retirement age (99) is past the plan's end age (90)."), d.warnings.join(" | "));
+  const r = compute(planWith([{ id: "p1", name: "Me", role: "self", birthDate: "1990-01-01", retirementAge: 99, lifeExpectancy: 90 }]), { today: TODAY });
+  assert.ok(r.warnings.includes("Your retirement age (99) is past the plan's end age (90)."), r.warnings.join(" | "));
+  // a name as typed reads as before
+  assert.ok(compute(planWith([{ id: "p1", name: "Ana", role: "self", birthDate: "2030-01-01" }]), { today: TODAY }).warnings.includes("Ana has a birth date in the future."));
+  // Social Security named at compute time: "Your Social Security", "Your spouse's Social Security"
+  const p = withBoExtras(); p.household.people.find((x) => x.id === "p-bo").name = "Me";
+  assert.ok(tiedTo(p, "p-bo").items.some((i) => i.kind === "socialSecurity" && i.name === "Your Social Security"));
+  const q = withBoExtras(); q.household.people.find((x) => x.id === "p-bo").name = "My spouse";
+  assert.deepEqual(removePerson(q, "p-bo", { keep: true }).removed, ["Your spouse's Social Security"]);
+});

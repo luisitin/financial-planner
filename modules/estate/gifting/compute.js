@@ -3,6 +3,7 @@
 // 709, and part of the lifetime exemption used; no tax until that is gone), a couple splitting gifts,
 // and a 529 college plan front-loaded with five years of gifts at once.
 import { annualExclusionFor, exclusionFor, SUPERFUND_YEARS, ANNUAL_EXCLUSION } from "./data/transfer-tax.js";
+import { nameIn } from "../../../core/words.js";
 
 export const KINDS = { cash: "Money", "529": "529 college plan", other: "Something else (property, shares)" };
 
@@ -62,10 +63,10 @@ export function compute(plan, params = {}) {
       elections.push(el);
       years.forEach((y, k) => entries.push({ year: y, to: e.to, giverId: e.giverId, giverName: e.giverName, amount: el.fifth + (k === 0 ? el.excess : 0) }));
       for (const g of e.gifts) if (g.superfund) { g.spread = SUPERFUND_YEARS; g.years = years; }
-      if (el.excess > 0) warnings.push(`${e.to}'s 529 from ${couple ? e.giverName : "you"} in ${e.year}: only ${SUPERFUND_YEARS} x the yearly limit (${$(cap)}) can be spread over five years; the other ${$(el.excess)} counts in ${e.year}.`);
+      if (el.excess > 0) warnings.push(`${e.to}'s 529 from ${couple ? nameIn(e.giverName) : "you"} in ${e.year}: only ${SUPERFUND_YEARS} x the yearly limit (${$(cap)}) can be spread over five years; the other ${$(el.excess)} counts in ${e.year}.`);
     } else {
       entries.push({ year: e.year, to: e.to, giverId: e.giverId, giverName: e.giverName, amount: e.total });
-      if (e.marked) notes.push(`${e.to}'s 529 from ${couple ? e.giverName : "you"} in ${e.year} is ${$(e.total)}, within the yearly ${$(ex)}, so there is nothing to spread over five years: it simply counts in ${e.year}.`);
+      if (e.marked) notes.push(`${e.to}'s 529 from ${couple ? nameIn(e.giverName) : "you"} in ${e.year} is ${$(e.total)}, within the yearly ${$(ex)}, so there is nothing to spread over five years: it simply counts in ${e.year}.`);
     }
   }
   // every year with a gift: per recipient and giver, what counts against that year's allowance

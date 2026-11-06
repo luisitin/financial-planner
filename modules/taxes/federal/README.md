@@ -204,3 +204,5 @@ Not modelled: AMT, the qualified business income deduction, the earned income an
   1,500 random households one Federal answer changes (10.5 against 10 cents: "the 10% bracket, and the child care credit
   getting smaller"), 11 Brackets answers change, and the two pages now agree on all; no qa household's page text changes.
   Test: brackets "one threshold".
+
+Review 2026-11-06 (round 7): the notes ("Filing separately is two returns: yours and your spouse's ... on your return", "Your health FSA election ... comes off your pay", "you have no pay or business income", "(you have none)", "Your child care account pays ... on your return", "Your pay ended on ...", "your and your spouse's child care accounts pay") and the page ("the next dollar you earn", "you would get about ... back, and your spouse would owe ...", "Your spouse's return") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js, imported as `W` beside this file's own `nameOf`). Test: "Review 2026-11-06 (round 7): the notes and the page say you/your ...".

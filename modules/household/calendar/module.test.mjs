@@ -109,3 +109,23 @@ test("estimated payments keep their federal date in Maine and Massachusetts; the
   assert.equal(ev(/Estimated tax payment 1 of 4/)?.date, "2024-04-15");
   assert.equal(ev(/Tax return for 2023 due/)?.date, "2024-04-17");
 });
+
+test("the first adult left unnamed (\"Me\") and \"My spouse\": required withdrawals, Medicare and paydays say your, you, your spouse", () => {
+  const p = familyPlan("2026-10-31");
+  p.household.people[0].birthDate = "1953-06-01"; p.household.people[0].name = "Me";   // 73 in 2026: first deadline April 1, 2027
+  p.household.people[1].birthDate = "1955-01-01";
+  const d = compute(p, { today: "2026-10-31", range: "year" });
+  const titles = d.events.map((e) => e.title);
+  assert.ok(titles.includes("Your first required withdrawal deadline"), titles.join(" | "));
+  assert.ok(titles.includes("Your required withdrawal for 2026 due (or by April 1 next year)"), titles.join(" | "));
+  assert.ok(!titles.some((t) => /\bMe\b/.test(t)));
+  assert.equal(d.events.find((e) => /Medicare open enrollment opens/.test(e.title)).detail, "Until December 7: you and Bo can change health or drug plans for next year.");
+  // pay lines Get started named in the first person read as "your ..."; a name typed is quoted as before
+  const q = emptyPlan();
+  q.income = [{ id: "a", name: "My pay", type: "salary", amount: 1, period: "monthly" }, { id: "b", name: "My spouse's salary", type: "salary", amount: 1, period: "monthly" }, { id: "c", name: "Bo's salary", type: "salary", amount: 1, period: "monthly" }];
+  assert.deepEqual(compute(q, { today: "2026-10-31", range: "quarter" }).notes, [
+    "Add the first payday to your pay on Income to see your paydays here.",
+    "Add the first payday to your spouse's salary on Income to see your paydays here.",
+    "Add the first payday to \"Bo's salary\" on Income to see your paydays here.",
+  ]);
+});

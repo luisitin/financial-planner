@@ -4,6 +4,7 @@
 // Security Administration's period life tables (an approximation; the exact SSA table is a
 // later improvement noted in the README). A "better" or "worse" health choice shifts it.
 import { ageOn } from "../../../core/math/dates.js";
+import { nameOf } from "../../../core/words.js";
 
 // Gompertz survival: S(t | x) = exp( -exp((x - m) / b) * (exp((t - x) / b) - 1) ); m = modal age at death, b = dispersion.
 // Fitted to approximate SSA 2021 period tables (women live longer; unisex sits between).
@@ -52,6 +53,6 @@ export function compute(plan, params = {}) {
     let y = 0; while (y < 300 && pEither(y) > 0.1) y++;
     either = { ages, planTo: a.age + y, planToYear: today ? Number(String(today).slice(0, 4)) + y : null, first: a.name, second: b.name };
   }
-  const suggestion = !alive.length ? "" : either ? `Plan for at least one of you being alive to about ${either.planTo} (${either.first}'s age): that is when the chance drops under 1 in 10.` : `Plan to about ${alive[0].planTo}: that is when the chance of still being alive drops under 1 in 10.`;
+  const suggestion = !alive.length ? "" : either ? `Plan for at least one of you being alive to about ${either.planTo} (${nameOf(either.first)} age): that is when the chance drops under 1 in 10.` : `Plan to about ${alive[0].planTo}: that is when the chance of still being alive drops under 1 in 10.`;
   return { people, either, suggestion, hasData: alive.length > 0 };
 }

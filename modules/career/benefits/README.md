@@ -169,3 +169,5 @@ fallback), not ready (no pay, pay linked to nobody, pay of 0).
   Security and Medicare 286.88), was $1,047; Ana 5,000 + Bo 3,000: Bo's 3,000 saves $714.81 (485.31 + 229.50), was $890.
   Ana's figures and every joint figure do not move. Test: "on a separate return the business owner's account saves what his
   own return says".
+
+Review 2026-11-06 (round 7): the lede ("Your workplace benefits for 2027", "Your spouse's ...") says you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).

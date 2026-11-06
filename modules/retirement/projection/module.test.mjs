@@ -1433,3 +1433,40 @@ test("round 7 (2026-11-06): everyone past the plan's end age (a birth year typo)
   assert.equal(compute(one, { today: "2026-11-06" }).ready, true);
   assert.equal(compute(familyPlan("2026-11-06"), { today: "2026-11-06" }).noYears ?? null, null);
 });
+
+// ---- review 2026-11-06, round 7: Get started names the first adult "Me" when no name is typed, and the partner "My spouse";
+// the words say "you", "your" and "your spouse" with the verb to match, never "Me's Social Security" or "while Me still works"
+test("Review 2026-11-06 (round 7): the unnamed first adult reads 'you' and 'your' in the income names and the health words", async () => {
+  const { incomeWords, healthSummary, onJobWords, spouseWords, noYearsWhy, spousalName } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-06";
+  const named = (partner, tick = false) => { const p = familyPlan(T); p.household.people[0].name = "Me"; p.household.people[1].name = partner; if (tick) p.retirement.medicare = { jobCoversSpouse: true }; return p; };
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  for (const [partner, them, theirs] of [["My spouse", "your spouse", "your spouse's"], ["Bo", "Bo", "Bo's"]]) {
+    const d = compute(named(partner), { today: T });
+    const ss = d.inputs.incomes.filter((x) => x.kind === "social").map((x) => x.name);
+    assert.deepEqual(ss, ["your Social Security", `${theirs} Social Security`], "was: Me's Social Security, My spouse's Social Security");
+    const words = incomeWords(d.inputs, money);
+    assert.match(words[0], /^your Social Security: \$[\d,]+ a year from 67$/, "a line named for you still says your ages");
+    assert.match(words[1], new RegExp(`^${theirs} Social Security: \\$[\\d,]+ a year from 67$`));
+    assert.deepEqual(spouseWords(d.health.spouseOnJob), [`In 2053 and 2054 ${them} is 65 or over while you still work: ${theirs} Medicare is counted. If a plan through your job covers ${them}, tick the box on the Medicare page.`]);
+    const label = partner === "Bo" ? "Bo" : "Your spouse";
+    assert.match(healthSummary(d.health.bridge, d.health.medicare, { money }), new RegExp(`^${label}: Medicare, about \\$[\\d,]+ a month from 2053\\. You: Medicare from 2055 \\(about \\$[\\d,]+ a month for the two of you\\)`));
+    assert.deepEqual(onJobWords(compute(named(partner, true), { today: T }).health.onJob), [`In 2053 and 2054 ${them} is 65 or over while you still work: you said a plan through your job covers ${them} (Medicare page), so Medicare those years is not added (the Medicare page counts them).`]);
+    assert.ok(!JSON.stringify([words, d.health]).includes("Me's"), "no Me's anywhere in the words or the health line");
+  }
+  // you as the one 65 or over, or the one presumed at work: "you are", "you have"
+  assert.deepEqual(spouseWords({ parts: [{ fromYear: 2053, untilYear: 2054, years: 2, names: ["Me"], worker: "My spouse", presumedUntil: 2055 }] }), ["In 2053 and 2054 you are 65 or over while your spouse still works: your Medicare is counted. If a plan through your spouse's job covers you, tick the box on the Medicare page.", "No pay is listed for your spouse and Get started does not say your spouse has stopped work, so the plan takes your spouse as working until 2055."]);
+  assert.deepEqual(onJobWords({ parts: [{ fromYear: 2053, untilYear: 2053, years: 1, names: ["Me"], worker: "Me", presumedUntil: 2054 }] }), ["In 2053 you are 65 or over but still work: cover comes through the job, so Medicare that year is not added (the Medicare page counts it).", "No pay is listed for you and Get started does not say you have stopped work, so the plan takes you as working until 2054."]);
+  // why a plan has no years: "you are 126", "you retire at 70", "you and your spouse are both past"
+  const ages = 'the retirement age and "Plan to age"';
+  assert.deepEqual(noYearsWhy([{ name: "Me", birthYear: 1900, retireAge: 65, endAge: 95 }], 2026), { why: "you are 126, past the age the plan runs to (95)", check: "the birth date" });
+  assert.deepEqual(noYearsWhy([{ name: "Me", birthYear: 1997, retireAge: 70, endAge: 60 }], 2026), { why: "the plan runs to 60, and you retire at 70", check: ages });
+  assert.deepEqual(noYearsWhy([{ name: "Me", birthYear: 1900, retireAge: 65, endAge: 95 }, { name: "My spouse", birthYear: 1901, retireAge: 65, endAge: 95 }], 2026), { why: "you and your spouse are both past the age the plan runs to", check: "the birth dates" });
+  // a spouse's top-up and a partner's pay, built at compute time
+  assert.deepEqual(["Me", "My spouse", "Ana"].map(spousalName), ["your benefit as a spouse", "your spouse's benefit as a spouse", "Ana's spouse's benefit"]);
+  const pt = await sixth.partTime(true); pt.household.people[0].name = "Me"; pt.household.people[1].name = "My spouse";
+  const row = compute(pt, { today: H }).rows.find((r) => r.year === 2026);
+  assert.ok(row.incomeLines.some((l) => l.name === "your spouse's pay" && Math.abs(l.amount - 18000) < 1), "was: My spouse's pay");
+  assert.ok(row.incomeLines.some((l) => l.name === "your Social Security" && l.amount > 30000), "was: Me's Social Security");
+});

@@ -277,3 +277,19 @@ test("the child care account's note says the part taxed as pay too when money is
   const one = compute(jo({ acct: 5000, care: 150 }), { today: NOV }).notes.find((n) => n.startsWith("Jo's child care account"));
   assert.match(one, /only 1,800 of care is on Expenses for it to pay back, so about 3,200 would be lost/); assert.doesNotMatch(one, /shared/);
 });
+
+test("Review 2026-11-06 (round 7): the notes and the W-4 fold say you/your for the unnamed first adult; a typed name as before", async () => {
+  const { w4Title } = await import("./compute.js");
+  assert.equal(w4Title("Me"), "Your W-4 and deductions");
+  assert.equal(w4Title("My spouse"), "Your spouse's W-4 and deductions");
+  assert.equal(w4Title("Jo"), "Jo: W-4 and deductions");
+  const NOV = "2026-11-02";
+  const me = (opts) => { const p = jo(opts); p.household.people[0].name = "Me"; return p; };
+  // pay typed as a yearly figure: 26 paychecks assumed, and the note points at the fold by its title
+  assert.ok(compute(me(), { today: NOV }).notes.includes(`Your pay is entered as a yearly figure on Income, so 26 paychecks a year are assumed: set how often you are paid under "Your W-4 and deductions".`));
+  assert.ok(compute(jo(), { today: NOV }).notes.includes(`Jo's pay is entered as a yearly figure on Income, so 26 paychecks a year are assumed: set how often Jo is paid under "Jo: W-4 and deductions".`));
+  // the child care account's notes
+  assert.ok(compute(me({ acct: 5000, care: 0 }), { today: NOV }).notes.some((n) => n === "Your child care account takes 5,000 out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost."));
+  assert.ok(compute(me({ acct: 5000, care: 150 }), { today: NOV }).notes.some((n) => n.startsWith("Your child care account takes 5,000 out of pay this year, but only 1,800 of care")));
+  assert.ok(!compute(me({ acct: 5000, care: 0 }), { today: NOV }).notes.some((n) => /\bMe's\b|\bMe (is|has)\b/.test(n)));
+});

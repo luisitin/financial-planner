@@ -1,6 +1,7 @@
 // modules/household/people/view.js -- DOM only. A list of people you tap to edit, one form,
 // and the household's tax filing status and state.
 import { compute, ROLES, FILING_STATUSES, US_STATES, tiedTo, removePerson } from "./compute.js";
+import { isYou, nameIn, NameIn, nameOf, verbFor, selfOf } from "../../../core/words.js";
 
 const FIELDS = (assumptions) => [
   { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. Ana" },
@@ -40,7 +41,7 @@ export function render(root, ctx) {
     const me = d.self ?? d.people.find((p) => p.role !== "dependent") ?? d.people[0];
     root.append(ui.card(null, ui.row(
       ui.stat("People", String(d.count), [d.adults ? `${d.adults} adult${d.adults === 1 ? "" : "s"}` : null, d.dependents ? `${d.dependents} dependent${d.dependents === 1 ? "" : "s"}` : null].filter(Boolean).join(", ") || " "),
-      me && me.yearsToRetirement !== null ? ui.stat(me.retired ? `${me.name} is retired` : `Years until ${me.name} retires`, me.retired ? "now" : String(me.yearsToRetirement), me.retirementDate ? `at ${me.retirementAge}, in ${me.retirementDate.slice(0, 4)}` : null) : null,
+      me && me.yearsToRetirement !== null ? ui.stat(me.retired ? `${NameIn(me.name)} ${verbFor(me.name, "is", "are")} retired` : `Years until ${nameIn(me.name)} ${verbFor(me.name, "retires", "retire")}`, me.retired ? "now" : String(me.yearsToRetirement), me.retirementDate ? `at ${me.retirementAge}, in ${me.retirementDate.slice(0, 4)}` : null) : null,
       d.horizonYears !== null ? ui.stat("The plan must last", `${d.horizonYears} years`, "until the last adult reaches their plan age") : null,
     )));
   }
@@ -63,7 +64,7 @@ export function render(root, ctx) {
     }
     const values = editing ? { ...editing } : { role: d.count === 0 ? "self" : (d.self ? "partner" : "self") };
     formHost.append(ui.h("div", {},
-      ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add a person"),
+      ui.h("h2", {}, editing ? `Edit ${isYou(editing.name) ? "your details" : nameIn(editing.name)}` : "Add a person"),
       ui.form(FIELDS(plan.assumptions ?? {}), values, (v) => {
         const clean = { name: v.name.trim(), role: v.role, birthDate: v.birthDate || "", retirementAge: v.retirementAge ?? null, lifeExpectancy: v.lifeExpectancy ?? null };
         if (!clean.name) return;
@@ -76,7 +77,7 @@ export function render(root, ctx) {
         });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add person", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => { removing = editing; editing = null; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "danger" })) : null,
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${selfOf(editing.name, nameIn(editing.name))}`, () => { removing = editing; editing = null; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "danger" })) : null,
     ));
   };
   // Remove used to drop only the person, so their pay and accounts went on counting as the household's without a word.
@@ -84,14 +85,17 @@ export function render(root, ctx) {
   const removePanel = (person) => {
     const t = tiedTo(plan, person.id);
     const name = person.name;
+    // the person as a sentence says them: "you" / "yourself" / "yours" for the unnamed first adult, "your spouse", or the name
+    const who = nameIn(name), Who = NameIn(name), whom = selfOf(name, who), whose = isYou(name) ? "yours" : nameOf(name);
+    const gone = isYou(name) ? "You are out of the plan" : `${Who} removed`;
     // their Social Security and their own papers go either way (`always`): only the rest can be kept, and the message
     // counts only what was kept (review 2026-11-02)
     const keepable = t.items.filter((i) => !i.always), always = t.items.filter((i) => i.always);
     const listed = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
     const finish = (keep) => {
       const n = t.items.length, k = keepable.length;
-      const what = n === 1 ? t.items[0].name : `${n} things that were ${name}'s`;
-      const text = !n ? `${name} removed.` : keep ? `${name} removed. ${k === 1 ? `${keepable[0].name} now counts` : `${k} things that were ${name}'s now count`} as the household's.${always.length ? ` ${listed(always.map((i) => i.name))} went with ${name}.` : ""}` : `${name} removed, with ${what}.`;
+      const what = n === 1 ? t.items[0].name : `${n} things that were ${whose}`;
+      const text = !n ? `${gone}.` : keep ? `${gone}. ${k === 1 ? `${keepable[0].name} now counts` : `${k} things that were ${whose} now count`} as the household's.${always.length ? ` ${listed(always.map((i) => i.name))} went with ${who}.` : ""}` : `${gone}, with ${what}.`;
       pending = { card: "people", text: text + (t.leavesOneAdult && t.married ? " Taxes are now Single." : ""), undo: structuredClone(plan) };
       removing = null;
       store.update((p) => { removePerson(p, person.id, { keep }); });
@@ -99,25 +103,25 @@ export function render(root, ctx) {
     const amount = (i) => i.amount === null ? null : i.every === "a month" ? `${fmt.money(i.amount, cur)} a month` : i.every === "one time" ? `${fmt.money(i.amount, cur)} one time` : i.every === "owed" ? `${fmt.money(i.amount, cur)} owed` : i.every === "cover" ? `${fmt.money(i.amount, cur)} cover` : fmt.money(i.amount, cur);
     const kids = t.dependents ? (plan.household?.people ?? []).filter((x) => x.id !== person.id && x.role === "dependent").map((x) => x.name) : [];
     return ui.h("div", { class: "remove-person", style: { marginTop: "20px" } },
-      ui.h("h2", {}, `Remove ${name} from the plan?`),
+      ui.h("h2", {}, `Remove ${whom} from the plan?`),
       t.items.length ? [
-        keepable.length ? [ui.h("p", {}, `These are ${name}'s in the plan:`),
+        keepable.length ? [ui.h("p", {}, `These are ${whose} in the plan:`),
           ui.h("ul", { class: "page-list" }, keepable.map((i) => ui.h("li", {},
             ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
             amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null))),
-          ui.h("p", { class: "muted small" }, `If ${name} has left the household, take these out too. If they stay with you (a joint account, an inherited one), keep them as the household's.`)] : null,
-        always.length ? [ui.h("p", {}, `These go with ${name} either way:`),
+          ui.h("p", { class: "muted small" }, `If ${who} ${verbFor(name, "has", "have")} left the household, take these out too. If they stay with you (a joint account, an inherited one), keep them as the household's.`)] : null,
+        always.length ? [ui.h("p", {}, `These go with ${who} either way:`),
           ui.h("ul", { class: "page-list" }, always.map((i) => ui.h("li", {},
             ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name), ui.h("div", { class: "d" }, i.where)),
             amount(i) ? ui.h("span", { class: "st amount" }, amount(i)) : null)))] : null,
-      ] : ui.h("p", { class: "muted" }, `Nothing else in the plan is tied to ${name}.`),
+      ] : ui.h("p", { class: "muted" }, `Nothing else in the plan is tied to ${who}.`),
       t.leavesOneAdult && t.married ? ui.notice("warn", `Taxes are set to ${FILING_STATUSES[plan.household.filingStatus]}. With one adult left the plan will use Single.${kids.length ? ` With ${kids.join(" and ")} at home you may file as head of household, which costs less tax: pick it under Taxes below.` : " Change it under Taxes below if you still file together this year."}`) : null,
-      t.named.length ? ui.h("div", { class: "notice warn" }, `${name} is still named as a beneficiary on ${t.named.map((x) => x.name).join(" and ")}. Removing ${name} here does not change that: only the bank or insurer can. `, ui.h("a", { href: t.named[0].href }, "Beneficiary audit")) : null,
+      t.named.length ? ui.h("div", { class: "notice warn" }, `${Who} ${verbFor(name, "is", "are")} still named as a beneficiary on ${t.named.map((x) => x.name).join(" and ")}. Removing ${whom} here does not change that: only the bank or insurer can. `, ui.h("a", { href: t.named[0].href }, "Beneficiary audit")) : null,
       ui.h("div", { class: "row", style: { marginTop: "12px" } },
         keepable.length
-          ? [ui.button(`Remove ${name} and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}`, () => finish(false), { class: "danger" }),
-             ui.button(`Remove ${name}, keep ${keepable.length === 1 ? "it" : always.length ? `the ${keepable.length} above` : "these"} as the household's`, () => finish(true), { class: "secondary" })]
-          : ui.button(`Remove ${name}${t.items.length ? ` and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}` : ""}`, () => finish(false), { class: "danger" }),
+          ? [ui.button(`Remove ${whom} and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}`, () => finish(false), { class: "danger" }),
+             ui.button(`Remove ${whom}, keep ${keepable.length === 1 ? "it" : always.length ? `the ${keepable.length} above` : "these"} as the household's`, () => finish(true), { class: "secondary" })]
+          : ui.button(`Remove ${whom}${t.items.length ? ` and ${t.items.length === 1 ? "it" : `these ${t.items.length}`}` : ""}`, () => finish(false), { class: "danger" }),
         ui.button("Cancel", () => { removing = null; drawForm(); }, { class: "secondary" })),
     );
   };

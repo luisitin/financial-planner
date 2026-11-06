@@ -8,6 +8,7 @@ import { ageOn, dateAtAge, addMonths } from "../../../core/math/dates.js";
 import { project } from "../../../core/math/retirement.js";
 import { rmdStartAge, rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { compute as computePeople } from "../../household/people/compute.js";
 import { buildInputs, retirementKnown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
@@ -120,23 +121,24 @@ export function compute(plan, params = {}) {
   // each adult: retirement, the ages the rules care about, Social Security, Medicare, required withdrawals, the plan's end
   const ss = computeSocialSecurity(plan, { today });
   for (const p of ordered) {
-    const name = p.name || "You";
+    // the unnamed first adult ("Me" from Get started) reads "you" in every sentence (round 7, 2026-11-06)
+    const name = p.name, Who = NameIn(name), Whose = NameOf(name);
     const by = yearOf(p.birthDate);
     if (!p.retired) {
       const gap = p.retirementAge < 65 ? ` Health cover from work ends: until Medicare at 65 that means a marketplace plan or a former employer's (${65 - p.retirementAge} ${65 - p.retirementAge === 1 ? "year" : "years"}).` : "";
-      add({ id: `retire-${p.id}`, kind: "retire", date: p.retirementDate, personId: p.id, title: `${name} retires`, detail: `At ${p.retirementAge}. The paychecks stop; savings, Social Security and any pension take over.${gap}`, go: ["household", "people"] });
+      add({ id: `retire-${p.id}`, kind: "retire", date: p.retirementDate, personId: p.id, title: `${Who} ${verbFor(name, "retires", "retire")}`, detail: `At ${p.retirementAge}. The paychecks stop; savings, Social Security and any pension take over.${gap}`, go: ["household", "people"] });
     }
     const working = (age) => !p.retired && age < p.retirementAge;
     if (working(50) && (contributes(p) || hasType(p, ["401k", "ira", "roth"]))) {
       const k = limits.kinds["401k"], ira = limits.kinds.ira;
-      add({ id: `catchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 50), personId: p.id, title: `${name} can save more for retirement`, detail: `From 50 the limits rise: ${fmtMoney(k.catchUp, cur)} more a year into a 401(k) and ${fmtMoney(ira.catchUp, cur)} more into an IRA (${limits.kindYear["401k"] === startYear && limits.kindYear.ira === startYear ? startYear : "latest"} figures).`, go: ["investments", "limits"] });
+      add({ id: `catchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 50), personId: p.id, title: `${Who} can save more for retirement`, detail: `From 50 the limits rise: ${fmtMoney(k.catchUp, cur)} more a year into a 401(k) and ${fmtMoney(ira.catchUp, cur)} more into an IRA (${limits.kindYear["401k"] === startYear && limits.kindYear.ira === startYear ? startYear : "latest"} figures).`, go: ["investments", "limits"] });
     }
     if (working(60) && hasType(p, ["401k"]) && limits.kinds["401k"].superCatchUp) {
       const sc = limits.kinds["401k"].superCatchUp;
-      add({ id: `supercatchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, sc.from), personId: p.id, title: `${name}'s four bigger catch-up years`, detail: `From ${sc.from} to ${sc.to} the 401(k) catch-up is ${fmtMoney(sc.amount, cur)} a year instead of ${fmtMoney(limits.kinds["401k"].catchUp, cur)}.`, go: ["investments", "limits"] });
+      add({ id: `supercatchup-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, sc.from), personId: p.id, title: `${Whose} four bigger catch-up years`, detail: `From ${sc.from} to ${sc.to} the 401(k) catch-up is ${fmtMoney(sc.amount, cur)} a year instead of ${fmtMoney(limits.kinds["401k"].catchUp, cur)}.`, go: ["investments", "limits"] });
     }
-    if (working(55) && hasType(p, ["hsa"])) add({ id: `hsa-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 55), personId: p.id, title: `${name}'s HSA limit rises`, detail: `From 55 a health savings account takes ${fmtMoney(limits.kinds.hsa.catchUp, cur)} more a year.`, go: ["taxes", "hsa-fsa"] });
-    if (hasType(p, ["401k", "ira", "roth"])) add({ id: `penalty-${p.id}`, kind: "penalty", date: addMonths(dateAtAge(p.birthDate, 59), 6), personId: p.id, title: `${name} can draw on retirement accounts freely`, detail: "From 59½ money comes out of IRAs and 401(k)s without the 10% early-withdrawal penalty (income tax still applies to pre-tax money).", go: ["retirement", "withdrawal-order"] });
+    if (working(55) && hasType(p, ["hsa"])) add({ id: `hsa-${p.id}`, kind: "catchup", date: dateAtAge(p.birthDate, 55), personId: p.id, title: `${Whose} HSA limit rises`, detail: `From 55 a health savings account takes ${fmtMoney(limits.kinds.hsa.catchUp, cur)} more a year.`, go: ["taxes", "hsa-fsa"] });
+    if (hasType(p, ["401k", "ira", "roth"])) add({ id: `penalty-${p.id}`, kind: "penalty", date: addMonths(dateAtAge(p.birthDate, 59), 6), personId: p.id, title: `${Who} can draw on retirement accounts freely`, detail: "From 59½ money comes out of IRAs and 401(k)s without the 10% early-withdrawal penalty (income tax still applies to pre-tax money).", go: ["retirement", "withdrawal-order"] });
     const sp = ss.people.find((x) => x.id === p.id);
     // someone already getting it has no start ahead, so no event (review 2026-11-02, round 5: a disability benefit paid now
     // read "starts in 2038, at full retirement age", while the Social Security page and the projection count it from today)
@@ -144,8 +146,8 @@ export function compute(plan, params = {}) {
       const claimDate = addMonths(p.birthDate, Math.round(sp.claimAge * 12));
       const fra = fullRetirementAge(by);
       const when = Math.round(sp.claimAge * 12) < Math.round(fra.asYears * 12) ? "early, so smaller for life" : Math.round(sp.claimAge * 12) > Math.round(fra.asYears * 12) ? "late, so bigger for life" : "at full retirement age";
-      add({ id: `social-${p.id}`, kind: "social", date: claimDate, personId: p.id, title: `${name}'s Social Security starts`, detail: `About ${fmtMoney(sp.monthly, cur)} a month in today's dollars, claimed at ${fmtAge(sp.claimAge)}: ${when}. It rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
-    } else add({ id: `social-${p.id}`, kind: "social", date: dateAtAge(p.birthDate, 62), personId: p.id, title: `${name} can claim Social Security`, detail: "62 is the earliest age. There is no estimate in the plan yet: add one so the plan counts it.", tone: "warn", go: ["retirement", "social-security"] });
+      add({ id: `social-${p.id}`, kind: "social", date: claimDate, personId: p.id, title: `${Whose} Social Security starts`, detail: `About ${fmtMoney(sp.monthly, cur)} a month in today's dollars, claimed at ${fmtAge(sp.claimAge)}: ${when}. It rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
+    } else add({ id: `social-${p.id}`, kind: "social", date: dateAtAge(p.birthDate, 62), personId: p.id, title: `${Who} can claim Social Security`, detail: "62 is the earliest age. There is no estimate in the plan yet: add one so the plan counts it.", tone: "warn", go: ["retirement", "social-security"] });
     // a spouse's benefit on the partner's record, when the plan counts it (Social Security's couple.spousalCounted, the
     // projection's "<name>'s spouse's benefit" line), from the month it starts (couple.spousalStartAge: the later of their own
     // claim and the partner's, never before 62). One already being paid has no start ahead, so no event (Review 2026-11-06)
@@ -156,16 +158,16 @@ export function compute(plan, params = {}) {
     const otherBorn = other ? adults.find((q) => q.id === other.id)?.birthDate : null;
     const otherClaim = other && !other.claimed && otherBorn ? addMonths(otherBorn, Math.round(other.claimAge * 12)) : null;
     const spousalDate = Number.isFinite(startAge) ? addMonths(p.birthDate, Math.round(startAge * 12)) : null;
-    if (other && spousalDate) add({ id: `spousal-${p.id}`, kind: "social", date: otherClaim && otherClaim > spousalDate ? otherClaim : spousalDate, personId: p.id, title: `${name}'s spouse's benefit starts`, detail: `About ${fmtMoney(Math.round(top), cur)} a month more in today's dollars, on ${other.name || "your partner"}'s record, once both have claimed. It is paid with ${name}'s own Social Security and rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
-    add({ id: `medicare-${p.id}`, kind: "medicare", date: dateAtAge(p.birthDate, 65), personId: p.id, title: `${name} joins Medicare`, detail: "Sign up in the three months before the 65th birthday to avoid a lifelong late penalty on Part B.", go: ["retirement", "projection"] });
+    if (other && spousalDate) add({ id: `spousal-${p.id}`, kind: "social", date: otherClaim && otherClaim > spousalDate ? otherClaim : spousalDate, personId: p.id, title: isYou(name) ? "Your benefit as a spouse starts" : nameIn(name) === String(name) ? `${name}'s spouse's benefit starts` : `${Whose} benefit as a spouse starts`, detail: `About ${fmtMoney(Math.round(top), cur)} a month more in today's dollars, on ${other.name ? nameOf(other.name) : "your partner's"} record, once both have claimed. It is paid with ${nameOf(name)} own Social Security and rises with inflation every year after.`, tone: "ok", go: ["retirement", "social-security"] });
+    add({ id: `medicare-${p.id}`, kind: "medicare", date: dateAtAge(p.birthDate, 65), personId: p.id, title: `${Who} ${verbFor(name, "joins", "join")} Medicare`, detail: "Sign up in the three months before the 65th birthday to avoid a lifelong late penalty on Part B.", go: ["retirement", "projection"] });
     if (hasType(p, RMD_ACCOUNT_TYPES)) {
       const startAge = rmdStartAge(p.birthDate), sy = rmdStartYear(p.birthDate);
       const k = b.inputs ? b.inputs.people.findIndex((q) => q.id === p.id) : -1;
       const row = rows.find((r) => r.year === sy);
       const first = row && k >= 0 ? row.rmdBy?.[k] / row.priceLevel : null;
-      add({ id: `rmd-${p.id}`, kind: "rmd", year: sy, personId: p.id, title: `${name}'s required withdrawals begin`, detail: `The tax rules make pre-tax accounts pay out from ${fmtAge(startAge)}${first ? `: about ${money(first)} the first year in today's dollars, taxed as income` : ", taxed as income"}.`, go: ["retirement", "rmd"] });
+      add({ id: `rmd-${p.id}`, kind: "rmd", year: sy, personId: p.id, title: `${Whose} required withdrawals begin`, detail: `The tax rules make pre-tax accounts pay out from ${fmtAge(startAge)}${first ? `: about ${money(first)} the first year in today's dollars, taxed as income` : ", taxed as income"}.`, go: ["retirement", "rmd"] });
     }
-    add({ id: `end-${p.id}`, kind: "end", date: p.planEndDate, personId: p.id, title: `The plan runs to ${name}'s ${p.planEndAge}`, detail: ordered.length > 1 ? "The money has to last until the last of you reaches the plan's end age." : "The money has to last until here.", go: ["retirement", "longevity"] });
+    add({ id: `end-${p.id}`, kind: "end", date: p.planEndDate, personId: p.id, title: isYou(name) ? `The plan runs until you are ${p.planEndAge}` : `The plan runs to ${nameOf(name)} ${p.planEndAge}`, detail: ordered.length > 1 ? "The money has to last until the last of you reaches the plan's end age." : "The money has to last until here.", go: ["retirement", "longevity"] });
   }
 
   // children: the tax credit ends at 17, adulthood at 18, a parent's health plan ends at 26
@@ -220,7 +222,7 @@ export function compute(plan, params = {}) {
   const fiRow = fi?.ready && fi.fiNumber > 0 && !already ? rows.find((r) => r.year > startYear && r.year < retireYear && r.totalReal >= fi.fiNumber) : null;
   if (fiRow) {
     const age = self?.birthDate ? fiRow.year - yearOf(self.birthDate) : null;
-    add({ id: "fi", kind: "fi", year: fiRow.year, title: "Financially independent", detail: `On this plan's path (what goes into savings now), savings pass about ${money(fi.fiNumber)}, enough to pay for your spending for good${age !== null ? ` (${self.name || "you"} ${age})` : ""}. Work becomes a choice.`, tone: "ok", go: ["retirement", "projection"] });
+    add({ id: "fi", kind: "fi", year: fiRow.year, title: "Financially independent", detail: `On this plan's path (what goes into savings now), savings pass about ${money(fi.fiNumber)}, enough to pay for your spending for good${age !== null ? (isYou(self.name) ? ` (at ${age})` : ` (${self.name} ${age})`) : ""}. Work becomes a choice.`, tone: "ok", go: ["retirement", "projection"] });
   }
   if (rows.length) {
     let best = MILESTONES.filter((m) => m <= (rows[0]?.totalReal ?? 0)).pop() ?? 0;
@@ -233,7 +235,7 @@ export function compute(plan, params = {}) {
     // the money running out or lasting is said only once Social Security is known (projection's retirementKnown, the
     // Dashboard's rule): without it the path leaves Social Security out and ran short (round 4, 2026-11-02)
     if (!known) { add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: `Not worked out yet. ${gap?.fix ?? "Add Social Security on the Social Security page."}`, go: gap?.go ?? ["retirement", "social-security"] }); }
-    else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${self.name || "you"} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
+    else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${nameIn(self.name)} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
   }
 

@@ -1,6 +1,9 @@
 // modules/retirement/annuities/view.js -- DOM only. Each annuity quote: what it pays, the return it pays
 // like over your likely lifetime, what bonds paying the same would cost, and what buying it does to your
 // plan; one form to add or change a quote. Runs on the PC when connected.
+// "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
+import { nameIn, nameOf, verbFor } from "../../../core/words.js";
+
 let pending = null;   // the confirmation shown on the next render
 
 const STYLE = `
@@ -39,11 +42,11 @@ export function render(page, ctx) {
     if (!d.ready) host.append(ui.card(null, ui.h("p", { class: "muted" }, `To check a quote against your plan, it needs: ${d.missing.join("; ")}.`)));
     for (const q of d.quotes) {
       const card = ui.card(q.name);
-      card.append(ui.h("p", { class: "an-d" }, `${money(q.premium)} now for ${money(q.monthly)} a month from ${q.personName}'s ${q.startAge}${q.joint && q.partnerName ? `, for as long as ${q.personName} or ${q.partnerName} lives` : ", for life"}, ${q.cola ? "rising with prices" : "the same dollars every year"}${q.insurer ? ` (${q.insurer})` : ""}.`));
+      card.append(ui.h("p", { class: "an-d" }, `${money(q.premium)} now for ${money(q.monthly)} a month from ${nameOf(q.personName)} ${q.startAge}${q.joint && q.partnerName ? `, for as long as ${nameIn(q.personName)} or ${nameIn(q.partnerName)} ${verbFor(q.partnerName, "lives", "live")}` : ", for life"}, ${q.cola ? "rising with prices" : "the same dollars every year"}${q.insurer ? ` (${q.insurer})` : ""}.`));
       const ladderBetter = q.ladderSaving < 0;
       if (q.rate !== null && Number.isFinite(q.rate)) card.append(
         ui.h("p", { class: `an-v ${ladderBetter ? "warn" : "ok"}` }, ladderBetter ? `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: less than the annuity.` : `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: the annuity is ${money(q.ladderSaving)} cheaper.`),
-        ui.h("p", { class: "an-d" }, `It pays ${pct(q.payoutRate)} of the sum a year; over the lifetime ${q.joint ? "the two of you are" : `${q.personName} is`} likely to have, that is like a ${pct(q.rate)} return. The bonds stop at ${q.endAge}; the annuity keeps paying after, which is what it is for.`));
+        ui.h("p", { class: "an-d" }, `It pays ${pct(q.payoutRate)} of the sum a year; over the lifetime ${q.joint ? "the two of you are" : `${nameIn(q.personName)} ${verbFor(q.personName, "is", "are")}`} likely to have, that is like a ${pct(q.rate)} return. The bonds stop at ${q.endAge}; the annuity keeps paying after, which is what it is for.`));
       if (q.withIt) {
         const b = d.base, w = q.withIt;
         const row = (label, x, y) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, x), ui.h("b", {}, y));

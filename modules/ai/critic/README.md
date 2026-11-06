@@ -164,3 +164,5 @@ stand-in AI that answers late), not by a unit test.
 - Show which fact each point rests on.
 - Let the person mark a point as handled, so a later run says what changed.
 - Optionally let goals go as "Goal 1 (education)"... for a household that chose an online AI service.
+
+Review 2026-11-06 (round 7): the stand-in key ("On this page Adult 1 is you, Adult 2 is your spouse, ...") says you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only). Not changed: `restore` puts the real name back into the AI's answer, so an answer can still read "Me has ..." (verbs cannot be fixed by swapping a word).

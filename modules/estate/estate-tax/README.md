@@ -30,3 +30,5 @@
 ## Ideas / not yet
 - State tables (exemptions and graduated rates) once a reliable yearly source is in reach.
 - The estate year by year along the plan, with the exemption growing.
+
+Review 2026-11-06 (round 7): "Gifts already count" says "you have $X left", "your spouse has $X left" for the unnamed first adult ("Me") and the setup's "My spouse"; typed names read as before (core/words.js). Words only (view).

@@ -3,6 +3,11 @@
 // the milestones ahead, the next steps, the plan's health and the assumptions. "Print or save as PDF"
 // prints the same sheet on its own (report-kit.js). Runs on the PC when connected.
 import { reportFrame, figs, rtable, section, list, settleReport } from "../report-kit.js";
+import { isYou, nameIn } from "../../../core/words.js";
+
+// a person inside a sentence: the unnamed first adult ("Me" from Get started) is "you", the unnamed partner "your spouse",
+// a typed name as typed; someone else left without a name stays as they are (round 7, 2026-11-06)
+const said = (p) => (p.role === "self" || !isYou(p.name) ? nameIn(p.name) : p.name);
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -25,7 +30,7 @@ export function render(page, ctx) {
     const title = `Financial plan summary${d.household.name ? `: ${d.household.name}` : ""}`;
     const { wrap, sheet } = reportFrame(ui, { title });
     host.append(wrap);
-    const names = d.household.people.map((p) => `${p.name}${p.age !== null ? ` (${p.age})` : ""}`);
+    const names = d.household.people.map((p) => `${said(p)}${p.age !== null ? ` (${p.age})` : ""}`);
     const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
     const adults = d.household.people.filter((p) => p.role !== "dependent");
     const r = d.retirement;
@@ -97,7 +102,7 @@ export function render(page, ctx) {
     const as = d.assumptions;
     sheet.append(section(ui, "Assumptions",
       list(ui, [`Inflation ${pct(as.inflation, 1)} a year; stocks earn ${pct(as.returnStocks, 1)} and bonds ${pct(as.returnBonds, 1)} a year before inflation.`,
-        `Retirement at ${adults.map((p) => `${p.retirementAge ?? as.retirementAge} for ${p.name}`).join(", ")}; the plan runs to age ${as.planEndAge}.`,
+        `Retirement at ${adults.map((p) => `${p.retirementAge ?? as.retirementAge} for ${said(p)}`).join(", ")}; the plan runs to age ${as.planEndAge}.`,
         as.taxMode === "brackets" ? "Tax in retirement through the federal brackets." : "Tax in retirement at one flat rate on pre-tax withdrawals.",
         "Amounts are in today's dollars unless said otherwise."])),
       ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)} from the figures in the plan. Projections are estimates built on the assumptions above, not promises; markets, laws and lives change. Look at it again at least once a year.`));

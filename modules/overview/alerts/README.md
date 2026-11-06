@@ -158,3 +158,5 @@ several cards: two Chase cards with no files now get "Bring in the card files" (
   before). The test checks $21,000 waits and $22,000 cannot be reached, and the holiday due 3 days after the turn is now
   due December 5, 2027.
 - Test: "the tax bill alert reads each separate return".
+
+Review 2026-11-06 (round 7): "You retire this year", "Your required withdrawal: ..." and the separate-return tax bill ("on your spouse's return", "Your spouse's return has ... your spouse's pay takes out") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."

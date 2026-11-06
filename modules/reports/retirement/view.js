@@ -3,6 +3,7 @@
 // how the money comes out, required withdrawals, the plan every five years, the market stress tests.
 import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
 import { bandChart } from "../../retirement/charts.js";
+import { nameIn, NameOf } from "../../../core/words.js";
 
 const lc = (s) => String(s).charAt(0).toLowerCase() + String(s).slice(1);   // "Taxable, then pre-tax, then Roth" -> "taxable, then pre-tax, then Roth"
 
@@ -47,11 +48,11 @@ export function render(page, ctx) {
       d.history.worst.length ? rtable(ui, [{ label: "Hardest starting years", get: (w) => String(w.startYear) }, { label: "Result", num: true, get: (w) => (w.failAge ? `runs out at ${w.failAge}` : `lasts, ${big(w.endReal)} left`) }], d.history.worst) : null));
     if (d.socialSecurity.people.length) sheet.append(section(ui, "Social Security",
       rtable(ui, [{ label: "", get: (x) => x.name }, { label: "Claims at", get: (x) => ageTxt(x.claimAge) }, { label: "A month", num: true, get: (x) => money(x.monthly) }, ...[62, 70].map((a) => ({ label: `At ${a}`, num: true, get: (x) => money(x.options.find((o) => o.claimAge === a)?.monthly) }))], d.socialSecurity.people),
-      d.socialSecurity.survivorMonthly ? ui.h("p", { class: "rp-sub" }, `If one of you dies, the other keeps ${Object.entries(d.socialSecurity.survivorMonthly).map(([id, v]) => `${money(v)} a month (${d.socialSecurity.names[id]})`).join(" or ")}.`) : null));
+      d.socialSecurity.survivorMonthly ? ui.h("p", { class: "rp-sub" }, `If one of you dies, the other keeps ${Object.entries(d.socialSecurity.survivorMonthly).map(([id, v]) => `${money(v)} a month (${d.socialSecurity.names[id] ? nameIn(d.socialSecurity.names[id]) : ""})`).join(" or ")}.`) : null));
     const out = [];
     if (d.order) out.push(d.order.best === d.order.current ? `The withdrawal order (${lc(d.order.current)}) is already the one that leaves the most after tax.` : `Drawing ${lc(d.order.best)} would leave about ${big(d.order.gain)} more after tax than the plan's ${lc(d.order.current)} (Withdrawal order).`);
     if (d.roth) out.push(d.roth.gain > 500 ? `Roth conversions (${lc(d.roth.best)}) would leave about ${big(d.roth.gain)} more after tax (Roth conversions).` : "Roth conversions would make little difference to what is left after tax.");
-    for (const r of d.rmd) out.push(`${r.name}'s required withdrawals begin in ${r.startYear}${r.firstRmdReal ? `, about ${money(r.firstRmdReal)} the first year` : ""}.`);
+    for (const r of d.rmd) out.push(`${NameOf(r.name)} required withdrawals begin in ${r.startYear}${r.firstRmdReal ? `, about ${money(r.firstRmdReal)} the first year` : ""}.`);
     if (out.length) sheet.append(section(ui, "How the money comes out", list(ui, out)));
     sheet.append(section(ui, `The plan every ${5} years`,
       wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved in", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") }, { label: "Left", num: true, get: (r) => (r.short > 0 ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)) }], d.years)));

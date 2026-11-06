@@ -2,6 +2,10 @@
 // first ones look, and the year-by-year schedule from the projection.
 import { compute, thisYear, markTaken } from "./compute.js";
 import { rmdFactor } from "../../../core/math/rmd.js";
+// "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7); thisYear names
+// someone with no name "You", which reads the same
+import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+const unnamed = (n) => (n === "You" ? "" : n);
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -21,23 +25,23 @@ export function render(root, ctx) {
     const from = r.accounts.map((a) => a.name).join(" and ");
     const k401 = r.accounts.filter((a) => a.type === "401k").length;
     if (r.taken) {
-      now.push(ui.card(null, ui.h("p", { style: { margin: 0 } }, `${r.name}'s ${ty.year} withdrawal is taken (marked ${long(r.taken)}). `,
-        ui.button("Not yet", () => { pending = `${r.name}'s ${ty.year} withdrawal is back on the list.`; store.update((p) => markTaken(p, ty.year, r.id, null)); }, { class: "secondary small" }))));
+      now.push(ui.card(null, ui.h("p", { style: { margin: 0 } }, `${NameOf(unnamed(r.name))} ${ty.year} withdrawal is taken (marked ${long(r.taken)}). `,
+        ui.button("Not yet", () => { pending = `${NameOf(unnamed(r.name))} ${ty.year} withdrawal is back on the list.`; store.update((p) => markTaken(p, ty.year, r.id, null)); }, { class: "secondary small" }))));
       continue;
     }
     const lastDec = `December 31, ${ty.year - 1}`;
     now.push(ui.h("section", { class: "card" },
-      ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, `This year, ${r.name} (${r.age})`),
+      ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, isYou(unnamed(r.name)) ? `Yours this year, at ${r.age}` : `This year, ${nameIn(r.name)} (${r.age})`),
       ui.h("h2", { style: { marginTop: 0 } }, `Take at least ${money(r.amount)} from ${from} by ${long(r.deadline)}`),
       ui.h("p", {}, r.accounts.length === 1
         ? `${r.accounts[0].estimated ? `Worked out from today's balance: ${from} holds ${money(r.accounts[0].balance)}` : `${from} held ${money(r.accounts[0].balance)} on ${lastDec}`}, divided by ${rmdFactor(r.age)}, the IRS factor at ${r.age}.`
         : `Each account's ${r.estimated ? "balance today" : `balance on ${lastDec}`} divided by ${rmdFactor(r.age)}, the IRS factor at ${r.age}: ${r.accounts.map((a) => `${a.name} ${money(a.balance / rmdFactor(r.age))}`).join(", ")}.`),
       r.estimated ? ui.h("p", { class: "muted small" }, `The exact figure uses the balance on ${lastDec}: it is on the year-end statement. Type it as that day's balance on the account's page and this updates.`) : null,
-      r.first ? ui.h("p", { class: "small" }, `This is ${r.name}'s first year: it can wait until April 1, ${ty.year + 1}, but then ${ty.year + 1} has two withdrawals, both taxed that year. Taking it by December 31, ${ty.year} spreads the tax.`) : null,
+      r.first ? ui.h("p", { class: "small" }, `This is ${nameOf(unnamed(r.name))} first year: it can wait until April 1, ${ty.year + 1}, but then ${ty.year + 1} has two withdrawals, both taxed that year. Taking it by December 31, ${ty.year} spreads the tax.`) : null,
       k401 && r.accounts.length > 1 ? ui.h("p", { class: "small" }, "Each 401(k)'s share comes out of that 401(k). IRAs can be added together and taken from any one of them.") : null,
-      k401 && r.working ? ui.h("p", { class: "small" }, `Still working? A 401(k) at ${r.name === "You" ? "your" : `${r.name}'s`} current job can usually wait until retiring (check the plan's rules); IRAs cannot.`) : null,
+      k401 && r.working ? ui.h("p", { class: "small" }, `Still working? A 401(k) at ${nameOf(unnamed(r.name))} current job can usually wait until retiring (check the plan's rules); IRAs cannot.`) : null,
       ui.h("p", { class: "muted small" }, "Missing it costs 25% of what was not taken (10% if it is taken within two years). Your bank or broker can set it up; ask them to hold back tax if you like."),
-      ui.row(ui.button("I've taken it", () => { pending = `Marked: ${r.name}'s ${ty.year} withdrawal is taken.`; store.update((p) => markTaken(p, ty.year, r.id, today)); }, { class: "secondary" })),
+      ui.row(ui.button("I've taken it", () => { pending = `Marked: ${nameOf(unnamed(r.name))} ${ty.year} withdrawal is taken.`; store.update((p) => markTaken(p, ty.year, r.id, today)); }, { class: "secondary" })),
     ));
   }
   root.append(ui.h("section", { class: "card accent hero" },
@@ -47,7 +51,7 @@ export function render(root, ctx) {
   ), ...now);
   if (!d.people.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), "."))); return; }
   root.append(ui.card(null, ui.row(
-    ...d.people.map((p) => ui.stat(`${p.name} starts at ${p.startAge}`, String(p.startYear), p.yearsUntil ? `in ${p.yearsUntil} year${p.yearsUntil === 1 ? "" : "s"}` : "already")),
+    ...d.people.map((p) => ui.stat(`${NameIn(p.name)} ${verbFor(p.name, "starts", "start")} at ${p.startAge}`, String(p.startYear), p.yearsUntil ? `in ${p.yearsUntil} year${p.yearsUntil === 1 ? "" : "s"}` : "already")),
     ui.stat("Pre-tax money today", money(d.deferredNow), d.deferredAccounts.map((a) => a.name).join(", ") || "none on file"),
   )));
   if (!d.hasDeferred) { root.append(ui.notice("info", "No pre-tax retirement accounts on file, so no required withdrawals. If you have a 401(k) or traditional IRA, add it on the Net worth page.")); return; }

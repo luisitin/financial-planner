@@ -3,6 +3,7 @@
 // tax, shared across grants, and when a sale qualifies), purchase-plan shares sold now or later; the company, the grants
 // and the purchased shares edited in folds.
 import { compute, DEFAULT_GRANT, ESPP_DISCOUNT, ISO_AFTER_LEAVING, ISO_LIMIT } from "./compute.js";
+import { nameIn } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 let editing = null;   // the grant or lot whose form is open
@@ -50,7 +51,7 @@ export function render(page, ctx) {
       root.append(ui.card(`${d.symbol || "Your company"} at ${price2(d.price)}`, ui.row(
         ui.stat("Yours now", money(d.stake.owned), "shares listed on Holdings and vested options' value"),
         ui.stat("Still to vest", money(d.stake.unvested), "if you stay"),
-      ), d.stake.share !== null ? ui.h("p", { class: "eq-say" }, `${pct(d.stake.share)} of everything you have invested rides on the company${d.person ? ` that pays ${d.person.name}` : ""}${ok ? ": within the usual 10% for one company." : "; up to 10% is the usual most for one company."}`) : null,
+      ), d.stake.share !== null ? ui.h("p", { class: "eq-say" }, `${pct(d.stake.share)} of everything you have invested rides on the company${d.person ? ` that pays ${nameIn(d.person.name)}` : ""}${ok ? ": within the usual 10% for one company." : "; up to 10% is the usual most for one company."}`) : null,
       d.stake.vestedUnits > 0 ? ui.h("p", { class: "muted small" }, "Units that have vested count here once you add their shares on Holdings (or sell them).") : null,
       ui.row(ui.h("a", { class: ok ? "btn secondary" : "btn", href: "#/investments/employer-stock" }, ok ? "Employer stock" : "How to bring it down"))));
     }

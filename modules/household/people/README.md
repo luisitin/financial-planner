@@ -49,3 +49,5 @@ No people: empty state. Missing birth date: age `null`, shown as "no birth date 
 ## Ideas / not yet
 - Spouse's Social Security and survivor rules will need `birthDate` of both adults (phase 5).
 - A "dependent until age" field for college and child-tax-credit pages (phase 6).
+
+Review 2026-11-06 (round 7): the retirement tile ("Years until you retire", "You are retired"), the warnings ("You have a birth date in the future", "Your retirement age (70) is past ..."), the remove panel ("Remove yourself from the plan?", "These are yours in the plan", "Remove your spouse and these 3") and the Social Security line named at compute time ("Your Social Security", "Your spouse's Social Security"; a person with no name reads "Their Social Security", was "Their's") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse"; typed names read as before, and the list and the Me role pill keep the names as labels (core/words.js). Words only: no stored field changed. Test: "the first adult left unnamed ("Me") and "My spouse": warnings and Social Security say you ...".

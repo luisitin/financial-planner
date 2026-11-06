@@ -446,3 +446,28 @@ test("Review 2026-11-06: the tax bill alert reads each separate return, and says
   assert.equal(a.title, "About $1,660 of tax to pay in April on Bo's return");
   assert.match(a.detail, /one return's refund cannot pay the other's bill/);
 });
+
+test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you and your, the unnamed partner your spouse; typed names as before", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-02";
+  // a retirement inside the next year: "You retire this year", not "Me retires"
+  const p = emptyPlan();
+  p.household.people = [{ id: "r", name: "Me", role: "self", birthDate: "1962-03-10", retirementAge: 65 }];
+  p.accounts = [{ id: "ira", name: "IRA", type: "ira", balance: 310000, ownerId: "r", asOf: T, history: [] }];
+  const r = compute(p, { today: T }).alerts.find((a) => a.id === "retiring-r");
+  assert.ok(r); assert.match(r.title, /^You retire (this year|in about a year)/);
+  const named = structuredClone(p); named.household.people[0].name = "Ruth";
+  assert.match(compute(named, { today: T }).alerts.find((a) => a.id === "retiring-r").title, /^Ruth retires (this year|in about a year)/);
+  // this year's required withdrawal: "Your required withdrawal"
+  const q = emptyPlan();
+  q.household.people = [{ id: "r", name: "Me", role: "self", birthDate: "1950-03-10" }];
+  q.accounts = [{ id: "ira", name: "IRA", type: "ira", balance: 310000, ownerId: "r", asOf: "2026-09-15", history: [] }];
+  assert.match(compute(q, { today: T }).alerts.find((a) => a.id.startsWith("rmd-")).title, /^Your required withdrawal: at least \$13,080 by December 31/);
+  // filing separately, the partner's return owes: "on your spouse's return"; "Your spouse's return has ... your spouse's pay"
+  const s = familyPlan(T); s.household.filingStatus = "married_separate"; s.household.people[0].name = "Me"; s.household.people[1].name = "My spouse";
+  s.whatIfs = { ...(s.whatIfs ?? {}), benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } } };
+  const a = compute(s, { today: T }).alerts.find((x) => x.id === "tax-bill");
+  assert.equal(a.title, "About $1,660 of tax to pay in April on your spouse's return");
+  assert.match(a.detail, /Your spouse's return has about \$[\d,]+ of federal tax and your spouse's pay takes out about/);
+  for (const x of compute(s, { today: T }).alerts) assert.doesNotMatch(`${x.title} ${x.detail}`, /\bMe's\b|My spouse/, x.id);
+});

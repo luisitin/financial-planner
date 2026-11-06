@@ -87,3 +87,5 @@ starting, re-dating, removing, unknown kinds, the empty plan.
 - More events: retiring, losing a partner (survivor benefits, qualifying surviving spouse status), a child leaving
   home, a disability.
 - Put an event's deadlines on the Money calendar.
+
+Review 2026-11-06 (round 7): a new job's message says "your pay" for the unnamed first adult ("Me") and "your spouse's pay" for the setup's "My spouse" (it read "My spouse's pay"); typed names read as before (core/words.js nameOf). Words only. Test: "the first adult left unnamed ("Me") and "My spouse": a new job's pay says ...".

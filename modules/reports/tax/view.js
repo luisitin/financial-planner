@@ -2,6 +2,7 @@
 // step by step, the rates, the brackets, how it gets paid, gains, the HSA, and the tax in retirement.
 import { reportFrame, figs, rtable, section, list, settleReport } from "../report-kit.js";
 import { ratePct } from "../../taxes/federal/compute.js";
+import { isYou, nameOf, NameOf } from "../../../core/words.js";
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -26,11 +27,16 @@ export function render(page, ctx) {
     // filing separately: each return's own bracket, room and next dollar, and its own ladder (compute thisYear.returns), not the
     // two returns' combined taxable income laid on one return's ladder (Review 2026-11-06)
     const sepRets = Array.isArray(t.returns) && t.returns.length > 1 ? t.returns : null;
-    const who = (x) => `${x.name ?? "one spouse"}'s`;
+    // the unnamed first adult ("Me" from Get started) reads "your"/"yours", the unnamed partner "your spouse's"; a typed
+    // name reads as before (round 7, 2026-11-06)
+    const who = (x) => (x.name == null ? "one spouse's" : nameOf(x.name));                                  // in a sentence
+    const Whose = (x) => (x.name == null ? "one spouse's" : NameOf(x.name));                                // a heading
+    const theirs = (x) => (x.name == null ? "one spouse's" : isYou(x.name) ? "yours" : nameOf(x.name));     // standing alone
+    const Theirs = (x) => (x.name == null ? "one spouse's" : isYou(x.name) ? "Yours" : NameOf(x.name));
     const roomWords = (x, short = false) => (Number.isFinite(x.roomInBracket) ? `${money(x.roomInBracket)} more ${short ? "" : "taxable income "}fits in the ${pct(x.bracketRate, 0)} bracket before ${pct(x.nextRate, 0)} starts` : `that is the top bracket`);
     sheet.append(ui.h("h1", {}, `Tax report, ${d.year}`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}federal income tax${d.isIndexed ? " (this year's tables are estimated from the latest published)" : ""} · prepared ${longDate(d.today)}`),
       ui.h("p", { class: "rp-lead" }, `${t.totalTax < -0.5 ? `No federal tax for ${d.year}: the credits are about ${money(-t.totalTax)} more than the tax, and that comes back with the refund.` : `Federal tax for ${d.year} comes to about ${money(t.totalTax)}${t.seTax >= 1 ? ` (${money(t.seTax)} of it self-employment tax)` : ""}: ${ratePct(t.effectiveRate)} of income.`} ${sepRets
-        ? `Filing separately, each return has its own brackets: ${sepRets.map((x, i) => (i ? `on ${who(x)}, the next dollar pays ${pct(x.nextDollar, 0)}, and ${roomWords(x, true)}` : `on ${who(x)} return the next dollar of ordinary income pays ${pct(x.nextDollar, 0)}, and ${roomWords(x)}`)).join("; ")}.`
+        ? `Filing separately, each return has its own brackets: ${sepRets.map((x, i) => (i ? `on ${theirs(x)}, the next dollar pays ${pct(x.nextDollar, 0)}, and ${roomWords(x, true)}` : `on ${who(x)} return the next dollar of ordinary income pays ${pct(x.nextDollar, 0)}, and ${roomWords(x)}`)).join("; ")}.`
         : `The next dollar of ordinary income pays ${pct(t.nextDollar ?? t.marginal, 0)}; ${roomWords(t)}.`}`));
     sheet.append(section(ui, `${d.year}, step by step`,
       rtable(ui, [{ label: "", get: (s) => ui.h("span", {}, ui.h("b", {}, s.label), s.sub ? ui.h("span", { class: "rp-sub" }, ` · ${s.sub}`) : null) }, { label: "Amount", num: true, get: (s) => money(s.amount) }], d.thisYear.steps)));
@@ -41,13 +47,13 @@ export function render(page, ctx) {
     const perReturn = [["The next dollar", (x) => pct(x.nextDollar, 0)], ["Bracket", (x) => pct(x.bracketRate, 0)], ["Room left in it", (x) => (Number.isFinite(x.roomInBracket) ? money(x.roomInBracket) : "top rate")]];
     sheet.append(sepRets
       ? section(ui, "The rates", figs(ui, head),
-        rtable(ui, [{ label: "", get: ([label]) => ui.h("b", {}, label) }, ...sepRets.map((x) => ({ label: who(x), num: true, get: ([, f]) => f(x) }))], perReturn))
+        rtable(ui, [{ label: "", get: ([label]) => ui.h("b", {}, label) }, ...sepRets.map((x) => ({ label: Theirs(x), num: true, get: ([, f]) => f(x) }))], perReturn))
       : section(ui, "The rates",
         figs(ui, [...head, ["The next dollar", pct(t.nextDollar ?? t.marginal, 0)], ["Your bracket", pct(t.bracketRate, 0)], Number.isFinite(t.roomInBracket) ? ["Room left in it", big(t.roomInBracket)] : null])));
     const ladderTable = (rows, mine) => rtable(ui, [{ label: "Rate", get: (l) => ui.h("span", { class: l.current ? "rp-ok" : null }, pct(l.rate, 0)) }, { label: "Taxable income", get: (l) => (Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`) }, { label: mine, num: true, get: (l) => (l.filled > 0 ? money(l.filled) : "-") }, { label: "Tax", num: true, get: (l) => (l.tax > 0 ? money(l.tax) : "-") }], rows);
     sheet.append(sepRets
       ? section(ui, "The brackets", ui.h("p", {}, "Filing separately, each of you has your own ladder, on the brackets for a separate return."),
-        ...sepRets.flatMap((x) => [ui.h("h3", {}, `${who(x)} return: ${money(x.ordinaryTaxable)} of ordinary taxable income`), ladderTable(x.ladder, `${who(x)} in it`)]))
+        ...sepRets.flatMap((x) => [ui.h("h3", {}, `${Whose(x)} return: ${money(x.ordinaryTaxable)} of ordinary taxable income`), ladderTable(x.ladder, `${Theirs(x)} in it`)]))
       : section(ui, "The brackets", ladderTable(d.ladder, "Yours in it")));
     const payLines = [];
     // the same answer as Withholding check: typed figures, else withholding estimated from pay
@@ -57,10 +63,10 @@ export function render(page, ctx) {
     const rets = Array.isArray(pay.returns) && pay.returns.length > 1 ? pay.returns : null;
     if (rets) {
       payLines.push(`About ${money(pay.totalTax)} of tax on the two returns. ${took}. Filing separately, each return settles on its own, and one return's refund cannot pay the other's bill.`);
-      for (const x of rets) payLines.push(`${x.name}'s return: ${x.verdict === "owe" ? `about ${money(x.balance)} left to pay at filing${x.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}` : x.verdict === "refund" ? `a refund of about ${money(-x.balance)} next spring` : `about right (${x.balance >= 0 ? `${money(x.balance)} to pay` : `${money(-x.balance)} back`} at filing)`}.`);
+      for (const x of rets) payLines.push(`${Whose(x)} return: ${x.verdict === "owe" ? `about ${money(x.balance)} left to pay at filing${x.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}` : x.verdict === "refund" ? `a refund of about ${money(-x.balance)} next spring` : `about right (${x.balance >= 0 ? `${money(x.balance)} to pay` : `${money(-x.balance)} back`} at filing)`}.`);
       for (const x of rets.filter((y) => y.needsEstimates)) {
-        if (x.overdue) payLines.push(`Estimated payments on ${x.name}'s return: ${money(x.overdue.amount)} due from ${longDate(x.overdue.due)} on is not marked as paid.`);
-        if (x.nextDue) payLines.push(`Estimated payments on ${x.name}'s return: the ${x.nextDue.label} payment of ${money(x.nextDue.amount)} is due ${longDate(x.nextDue.due)}.`);
+        if (x.overdue) payLines.push(`Estimated payments on ${who(x)} return: ${money(x.overdue.amount)} due from ${longDate(x.overdue.due)} on is not marked as paid.`);
+        if (x.nextDue) payLines.push(`Estimated payments on ${who(x)} return: the ${x.nextDue.label} payment of ${money(x.nextDue.amount)} is due ${longDate(x.nextDue.due)}.`);
       }
     }
     else if (pay.verdict === "unknown") payLines.push("Whether paychecks take enough out is not known yet: the Withholding check page works it out from a pay stub.");

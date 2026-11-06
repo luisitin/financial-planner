@@ -81,3 +81,6 @@ dated 2026-05-29, read 2026-10-31; the key's generator and lead audit were updat
 worked examples, whose arithmetic and source are in each row's note.
 
 **Fixed 2026-10-30 (F-030):** employer HSA deposits now count toward the HSA limit (Publication 969: employer payments reduce what the individual may contribute), so a 2026 self-only HSA at age 40 with 4,400 from the individual and 100 from the employer uses 4,500 against the 4,400 limit and is over by 100. Employer 401(k) money remains outside the elective-deferral limit; the separate overall defined-contribution cap is not modelled. The HSA cover now comes from the HSA page (`hsaPicture`); the key's cases name none, which reads as self-only cover of the adult marked "Me".
+
+## Review 2026-11-06 (round 7): you and your
+- Review 2026-11-06 (round 7): the match question and its answers (view.js) say you/your for the unnamed first adult and "your spouse" for Get started's partner ("Does your spouse's job add money when your spouse saves ..."), via `core/words.js`; record titles ("Me: 401(k) / 403(b)") keep the name as a label. No compute change.

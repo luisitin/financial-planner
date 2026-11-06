@@ -2,6 +2,7 @@
 // care dropped into the plan (does the money still last, how many years of care it could carry, what
 // a policy on file changes), and the care to plan for as a small form. Runs on the PC when connected.
 import { CARE, COST_YEAR, CHANCE_AFTER_65, AVERAGE_YEARS, DEFAULTS, DEFAULT_WAIT_DAYS, DEFAULT_BENEFIT_YEARS, MAX_YEARS } from "./compute.js";
+import { nameIn, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -49,19 +50,21 @@ export function render(page, ctx) {
   }
 
   function personCard(p, d) {
-    const card = ui.card(`If ${p.name} needed care`);
+    // the age the money runs out, said of the first adult: "you are 83", "Ana is 83"
+    const whenAge = (age) => `${nameIn(d.primary)} ${verbFor(d.primary, "is", "are")} ${age}`;
+    const card = ui.card(`If ${nameIn(p.name)} needed care`);
     const what = `${yrs(p.years)} of ${d.care.short} from ${p.startAge}`;
     card.append(ui.row(
       ui.stat("Care would cost", money(p.costTotal), `${what}, today's prices`),
       ui.stat("Chance of reaching " + p.startAge, `${Math.round(p.reachChance * 100)}%`, "from How long to plan for"),
     ));
     if (!d.base.success) {
-      card.append(ui.h("p", { class: "ltc-verdict bad" }, "The plan runs short even without care."), ui.h("p", { class: "ltc-d" }, `Fix that first on Will the money last?; care would only bring the day forward${p.self.failAge ? ` (the money would run out when ${d.primary} is ${p.self.failAge})` : ""}.`));
+      card.append(ui.h("p", { class: "ltc-verdict bad" }, "The plan runs short even without care."), ui.h("p", { class: "ltc-d" }, `Fix that first on Will the money last?; care would only bring the day forward${p.self.failAge ? ` (the money would run out when ${whenAge(p.self.failAge)})` : ""}.`));
     } else if (p.self.success) {
       card.append(ui.h("p", { class: "ltc-verdict ok" }, `Your plan can pay for it and still last.`),
         ui.h("p", { class: "ltc-d" }, `The savings could carry ${p.maxYears >= MAX_YEARS ? `${MAX_YEARS} years or more` : `up to about ${yrs(p.maxYears)}`} of ${d.care.short} from ${p.startAge}; after ${what} about ${money(p.self.endReal)} is still left at the end. Paying for care from savings like this is called self-insuring.`));
     } else {
-      card.append(ui.h("p", { class: "ltc-verdict bad" }, p.self.failAge ? `The money would run out when ${d.primary} is ${p.self.failAge}.` : "The money would run out before the end of the plan."),
+      card.append(ui.h("p", { class: "ltc-verdict bad" }, p.self.failAge ? `The money would run out when ${whenAge(p.self.failAge)}.` : "The money would run out before the end of the plan."),
         ui.h("p", { class: "ltc-d" }, `The savings could carry about ${yrs(p.maxYears ?? 0)} of ${d.care.short}. About ${money(p.shortToday)} more saved today would pay for ${what}; a long-term care policy is the other way to cover it. When savings run out, Medicaid pays for nursing-home care, in most states once savings are down to about $2,000.`));
     }
     if (p.policy) {
@@ -69,7 +72,7 @@ export function render(page, ctx) {
       const lost = !pol.inflationProtected;
       card.append(ui.h("h3", { style: { margin: "14px 0 4px" } }, `With ${pol.names.join(" and ")}`),
         ui.h("p", {}, `It pays up to ${money(pol.monthly)} a month for ${pol.years} years after ${pol.waitDays} days. ${lost ? `It has no inflation protection, so by ${p.fromYear} that ${money(pol.monthly)} would buy what about ${money(pol.monthlyThenReal)} buys today.` : "Its benefit rises with prices."} For ${what} it would pay about ${money(pol.paysTotal)} in today's money; the premiums until then come to about ${money(pol.premiumsToStart)} in today's money${pol.premiumsToStart > pol.paysTotal ? ", more than it would pay out" : ""}.`),
-        p.withPolicy ? ui.h("p", { class: "ltc-d" }, p.withPolicy.success ? `Paying the premiums from savings and counting what it pays, the plan ends with about ${money(p.withPolicy.endReal)}${p.self.success ? ` instead of ${money(p.self.endReal)} without the policy: ${p.withPolicy.endReal >= p.self.endReal ? "the policy comes out ahead" : "the policy costs the plan more than it pays back"}` : ""}.` : `Even with the policy the money would run out when ${d.primary} is ${p.withPolicy.failAge}.`) : null);
+        p.withPolicy ? ui.h("p", { class: "ltc-d" }, p.withPolicy.success ? `Paying the premiums from savings and counting what it pays, the plan ends with about ${money(p.withPolicy.endReal)}${p.self.success ? ` instead of ${money(p.self.endReal)} without the policy: ${p.withPolicy.endReal >= p.self.endReal ? "the policy comes out ahead" : "the policy costs the plan more than it pays back"}` : ""}.` : `Even with the policy the money would run out when ${whenAge(p.withPolicy.failAge)}.`) : null);
       card.append(policyTerms(p));
     }
     return card;

@@ -1,6 +1,8 @@
 // modules/retirement/longevity/view.js -- DOM only. Chances of reaching each age, per adult and
 // for at least one of a couple, and the age the plan should run to; sex and health per person.
 import { compute } from "./compute.js";
+// "you" and "your" for the first adult Get started left unnamed ("Me"; round 7)
+import { namesIn, nameIn, nameOf, NameOf } from "../../../core/words.js";
 
 let pending = null;
 
@@ -23,11 +25,11 @@ export function render(root, ctx) {
       ui.row(ui.stat("Life expectancy", `${Math.round(p.expectancy)}`, "the average; half live longer"), ui.stat("1 in 10 reach", `${p.planTo}`, `the plan runs to ${p.currentPlanEnd}`)),
       ui.h("ul", { class: "records" }, p.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Reaching ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
       ui.h("div", { class: "form" }, ui.field("Sex", sexSel, "the tables differ; leave it unsaid for the average"), ui.field("Health", healthSel)),
-      ui.row(ui.button("Save", () => { pending = `${p.name}'s details saved.`; store.update((pl) => { pl.retirement.longevity = pl.retirement.longevity ?? {}; pl.retirement.longevity[p.id] = { sex: sexSel.value, health: healthSel.value }; }); }, { class: "secondary" })),
+      ui.row(ui.button("Save", () => { pending = `${NameOf(p.name)} details saved.`; store.update((pl) => { pl.retirement.longevity = pl.retirement.longevity ?? {}; pl.retirement.longevity[p.id] = { sex: sexSel.value, health: healthSel.value }; }); }, { class: "secondary" })),
     ));
   }
-  if (d.either) root.append(ui.card(`At least one of ${d.either.first} and ${d.either.second}`,
-    ui.h("ul", { class: "records" }, d.either.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Someone still here when ${d.either.first} would be ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
-    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: about ${d.either.planTo} on ${d.either.first}'s clock${d.either.planToYear ? ` (${d.either.planToYear})` : ""}. Set "Plan to age" on the People page if you want the projection to use it.`),
+  if (d.either) root.append(ui.card(`At least one of ${namesIn([d.either.first, d.either.second])}`,
+    ui.h("ul", { class: "records" }, d.either.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Someone still here when ${nameIn(d.either.first)} would be ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
+    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: about ${d.either.planTo} on ${nameOf(d.either.first)} clock${d.either.planToYear ? ` (${d.either.planToYear})` : ""}. Set "Plan to age" on the People page if you want the projection to use it.`),
   ));
 }

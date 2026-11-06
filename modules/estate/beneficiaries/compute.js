@@ -4,6 +4,7 @@
 // that do not add up, a child under 18 named directly, the estate named, a spouse missing from a 401(k).
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { nameIn, verbFor } from "../../../core/words.js";
 
 /** The accounts that take a beneficiary, and what the form is called. */
 export const NAMED = {
@@ -68,10 +69,10 @@ export function compute(plan, params = {}) {
     }
     // ERISA: a married participant's 401(k) goes to the spouse unless the spouse signed a waiver
     const spouse = adults.find((a) => a.id !== s.ownerId && s.ownerId);
-    if (s.type === "401k" && married && spouse && primary.length && !primary.some((b) => b.personId === spouse.id || b.name.toLowerCase() === spouse.name.toLowerCase())) flags.push(`${spouse.name} is not the main beneficiary: by federal law a married person's 401(k) goes to the spouse unless ${spouse.name} signed a waiver`);
+    if (s.type === "401k" && married && spouse && primary.length && !primary.some((b) => b.personId === spouse.id || b.name.toLowerCase() === spouse.name.toLowerCase())) flags.push(`${nameIn(spouse.name)} ${verbFor(spouse.name, "is", "are")} not the main beneficiary: by federal law a married person's 401(k) goes to the spouse unless ${nameIn(spouse.name)} signed a waiver`);
     if (primary.length && reviewedAt && today) {
       if (ageOn(reviewedAt, today) >= REVIEW_YEARS) flags.push(`checked ${ageOn(reviewedAt, today)} years ago`);
-      for (const p of people) if (p.birthDate && p.birthDate > reviewedAt) flags.push(`${p.name} was born after it was last checked`);
+      for (const p of people) if (p.birthDate && p.birthDate > reviewedAt) flags.push(`${nameIn(p.name)} ${verbFor(p.name, "was", "were")} born after it was last checked`);
     }
     return { key: s.key, source: s.source, id: s.id, name: s.name, ownerId: s.ownerId, typeLabel: s.typeLabel, form: s.form, value: s.value, primary, contingent, reviewedAt, flags, minors: minorsNamed, ok: flags.length === 0 };
   });

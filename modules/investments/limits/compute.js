@@ -7,6 +7,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { dueDay } from "../../household/calendar/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { nameIn, NameOf } from "../../../core/words.js";
 
 const HSA_LABEL = { none: "HSA (no high-deductible plan)", self: "HSA (self-only coverage)", family: "HSA (family coverage)" };
 const STATUS_RANK = { ok: 0, partial: 1, over: 2 };
@@ -161,7 +162,10 @@ export function compute(plan, params = {}) {
   const money = (n) => Math.round(n).toLocaleString("en-US");
   if (!people.length) notes.push("Add the adults on the People page; limits are per person.");
   if (!c.items.length) notes.push("Nothing on the Contributions page yet, so every limit shows its full room.");
-  for (const r of roth?.people ?? []) if (r.over > 0) warnings.push(`${r.name}: ${money(r.roth)} is going into a Roth IRA, ${r.allowed > 0 ? `${money(r.over)} more than the ${money(r.allowed)} allowed directly this year` : "but none is allowed directly this year"}. Move the extra to a traditional IRA or take it out before the filing deadline, or it is taxed 6% for each year it stays.`);
+  // the unnamed first adult reads "Your 8,000 is going ...", the partner Get started named "Your spouse's 8,000"; a typed name
+  // keeps "Ana: 8,000 is going ..." (Review 2026-11-06 round 7)
+  const whose = (name) => (nameIn(name) !== String(name ?? "") ? NameOf(name) : `${name}:`);
+  for (const r of roth?.people ?? []) if (r.over > 0) warnings.push(`${whose(r.name)} ${money(r.roth)} is going into a Roth IRA, ${r.allowed > 0 ? `${money(r.over)} more than the ${money(r.allowed)} allowed directly this year` : "but none is allowed directly this year"}. Move the extra to a traditional IRA or take it out before the filing deadline, or it is taxed 6% for each year it stays.`);
   return {
     year, limitsYear, kindYear: L.kindYear, base: { "401k": L.kinds["401k"].limit, ira: L.kinds.ira.limit, hsa: L.kinds.hsa.limit, hsaFamily: L.kinds.hsa.family }, payKnown,
     people, hsa: { coverage: hp.coverage, coveredName, shared: hp.shared }, fsa: { limit: L.kinds.fsa?.limit ?? null }, gift: { exclusion: L.giftExclusion ?? 19000, superfund: (L.giftExclusion ?? 19000) * 5 },

@@ -2,6 +2,8 @@
 // it, what it is worth over a lifetime, the lump sum against the monthly payments, the survivor option;
 // one form to add or change a pension (the projection counts them).
 import { compute } from "./compute.js";
+// "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
+import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -37,20 +39,20 @@ export function render(page, ctx) {
 
   for (const x of d.items) {
     const card = ui.card(x.name);
-    card.append(ui.h("p", { class: "pn-d" }, `${x.personName}: ${money(x.monthly)} a month from ${x.startAge} (${x.startYear})${x.endAge ? ` to ${x.endAge}` : " for life"}, ${x.cola ? "rising with prices each year" : "the same dollars every year"}.`));
+    card.append(ui.h("p", { class: "pn-d" }, `${NameIn(x.personName)}: ${money(x.monthly)} a month from ${x.startAge} (${x.startYear})${x.endAge ? ` to ${x.endAge}` : " for life"}, ${x.cola ? "rising with prices each year" : "the same dollars every year"}.`));
     const list = ui.h("ul", { class: "pn-list" });
-    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, "Against inflation"), ui.h("div", { class: "pn-d" }, x.cola ? "It rises with prices, so it keeps what it buys." : `With no cost-of-living raises, by ${x.personName}'s 85th birthday ${money(x.monthly)} buys what about ${money(x.atEightyFive)} buys today, at ${pct(d.inflation)} inflation.`)));
-    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `Worth about ${money(x.lifetime)}`), ui.h("div", { class: "pn-d" }, `The payments over the years ${x.personName} is likely to live, in today's money, discounted at what safe bonds earn above inflation (${pct(d.realRate)}). It is what the same income would cost to buy.`)));
+    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, "Against inflation"), ui.h("div", { class: "pn-d" }, x.cola ? "It rises with prices, so it keeps what it buys." : `With no cost-of-living raises, by ${nameOf(x.personName)} 85th birthday ${money(x.monthly)} buys what about ${money(x.atEightyFive)} buys today, at ${pct(d.inflation)} inflation.`)));
+    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `Worth about ${money(x.lifetime)}`), ui.h("div", { class: "pn-d" }, `The payments over the years ${nameIn(x.personName)} ${verbFor(x.personName, "is", "are")} likely to live, in today's money, discounted at what safe bonds earn above inflation (${pct(d.realRate)}). It is what the same income would cost to buy.`)));
     if (x.lump) {
       const l = x.lump;
       const verdict = l.verdict === "monthly" ? ["ok", "The monthly payments look better."] : l.verdict === "lump" ? ["warn", "The lump sum looks better."] : ["", "About even."];
       list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `Lump sum of ${money(l.amount)} or monthly?`), ui.h("div", { class: `pn-v ${verdict[0]}` }, verdict[1]),
-        ui.h("div", { class: "pn-d" }, `${l.rate === -Infinity ? "The lump sum is more than the payments are likely to add up to." : l.rate === Infinity ? "The payments are worth far more than this lump sum." : `The monthly payments are like investing the lump sum at ${pct(l.rate)} a year for life; safe bonds earn about ${pct(d.nominalRate)}.`} ${l.breakevenAge ? `They add up to more than the lump sum from age ${l.breakevenAge}; ${x.personName} has about a ${Math.round(l.chanceToBreakeven * 100)}% chance of getting there.` : ""} The monthly payments cannot run out and need no investing; the lump sum can be left to heirs.`)));
+        ui.h("div", { class: "pn-d" }, `${l.rate === -Infinity ? "The lump sum is more than the payments are likely to add up to." : l.rate === Infinity ? "The payments are worth far more than this lump sum." : `The monthly payments are like investing the lump sum at ${pct(l.rate)} a year for life; safe bonds earn about ${pct(d.nominalRate)}.`} ${l.breakevenAge ? `They add up to more than the lump sum from age ${l.breakevenAge}; ${nameIn(x.personName)} ${verbFor(x.personName, "has", "have")} about a ${Math.round(l.chanceToBreakeven * 100)}% chance of getting there.` : ""} The monthly payments cannot run out and need no investing; the lump sum can be left to heirs.`)));
     }
     if (x.survivor) {
       const s = x.survivor;
-      list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `For ${s.partnerName} after ${x.personName} dies`), ui.h("div", { class: `pn-v ${s.better === "joint" ? "ok" : s.better === "single" ? "warn" : ""}` }, s.better === "joint" ? "The survivor option is worth more on average." : s.better === "single" ? "The single-life option is worth more on average." : "About even on average."),
-        ui.h("div", { class: "pn-d" }, `Single life pays ${money(x.monthly)} a month while ${x.personName} lives (worth about ${money(s.single)}); the survivor option pays ${money(s.monthly)}, and ${money(s.survivorMonthly)} to ${s.partnerName} after (worth about ${money(s.joint)}), counting both of your chances of living each year. The survivor option is insurance: it matters most if ${s.partnerName} would struggle without it.`)));
+      list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `For ${nameIn(s.partnerName)} after ${nameIn(x.personName)} ${verbFor(x.personName, "dies", "die")}`), ui.h("div", { class: `pn-v ${s.better === "joint" ? "ok" : s.better === "single" ? "warn" : ""}` }, s.better === "joint" ? "The survivor option is worth more on average." : s.better === "single" ? "The single-life option is worth more on average." : "About even on average."),
+        ui.h("div", { class: "pn-d" }, `Single life pays ${money(x.monthly)} a month while ${nameIn(x.personName)} ${verbFor(x.personName, "lives", "live")} (worth about ${money(s.single)}); the survivor option pays ${money(s.monthly)}, and ${money(s.survivorMonthly)} to ${nameIn(s.partnerName)} after (worth about ${money(s.joint)}), counting both of your chances of living each year. The survivor option is insurance: it matters most if ${nameIn(s.partnerName)} would struggle without it.`)));
     }
     card.append(list, ui.row(ui.button("Change", () => { editing = (plan.retirement.pensions ?? []).find((y) => y.id === x.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
     root.append(card);

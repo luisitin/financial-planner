@@ -76,3 +76,5 @@
 ## Ideas / not yet
 - 529 state deductions by state; SEP/Solo 401(k) limits for the self-employed.
 - The IRA limit capped by compensation (219(b)(1)(B), the spousal IRA 219(c)).
+
+Review 2026-11-06 (round 7): "You can put up to ... in a Roth IRA", "You have no Roth IRA room left", "Only you are on the self-only high-deductible health plan. If your spouse is covered too ..." and the warning "Your 3,000 is going into a Roth IRA" ("Your spouse's 3,000 ...") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Ben: 3,000 is going ..."; core/words.js). Test: "Review 2026-11-06 (round 7): the Roth IRA warning says your ...".

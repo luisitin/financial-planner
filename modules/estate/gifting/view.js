@@ -3,6 +3,7 @@
 // change a gift.
 import { compute, KINDS } from "./compute.js";
 import { SUPERFUND_YEARS, FIRST_YEAR } from "./data/transfer-tax.js";
+import { isYou, nameIn, NamesIn } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -43,17 +44,17 @@ export function render(page, ctx) {
       ui.stat("Lifetime exemption left", money(Math.min(...Object.values(d.lifetimeLeft))), d.couple ? "the lower of yours" : "of " + money(d.lifetimeExclusion)),
     )));
     const list = ui.h("ul", { class: "gf-list" }, [...d.gifts].sort((a, b) => a.year - b.year).map((g) => {
-      const overRows = d.byYear.filter((b) => g.years.includes(b.year)).flatMap((b) => b.rows.filter((r) => r.over > 0 && r.to.toLowerCase() === String(g.to ?? "").trim().toLowerCase() && g.givers.some((f) => f.id === r.giverId)).map((r) => `${r.giverName} ${money(r.over)} over in ${b.year}`));
+      const overRows = d.byYear.filter((b) => g.years.includes(b.year)).flatMap((b) => b.rows.filter((r) => r.over > 0 && r.to.toLowerCase() === String(g.to ?? "").trim().toLowerCase() && g.givers.some((f) => f.id === r.giverId)).map((r) => `${isYou(r.giverName) ? "you are" : nameIn(r.giverName)} ${money(r.over)} over in ${b.year}`));
       return ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.gifts ?? []).find((y) => y.id === g.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("div", { class: "gf-body" }, ui.h("div", { class: "gf-t" }, `${g.to || "Someone"}: ${KINDS[g.kind] ?? KINDS.cash}`),
-          ui.h("div", { class: "gf-d" }, [g.givers.map((f) => f.name).join(" and ") + (g.splitByElection ? " (split, as every gift that year)" : ""), g.spread > 1 ? `${g.year} to ${g.year + g.spread - 1}, spread over ${g.spread} years` : String(g.year)].join(" · ")),
+          ui.h("div", { class: "gf-d" }, [NamesIn(g.givers.map((f) => f.name)) + (g.splitByElection ? " (split, as every gift that year)" : ""), g.spread > 1 ? `${g.year} to ${g.year + g.spread - 1}, spread over ${g.spread} years` : String(g.year)].join(" · ")),
           overRows.length ? ui.h("div", { class: "gf-d gf-over" }, `Gift tax return: ${overRows.join("; ")}`) : null),
         ui.h("div", { class: "gf-v" }, money(g.amount)));
     }));
     root.append(ui.card("Your gifts", ui.h("p", { class: "muted small" }, "Tap a gift to change it."), list));
     const returns = d.byYear.filter((b) => b.needs709);
     if (returns.length) root.append(ui.card("Gift tax returns to file", ui.h("ul", {}, returns.map((b) => ui.h("li", {}, `${b.year}: Form 709 by April 15, ${b.year + 1}${b.overTotal ? ` (${money(b.overTotal)} over the yearly limit, from the lifetime exemption)` : " (to split gifts or spread a 529; no tax)"}`))),
-      ui.h("p", { class: "muted small" }, `Lifetime exemption these gifts use: ${d.givers.map((g) => `${g.name} ${money(d.lifetimeUsed[g.id])}`).join(", ")}.`)));
+      ui.h("p", { class: "muted small" }, `Lifetime exemption these gifts use: ${d.givers.map((g) => `${nameIn(g.name)} ${money(d.lifetimeUsed[g.id])}`).join(", ")}.`)));
   }
 
   // add or change a gift

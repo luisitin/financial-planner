@@ -32,3 +32,5 @@
 "Guaranteed income covers" (`floorBefore`, `floorAfter`) is guaranteed income in the first retirement year over that year's
 spending plus its health cover (the projection's "Health cover" events, marked `spending`, in today's dollars), the same
 share as Will the money last?'s "Guaranteed income"; it read the spending alone. Tested against the projection's `coverage`.
+
+Review 2026-11-06 (round 7): each quote's words ("a month from your 65, for as long as you or your spouse lives", "over the lifetime you are likely to have") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only.

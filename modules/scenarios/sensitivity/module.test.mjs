@@ -92,4 +92,25 @@ test("review 2026-11-02 (round 5, second pass): the method note says how the cla
   assert.match(ssMethodNote(["A", "B", "C"], false), /^Social Security: A, B and C claiming at the same age, the oldest one's age today \(62 at the earliest\), or all at 70\.$/);
 });
 
+test("review 2026-11-06 (round 7): the unnamed first adult reads you, the partner your spouse; names as before", async () => {
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const { ssMethodNote } = await import("./compute.js");
+  const T = "2026-11-02";
+  const fam = familyPlan(); fam.household.people[0].name = "Me"; fam.household.people[1].name = "My spouse";
+  const m = compute(fam, { today: TODAY });
+  assert.equal(m.rows.find((r) => r.id === "retire").label, "When you retire");
+  assert.equal(row("retire").label, "When Ana retires");
+  assert.match(m.ssMethod, /^Social Security: you and your spouse claiming at the same age, the older one's age today/);
+  assert.match(d.ssMethod, /^Social Security: Ana and Bo claiming at the same age/);
+  assert.match(ssMethodNote(["Me"], false), /^Social Security: you claiming at today's age \(62 at the earliest\) or at 70\.$/);
+  assert.match(ssMethodNote(["Bo", "Me"], false), /^Social Security: you and Bo claiming at the same age/);
+  // who is left out of the claiming row, and why, in the person's own number
+  const retired = (samBorn, leeBorn) => { const p = retirementPlan(); p.household.people[0].birthDate = samBorn; p.household.people[1].birthDate = leeBorn; p.income = []; p.retirement.contributions = []; return p; };
+  const old = retired("1950-06-20", "1957-06-10"); old.retirement.socialSecurity.sam.claimAge = 66;
+  old.household.people[0].name = "Me"; old.household.people[1].name = "My spouse";
+  assert.equal(compute(old, { today: T }).rows.find((r) => r.id === "claim").help, "your spouse only: you are 70 or over, when waiting adds nothing");
+  old.income = [{ id: "ss-sam", name: "Social Security", type: "social", personId: "sam", amount: 2100, period: "monthly" }];
+  assert.equal(compute(old, { today: T }).rows.find((r) => r.id === "claim").help, "your spouse only: you already get it");
+});
+
 function near(a, b, tol = 0.5) { assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`); }

@@ -92,3 +92,5 @@ This page's figures do not move for any fixture (none holds tax-exempt interest)
   "Cover through a job" card, or says "Will the money last? adds no health cover now" while the tick is on: the card said that
   page counted the Medicare it does not add. Test: "verify 2026-11-06: no tick question for someone whose Medicare a line on
   Expenses pays ..." (failed on the seventh pass's patch).
+
+Review 2026-11-06 (round 7): the sign-up lines ("You: sign up between ...") and the "Cover through a job" card ("your spouse is 65 or over while you still work ... a plan through your job covers your spouse") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only: no figure or rule changed.

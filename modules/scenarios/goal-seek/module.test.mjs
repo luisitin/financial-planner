@@ -149,3 +149,27 @@ test("verify 2026-11-06: the method sentence names the adult the retirement leve
   const d = compute(p, { today: "2026-11-06" });
   assert.equal(lever(d, "retire").title, "When Jo can retire", "the second adult listed: the words must not say the first person");
 });
+
+test("review 2026-11-06 (round 7): the unnamed first adult reads you, the partner your spouse; names as before", async () => {
+  const fam = familyPlan(); fam.household.people[0].name = "Me"; fam.household.people[1].name = "My spouse";
+  const m = compute(fam, { today: TODAY });
+  assert.equal(lever(m, "retire").title, "When you can retire");
+  assert.match(lever(m, "claim").sentence, /^You and your spouse claiming /);
+  for (const l of m.levers) assert.doesNotMatch(`${l.title} ${l.sentence}`, /\bMe\b|My spouse/, l.id);
+  const named = compute(familyPlan(), { today: TODAY });
+  assert.equal(lever(named, "retire").title, "When Ana can retire");
+  assert.match(lever(named, "claim").sentence, /^Ana and Bo claiming /);
+  // one already paid: "you already get it", the other moved alone
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const T = "2026-11-02";
+  const p = retirementPlan();
+  p.household.people.find((x) => x.id === "sam").birthDate = "1950-03-10";
+  p.household.people.find((x) => x.id === "lee").birthDate = "1957-06-20";
+  for (const x of p.household.people) x.retirementAge = 62;
+  p.household.people.find((x) => x.id === "sam").name = "Me"; p.household.people.find((x) => x.id === "lee").name = "My spouse";
+  p.income = (p.income ?? []).filter((x) => !["salary", "bonus", "business"].includes(x.type));
+  p.income.push({ id: "ss-sam", name: "My Social Security", type: "social", personId: "sam", amount: 2800, period: "monthly", growth: 0, taxable: true });
+  p.retirement.socialSecurity = { sam: { claimAge: 66, monthlyAtFRA: 2800 }, lee: { claimAge: 70, monthlyAtFRA: 2100 } };
+  const c = compute(p, { today: T }).levers?.find((l) => l.id === "claim");
+  if (c) { assert.match(c.sentence, /^Your spouse claiming /); assert.match(c.sentence, / You already get it, so that stays as it is\.$/); }
+});

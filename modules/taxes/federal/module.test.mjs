@@ -821,3 +821,33 @@ test("Review 2026-11-06: pay that ended this year or is one-time is 'not counted
   // truly nothing on the Income page keeps its words (Kim & Lou's "on the Income page" is covered above)
   assert.ok(compute(emptyPlan(), { today }).notes.includes("Nothing on the Income page yet: the estimate is built from what you type below."));
 });
+
+// --- Review 2026-11-06 (round 7): "you" for the first adult Get started left unnamed ("Me") ---------------------------------
+test("Review 2026-11-06 (round 7): the notes and the page say you/your for the unnamed first adult; typed names as before", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { uncountedWords } = await import("./compute.js");
+  const unnamed = (fn) => { const q = familyPlan(TODAY); q.household.people.find((x) => x.id === "p-ana").name = "Me"; q.household.people.find((x) => x.id === "p-bo").name = "My spouse"; if (fn) fn(q); return q; };
+  // filing separately: "two returns: yours and your spouse's", the child "on your return" or "on your spouse's return"
+  const mfs = unnamed((q) => { q.household.filingStatus = "married_separate"; });
+  const d = compute(mfs, { today: TODAY });
+  assert.ok(d.notes.some((n) => /^Filing separately is two returns: (yours and your spouse's|your spouse's and yours), each with their own pay/.test(n) && /on (your|your spouse's) return\.$/.test(n)), d.notes.join(" | "));
+  const named = familyPlan(TODAY); named.household.filingStatus = "married_separate";
+  assert.ok(compute(named, { today: TODAY }).notes.some((n) => /^Filing separately is two returns: Ana's and Bo's, each with their own pay/.test(n)));
+  const text = await pageText(mfs);
+  assert.ok(text.includes("Your spouse's return") && text.includes("Your return"), text.slice(0, 900));
+  assert.ok(!/\bMe's\b|\bMe (would|earns)\b|My spouse/.test(text), text.match(/.{60}(Me's|Me would|Me earns|My spouse).{60}/)?.[0]);
+  // a separate return's child care account over the 3,750: "Your child care account ... on your return"
+  const over = compute(unnamed((q) => { q.household.filingStatus = "married_separate"; q.whatIfs = { benefits: { "p-ana": { dcfsaElect: 5000, planYear: 2026 }, "p-bo": { dcfsaElect: 0, planYear: 2026 } } }; }), { today: TODAY });
+  assert.ok(over.notes.some((n) => n === "Your child care account pays 5,000 of care, over the 3,750 a separate return can keep out of income: 1,250 of it is taxed as pay on your return."), over.notes.join(" | "));
+  // pay not counted this year
+  assert.equal(uncountedWords([{ name: "Me", what: "pay", why: "ended", date: "2026-03-31" }]), "Your pay ended on March 31, 2026; this estimate counts only pay coming in today.");
+  assert.equal(uncountedWords([{ name: "My spouse", what: "bonus", why: "once", amount: 5000 }]), "Your spouse's 5,000 of bonus is one-time; this estimate counts no one-time pay.");
+  // a spouse with no earned income on a joint return: "you have no pay", not "Me has no pay"
+  const kl = emptyPlan(); kl.household.filingStatus = "married_joint"; kl.household.state = "OH";
+  kl.household.people = [{ id: "kim", name: "My spouse", role: "partner", birthDate: "1990-01-01" }, { id: "lou", name: "Me", role: "self", birthDate: "1991-01-01" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
+  kl.income = [{ id: "pay", name: "My spouse's pay", type: "salary", personId: "kim", amount: 70000, period: "annual", growth: 0, taxable: true }];
+  kl.expenses = [{ id: "care", name: "Daycare", category: "childcare", amount: 900, period: "monthly" }];
+  assert.ok(compute(kl, { today: TODAY }).notes.some((n) => n.includes("and you have no pay or business income on the Income page")));
+  const acct = structuredClone(kl); acct.whatIfs = { benefits: { kim: { dcfsaElect: 5000, planYear: 2026 } } };
+  assert.ok(compute(acct, { today: TODAY }).notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (you have none).")));
+});

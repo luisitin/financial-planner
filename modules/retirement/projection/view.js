@@ -5,6 +5,7 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, RULE_WORDS, leftWords, leftWhy } from "../careful.js";
+import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 /** "a, b and c" */
 const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -71,8 +72,9 @@ export function render(root, ctx) {
   // or nobody ("nobody in the plan works now")
   const rb = d.retireBy ?? { name: d.people[0].name, age: d.atRetirement.age, first: true };
   // the first adult has stopped while a partner with pay works on (seventh pass): retirement starts now, the pay counted as income
-  const paidOn = rb.stopped && rb.working?.length ? `${rb.name} ${rb.notWorking ? "is not working" : "has stopped work"}; ${listOf(rb.working.map((w) => `${w.name}'s pay comes in until ${w.untilYear}`))}` : null;
-  const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${rb.name} at ${rb.age}` : `when ${rb.name} stops work at ${rb.age}`);
+  // "you" and "your" for the first adult Get started left unnamed ("you at 65", "your spouse's pay"; round 7)
+  const paidOn = rb.stopped && rb.working?.length ? `${nameIn(rb.name)} ${rb.notWorking ? `${verbFor(rb.name, "is", "are")} not working` : `${verbFor(rb.name, "has", "have")} stopped work`}; ${listOf(rb.working.map((w) => `${nameOf(w.name)} pay comes in until ${w.untilYear}`))}` : null;
+  const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
     ui.h("p", { class: "lede" }, verdictText),
@@ -99,11 +101,13 @@ export function render(root, ctx) {
   root.append(ui.card("What goes into this",
     ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
-      ["People", d.people.map((p) => (rb.stopped && rb.id === p.id ? `${p.name}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : `${p.name}: retires at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
+      // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
+      ["People", d.people.map((p, i) => (rb.stopped && rb.id === p.id ? `${(i ? nameIn : NameIn)(p.name)}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : `${(i ? nameIn : NameIn)(p.name)}: ${verbFor(p.name, "retires", "retire")} at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
       ["Retirement money today", `${money(d.inputs.balances.cash + d.inputs.balances.taxable + d.inputs.balances.deferred + d.inputs.balances.free)}: ${money(d.inputs.balances.cash)} cash, ${money(d.inputs.balances.taxable)} taxable, ${money(d.inputs.balances.deferred)} pre-tax, ${money(d.inputs.balances.free)} tax-free`],
       ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (Contributions page)` : "nothing entered (Contributions page)"],
       // each line by its own name, with its ages or years (incomeWords: rent says "from 2033", never its owner's age)
-      ["Income counted", d.inputs.incomes.length ? incomeWords(d.inputs, money).join("; ") : "none entered (Social Security page)"],
+      // the lines named for the unnamed first adult say "your Social Security": a capital only at the start of the record
+      ["Income counted", d.inputs.incomes.length ? incomeWords(d.inputs, money).join("; ").replace(/^your /, "Your ") : "none entered (Social Security page)"],
       ...(d.otherLeft?.length ? [["Not counted", d.otherLeft.map((x) => `${x.name}: ${money(x.yearly)} a year, ${leftWhy(x)}`).join("; ")]] : []),
       ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" || d.health?.fromSetup ? ` (${d.health?.fromSetup ? "the figure from Get started" : "today's expenses"}${d.health?.removedMonthly > 0 ? `, less ${money(d.health.removedMonthly)} a month of health insurance` : ""})` : ""}${healthOn ? ", on top of health cover" : d.health?.included ? ", health cover included" : ""}`],
       ["Growth and inflation", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, ${fmt.pct(d.inputs.rates.inflation, 1)} inflation (Assumptions page); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
@@ -150,15 +154,15 @@ function healthRecord(ctx, d) {
     if (m) words.push(`Medicare here is Part B, a drug plan and a supplement (${m.supplementDefault ? `about ${fmt.money(Math.round(m.supplementMonthly), plan.meta.currency)} a month each, the national average for Medigap Plan G; yours on the Medicare page` : m.supplementMonthly > 0 ? `${fmt.money(Math.round(m.supplementMonthly), plan.meta.currency)} a month each, as you entered on the Medicare page` : "none: you entered $0 on the Medicare page"}). Not counted: what you pay at the pharmacy, dental care, glasses, hearing aids and long-term care.`);
     if (b?.underLine?.length) words.push(`In ${yearsOf(b.underLine)} the plan's income is under the poverty line, where the marketplace gives no credit: Medicaid may cover people with that income instead (your state's marketplace site will say).`);
     if (h.paidBy) words.push(h.paidBy.era
-      ? `Your expenses list "${h.paidBy.line}": with ${list(h.paidBy.names)} 65 or over and retired, that counts as ${h.paidBy.names.length > 1 ? "their" : `${h.paidBy.names[0]}'s`} Medicare and any supplement, so it stays in your spending and Medicare is not added again.`
-      : `Medicare for ${list(h.paidBy.names)} is already in your spending (your expenses list "${h.paidBy.line}"), so it is not added again.`);
+      ? `Your expenses list "${h.paidBy.line}": with ${list(h.paidBy.names.map(nameIn))} 65 or over and retired, that counts as ${h.paidBy.names.length > 1 ? (h.paidBy.names.some(isYou) ? "your" : "their") : nameOf(h.paidBy.names[0])} Medicare and any supplement, so it stays in your spending and Medicare is not added again.`
+      : `Medicare for ${list(h.paidBy.names.map(nameIn))} is already in your spending (your expenses list "${h.paidBy.line}"), so it is not added again.`);
     if (h.otherLine) words.push(`Your expenses list "${h.otherLine}": nobody here is 65 yet, so it stays in your spending as it is, and your own Medicare is added from 65.`);
     // the Medicare years left to a job's plan, a sentence for each worker's run of years (onJobWords; verify 2026-11-06)
     if (h.onJob) words.push(...onJobWords(h.onJob, list));
     // a husband's or wife's Medicare counted while the other still works, and how to leave it out (spouseWords; seventh pass)
     if (h.spouseOnJob) words.push(...spouseWords(h.spouseOnJob, list));
     if (h.coverLines?.length) words.push(`${list(h.coverLines.map((x) => `"${x.name}"`))} on Expenses ${h.coverLines.length === 1 ? "is" : "are"} left out of retirement spending: cover from retirement on is worked out here instead.`);
-    if (h.jobPlan) words.push(`While ${h.jobPlan.worker} still works (${span(h.jobPlan.fromYear, h.jobPlan.untilYear, h.jobPlan.years)}), the ${around(h.jobPlan.monthly)} a month stays in, for the plan at work: about ${around(h.jobPlan.total)}${b || m ? " more" : ""} over ${h.jobPlan.years === 1 ? "that year" : "those years"}.`);
+    if (h.jobPlan) words.push(`While ${nameIn(h.jobPlan.worker)} still ${verbFor(h.jobPlan.worker, "works", "work")} (${span(h.jobPlan.fromYear, h.jobPlan.untilYear, h.jobPlan.years)}), the ${around(h.jobPlan.monthly)} a month stays in, for the plan at work: about ${around(h.jobPlan.total)}${b || m ? " more" : ""} over ${h.jobPlan.years === 1 ? "that year" : "those years"}.`);
     if (!words.length) return null;
   }
   const out = ui.h("div");

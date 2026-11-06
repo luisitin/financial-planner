@@ -2,6 +2,7 @@
 // cover pays against their pay, whether the household could still pay the must-pay bills, whether the
 // cash lasts through the waiting period, Social Security disability, and the policy terms to fill in.
 import { compute, TARGET_SHARE, ODDS_TEXT, SSDI_WAIT_MONTHS, DEFAULT_WAIT_DAYS, DEFAULT_UNTIL_AGE } from "./compute.js";
+import { nameIn, nameOf } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -46,13 +47,13 @@ export function render(page, ctx) {
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   for (const e of d.earners) {
-    const card = ui.card(`If ${e.name} could not work`);
+    const card = ui.card(`If ${nameIn(e.name)} could not work`);
     card.append(ui.row(
       ui.stat("Cover would pay", `${money(e.benefitMonthly)}`, e.policies.length ? `a month, ${pct(e.share)} of pay; ${money(e.afterTaxMonthly)} after tax` : "no disability cover on file"),
       ui.stat("Pay now", money(e.grossMonthly), `a month before tax; about ${money(e.takeHomeMonthly)} take-home`),
     ));
     const good = e.share >= TARGET_SHARE - 0.005;
-    card.append(ui.h("p", { class: `di-verdict ${good ? "ok" : e.policies.length ? "warn" : "bad"}` }, good ? `Covers ${pct(e.share)} of pay: at or above the ${pct(TARGET_SHARE)} most planners aim for.` : e.policies.length ? `Covers ${pct(e.share)} of pay; most planners aim for ${pct(TARGET_SHARE)}. About ${money(e.extraNeeded)} a month more would get there.` : `Nothing would replace ${e.name}'s pay. Most planners aim for ${pct(TARGET_SHARE)} of it: about ${money(e.target)} a month.`));
+    card.append(ui.h("p", { class: `di-verdict ${good ? "ok" : e.policies.length ? "warn" : "bad"}` }, good ? `Covers ${pct(e.share)} of pay: at or above the ${pct(TARGET_SHARE)} most planners aim for.` : e.policies.length ? `Covers ${pct(e.share)} of pay; most planners aim for ${pct(TARGET_SHARE)}. About ${money(e.extraNeeded)} a month more would get there.` : `Nothing would replace ${nameOf(e.name)} pay. Most planners aim for ${pct(TARGET_SHARE)} of it: about ${money(e.target)} a month.`));
 
     const checks = ui.h("ul", { class: "di-checks" });
     const check = (ok, title, text) => checks.append(ui.h("li", {}, ui.h("span", { class: "di-ic" }, ok === null ? "•" : ok ? "✅" : "⚠️"), ui.h("div", {}, ui.h("div", { class: "di-t" }, title), ui.h("div", { class: "di-d" }, text))));

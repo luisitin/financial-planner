@@ -4,6 +4,7 @@
 import { compute, ratePct } from "./compute.js";
 import { taxAnswer, fullSteps } from "../withholding/compute.js";
 import { FILING_STATUSES } from "../../../core/math/tax.js";
+import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;
 
@@ -31,7 +32,7 @@ export function render(root, ctx) {
   // estimated) or with no pay at all (nothing withheld), so its balance is known: read it (Review 2026-11-06, verifier: two
   // self-employed spouses each owing thousands read "Gus's is about right, and Hal's is about right")
   const verdictOf = (x) => (x.verdict !== "unknown" ? x.verdict : Math.abs(x.balance) < 500 ? "about right" : x.balance > 0 ? "owe" : "refund");
-  const retWords = rets ? rets.map((x) => verdictOf(x) === "owe" ? `${x.name} would owe about ${money(x.balance)}` : verdictOf(x) === "refund" ? `${x.name} would get about ${money(-x.balance)} back` : `${x.name}'s is about right`).join(", and ") : "";
+  const retWords = rets ? rets.map((x) => verdictOf(x) === "owe" ? `${nameIn(x.name)} would owe about ${money(x.balance)}` : verdictOf(x) === "refund" ? `${nameIn(x.name)} would get about ${money(-x.balance)} back` : `${isYou(x.name) ? "yours" : nameOf(x.name)} is about right`).join(", and ") : "";
   const oweMost = rets ? Math.max(...rets.map((x) => x.balance)) : owes;
   const paidBy = !ans ? "" : ans.from === "none" ? (ans.paid > 0 ? `Nothing is taken out of pay; ${money(ans.paid)} is paid in estimates so far` : "Nothing is taken out of pay and no estimated payments are typed yet")
     : `${ans.from === "typed" ? "The paychecks take out" : "Your paychecks take out about"} ${money(ans.projected)} by December${ans.from === "paycheck" ? " (estimated from your pay)" : ans.from === "mixed" ? " (partly estimated from pay)" : ""}${ans.paid > 0 ? ` and ${money(ans.paid)} is already paid` : ""}`;
@@ -50,7 +51,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? (negative ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back` : `About ${money(total)} of federal tax for ${d.year}`) : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, d.hasIncome
-      ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? `${firstName(r)} earns` : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
+      ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? ` ${paidBy}, so you would owe about ${money(owes)} at filing time.` : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
     owes !== null ? ui.row(noPay ? ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, oweMost >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, oweMost >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
     ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}; it leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, care for an adult who cannot look after themselves, and state tax.`),
@@ -83,7 +84,7 @@ export function render(root, ctx) {
       ui.h("ul", { class: "records" }, r.separate.map((x) => { const o = own(x), se = o ? o.se + o.addl : 0, b = o && o.taxableIncome != null ? o : null;
         const gross = b?.gross ?? x.income.gross, taxable = b ? b.taxableIncome : x.taxableIncome, ded = b ? b.deduction : x.deduction, bracket = b ? b.bracketRate : x.bracketRate, half = Number(b?.half) || 0;
         return ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name ?? "Spouse"}'s return`), ui.h("span", { class: "rec-value" }, money(o ? o.total : x.totalTax))),
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name === null || x.name === undefined ? "Spouse's" : NameOf(x.name)} return`), ui.h("span", { class: "rec-value" }, money(o ? o.total : x.totalTax))),
         ui.h("div", { class: "rec-sub" }, `${money(gross)} of income, ${money(taxable)} taxed after ${money(ded.amount + (ded.qbi || 0) + half)} of deductions${ded.used === "itemized" ? " (itemized)" : ""}${[ded.qbi >= 0.5 ? `the 20% business deduction (${money(ded.qbi)})` : null, half >= 0.5 ? `half the self-employment tax (${money(half)})` : null].filter(Boolean).map((t, i) => `${i ? " and " : ", including "}${t}`).join("")}; the ${fmt.pct(bracket, 0)} bracket${se >= 0.5 ? `; with the business on this return: ${money(o.incomeTax)} of income tax and ${money(se)} of self-employment tax` : ""}`)); })),
     ));
   }
@@ -114,7 +115,9 @@ export function render(root, ctx) {
 }
 
 /** The spouse whose return the next dollar and the bracket figures are for (the engine's `separateTo`, else the first). */
-const firstName = (r) => (r.separate.find((x) => x.personId != null && x.personId === r.separateTo) ?? r.separate[0]).name ?? "the first spouse";
+const firstName = (r) => (r.separate.find((x) => x.personId != null && x.personId === r.separateTo) ?? r.separate[0]).name ?? null;
+/** "you earn" for the first adult Get started left unnamed ("Me"), "your spouse earns", "Ana earns" (round 7). */
+const earnsWords = (r) => { const n = firstName(r); return n === null ? "the first spouse earns" : `${nameIn(n)} ${verbFor(n, "earns", "earn")}`; };
 
 function figuresFold(ctx, d) {
   const { ui, fmt, store, plan } = ctx;

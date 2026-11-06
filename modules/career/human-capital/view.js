@@ -3,6 +3,7 @@
 // investing; how steady each job is in a fold.
 import { compute, RISK } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
+import { nameIn } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -39,7 +40,7 @@ export function render(page, ctx) {
   root.append(ui.card("Each earner", ui.h("ul", { class: "records" }, d.people.map((p) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${p.name}, ${p.age}`), ui.h("span", { class: "rec-value" }, money(p.value))),
     ui.h("div", { class: "rec-sub" }, `${money(p.pay)} a year for ${p.years} more year${p.years === 1 ? "" : "s"} (to ${p.retireAge}); ${{ steady: "a steady", average: "an average", volatile: "a volatile" }[p.risk]} job, valued at ${(p.rate * 100).toFixed(1)}% a year. ${money(p.afterTax)} after tax.`),
-    ui.h("div", { class: `rec-sub${p.coverShare !== null && p.coverShare < 0.5 ? " hc-warn" : ""}` }, p.cover > 0 ? `Life insurance on ${p.name}: ${money(p.cover)}, ${pct(p.coverShare)} of it.` : `No life insurance on ${p.name}: the household would lose this pay if ${p.name} died.`))))));
+    ui.h("div", { class: `rec-sub${p.coverShare !== null && p.coverShare < 0.5 ? " hc-warn" : ""}` }, p.cover > 0 ? `Life insurance on ${nameIn(p.name)}: ${money(p.cover)}, ${pct(p.coverShare)} of it.` : `No life insurance on ${nameIn(p.name)}: the household would lose this pay if ${nameIn(p.name)} died.`))))));
 
   const marks = d.crossYear ? [{ year: d.crossYear, label: "savings pass it" }] : [];
   const years = d.path.map((x) => x.year);

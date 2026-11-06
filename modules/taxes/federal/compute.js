@@ -8,6 +8,9 @@ import { federalTax, marginalRate, careStep, paramsFor, standardDeduction, SEPAR
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { limitsFor, catchUpFor, hsaPicture, limitKind } from "../../retirement/contributions/compute.js";
+// a person inside a sentence: "you" / "your" for the first adult Get started left unnamed ("Me"), "your spouse" for the
+// partner it named; a typed name as before (Review 2026-11-06 round 7). As W.*: this file has its own nameOf (an id's name)
+import * as W from "../../../core/words.js";
 
 export { TAX_YEARS };
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
@@ -43,7 +46,7 @@ export function uncountedEarned(inc, people = [], year = null) {
 export function uncountedWords(all) {
   const list = (all ?? []).filter((x) => x.inYear !== false);
   if (!list.length) return "";
-  const whose = (x) => (x.name ? `${x.name}'s` : "the");
+  const whose = (x) => (x.name ? W.nameOf(x.name) : "the");
   const bits = list.slice(0, 3).map((x) => (x.why === "once" ? `${whose(x)} ${fmtInt(x.amount)} of ${x.what} is one-time` : `${whose(x)} ${x.what} ${x.why === "ended" ? "ended" : "starts"} on ${dayWords(x.date)}`));
   const said = bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
   const counts = [list.some((x) => x.why !== "once") ? "only pay coming in today" : null, list.some((x) => x.why === "once") ? "no one-time pay" : null].filter(Boolean).join(", and ");
@@ -434,7 +437,7 @@ export function taxInputs(plan, params = {}) {
     hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
   sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA, FSA and child care account money from pay are already left out)${dcTaxed > 0.5 ? `, plus ${fmtInt(dcTaxed)} of the child care account taxed as pay` : ""}` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
   if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
-  for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${x.name}'s health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? `${x.name}'s` : "your"} pay before tax.`);
+  for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${W.NameOf(x.name)} health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? W.nameOf(x.name) : "your"} pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   let gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
@@ -505,13 +508,13 @@ export function taxInputs(plan, params = {}) {
       const said = nothingCounted ? "" : uncountedWords(lost);
       const hint = `${said ? ` ${said}` : ""}${!c.joint && lost.some((x) => x.inYear) ? " To count what was paid this year, type it as Wages this year below." : ""}`;
       notes.push(c.joint
-        ? `Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and ${none.length === 1 && none[0].name ? `${none[0].name} has no` : "neither of you has"} pay or business income ${where}, ${so}.${hint} (A spouse who was a full-time student for five months of the year, or could not look after themselves, counts as earning $250 a month for one child or $500 for two or more; the plan does not track that.)`
+        ? `Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and ${none.length === 1 && none[0].name ? `${W.nameIn(none[0].name)} ${W.verbFor(none[0].name, "has", "have")} no` : "neither of you has"} pay or business income ${where}, ${so}.${hint} (A spouse who was a full-time student for five months of the year, or could not look after themselves, counts as earning $250 a month for one child or $500 for two or more; the plan does not track that.)`
         : `Child care counts for the child care credit only up to your earned income (pay or business profit), and none is ${where}, ${so}.${hint}`);
     }
     if (!c.elected && c.later.length) notes.push(`The child care account on Benefits elections is chosen for ${c.later[0].planYear}, so it is not counted in ${year}'s tax. (If it is this year's, choose ${year} as the year on that page.)`);
     // the child care account (careAccountRule): over a plan's own limit, lost beyond the care, taxed beyond the limit or the pay
     const A = c.account, many = A.people.filter((x) => x.typed > 0).length > 1;
-    const whose = (x) => (many && x.name ? `${x.name}'s` : "The");
+    const whose = (x) => (many && x.name ? W.NameOf(x.name) : "The");
     for (const x of A.people) if (x.typed > A.planMax + 0.5) notes.push(`${whose(x)} child care account is set to ${fmtInt(x.typed)} on Benefits elections; a plan takes at most ${fmtInt(A.planMax)} a year, so ${fmtInt(A.planMax)} is counted.`);
     if (A.forfeited > 0.5) notes.push(A.care <= 0.5
       ? `A child care account of ${fmtInt(A.elected)} is chosen on Benefits elections, but ${!c.persons ? `no child on the People page is under 13 in ${year}, so it has no care to pay for` : "no care for a child is on the Expenses page"}. The account only pays back care, so you would lose the ${fmtInt(A.forfeited)}: it is not paid to you, and it is not taxed. ${!c.persons ? "Check the birth dates on People" : "Add the care on Expenses"}, or choose less on Benefits elections.`
@@ -519,17 +522,17 @@ export function taxInputs(plan, params = {}) {
     if (A.taxedAsPay > 0.5) {
       if (A.separate) {
         for (const x of A.people.filter((y) => y.taxedAsPay > 0.5)) notes.push(x.received > A.limit + 0.005
-          ? `${x.name ? `${x.name}'s` : "The"} child care account pays ${fmtInt(x.received)} of care, over the ${fmtInt(A.limit)} a separate return can keep out of income: ${fmtInt(x.taxedAsPay)} of it is taxed as pay${x.name ? ` on ${x.name}'s return` : ""}.`
-          : `Only ${fmtInt(x.excluded)} of ${x.name ? `${x.name}'s` : "the"} child care account stays out of income on a separate return: no more than the lower earner's earned income. The other ${fmtInt(x.taxedAsPay)} is taxed as pay.`);
+          ? `${x.name ? W.NameOf(x.name) : "The"} child care account pays ${fmtInt(x.received)} of care, over the ${fmtInt(A.limit)} a separate return can keep out of income: ${fmtInt(x.taxedAsPay)} of it is taxed as pay${x.name ? ` on ${W.nameOf(x.name)} return` : ""}.`
+          : `Only ${fmtInt(x.excluded)} of ${x.name ? W.nameOf(x.name) : "the"} child care account stays out of income on a separate return: no more than the lower earner's earned income. The other ${fmtInt(x.taxedAsPay)} is taxed as pay.`);
       } else {
         // two accounts: the part taxed as pay is shared by what each put in, the split every page says (Benefits, Paycheck)
-        const split = many ? ` (${A.people.filter((x) => x.taxedAsPay > 0.5).map((x) => `${x.name ?? "one"} ${fmtInt(x.taxedAsPay)}`).join(", ")}, by what each put in)` : "";
+        const split = many ? ` (${A.people.filter((x) => x.taxedAsPay > 0.5).map((x) => `${x.name === null || x.name === undefined ? "one" : W.nameIn(x.name)} ${fmtInt(x.taxedAsPay)}`).join(", ")}, by what each put in)` : "";
         // none of it out of income (no earned income on the lower side): "None of", not "Only 0 of" (Review 2026-11-06)
         const zero = A.joint ? (c.earnedPeople ?? []).filter((x) => !(x.earned > 0.5)) : [];
         // "has none counted for <year>" when that pay is on the Income page but ended, has not started or is one-time
         const tail = uncountedOf(A.joint ? zero.map((x) => x.id) : [c.filerId]).length ? ` counted for ${year}` : "";
         notes.push(A.earnedCapped && A.excluded < 0.5
-          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${zero[0].name} has none${tail}` : `there is none${tail}`})` : `your earned income (there is none${tail})`}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
+          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${W.nameIn(zero[0].name)} ${W.verbFor(zero[0].name, "has", "have")} none${tail}` : `there is none${tail}`})` : `your earned income (there is none${tail})`}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
           : A.earnedCapped
           ? `Only ${fmtInt(A.excluded)} of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? "the lower earner's earned income" : "your earned income"}. The other ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
           : `The child care account${many ? "s" : ""} pay${many ? "" : "s"} ${fmtInt(A.received)} of care, over this year's limit of ${fmtInt(A.limit)} for the household: ${fmtInt(A.taxedAsPay)} of it is taxed as pay${split}.`);
@@ -610,7 +613,7 @@ export function taxInputs(plan, params = {}) {
     if (gains.netLoss < 0) sources.push({ key: "loss", label: "Capital loss allowed", amount: gains.lossAllowed, from: "plan", detail: "Capital gains page, each return's own" });
     const sums = Object.fromEntries(SEPARATE_FIELDS.map((f) => [f, separate.reduce((s, x) => s + (Number(x[f]) || 0), 0)]));
     inputs = { ...inputs, ...sums, separate, separateTo: me ? me.id : separate[0].personId };   // an amount another page adds lands on Me's return
-    notes.push(`Filing separately is two returns: ${separate.map((x) => x.name).join("'s and ")}'s, each with their own pay, saving and income; income in neither name and the figures typed here are split in half${dependentsUnder17 + otherDependents > 0 ? `, and ${dependentsUnder17 + otherDependents === 1 ? "the child is" : "the children are"} on ${carrier.name}'s return` : ""}.`);
+    notes.push(`Filing separately is two returns: ${separate.map((x) => (W.isYou(x.name) ? "yours" : W.nameOf(x.name))).join(" and ")}, each with their own pay, saving and income; income in neither name and the figures typed here are split in half${dependentsUnder17 + otherDependents > 0 ? `, and ${dependentsUnder17 + otherDependents === 1 ? "the child is" : "the children are"} on ${W.nameOf(carrier.name)} return` : ""}.`);
   }
   // income on the page that is not counted this year (ended, not started, one-time) is not "nothing on the Income page"
   // (Review 2026-11-06, verifier follow-up: H-0221 and H-0228, whose pay ended this year)
@@ -755,7 +758,7 @@ function careSub(c, care) {
 function accountsSay(care) {
   const list = (care?.account?.people ?? []).filter((x) => x.received > 0.5);
   if (list.length < 2) return { pay: "your child care account pays", many: false };
-  const names = list.map((x) => (x.name ? `${x.name}'s` : "a"));
+  const names = list.map((x) => (x.name ? W.nameOf(x.name) : "a"));
   return { pay: `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} child care accounts pay`, many: true };
 }
 

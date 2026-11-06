@@ -29,3 +29,5 @@
 ## Ideas / not yet
 - Gifts read from the bank files (transfers to family).
 - The 709 summary as a printable page.
+
+Review 2026-11-06 (round 7): the 529 warning and note ("Cy's 529 from you in 2026"), a gift's givers ("You and your spouse"), the over-the-limit line ("Gift tax return: you are $55,000 over in 2026") and the lifetime-exemption line ("you $55,000, your spouse $0") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse"; typed names read as before, and the "From" picker keeps the names as labels (core/words.js). Words only: no figure or rule changed. Test: "the first adult left unnamed ("Me") in a couple: the 529 warning and note say from you".

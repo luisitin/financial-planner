@@ -3,6 +3,7 @@
 // household (a guardian for children under 18, a trust), each one's status, and the reasons to look at
 // a signed one again: it is old, or a child was born or someone joined the household after it was signed.
 import { ageOn } from "../../../core/math/dates.js";
+import { nameIn, verbFor } from "../../../core/words.js";
 
 /** The documents, who needs each, and what it does, in plain words. */
 export const KINDS = {
@@ -45,7 +46,7 @@ export function compute(plan, params = {}) {
         const years = ageOn(updatedAt, today);
         if (years >= REVIEW_YEARS) reasons.push(`signed ${years} years ago`);
         // someone in the household was born after it was signed
-        for (const p of people) if (p.birthDate && p.birthDate > updatedAt && (kind === "will" || kind === "guardian" || kind === "trust")) reasons.push(`${p.name} was born after it was signed`);
+        for (const p of people) if (p.birthDate && p.birthDate > updatedAt && (kind === "will" || kind === "guardian" || kind === "trust")) reasons.push(`${nameIn(p.name)} ${verbFor(p.name, "was", "were")} born after it was signed`);
       }
       items.push({ key: o.id ? `${kind}:${o.id}` : kind, kind, label: k.label, what: k.what, personId: o.id, personName: o.name, optional: !!k.optional, status, updatedAt, where: r?.where ?? "", notes: r?.notes ?? "", stale: reasons.length > 0, reasons, id: r?.id ?? null });
     }

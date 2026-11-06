@@ -23,3 +23,5 @@ Per adult: will, financial power of attorney, health care power of attorney, liv
 ## Ideas / not yet
 - Life events that call for a review (marriage, divorce, a move to another state) from the household's history.
 - Where each is kept, as a printable sheet for the executor (Reports).
+
+Review 2026-11-06 (round 7): a reason to look at a paper again says "you were born after it was signed" for the unnamed first adult ("Me"), with the verb to match; typed names read as before, and the row labels ("Will: Me") keep the name as a label (core/words.js). Words only. Test: "the first adult left unnamed ("Me"): a reason to look again says you ...".

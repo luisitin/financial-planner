@@ -16,6 +16,8 @@ import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // income, so this import cycle is calls inside functions only, never at load
 import { compute as computeHealthcare } from "../healthcare/compute.js";
 import { compute as computeMedicare, planIncome } from "../medicare/compute.js";
+// a person inside a sentence: "you", "your spouse" or the name as typed (Get started names the first adult "Me")
+import { isYou, nameIn, nameOf, verbFor, namesIn, NamesIn } from "../../../core/words.js";
 
 /** The withdrawal orders a plan can choose (after cash, which always goes first). */
 export const WITHDRAWAL_ORDERS = {
@@ -90,7 +92,7 @@ export function incomeSocial(plan, people, ssPeople, today) {
     if ((ssPeople ?? []).some((q) => q.id === who.id && q.yearly > 0)) continue;
     const later = x.startDate && String(x.startDate) > String(today);
     const startYear = later ? Number(String(x.startDate).slice(0, 4)) : nowYear;
-    out.push({ name: String(x.name || `${who.name}'s Social Security`).trim(), yearly, personId: who.id, startAge: startYear - who.birthYear, cola: true, taxable: x.taxable !== false, kind: "social", source: "income", ...(later ? { startsOn: String(x.startDate) } : {}) });
+    out.push({ name: String(x.name || `${nameOf(who.name)} Social Security`).trim(), yearly, personId: who.id, startAge: startYear - who.birthYear, cola: true, taxable: x.taxable !== false, kind: "social", source: "income", ...(later ? { startsOn: String(x.startDate) } : {}) });
   }
   return out;
 }
@@ -657,7 +659,12 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, spouseOnJob, jobPlan, jobCoversSpouse };
 }
 
-const listNames = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/**
+ * A spouse's top-up line's name (round 7): "Ana's spouse's benefit" as before for a typed name; "your benefit as a spouse" for
+ * the first adult Get started left unnamed ("Me"), and "your spouse's benefit as a spouse" for "My spouse" (never "Me's
+ * spouse's benefit", nor "your spouse's benefit" for your own top-up).
+ */
+export const spousalName = (name) => (nameIn(name) === String(name) ? `${name}'s spouse's benefit` : `${nameOf(name)} benefit as a spouse`);
 
 /**
  * Why a plan has no retirement year (to tax, or at all), in plain words, and what to check on the People page (Review 2026-11-06: 17 qa
@@ -671,8 +678,9 @@ const listNames = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).joi
  */
 export function noYearsWhy(people = [], year = null) {
   const ps = (people ?? []).filter((p) => p && Number.isFinite(p.birthYear));
-  const named = (xs) => listNames(xs.map((p) => p.name || "you"));
-  const verb = (xs, one, many) => (xs.length === 1 && xs[0].name ? one : many);
+  // "you" for the unnamed first adult, with the verb to match ("you are 126", "you retire at 70"; round 7)
+  const named = (xs) => namesIn(xs.map((p) => p.name));
+  const verb = (xs, one, many) => (xs.length === 1 && !isYou(xs[0].name) ? one : many);
   const ages = 'the retirement age and "Plan to age"';
   if (ps.length && Number.isFinite(year) && ps.every((p) => year - p.birthYear >= p.endAge)) {
     return ps.length === 1 ? { why: `${named(ps)} ${verb(ps, "is", "are")} ${year - ps[0].birthYear}, past the age the plan runs to (${ps[0].endAge})`, check: "the birth date" }
@@ -763,11 +771,11 @@ export function buildInputs(plan, params = {}) {
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });
   // someone already getting it before the claim age on file (disability or survivor benefits) gets it from now (fromAge)
-  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${p.name}'s Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.fromAge, cola: true, taxable: true, kind: "social" });
+  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${nameOf(p.name)} Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.fromAge, cola: true, taxable: true, kind: "social" });
   // a spouse's top-up on the partner's record, as the Social Security page counts it (couple.spousalCounted): from the
   // later of the two people's own start years, never before the partner has claimed (recheck 2026-11-05: never counted).
   // After each person's own line, so the stress tests' "first Social Security line of a person" stays their own
-  for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: `${p.name}'s spouse's benefit`, yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social" }); }
+  for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: spousalName(p.name), yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social" }); }
   for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension" });
   for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
   for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
@@ -791,7 +799,7 @@ export function buildInputs(plan, params = {}) {
       groups.set(key, { from, until, yearly: (groups.get(key)?.yearly ?? 0) + perYear(x.amount, x.period) });
     }
     for (const g of [...groups.values()].sort((a, b) => a.from - b.from || a.until - b.until)) {
-      if (g.yearly > 0) incomes.push({ name: `${p.name}'s pay`, yearly: g.yearly, personIndex: i, startAge: g.from - p.birthYear, endAge: g.until - p.birthYear, cola: true, taxable: true, type: "pay" });
+      if (g.yearly > 0) incomes.push({ name: `${nameOf(p.name)} pay`, yearly: g.yearly, personIndex: i, startAge: g.from - p.birthYear, endAge: g.until - p.birthYear, cola: true, taxable: true, type: "pay" });
     }
   }
   // rent after work stops; support and other to their end date (else while their owner works, by the work rule); never dividends (otherIncome)
@@ -913,7 +921,8 @@ export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("
   return (I?.incomes ?? []).map((x) => {
     const who = I.people[x.personIndex ?? 0] ?? I.people[0];
     const start = who.birthYear + x.startAge;
-    const named = I.people.some((p) => String(x.name).startsWith(`${p.name}'s `));
+    // a line named for a person: "Ana's ...", or "your ..." / "your spouse's ..." for the people Get started left unnamed (round 7)
+    const named = I.people.some((p) => String(x.name).startsWith(`${p.name}'s `) || String(x.name).startsWith(`${nameOf(p.name)} `));
     const ends = x.endAge !== undefined && x.endAge !== null ? ` to ${named ? x.endAge : who.birthYear + x.endAge}` : "";
     return `${x.name}: ${money(x.yearly)} a year from ${named ? x.startAge : start <= I.startYear ? "now" : start}${ends}${x.type === "rental" ? " (before its costs)" : ""}`;
   });
@@ -945,20 +954,20 @@ export function bridgeParts(years) {
 export function healthSummary(b, m, { money = (n) => `$${Math.round(n).toLocaleString("en-US")}`, surcharge = true } = {}) {
   const around = (n) => money(Math.round(n / 10) * 10);
   const range = (lo, hi) => (hi > lo * 1.25 ? `${around(lo)} to ${around(hi)}` : around(lo));
-  const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+  // the people as a label, "You" and "your spouse" for those Get started left unnamed (round 7): "You and Bo: Medicare ..."
   const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
   const out = [];
   for (const p of b?.parts ?? (b ? [{ names: [], fromYear: b.fromYear, untilYear: b.untilYear, years: b.years, monthlyLow: b.monthlyLow, monthlyHigh: b.monthlyHigh, creditYears: b.creditYears }] : [])) {
-    out.push(`${p.names.length ? `${list(p.names)}: about` : "About"} ${range(p.monthlyLow, p.monthlyHigh)} a month, ${span(p.fromYear, p.untilYear, p.years)} (${creditWords(p)})`);
+    out.push(`${p.names.length ? `${NamesIn(p.names)}: about` : "About"} ${range(p.monthlyLow, p.monthlyHigh)} a month, ${span(p.fromYear, p.untilYear, p.years)} (${creditWords(p)})`);
   }
   if (m) {
-    const whom = (names) => (names.length < 2 ? "" : names.length >= m.people ? (m.people === 2 ? " for the two of you" : " for all of you") : ` for ${list(names)}`);
+    const whom = (names) => (names.length < 2 ? "" : names.length >= m.people ? (m.people === 2 ? " for the two of you" : " for all of you") : ` for ${namesIn(names)}`);
     const tail = surcharge && m.surchargeYears ? `, including an income surcharge in ${m.surchargeYears} of those years (Medicare page)` : "";
     if (m.early && m.people > 1) {
       const joiners = (m.allNames ?? []).filter((n) => !m.early.names.includes(n));
-      out.push(`${list(m.early.names)}: Medicare, about ${range(m.early.monthlyLow, m.early.monthlyHigh)} a month from ${m.early.fromYear}`);
-      out.push(`${list(joiners.length ? joiners : m.allNames)}: Medicare from ${m.allFromYear} (about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames)})${tail}`);
-    } else out.push(`${list(m.allNames ?? [])}: Medicare, about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames ?? [])} from ${m.allFromYear}${tail}`);
+      out.push(`${NamesIn(m.early.names)}: Medicare, about ${range(m.early.monthlyLow, m.early.monthlyHigh)} a month from ${m.early.fromYear}`);
+      out.push(`${NamesIn(joiners.length ? joiners : m.allNames)}: Medicare from ${m.allFromYear} (about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames)})${tail}`);
+    } else out.push(`${NamesIn(m.allNames ?? [])}: Medicare, about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames ?? [])} from ${m.allFromYear}${tail}`);
   }
   return out.length ? `${out.join(". ")}.` : "";
 }
@@ -974,13 +983,16 @@ export function onJobWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${x
   if (!j) return [];
   const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
   const out = [];
+  // "you" and "your" for the first adult Get started left unnamed, with the verb to match (round 7): "while you still work"
+  const who = (xs) => list(xs.map(nameIn)), are = (xs) => (xs.length > 1 || isYou(xs[0]) ? "are" : "is");
   for (const p of j.parts ?? [j]) {
     const yrs = span(p.fromYear, p.untilYear, p.years), others = p.names.filter((n) => n !== p.worker), those = p.years === 1 ? "that year" : "those years", it = p.years === 1 ? "it" : "them";
+    const w = nameIn(p.worker), works = verbFor(p.worker, "works", "work"), job = `${nameOf(p.worker)} job`;
     out.push(others.length
-      ? `In ${yrs} ${list(others)} ${others.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: ${p.byTick ? `you said a plan through ${p.worker}'s job covers ${list(others)} (Medicare page)` : `a plan through ${p.worker}'s job can cover ${list(p.names)}`}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
-      : `In ${yrs} ${p.worker} is 65 or over but still works: cover comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
+      ? `In ${yrs} ${who(others)} ${are(others)} 65 or over while ${w} still ${works}: ${p.byTick ? `you said a plan through ${job} covers ${who(others)} (Medicare page)` : `a plan through ${job} can cover ${who(p.names)}`}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
+      : `In ${yrs} ${w} ${are([p.worker])} 65 or over but still ${works}: cover comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
     // the worker is presumed (no pay and no Get started answer; fifth pass): said, so "Ana's job" is not read as a fact
-    if (p.presumedUntil) out.push(`No pay is listed for ${p.worker} and Get started does not say ${p.worker} has stopped work, so the plan takes ${p.worker} as working until ${p.presumedUntil}.`);
+    if (p.presumedUntil) out.push(`No pay is listed for ${w} and Get started does not say ${w} ${verbFor(p.worker, "has", "have")} stopped work, so the plan takes ${w} as working until ${p.presumedUntil}.`);
   }
   return out;
 }
@@ -994,9 +1006,16 @@ export function onJobWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${x
 export function spouseWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)) {
   if (!j) return [];
   const span = (from, until, n) => (from === until ? `${from}` : n === 2 ? `${from} and ${until}` : `${from} to ${until}`);
-  return (j.parts ?? []).flatMap((p) => [`In ${span(p.fromYear, p.untilYear, p.years)} ${list(p.names)} ${p.names.length > 1 ? "are" : "is"} 65 or over while ${p.worker} still works: ${p.names.length > 1 ? "their" : `${p.names[0]}'s`} Medicare is counted. If a plan through ${p.worker}'s job covers ${p.names.length > 1 ? "them" : p.names[0]}, tick the box on the Medicare page.`,
-    // the worker is presumed (no pay and no Get started answer; fifth pass): said, as onJobWords does
-    ...(p.presumedUntil ? [`No pay is listed for ${p.worker} and Get started does not say ${p.worker} has stopped work, so the plan takes ${p.worker} as working until ${p.presumedUntil}.`] : [])]);
+  // "you" and "your" for the first adult Get started left unnamed (round 7): "your spouse's Medicare", "while you still work";
+  // several people with you among them are "you" too ("you and Bo are 65 or over ... your Medicare")
+  const many = (xs) => xs.length > 1, withYou = (xs) => xs.some(isYou);
+  const whose = (xs) => (many(xs) ? (withYou(xs) ? "your" : "their") : nameOf(xs[0])), whom = (xs) => (many(xs) ? (withYou(xs) ? "you" : "them") : nameIn(xs[0]));
+  return (j.parts ?? []).flatMap((p) => {
+    const w = nameIn(p.worker);
+    return [`In ${span(p.fromYear, p.untilYear, p.years)} ${list(p.names.map(nameIn))} ${many(p.names) || isYou(p.names[0]) ? "are" : "is"} 65 or over while ${w} still ${verbFor(p.worker, "works", "work")}: ${whose(p.names)} Medicare is counted. If a plan through ${nameOf(p.worker)} job covers ${whom(p.names)}, tick the box on the Medicare page.`,
+      // the worker is presumed (no pay and no Get started answer; fifth pass): said, as onJobWords does
+      ...(p.presumedUntil ? [`No pay is listed for ${w} and Get started does not say ${w} ${verbFor(p.worker, "has", "have")} stopped work, so the plan takes ${w} as working until ${p.presumedUntil}.`] : [])];
+  });
 }
 
 /**

@@ -634,3 +634,36 @@ test("recheck 2026-11-05: a new amount saved here for a benefit paid unreduced i
     assert.equal(d.people[0].monthly, 1850); assert.equal(d.couple.survivorMonthly.s, 1850); assert.equal(d.couple.spousal.s, 25);
   }
 });
+
+test("review 2026-11-06 (round 7): the unnamed first adult reads you and your, the partner your spouse; names as before", async () => {
+  const { compute, survivorWords, spousalWords, heroTopUpWords } = await import("./compute.js");
+  const { money } = await import("../../../core/format.js");
+  const T = "2026-11-02";
+  const usd = (n) => money(n, "USD");
+  // the round-5 couple (an early claim of $1,500, $2,100 at full age; $900 of the other's own at 67), first named by Get started
+  const pair = (a, b) => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: a, role: "self", birthDate: "1962-05-10" }, { id: "s", name: b, role: "partner", birthDate: "1966-06-20" }];
+    p.retirement.socialSecurity = { r: { monthlyAtFRA: 2100 }, s: { claimAge: 67, monthlyAtFRA: 900 } };
+    p.income = [{ id: "i", name: "My Social Security", type: "social", personId: "r", amount: 1500, period: "monthly" }];
+    return p;
+  };
+  const d = compute(pair("Me", "My spouse"), { today: T }); const [me, sp] = d.people;
+  assert.equal(survivorWords(sp, me, d.couple.survivorMonthly.s, usd),
+    "If you die first, your spouse would get a widow's or widower's benefit on your record: about $1,733 a month in place of your spouse's own $900. That is more than the $1,500 you get now, because it is worked out from your full-age amount.");
+  assert.equal(survivorWords(me, sp, d.couple.survivorMonthly.r, usd), "If your spouse dies first, you keep your own $1,500 a month, and your spouse's $900 stops.");
+  assert.equal(spousalWords(sp, me, d, usd), "On your record, your spouse also gets about $150 a month more (a spouse's benefit) from 2033, once both have claimed. The plan counts it.");
+  assert.equal(heroTopUpWords(d, usd), "The $30,600 a year includes about $150 a month your spouse gets on your record (a spouse's benefit) from 2033.");
+  // the first adult the one with the top-up: "you get", "your own figure", "you won't get"
+  const q = pair("Sam", "Me"); q.retirement.socialSecurity.s = { claimAge: 67 };
+  const e = compute(q, { today: T });
+  assert.equal(spousalWords(e.people[1], e.people[0], e, usd), "On Sam's record, you could get up to about $1,050 a month (a spouse's benefit) once both have claimed. The plan does not count it until your own figure is added below.");
+  assert.match(spousalWords(e.people[1], e.people[0], e, usd, { none: true }), /The plan leaves it out, as you won't get Social Security\.$/);
+  const f = compute(pair("Sam", "Me"), { today: T });
+  assert.equal(survivorWords(f.people[0], f.people[1], f.couple.survivorMonthly.r, usd), "If you die first, Sam keeps their own $1,500 a month, and your $900 stops.");
+  assert.equal(heroTopUpWords(f, usd), "The $30,600 a year includes about $150 a month you get on Sam's record (a spouse's benefit) from 2033.");
+  // typed names read exactly as before
+  const g = compute(pair("Ruth", "Sam"), { today: T });
+  assert.equal(survivorWords(g.people[0], g.people[1], g.couple.survivorMonthly.r, usd), "If Sam dies first, Ruth keeps their own $1,500 a month, and Sam's $900 stops.");
+  assert.equal(heroTopUpWords(g, usd), "The $30,600 a year includes about $150 a month Sam gets on Ruth's record (a spouse's benefit) from 2033.");
+});

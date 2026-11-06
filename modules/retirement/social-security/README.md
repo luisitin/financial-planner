@@ -214,3 +214,6 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
   (`startAge` in `couple()`: the later of 62, their own claim age and their age at the partner's claim, the partner's
   counted as passed when already paid), returned so the Timeline can date "Sam's spouse's benefit starts". No figure
   changes. Test: overview/timeline "a spouse's benefit on the partner's record is a Timeline event".
+
+## Review 2026-11-06 (round 7): you and your
+- Review 2026-11-06 (round 7): every sentence (`survivorWords`, `spousalWords`, `heroTopUpWords`, the buttons, notices and labels in view.js) says you/your for the unnamed first adult and "your spouse" for Get started's partner ("If you die first, your spouse keeps ...", "Save your Social Security"), via `core/words.js`; the fold titles keep the name, typed names read as before, the stored Income name is not changed. Test: "review 2026-11-06 (round 7)".

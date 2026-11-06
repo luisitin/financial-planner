@@ -30,3 +30,5 @@
 ## Ideas / not yet
 - Per-stirpes versus per-capita; a trust named as beneficiary of a retirement account (see-through rules).
 - Print the list for the executor (Reports).
+
+Review 2026-11-06 (round 7): the 401(k) spouse flag ("you are not the main beneficiary ... unless you signed a waiver", "your spouse is not ...") and the born-after flag ("you were born after it was last checked") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before, and the quick-pick chips keep the names as labels (core/words.js). Words only. Test: "the first adult left unnamed ("Me") and the setup's "My spouse": the flags say you and your spouse".

@@ -82,3 +82,5 @@ divided by `(1 + i)^n`; its modeled tax is `required * t`. Lifetime real sums
 add those unrounded annual real amounts. The fixed rates are invented inputs,
 not IRS tax rates or forecasts. The second method uses exact rational products
 of retained shares to check the decimal annual ledger.
+
+Review 2026-11-06 (round 7): "You start at 75", "This is your first year", "your 2026 withdrawal is taken" and the 401(k) note say you/your for the unnamed first adult ("Me", or "You" from `thisYear` when no name is typed), with the verb to match; typed names read as before (core/words.js). Words only.

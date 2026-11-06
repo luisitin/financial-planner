@@ -8,6 +8,7 @@ import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { taxInputs } from "../federal/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 /** Employee payroll tax: Social Security 6.2% up to the year's pay limit (IRC 3101(a), 3121(a)(1)), Medicare 1.45% on all pay (3101(b)(1)). */
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
@@ -142,13 +143,15 @@ export function compute(plan, params = {}) {
   else {
     const outside = people.filter((p) => !p.eligible && p.used > 0);
     const insideExcess = people.filter((p) => p.eligible).reduce((s, p) => s + p.excess, 0);
-    for (const p of outside) notes.push(`${p.name} is not on the self-only health plan, so the ${fmtInt(p.used)} going into ${p.name}'s HSA is not allowed: it is taxed as pay and charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
+    // the unnamed first adult (and the "You" stand-in when no adult is on People) reads "You are not ... your HSA" (round 7)
+    const nm = (p) => (p.id === null ? null : p.name);
+    for (const p of outside) notes.push(`${NameIn(nm(p))} ${verbFor(nm(p), "is", "are")} not on the self-only health plan, so the ${fmtInt(p.used)} going into ${nameOf(nm(p))} HSA is not allowed: it is taxed as pay and charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
     if (outside.length) { if (insideExcess > 0) notes.push(`The covered person's own HSA is over the ${limitsYear} limit by ${fmtInt(insideExcess)}: excess contributions are taxed 6% a year until withdrawn.`); }
     else if (over > 0) notes.push(`The HSA is over the ${limitsYear} limit by ${fmtInt(over)}: excess contributions are taxed 6% a year until withdrawn.`);
     // a spouse 55 or over who does not use their own catch-up cannot hand it to the other (223(b)(3); Pub. 969)
     if (!outside.length && insideExcess > over + 0.005) notes.push(`In all ${fmtInt(insideExcess)} is over the limit: the extra ${fmtInt(pic.catchUpAmount)} from age ${pic.catchUpAge} can go only into that person's own HSA, not the other's.`);
   }
   if (election > 0 && total > 0) notes.push("A general-purpose health FSA and an HSA cannot run in the same year; with an HSA the FSA has to be the limited-purpose kind (dental and vision only).");
-  for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${x.name}'s FSA election` : "The FSA election"} is over the ${fsaYear} limit of ${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
+  for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${NameOf(x.name)} FSA election` : "The FSA election"} is over the ${fsaYear} limit of ${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
   return { year, limitsYear, fsaYear, wageBase, hsa, fsa, hasHsa: total > 0 || hsaBalance > 0, hasFsa: election > 0, notes, selfName: owner && owner.id !== null ? owner.name : "you" };
 }

@@ -53,3 +53,5 @@ calendar years. `ageAtSurvival` walks on until the chance falls to the target,
 "at least one alive" search runs until it crosses 10%; 300 years is only a guard.
 The age200 endpoint used for the unbounded midpoint checks has a tail below half
 the last stored decimal, as bounded in the brief.
+
+Review 2026-11-06 (round 7): the suggestion ("(your age)"), the couple card ("At least one of you and your spouse", "Someone still here when you would be 80", "on your clock") and the saved note ("Your details saved.") say you/your for the unnamed first adult ("Me"); typed names read as before (core/words.js). Test: "Review 2026-11-06 (round 7): the couple's age is 'your age' ...".

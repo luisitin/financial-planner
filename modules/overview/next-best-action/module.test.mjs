@@ -465,3 +465,30 @@ test("Each month's money: the lines on screen add up to the spare money, the chi
   assert.ok(!fl.some((x) => x.key === "careLost"));
   near(fl.reduce((t, x) => t + x.amount, 0), f.spare.gross - f.spare.monthly, 0.005);
 });
+
+test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you and your, the unnamed partner your spouse; typed names as before", () => {
+  const T = "2026-11-02";
+  const named = compute(familyPlan(T), { today: T });
+  assert.match(step(named, "match").detail, /^Bo has a 401\(k\) and pay but no contribution on file\./);
+  assert.match(step(named, "ira").detail, /^Ana \$7,500, Bo \$[\d,]+ of room left this year \(limit \$7,500 each\)\./);
+  assert.match(step(named, "max-401k").detail, /^Ana \$[\d,]+ of room left this year \(limit/);
+  const couple = familyPlan(T); couple.household.people[0].name = "Me"; couple.household.people[1].name = "My spouse";
+  const d = compute(couple, { today: T });
+  assert.match(step(d, "match").detail, /^Your spouse has a 401\(k\) and pay but no contribution on file\./);
+  assert.match(step(d, "ira").detail, /^Room left this year: you \$7,500, your spouse \$[\d,]+ \(limit \$7,500 each\)\./);
+  assert.match(step(d, "max-401k").detail, /^You have \$[\d,]+ of room left this year \(limit/);
+  for (const s of d.steps) assert.doesNotMatch(s.detail, /\bMe\b|My spouse/, s.id);
+  // nothing on file for either: "You and your spouse have"
+  const none = structuredClone(couple); none.retirement.contributions = [];
+  assert.match(step(compute(none, { today: T }), "match").detail, /^You and your spouse have a 401\(k\) and pay/);
+  // alone, with a match: "You put money in with a match", not "Me puts"
+  const single = familyPlan(T); single.household.people[0].name = "Me"; single.household.people = single.household.people.filter((x) => x.role !== "partner");
+  const s = compute(single, { today: T });
+  assert.match(step(s, "match").detail, /^You put money in with a match\./);
+  assert.match(step(s, "ira").detail, /^You have \$7,500 of room left this year \(limit \$7,500\)\./);
+  // a 401(k) only from a job left: "Your spouse's 401(k) is from a job left"
+  const left = structuredClone(couple);
+  const ask = step(d, "match").ask[0].accounts;
+  for (const a of left.accounts) if (ask.includes(a.id)) a.formerJob = true;
+  assert.match(step(compute(left, { today: T }), "match").detail, /^Your spouse's 401\(k\) is from a job left: check whether the job now has a plan with a match\./);
+});

@@ -5,6 +5,11 @@
 // One question at a time: the answer and any message wait in module state and show on the next render; a render
 // that is no longer on screen (the shell's #content is shared by every page) never redraws.
 import { compute, factSheet, allowedPages, buildPrompt, readAnswer, LEVELS } from "./compute.js";
+import { nameIn } from "../../../core/words.js";
+
+// who a stand-in is, in the sentence: the unnamed first adult ("Me" from Get started) is "you", the unnamed partner "your
+// spouse", a typed name as typed (round 7, 2026-11-06)
+const said = (n) => (n.kind === "person" && String(n.name ?? "").trim() ? nameIn(n.name) : n.name);
 
 let result = null;    // { at (the plan's updatedAt when asked), points, model } kept while the app is open
 let pending = null;   // { kind: "off" | "no models" | "unreachable" | "error" | "unreadable", detail } for the next render
@@ -71,7 +76,7 @@ export function render(page, ctx) {
     foldOpen = fold.open;
     if (!fold.open || foldBody.childElementCount) return;
     const s = getSheet();
-    const key = s.names.filter((n) => n.kind === "person" || /\d$/.test(n.alias)).map((n) => `${n.alias} is ${n.name}`);
+    const key = s.names.filter((n) => n.kind === "person" || /\d$/.test(n.alias)).map((n) => `${n.alias} is ${said(n)}`);
     foldBody.append(
       ui.h("p", { class: "muted small" }, "This is everything the AI gets, word for word, plus the names of the pages it can point you to. People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind and a number (\"credit card 1\"). Your goal names are sent as you typed them, with those names swapped in them too. The AI helper runs on your PC, unless you picked an online AI service in Settings; then these lines go to that service."),
       key.length ? ui.h("p", { class: "small" }, `On this page ${key.join(", ")}. The AI only ever sees Adult 1, Adult 2 and so on.`) : null,

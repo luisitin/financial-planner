@@ -7,6 +7,7 @@ import { buildInputs } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { nameIn, namesIn, verbFor } from "../../../core/words.js";
 
 /** The share of scheduled Social Security payable once the retirement trust fund runs dry (2025 Trustees Report: 2033, 77%). */
 export const SS_PAYABLE_IF_DEPLETED = 0.77;
@@ -57,7 +58,7 @@ export function compute(plan, params = {}) {
     { label: pct1(I.rates.inflation + NUDGE.inflation), inputs: fromInputs((c) => { c.rates.inflation += NUDGE.inflation; }) });
   if (ageNow !== null && ageNow < retireAge) {
     const earlier = Math.max(ageNow + 1, retireAge - NUDGE.retireYears), later = retireAge + NUDGE.retireYears;
-    if (earlier < retireAge) add("retire", `When ${self.name || "you"} retire${self.name ? "s" : ""}`, "the household's spending years start then; saving stops", `age ${retireAge}`,
+    if (earlier < retireAge) add("retire", `When ${nameIn(self.name)} ${verbFor(self.name, "retires", "retire")}`, "the household's spending years start then; saving stops", `age ${retireAge}`,
       { label: `age ${earlier}`, inputs: fromPlan((p) => { p.household.people.find((q) => q.id === self.id).retirementAge = earlier; }) },
       { label: `age ${later}`, inputs: fromPlan((p) => { p.household.people.find((q) => q.id === self.id).retirementAge = later; }) });
   }
@@ -88,13 +89,14 @@ export function compute(plan, params = {}) {
     // couple of 64 and 60 read "now (64 and 6 months)", which is 19 months away for the younger one)
     const nowForAll = movable.every((x) => x.ageNow !== null && Math.abs(low - x.ageNow) <= 1 / 12 + 1e-9);
     const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} month${m === 1 ? "" : "s"}` : String(y); };
-    const and = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+    // names in a sentence: the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
+    const and = namesIn;
     const names = movable.map((x) => x.name);
     // who is left out, and why: already paid, or 70 or over (waiting adds nothing then); not "the others already get it" for
     // someone who never claimed (review 2026-11-02, round 5)
     const out = (sp?.people ?? []).filter((x) => ss[x.id] && !movable.includes(x));
     const paid = out.filter((x) => x.claimed).map((x) => x.name), over = out.filter((x) => !x.claimed).map((x) => x.name);
-    const why = [paid.length ? `${and(paid)} already ${paid.length === 1 ? "gets" : "get"} it` : null, over.length ? `${and(over)} ${over.length === 1 ? "is" : "are"} 70 or over, when waiting adds nothing` : null].filter(Boolean).join("; ");
+    const why = [paid.length ? `${and(paid)} already ${paid.length === 1 ? verbFor(paid[0], "gets", "get") : "get"} it` : null, over.length ? `${and(over)} ${over.length === 1 ? verbFor(over[0], "is", "are") : "are"} 70 or over, when waiting adds nothing` : null].filter(Boolean).join("; ");
     add("claim", "When Social Security starts", out.length ? `${and(names)} only: ${why}` : "everyone claims at the same age", claims.length === 1 ? `at ${ageWords(claims[0])}` : "as on the page",
       { label: low > 62 && nowForAll ? `now (${ageWords(low)})` : `at ${ageWords(low)}`, inputs: claimAll(low) }, { label: "at 70", inputs: claimAll(70) });
   }
@@ -123,9 +125,10 @@ export function compute(plan, params = {}) {
  * (review 2026-11-02, round 5: the note said "62, or their age today", but a couple of 64 and 60 both move to 64 and 6 months).
  */
 export function ssMethodNote(names = [], cut = false) {
-  const and = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  // the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
+  const and = namesIn;
   const two = names.length === 2;
-  const claim = !names.length ? null : names.length === 1 ? `${names[0]} claiming at today's age (62 at the earliest) or at 70`
+  const claim = !names.length ? null : names.length === 1 ? `${nameIn(names[0])} claiming at today's age (62 at the earliest) or at 70`
     : `${and(names)} claiming at the same age, the ${two ? "older" : "oldest"} one's age today (62 at the earliest), or ${two ? "both" : "all"} at 70`;
   const parts = [claim, cut ? `the ${Math.round(SS_PAYABLE_IF_DEPLETED * 100)}% that would be payable if the retirement trust fund runs dry in 2033 (2025 Trustees Report)` : null].filter(Boolean);
   return parts.length ? `Social Security: ${parts.join("; and ")}.` : null;
