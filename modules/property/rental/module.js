@@ -12,7 +12,7 @@ export default {
   phase: 10,
   enabledByDefault: true,
   needs: ["property", "accounts", "debts", "income", "taxes"],
-  writes: ["property"],
+  writes: ["property", "accounts", "debts"],
   heavy: false,
   purpose: "What a rental really earns: rent less empty months and costs, the loan and tax, the checks a lender makes, and what it adds to your wealth.",
   compute,

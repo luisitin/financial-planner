@@ -2,7 +2,9 @@
 // is the home insured for what it would cost to rebuild, are the liability limits on the cars and the
 // home enough to protect your net worth from a lawsuit (retirement accounts are mostly out of reach),
 // does an umbrella policy make sense and for how much, and do the deductibles fit in the cash you keep.
-import { compute as computePolicies } from "../policies/compute.js";
+import { compute as computePolicies, HOME_KINDS, pairHomes } from "../policies/compute.js";
+import { compute as computeAssets } from "../../balance/assets/compute.js";
+import { rentalsOf, valueAccountOf, twinAccount } from "../../property/rental/running.js";
 import { compute as computeNetWorth, countedBalance } from "../../balance/net-worth/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -45,27 +47,48 @@ export function compute(plan, params = {}) {
   const accounts = plan.accounts ?? [];
   const pol = computePolicies(plan, { today });
   const active = pol.items.filter((x) => !x.ended);
-  const autos = active.filter((x) => x.kind === "auto"), homesPol = active.filter((x) => x.kind === "home"), umbrellas = active.filter((x) => x.kind === "umbrella");
+  const autos = active.filter((x) => x.kind === "auto"), homesPol = active.filter((x) => HOME_KINDS.includes(x.kind)), umbrellas = active.filter((x) => x.kind === "umbrella");
   const nw = computeNetWorth(plan, { today });
   const k401 = accounts.filter((a) => a.type === "401k").reduce((s, a) => s + countedBalance(a), 0);
   const iras = accounts.filter((a) => IRA_TYPES.includes(a.type)).reduce((s, a) => s + countedBalance(a), 0);
   const shielded = k401 + Math.min(iras, IRA_LIMIT);
   const exposed = Math.max(0, nw.netWorth - shielded);
 
-  // the homes against their dwelling cover: paired one to one when the counts match (or by accountId), else in total
+  // the homes against their dwelling cover: the policy tied to the home ("Which home" on Policies), else one whose name names
+  // it, else one to one in order when the counts match, or a lone home with the first policy (insurance/policies pairHomes)
   const properties = accounts.filter((a) => a.type === "property" && countedBalance(a) > 0);
+  // (a home rented out: one a Rental analysis entry names, or the account an unlinked rental of its name probably is; review
+  // 2026-11-06, money 6: a landlord policy goes with it before list order)
+  const rentalAccts = new Set(rentalsOf(plan).map((r) => (valueAccountOf(plan, r) ?? twinAccount(plan, r))?.id).filter(Boolean));
+  const paired = pairHomes(properties.map((a) => ({ accountId: a.id, name: a.name, rental: rentalAccts.has(a.id) })), homesPol, { lone: "first" });
   const homes = properties.map((a, i) => {
-    const policy = homesPol.find((x) => x.accountId === a.id) ?? (properties.length === homesPol.length ? homesPol[i] : properties.length === 1 ? homesPol[0] : null) ?? null;
+    const policy = paired[i];
     const dwelling = policy ? Number(policy.benefit) || 0 : 0;
     const rebuild = policy && Number(policy.rebuildCost) > 0 ? Number(policy.rebuildCost) : null;
     const share = rebuild ? dwelling / rebuild : null;
     const status = !policy ? "none" : rebuild === null ? "unknown" : share >= 1 - 1e-9 ? "ok" : share >= COINSURANCE ? "low" : "under";
     return { id: a.id, name: a.name, value: countedBalance(a), policy: policy ? { id: policy.id, name: policy.name } : null, dwelling, rebuild, share, status };
   });
+  // the homes rented out (Rental analysis), each with the policy What you own pairs with it (round 8 batch 6, landlord-7): the
+  // same home rows and the same pairHomes there, so the two pages cannot disagree (review 2026-11-06, money 6: a rental only on
+  // Rental analysis, insured by "Acme rental dwelling" on What you own, had "no policy on file" here); a rental only on Rental
+  // analysis with an account of its name on Net worth (running.js twinAccount) takes that account's policy on both
+  const owned = computeAssets(plan, { today }).homes;
+  const condoAccts = new Set(rentalsOf(plan).filter((r) => Number(r.hoaMonthly) > 0).map((r) => (valueAccountOf(plan, r) ?? twinAccount(plan, r))?.id).filter(Boolean));
+  const rented = rentalsOf(plan).map((r) => {
+    const h = owned.find((x) => x.rental && x.entryId === r.id);
+    const policy = h?.policy ? homesPol.find((x) => x.id === h.policy.id) ?? null : null;
+    return { id: r.id, name: r.name || "Your rental", hoa: Number(r.hoaMonthly) > 0, policy: policy ? { id: policy.id, name: policy.name || "its policy", kind: policy.kind } : null };
+  });
   const ownsHome = properties.length > 0;
 
   const autoLiability = autos.length ? Math.max(...autos.map((x) => Number(x.benefit) || 0)) : 0;
-  const homeLiability = homesPol.length ? Math.max(...homesPol.map((x) => Number(x.liability) > 0 ? Number(x.liability) : HOME_LIABILITY_DEFAULT)) : 0;
+  // the home side: a home or landlord policy's liability cover is for its own home, so the weakest counts (review 2026-11-06,
+  // money 8: the best of them hid a $100,000 limit on the home lived in behind the condo's $1,000,000). Homeowners policies
+  // alone are taken at the highest, as before this batch (a second home's policy was read that way)
+  const liabOf = (x) => (Number(x.liability) > 0 ? Number(x.liability) : HOME_LIABILITY_DEFAULT);
+  const ownPol = homesPol.filter((x) => x.kind !== "landlord"), landPol = homesPol.filter((x) => x.kind === "landlord");
+  const homeLiability = homesPol.length ? Math.min(ownPol.length ? Math.max(...ownPol.map(liabOf)) : Infinity, ...landPol.map(liabOf)) : 0;
   const homeLiabilityKnown = homesPol.some((x) => Number(x.liability) > 0);
   const umbrella = umbrellas.reduce((s, x) => s + (Number(x.benefit) || 0), 0);
   const inCar = autos.length ? autoLiability + umbrella : 0, atHome = homesPol.length ? homeLiability + umbrella : 0;
@@ -78,8 +101,26 @@ export function compute(plan, params = {}) {
   // 1. the home: insured for the cost to rebuild
   for (const h of homes) {
     if (h.status === "none") add({ id: `home-${h.id}`, ok: false, title: `${h.name} has no home insurance on file`, text: "Add the homeowners policy on Policies. A lender requires it while there is a mortgage; without one a fire is paid from savings.", go: ["insurance", "policies"] });
+    // a rented-out condo (association dues): the building is usually on the association's master policy, the owner's own
+    // covers the inside of the unit (Maryland Insurance Administration, Condominium insurance FAQs, read 2026-11-06: the master
+    // policy "generally" covers "the exterior/structure of buildings"; a unit owner's policy "may only cover the interior of the
+    // unit and its contents"), so the cost to rebuild the building is not the question (review 2026-11-06, UX 8)
+    else if (h.status === "unknown" && condoAccts.has(h.id)) add({ id: `home-${h.id}`, ok: null, title: `${h.name}: insured for ${money(h.dwelling)}`, text: `With association dues, the building itself is usually on the association's policy and yours covers the inside of the unit. Ask the insurer what your policy covers inside the unit, and the association where theirs stops.`, go: null });
     else if (h.status === "unknown") add({ id: `home-${h.id}`, ok: null, title: `${h.name}: insured for ${money(h.dwelling)}`, text: `What matters is the cost to rebuild, not the price it would sell for (${money(h.value)}, land included, which does not burn). Ask the insurer for its rebuild estimate and enter it under Policy terms below.`, go: null });
     else add({ id: `home-${h.id}`, ok: h.status === "ok", title: h.status === "ok" ? `${h.name} is insured for the full cost to rebuild` : `${h.name} is insured for ${Math.round(h.share * 100)}% of the cost to rebuild`, text: h.status === "ok" ? `${money(h.dwelling)} of dwelling cover against a rebuild cost of ${money(h.rebuild)}.` : `${money(h.dwelling)} against ${money(h.rebuild)}. ${h.status === "under" ? `Under ${Math.round(COINSURANCE * 100)}%, most policies also cut what they pay for a partial loss, like a kitchen fire. ` : ""}Raising the dwelling cover to ${money(h.rebuild)} usually costs little.`, go: null });
+  }
+  // 1b. a home rented out needs a landlord policy (Triple-I, "Coverage for renting out your home", read 2026-11-06: for a
+  // lease of "six months or a year, you will likely need a landlord or rental dwelling policy"; a "standard homeowners
+  // policy may not cover losses incurred while your home is rented out"), and an umbrella pays only once the policy under it
+  // has (Triple-I, "Should I purchase an umbrella liability policy?", read 2026-11-06, which lists "renting out a property you own")
+  for (const r of rented) {
+    const umb = umbrellas.length ? ` Tell your umbrella insurer about ${r.name} too: an umbrella pays only after a policy under it has paid, so its landlord policy should be one of them.` : "";
+    // with association dues the building is usually the association's to insure (UX 8, the source above)
+    const covers = r.hoa ? "With association dues, the building itself is usually on the association's policy: yours covers the inside, the rent lost while it is repaired, and you if someone is hurt there and sues. The association's papers say where theirs stops." : "it covers the building, the rent lost while it is repaired, and you if someone is hurt there and sues.";
+    if (r.policy?.kind === "landlord") add({ id: `rental-${r.id}`, ok: umb ? null : true, title: `${r.name} has a landlord policy`, text: `${r.policy.name} is the kind a home rented to others needs${r.hoa ? `. ${covers}` : `: ${covers}`}${umb}`, go: null });
+    // (`query`: "Go there" opens that policy's form, review 2026-11-06, UX 11)
+    else if (r.policy) add({ id: `rental-${r.id}`, ok: false, title: `${r.name} is rented out: it needs a landlord policy`, text: `${r.policy.name} is on file as a homeowners policy, which may not pay for a home you rent to others. Ask the insurer for a landlord (rental dwelling) policy; if it already is one, set its kind to Landlord on Policies.${umb}`, go: ["insurance", "policies"], query: { edit: r.policy.id } });
+    else add({ id: `rental-${r.id}`, ok: false, title: `${r.name} is rented out and has no policy on file`, text: `A home rented to others needs a landlord (rental dwelling) policy: it covers the building, the rent lost while it is repaired, and you if someone is hurt there and sues. Add it on Policies.${umb}`, go: ["insurance", "policies"] });
   }
   if (!ownsHome && !homesPol.length) add({ id: "renters", ok: false, title: "No renters insurance on file", text: "Renters insurance covers your belongings and your liability if someone is hurt in your home. It usually costs a few hundred dollars a year or less.", go: ["insurance", "policies"] });
   // 2. the cars
@@ -87,20 +128,25 @@ export function compute(plan, params = {}) {
   const carLoans = accounts.filter((a) => a.type === "loan" && /car|auto|vehicle|truck/i.test(`${a.name} ${a.institution ?? ""}`));
   if (autos.length) add({ id: "auto", ok: autoLiability >= AUTO_MIN, title: autoLiability >= AUTO_MIN ? `Car liability: ${money(autoLiability)} per accident` : autoLiability > 0 ? `Car liability is low: ${money(autoLiability)} per accident` : "Car liability limit not entered", text: autoLiability >= AUTO_MIN ? `At or above the ${money(AUTO_MIN)} per accident (100/300/100) most advisers suggest as a floor.` : `Most advisers suggest at least ${money(AUTO_MIN)} per accident (100/300/100); state minimums are far lower and a serious accident costs much more. Raising the limits is usually cheap.`, go: autoLiability > 0 ? null : ["insurance", "policies"] });
   else if (vehicles.length || carLoans.length) add({ id: "auto", ok: false, title: "No car insurance on file", text: "Your accounts show a car. Add its policy on Policies with the liability limit per accident.", go: ["insurance", "policies"] });
-  // 3. a lawsuit against what you own
+  // 3. a lawsuit against what you own: one phrase, one figure each (round 8 batch 6, landlord-7: "a lawsuit could reach" was
+  // both $318,000 on the tile and $218,000 here). What a lawsuit could reach = net worth less retirement accounts (`exposed`);
+  // not covered = that less the weaker liability cover (`uncovered`)
   if (autos.length || homesPol.length) {
     const okLiab = weakest >= exposed;
-    add({ id: "liability", ok: okLiab, title: okLiab ? "Your liability cover protects your net worth" : `A lawsuit could reach about ${money(exposed - weakest)} of what you own`,
+    add({ id: "liability", ok: okLiab, title: okLiab ? "Your liability cover protects your net worth" : `${money(exposed - weakest)} of what you own is not covered`,
       text: `Your net worth is ${money(nw.netWorth)}; ${shielded > 0 ? `${money(shielded)} of it is in retirement accounts, which are mostly out of a creditor's reach, leaving ${money(exposed)} exposed` : `all of it is exposed`}. Cover for someone hurt: ${[autos.length ? `${money(inCar)} in a car accident` : null, homesPol.length ? `${money(atHome)} at home${homeLiabilityKnown ? "" : ` (${money(HOME_LIABILITY_DEFAULT)} assumed for the home policy: enter its liability limit below)`}` : null].filter(Boolean).join(", ")}${umbrella > 0 ? `, the umbrella's ${money(umbrella)} included` : ""}.${okLiab ? "" : suggestedUmbrella > 0 ? " An umbrella policy closes the gap (below)." : ` Raising the ${autos.length && inCar === weakest ? "car" : "home"} policy's liability limit to ${money(Math.max(exposed, autos.length && inCar === weakest ? AUTO_MIN : UMBRELLA_UNDER.home))} closes it and usually costs little.`}`, go: null });
   }
-  // 4. an umbrella
-  if (suggestedUmbrella > 0) add({ id: "umbrella", ok: false, title: `An umbrella policy of ${money(suggestedUmbrella)}`, text: `It adds liability cover on top of the car and home policies, for about ${money(umbrellaCost(suggestedUmbrella)[0])} to ${money(umbrellaCost(suggestedUmbrella)[1])} a year. Insurers usually want ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} on the home underneath it.`, go: null });
+  // 4. an umbrella (the policies under it name the homes rented out too: review 2026-11-06, UX 12, the umbrella pays only after
+  // each of them has)
+  const lets = rented.map((r) => `${r.name}'s landlord policy`);
+  const onHomes = lets.length ? `on the home and on ${lets.length === 1 ? lets[0] : `${lets.slice(0, -1).join(", ")} and ${lets[lets.length - 1]}`}` : "on the home";
+  if (suggestedUmbrella > 0) add({ id: "umbrella", ok: false, title: `An umbrella policy of ${money(suggestedUmbrella)}`, text: `It adds liability cover on top of the car and home policies, for about ${money(umbrellaCost(suggestedUmbrella)[0])} to ${money(umbrellaCost(suggestedUmbrella)[1])} a year. Insurers usually want ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} ${onHomes} underneath it.`, go: null });
   else if (umbrella > 0) {
     const shortUnder = (autos.length && autoLiability < UMBRELLA_UNDER.auto) || (homesPol.length && homeLiability < UMBRELLA_UNDER.home);
-    add({ id: "umbrella", ok: !shortUnder, title: `Umbrella: ${money(umbrella)}`, text: shortUnder ? `Check the limits underneath it: umbrella insurers usually require ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} on the home, and a gap below them is yours to pay.` : "The car and home limits underneath meet what umbrella insurers usually require.", go: null });
+    add({ id: "umbrella", ok: !shortUnder, title: `Umbrella: ${money(umbrella)}`, text: shortUnder ? `Check the limits underneath it: umbrella insurers usually require ${money(UMBRELLA_UNDER.auto)} per accident on the cars and ${money(UMBRELLA_UNDER.home)} ${onHomes}, and a gap below them is yours to pay.` : "The car and home limits underneath meet what umbrella insurers usually require.", go: null });
   }
   // 5. the deductibles against the cash
-  const withDeductible = active.filter((x) => ["auto", "home"].includes(x.kind) && Number(x.deductible) > 0);
+  const withDeductible = active.filter((x) => ["auto", ...HOME_KINDS].includes(x.kind) && Number(x.deductible) > 0);
   let deductibles = null;
   if (withDeductible.length) {
     const liq = computeLiquidity(plan, { today });
@@ -108,5 +154,6 @@ export function compute(plan, params = {}) {
     deductibles = { total, cash: liq.now, ok: liq.now >= total };
     add({ id: "deductibles", ok: deductibles.ok, title: deductibles.ok ? "Your cash covers the deductibles" : "The deductibles are more than your cash", text: deductibles.ok ? `The deductibles add up to ${money(total)}; usable cash is ${money(liq.now)}. ${liq.now >= total * 3 ? "With this much cash, a higher deductible would lower the premiums." : ""}` : `They add up to ${money(total)} against ${money(liq.now)} of usable cash: a claim would mean borrowing. Build the emergency fund, or choose lower deductibles.`, go: deductibles.ok ? null : ["balance", "liquidity"] });
   }
-  return { netWorth: nw.netWorth, exposed, shielded, ownsHome, homes, auto: autos.length ? { policies: autos.map((x) => x.name), liability: autoLiability } : null, homeLiability, homeLiabilityKnown, umbrella, inCar, atHome, suggestedUmbrella, umbrellaCost: UMBRELLA_COST.map((c) => c * suggestedUmbrella / UMBRELLA_STEP), deductibles, checks, hasAny: autos.length + homesPol.length + umbrellas.length > 0 };
+  const liabilityCover = Number.isFinite(weakest) ? weakest : 0;
+  return { netWorth: nw.netWorth, exposed, shielded, liabilityCover, uncovered: Math.max(0, exposed - liabilityCover), rented, ownsHome, homes, auto: autos.length ? { policies: autos.map((x) => x.name), liability: autoLiability } : null, homeLiability, homeLiabilityKnown, umbrella, inCar, atHome, suggestedUmbrella, umbrellaCost: UMBRELLA_COST.map((c) => c * suggestedUmbrella / UMBRELLA_STEP), deductibles, checks, hasAny: autos.length + homesPol.length + umbrellas.length > 0 };
 }

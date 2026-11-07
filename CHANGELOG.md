@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] A rental is entered once and counted once: Rental analysis offers "Add it to net worth" (or links the home already there), Policies pairs it with its own landlord policy, and Auto, home, umbrella says one figure for what a lawsuit could reach, with a check that a rented-out home has landlord cover.
+- [builder:claude-b] The retirement plan and Income count a rental's rent after what it costs to run (the condo: $937 a month, not $2,100), and its loan payment until the loan is paid off, so a landlord's retirement is no longer overstated.
+- [builder:claude-b] Financial independence counts the same rent after costs, and Needs attention asks "Is Condo on Net worth already?" instead of saying it is missing when it is there.
 - [builder:claude-b] The tax rate other pages quote is the Federal estimate's own: HSA and FSA savings, Health's HSA rate, Tax-lot harvesting, Crypto, Asset location, Benefits, a raise on Salary, Offer compare, Education's credit, Home and Renovation now read the same return. The freelancer is no longer told 22% on one page and 12% on another; the widow's HSA and harvesting figures match her return.
 - [builder:claude-b] Stock pay's card on Equity adds up: the extra 0.9% Medicare tax owed and held back has its own row, so federal tax less what was held back equals what to set aside.
 - [builder:claude-b] Every step on the way to Your plan opens in plain words: "bills you have to pay" instead of "must-pay", "even in a bad run of years" instead of "9 of 10 markets", "once prices rise" instead of "inflation", "accounts you haven't paid tax on yet" instead of "pre-tax", "change" instead of "lever"; small links on those screens are now full-size tap targets.

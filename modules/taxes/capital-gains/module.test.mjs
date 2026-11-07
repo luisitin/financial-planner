@@ -57,3 +57,18 @@ test("round 8 verify: the 0% room, the tax the sales add and one more sale are w
   assert.equal(known(q, { today: "2026-09-16" }).changed, false);
   assert.equal(compute(q, { today: "2026-09-16" }).taxWith, federalTax(b.inputs, b.params).totalTax);
 });
+
+// round 8 batch 6 review (UX 9, item 26's next step): a sale named for a rental says the part of its gain from depreciation
+test("batch 6 review: a sale named for a rental on Rental analysis carries its depreciation taken (about 44,291), the part taxed at up to 25%", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const p = condoOnNetWorthPlan();
+  p.taxes = { ...(p.taxes ?? {}), gains: [{ id: "s1", name: "Condo sale", proceeds: 244400, basis: 165700, held: "long" }, { id: "s2", name: "100 shares", proceeds: 5000, basis: 4000, held: "long" }] };
+  const d = compute(p, { today: "2026-11-06" });
+  assert.equal(d.rentalSales.length, 1);
+  const s = d.rentalSales[0];
+  assert.deepEqual([s.id, s.rental], ["s1", "Condo"]);
+  assert.ok(Math.abs(s.depreciation - 44290.91) < 0.01, String(s.depreciation));
+  // the gain is 78,700, more than the depreciation: all of it is the 25% part
+  assert.ok(Math.abs(s.fromDepreciation - 44290.91) < 0.01);
+  assert.deepEqual(compute(taxPlan(), { today: "2026-11-06" }).rentalSales ?? [], []);
+});

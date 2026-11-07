@@ -208,3 +208,13 @@ December 31", with the year's tax, that a hold-back counts as paid through the w
 included (IRC 6654(g)), and what leaves nothing to pay in April. It replaces `estimates-behind` there, so the person is
 never told both to have tax held back and to "pay the past-due part" (verify item 4). It is added after the required
 withdrawal's alert, so on the same date it follows it. Test: "round 8 batch 1: a withdrawal's tax is held back from it".
+
+## A rental left out of net worth (round 8 batch 6 review, 2026-11-06, UX 10)
+A rental on Rental analysis that names no Net worth account (and has a value) is a housekeeping item (`chore`), to Rental
+analysis: "Condo is not in your net worth yet. It is worth $260,000 and owes $150,000 on Rental analysis. Add it there in one
+tap." When Net worth may already list it (an account of its name, or others that are not the home you live in: property/rental
+running.js `twinAccount`, `candidateAccounts`) it says "Net worth may already list it: say which there." Chores are not
+counted in the Dashboard's figure. Test: "batch 6 review" in `module.test.mjs`.
+Verify (same day): when Net worth may already list it, the title asks instead of asserting: "Is Condo on Net worth
+already?" (it read "Condo is not in your net worth yet" over a Net worth that listed Condo at $260,000). Test: "round 8
+batch 6 verify: a rental Net worth may already list is asked about, not called missing".

@@ -106,3 +106,59 @@ test("saving and removing a belonging: cleaned, added or replaced by id, dated; 
   // every special kind keeps its value; every kind has a label
   for (const [, k] of Object.entries(KINDS)) { assert.ok(k.label); if (k.special) assert.equal(k.life, null); }
 });
+
+// ---- round 8 batch 6: the condo listed once, insured by its own policy (landlord-2) -------------------------------------
+test("batch 6: policies pair with their homes by name before list order, and a rental only on Rental analysis with a Net worth twin borrows its policy", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  // the tester's plan: Home and Condo on Net worth, the condo also on Rental analysis (not linked), two home policies.
+  // Three rows against two policies paired nothing before: "No home insurance on file" for all three
+  const d = compute(condoOnNetWorthPlan(), { today: T });
+  assert.deepEqual(d.homes.map((h) => [h.name, h.accountId, h.policy?.name ?? null, !!h.twin]), [["Home", "setup-have-home", "Home policy", false], ["Condo", "condo", "Condo landlord policy", false], ["Condo", null, "Condo landlord policy", true]]);
+  assert.equal(d.checks.filter((c) => c.id.startsWith("home-")).length, 0);
+  assert.equal(d.totals.counted, 410000 + 260000 + 15000, "the twin is not counted twice");
+  // the policies listed the other way round still go to their own homes (it went by list order)
+  const p = condoOnNetWorthPlan(); p.insurance.policies = [p.insurance.policies[1], p.insurance.policies[0]];
+  p.property[0].accountId = "condo";
+  const e = compute(p, { today: T });
+  assert.deepEqual(e.homes.map((h) => [h.name, h.policy?.name]), [["Home", "Home policy"], ["Condo", "Condo landlord policy"]]);
+  // "Which home" on Policies wins over the names
+  p.insurance.policies[1].accountId = "condo"; p.insurance.policies[0].accountId = "setup-have-home";
+  assert.deepEqual(compute(p, { today: T }).homes.map((h) => h.policy?.name), ["Condo landlord policy", "Home policy"]);
+});
+
+test("batch 6: the total says what it leaves out: a rental only on Rental analysis is named with its value", async () => {
+  const { condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const d = compute(condoOnlyRentalPlan(), { today: "2026-11-06" });
+  assert.equal(d.totals.counted, 425000);
+  assert.deepEqual(d.totals.left, [{ name: "Condo", value: 260000, page: "Rental analysis", twin: null }]);
+  const c = d.homes.find((h) => h.rental);
+  assert.equal(c.counted, false); assert.equal(c.policy?.name, "Condo landlord policy");
+  // nothing left out on the family plan
+  assert.deepEqual(compute(plan(), { today: TODAY }).totals.left, []);
+});
+
+// ---- round 8 batch 6 review (UX 1, 2, 11) ----------------------------------------------------------------------------------
+test("batch 6 review: two homes of one name and value are flagged; a rental with an account named otherwise is asked about, not asserted", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const { addToNetWorth } = await import("../../property/rental/running.js");
+  const T = "2026-11-06";
+  // the review's "No, add it as its own": Net worth then lists Condo twice at 260,000
+  const p = condoOnNetWorthPlan(); let n = 0;
+  addToNetWorth(p, "r-condo", { today: T, uid: () => `n${++n}` });
+  const d = compute(p, { today: T });
+  const dup = d.checks.find((c) => c.id.startsWith("dup-"));
+  assert.ok(dup, d.checks.map((c) => c.id).join(", "));
+  assert.equal(dup.text, "Condo is listed twice on Net worth, at $260,000 each. If they are the same home, remove the extra one there.");
+  assert.deepEqual(dup.go, ["balance", "net-worth"]);
+  // the review's renamed account: "Rental condo on Elm" may be the condo, so it is not said to be only on Rental analysis
+  const q = condoOnNetWorthPlan(); q.accounts.find((a) => a.id === "condo").name = "Rental condo on Elm";
+  const e = compute(q, { today: T });
+  const row = e.homes.find((h) => h.rental && h.counted === false);
+  assert.deepEqual(row.maybe.map((a) => a.name), ["Rental condo on Elm"]);
+  assert.equal(e.totals.left.find((x) => x.name === "Condo").maybe, true);
+  // the policy's kind is kept, so a rented-out home insured by a homeowners policy can say so
+  const homes = compute(condoOnNetWorthPlan(), { today: T }).homes;
+  assert.equal(homes.find((h) => h.name === "Condo" && h.accountId).policy.kind, "home");
+  assert.equal(homes.find((h) => h.name === "Home").policy.kind, undefined, "the home lived in: as before");
+});

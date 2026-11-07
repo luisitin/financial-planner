@@ -6,6 +6,9 @@ import { countedBalance } from "../net-worth/compute.js";
 import { growthRate } from "../../property/home/compute.js";
 import { DEFAULTS as CAR } from "../../property/vehicles/compute.js";
 import { monthsBetween, daysBetween } from "../../../core/math/dates.js";
+import { HOME_KINDS, pairHomes } from "../../insurance/policies/compute.js";
+import { twinAccount, candidateAccounts } from "../../property/rental/running.js";
+import { money as fmtMoney } from "../../../core/format.js";
 
 /**
  * Kinds of belonging. `life`: an example of the years it lasts, used for the rough worth now (blank = it keeps its
@@ -78,20 +81,37 @@ export function compute(plan, params = {}) {
   const unlinked = (kinds) => entries.filter((e) => kinds.includes(e.kind) && !(e.accountId && accounts.some((a) => a.id === e.accountId)));
 
   // homes and land: the Real estate accounts, plus property-page entries with no account
-  const homePol = pol.all.filter((p) => p.kind === "home");
+  const homePol = pol.all.filter((p) => HOME_KINDS.includes(p.kind));
   const homeRows = [
     ...accounts.filter((a) => a.type === "property").map((a) => ({ a, e: linked(a.id) ?? {} })),
     ...unlinked(["home", "rental"]).map((e) => ({ a: null, e })),
   ];
+  // the policy (round 8 batch 6, landlord-2): one tied to this home ("Which home" on Policies), else one whose name names the
+  // home, else the rest one to one in order (insurance/policies pairHomes: one pairing for this page and Auto, home, umbrella)
+  // a rental only on Rental analysis is not in net worth: said so, with the Net worth account that is probably it (`twin`,
+  // same name, asked about on the page); such a row takes its twin's policy and is left out of the pairing
+  const twins = homeRows.map(({ a, e }) => (!a && e.kind === "rental" ? twinAccount(plan, e) : null));
+  const pairable = homeRows.map((_, i) => i).filter((i) => !twins[i]);
+  // (a home rented out, `rental`: its Rental analysis entry, or the account an unlinked rental of its name probably is, so a
+  // landlord policy goes with it before list order; review 2026-11-06, money 6)
+  const twinIds = new Set(twins.filter(Boolean).map((t) => t.id));
+  const pairs = pairHomes(pairable.map((i) => ({ accountId: homeRows[i].a?.id ?? null, name: homeRows[i].e.name || homeRows[i].a?.name || "", rental: homeRows[i].e.kind === "rental" || twinIds.has(homeRows[i].a?.id) })), homePol);
+  const paired = homeRows.map(() => null);
+  pairable.forEach((i, k) => { paired[i] = pairs[k]; });
+  twins.forEach((t, i) => { if (t) paired[i] = paired[homeRows.findIndex((h) => h.a?.id === t.id)] ?? null; });
   const homes = homeRows.map(({ a, e }, i) => {
     const value = a ? countedBalance(a) : num(e.value) ?? 0;
     const paid = num(e.purchasePrice), bought = isDate(e.purchaseDate) ? e.purchaseDate : null;
     const months = bought && isDate(today) ? monthsBetween(bought, today) : null;
-    // the policy: one tied to this home's account, else paired one to one as insurance/property pairs them
-    const policy = (a && homePol.find((p) => p.accountId === a.id)) ?? (homeRows.length === homePol.length ? homePol[i] : homeRows.length === 1 && homePol.length === 1 ? homePol[0] : null) ?? null;
+    const policy = paired[i];
+    const twin = twins[i];
     return { accountId: a?.id ?? null, entryId: e.id ?? null, name: e.name || a?.name || "Home", rental: e.kind === "rental", value, paid, bought,
       change: paid !== null ? value - paid : null, perYear: paid !== null && months !== null ? growthRate(paid, value, months) : null,
-      policy: policy ? { id: policy.id, name: policy.name || "Home policy" } : null };
+      // (a home rented out also says its policy's kind, so one on file as a homeowners policy can say so: review 2026-11-06, UX 11)
+      policy: policy ? { id: policy.id, name: policy.name || "Home policy", ...(e.kind === "rental" || twinIds.has(a?.id) ? { kind: policy.kind ?? "home" } : {}) } : null,
+      // a rental only on Rental analysis: the account of its name it probably is (`twin`), else the accounts named otherwise
+      // that may be it (`maybe`, running.js candidateAccounts; review 2026-11-06, UX 2), asked about on Rental analysis
+      ...(a ? {} : { counted: false, ...(twin ? { twin: { id: twin.id, name: twin.name, value: countedBalance(twin) } } : e.kind === "rental" ? { maybe: candidateAccounts(plan, e).map((x) => ({ id: x.id, name: x.name, value: x.value })) } : {}) }) };
   });
 
   // cars: the Vehicle accounts, plus property-page cars with no account (as property/vehicles lists them)
@@ -126,10 +146,23 @@ export function compute(plan, params = {}) {
     paid: sum(items, (x) => num(x.paid)), worth: sum(items, (x) => x.worth), uncovered: sum(uncovered, (x) => x.worth), uncoveredCount: uncovered.length,
   };
   totals.counted = totals.homes + totals.cars + totals.others;
+  // what the total leaves out (round 8 batch 6, landlord-2: the header said "counted in your net worth" over a condo that was
+  // not): homes and cars entered only on their own pages, with what each is worth there
+  totals.left = [...homes.filter((h) => !h.accountId).map((h) => ({ name: h.name, value: h.value, page: h.rental ? "Rental analysis" : "Your home", twin: h.twin?.name ?? null, ...(h.maybe?.length ? { maybe: true } : {}) })),
+    ...cars.filter((c) => !c.accountId).map((c) => ({ name: c.name, value: c.value, page: "Car costs", twin: null }))];
 
   const checks = [];
-  for (const h of homes) if (!h.policy && !h.rental) checks.push({ id: `home-${h.accountId ?? h.entryId}`, text: `No home insurance on file for ${h.name}. Add its policy so a claim has the right numbers.`, go: ["insurance", "policies"] });
-  for (const h of homes) if (!h.policy && h.rental) checks.push({ id: `home-${h.accountId ?? h.entryId}`, text: `No policy on file for the rental ${h.name}.`, go: ["insurance", "policies"] });
+  // the same home on Net worth twice (review 2026-11-06, UX 1: "No, add it as its own" listed Condo at $260,000 twice): two
+  // Real estate accounts of one name (letter case and spaces aside) and one value, to the dollar
+  const counted = homes.filter((h) => h.accountId), seen = new Set();
+  for (const h of counted) {
+    const same = counted.filter((o) => o !== h && String(o.name).trim().toLowerCase() === String(h.name).trim().toLowerCase() && Math.abs(o.value - h.value) < 1);
+    if (!same.length || seen.has(h.accountId)) continue;
+    same.forEach((o) => seen.add(o.accountId)); seen.add(h.accountId);
+    checks.push({ id: `dup-${h.accountId}`, text: `${h.name} is listed ${same.length === 1 ? "twice" : `${same.length + 1} times`} on Net worth, at ${fmtMoney(h.value, plan.meta?.currency ?? "USD")} each. If they are the same home, remove the extra one there.`, go: ["balance", "net-worth"] });
+  }
+  for (const h of homes) if (!h.policy && !h.rental && !h.twin) checks.push({ id: `home-${h.accountId ?? h.entryId}`, text: `No home insurance on file for ${h.name}. Add its policy so a claim has the right numbers.`, go: ["insurance", "policies"] });
+  for (const h of homes) if (!h.policy && h.rental && !h.twin) checks.push({ id: `home-${h.accountId ?? h.entryId}`, text: `No policy on file for the rental ${h.name}.`, go: ["insurance", "policies"] });
   if (cars.length && !carPolicies.length) checks.push({ id: "cars", text: `${cars.length === 1 ? "Your car has" : "Your cars have"} no car insurance on file.`, go: ["insurance", "policies"] });
   const names = (list) => (list.length <= 3 ? list.map((x) => x.name).join(list.length === 2 ? " and " : ", ") : `${list.length} belongings`);
   if (uncovered.length) checks.push({ id: "uncovered", text: `${names(uncovered)} ${uncovered.length === 1 ? "is" : "are"} not tied to a policy.${pol.things.length ? " Pick the policy that covers each one." : " Add your home or renters policy, then pick it for each one."}`, go: pol.things.length ? null : ["insurance", "policies"] });

@@ -44,3 +44,15 @@ test("joint life pays while either lives: a lower monthly can still be worth as 
   assert.ok(j.rate > s.rate, "the same payment for longer"); assert.equal(j.partnerName, "Bo");
   assert.ok(late.ladderCost < s.ladderCost);
 });
+
+// round 8 batch 6 review: a line with calendar bounds (a rental's loan payment that comes back only after the loan is paid off,
+// fromYear 2051) counted in the first retirement year (2045), so the share no longer matched the projection's
+test("batch 6: guaranteed income keeps a line's calendar years (the condo's loan payment back only from 2051)", async () => {
+  const { compute: projection } = await import("../projection/compute.js");
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnNetWorthPlan(); p.retirement.annuities = [{ id: "q", name: "Q", personId: "setup-self", premium: 100000, monthly: 600, startAge: 65 }];
+  const pr = projection(p, { today: T });
+  assert.ok(pr.inputs.incomes.some((x) => x.part === "loan back" && x.fromYear === 2051));
+  near(compute(p, { today: T, paths: 0 }).quotes[0].floorBefore, pr.coverage, 1e-9);
+});

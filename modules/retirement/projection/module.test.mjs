@@ -1038,9 +1038,10 @@ test("fifth pass: rent and dividends are named by their own name, never as someo
   const p = rentLee({ id: "rent", name: "Rental condo", type: "rental", amount: 1500, growth: 0.02 });
   const I = buildInputs(p, { today: H }).inputs;
   const words = incomeWords(I, (n) => `$${Math.round(n).toLocaleString("en-US")}`);
-  assert.ok(words.includes("Rental condo: $18,000 a year from 2033 (before its costs)"), words.join("; "));
+  // one unit (round 8 batch 6 review, UX 7): the year, with whose age it is
+  assert.ok(words.includes("Rental condo (before its costs): $18,000 a year from 2033 (Lee is 63)"), words.join("; "));
   assert.ok(!words.some((w) => /Lee's pay/.test(w)), "was: Lee's pay: $18,000 a year from 56");
-  assert.ok(words.includes("Lee's Social Security: $25,200 a year from 67"));
+  assert.ok(words.includes("Lee's Social Security: $25,200 a year from 2037 (age 67)"), words.join("; "));
   // the stat says what comes in in the first retirement year, by type (was incomeKinds, every kind the plan holds; review
   // 2026-11-06: the base's coverageFrom, which matches the share it shows): in 2033 only the rent
   assert.deepEqual(compute(p, { today: H }).coverageFrom, ["rent"]);
@@ -1449,8 +1450,8 @@ test("Review 2026-11-06 (round 7): the unnamed first adult reads 'you' and 'your
     const ss = d.inputs.incomes.filter((x) => x.kind === "social").map((x) => x.name);
     assert.deepEqual(ss, ["your Social Security", `${theirs} Social Security`], "was: Me's Social Security, My spouse's Social Security");
     const words = incomeWords(d.inputs, money);
-    assert.match(words[0], /^your Social Security: \$[\d,]+ a year from 67$/, "a line named for you still says your ages");
-    assert.match(words[1], new RegExp(`^${theirs} Social Security: \\$[\\d,]+ a year from 67$`));
+    assert.match(words[0], /^your Social Security: \$[\d,]+ a year from \d{4} \(age 67\)$/, "a line named for you still says your ages");
+    assert.match(words[1], new RegExp(`^${theirs} Social Security: \\$[\\d,]+ a year from \\d{4} \\(age 67\\)$`));
     assert.deepEqual(spouseWords(d.health.spouseOnJob), [`In 2053 and 2054 ${them} is 65 or over while you still work: ${theirs} Medicare is counted. If a plan through your job covers ${them}, tick the box on the Medicare page.`]);
     const label = partner === "Bo" ? "Bo" : "Your spouse";
     assert.match(healthSummary(d.health.bridge, d.health.medicare, { money }), new RegExp(`^${label}: Medicare, about \\$[\\d,]+ a month from 2053\\. You: Medicare from 2055 \\(about \\$[\\d,]+ a month for the two of you\\)`));
@@ -1508,4 +1509,137 @@ test("part 3 review: savingsUnknown is true only with no investments, nothing ad
   assert.equal(savingsUnknown(mk("short", {}, [], 2026)), false, "already retired: runs out is the answer");
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
   assert.ok(view.includes("We don't know yet") && view.includes("savingsUnknown(d)"));
+});
+
+// ---- round 8 batch 6: the condo's rent after its running costs, its loan counted once (landlord-5) ------------------------
+const rentalOf = (b) => b.inputs.incomes.filter((x) => x.source === "rental").map((x) => [x.part, Math.round(x.yearly), x.cola, x.taxable, x.fromYear ?? null, x.untilYear ?? null]);
+test("batch 6: the condo counts after its running costs from retirement (11,240 a year, rising with inflation), not 25,200 of gross rent", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnNetWorthPlan(), b = buildInputs(p, { today: T });
+  const rent = b.inputs.incomes.filter((x) => x.type === "rental");
+  // no gross rent line any more: the Income page's 2,100 a month is the condo's rent
+  assert.ok(!rent.some((x) => x.name === "Rent coming in"), rent.map((x) => x.name).join("; "));
+  const run = rent.find((x) => x.part === "rent");
+  assert.deepEqual([run.name, run.yearly, run.cola, run.startAge], ["Condo's rent after its running costs", 11240, true, 2045 - 1980]);
+  // Get started's spending figure carries the condo's 851 (it is still being paid when work stops: 4,350 + 851 = 5,200), so the
+  // payment comes back once the loan is paid off: 150,000 at 4.5% and 851 a month, 289 months from November 2026
+  assert.equal(b.setupMonthly, 5200);
+  const back = rent.find((x) => x.part === "loan back");
+  assert.deepEqual([back.name, back.yearly, back.cola, back.fromYear, back.loanEnds], ["Condo's loan payment, back once the loan is paid off", 851 * 12, true, 2051, "2050-12"]);
+  // the first retirement year: Alex's pay and the condo after its costs against the spending and health line
+  const d = compute(p, { today: T });
+  const row = d.rows.find((r) => r.year === 2045);
+  near(row.income, 72000 * 1.03 ** 19 + 11240 * row.priceLevel, 1);
+  assert.equal(Math.round(d.coverage * 100), 123, String(d.coverage));
+  assert.ok(d.coverage < 1.27, "it was 128% with the gross rent");
+  // the tile says the rent is after its costs (UX 7); a loan payment given back is not income of any kind
+  assert.deepEqual(d.coverageFrom, ["a partner's pay", "rent after its running costs"]);
+  // in words: one unit, the year with whose age it is (UX 7)
+  const { incomeWords } = await import("./compute.js");
+  const words = incomeWords(b.inputs);
+  assert.ok(words.includes("Condo's rent after its running costs: $11,240 a year from 2045 (Sam is 65)"), words.join("; "));
+  assert.ok(words.includes("Condo's loan ends in December 2050: the $851 a month for it in your spending is free again from 2051 ($10,212 a year)"), words.join("; "));
+});
+
+test("batch 6 review (money 4): a loan the spending does not hold comes off at its fixed payment until it is paid off, while the rent after costs rises with inflation", async () => {
+  const { condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnlyRentalPlan(), b = buildInputs(p, { today: T });
+  // two lines: the rent after costs (rising), and the loan's 851 x 12 = 10,212 a year coming off (fixed, untaxed) to 2050. It
+  // was one fixed line, 11,240 - 10,212 = 1,028, which did not rise with the rent
+  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null], ["loan", -10212, false, false, null, 2050]]);
+  // the engine: 2045's condo lines are 11,240 x 1.03^19 - 10,212 = 19,709 - 10,212 = 9,497 (was 1,028); 2050's 22,849 - 10,212
+  const d = compute(p, { today: T });
+  const condo = (y) => d.rows.find((r) => r.year === y).incomeLines.filter((l) => /^Condo/.test(l.name)).reduce((t, l) => t + l.amount, 0);
+  near(condo(2045), 11240 * 1.03 ** 19 - 10212, 1);
+  near(condo(2050), 11240 * 1.03 ** 24 - 10212, 1);
+  near(condo(2051), 11240 * 1.03 ** 25, 1);
+  // first-year coverage 135% (was 126%)
+  assert.equal(Math.round(d.coverage * 100), 135, String(d.coverage));
+  const { incomeWords } = await import("./compute.js");
+  assert.ok(incomeWords(b.inputs).includes("Condo's loan payments, $851 a month, come off from 2045 (Sam is 65) until the loan ends in December 2050"), incomeWords(b.inputs).join("; "));
+  assert.equal(b.setupMonthly, 4350, "the loan is not among the bills");
+});
+
+test("batch 6 review (money 1): spending from Expenses holds the condo's loan only when a bill or Debts row in it does; a mortgage bill for the home alone does not", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  // the review's repro: no figure typed, so the spending is today's Expenses, and the home's mortgage is filed under housing
+  // as "Mortgage payment" ($2,350): Expenses then drops both mortgages from Debts, so the condo's 851 is in no bill
+  const p = condoOnNetWorthPlan();
+  p.retirement.spendingMonthly = 0; p.guide.retireAuto = false;
+  p.expenses.push({ id: "x-mort", name: "Mortgage payment", category: "housing", essential: true, period: "monthly", inflates: false, startDate: "", endDate: "", amount: 2350 });
+  const b = buildInputs(p, { today: T });
+  assert.equal(b.spendingSource, "expenses");
+  // no "back once paid off" (it gave 21,382 in 2051, rising for life): the loan comes off until December 2050
+  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null], ["loan", -10212, false, false, null, 2050]]);
+  // the same plan with no housing bill: Expenses counts the condo's 851 from Debts, so it comes back after the payoff
+  const q = condoOnNetWorthPlan();
+  q.retirement.spendingMonthly = 0; q.guide.retireAuto = false;
+  assert.deepEqual(rentalOf(buildInputs(q, { today: T })), [["rent", 11240, true, true, null, null], ["loan back", 10212, true, false, 2051, null]]);
+  // a typed figure holds no loan: it comes off
+  const t = condoOnNetWorthPlan(); t.guide.setup.retireAuto = false;
+  assert.deepEqual(rentalOf(buildInputs(t, { today: T })).map((x) => x[0]), ["rent", "loan"]);
+});
+
+test("batch 6 review (money 2 and 3): the payment that comes back is what the spending holds (the minimum, not the extra), and it is not taxed", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnNetWorthPlan();
+  p.debts.find((d) => d.accountId === "condo-loan").extra = 300;
+  const b = buildInputs(p, { today: T });
+  // Get started's figure holds the minimum, 851 (still 5,200): at 1,151 a month the loan is paid off in 2041, before
+  // retirement, so the 851 comes back from 2045 at 10,212 a year (it was 13,812: the payment with its extra)
+  assert.equal(b.setupMonthly, 5200);
+  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null], ["loan back", 10212, true, false, 2045, null]]);
+  const d = compute(p, { today: T });
+  assert.equal(Math.round(d.coverage * 100), 138, String(d.coverage));
+  assert.deepEqual(d.coverageFrom, ["a partner's pay", "rent after its running costs"], "the loan given back in 2045 is not named as income");
+  // on the brackets, the 2051 tax is the run's with that line out of the taxed income (it was taxed as income: 5,097 against 243)
+  const q = condoOnNetWorthPlan(); q.retirement.taxMode = "brackets";
+  const r = compute(q, { today: T }), I = r.inputs;
+  const row = r.rows.find((x) => x.year === 2051), lineOf = row.incomeLines.find((l) => /back once/.test(l.name));
+  assert.ok(lineOf && lineOf.amount > 20000, "the line is paid in 2051");
+  assert.equal(I.incomes.find((x) => x.part === "loan back").taxable, false);
+  // the review's figures: 2051 tax $243 untaxed, $5,097 when the line was taxed
+  const taxed = project({ ...I, incomes: I.incomes.map((x) => (x.part === "loan back" ? { ...x, taxable: true } : x)) });
+  near(row.taxes, 243, 1);
+  near(taxed.rows.find((x) => x.year === 2051).taxes, 5097, 1);
+});
+
+test("batch 6 review (money 5): a rental whose running costs are more than its rent still gives its loan back, and its shortfall is paid", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnNetWorthPlan();
+  // rent 1,100: 13,200 less 5% empty months (660) less 12,700 of costs = -160 a year
+  p.property[0].rentMonthly = 1100; p.income.find((x) => x.type === "rental").amount = 1100;
+  const b = buildInputs(p, { today: T });
+  assert.deepEqual(rentalOf(b), [["short", -160, true, false, null, null], ["loan back", 10212, true, false, 2051, null]]);
+  const { incomeWords } = await import("./compute.js");
+  assert.ok(incomeWords(b.inputs).includes("Condo costs $160 a year more to run than its rent brings in, paid from savings from 2045 (Sam is 65)"), incomeWords(b.inputs).join("; "));
+});
+
+test("batch 6 review: a rental sold before its loan is paid off ends the loan with the sale; a loan paid off before retirement is not taken off", async () => {
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  // the rent line ends in June 2047 (sold): the rent counts to 2047, and the spending's 851 is free again from 2048
+  const p = condoOnNetWorthPlan(); p.income.find((x) => x.type === "rental").endDate = "2047-06-30";
+  assert.deepEqual(rentalOf(buildInputs(p, { today: T })), [["rent", 11240, true, true, null, 2047], ["loan back", 10212, true, false, 2048, null]]);
+  // not held in the spending: the payments come off only to the sale
+  const q = condoOnlyRentalPlan(); q.income.find((x) => x.type === "rental").endDate = "2047-06-30";
+  const bq = buildInputs(q, { today: T });
+  assert.deepEqual(rentalOf(bq), [["rent", 11240, true, true, null, 2047], ["loan", -10212, false, false, null, 2047]]);
+  const { incomeWords } = await import("./compute.js");
+  assert.ok(incomeWords(bq.inputs).includes("Condo's loan payments, $851 a month, come off from 2045 (Sam is 65) until it is sold in 2047"), incomeWords(bq.inputs).join("; "));
+  // a loan of 20,000 paid off in about two years: nothing comes off in retirement
+  const r = condoOnlyRentalPlan(); r.property[0].loanBalance = 20000;
+  assert.deepEqual(rentalOf(buildInputs(r, { today: T })), [["rent", 11240, true, true, null, null]]);
+});
+
+test("batch 6: rent for a place not on Rental analysis is counted as before, at its gross, 'before its costs'", () => {
+  const p = rentLee({ id: "rent", name: "Rental condo", type: "rental", amount: 1500, growth: 0.02 });
+  const I = buildInputs(p, { today: H }).inputs;
+  const r = I.incomes.find((x) => x.name === "Rental condo");
+  assert.equal(r.yearly, 18000); assert.equal(r.cola, true); assert.equal(r.afterCosts, undefined);
 });

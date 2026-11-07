@@ -70,3 +70,24 @@ removed here; Life events' new job does not carry `continues` (it is a pay of it
 ## Business income and "reaches the bank" (review 2026-11-02)
 The totals card's take-home sentence names business income apart: pay reaches the bank after its tax, business income
 before its tax (paid in four estimated payments), so the figure is not read as after tax when it is not.
+
+## Rent after the place's running costs (round 8 batch 6, landlord-5, 2026-11-06)
+`rentAfterCostsOf(plan, { today })` -> Map(income id -> { monthly, afterCosts, rentals, beforeCosts, onPage }) for each rent
+line going today. The line keeps the rent as typed (tax and the totals read it). Matched to the rentals on Rental analysis as
+the Federal estimate matches them (property/rental `running.js` `matchRent`: name, then amount within 2%, then in proportion),
+each rental's rent less empty months and running costs (`runningOf`) is shared over the lines that hold its rent. The page
+says "$937 a month after Condo's running costs (Rental analysis)": (25,200 − 1,260 − 12,700) ÷ 12 = 936.67. Rent for a place
+not on Rental analysis says "Before the place's running costs (tax, insurance, upkeep): add it on Rental analysis to count
+them". The month's left-over figure (Next best action, Dashboard, Budget) does not read this yet: that work is in flight
+elsewhere. Test: "batch 6" in `module.test.mjs`.
+
+## Review fixes (round 8 batch 6, 2026-11-06)
+- A line that is one rental's whole rent (the only line holding it) shows that rental's own figure, as Rental analysis and the
+  retirement plan do (money 10: $2,000 here against $2,100 there read $892, the figure scaled by 24,000 / 25,200; now $937), and
+  `rentalRent` (the rent there, a month) when the two differ: "Rental analysis has the rent at $2,100 a month: change one so
+  they match".
+- Its loan (UX 5, "$937 or $86?"): `loanMonthly` (property/rental running.js `loanPaymentOf`: the Mortgage account's payment and
+  extra on Debts, or the payment typed on Rental analysis) and `afterLoan` = afterCosts − loanMonthly: "$937 a month after
+  Condo's running costs (Rental analysis); $86 after its $851 loan payment too (the loan is on Debts)." A line shared by
+  several rentals says no single loan, as before.
+- Tests: "batch 6 review" in `module.test.mjs`.

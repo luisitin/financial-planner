@@ -20,6 +20,7 @@ import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
 import { pmtToReach, fv } from "../../../core/math/finance.js";
 import { nameOf, NameOf, NameIn, verbFor } from "../../../core/words.js";
 import { money as fmtMoney, date as fmtDate } from "../../../core/format.js";
+import { rentalsOf, valueAccountOf, twinAccount, candidateAccounts } from "../../property/rental/running.js";
 
 export const LEVELS = { bad: { label: "fix", order: 0 }, warn: { label: "check", order: 1 }, info: { label: "to do", order: 2 } };
 export const STALE_BALANCE_DAYS = 90;
@@ -120,6 +121,16 @@ export function compute(plan, params = {}) {
     if (stale.length) add("stale-balances", "warn", `${stale.length === 1 ? "One balance is" : `${stale.length} balances are`} more than ${STALE_BALANCE_DAYS} days old`, `${stale.slice(0, 3).map((a) => a.name).join(", ")}${stale.length > 3 ? "..." : ""}. Update them so the totals mean something.`, ["balance", "update"]);
     const last = nw.history[nw.history.length - 1];
     if (!last || daysBetween(last.date, today) > STALE_HISTORY_DAYS) add("history", "info", "Save today's totals", last ? `The last saved point is from ${fmtDate(last.date)}. Saving once a month builds the net-worth history.` : "Saving once a month builds the net-worth history.", ["balance", "net-worth"], chore);
+  }
+  // a rental only on Rental analysis is left out of net worth (round 8 batch 6 review, UX 10: only Rental analysis and the
+  // Asset register said so): a housekeeping item, with its value and the loan typed there; asked about when Net worth may
+  // already list it (running.js twinAccount, candidateAccounts), and then its title asks rather than calls it missing (batch 6
+  // verify: "Condo is not in your net worth yet" stood over a Net worth that listed Condo at $260,000)
+  for (const r of rentalsOf(plan)) {
+    if (valueAccountOf(plan, r) || !(Number(r.value) > 0)) continue;
+    const owes = !r.loanAccountId && Number(r.loanBalance) > 0 ? Number(r.loanBalance) : 0, name = String(r.name ?? "").trim() || "Your rental";
+    const maybe = !!twinAccount(plan, r) || candidateAccounts(plan, r).length > 0;
+    add(`rental-off-${r.id}`, "info", maybe ? `Is ${name} on Net worth already?` : `${name} is not in your net worth yet`, `It is worth ${money(Number(r.value))}${owes > 0 ? ` and owes ${money(owes)}` : ""} on Rental analysis. ${maybe ? "Net worth may already list it: say which there." : "Add it there in one tap."}`, ["property", "rental"], chore);
   }
 
   // money

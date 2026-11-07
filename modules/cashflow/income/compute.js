@@ -3,6 +3,8 @@
 // grows. Expenses, liquidity, retirement and taxes read these totals.
 import { perMonth, perYear, activeOn, periodLabel } from "../../../core/math/periods.js";
 import { addMonths, isValidDate } from "../../../core/math/dates.js";
+// a rental's rent after its running costs (a leaf: Net worth's balance rule only)
+import { rentalsOf, rentAfterCosts, loanPaymentOf } from "../../property/rental/running.js";
 
 export const INCOME_TYPES = {
   salary:     { label: "Pay from a job",           icon: "💼" },
@@ -77,6 +79,39 @@ export function compute(plan, params = {}) {
     byType, byPerson: [...byPersonMap.values()].sort((a, b) => b.yearly - a.yearly),
     warnings,
   };
+}
+
+/**
+ * rentAfterCostsOf(plan, { today }) -> Map(income id -> { monthly (the line's rent a month, as typed), afterCosts (a month: the
+ * rent of places on Rental analysis after their empty months and running costs, plus any rest of the line), rentals (the
+ * places it is the rent of), beforeCosts (a month: the part that is rent for a place not on Rental analysis, before its costs) })
+ * for each rent line going today (round 8 batch 6, landlord-5: Income listed the condo's $2,100 with none of its $1,163 a month
+ * of running costs). The line keeps the rent as typed: tax and the totals read it. The match of lines to places is the Federal
+ * estimate's and the retirement plan's (property/rental running.js rentAfterCosts). Empty when nothing is rent.
+ * A line that is one rental's whole rent (review 2026-11-06) also has: `afterCosts` from that rental's own figure (not scaled by
+ * the line, so it matches Rental analysis), `rentalRent` (the rent a month there, when it differs from the line; else null),
+ * `loanMonthly` and `afterLoan` (its loan payment a month and what is left after it; null with no loan), `loanInDebts`.
+ */
+export function rentAfterCostsOf(plan, params = {}) {
+  const d = compute(plan, params);
+  const rows = d.items.filter((x) => x.type === "rental" && x.active && x.period !== "once" && x.yearly > 0);
+  const out = new Map();
+  if (!rows.length) return out;
+  const split = rentAfterCosts(plan, rows.map((x) => ({ name: x.name, yearly: x.yearly })));
+  const list = rentalsOf(plan);
+  rows.forEach((x, j) => {
+    const m = split[j];
+    // a line that is one rental's whole rent (the only line holding it) shows that rental's own figure, as Rental analysis and
+    // the retirement plan do, and the rent there when the two differ (review 2026-11-06, money 10: $2,000 here against $2,100
+    // there read $892, the figure scaled by the line); its loan payment then comes off too (UX 5: "$937 or $86?")
+    const one = m.parts.length === 1 && m.parts[0].only ? m.parts[0] : null;
+    const afterCosts = m.removed > 0.005 ? ((one ? one.noi : m.afterCosts) + m.left) / 12 : null;
+    const loan = one ? loanPaymentOf(plan, list[one.index]) : null;
+    out.set(x.id, { monthly: x.monthly, afterCosts, rentals: m.names, beforeCosts: m.left / 12, onPage: list.length > 0,
+      rentalRent: one && one.take < one.rent - 0.5 ? one.rent / 12 : null,
+      loanMonthly: afterCosts !== null && loan ? loan.monthly : null, afterLoan: afterCosts !== null && loan ? afterCosts - loan.monthly : null, loanInDebts: !!loan?.inDebts });
+  });
+  return out;
 }
 
 /** Pay above this a year, typed as anything but yearly, is asked about ("Did you mean a year?"): $40,000 a month. My choice. */

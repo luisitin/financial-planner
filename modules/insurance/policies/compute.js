@@ -14,11 +14,70 @@ export const KINDS = {
   ltc:        { label: "Long-term care", icon: "🏥", benefit: "Monthly benefit", group: "care" },
   health:     { label: "Health", icon: "🩺", benefit: "Out-of-pocket maximum", group: "health" },
   home:       { label: "Home or renters", icon: "🏠", benefit: "Dwelling or contents cover", group: "property" },
+  landlord:   { label: "Landlord (a home you rent out)", icon: "🏘️", benefit: "Dwelling cover", group: "property" },
   auto:       { label: "Auto", icon: "🚗", benefit: "Liability limit (per accident)", group: "property" },
   umbrella:   { label: "Umbrella", icon: "☂️", benefit: "Liability limit", group: "property" },
   other:      { label: "Other", icon: "📄", benefit: "Benefit", group: "other" },
 };
 export const GROUPS = { life: "Life", income: "Income if you cannot work", care: "Care", health: "Health", property: "Home, car and liability", other: "Other" };
+/** The kinds that insure a home's building: a homeowners, condo or renters policy, and a landlord policy for a home rented out. */
+export const HOME_KINDS = ["home", "landlord"];
+
+const words = (v) => String(v ?? "").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+/** namesHome(policy, name) -> true when the policy's name holds the home's name as whole words, three letters or more ("Condo landlord policy", "Condo"). */
+export function namesHome(policy, name) {
+  const w = words(name).join(" ");
+  return w.length >= 3 && ` ${words(policy?.name).join(" ")} `.includes(` ${w} `);
+}
+
+/**
+ * pairHomes(homes, policies, { lone }) -> [policy | null] for each home ({ accountId, name, rental }), one policy to one home (round 8
+ * batch 6, landlord-2 and landlord-7: the pages paired by list order, so the condo could take the main home's policy):
+ * 1. the policy tied to the home (`accountId`, "Which home" on Policies);
+ * 2. by name: a policy whose name holds the home's name as whole words ("Condo landlord policy" for "Condo"), when it is the
+ *    only policy left that names this home and no other home left (repeated while it pairs, so "Home policy" going to Home
+ *    leaves "Condo home insurance" naming only Condo);
+ * 2b. by kind, when a landlord policy is left: landlord policies with the homes rented out (`rental: true`), homeowners ones
+ *    with the others, one to one in order within each group whose counts match (review 2026-11-06, money 6);
+ * 3. what is left (a policy named for a home that already has one is not), one to one in list order when as many homes as
+ *    policies are left; else a single home left with a single policy left, or (`lone: "first"`) with the first of several
+ *    (insurance/property's rule before this change).
+ * Pages pass the homes and policies they check; the order rules are each page's own from before, so a plan with neither a
+ * tie nor names is paired as it was.
+ */
+export function pairHomes(homes, policies, { lone = "only" } = {}) {
+  const out = homes.map(() => null), used = new Set();
+  homes.forEach((h, i) => { const p = h.accountId ? policies.find((x) => x.accountId === h.accountId && !used.has(x)) : null; if (p) { out[i] = p; used.add(p); } });
+  const holds = (p, h) => namesHome(p, h.name);
+  // by name, again and again while it pairs: a policy that names only this home of those left, and the only such policy
+  for (let more = true; more;) {
+    more = false;
+    homes.forEach((h, i) => {
+      if (out[i]) return;
+      const free = policies.filter((p) => !used.has(p) && !(p.accountId && homes.some((o) => o.accountId === p.accountId)));
+      const hit = free.filter((p) => holds(p, h) && !homes.some((o, k) => k !== i && !out[k] && holds(p, o)));
+      if (hit.length !== 1) return;
+      out[i] = hit[0]; used.add(hit[0]); more = true;
+    });
+  }
+  // left over: not used, not tied to another home, and not named for a home that already has its policy
+  const free = () => policies.filter((p) => !used.has(p) && !(p.accountId && homes.some((o) => o.accountId === p.accountId)) && !homes.some((o, k) => out[k] && namesHome(p, o.name)));
+  // by kind, when a landlord policy is left (review 2026-11-06, money 6: "Rental dwelling policy" listed first went to the home
+  // lived in): landlord policies with the homes rented out (`rental`), homeowners policies with the others, one to one in order
+  // within each group when its counts match. With no landlord policy nothing tells them apart, and the order rule is as before
+  if (free().some((p) => p.kind === "landlord")) {
+    for (const [rental, kind] of [[true, "landlord"], [false, "home"]]) {
+      const hs = homes.map((_, i) => i).filter((i) => !out[i] && !!homes[i].rental === rental), ps = free().filter((p) => p.kind === kind);
+      if (hs.length && hs.length === ps.length) hs.forEach((i, k) => { out[i] = ps[k]; used.add(ps[k]); });
+    }
+  }
+  const leftH = homes.map((_, i) => i).filter((i) => !out[i]);
+  const leftP = free();
+  if (leftH.length && leftH.length === leftP.length) leftH.forEach((i, k) => { out[i] = leftP[k]; });
+  else if (leftH.length === 1 && leftP.length && (leftP.length === 1 || lone === "first")) out[leftH[0]] = leftP[0];
+  return out;
+}
+
 /** How far ahead a renewal or an end date is flagged. */
 export const SOON_DAYS = 60;
 

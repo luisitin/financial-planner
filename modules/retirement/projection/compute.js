@@ -10,7 +10,10 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeSocialSecurity } from "../social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { nper } from "../../../core/math/finance.js";
-import { ageOn } from "../../../core/math/dates.js";
+import { ageOn, addMonths } from "../../../core/math/dates.js";
+import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+// a rental's rent after its running costs, its loan, and which Income rent lines are its rent (a leaf: no page graph)
+import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // health cover (marketplace to 65, Medicare from 65): both pages run the plan through buildInputs({ health: false }) for its
@@ -177,11 +180,16 @@ export function otherIncome(plan, people, retireYear, today, works = null) {
     const pool = named.length ? named : deps;
     return pool.length ? Math.max(...pool.map((d) => yearOf(d.birthDate))) + CHILD_SUPPORT_UNTIL : null;
   };
+  // rent for a place on Rental analysis is counted there, after its running costs (rentalLines; round 8 batch 6, landlord-5):
+  // only the rest of an Income rent line, rent for a place not on that page, is counted here, before its costs
+  const isRent = (x) => (KNOWN_TYPES.includes(x.type) ? x.type : "other") === "rental" && x.period !== "once" && perYear(x.amount, x.period) > 0 && !(x.endDate && String(x.endDate) < String(today));
+  const rentRows = (plan.income ?? []).filter(isRent);
+  const rentLeft = new Map(rentAfterCosts(plan, rentRows.map((x) => ({ name: x.name, yearly: perYear(x.amount, x.period) }))).map((m, j) => [rentRows[j], m.left]));
   for (const x of plan.income ?? []) {
     const type = KNOWN_TYPES.includes(x.type) ? x.type : "other";
     if (!OTHER_INCOME_TYPES.includes(type) || x.period === "once") continue;
-    const yearly = perYear(x.amount, x.period);
-    if (!(yearly > 0)) continue;
+    const yearly = type === "rental" && rentLeft.has(x) ? rentLeft.get(x) : perYear(x.amount, x.period);
+    if (!(yearly > (type === "rental" ? 0.005 : 0))) continue;
     if (x.endDate && String(x.endDate) < String(today)) continue;
     const who = people.find((p) => p.id === x.personId) ?? people[0];
     const name = String(x.name || "Other income").trim();
@@ -206,6 +214,69 @@ export function otherIncome(plan, people, retireYear, today, works = null) {
     counted.push({ name, yearly, personId: who.id, startAge: from - who.birthYear, endAge: until === null ? undefined : until - who.birthYear, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type, source: "income", ...(whileWorking ? { whileWorking: true } : {}) });
   }
   return { counted, left };
+}
+
+/**
+ * The rentals on Rental analysis as retirement income (round 8 batch 6, landlord-5: the plan counted the Income page's gross
+ * rent, $25,200 a year, and none of the condo's running costs). For each rental, from the household's first retirement year
+ * (to the last end date of the Income rent lines that are its rent, when each has one: selling it):
+ * - "rent": its rent less empty months and running costs (running.js runningOf: `noi`, today's money, rising with inflation,
+ *   taxed as the rest of the income is); when the costs are more than the rent, "short": what the household pays on top of the
+ *   rent (negative, rising with inflation, untaxed: no tax saving is counted for the loss);
+ * - its loan (running.js loanOf), paid until it is paid off (today + nper(rate / 12, payment, balance) months; a payment below
+ *   the interest never ends it) or the place is sold, whichever is first (`ends`):
+ *   - "loan": a payment the retirement spending does not carry (`inSpending(loan)` is 0: a figure you typed, or a loan typed only
+ *     on Rental analysis) comes off, payment x 12 a year (negative, a fixed amount as the payment is, untaxed), until `ends`;
+ *   - "loan back": a payment the spending carries (`inSpending(loan)`: the monthly amount it carries, Get started's figure the
+ *     loan's minimum, setupLoans, or what today's bills on Expenses count for it, expenses debtsCounted) stays in that spending
+ *     every year, rising with it, so that amount x 12 comes back from the year after `ends` (rising with inflation as the
+ *     spending does; untaxed: it is spending no longer needed, not income);
+ *   - "loan rest": the part of the payment the spending does not carry (an extra paid on Debts, say), until `ends`, as "loan".
+ *   (review 2026-11-06, money 1 to 5: the payment came back when the spending never held it, at the payment with its extra, and
+ *   taxed; while the loan ran the rent counted as a fixed "after costs and loan" figure that did not rise; a rental whose costs
+ *   were above its rent dropped its loan altogether)
+ * rentalLines(plan, people, retireYear, today, { inSpending }) -> [{ name, yearly, personId, startAge, fromYear?, untilYear?, cola,
+ *   taxable, type: "rental", source: "rental", afterCosts: true, rental (its name), part, monthly? (a loan line's payment a month),
+ *   loanEnds? ("YYYY-MM": its last payment), sold? (the year it is sold, when that ends the loan) }]
+ */
+export function rentalLines(plan, people, retireYear, today, { inSpending = () => 0 } = {}) {
+  const list = rentalsOf(plan);
+  if (!list.length || !people.length) return [];
+  const who = people[0], li = computeLiabilities(plan, { today });
+  const rows = (plan.income ?? []).filter((x) => x.type === "rental" && x.period !== "once" && perYear(x.amount, x.period) > 0 && !(x.endDate && String(x.endDate) < String(today)));
+  const split = rentAfterCosts(plan, rows.map((x) => ({ name: x.name, yearly: perYear(x.amount, x.period) })));
+  const out = [];
+  list.forEach((r) => {
+    const name = String(r.name || "Rental").trim();
+    const run = runningOf(r, rentalValue(plan, r));
+    // an end date on every Income rent line that is this rental's rent (selling it, say): its last year
+    const mine = rows.filter((x, j) => split[j].names.includes(r.name || "Rental"));
+    const until = mine.length && mine.every((x) => x.endDate) ? Math.max(...mine.map((x) => yearOf(x.endDate))) : null;
+    const base = { personId: who.id, startAge: retireYear - who.birthYear, type: "rental", source: "rental", afterCosts: true, rental: name };
+    const sold = until !== null ? { untilYear: until } : {};
+    if (until === null || until >= retireYear) {
+      if (run.noi > 0.5) out.push({ ...base, ...sold, name: `${name}'s rent after its running costs`, yearly: run.noi, cola: true, taxable: true, part: "rent" });
+      else if (run.noi < -0.5) out.push({ ...base, ...sold, name: `${name}'s running costs beyond its rent`, yearly: run.noi, cola: true, taxable: false, part: "short" });
+    }
+    const loan = loanOf(r, li.rows);
+    if (!loan || !(loan.balance > 0) || !(loan.payment > 0)) return;
+    const months = nper((Number(loan.rate) || 0) / 12, loan.payment, loan.balance);
+    const endDate = Number.isFinite(months) && today ? addMonths(today, Math.ceil(months - 1e-9)) : null;
+    const lastYear = endDate ? yearOf(endDate) : Infinity;
+    const ends = Math.min(lastYear, until ?? Infinity);
+    const carried = Math.max(0, Number(inSpending(loan)) || 0);
+    const said = { monthly: loan.payment, ...(endDate ? { loanEnds: String(endDate).slice(0, 7) } : {}), ...(until !== null && until < lastYear ? { sold: until } : {}) };
+    const bound = Number.isFinite(ends) ? { untilYear: ends } : {};
+    if (carried > 0.005) {
+      const from = Math.max(retireYear, ends + 1);
+      if (Number.isFinite(from)) out.push({ ...base, ...said, monthly: carried, name: `${name}'s loan payment, back once the loan is paid off`, yearly: carried * 12, cola: true, taxable: false, fromYear: from, part: "loan back" });
+      const rest = loan.payment - carried;
+      if (rest > 0.5 && ends >= retireYear) out.push({ ...base, ...said, ...bound, monthly: rest, name: `${name}'s loan payments not in your spending`, yearly: -rest * 12, cola: false, taxable: false, part: "loan rest" });
+    } else if (ends >= retireYear) {
+      out.push({ ...base, ...said, ...bound, name: `${name}'s loan payments`, yearly: -loan.payment * 12, cola: false, taxable: false, part: "loan" });
+    }
+  });
+  return out;
 }
 
 /** The engine incomes otherIncome() counts (round 5's name, kept for its callers). */
@@ -266,20 +337,32 @@ export function setupFigure(plan, today = null) {
   const cat = (k) => ex?.byCategory.find((c) => c.category === k)?.monthly ?? 0;
   const core = (ex?.monthly ?? 0) - cat("debt") - cat("childcare");
   const rows = L("expenses").filter((x) => isSetup(x.id) && x.category !== "childcare").reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
+  const loans = setupLoans(plan, today).reduce((t, d) => t + d.pay, 0);
+  return Math.round((core + rows + loans) / 10) * 10;
+}
+
+/**
+ * setupLoans(plan, today) -> [{ accountId, pay }]: the loans Get started's starting figure carries into retirement (setupFigure):
+ * each Debts row still being paid when the first adult to stop work stops (months to payoff at its payment, `nper`, past the
+ * months until then), none when a bill on Expenses is a loan payment, or without birth dates. Will the money last? reads it to
+ * tell whether a rental's loan payment is already in the spending (round 8 batch 6).
+ */
+export function setupLoans(plan, today = null) {
+  const L = (k) => (Array.isArray(plan?.[k]) ? plan[k] : []);
   const planAge = Number(plan?.assumptions?.retirementAge ?? 65), status = plan?.guide?.setup?.status ?? {};
   const people = Array.isArray(plan?.household?.people) ? plan.household.people : [];
   const left = today ? people.filter((p) => p.role !== "dependent" && p.birthDate && status[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
   const until = left.length ? Math.min(...left) : null;
-  let loans = 0;
+  const out = [];
   if (until !== null && !L("expenses").some((x) => x.category === "debt")) {
     for (const d of L("debts")) {
       const owed = Math.abs(Number(L("accounts").find((a) => a.id === d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
       if (!(owed > 0) || !(pay > 0)) continue;
       const months = nper((Number(d.rate) || 0) / 12, pay, owed);
-      if (!Number.isFinite(months) || months > until) loans += pay;
+      if (!Number.isFinite(months) || months > until) out.push({ accountId: d.accountId, pay });
     }
   }
-  return Math.round((core + rows + loans) / 10) * 10;
+  return out;
 }
 
 /**
@@ -815,6 +898,16 @@ export function buildInputs(plan, params = {}) {
   // rent after work stops; support and other to their end date (else while their owner works, by the work rule); never dividends (otherIncome)
   const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`, works);
   for (const x of other.counted) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  // the rentals on Rental analysis, after their running costs; a loan payment the spending already carries comes back once the
+  // loan is paid off (rentalLines). The spending carries it when it is today's bills (Expenses holds every Debts payment) or
+  // Get started's figure built from them (setupLoans: the loans still being paid when work stops)
+  // (review 2026-11-06, money 1 and 2: only a loan the spending holds, at what it holds: Get started's figure carries a loan's
+  // minimum, Expenses what its bills count for it, expenses debtsCounted, and no mortgage a housing bill stands for unless the
+  // bills hold them all)
+  const carriedLoans = fromSetup ? new Map(setupLoans(plan, today).map((d) => [d.accountId, d.pay]))
+    : spendingSource === "expenses" ? new Map((ex?.debtsCounted ?? []).map((d) => [d.id, d.monthly])) : null;
+  const inSpending = (loan) => (loan?.inDebts && loan.accountId ? carriedLoans?.get(loan.accountId) ?? 0 : 0);
+  for (const x of rentalLines(plan, people, retireYear, today ?? `${year}-01-01`, { inSpending })) incomes.push({ ...x, personIndex: personIndex(x.personId) });
   const spendingYearly = (baseMonthly - removedMonthly) * 12;
   const endYear = Math.max(...people.map((p) => p.birthYear + p.endAge));
   const inputs = {
@@ -850,8 +943,10 @@ export function buildInputs(plan, params = {}) {
 }
 
 /** What an engine income is, in the words the page names it by (Social Security, pensions, a partner's pay, rent, other income). */
-export const INCOME_WORDS = { social: "Social Security", pension: "pensions", pay: "a partner's pay", rental: "rent", other: "other income" };
-const wordKey = (x) => (x.kind === "social" ? "social" : x.type === "pay" ? "pay" : x.type === "rental" ? "rental" : x.type === "support" || x.type === "other" ? "other" : "pension");
+// rent for a place on Rental analysis is counted after its running costs, and says so (round 8 batch 6 review, UX 7); a loan
+// payment the spending gives back after the loan is paid off is not income of any kind (rentalLines "loan back")
+export const INCOME_WORDS = { social: "Social Security", pension: "pensions", pay: "a partner's pay", rentAfter: "rent after its running costs", rental: "rent", other: "other income" };
+const wordKey = (x) => (x.part === "loan back" ? null : x.kind === "social" ? "social" : x.type === "pay" ? "pay" : x.type === "rental" ? (x.afterCosts ? "rentAfter" : "rental") : x.type === "support" || x.type === "other" ? "other" : "pension");
 /** The engine counts an income in `year` (core/math/retirement.js project: its owner's age within start and end, and the year bounds). */
 export const incomeIn = (I, x, year) => {
   const age = year - (I.people[x.personIndex ?? 0]?.birthYear ?? 0);
@@ -921,20 +1016,37 @@ export function creditWords(b) {
 }
 
 /**
- * The plan's income in words, each line by its own name (fifth pass, 2026-11-02): "Ana's Social Security: $32,647 a year from
- * 67" (a line named for a person says that person's ages); any other line, rent, a pension or other income under its own name,
- * says the years, or "from now": "Rental condo: $18,000 a year from 2033" (it read "from 63", Lee's age, and before the FIRE
- * answer the rent came in as "Lee's pay"). Review 2026-11-06, with the base's "Income counted" record (recheck 2026-11-05): an
- * end is said too ("to 66", or "to 2034"), and rent is "(before its costs)". incomeWords(inputs, money) -> [text]
+ * The plan's income in words, each line by its own name (fifth pass, 2026-11-02), in one unit (round 8 batch 6 review, UX 7: ages
+ * and years were mixed in one list): the calendar year, with the age it is said for. A line named for a person says that
+ * person's age: "Ana's Social Security: $32,647 a year from 2047 (age 67)"; any other line, rent, a pension or other income
+ * under its own name, says whose age it starts at: "Rental condo: $18,000 a year from 2033 (Lee is 56)" (it read "from 63",
+ * Lee's age, and before the FIRE answer the rent came in as "Lee's pay"), or "from now". Review 2026-11-06, with the base's
+ * "Income counted" record (recheck 2026-11-05): an end is said too (" to 2034"), and rent for a place not on Rental analysis is
+ * "(before its costs)". A rental's own lines (rentalLines) say what each is: its rent after its running costs; what it costs
+ * beyond its rent; its loan payments coming off until the loan ends (or it is sold); the payment the spending holds, free again
+ * after. incomeWords(inputs, money) -> [text]
  */
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthWords = (ym) => `${MONTH_NAMES[Number(String(ym).slice(5, 7)) - 1] ?? ""} ${String(ym).slice(0, 4)}`.trim();
 export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`) {
   return (I?.incomes ?? []).map((x) => {
     const who = I.people[x.personIndex ?? 0] ?? I.people[0];
-    const start = who.birthYear + x.startAge;
+    // calendar bounds (a rental's lines, round 8 batch 6) move the first and last year said
+    const start = Math.max(who.birthYear + x.startAge, x.fromYear ?? -Infinity);
     // a line named for a person: "Ana's ...", or "your ..." / "your spouse's ..." for the people Get started left unnamed (round 7)
     const named = I.people.some((p) => String(x.name).startsWith(`${p.name}'s `) || String(x.name).startsWith(`${nameOf(p.name)} `));
-    const ends = x.endAge !== undefined && x.endAge !== null ? ` to ${named ? x.endAge : who.birthYear + x.endAge}` : "";
-    return `${x.name}: ${money(x.yearly)} a year from ${named ? x.startAge : start <= I.startYear ? "now" : start}${ends}${x.type === "rental" ? " (before its costs)" : ""}`;
+    const at = (year) => (named ? `age ${year - who.birthYear}` : `${nameIn(who.name)} ${verbFor(who.name, "is", "are")} ${year - who.birthYear}`);
+    const from = start <= I.startYear ? "now" : `${start} (${at(start)})`;
+    const endYear = x.endAge !== undefined && x.endAge !== null ? who.birthYear + x.endAge : x.untilYear !== undefined && x.untilYear !== null ? x.untilYear : null;
+    const ends = endYear !== null ? ` to ${endYear}` : "";
+    if (x.source === "rental") {
+      const until = x.sold ? `it is sold in ${x.sold}` : x.loanEnds ? `the loan ends in ${monthWords(x.loanEnds)}` : "the end of the plan (the payment does not cover the interest)";
+      if (x.part === "short") return `${x.rental} costs ${money(-x.yearly)} a year more to run than its rent brings in, paid from savings from ${from}${ends}`;
+      if (x.part === "loan") return `${x.rental}'s loan payments, ${money(x.monthly)} a month, come off from ${from} until ${until}`;
+      if (x.part === "loan rest") return `${x.rental}'s loan payments beyond what your spending holds, ${money(x.monthly)} a month, come off from ${from} until ${until}`;
+      if (x.part === "loan back") return `${x.sold ? `${x.rental} is sold in ${x.sold}` : `${x.rental}'s loan ends in ${monthWords(x.loanEnds)}`}: the ${money(x.monthly)} a month for it in your spending is free again from ${start <= I.startYear ? "now" : start} (${money(x.yearly)} a year)`;
+    }
+    return `${x.name}${x.type === "rental" && !x.afterCosts ? " (before its costs)" : ""}: ${money(x.yearly)} a year from ${from}${ends}`;
   });
 }
 

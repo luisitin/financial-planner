@@ -4,7 +4,7 @@
 // the same until the plan's end would cost instead (the difference is what pooling the risk of a long
 // life is worth); and what buying it does to your plan: the chance the money lasts, what you could
 // spend, what is left at the end.
-import { buildInputs } from "../projection/compute.js";
+import { buildInputs, incomeIn } from "../projection/compute.js";
 import { copyInputs } from "../../../core/math/retirement.js";
 import { results } from "../../scenarios/compare/compute.js";
 import { survival } from "../longevity/compute.js";
@@ -35,7 +35,9 @@ export function compute(plan, params = {}) {
   const base = results(I, { paths });
   const guaranteedShare = (inputs) => {
     const yr = inputs.retireYear;
-    const g = (inputs.incomes ?? []).reduce((s, x) => { const pi = x.personIndex ?? 0; const age = yr - inputs.people[pi].birthYear; return s + (age >= x.startAge && (x.endAge === undefined || x.endAge === null || age <= x.endAge) ? x.yearly * (x.cola === false ? Math.pow(1 + inputs.rates.inflation, -(yr - inputs.startYear)) : 1) : 0); }, 0);   // a fixed-dollar payment, in today's dollars
+    // each line paid that year (projection incomeIn: its ages and its calendar years, round 8 batch 6: a rental's loan payment
+    // that comes back only after the loan is paid off was counted from the start)
+    const g = (inputs.incomes ?? []).reduce((s, x) => s + (incomeIn(inputs, x, yr) ? x.yearly * (x.cola === false ? Math.pow(1 + inputs.rates.inflation, -(yr - inputs.startYear)) : 1) : 0), 0);   // a fixed-dollar payment, in today's dollars
     // against that year's spending and its health cover (the projection's "Guaranteed income" share counts both, 2026-11-02)
     const spent = inputs.spending.yearly + (inputs.events ?? []).filter((e) => e.spending && e.year === yr && e.amount > 0).reduce((s, e) => s + e.amount, 0);
     return spent > 0 ? g / spent : null;

@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 2,
   enabledByDefault: true,
-  needs: ["household", "accounts", "netWorthHistory", "income", "expenses", "debts", "goals", "assumptions"],
+  needs: ["household", "accounts", "netWorthHistory", "income", "expenses", "debts", "goals", "assumptions", "property"],
   writes: [],
   heavy: false,
   purpose: "One list of what needs your attention, worst first, each opening the page where it is fixed.",

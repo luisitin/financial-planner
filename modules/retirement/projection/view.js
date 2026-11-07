@@ -108,6 +108,10 @@ export function render(root, ctx) {
     lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
     ui.h("p", { class: "muted small" }, "One line, expected returns. The Monte Carlo and History pages show the range around it."),
   ));
+  // a rental's loan payment the spending holds (round 8 batch 6 review, UX 7): said with the spending, so the line that gives
+  // it back after the loan is paid off does not read as income
+  const back = d.inputs.incomes.filter((x) => x.part === "loan back");
+  const heldLoans = back.length ? `, which holds ${back.map((x) => `${x.rental}'s ${money(x.monthly)} a month loan payment${x.loanEnds && !x.sold ? ` until ${String(x.loanEnds).slice(0, 4)}` : ""}`).join(" and ")}` : "";
   root.append(ui.card("What goes into this",
     ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
@@ -119,7 +123,7 @@ export function render(root, ctx) {
       // the lines named for the unnamed first adult say "your Social Security": a capital only at the start of the record
       ["Income counted", d.inputs.incomes.length ? incomeWords(d.inputs, money).join("; ").replace(/^your /, "Your ") : "none entered (Social Security page)"],
       ...(d.otherLeft?.length ? [["Not counted", d.otherLeft.map((x) => `${x.name}: ${money(x.yearly)} a year, ${leftWhy(x)}`).join("; ")]] : []),
-      ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" || d.health?.fromSetup ? ` (${d.health?.fromSetup ? "the figure from Get started" : "today's expenses"}${d.health?.removedMonthly > 0 ? `, less ${money(d.health.removedMonthly)} a month of health insurance` : ""})` : ""}${healthOn ? ", on top of health cover" : d.health?.included ? ", health cover included" : ""}`],
+      ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" || d.health?.fromSetup ? ` (${d.health?.fromSetup ? "the figure from Get started" : "today's expenses"}${d.health?.removedMonthly > 0 ? `, less ${money(d.health.removedMonthly)} a month of health insurance` : ""}${heldLoans})` : ""}${healthOn ? ", on top of health cover" : d.health?.included ? ", health cover included" : ""}`],
       ["Growth and rising prices", `${fmt.pct(d.inputs.returns.stocks, 1)} stocks, ${fmt.pct(d.inputs.returns.bonds, 1)} bonds, prices rising ${fmt.pct(d.inputs.rates.inflation, 1)} a year (Numbers we assume); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${d.orderLabel.toLowerCase()}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals from ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from pre-tax accounts; withdrawals ${d.orderLabel.toLowerCase()}; required withdrawals from ${d.inputs.rmd.startAge}`],
     ].flatMap(([k, v]) => [ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, linked(v))),

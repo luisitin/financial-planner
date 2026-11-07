@@ -11,9 +11,11 @@ import { compute as computeState } from "../../taxes/state/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../../core/math/finance.js";
 import { withoutIncomeRent, known, knownWithout } from "../../taxes/federal/known.js";
+import { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts } from "./running.js";
+import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 
-/** Defaults for what is not typed: vacancy 5% of rent, maintenance 1% of the value a year, land 20% of the price (not depreciated), appreciation 3.5%. */
-export const DEFAULTS = { vacancy: 0.05, maintenance: 0.01, management: 0, landShare: 0.2, appreciation: 0.035 };
+/** Defaults for what is not typed (running.js): vacancy 5% of rent, maintenance 1% of the value a year, land 20% of the price (not depreciated), appreciation 3.5%. */
+export { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts };
 /** Residential rental buildings are depreciated straight-line over 27.5 years, mid-month in the first year (IRS Publication 527). */
 export const RECOVERY_YEARS = 27.5;
 /** The special allowance for rental losses with active participation: $25,000, less half of modified AGI above $100,000, gone at $150,000 (IRC 469(i)(2), (3)(A)); $12,500 and $50,000 married filing separately and living apart all year, none filing separately otherwise (469(i)(5)). */
@@ -33,6 +35,30 @@ export function depreciation(basis, placedInService, year) {
   return Math.max(0, Math.min(full, basis - before));
 }
 
+/**
+ * depreciationTaken(basis, placedInService, asOf) -> the depreciation taken, or that could have been, from the date first rented
+ * to `asOf` (a sale then, say): each whole tax year's depreciation, then that year's to its month by the mid-month rule (half the
+ * month of the date counts), never more than the building's cost (round 8 batch 6 review, item 26's next step). The law lowers the
+ * cost by depreciation "you deducted or could have deducted" (IRS Publication 527 (2025), Decreases to basis, read 2026-11-06),
+ * and on a sale that part of the gain (unrecaptured section 1250 gain) is taxed at up to 25% (IRC 1(h)(1)(E)).
+ */
+export function depreciationTaken(basis, placedInService, asOf) {
+  if (!(basis > 0) || !placedInService || !asOf) return 0;
+  const y0 = Number(String(placedInService).slice(0, 4)), m0 = Number(String(placedInService).slice(5, 7));
+  const y = Number(String(asOf).slice(0, 4)), m = Number(String(asOf).slice(5, 7));
+  if (!(y0 > 0) || !(y > 0) || y < y0 || (y === y0 && m <= m0)) return 0;
+  let total = 0;
+  for (let k = y0; k < y; k++) total += depreciation(basis, placedInService, k);
+  total += basis / RECOVERY_YEARS * (y === y0 ? m - m0 : m - 0.5) / 12;
+  return Math.min(basis, total);
+}
+
+/** The building's cost a rental is depreciated on: the price paid (or its value) less the land's share, plus improvements. */
+export function buildingBasis(r, value = r?.value) {
+  const n = (v, d = 0) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? d : Number(v));
+  return n(r?.purchasePrice, n(value)) * (1 - n(r?.landShare, DEFAULTS.landShare)) + n(r?.improvements);
+}
+
 /** The loss allowance at a modified adjusted gross income. */
 export function lossAllowance(magi, { separate = false } = {}) {
   const k = separate ? 0.5 : 1;
@@ -43,25 +69,13 @@ export function lossAllowance(magi, { separate = false } = {}) {
 export function analyse(r, loan, rates) {
   const n = (v, d = 0) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? d : Number(v));
   const value = n(r.value), price = n(r.purchasePrice, value);
-  const rent = n(r.rentMonthly) * 12;
-  const vacancy = rent * n(r.vacancy, DEFAULTS.vacancy);
-  const income = rent - vacancy;
-  const costs = [
-    { key: "tax", label: "Property tax", amount: n(r.propertyTax) },
-    { key: "insurance", label: "Insurance", amount: n(r.insurance) },
-    { key: "hoa", label: "Association dues", amount: n(r.hoaMonthly) * 12 },
-    { key: "maintenance", label: "Repairs and upkeep", amount: value * n(r.maintenance, DEFAULTS.maintenance) },
-    { key: "management", label: "Property manager", amount: income * n(r.management, DEFAULTS.management) },
-    { key: "utilities", label: "Utilities you pay", amount: n(r.utilitiesMonthly) * 12 },
-    { key: "other", label: "Other costs", amount: n(r.otherMonthly) * 12 },
-  ].filter((c) => c.amount > 0);
-  const opex = costs.reduce((s, c) => s + c.amount, 0);
-  const noi = income - opex;
+  // the rent less empty months and the running costs: one formula with Income and the retirement plan (running.js)
+  const { rent, vacancy, income, costs, opex, noi } = runningOf(r, value);
   const pay = loan ? yearOfPayments(loan.balance, loan.rate, loan.payment) : { paid: 0, interest: 0, principal: 0 };
   const debtService = pay.paid;
   const cashFlow = noi - debtService;
   const cashIn = n(r.cashIn, null);
-  const basis = price * (1 - n(r.landShare, DEFAULTS.landShare)) + n(r.improvements);
+  const basis = buildingBasis(r, value);
   const dep = depreciation(basis, r.purchaseDate, rates.year);
   const taxable = income - opex - pay.interest - dep;
   // on its own (compute() replaces these with the household's netting, pro-rata shares and the federal engine's tax):
@@ -110,14 +124,7 @@ export function rentalsFor(plan, { today = null, year } = {}) {
   const list = (plan.property ?? []).filter((x) => x.kind === "rental");
   if (!list.length) return [];
   const li = computeLiabilities(plan, { today });
-  const accounts = plan.accounts ?? [];
-  return list.map((r) => {
-    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
-    const row = r.loanAccountId ? li.rows.find((x) => x.id === r.loanAccountId) : null;
-    const loan = row ? { name: row.name, balance: row.owed, rate: row.rate ?? 0, payment: row.payment || 0 }
-      : Number(r.loanBalance) > 0 ? { name: "Loan", balance: Number(r.loanBalance), rate: Number(r.loanRate) || 0, payment: Number(r.loanPayment) || 0 } : null;
-    return analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { marginal: 0, state: 0, allowance: 0, year });
-  });
+  return list.map((r) => analyse({ ...r, value: rentalValue(plan, r) }, loanOf(r, li.rows), { marginal: 0, state: 0, allowance: 0, year }));
 }
 
 /**
@@ -158,15 +165,26 @@ export function compute(plan, params = {}) {
   // the allowance's figures as they apply (for the page's sentences): $25,000 from $100,000 to $150,000, or half of each filing separately
   const rule = separate ? { max: ALLOWANCE.max / 2, from: ALLOWANCE.from / 2, to: ALLOWANCE.to / 2 } : { ...ALLOWANCE };
   const li = computeLiabilities(plan, { today });
-  const accounts = plan.accounts ?? [];
   // filing separately while living together at any time in the year: no allowance at all (469(i)(5)(B))
   const room = kr ? kr.allowance : separateTogether ? 0 : lossAllowance(magi, { separate });
-  const rentals = list.map((r) => {
-    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
-    const row = r.loanAccountId ? li.rows.find((x) => x.id === r.loanAccountId) : null;
-    const loan = row ? { name: row.name, balance: row.owed, rate: row.rate ?? 0, payment: row.payment || 0 }
-      : Number(r.loanBalance) > 0 ? { name: "Loan", balance: Number(r.loanBalance), rate: Number(r.loanRate) || 0, payment: Number(r.loanPayment) || 0 } : null;
-    return analyse({ ...r, value: acct ? countedBalance(acct) : r.value }, loan, { ...rates, allowance: room });
+  const loans = list.map((r) => loanOf(r, li.rows));
+  const rentals = list.map((r, i) => analyse({ ...r, value: rentalValue(plan, r) }, loans[i], { ...rates, allowance: room }));
+  // on Net worth or not (round 8 batch 6, landlord-2): the value account it names, the one Net worth probably already has
+  // under its name (`twin`, asked about, never linked by itself), and whether its loan's rate and payment are on Debts
+  rentals.forEach((a, i) => {
+    const r = list[i];
+    const twin = twinAccount(plan, r);
+    a.accountId = valueAccountOf(plan, r)?.id ?? null;
+    a.twin = twin ? { id: twin.id, name: twin.name, value: countedBalance(twin) } : null;
+    a.loanAccountId = loans[i]?.accountId ?? null;
+    a.loanInDebts = !!loans[i]?.inDebts;
+    a.onNetWorth = !!a.accountId && (!loans[i] || !!a.loanAccountId);
+    // the accounts named otherwise that could be it (none when one of its name is asked about), and what "Add it to net worth"
+    // would add: its value, less the loan typed here when that is added too (review 2026-11-06, UX 1 and 2)
+    a.candidates = a.accountId || twin ? [] : candidateAccounts(plan, r);
+    a.wouldAdd = (a.accountId ? 0 : Number(r.value) || 0) - (!a.loanAccountId && Number(r.loanBalance) > 0 ? Number(r.loanBalance) : 0);
+    // the depreciation taken so far (item 26's next step): on a sale, that part of the gain is taxed at up to 25%
+    a.depreciationTaken = today ? depreciationTaken(a.basis, r.purchaseDate, today) : null;
   });
   // the losses netted across the rentals, then the allowance, spread pro rata
   const passive = kr ? kr.passive : passiveLosses(rentals.map((x) => x.taxable), room);
@@ -200,5 +218,5 @@ export function compute(plan, params = {}) {
     a.afterTax = a.cashFlow - a.tax;
   });
   const sum = (k) => rentals.reduce((s, x) => s + (x[k] ?? 0), 0);
-  return { ready: true, year: rates.year, ...(noRent.removed > 0 ? { incomeRent: noRent.removed } : {}), rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, rule, lossRoom: room, passive, separateTogether, tax: { federal, niit, state, total: federal + state } };
+  return { ready: true, year: rates.year, netWorth: computeNetWorth(plan, { today }).netWorth, ...(noRent.removed > 0 ? { incomeRent: noRent.removed } : {}), rentals, totals: { rent: sum("rent"), noi: sum("noi"), cashFlow: sum("cashFlow"), afterTax: sum("afterTax"), equity: sum("equity"), value: sum("value") }, rates, rule, lossRoom: room, passive, separateTogether, tax: { federal, niit, state, total: federal + state } };
 }

@@ -16,7 +16,7 @@ export function render(root, ctx) {
   const FIELDS = [
     { key: "name", label: "What you sold", type: "text", required: true, placeholder: "e.g. 100 shares of VTI" },
     { key: "proceeds", label: "Sold for", type: "money", required: true, min: 0 },
-    { key: "basis", label: "Cost (what you paid)", type: "money", required: true, min: 0, help: "the basis on the broker's statement, fees included" },
+    { key: "basis", label: "Cost (what you paid)", type: "money", required: true, min: 0, help: "the basis on the broker's statement, fees included. Selling a home you rented out? Its cost is what you paid plus improvements, less the depreciation taken, or that could have been taken (Rental analysis shows it so far), and the part of the gain from depreciation is taxed at up to 25%" },
     { key: "held", label: "How long you held it", type: "select", options: [{ value: "long", label: "more than a year (long-term)" }, { value: "short", label: "a year or less (short-term)" }] },
   ];
   root.append(ui.h("section", { class: "card accent hero" },
@@ -29,6 +29,9 @@ export function render(root, ctx) {
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
+  // a sale named for a rental (round 8 batch 6 review, item 26's next step): the part of its gain from depreciation is taxed at
+  // up to 25%, which the figures here do not split yet
+  for (const x of d.rentalSales ?? []) root.append(ui.notice("warn", `If “${x.sale}” is the sale of ${x.rental}, your rental: about ${money(x.fromDepreciation)} of its gain is depreciation taken back (Rental analysis), taxed at up to 25%, not at the long-term rates, so the tax will be more than shown.`));
   root.append(ui.card(null, ui.row(
     ui.stat("Long-term", money(d.gains.netLong), "after netting"),
     ui.stat("Short-term", money(d.gains.netShort), d.shortTax > 0 ? `${money(d.shortTax)} of tax, at ordinary rates` : "taxed like wages"),

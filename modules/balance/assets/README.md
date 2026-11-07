@@ -86,3 +86,30 @@ saving and removing (cleaning, replacing by id, dates, the kinds).
 - A photo per belonging (needs file storage on the PC server, not the plan).
 - Print the inventory as a single sheet for the insurer.
 - Compare the belongings' total with a renters policy's contents cover.
+
+## The condo once, insured by its own policy (round 8 batch 6, landlord-2, 2026-11-06)
+- **Pairing** (`insurance/policies` `pairHomes`, shared with Auto, home, umbrella): a policy tied to the home ("Which home"
+  on Policies), else one whose name holds the home's name as whole words and names no other home left ("Condo landlord
+  policy" for Condo), else the rest one to one in list order as before. Home and landlord policies count. The tester's plan
+  (Home and Condo on Net worth, the condo also on Rental analysis) had three rows against two policies, so none paired and
+  all three said "No policy on file"; now Home → Home policy, Condo → Condo landlord policy.
+- **A rental only on Rental analysis** is `counted: false`; with a Net worth account of its name (`twin`, property/rental
+  `running.js`) it takes that account's policy, raises no "no policy" check, and the row asks "If it is this rental, link
+  them" (one tap); without one, "Only on Rental analysis: not in your net worth yet" with "Add it to net worth" (property/rental
+  `addToNetWorth`).
+- **The total says what it leaves out** (`totals.left`): "counted in your net worth; not Condo ($260,000), which is only on
+  Rental analysis". A row with a twin is not named there (it is probably the account already counted).
+- Tests: "batch 6" in `module.test.mjs`.
+
+## Review fixes (round 8 batch 6, 2026-11-06)
+- The same home twice (UX 1: "No, add it as its own" on Rental analysis listed Condo at $260,000 twice): two Real estate
+  accounts of one name (letter case and spaces aside) and one value, to the dollar, give the check "Condo is listed twice on
+  Net worth, at $260,000 each. If they are the same home, remove the extra one there." (`dup-<id>`, to Net worth).
+- A rental only on Rental analysis with no account of its name has `maybe`: the accounts named otherwise that may be it
+  (property/rental running.js `candidateAccounts`, never the home you live in). Its row then says "Net worth may already list
+  it under another name (...): answer on Rental analysis", with that link in place of "Add it to net worth", and the tile says
+  it "may not be in your net worth yet" (UX 2).
+- Pairing: a home rented out (its entry, or a twin's account) is passed to `pairHomes` as `rental`, so a landlord policy goes
+  with it before list order (money 6). A home rented out also carries its policy's `kind`; one on file as a homeowners policy
+  reads "(on file as a homeowners policy: check its kind on Policies)" (UX 11). Other rows are as before.
+- Tests: "batch 6 review" in `module.test.mjs`.

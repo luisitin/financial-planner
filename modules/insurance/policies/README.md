@@ -41,3 +41,25 @@ Read by the other insurance pages (life needs, disability, long-term care, prope
 - Beneficiaries per policy (estate/beneficiaries will hold them).
 
 Review 2026-11-06 (round 7): the cover tile for the unnamed first adult ("Me") reads "Your life cover" (was "Me: life cover"); typed names read as before, and the "Who it covers" picker keeps the names as labels (core/words.js). Words only (view).
+
+## A landlord kind and "Which home" (round 8 batch 6, landlord-2 and landlord-7, 2026-11-06)
+- Kind `landlord` ("Landlord (a home you rent out)", benefit: dwelling cover, group: home, car and liability). A home rented
+  to others for "six months or a year" likely needs "a landlord or rental dwelling policy"; a "standard homeowners policy
+  may not cover losses incurred while your home is rented out" (Triple-I, "Coverage for renting out your home", read
+  2026-11-06). `HOME_KINDS` = home and landlord: the kinds that insure a home's building.
+- "Which home" (`accountId`, home and landlord policies only, shown only for those kinds): the Real estate account the policy
+  insures; the list says "insures Condo".
+- `pairHomes(homes, policies, { lone })`: one pairing for What you own and Auto, home, umbrella: the tie, then names (whole
+  words, three letters or more, repeated while it pairs), then list order as each page did before (a policy named for a
+  home that already has one is not paired by order). `namesHome(policy, name)`.
+- Tests: "batch 6" in `module.test.mjs`.
+
+## Review fixes (round 8 batch 6, 2026-11-06)
+- `pairHomes` step 2b, by kind (money 6): when a landlord policy is left after the ties and the names, landlord policies go with
+  the homes rented out (`rental: true`: a Rental analysis entry, or the account an unlinked rental of its name probably is) and
+  homeowners policies with the others, one to one in order within each group whose counts match. "Rental dwelling policy"
+  listed before "Homeowners policy" took Home. With no landlord policy nothing tells them apart, so the order rule is as before
+  (every plan without a landlord policy is paired as it was).
+- The form (UX 11): a link to one policy (`#/insurance/policies?edit=<id>`, from Auto, home, umbrella's "Go there") opens its
+  form once; "Which home" starts on the one home a home or landlord policy's name names, until one is picked.
+- Tests: "batch 6 review" in `module.test.mjs`.

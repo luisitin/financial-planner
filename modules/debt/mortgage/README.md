@@ -27,3 +27,28 @@ When the payoff plan finishes the mortgage sooner (debt/payoff `twoDates`), the 
 
 ## Ideas / not yet
 - Points and rate buydown; ARM resets; property tax and insurance escrow lines.
+
+## Each loan against its own home (round 8 batch 6, landlord-2, 2026-11-06)
+- **Which mortgage**: `params.accountId`, else `debtPlan.mortgageAccountId`, else the first mortgage owed that no rental on
+  Rental analysis names (the home you live in), else the first owed. The rows are highest rate first, so the condo's 4.5%
+  loan came before the home's 3.5% one and was measured against the home (37% of 410,000); Your home read the condo's loan
+  as its own. `others` lists the rest; the page links each ("Also on file: Condo mortgage").
+- **Its home** (`homeOf(plan, loanId)`): the property entry that names the loan (`loanAccountId`) with its Net worth account
+  (or the account of its name), else its own value; otherwise the first Real estate account with a value that no other
+  loan's property claims (as before when no rental names a loan).
+- **A rental's loan**: what is owed against its value today only (`pmi.rental`: 150,000 ÷ 260,000 = **58%**). The Homeowners
+  Protection Act's 80% / 78% dates are for "a single-family dwelling that is the principal residence of the mortgagor"
+  (12 U.S.C. 4901(14), (15), read 2026-11-06 at law.cornell.edu), so the page says the lender's own rules decide.
+- Tests: "batch 6" in `module.test.mjs`; `tests/debt-pages.test.mjs` and the debt answer key pass unchanged.
+
+## Review fixes (round 8 batch 6, 2026-11-06)
+- `homeOf` (money 9): the home's mortgage is measured against the first Real estate account that is neither another loan's home
+  nor any rental's (linked, or the account of its name it probably is), with or without a loan: a condo owned outright,
+  listed first, was taken as the home's (96% of 260,000 instead of 61% of 410,000).
+- (money 10) A rental's loan is measured against its Net worth account only once the rental names it (`accountId`); until then
+  against the value typed on Rental analysis, as Rental analysis does (an unlinked Condo at 270,000 gave 56%, not 58%).
+- The page (UX 6): the loan shown rides in the address (`#/debt/mortgage?loan=<id>`), so Back returns to the other loan and the
+  menu opens the home's; the other loans are outlined 44 px buttons ("See Condo mortgage ›"); the hero names the home ("On
+  Condo, which you rent out"); the payoff sentence says "onto this loan" when there are several; a rental's tile is "Owed
+  against its value: 58% of Condo's $260,000 today" (the README keeps why the law's dates are not given).
+- Tests: "batch 6 review" in `module.test.mjs`.

@@ -5,13 +5,17 @@
 import { taxInputs, netGains, lossCarryover, addIncome } from "../federal/compute.js";
 import { known } from "../federal/known.js";
 import { federalTax } from "../../../core/math/tax.js";
+import { depreciationTaken, buildingBasis } from "../../property/rental/compute.js";
+import { rentalsOf, rentalValue } from "../../property/rental/running.js";
+import { namesHome } from "../../insurance/policies/compute.js";
 
 /**
  * compute(plan, { today, extra: { amount, held } }) -> {
  *   year, filingStatus, rows: [{ id, name, proceeds, basis, held, gain }], gains (netGains), hasSales,
  *   taxWithout, taxWith, taxOnGains, rateOnGains, niit, qualifiedLayers: [{ rate, amount, tax }], shortTax,
  *   zeroRoom (long-term gain that would still be taxed at 0%), zeroTop, thresholds: { zero, fifteen }, taxableIncome,
- *   extra: { amount, held, tax, rate } | null, isIndexed
+ *   extra: { amount, held, tax, rate } | null, rentalSales: [{ id, sale, rental, depreciation, fromDepreciation }] (a sale named
+ *   for a rental: the part of its gain from depreciation taken, taxed at up to 25%), isIndexed
  * }
  */
 export function compute(plan, params = {}) {
@@ -54,11 +58,18 @@ export function compute(plan, params = {}) {
     extra = { amount, held, tax: r2.totalTax - withGains.totalTax, rate: (r2.totalTax - withGains.totalTax) / amount };
   }
   const taxOnGains = withGains.totalTax - without.totalTax;
+  // a sale named for a rental on Rental analysis ("Condo sale" for Condo): the depreciation taken to today, and the part of the
+  // gain it makes, taxed at up to 25% rather than the long-term rates worked out here (round 8 batch 6 review, item 26's next
+  // step: the page said 15% on all of it). Words only: the tax figures above do not split it yet
+  const rentalSales = !params.today ? [] : g.rows.flatMap((row) => rentalsOf(plan).filter((r) => namesHome({ name: row.name }, r.name)).slice(0, 1).map((r) => {
+    const dep = depreciationTaken(buildingBasis(r, rentalValue(plan, r)), r.purchaseDate, params.today);
+    return { id: row.id, sale: row.name, rental: r.name, depreciation: dep, fromDepreciation: Math.min(dep, Math.max(0, Number(row.gain) || 0)) };
+  })).filter((x) => x.fromDepreciation > 0.5);
   const realised = g.netLong + g.netShort + Math.max(0, -g.netLoss);
   return {
     year: b.year, filingStatus: b.filingStatus, rows: g.rows, gains: g, hasSales: g.rows.length > 0,
     taxWithout: without.totalTax, taxWith: withGains.totalTax, taxOnGains, rateOnGains: g.netLong + g.netShort > 0 ? taxOnGains / (g.netLong + g.netShort) : 0,
     niit: withGains.niit, qualifiedLayers: withGains.qualifiedLayers, shortTax, zeroRoom, thresholds, taxableIncome: withGains.taxableIncome, ordinaryTaxable: withGains.ordinaryTaxable,
-    extra, isIndexed: !!b.params.indexed, realised, lossSaves: g.lossAllowed < 0 ? without.totalTax - withGains.totalTax : 0,
+    extra, rentalSales, isIndexed: !!b.params.indexed, realised, lossSaves: g.lossAllowed < 0 ? without.totalTax - withGains.totalTax : 0,
   };
 }

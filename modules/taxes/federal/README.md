@@ -402,3 +402,9 @@ Review 2026-11-06 (round 7): the notes ("Filing separately is two returns: yours
 ## One return for every page that says "your tax" (round 8, batch 1 follow-up)
 
 `taxView(plan, params, { without })` in `known.js` is `taxInputs()` on the Federal estimate's own return: `inputs`, `result`, `nextDollar` and `total` are `known()`'s, and everything else `taxInputs()` gives (year, filing status, gains, HSA, care) is carried along, so a page changes one line. HSA and FSA, Health (HSA saving), Tax-lot harvesting, Crypto, Asset location, Benefits, Salary, Offer compare, Education (American Opportunity credit), Home (sale tax), Renovation and Equity compensation read it; Paycheck does not (it is the employer's withholding table, not the return). `without: "stock"` leaves this year's vesting units out of the wages for Equity compensation, which adds them itself. Without `params.today` it is `taxInputs()` as before.
+
+## The rent match is shared (round 8 batch 6, 2026-11-06)
+`withoutIncomeRent` now reads property/rental `running.js` `matchRent` (the same rule, moved: by name, then by amount within
+2%, then the rest in proportion), so Income ("$937 a month after Condo's running costs") and Will the money last? match the
+same Income lines to the same rentals. No figure moves: every module's compute gives the same result on all qa plans
+(invariance in the batch 6 report).

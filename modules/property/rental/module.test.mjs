@@ -198,3 +198,151 @@ test("round 8 review 1: Rental analysis takes the allowance, its modified AGI an
   const l = compute(landlordPlan(), { today: T });
   assert.equal(l.rates.magi, 154400); assert.equal(l.lossRoom, 0);
 });
+
+// ---- round 8 batch 6: a rental is entered once and counted once (landlord-2) -------------------------------------------
+const T6 = "2026-11-06";
+const rentalMod = () => import("./compute.js");
+const runningMod = () => import("./running.js");
+let seq = 0;
+const uid = () => `new-${++seq}`;
+
+test("batch 6: the condo's rent after its running costs is 11,240 a year ($937 a month), Rental analysis's own line", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const R = await runningMod();
+  const p = condoOnNetWorthPlan(), r = p.property[0];
+  // 2,100 x 12 = 25,200; empty months 5%: 1,260; tax 4,700 + insurance 1,200 + dues 350 x 12 + upkeep 1% of 260,000
+  const run = R.runningOf(r, 260000);
+  near(run.rent, 25200); near(run.vacancy, 1260); near(run.opex, 4700 + 1200 + 4200 + 2600); near(run.noi, 11240);
+  near(run.noi / 12, 936.67, 0.005);
+  // the same figure as Rental analysis's "Income after running costs"
+  const d = compute(p, { today: T6 });
+  near(d.rentals[0].noi, run.noi, 1e-9);
+});
+
+test("batch 6: a mortgage picked with no rate or payment on Debts keeps the loan typed for it (it was dropped)", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const p = condoOnNetWorthPlan();
+  p.debts = p.debts.filter((x) => x.accountId !== "condo-loan");   // "Condo mortgage" on Net worth, nothing on Debts
+  const d = compute(p, { today: T6 });
+  const pay = yearOfPayments(150000, 0.045, 851);
+  near(d.rentals[0].debtService, pay.paid); near(d.rentals[0].interest, pay.interest);
+  assert.equal(d.rentals[0].loanInDebts, false);
+});
+
+test("batch 6: keepLoanDetails puts the typed rate and payment on Debts for a picked mortgage that has none, and leaves one that has", async () => {
+  const R = await rentalMod();
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const p = condoOnNetWorthPlan();
+  p.debts = p.debts.filter((x) => x.accountId !== "condo-loan");
+  assert.equal(R.keepLoanDetails(p, p.property[0], uid), true);
+  const row = p.debts.find((x) => x.accountId === "condo-loan");
+  assert.equal(row.rate, 0.045); assert.equal(row.minPayment, 851);
+  assert.equal(R.keepLoanDetails(p, { ...p.property[0], loanPayment: 999 }, uid), false, "a row with a payment is kept");
+  assert.equal(p.debts.find((x) => x.accountId === "condo-loan").minPayment, 851);
+  assert.equal(R.keepLoanDetails(p, { ...p.property[0], loanAccountId: "gone" }, uid), false, "an account no longer there writes nothing");
+});
+
+test("batch 6: Add it to net worth puts the condo on Net worth once, with its loan on Debts (net worth 618,000)", async () => {
+  const R = await rentalMod();
+  const { condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const { compute: netWorth } = await import("../../balance/net-worth/compute.js");
+  const { compute: debts } = await import("../../balance/liabilities/compute.js");
+  const { compute: assets } = await import("../../balance/assets/compute.js");
+  const p = condoOnlyRentalPlan();
+  assert.equal(netWorth(p, { today: T6 }).netWorth, 508000, "before: the condo is left out");
+  const before = compute(p, { today: T6 }).rentals[0];
+  assert.equal(before.onNetWorth, false); assert.equal(before.accountId, null);
+  const res = R.addToNetWorth(p, "r-condo", { today: T6, uid });
+  assert.deepEqual(res.made, ["value", "loan"]);
+  const acct = p.accounts.find((a) => a.id === res.accountId), loan = p.accounts.find((a) => a.id === res.loanAccountId);
+  assert.deepEqual([acct.name, acct.type, acct.balance, acct.asOf], ["Condo", "property", 260000, T6]);
+  assert.deepEqual([loan.name, loan.type, loan.balance], ["Condo mortgage", "mortgage", 150000]);
+  // 8,000 + 25,000 + 180,000 + 120,000 + 410,000 + 15,000 + 260,000 - 250,000 - 150,000
+  assert.equal(netWorth(p, { today: T6 }).netWorth, 618000);
+  // Debts: no "needs details" (every loan has its rate and payment)
+  const li = debts(p, { today: T6 });
+  assert.equal(li.rows.filter((x) => !x.detail).length, 0);
+  const row = li.rows.find((x) => x.id === res.loanAccountId);
+  assert.equal(row.rate, 0.045); assert.equal(row.payment, 851);
+  // What you own lists the condo once, insured by the condo's policy
+  const a = assets(p, { today: T6 });
+  assert.deepEqual(a.homes.map((h) => [h.name, h.value, h.policy?.name]), [["Home", 410000, "Home policy"], ["Condo", 260000, "Condo landlord policy"]]);
+  // Rental analysis reads the same figures, now from Net worth
+  const after = compute(p, { today: T6 }).rentals[0];
+  assert.equal(after.onNetWorth, true); assert.equal(after.value, 260000);
+  near(after.debtService, before.debtService); near(after.noi, before.noi);
+  // a second tap adds nothing
+  assert.deepEqual(R.addToNetWorth(p, "r-condo", { today: T6, uid }).made, []);
+  assert.equal(p.accounts.length, 9);
+});
+
+test("batch 6: a rental not linked but listed on Net worth under its name is asked about (twin), never linked by itself", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const p = condoOnNetWorthPlan();
+  const r = compute(p, { today: T6 }).rentals[0];
+  assert.deepEqual(r.twin, { id: "condo", name: "Condo", value: 260000 });
+  assert.equal(r.accountId, null); assert.equal(r.onNetWorth, false);
+  // linked ("Yes, it's this one"): counted once, no twin
+  p.property[0].accountId = "condo";
+  const s = compute(p, { today: T6 }).rentals[0];
+  assert.equal(s.twin, null); assert.equal(s.onNetWorth, true);
+  // another name, or an account another entry names: no twin
+  const q = condoOnNetWorthPlan(); q.property[0].name = "Duplex";
+  assert.equal(compute(q, { today: T6 }).rentals[0].twin, null);
+});
+
+test("batch 6: matchRent is the Federal estimate's rule: by name, then by amount within 2%, then the rest in proportion", async () => {
+  const R = await runningMod();
+  // by name, at most what the rental collects
+  let m = R.matchRent([{ name: "Rent from the condo", yearly: 30000 }, { name: "Garage", yearly: 1200 }], [{ name: "Condo", rent: 25200 }]);
+  assert.deepEqual(m.removed, [25200, 0]); assert.deepEqual(m.left, [4800, 1200]);
+  // by amount
+  m = R.matchRent([{ name: "Rent coming in", yearly: 25200 }, { name: "Garage", yearly: 1200 }], [{ name: "Condo", rent: 25000 }]);
+  assert.deepEqual(m.removed, [25000, 0]);
+  // in proportion, shared among the rentals by what each still collects
+  m = R.matchRent([{ name: "Rent", yearly: 10000 }, { name: "More rent", yearly: 30000 }], [{ name: "A", rent: 12000 }, { name: "B", rent: 8000 }]);
+  near(m.removed[0], 5000); near(m.removed[1], 15000); near(m.takes[1][0], 9000); near(m.takes[1][1], 6000);
+  // the Federal estimate takes the same rent out (known.js withoutIncomeRent reads matchRent)
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const { withoutIncomeRent } = await import("../../taxes/federal/known.js");
+  const { compute: federal } = await import("../../taxes/federal/compute.js");
+  const p = condoOnNetWorthPlan();
+  assert.equal(withoutIncomeRent(p, federal(p, { today: T6 }), { today: T6 }).removed, 25200);
+});
+
+// ---- round 8 batch 6 review (UX 1 to 3): never the home you live in; a home named otherwise on Net worth is asked about --------
+test("batch 6 review: 'Its value on Net worth' and the question leave out the home you live in; an account named otherwise is offered first when its value is close", async () => {
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const R = await import("./compute.js");
+  const T = "2026-11-06";
+  // Get started's home account, one named "Home", one a Your home entry names
+  const p = condoOnlyRentalPlan();
+  assert.deepEqual([...R.livedIn(p)], ["setup-have-home"]);
+  assert.deepEqual(R.candidateAccounts(p, p.property[0]), [], "was: Home ($410,000), which made the home you live in the rental");
+  p.property.push({ id: "h", kind: "home", name: "Our house", accountId: "acc-house" }); p.accounts.push({ id: "acc-house", name: "Our house", type: "property", balance: 500000 });
+  assert.ok(R.livedIn(p).has("acc-house"));
+  // the review's renamed account: Net worth's "Rental condo on Elm" at 260,000, not linked; a cabin at 90,000
+  const q = condoOnNetWorthPlan(); q.accounts.find((a) => a.id === "condo").name = "Rental condo on Elm";
+  q.accounts.push({ id: "cabin", name: "Cabin", type: "property", balance: 90000 });
+  assert.deepEqual(R.candidateAccounts(q, q.property[0]).map((a) => [a.name, a.likely]), [["Rental condo on Elm", true], ["Cabin", false]]);
+  const d = R.compute(q, { today: T }).rentals[0];
+  assert.equal(d.twin, null); assert.deepEqual(d.candidates.map((a) => a.id), ["condo", "cabin"]);
+  // what "Add it to net worth" would add: its value less its loan typed here (260,000 - 150,000), against today's 508,000
+  const v = R.compute(condoOnlyRentalPlan(), { today: T });
+  assert.equal(v.rentals[0].wouldAdd, 110000); assert.equal(v.netWorth, 508000);
+  // the tester's plan: its loan is on Net worth already, so only the value would be added
+  assert.equal(R.compute(condoOnNetWorthPlan(), { today: T }).rentals[0].wouldAdd, 260000);
+});
+
+// round 8 batch 6 review (UX 9, item 26's next step): the depreciation taken so far, the part of a sale's gain taxed at up to 25%
+test("batch 6 review: depreciation taken so far: 168,000 / 27.5 a year from August 2019, mid-month, to November 2026 is about 44,291", async () => {
+  const R = await import("./compute.js");
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  // 2019: 4.5 months (2,290.91); 2020 to 2025: 6 x 6,109.09; 2026 to mid-November: 10.5 months (5,345.45)
+  near(R.depreciationTaken(168000, "2019-08-01", "2026-11-06"), 168000 / 27.5 * (4.5 / 12 + 6 + 10.5 / 12), 0.01);
+  near(R.depreciationTaken(168000, "2019-08-01", "2019-11-20"), 168000 / 27.5 * 3 / 12, 0.01);
+  assert.equal(R.depreciationTaken(168000, "2019-08-01", "2019-08-20"), 0);
+  assert.equal(R.depreciationTaken(168000, "1990-01-01", "2026-11-06"), 168000, "never more than the building's cost");
+  assert.equal(R.depreciationTaken(0, "2019-08-01", "2026-11-06"), 0);
+  near(R.compute(condoOnNetWorthPlan(), { today: "2026-11-06" }).rentals[0].depreciationTaken, 44290.91, 0.01);
+});

@@ -378,3 +378,24 @@ test("verify: adding a bill with the list folded keeps it open and shows the con
   // the notice shows once: the next draw has no pending word and the list folds again
   assert.equal(fold(draw(plan, () => {})).open, false);
 });
+
+// ---- round 8 batch 6 review (money 1 and 2): which Debts payments the month carries, and how much of each ----------------
+test("batch 6: debtsCounted lists the Debts rows the month carries, at the amount it carries; a mortgage dropped for a housing bill is not there", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const by = (xs) => [...xs].sort((a, b) => (a.id < b.id ? 1 : -1));
+  // no loan bills: both mortgages come from Debts, at their payments
+  const p = condoOnNetWorthPlan();
+  assert.deepEqual(by(compute(p, { today: T }).debtsCounted), [{ id: "setup-owe-mortgage", monthly: 2350 }, { id: "condo-loan", monthly: 851 }]);
+  // a bill under loan payments matched to the condo's loan: carried at the bill's amount
+  p.expenses.push({ id: "x-condo", name: "Condo mortgage", category: "debt", amount: 900, period: "monthly" });
+  assert.deepEqual(compute(p, { today: T }).debtsCounted.find((x) => x.id === "condo-loan"), { id: "condo-loan", monthly: 900 });
+  // the home's mortgage filed under housing ($2,350): Expenses then drops every mortgage from Debts, so the condo's 851 is in no
+  // bill and is not carried (the review's repro)
+  const q = condoOnNetWorthPlan();
+  q.expenses.push({ id: "x-mort", name: "Mortgage payment", category: "housing", amount: 2350, period: "monthly" });
+  assert.deepEqual(compute(q, { today: T }).debtsCounted, []);
+  // a housing bill that is both mortgages' payments (within 10% of 3,201) carries both, at their payments
+  q.expenses.find((x) => x.id === "x-mort").amount = 3200;
+  assert.deepEqual(by(compute(q, { today: T }).debtsCounted), [{ id: "setup-owe-mortgage", monthly: 2350 }, { id: "condo-loan", monthly: 851 }]);
+});

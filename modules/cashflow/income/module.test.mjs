@@ -124,3 +124,49 @@ test("a raise from a later date: one chain (review 2026-11-02, round 5): the set
   assert.equal(again.old.id, "n1"); assert.equal(again.old.continues, "i-side"); assert.equal(again.next.continues, "i-side");
   assert.equal(chainId(null), undefined);
 });
+
+// ---- round 8 batch 6: rent after the place's running costs (landlord-5) --------------------------------------------------
+test("batch 6: the condo's $2,100 of rent is $937 a month after its running costs (Rental analysis); the line keeps $2,100", async () => {
+  const M = await import("./compute.js");
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const p = condoOnNetWorthPlan(), T = "2026-11-06";
+  const r = M.rentAfterCostsOf(p, { today: T }).get("setup-other");
+  // (25,200 less 5% empty months, less 4,700 + 1,200 + 4,200 + 2,600 of running costs) / 12
+  near(r.afterCosts, 11240 / 12); assert.deepEqual(r.rentals, ["Condo"]); near(r.beforeCosts, 0); assert.equal(r.onPage, true);
+  // the totals and tax still read the rent as typed
+  near(compute(p, { today: T }).monthly, 95000 / 12 + 72000 / 12 + 2100);
+  // a second rent line for a place not on Rental analysis stays before its costs
+  p.income.push({ id: "garage", name: "Garage", type: "rental", amount: 150, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+  const g = M.rentAfterCostsOf(p, { today: T }).get("garage");
+  assert.equal(g.afterCosts, null); near(g.beforeCosts, 150);
+  // no place on Rental analysis: before its costs, and the page says where to add it
+  p.property = [];
+  const n = M.rentAfterCostsOf(p, { today: T }).get("setup-other");
+  assert.equal(n.afterCosts, null); assert.equal(n.onPage, false);
+  // no rent at all: nothing
+  assert.equal(M.rentAfterCostsOf(emptyPlan(), { today: T }).size, 0);
+});
+
+// round 8 batch 6 review (money 10, UX 5): one figure for what the condo brings in, its loan said too
+test("batch 6 review: a line that is one rental's whole rent shows that rental's figure ($937), with the loan after it ($86), and says when the rents differ", async () => {
+  const M = await import("./compute.js");
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const p = condoOnNetWorthPlan();
+  let r = M.rentAfterCostsOf(p, { today: T }).get("setup-other");
+  // 937 less the 851 payment on Debts = 86 a month, Rental analysis's cash flow
+  near(r.afterCosts, 11240 / 12); near(r.loanMonthly, 851); near(r.afterLoan, 11240 / 12 - 851); assert.equal(r.loanInDebts, true); assert.equal(r.rentalRent, null);
+  // the review's rentdiff: Income's line $2,000, Rental analysis $2,100: the rental's own $937 (it read $892, scaled by 24,000 / 25,200)
+  p.income.find((x) => x.id === "setup-other").amount = 2000;
+  r = M.rentAfterCostsOf(p, { today: T }).get("setup-other");
+  near(r.afterCosts, 11240 / 12); near(r.rentalRent, 2100);
+  // a loan typed only on Rental analysis: said, not on Debts
+  r = M.rentAfterCostsOf(condoOnlyRentalPlan(), { today: T }).get("setup-other");
+  near(r.loanMonthly, 851); assert.equal(r.loanInDebts, false);
+  // one line for two places on Rental analysis: shared as before, no single loan said
+  const q = condoOnNetWorthPlan();
+  q.property.push({ ...q.property[0], id: "r-flat", name: "Flat", accountId: undefined, loanAccountId: null, loanBalance: 0, rentMonthly: 900 });
+  q.income.find((x) => x.id === "setup-other").amount = 3000;
+  r = M.rentAfterCostsOf(q, { today: T }).get("setup-other");
+  assert.deepEqual(r.rentals, ["Condo", "Flat"]); assert.equal(r.loanMonthly, null);
+});

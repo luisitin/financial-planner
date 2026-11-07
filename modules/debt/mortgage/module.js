@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 4,
   enabledByDefault: true,
-  needs: ["accounts", "debts", "debtPlan"],
+  needs: ["accounts", "debts", "debtPlan", "property"],
   writes: [],
   heavy: false,
   purpose: "Your mortgage's schedule, and what extra payments, paying every two weeks or a recast would save.",

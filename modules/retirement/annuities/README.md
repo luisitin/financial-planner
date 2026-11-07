@@ -34,3 +34,9 @@ spending plus its health cover (the projection's "Health cover" events, marked `
 share as Will the money last?'s "Guaranteed income"; it read the spending alone. Tested against the projection's `coverage`.
 
 Review 2026-11-06 (round 7): each quote's words ("a month from your 65, for as long as you or your spouse lives", "over the lifetime you are likely to have") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only.
+
+## Calendar years (round 8 batch 6 review, 2026-11-06)
+A guaranteed income line counts in the first retirement year only when it is paid that year by both its ages and its calendar
+years (`fromYear`, `untilYear`), the engine's own test (projection `incomeIn`). A rented-out condo's loan payment that comes
+back only once the loan is paid off (from 2051 on the landlord plan) was counted from 2045, so the share read 138% against the
+projection's 123%. Tested on `qa/fixtures/round8-rental.mjs`.

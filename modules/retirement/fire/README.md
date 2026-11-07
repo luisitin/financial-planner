@@ -283,3 +283,13 @@ without its fix.
   from this year). Rae: Jo could stop at 66 -> 71 (66 with no supplement).
 - Tests: "seventh pass (fire-ver8b): other income that stops in steps ..." and the condo couple's Ray `stoppingNow`; both failed
   on the base.
+
+## Round 8 batch 6 verify (2026-11-06): a rental's loan payment back is not rent
+Will the money last? counts a rental on Rental analysis as its rent after running costs (projection `rentalLines`, part
+"rent") and, when the retirement spending holds the rental's loan payment, gives that payment back from the year after the
+loan is paid off (part "loan back": spending no longer needed, untaxed). `otherYearly` leaves "loan back" out: it is not
+income of any kind. The landlord household (`qa/fixtures/round8-rental.mjs`): 25,200 of rent less 1,260 of empty months and
+12,700 of running costs = **$11,240 a year of rent**, whether its loan is on Debts or typed on Rental analysis; with the
+loan on Debts the page said "$21,452 a year of rent" (11,240 + the $10,212 loan payment that comes back only from 2051).
+Formula source: property/rental README ("Income after running costs"). Test: "round 8 batch 6 verify: a rental's loan
+payment ... is not rent".

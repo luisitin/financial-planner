@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 5,
   enabledByDefault: true,
-  needs: ["household", "accounts", "expenses", "income", "retirement", "assumptions"],
+  needs: ["household", "accounts", "expenses", "income", "retirement", "assumptions", "property", "debts"],
   writes: ["retirement"],
   heavy: false,
   purpose: "Your plan run year by year to the end: what you have, add, receive and spend, and whether the money lasts.",

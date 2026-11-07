@@ -192,7 +192,9 @@ export function incomeAnswer(plan, today) {
   const social = I.incomes.filter((x) => x.kind === "social" && x.yearly > 0);
   // a partner still working when the household retires comes in as "<name>'s pay": pay, not a pension; support with no end date
   // counts only while its owner works (projection otherIncome), so it is not income after work either
-  const other = I.incomes.filter((x) => x.kind !== "social" && x.yearly > 0 && x.type !== "pay" && !x.whileWorking);
+  // (round 8 batch 6 verify: a rental's loan payment that the spending gives back once the loan is paid off, projection
+  // rentalLines "loan back", is spending no longer needed from that year, not rent: it read "$21,452 a year of rent")
+  const other = I.incomes.filter((x) => x.kind !== "social" && x.yearly > 0 && x.type !== "pay" && !x.whileWorking && x.part !== "loan back");
   const KIND = { pension: "pension", rental: "rent", investment: "dividends", support: "other", other: "other" };
   const said = plan.guide?.setup?.ss ?? {};
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");

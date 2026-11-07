@@ -4,20 +4,26 @@ import { compute } from "./compute.js";
 import { twoDates } from "../payoff/compute.js";
 const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
-const state = { extra: null, lump: 0 };
+const state = { extra: null, lump: 0, shown: null };   // shown: the loan the what-ifs were typed for
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today(), extra: state.extra ?? undefined, lump: state.lump });
+  // several mortgages (a home and a rental, round 8 batch 6): the one picked rides in the address (#/debt/mortgage?loan=<id>), so
+  // Back returns to the other and the menu opens the home's (review 2026-11-06, UX 6); the what-ifs belong to one loan
+  const which = ctx.route?.query?.loan ?? null;
+  if (state.shown !== which) { state.extra = null; state.lump = 0; state.shown = which; }
+  const d = compute(plan, { today: fmt.today(), extra: state.extra ?? undefined, lump: state.lump, ...(which ? { accountId: which } : {}) });
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
+  // the others a tap away, as outlined buttons (UX 6: a 16 px link)
+  const pick = d.others?.length ? ui.h("div", { class: "row" }, ...d.others.map((o) => ui.h("a", { class: "btn secondary", href: `#/debt/mortgage?loan=${encodeURIComponent(o.id)}` }, `See ${o.name} ›`))) : null;
   const monthsText = (m) => !Number.isFinite(m) ? "never" : `${Math.floor(m / 12)} yr ${m % 12} mo`;
 
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Mortgage"),
       ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast would do."),
-      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? "#/balance/liabilities" : "#/balance/net-worth" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage"))));
+      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? "#/balance/liabilities" : "#/balance/net-worth" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
     return;
   }
   const m = d.mortgage;
@@ -26,9 +32,12 @@ export function render(root, ctx) {
   try { rolled = twoDates(plan, { today: fmt.today() })[m.id] ?? null; } catch { rolled = null; }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, m.name),
+    // the home it is on, when there is more than one loan or it is a rental's (UX 6)
+    d.home && (d.others?.length || d.home.rental) ? ui.h("p", { class: "muted" }, `On ${d.home.name}${d.home.rental ? ", which you rent out" : ""}`) : null,
     ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)}, ${fmt.money(m.payment, cur)} a month. At that pace it ends ${d.base.endDate ? `in ${monthYear(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
     // the payoff plan's date, which the Timeline and the Plan summary show: said here with the reason (round 4, 2026-11-02)
-    rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto the mortgage` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+    pick,
+    rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto ${d.others?.length ? "this loan" : "the mortgage"}` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
   ));
   const extraIn = ui.input({ type: "number", value: d.withExtra.extra, min: 0, step: "25", inputmode: "decimal", "aria-label": "Extra each month", onChange: (e) => { state.extra = Math.max(0, Number(e.target.value) || 0); redraw(); } });
   const lumpIn = ui.input({ type: "number", value: state.lump || "", min: 0, step: "1000", inputmode: "decimal", placeholder: "e.g. 20000", "aria-label": "Lump sum", onChange: (e) => { state.lump = Math.max(0, Number(e.target.value) || 0); redraw(); } });
@@ -40,7 +49,8 @@ export function render(root, ctx) {
     ui.stat(`Extra ${fmt.money(d.withExtra.extra, cur)} a month`, d.withExtra.monthsSaved ? `${monthsText(d.withExtra.monthsSaved)} sooner` : "no change", d.withExtra.interestSaved ? `saves ${fmt.money(d.withExtra.interestSaved, cur)} of interest; ends ${d.withExtra.endDate ? fmt.date(d.withExtra.endDate) : monthsText(d.withExtra.months)}` : "type an extra amount above"),
     ui.stat("Half a payment every two weeks", d.biweekly.monthsSaved ? `${monthsText(d.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(d.biweekly.interestSaved, cur)}`),
     d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)}/mo`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
-    d.pmi ? ui.stat("Mortgage insurance", d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
+    d.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(d.pmi.ltv, 0), `of ${d.pmi.homeName}'s ${fmt.money(d.pmi.homeValue, cur)} today`)
+    : d.pmi ? ui.stat("Mortgage insurance", d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
       ? `you owe ${fmt.pct(d.pmi.ltv, 0)} of the ${fmt.money(d.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}; it ends by itself at 78%${d.pmi.dateAuto && d.pmi.monthsUntilAuto ? `, around ${fmt.date(d.pmi.dateAuto)}` : ""}`
       : `you owe ${fmt.pct(d.pmi.ltv, 0)} of the home's ${fmt.money(d.pmi.homeValue, cur)} today. The law counts from the price you paid: enter it on Your home for the dates. A lender may also drop it on a new appraisal`) : null,
   )));

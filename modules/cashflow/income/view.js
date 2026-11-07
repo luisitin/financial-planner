@@ -1,6 +1,6 @@
 // modules/cashflow/income/view.js -- DOM only. Totals up top, a tappable list of income
 // sources, one form to add or edit.
-import { compute, INCOME_TYPES, looksYearly, changeFrom } from "./compute.js";
+import { compute, INCOME_TYPES, looksYearly, changeFrom, rentAfterCostsOf } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel, payRhythm } from "../../../core/math/periods.js";
 import { takeHome } from "../paycheck/compute.js";
 
@@ -134,13 +134,28 @@ export function render(root, ctx) {
       if (x.heldMonthly > 0.5) bits.push(`the plan counts on ${fmt.money(x.monthly - x.heldMonthly, cur)} a month (Side income)`);
       return bits.join(" · ");
     };
+    // rent: what is left once the place's running costs are paid (Rental analysis), or "before its costs" (round 8 batch 6)
+    const rents = rentAfterCostsOf(plan, { today });
+    const listNames = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+    const rentNote = (x) => {
+      const r = rents.get(x.id);
+      if (!r) return null;
+      const link = ui.h("a", { href: "#/property/rental", onClick: (e) => e.stopPropagation() }, "Rental analysis");
+      // one answer to "what does it bring in": after its running costs, then after its loan payment too (review 2026-11-06, UX 5),
+      // and the rent Rental analysis works from when it is not this line's (money 10)
+      if (r.afterCosts !== null) return ui.h("div", { class: "d" }, `${fmt.money(r.afterCosts, cur)} a month after ${listNames(r.rentals)}'s running costs (`, link, `)`,
+        r.loanMonthly !== null ? `; ${r.afterLoan < -0.5 ? `${fmt.money(-r.afterLoan, cur)} short` : fmt.money(r.afterLoan, cur)} after its ${fmt.money(r.loanMonthly, cur)} loan payment too (the loan is on ${r.loanInDebts ? "Debts" : "Rental analysis"})` : "",
+        r.beforeCosts > 0.5 ? `; ${fmt.money(r.beforeCosts, cur)} of it is for a place not there, before its costs` : "",
+        r.rentalRent !== null ? `. Rental analysis has the rent at ${fmt.money(r.rentalRent, cur)} a month: change one so they match` : "", ".");
+      return ui.h("div", { class: "d" }, "Before the place's running costs (tax, insurance, upkeep): add it on ", link, " to count them.");
+    };
     const rows = [...d.items].sort((a, b) => Number(b.active) - Number(a.active) || b.monthly - a.monthly);
     root.append(ui.card("Income sources",
       ui.h("ul", { class: "page-list" }, rows.map((x) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer", opacity: x.active ? 1 : 0.6 },
         onClick: () => { editing = plan.income.find((y) => y.id === x.id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, x.icon),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x))),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x)), rentNote(x)),
         ui.h("span", { class: "st amount" }, !x.active ? ui.h("div", { class: "muted" }, x.upcoming ? "not yet" : "ended") : ui.h("div", {}, x.period === "once" ? fmt.money(x.amount, cur) : fmt.money(x.monthly, cur)), !x.active ? null : ui.h("div", { class: "muted small" }, x.period === "once" ? "one time" : "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a")),
       ))),
       ui.h("p", { class: "muted small" }, "Tap an income to change it."),

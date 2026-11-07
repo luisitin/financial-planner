@@ -13,7 +13,7 @@ export default {
   phase: 10,
   enabledByDefault: true,
   needs: ["accounts", "property", "insurance", "belongings"],
-  writes: ["belongings"],
+  writes: ["belongings", "property", "accounts", "debts"],
   heavy: false,
   purpose: "Lists your home, cars and belongings with what you paid, what each is worth now and which policy covers it.",
   compute,

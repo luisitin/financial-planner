@@ -2,6 +2,7 @@
 // (read from Net worth and the property pages, which stay where they are changed) and a home inventory of belongings
 // kept here (added, changed and removed on this page), with the things worth a look for an insurance claim.
 import { compute, saveBelonging, removeBelonging, KINDS } from "./compute.js";
+import { addToNetWorth } from "../../property/rental/running.js";
 
 let pending = null;   // the confirmation shown on the next render
 let editing = null;   // the id of the belonging being changed
@@ -38,13 +39,17 @@ export function render(page, ctx) {
   }
 
   // the totals
+  // the total says what it leaves out: a home or car entered only on its own page is not in net worth (round 8 batch 6)
+  const leftOut = d.totals.left.filter((x) => !x.twin);
+  // (one Net worth may already hold under another name is "may not be in your net worth yet": review 2026-11-06, UX 2)
+  const leftWords = leftOut.length === 1 ? `; not ${leftOut[0].name} (${money(leftOut[0].value)}), which ${leftOut[0].maybe ? "may not be in your net worth yet" : `is only on ${leftOut[0].page}`}` : leftOut.length ? `; not ${leftOut.length} things only on their own pages (${money(leftOut.reduce((t, x) => t + x.value, 0))})` : "";
   if (!d.empty) root.append(ui.h("section", { class: "card" }, ui.row(
-    ui.stat("Homes, cars and other things", money(d.totals.counted), "counted in your net worth"),
+    ui.stat("Homes, cars and other things", money(d.totals.counted), `counted in your net worth${leftWords}`),
     ui.stat("Your belongings", d.items.length ? money(d.totals.worth) : "None listed", d.items.length ? `worth about this now; you paid ${money(d.totals.paid)}` : "the things in your home"))));
 
   // things worth a look
   if (d.checks.length) root.append(ui.card("Worth a look", ui.h("ul", { class: "as-checks" }, d.checks.map((c) => ui.h("li", {},
-    ui.h("span", {}, c.text), c.go ? ui.h("div", {}, ui.h("a", { href: `#/${c.go.join("/")}` }, "Open Policies ›")) : null)))));
+    ui.h("span", {}, c.text), c.go ? ui.h("div", {}, ui.h("a", { href: `#/${c.go.join("/")}` }, c.go[1] === "net-worth" ? "Open Net worth ›" : "Open Policies ›")) : null)))));
 
   // homes
   if (d.homes.length) root.append(ui.card(d.homes.length === 1 ? "Your home" : "Homes and land", ui.h("ul", { class: "records" }, d.homes.map((h) => ui.h("li", {},
@@ -52,8 +57,20 @@ export function render(page, ctx) {
     ui.h("div", { class: "rec-sub" }, h.paid !== null
       ? `Paid ${money(h.paid)}${h.bought ? ` in ${year(h.bought)}` : ""}: ${h.change >= 0 ? "up" : "down"} ${money(Math.abs(h.change))}${h.perYear !== null ? `, about ${pct(h.perYear)} a year` : ""}.`
       : "Add what you paid and when on the Home page to see how its value has moved."),
-    ui.h("div", { class: "rec-sub" }, h.policy ? `Insured by ${h.policy.name}.` : ui.h("span", { class: "pill warn" }, "No policy on file")),
-    ui.h("div", { class: "rec-foot" }, ui.h("a", { class: "btn secondary small", href: h.rental ? "#/property/rental" : "#/property/home" }, h.rental ? "Rental details" : "Home details")))))));
+    // a home rented out insured by a policy on file as a homeowners one says so (review 2026-11-06, UX 11)
+    ui.h("div", { class: "rec-sub" }, h.policy ? `Insured by ${h.policy.name}${h.policy.kind === "home" ? " (on file as a homeowners policy: check its kind on Policies)" : ""}.` : ui.h("span", { class: "pill warn" }, "No policy on file")),
+    // a rental only on Rental analysis: not in net worth, with the one tap that puts it there (or links the account Net
+    // worth already has under its name), round 8 batch 6
+    h.counted === false && h.rental ? ui.h("div", { class: "rec-sub" }, h.twin
+      ? `Net worth also lists ${h.twin.name} (${money(h.twin.value)}). If it is this rental, link them so it is counted once.`
+      : h.maybe?.length ? `Net worth may already list it under another name (${h.maybe.map((a) => `${a.name}, ${money(a.value)}`).join("; ")}): answer on Rental analysis.`
+      : `Only on Rental analysis: not in your net worth yet.`) : null,
+    ui.h("div", { class: "rec-foot" },
+      h.counted === false && h.rental && h.entryId ? (h.twin
+        ? ui.button("It's the same home", () => { pending = { text: `Linked: the ${h.twin.name} on Net worth is ${h.name}, counted once.` }; store.update((q) => { const r = (q.property ?? []).find((x) => x.id === h.entryId); if (r) r.accountId = h.twin.id; }); }, { class: "small" })
+        : h.maybe?.length ? ui.h("a", { class: "btn small", href: "#/property/rental" }, "Answer on Rental analysis")
+        : ui.button("Add it to net worth", () => { pending = { text: `${h.name} added to your net worth.` }; store.update((q) => { addToNetWorth(q, h.entryId, { today, uid: ui.uid }); }); }, { class: "small" })) : null,
+      ui.h("a", { class: "btn secondary small", href: h.rental ? "#/property/rental" : "#/property/home" }, h.rental ? "Rental details" : "Home details")))))));
 
   // cars
   if (d.cars.length) root.append(ui.card(d.cars.length === 1 ? "Your car" : "Your cars", ui.h("ul", { class: "records" }, d.cars.map((c) => ui.h("li", {},

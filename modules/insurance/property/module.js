@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 8,
   enabledByDefault: true,
-  needs: ["accounts", "insurance"],
+  needs: ["accounts", "insurance", "property", "debts"],
   writes: ["insurance"],
   heavy: false,
   purpose: "Whether your home, car and umbrella cover is enough for what you own: the cost to rebuild, the liability limits against your net worth, and the deductibles against your cash.",

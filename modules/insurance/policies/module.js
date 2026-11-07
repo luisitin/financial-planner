@@ -12,7 +12,7 @@ export default {
   status: "usable",
   phase: 8,
   enabledByDefault: true,
-  needs: ["insurance", "household"],
+  needs: ["insurance", "household", "accounts"],
   writes: ["insurance"],
   heavy: false,
   purpose: "Every policy you hold (life, disability, care, health, home, car, umbrella) with what it pays, what it costs a year, whom it covers and when it ends or renews.",

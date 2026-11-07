@@ -153,11 +153,10 @@ children were grown (H-0201), a housing allowance after service (H-1396: $762,05
 on top of the IRA (H-0796) and dividends on top of the brokerage that pays them. `otherIncome(plan, people, retireYear,
 today) -> { counted, left }` (`incomeOther` is now `.counted`) counts, from the household's first retirement year (or the
 item's later start date):
-- **Rent** (`rental`): for life, or to its end date. Gross: the rental's own costs (property tax, insurance, repairs,
-  management) are not taken off, as the Income page and Federal estimate ("before expenses") count it. Netting it against
-  the Rental property page's costs is not simple: an Income line and a `property` rental record are not linked, so a
-  household with two rentals or one typed twice could not be matched. Type the rent net of its costs if they are not
-  already in your spending.
+- **Rent** (`rental`): for life, or to its end date. Rent for a place on Rental analysis is no longer counted here: since
+  round 8 batch 6 it is `rentalLines`' (after its running costs, below), matched to the Income line as the Federal estimate
+  matches it (property/rental `running.js` `matchRent`). Only the rest of a line, rent for a place not on that page, is
+  counted here, gross ("(before its costs)").
 - **Support and other**: up to an end date they carry. Without one they stop when their owner stops work, as before round 5
   (a partner who works on after the household retires keeps it until then, as inside "<name>'s pay"; the first adult's and
   the household's never count after retirement), and are listed in `left` with `why: "work"`. The line counted while the
@@ -660,3 +659,58 @@ years"; "adjusted for inflation" (the engine's label, core/math/retirement.js, u
 
 ## Path part 3, review fixes
 - `savingsUnknown(d)` (compute.js): nothing saved for retirement on file (no first-year balance, nothing being added) and the verdict is not "on track". The page then heads "We don't know yet" with a link to What you own, and the careful line is not run. Quick answers' retire answer (`verdict: "unknown"`) and Your plan's row ("Not known yet", calm, not a gap) follow. No figure changes.
+
+## A rental after its running costs (round 8 batch 6, landlord-5, 2026-11-06; review fixes the same day)
+`rentalLines(plan, people, retireYear, today, { inSpending })`, added to the engine's incomes by `buildInputs`, type `rental`,
+`source: "rental"`, `afterCosts: true`, `rental` (its name) and `part`, for each rental on Rental analysis, from the
+household's first retirement year (to the last end date of the Income rent lines that are its rent, when each has one: the
+year it is sold):
+- **"rent"**, "<name>'s rent after its running costs": `runningOf` (property/rental `running.js`): rent × 12 less empty months
+  less property tax, insurance, dues, upkeep, a manager, utilities and other costs (`noi`), in today's money, rising with
+  inflation (`cola`), taxed as the rest of the income.
+- **"short"**, when the running costs are more than the rent: "<name>'s running costs beyond its rent", `noi` (negative),
+  rising with inflation, untaxed (no tax saving is counted for the loss). Review money 5: such a rental added no line at all.
+- **Its loan** (`loanOf`), paid until it is paid off (today + `nper(rate / 12, payment, balance)` months; Condo: 150,000 at 4.5%
+  and 851 a month, 289 months from November 2026, last payment December 2050, `loanEnds: "2050-12"`) or the place is sold,
+  whichever is first (`ends`). `inSpending(loan)` is the monthly amount the retirement spending holds for it:
+  - Get started's own figure holds the loans still being paid when work stops, at their minimum (`setupLoans` → `pay`);
+  - today's bills on Expenses hold what they count for each Debts row (cashflow/expenses `debtsCounted`: a bill matched to it at
+    the bill's amount, any other row at its payment; no mortgage when a housing bill stands for the mortgage, unless those
+    bills add up to all of them, since a bill for one of two mortgages drops both from Debts);
+  - a figure typed on this page holds none.
+  Then:
+  - **"loan back"** (held): "<name>'s loan payment, back once the loan is paid off", the held amount × 12, rising with inflation as
+    the spending holding it does, untaxed (spending no longer needed, not income), from the year after `ends` (or the first
+    retirement year, when that is later). Review money 1: from Expenses it came back even when no bill held it (21,382 in 2051,
+    for life); money 2: at the payment with its extra (13,812 a year) where the figure held the minimum (10,212); money 3: it
+    was taxed (2051 tax 5,097 on the brackets, 243 untaxed).
+  - **"loan rest"** (held in part): the part of the payment the spending does not hold (an extra paid on Debts), negative, a
+    fixed amount, untaxed, until `ends`.
+  - **"loan"** (not held): "<name>'s loan payments", −payment × 12, a fixed amount as the payment is, untaxed, until `ends`.
+    Review money 4: this was one fixed line, noi − payment × 12 (1,028 a year), which kept the rent from rising with
+    inflation while the loan ran: 2045 counted 1,028 where 19,709 − 10,212 = 9,497 comes in. The engine adds a negative line
+    to the year's income (`core/math/retirement.js` step 2, `income += amt`, then `need = max(0, spending − income)`).
+- The landlord (qa/fixtures/round8-rental.mjs `condoOnNetWorthPlan`): the first retirement year, 2045, was 128% paid by income
+  (Alex's pay 126,252 + the gross rent 25,200, flat, against 109,419 of spending and 9,172 of health cover); now **123%**:
+  126,252 + 11,240 × 1.03^19 (19,709) = 145,962 against 118,591. The tester's "about 110%" also took the 851 off the rent,
+  but Get started's figure (5,200 = 4,350 + the condo's 851, still owed in 2045) already pays it, so that would count it
+  twice. From 2051 the 10,212 comes back. The condo only on Rental analysis (`condoOnlyRentalPlan`, the loan not among the
+  bills, spending 4,350): 19,709 − 10,212 in 2045 to 22,849 − 10,212 in 2050, then 23,534 rising: 2045 at **135%** (it was
+  150% with the gross rent, and 126% with the fixed 1,028).
+- Other pages reading the incomes: Annuities' guaranteed share now keeps a line's calendar years (`incomeIn`), so "loan back"
+  from 2051 is not counted in 2045. FIRE's "other income a year" leaves out negative lines (`yearly > 0`). Batch 5b's
+  guaranteed-income-first engine should count negative lines (they lower what income covers), not drop them.
+- The month's own figure (the left-over on Next best action, Dashboard and Budget) still leaves the condo's running costs out:
+  that work is in flight elsewhere (handed over in the batch report).
+- **Words** (review UX 7): "Income counted" says one unit, the calendar year with the age it is said for: a line named for a
+  person "from 2047 (age 67)", any other "from 2045 (Sam is 65)", or "from now"; an end " to 2050"; rent for a place not on
+  Rental analysis "Rental condo (before its costs): ...". A rental's own lines say what they are: "Condo's rent after its
+  running costs: $11,240 a year from 2045 (Sam is 65)", "Condo's loan payments, $851 a month, come off from 2045 (Sam is 65)
+  until the loan ends in December 2050", "Condo's loan ends in December 2050: the $851 a month for it in your spending is
+  free again from 2051 ($10,212 a year)", "Condo costs $160 a year more to run than its rent brings in, paid from savings
+  from 2045". "Spending in retirement" names a loan it holds ("which holds Condo's $851 a month loan payment until 2050"), and
+  the "Paid by income" tile says "rent after its running costs" for these lines (`INCOME_WORDS.rentAfter`; a loan given back
+  is not named as income).
+- Tests: "batch 6" in `module.test.mjs`: the two plans above; the review's repros (a housing bill for the home's mortgage
+  alone, an extra of 300 on the condo's loan, the brackets, rent of 1,100, a sale in 2047, a loan paid off before retirement);
+  rent for a place not on Rental analysis unchanged.

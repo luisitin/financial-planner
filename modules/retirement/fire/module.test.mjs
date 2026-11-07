@@ -604,3 +604,16 @@ test("seventh pass (fire-ver8b): other income that stops in steps is said step b
   assert.equal(otherEndWords({ yearly: 14400, by: 2034, all: false }, 26400), " ($14,400 of it only until 2034)");
   assert.equal(otherEndWords(null, 0), "");
 });
+
+test("round 8 batch 6 verify: a rental's loan payment that the spending gives back after payoff is not rent; the rent counted is after its running costs", async () => {
+  const { incomeAnswer } = await import("./compute.js");
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  // Condo: 2,100 x 12 = 25,200, less 5% empty months (1,260) and 12,700 of running costs = 11,240 a year. On the plan whose
+  // spending (Get started's figure) holds the condo's $851, the projection also has "Condo's loan payment, back once the loan
+  // is paid off" ($10,212 from 2051): the page said "$21,452 a year of rent", a figure on no other page
+  const a = incomeAnswer(condoOnNetWorthPlan(), "2026-11-06");
+  assert.equal(Math.round(a.otherYearly), 11240);
+  assert.deepEqual(a.otherKinds, ["rent"]);
+  // the same household with the loan typed only on Rental analysis: the same rent
+  assert.equal(Math.round(incomeAnswer(condoOnlyRentalPlan(), "2026-11-06").otherYearly), 11240);
+});

@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 2,
   enabledByDefault: true,
-  needs: ["income", "household"],
+  needs: ["income", "household", "property", "accounts", "debts"],
   writes: ["income"],
   heavy: false,
   purpose: "Every source of money coming in, on a monthly footing whatever the pay schedule.",

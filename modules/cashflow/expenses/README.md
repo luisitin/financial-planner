@@ -158,3 +158,15 @@ row, "It is something else", tapping a row) opens it first. "Debts >" is a 44 px
 - The tiles read "Bills you have to pay" and "Could be cut"; each bill's note says "a bill you have to pay" or "could be cut".
 - "Where it goes" is left out when it would only repeat the list (one row per kind, as Get started writes them).
 - When our guess is more than comes in, the left-over tile says so plainly ("probably too high") instead of "about $X short".
+
+## The Debts payments the month carries (round 8 batch 6 review, 2026-11-06)
+`debtsCounted: [{ id, monthly }]`: each Debts row (by its account id) whose payment is in `monthly`, and how much of it: a row
+matched to a bill at the bill's amount, any other row with a payment at that payment (added from Debts, or covered by a
+filed line that matches no debt). A mortgage dropped because a housing bill is the mortgage is listed only when those housing
+bills add up to all the mortgages' payments (within 10%), each at its payment: a bill for one of two mortgages drops both from
+Debts, and which one it stands for cannot be told. Will the money last? reads it to give a rental's loan payment back after
+the loan is paid off only when, and as much as, today's bills hold it. Nothing else here changes. Test: "batch 6" in
+`module.test.mjs` (the landlord plan with no loan bill, a bill of $900 for the condo's loan, a "Mortgage payment" bill of
+$2,350 for the home alone, one of $3,200 for both).
+Known, not changed here: a housing bill for one mortgage drops every mortgage from Debts, so the landlord with "Mortgage
+payment" $2,350 has the condo's $851 in no bill (the month is $851 short). Left for the month's owners (batch report).

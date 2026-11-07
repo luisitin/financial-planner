@@ -90,6 +90,7 @@ export function billsFoldOpen(plan, items) {
  *   byCategory: [{ category, label, icon, monthly, share }] (active, largest first),
  *   income: { monthly, yearly } | null, leftOver (income monthly - expenses monthly) | null, savingsRate | null,
  *   warnings: [text],
+ *   debtsCounted: [{ id (the Debts row's account id), monthly (what the month carries for it) }] (the Debts payments in `monthly`),
  *   guessedMonthly, guessedShare, guessedEssential, guessedEssentialShare, guessedCount (only when the plan holds guesses and
  *   some of the month is ours: the bills and debt payments Get started guessed, a month, and their share of the month and of
  *   the must-pay part; spec 8.1)
@@ -123,7 +124,8 @@ export function compute(plan, params = {}) {
   const mortgagePay = debts ? (debts.rows ?? []).filter((r) => r.type === "mortgage").reduce((s, r) => s + (Number(r.payment) || 0), 0) : 0;
   // (Get started's housing row while it is our guess is never the mortgage's payment: it is the home's other costs, worked
   // out by our guesses, whatever its name or amount; C3 review D1)
-  const mortgageFiled = mortgagePay > 0 && active.some((x) => x.category === "housing" && !guessedSetupRow(plan, x) && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1));
+  const isMortgageBill = (x) => x.category === "housing" && !guessedSetupRow(plan, x) && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1);
+  const mortgageFiled = mortgagePay > 0 && active.some(isMortgageBill);
   const allDebtPayments = debts ? debts.payments : 0;
   const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);
   const filedDebt = sum(active.filter((x) => x.category === "debt"), "monthly");
@@ -136,6 +138,17 @@ export function compute(plan, params = {}) {
   const endedIds = new Set([...pm.matched.values()].map((e) => e.id));
   const ended = [...pm.matched].map(([id, e]) => ({ debtId: id, debtName: paidRows.find((r) => r.id === id)?.name ?? "", id: e.id, name: e.name, monthly: e.monthly }));
   const m = matchDebts(debtItems.filter((x) => !endedIds.has(x.id)), rows);
+  // the Debts rows the month carries and how much of each (round 8 batch 6 review, money 1 and 2: the retirement plan gives a
+  // rental's loan payment back once the loan is paid off only when the spending carries it, and only what it carries): a row
+  // matched to a bill at the bill's amount; any other row with a payment at that payment (added from Debts, or covered by a
+  // filed line that matches no debt). The mortgages, when a housing bill is the mortgage, only when those bills add up to all
+  // of them (within 10%): a bill for one of two mortgages drops both from Debts, and which one it is cannot be told
+  const filedMortgages = mortgageFiled ? sum(active.filter(isMortgageBill), "monthly") : 0;
+  const mortgagesInBill = mortgageFiled && Math.abs(filedMortgages - mortgagePay) <= mortgagePay * 0.1;
+  const debtsCounted = [
+    ...(debts?.rows ?? []).filter((r) => mortgagesInBill && r.type === "mortgage" && (Number(r.payment) || 0) > 0).map((r) => ({ id: r.id, monthly: Number(r.payment) })),
+    ...rows.map((r) => ({ id: r.id, monthly: m.matched.get(r.id)?.monthly ?? r.payment })),
+  ];
   // what is filed but matches no debt (one line for all of them, or an amount out of date) covers the unmatched debts up to its amount
   const unmatchedRows = rows.filter((r) => !m.matched.has(r.id));
   const missingTotal = unmatchedRows.reduce((t, r) => t + r.payment, 0);
@@ -196,7 +209,7 @@ export function compute(plan, params = {}) {
     // an extra paid on a debt kept on Debts alone could be cut in a pinch: it is a nice-to-have, so the two add up to the total
     optionalMonthly: sum(active.filter((x) => !x.essential), "monthly") + (debtFromDebts - debtRequired),
     inflatingMonthly, nextYear, leftOverNextYear,
-    debtPayments, debtFromDebts, debtRequired, fromDebts, ended, debtMatches: Object.fromEntries([...m.matched].map(([id, e]) => [id, e.id])),
+    debtPayments, debtFromDebts, debtRequired, fromDebts, ended, debtsCounted, debtMatches: Object.fromEntries([...m.matched].map(([id, e]) => [id, e.id])),
     oneTime: sum(active, "oneTime"),
     byCategory, income, leftOver, savingsRate: income && income.monthly > 0 ? leftOver / income.monthly : null,
     warnings, overspend,

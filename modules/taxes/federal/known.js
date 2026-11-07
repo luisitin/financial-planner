@@ -22,6 +22,7 @@ import { compute as computeProjection } from "../../retirement/projection/comput
 import { rmdAmount } from "../../../core/math/rmd.js";
 import { compute as computeEmployerStock, supplementalWithholding, ADDITIONAL_MEDICARE } from "../../investments/employer-stock/compute.js";
 import { rentalsFor, passiveLosses, lossAllowance } from "../../property/rental/compute.js";
+import { matchRent } from "../../property/rental/running.js";
 import { iraDeduction, coveredAtWork } from "../../investments/limits/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { yearOfPayments } from "../../../core/math/finance.js";
@@ -70,21 +71,8 @@ export function withoutIncomeRent(plan, fed, { today = null, rentals = null } = 
   const rows = computeIncome(plan, { today }).active.filter((x) => x.type === "rental" && x.taxable !== false && n(x.yearly) > 0);
   const all = rows.reduce((s, x) => s + x.yearly, 0);
   if (!(all > 0)) return { inputs: fed.inputs, removed: 0, left: 0, rows: [] };
-  const props = (rentals ?? rentalsFor(plan, { today, year: fed.year })).map((r) => ({ name: String(r.name ?? "").trim().toLowerCase(), rent: Math.max(0, n(r.rent)) }));
-  const takes = rows.map(() => 0), used = new Set();
-  const lc = (v) => String(v ?? "").trim().toLowerCase();
-  const match = (test) => {
-    for (const pr of props) {
-      if (!(pr.rent > 0.005)) continue;
-      const i = rows.findIndex((x, j) => !used.has(j) && test(x, pr));
-      if (i < 0) continue;
-      used.add(i); takes[i] = Math.min(rows[i].yearly, pr.rent); pr.rent -= takes[i];
-    }
-  };
-  match((x, pr) => pr.name.length > 0 && lc(x.name).length > 0 && (lc(x.name).includes(pr.name) || pr.name.includes(lc(x.name))));
-  match((x, pr) => Math.abs(x.yearly - pr.rent) <= Math.max(1, 0.02 * pr.rent));
-  const still = props.reduce((t, pr) => t + pr.rent, 0), rest = rows.reduce((t, x, j) => t + (used.has(j) ? 0 : x.yearly), 0);
-  if (still > 0.005 && rest > 0) { const k = Math.min(1, still / rest); rows.forEach((x, j) => { if (!used.has(j)) takes[j] = x.yearly * k; }); }
+  // the match is Rental analysis's (running.js matchRent), shared with Income and Will the money last? (round 8 batch 6)
+  const takes = matchRent(rows, rentals ?? rentalsFor(plan, { today, year: fed.year })).removed;
   const removed = takes.reduce((t, v) => t + v, 0);
   if (!(removed > 0.005)) return { inputs: fed.inputs, removed: 0, left: all, rows: rows.map((x) => ({ name: x.name, yearly: x.yearly, removed: 0 })) };
   const inp = fed.inputs;

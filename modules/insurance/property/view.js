@@ -16,6 +16,7 @@ const STYLE = `
 `;
 
 const TERMS = {
+  landlord: null,
   home: [
     { key: "rebuildCost", label: "Cost to rebuild", type: "money", min: 0, help: "the insurer's replacement-cost estimate, on the declarations page or in its app" },
     { key: "liability", label: "Liability limit", type: "money", min: 0, help: "personal liability (coverage E), often $100,000 to $500,000" },
@@ -23,6 +24,9 @@ const TERMS = {
   ],
   auto: [{ key: "deductible", label: "Deductible", type: "money", min: 0, help: "collision deductible, per car" }],
 };
+// a landlord policy has the same terms: cost to rebuild, liability limit, deductible; its help in plain words (review 2026-11-06,
+// UX 8: "personal liability (coverage E)" is homeowners jargon)
+TERMS.landlord = TERMS.home.map((f) => (f.key === "liability" ? { ...f, help: "liability: if someone is hurt there and sues, often $300,000 to $1,000,000" } : f));
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -40,22 +44,26 @@ export function render(page, ctx) {
     ui.row(ui.h("a", { class: "btn", href: "#/insurance/policies" }, "Add your policies"))));
   else {
     const weakest = Math.min(...[d.auto ? d.inCar : null, d.homeLiability ? d.atHome : null].filter((x) => x !== null));
+    // one phrase, one figure (round 8 batch 6, landlord-7): "a lawsuit could reach" is only ever the net worth less retirement
+    // accounts; what the policies leave over is "not covered"
+    // (review 2026-11-06, money 7: "what you own outside retirement accounts" is $718,000 on the landlord plan; the figure is net worth)
+    const reach = `${money(d.exposed)} a lawsuit could reach (${d.shielded > 0 ? "your net worth outside retirement accounts" : "your net worth"})`;
     root.append(ui.card(null, ui.row(
-      ui.stat("A lawsuit could reach", money(d.exposed), d.shielded > 0 ? `of ${money(d.netWorth)} net worth; retirement accounts are mostly safe` : "your net worth"),
+      ui.stat("Not covered by your policies", money(d.uncovered), d.uncovered > 0.5 ? `of the ${reach}, after ${money(d.liabilityCover)} of liability cover` : `your ${money(d.liabilityCover)} of liability cover is more than the ${reach}`),
       ui.stat("Liability cover", money(weakest), d.umbrella > 0 ? "the lower of car and home, umbrella included" : d.auto && d.homeLiability ? "the lower of car and home" : "per accident"),
     )));
   }
 
   if (d.checks.length) {
     const list = ui.h("ul", { class: "pr-checks" }, d.checks.map((c) => ui.h("li", {}, ui.h("span", { class: "pr-ic" }, c.ok === null ? "•" : c.ok ? "✅" : "⚠️"), ui.h("div", {},
-      ui.h("div", { class: "pr-t" }, c.title), ui.h("div", { class: "pr-d" }, c.text), c.go ? ui.h("a", { href: `#/${c.go.join("/")}` }, "Go there ›") : null))));
+      ui.h("div", { class: "pr-t" }, c.title), ui.h("div", { class: "pr-d" }, c.text), c.go ? ui.h("a", { href: `#/${c.go.join("/")}${c.query ? `?${new URLSearchParams(c.query)}` : ""}` }, "Go there ›") : null))));
     root.append(ui.card("The checks", list));
   }
 
   // the terms the Policies form does not ask
   const editable = (plan.insurance?.policies ?? []).filter((x) => TERMS[x.kind]);
   if (editable.length) {
-    const missing = editable.filter((x) => x.kind === "home" && !(Number(x.rebuildCost) > 0 && Number(x.liability) > 0)).length;
+    const missing = editable.filter((x) => (x.kind === "home" || x.kind === "landlord") && !(Number(x.rebuildCost) > 0 && Number(x.liability) > 0)).length;
     const fold = ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Policy terms"), ui.h("span", { class: "fold-status" }, missing ? "rebuild cost or liability missing" : "all entered"), ui.h("span", { class: "fold-chev" }, "›")));
     for (const x of editable) {
       fold.append(ui.h("h3", { style: { margin: "12px 0 4px" } }, x.name), ui.form(TERMS[x.kind], Object.fromEntries(TERMS[x.kind].map((f) => [f.key, x[f.key] ?? null])), (v) => {

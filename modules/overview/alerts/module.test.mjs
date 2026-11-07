@@ -600,3 +600,29 @@ test("round 8 review UX 4: a past-due college goal for a child in college points
   assert.equal(a.detail, "Education says the next bill is about $12,930 (the spring half of 2026-27, due January 15, 2027): tap Update on Education to set this goal to it.");
   assert.deepEqual(a.go, ["goals", "education"]);
 });
+
+// round 8 batch 6 review (UX 10): a rental only on Rental analysis is a housekeeping item, with its value and loan
+test("batch 6 review: a rental left out of net worth is a housekeeping item; asked about when Net worth may already list it", async () => {
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const T = "2026-11-06";
+  const a = compute(condoOnlyRentalPlan(), { today: T }).alerts.find((x) => x.id === "rental-off-r-condo");
+  assert.deepEqual([a.title, a.detail, a.go, a.chore], ["Condo is not in your net worth yet", "It is worth $260,000 and owes $150,000 on Rental analysis. Add it there in one tap.", ["property", "rental"], true]);
+  // Net worth lists a Condo: asked, not asserted
+  const b = compute(condoOnNetWorthPlan(), { today: T }).alerts.find((x) => x.id === "rental-off-r-condo");
+  assert.equal(b.detail, "It is worth $260,000 on Rental analysis. Net worth may already list it: say which there.");
+  // linked: nothing
+  const p = condoOnNetWorthPlan(); p.property[0].accountId = "condo";
+  assert.ok(!compute(p, { today: T }).alerts.some((x) => x.id.startsWith("rental-off-")));
+});
+
+test("round 8 batch 6 verify: a rental Net worth may already list is asked about, not called missing", async () => {
+  const { condoOnNetWorthPlan, condoOnlyRentalPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const find = (p) => compute(p, { today: "2026-11-06" }).alerts.find((x) => x.id === "rental-off-r-condo");
+  // Net worth lists "Condo" at $260,000, not yet linked: it is probably in net worth already, so the title asks
+  const a = find(condoOnNetWorthPlan());
+  assert.equal(a.title, "Is Condo on Net worth already?");
+  assert.doesNotMatch(a.title, /not in your net worth/);
+  assert.match(a.detail, /Net worth may already list it/);
+  // only on Rental analysis: it is not in net worth, and the item says so
+  assert.equal(find(condoOnlyRentalPlan()).title, "Condo is not in your net worth yet");
+});

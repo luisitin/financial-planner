@@ -36,3 +36,21 @@ Losses beyond 3,000 carry forward but the carry-forward is not stored for next y
 
 ## Ideas / not yet
 - Read sales from the brokerage import (Phase 7 tax lots); carry the loss forward into next year's plan.
+
+## Selling a rental (round 8 batch 6, landlord-4, 2026-11-06)
+The Cost box's help adds: "Selling a home you rented out? Its cost is what you paid plus improvements, less the depreciation
+taken (Rental analysis shows a year's), and the part of the gain from depreciation is taxed at up to 25%." Sources: IRS
+Publication 527 (2025), "Depreciation reduces your basis for figuring gain or loss on a later sale or exchange" (read
+2026-11-06); IRC 1(h)(1)(E), 25 percent on unrecaptured section 1250 gain (read 2026-11-06 at law.cornell.edu). The sale
+itself (adjusted basis, the split of the gain, the released losses) is not worked yet (item 26's second part).
+
+## Review fixes (round 8 batch 6, 2026-11-06)
+- The Cost help says "less the depreciation taken, or that could have been taken": IRS Publication 527 (2025), Decreases to
+  basis: "Depreciation you deducted or could have deducted on your tax returns" (read 2026-11-06); IRC 1016(a)(2) "allowed or
+  allowable".
+- `rentalSales: [{ id, sale, rental, depreciation, fromDepreciation }]`: a sale whose name names a rental on Rental analysis as
+  whole words ("Condo sale" for Condo) carries the depreciation taken to today (property/rental `depreciationTaken`) and the
+  part of its gain that makes, min(depreciation, gain), taxed at up to 25% (IRC 1(h)(1)(E)). The page then says "If “Condo sale”
+  is the sale of Condo, your rental: about $44,291 of its gain is depreciation taken back (Rental analysis), taxed at up to 25%, not at the long-term
+  rates, so the tax will be more than shown." The tax figures do not split it yet (item 26's second part).
+- Test: "batch 6 review" in `module.test.mjs`.

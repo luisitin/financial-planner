@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 6,
   enabledByDefault: true,
-  needs: ["household", "income", "taxes"],
+  needs: ["household", "income", "taxes", "property"],
   writes: ["taxes"],
   heavy: false,
   purpose: "Tax on what you sell this year: short against long, the 0/15/20% bands, the loss allowance, and how much gain still fits at 0%.",
