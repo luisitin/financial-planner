@@ -16,6 +16,7 @@ import * as fmt from "./format.js";
 import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
 import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
 import { view, reach, shown as offeredPage } from "./view.js";
+import { healOnce, brokenWords, bootWords, PAGE_WORDS, failNotice as healNotice } from "./heal.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -31,6 +32,14 @@ const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav))
 let GUESS = { estimators: {}, tables: {}, weights: {} };
 let moved = 0;                      // how many guesses the last save moved (store.takeSettled), said once with its notice
 export const isReady = (m) => m.status !== "planned";
+// A mix of old and new files (a deploy landing while the app opens) is mended by one reload (core/heal.js), before any
+// error is shown; never twice within two minutes. The sandbox (testers, ?sandbox=1) never reloads by itself: a tester
+// sees the error at once. The PC's server always puts an import map in index.html, so its presence says the app's files
+// come from the PC (restarting it can help); on GitHub Pages (phone only) the words never mention the PC.
+const heal = () => !store.sandbox() && healOnce();
+const servedByPc = () => !!document.querySelector('script[type="importmap"]');
+/** A red notice in plain words with a filled Reload button; the technical text sits behind "Show details" (core/heal.js). */
+const failNotice = (words, details = [], opts = {}) => healNotice(ui, words, details, opts);
 // The household's view (core/view.js): a page is offered (menu, search, lists) only when it is ready, not a builder's
 // page, and what it needs (the PC, the AI helper) answers. The build view offers everything, as before.
 const isShown = (m) => offeredPage(m, isReady);
@@ -208,13 +217,9 @@ async function show(route, { keepScroll = false } = {}) {
   if (!keepScroll) closeDrawer();
   window.scrollTo(0, keepY);
   if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
-  if (broken.length) {
-    // Plain words first; the technical list sits behind a tap (design log 2026-09-15).
-    const n = broken.length;
-    root.append(ui.h("div", { class: "notice error" },
-      ui.h("div", {}, `${n === 1 ? "One page" : `${n} pages`} could not load right now. Reload the page; if it keeps happening, restart the app on the PC.`),
-      ui.h("details", { class: "notice-details" }, ui.h("summary", {}, "Show details"), ui.h("ul", {}, broken.map((b) => ui.h("li", {}, b))))));
-  }
+  // Plain words first; the technical list sits behind a tap (design log 2026-09-15). Shown only when the one reload
+  // at boot did not mend it (boot() below).
+  if (broken.length) root.append(failNotice(brokenWords(broken.length, servedByPc()), broken));
   const ctx = makeCtx(route);
   ctx.module = m;
   // The page draws into its own plain <div data-page>, so a page that clears and redraws itself never wipes
@@ -231,7 +236,11 @@ async function show(route, { keepScroll = false } = {}) {
   ctx.derived = safeCompute(m, ctx.plan);
   let c = null;
   try { c = (await m.render(page, ctx)) ?? null; }
-  catch (e) { console.error(e); page.append(ui.notice("error", `This page failed to render: ${e}`)); }
+  catch (e) {
+    console.error(e);
+    if (seq === renderSeq && heal()) return;   // reloading: likely old and new files mixed; a second throw shows the notice
+    page.append(failNotice(PAGE_WORDS, [String(e)], { reload: !broken.length }));   // one Reload button on the screen
+  }
   if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
   cleanup = c;
   if (frame?.after) root.append(frame.after);
@@ -359,6 +368,7 @@ function onSync() {
 
 async function boot() {
   await loadModules();
+  if (broken.length && heal()) return;   // pages that do not fit the shell: one reload first (core/heal.js)
   // untouched guesses follow each change inside store.update (never on load, adopt, replace, resolve or another tab's save)
   store.settleWith((draft) => settle(draft, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today() }));
   await features.init();
@@ -420,4 +430,8 @@ function mendBlockedForms() {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   }, true);
 }
-boot().then(mendBlockedForms).catch((e) => { console.error(e); document.getElementById("content").textContent = `Boot failed: ${e}`; });
+boot().then(mendBlockedForms).catch((e) => {
+  console.error(e);
+  if (heal()) return;
+  document.getElementById("content").replaceChildren(failNotice(bootWords(servedByPc()), [String(e)]));
+});

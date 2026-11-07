@@ -1,7 +1,7 @@
-// modules/system/docs/view.js -- reads the project's own Markdown docs from the server
-// (they are static files) and renders them. Route: #/system/docs/<docId>.
+// modules/system/docs/view.js -- reads the project's own Markdown docs (static files next to the app's page: the PC's
+// server or GitHub Pages) and renders them. Route: #/system/docs/<docId>.
 // Picker, plain names and the end-of-document controls per docs/DESIGN_LOG.md 2026-09-15.
-import { markdownToHtml } from "./compute.js";
+import { markdownToHtml, docAddress, docTrouble } from "./compute.js";
 
 // Plain names for the picker, grouped: the owner's documents first, then the builder's.
 // Anything compute.js lists that is not named here lands in the builder group unchanged.
@@ -16,7 +16,7 @@ const FOR_BUILDERS = [
 ];
 
 export function render(root, ctx) {
-  const { ui, api, derived, route, go } = ctx;
+  const { ui, api, store, derived, route, go } = ctx;
   const current = derived.docs.find((d) => d.id === route.rest[0]) ?? derived.current;
   const byId = new Map(derived.docs.map((d) => [d.id, d]));
   const named = new Set([...FOR_YOU, ...FOR_BUILDERS].map(([id]) => id));
@@ -36,10 +36,13 @@ export function render(root, ctx) {
   const body = ui.h("div", { class: "doc" }, ui.muted("Loading..."));
   const foot = ui.h("div", { class: "doc-foot" });
   root.append(ui.card(null, body, foot));
-  const base = api.base();
-  if (!base) { body.textContent = "Documents are read from the PC. Open the app from the PC's address (or set it in Settings > PC connection) to read them here."; return; }
-  fetch(`${base}/${current.path}`, { cache: "no-cache" }).then(async (r) => {
-    if (!r.ok) throw new Error(`${r.status}`);
+  // next to the app's own page (the PC, or GitHub Pages under its subpath); a PC address set here wins (compute.js docAddress)
+  const serverUrl = api.base() === location.origin ? "" : api.base();
+  const address = docAddress(current.path, { serverUrl, page: location.href });
+  if (!address) { body.textContent = "Documents are read from the PC. Open the app from the PC's address (or set it in Settings > PC connection) to read them here."; return; }
+  const pc = !!serverUrl || store.backend() === "server";
+  fetch(address, { cache: "no-cache" }).then(async (r) => {
+    if (!r.ok) { const e = new Error(`${r.status}`); e.status = r.status; throw e; }
     body.innerHTML = markdownToHtml(await r.text());
     for (const a of body.querySelectorAll("a[href]")) {
       const href = a.getAttribute("href");
@@ -57,5 +60,11 @@ export function render(root, ctx) {
       ui.row(ui.h("a", { href: "#top", class: "btn secondary", onClick: (e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); } }, "Back to top")),
       picker(),
     );
-  }).catch((e) => { body.innerHTML = ""; body.append(ui.notice("error", `Could not load this document (${e.message}). Check the PC connection in Settings and try again.`)); });
+  }).catch((e) => {
+    const why = docTrouble(e.status ?? 0, { pc });
+    body.innerHTML = "";
+    body.append(ui.notice("error", why === "pc" ? `Could not load this document (${e.status || e.message}). Check the PC connection in Settings and try again.`
+      : why === "missing" ? "This document is not part of this copy of the app."
+      : "Could not open this document right now. Check that you are online, then try again."));
+  });
 }

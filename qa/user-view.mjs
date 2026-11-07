@@ -97,7 +97,7 @@ if (DEMO) {
     const fr = page.frames().find((f) => f !== page.mainFrame());
     const t = await fr.evaluate(() => document.getElementById("content")?.innerText ?? "");
     check(/Net worth/.test(t), "demo in a sandboxed frame: shows the pretend household (storage throws, plan kept in memory)");
-    check(!/out of space|Boot failed/i.test(t), "demo in a sandboxed frame: no storage-full or boot failure");
+    check(!/out of space|Boot failed|could not open/i.test(t), "demo in a sandboxed frame: no storage-full or boot failure");
     // make a change in the frame: it must stick for the visit
     await fr.evaluate(() => { location.hash = "#/system/settings"; }); await page.waitForTimeout(800);
     await fr.fill("input[name=name]", "Our family plan"); await fr.locator("#content form button[type=submit]").first().click(); await page.waitForTimeout(800);

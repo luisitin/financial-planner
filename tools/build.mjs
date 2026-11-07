@@ -34,6 +34,17 @@ export function startScript(plan) {
   return `<script>globalThis.__PLANNER_START__ = ${json};</script>`;
 }
 
+/**
+ * The single file leaves out index.html's opening guard: it has no sw.js beside it (and the claude.ai demo runs in a
+ * sandboxed frame, which refuses service workers), and one inlined script cannot mix old and new files. Throws when the
+ * guard is not found, so a renamed guard can never slip into the single file unnoticed.
+ */
+export function withoutOpeningGuard(html) {
+  const out = html.replace(/<script id="opening-guard">[\s\S]*?<\/script>\n?/, "");
+  if (out === html) throw new Error('index.html has no <script id="opening-guard">: update tools/build.mjs');
+  return out;
+}
+
 async function loadPlan(file) {
   const abs = path.resolve(file);
   if (/\.mjs$/i.test(abs)) {
@@ -53,7 +64,7 @@ export async function build({ demo = null, out = null } = {}) {
   const result = await esbuild.build({ entryPoints: [path.join(ROOT, "core/app.js")], bundle: true, format: "iife", minify: false, write: false, target: ["es2022"], logLevel: "warning" });
   const js = result.outputFiles[0].text;
   const css = fs.readFileSync(path.join(ROOT, "core/ui/base.css"), "utf8");
-  let html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  let html = withoutOpeningGuard(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"));
   const start = demo ? startScript(await loadPlan(demo)) : "";
   html = html.replace(/<link rel="stylesheet" href="\.\/core\/ui\/base\.css">/, () => `<style>\n${css}\n</style>`)
              .replace(/<script type="module" src="\.\/core\/app\.js"><\/script>/, () => `${start}\n<script>\n${js.replace(/<\/script>/g, "<\\/script>")}\n</script>`);

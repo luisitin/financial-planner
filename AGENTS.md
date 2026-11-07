@@ -42,6 +42,7 @@ configures the server and is never committed or served.
     README and the catalog's seeds column, never on screen. Empty states explain what to do
     first instead of showing zeros and empty tables.
 15. **The repo is public.** Never write a real name, address, employer, balance, account number, machine name or IP into a file. The pre-commit leak guard (`npm run hooks` once per clone) refuses them; examples use the invented households in `qa/`.
+16. **`main` is what the owner's phone opens** (GitHub Pages). Move it only with `git push`, so `.githooks/pre-push` runs `tools/main-gate.mjs` (`npm run skew` by hand): old and new files must never run together on the phone. Never push to `main` with `--no-verify`; docs/PLAN.md "On a static host" says why.
 
 ## Add a page in six steps
 ```

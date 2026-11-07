@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] The phone link never runs old and new files together after an update: a small service worker (sw.js) checks every file with the site on each open, the app reloads itself once if a page fails to load and then says so in plain words with a Reload button (never 'restart the app on the PC' on a phone), the Docs page works under the site's address, and a check (tools/main-gate.mjs, tools/live-check.mjs) reproduces the owner's broken screen and must pass before main moves.
 - [builder:claude-b] Smart guesses, step 4: retirement saving is never left at $0. Get started's question 4b shows a grey figure in every box (what you have in a 401(k) or IRA, what goes in, what your employer adds), with taps for what you put in (None, 3%, 5%, 6%, 10%, Not sure) and the dollars shown as you tap; "$5" is checked as 5%; a couple's "both of ours" is split between you.
 - [builder:claude-b] Next best action's match step says it in your own figures: "put in 6% of pay ($290 a month, about $20 more than the $270 we guess goes in now) to likely get about $190 a month from the employer". Contributions takes "6%" as an amount. When you said your job has a plan with nothing in it yet, the pages say so instead of calling it a job you left.
 - [builder:claude-b] Will the money last? waits while your retirement balances are our guesses, and says so, instead of a firm answer built on them.

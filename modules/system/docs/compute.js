@@ -18,6 +18,30 @@ export const DOCS = [
   { id: "changelog", title: "CHANGELOG", path: "CHANGELOG.md" },
 ];
 
+/**
+ * Where to read a doc from. A PC address set on this device (a copy of the app opened from elsewhere) wins, as before;
+ * otherwise the doc sits next to the app's own page, so it is read relative to it: "/README.md" on the PC,
+ * "/financial-planner/README.md" on GitHub Pages (the site lives under that subpath, not at the domain root).
+ * `page`: the address of the app's page (location.href). Null when neither works (the app opened from a file).
+ */
+export function docAddress(docPath, { serverUrl = "", page = "" } = {}) {
+  if (serverUrl) return `${String(serverUrl).replace(/\/+$/, "")}/${docPath}`;
+  let at;
+  try { at = new URL(page); } catch { return null; }
+  if (!/^https?:$/.test(at.protocol)) return null;
+  return new URL(docPath, at).href;
+}
+
+/**
+ * Why a doc could not be read, as one of "pc" | "missing" | "offline" (view.js words each). `pc`: the app talks to the
+ * PC (its server, or a PC address set on this device), so the PC connection is worth checking; otherwise (GitHub Pages,
+ * phone only) the PC is never mentioned. `status`: the HTTP status, or 0 when nothing answered.
+ */
+export function docTrouble(status, { pc = false } = {}) {
+  if (pc) return "pc";
+  return status === 404 ? "missing" : "offline";
+}
+
 export function compute(plan, params = {}) {
   return { docs: DOCS, current: DOCS.find((d) => d.id === params.doc) ?? DOCS[0] };
 }
