@@ -2,7 +2,7 @@
 // (read from Net worth and the property pages, which stay where they are changed) and a home inventory of belongings
 // kept here (added, changed and removed on this page), with the things worth a look for an insurance claim.
 import { compute, saveBelonging, removeBelonging, KINDS } from "./compute.js";
-import { addToNetWorth } from "../../property/rental/running.js";
+import { addToNetWorth, linkedWords } from "../../property/rental/running.js";
 
 let pending = null;   // the confirmation shown on the next render
 let editing = null;   // the id of the belonging being changed
@@ -67,7 +67,7 @@ export function render(page, ctx) {
       : `Only on Rental analysis: not in your net worth yet.`) : null,
     ui.h("div", { class: "rec-foot" },
       h.counted === false && h.rental && h.entryId ? (h.twin
-        ? ui.button("It's the same home", () => { pending = { text: `Linked: the ${h.twin.name} on Net worth is ${h.name}, counted once.` }; store.update((q) => { const r = (q.property ?? []).find((x) => x.id === h.entryId); if (r) r.accountId = h.twin.id; }); }, { class: "small" })
+        ? ui.button("It's the same home", () => { pending = { text: linkedWords(h.twin.name, h.name) }; store.update((q) => { const r = (q.property ?? []).find((x) => x.id === h.entryId); if (r) r.accountId = h.twin.id; }); }, { class: "small" })
         : h.maybe?.length ? ui.h("a", { class: "btn small", href: "#/property/rental" }, "Answer on Rental analysis")
         : ui.button("Add it to net worth", () => { pending = { text: `${h.name} added to your net worth.` }; store.update((q) => { addToNetWorth(q, h.entryId, { today, uid: ui.uid }); }); }, { class: "small" })) : null,
       ui.h("a", { class: "btn secondary small", href: h.rental ? "#/property/rental" : "#/property/home" }, h.rental ? "Rental details" : "Home details")))))));

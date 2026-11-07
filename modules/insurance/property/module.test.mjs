@@ -80,7 +80,7 @@ test("batch 6: a lawsuit could reach 318,000; 218,000 of it is not covered, afte
   assert.equal(d.liabilityCover, 100000); assert.equal(d.uncovered, 218000);
   // one meaning for each phrase: no check says "a lawsuit could reach" with another figure
   const liab = d.checks.find((c) => c.id === "liability");
-  assert.equal(liab.title, "$218,000 of what you own is not covered");
+  assert.equal(liab.title, "$218,000 of your net worth outside retirement accounts is not covered");
   assert.ok(!d.checks.some((c) => /lawsuit could reach/i.test(c.title)));
 });
 
@@ -143,7 +143,7 @@ test("batch 6 review: the home side of the liability check is the weakest home o
   pol.find((x) => x.id === "pol-home").liability = 100000; pol.find((x) => x.id === "pol-car").benefit = 1000000;
   const d = compute(p, { today: "2026-11-06" });
   assert.equal(d.liabilityCover, 100000); assert.equal(d.uncovered, 218000);
-  assert.equal(d.checks.find((c) => c.id === "liability").title, "$218,000 of what you own is not covered");
+  assert.equal(d.checks.find((c) => c.id === "liability").title, "$218,000 of your net worth outside retirement accounts is not covered");
 });
 
 test("batch 6 review (UX 8, 12): a rented-out condo with association dues is not asked for the cost to rebuild the building; the umbrella names its policy", async () => {

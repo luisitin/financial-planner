@@ -4,7 +4,7 @@ import { compute } from "./compute.js";
 import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
 import { readAmount, amountText } from "../../../core/format.js";
 import { clearGuess, isGuess } from "../../../core/estimate/index.js";
-import { payOf } from "../../overview/guesses/estimators/saving.js";
+import { jobPayOf as payOf } from "../../overview/guesses/estimators/saving.js";
 import { BUCKET_OF } from "../projection/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { leftWords } from "../../overview/next-best-action/compute.js";
@@ -34,10 +34,27 @@ export function readAmountOrShare(text) {
 export function applyContributionEdit(p, id, clean) {
   const i = (p.retirement.contributions ?? []).findIndex((c) => c.id === id);
   if (i < 0) return;
-  const was = p.retirement.contributions[i], { pctOfPay: _gone, ...rest } = was;
+  const { pctOfPay: _gone, ...rest } = p.retirement.contributions[i];
   p.retirement.contributions[i] = { ...rest, ...clean };
-  if (Number(was.amount) !== Number(clean.amount) || (was.period ?? "monthly") !== (clean.period ?? "monthly")) clearGuess(p, `retirement.contributions[${id}].amount`);
-  if (Number(was.employerMatch) !== Number(clean.employerMatch)) clearGuess(p, `retirement.contributions[${id}].employerMatch`);
+  // any save of the form is the person's own word, equal to our guess or not (spec S2): both guesses end
+  clearGuess(p, `retirement.contributions[${id}].amount`);
+  clearGuess(p, `retirement.contributions[${id}].employerMatch`);
+}
+
+/**
+ * The edit form's first values for a row. A figure that is still our guess opens grey (an empty box with the guess as its
+ * placeholder), never as typed text (spec P2). -> { values, amountHint, matchHint } (a hint is "" when that figure is typed)
+ */
+export function contributionFormStart(plan, row) {
+  const gAmt = isGuess(plan, `retirement.contributions[${row.id}].amount`), gMatch = isGuess(plan, `retirement.contributions[${row.id}].employerMatch`);
+  return { values: { ...row, amount: gAmt ? "" : row.amount, employerMatch: gMatch ? "" : row.employerMatch }, amountHint: gAmt ? String(row.amount) : "", matchHint: gMatch ? String(row.employerMatch) : "" };
+}
+/** A box left empty on a form that opened with a grey guess keeps the guess: saving it makes the figure the person's. */
+export function fillBlankFromGuess(v, start) {
+  const blank = (x) => x === "" || x === null || x === undefined;
+  // the grey guess is a figure in the period the row had; if How often changed meanwhile it is carried over, so $270 a month stays $270 a month
+  const was = start.values?.period ?? "monthly", carried = v.period && v.period !== was ? Math.round(Number(start.amountHint) * perYear(1, was) / perYear(1, v.period) * 100) / 100 : start.amountHint;
+  return { ...v, ...(start.amountHint !== "" && blank(v.amount) ? { amount: String(carried) } : {}), ...(start.matchHint !== "" && blank(v.employerMatch) ? { employerMatch: Number(start.matchHint) } : {}) };
 }
 
 /**
@@ -50,7 +67,7 @@ export function verdictWords(st) {
   if (!r) return "";
   if (st.retireGuessed) {
     const would = r.verdict === "on track" ? "the money would last to the end of the plan" : r.verdict === "tight" ? "the money would last, with little to spare" : `the money would run out${r.shortAge ? ` at about ${r.shortAge}` : ""}`;
-    return `By our guesses, ${would}. It rests on our guesses of ${st.retireGuessedWhat === "balance" ? "your savings, so type what is in your retirement accounts" : "your spending, so type what you really spend"} to know.`;
+    return `By our guesses, ${would}. It rests on our guesses of ${st.retireGuessedWhat === "balance" ? "your savings, so type what is in your retirement accounts" : st.retireGuessedWhat === "saving" ? "what you put in each month, so check the amounts below" : "your spending, so type what you really spend"} to know.`;
   }
   return r.verdict === "on track" ? "At this rate the money lasts to the end of the plan: you are on track."
     : r.verdict === "tight" ? "At this rate the money lasts, with little to spare."
@@ -275,11 +292,15 @@ export function render(root, ctx) {
     if (!showForm && !editing) { formHost.append(ui.button("+ Add another contribution", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
     // a new contribution starts on a retirement account, not a brokerage one
     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
-    const values = editing ? { ...editing, amount: shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
+    // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
+    const start = editing ? contributionFormStart(plan, editing) : null;
+    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is grey: leave it empty to keep it.` } : f.key === "employerMatch" && start.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is grey: leave it empty to keep it, or type 0 for none.` } : f));
+    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),
       !editing && prefill && prefillNote ? ui.h("p", { class: "muted small" }, prefillNote) : null,
-      ui.form(FIELDS, values, (v) => {
+      ui.form(fields, values, (v0) => {
+        const v = start ? fillBlankFromGuess(v0, start) : v0;
         // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
         const said = readAmountOrShare(v.amount);
         const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };

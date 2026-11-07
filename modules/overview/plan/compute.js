@@ -3,7 +3,7 @@
 // its own. No heavy simulation runs here: the Monte Carlo, the stress tests, goal seek and the health score stay on their own
 // pages (test: this file imports none of them). Life-needs is the one heavy-marked compute used: Next best action already
 // pays for it.
-import { standing, retirementGap } from "../setup/compute.js";
+import { standing, retirementGap, retireGuessAsk } from "../setup/compute.js";
 import { answerFor } from "../quick/compute.js";
 import { protectionGaps, sayName, twoFigures } from "../../insurance/life-needs/compute.js";
 import { firstYear } from "../../retirement/withdrawal-strategy/compute.js";
@@ -98,6 +98,8 @@ const ROW = {
     const months = monthsOf(st.runway), target = st.runwayTarget ?? 6;
     // the bills are mostly our guesses: the page says how many months is not known yet, so this row gives no bare figure
     if (st.runwayWaits) return { value: null, line: st.runway < 0.05 ? "Not known yet: it needs your own bills and the cash you have. Type them to find out." : `By our guesses of your bills, about ${months}. How many it really is isn't known yet: type your bills to find out.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.runway, note };
+    // above the months aimed for (checked before "ok": it is always ok then): "17.9 months, well over the 6 you want", never "18 of 6 months" (follow-up B4)
+    if (st.runway > target + 0.05) return { value: months, line: `Cash for ${months} of the bills you have to pay, well over the ${target} you want.`, status: "ok", short: `cash for ${months}, well over the ${target} you want`, figure: st.runway, note };
     if (st.runwayStatus === "ok") return { value: months, line: `Cash for ${months} of the bills you have to pay. You're covered.`, status: "ok", short: `cash for ${months}`, figure: st.runway, note };
     if (st.cushionLater) return { value: months, line: `Enough for now; build it to ${target} months once the costly debt is paid.`, status: "calm", figure: st.runway, note };
     return { value: months, line: `Cash for about ${months} of the bills you have to pay. Aim for ${target}.`, status: st.runwayStatus === "bad" ? "bad" : "warn", short: `cash for ${months.replace(/ months?$/, "")} of ${target} months`, figure: st.runway, note };
@@ -124,10 +126,12 @@ const ROW = {
     const short = a.verdict === "on track" ? "the money lasts" : a.verdict === "tight" ? "the money lasts, just" : `the money runs out at ${a.shortAge}`;
     // the page's sentence, without its "(Will the money last? shows how much less)" pointer: that is a page title, not plain words
     const base = String(a.line).replace(/\s*\([^()]*shows how much less\)/, "");
-    const line = g ? `${base} Partly our guesses of your spending.` : base;
+    const line = g ? `${base} ${retireGuessAsk(st).line}` : base;
     return { value, line, status: g ? "calm" : a.verdict === "on track" ? "ok" : a.verdict === "tight" ? "warn" : "bad", short, guessed: g, mostlyGuessed: g, figure: a.headline };
   },
-  "fix-retire"() {
+  "fix-retire"(S) {
+    // no retirement savings on file: there is nothing to improve yet, so the way forward is to add them (path review UX 2)
+    if (S.retire?.()?.verdict === "unknown") return { value: null, line: "Add your retirement savings first, then we can show what would help.", status: "calm", figure: null, fixHref: "#/balance/net-worth" };
     return { value: null, line: "A few changes would make it last, like working a little longer or spending a little less. See them.", status: "calm", figure: null };
   },
   "take-out"(S) {
@@ -232,3 +236,4 @@ export function compute(plan, params = {}) {
     madeOn: today, someGuessed: count > 0 || gl.length > 0,
   };
 }
+export { ROW as ROWS };

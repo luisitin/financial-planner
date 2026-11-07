@@ -64,12 +64,30 @@ export function personOf(plan, path) {
   const adults = L(plan?.household, "people").filter((p) => p?.role !== "dependent");
   return rec?.personId || rec?.ownerId || adults.find((p) => p.role === "self")?.id || adults[0]?.id || null;
 }
-/** Pay from an employer a year, before tax, for one person today (salary and bonus lines); 0 when none. A lone adult's unassigned lines are theirs. */
+/**
+ * Pay from an employer a year, before tax, for one person today (salary and bonus lines); 0 when none. A lone adult's unassigned
+ * lines are theirs only while none of their pay is assigned to them: a line left unassigned beside the adult's own pay (a partner
+ * who went, their pay kept as the household's) is not theirs (follow-up F9).
+ */
 export function payOf(plan, pid, today) {
   const adults = L(plan?.household, "people").filter((p) => p?.role !== "dependent");
-  const lone = adults.length === 1 && adults[0].id === pid;
-  return L(plan, "income").filter((x) => x && Number(x.amount) > 0 && x.period !== "once" && (x.type === "salary" || x.type === "bonus") && (x.personId === pid || (lone && !x.personId)) && (!today || activeOn(x, today)))
-    .reduce((s, x) => s + perYear(x.amount, x.period), 0);
+  const lines = L(plan, "income").filter((x) => x && Number(x.amount) > 0 && x.period !== "once" && (x.type === "salary" || x.type === "bonus") && (!today || activeOn(x, today)));
+  const lone = adults.length === 1 && adults[0].id === pid && !lines.some((x) => x.personId === pid);
+  const other = (x) => { const r = String(x.continues ?? x.id ?? ""); return r.startsWith("setup-pay-") && r !== `setup-pay-${pid}`; };   // a removed person's own pay line, kept as the household's
+  return lines.filter((x) => x.personId === pid || (lone && !x.personId && !other(x))).reduce((s, x) => s + perYear(x.amount, x.period), 0);
+}
+/**
+ * The pay a person's work plan goes by (follow-up F8): the pay line Get started made for them (`setup-pay-<id>`, with the raises
+ * that continue it), so a second job added later does not add its pay to the first job's 401(k) and match. A person with no
+ * Get started pay line (pay typed on Income): all their pay, as payOf.
+ */
+export function jobPayOf(plan, pid, today) {
+  const root = `setup-pay-${pid}`;
+  const live = (x) => x && Number(x.amount) > 0 && x.period !== "once" && (!today || activeOn(x, today));
+  const job = L(plan, "income").filter((x) => live(x) && (x.id === root || x.continues === root) && (x.type === "salary" || x.type === "bonus"));
+  if (!job.length) return payOf(plan, pid, today);
+  const bonus = L(plan, "income").filter((x) => live(x) && x.type === "bonus" && x.personId === pid && !job.includes(x));
+  return [...job, ...bonus].reduce((s, x) => s + perYear(x.amount, x.period), 0);
 }
 const ageOf = (plan, pid, today) => { const p = L(plan?.household, "people").find((x) => x?.id === pid); return p?.birthDate && today ? ageOn(p.birthDate, today) : null; };
 /** The age a person reaches in `year` (the year minus the birth year): what the 401(k) catch-up and the 60 to 63 amount go by (IRS Notice 2025-67). */
@@ -151,7 +169,7 @@ const MATCH_NEEDED = () => head("median employee deferral needed to get the full
 
 /** The share of pay people like this person put in (to 0.1 point), the same figure contrib.amount says; null without pay. */
 export function usualShare(plan, pid, today) {
-  const pay = payOf(plan, pid, today);
+  const pay = jobPayOf(plan, pid, today);
   return pay > 0 ? Math.round(deferralRate({ pay, age: ageOf(plan, pid, today) }) * 1000) / 1000 : null;
 }
 const contribRec = (plan, pid) => L(plan?.retirement, "contributions").find((c) => c?.id === `setup-contrib-${pid}`) ?? null;
@@ -339,7 +357,8 @@ export const estimators = {
     tier: 4, order: 1, label: "What you put into your 401(k) a month", unit: "month", weight: "big", page: () => "#/retirement/contributions", reads: [],
     fn(plan, { today, path }) {
       const pid = personOf(plan, path);
-      const pay = payOf(plan, pid, today), age = ageOf(plan, pid, today);
+      if (!stillHere(plan, pid)) return null;
+      const pay = jobPayOf(plan, pid, today), age = ageOf(plan, pid, today);
       const rec = contribRec(plan, pid);
       // a row that is not a monthly one is never given monthly dollars (it stays as it is)
       if (rec && rec.period && rec.period !== "monthly") return null;
@@ -365,7 +384,8 @@ export const estimators = {
     tier: 4, order: 2, label: "What your employer adds a year", unit: "year", weight: "big", page: () => "#/retirement/contributions", reads: ["contrib.amount"],
     fn(plan, { today, path, args }, lib) {
       const pid = personOf(plan, path);
-      const pay = payOf(plan, pid, today);
+      if (!stillHere(plan, pid)) return null;
+      const pay = jobPayOf(plan, pid, today);
       const tiers = typedTiers(plan, pid);
       // "no match at this job": said on Contributions (or question 2's No), on this screen (its No match chip) before it is saved, or a
       // formula on Work benefits with no money in it. On the screen the chip writes a typed 0; said elsewhere after our guess was

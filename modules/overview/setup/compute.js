@@ -13,7 +13,7 @@ import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../..
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
-import { compute as computeProjection, retirementKnown, ssOnIncome } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, retirementKnown, ssOnIncome, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
 import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
@@ -27,7 +27,7 @@ import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spe
 import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow } from "../guesses/estimators/home.js";
 import { startOf as loanStartOf, recordOf } from "../guesses/estimators/debts.js";
 import { profileOf } from "../guesses/estimators/common.js";
-import { payOf as payFromEmployer } from "../guesses/estimators/saving.js";
+import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
 import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords } from "../../../core/math/leftover.js";
@@ -93,6 +93,18 @@ export const RETIRE_KINDS = [{ value: "work", label: "Through work", type: "401k
  * "Which kind of IRA?" under On my own (round 8, item 35): Traditional saves `ira`, Roth saves `roth`, Not sure saves `ira`
  * (counted as traditional for now, and listed among our guesses on the done screen). No answer: as before.
  */
+/**
+ * Question 4's retirement box for one adult, in the words that fit them (follow-up B8): someone who has stopped work (said retired or
+ * not working in question 2) is asked "Where is it held?" -- "In a company plan" / "In my own IRA" -- with nothing about pay: no
+ * "put in a month", no employer match, and the Roth question folded. Anyone else: "Where" with Through work / On my own.
+ * -> { retired, label, kinds: [{ value, label }], help, putIn (ask what goes in each month), iraFold (the kind of IRA waits behind a tap) }
+ */
+export function retireKindsFor(p, pid) {
+  const retired = ["retired", "none"].includes(p?.guide?.setup?.status?.[pid]);
+  const kinds = retired ? [{ value: "work", label: "In a company plan" }, { value: "own", label: "In my own IRA" }] : RETIRE_KINDS.map(({ value, label }) => ({ value, label }));
+  return { retired, label: retired ? "Where is it held?" : "Where", kinds: [...kinds, { value: "unsure", label: "Not sure" }],
+    help: retired ? "A company plan is a 401(k) or 403(b) from a job you had. An IRA is one you opened yourself. Not sure? We'll count it as a company plan." : null, putIn: !retired, iraFold: retired };
+}
 export const IRA_KINDS = [{ value: "traditional", label: "Traditional" }, { value: "roth", label: "Roth" }, { value: "unsure", label: "Not sure" }];
 /** What you owe. */
 export const OWE = [
@@ -158,7 +170,7 @@ export function housingWords(plan) {
 export { spendBasis };
 /** What you are working toward. `focus` ones are not saving goals: they put a guide among the first moves instead. */
 export const GOALS = [
-  { key: "cushion", icon: "🛟", label: "A safety cushion", line: "For surprises", name: "Emergency fund" },
+  { key: "cushion", icon: "🛟", label: "An emergency fund", line: "For surprises", name: "Emergency fund" },
   { key: "debt", icon: "💳", label: "Paying off debt", line: "Be debt free", focus: true },
   { key: "home", icon: "🏡", label: "Buying a home", line: "The down payment", name: "House down payment", years: 3 },
   { key: "retire", icon: "🌴", label: "Retiring well", line: "Enough to stop working", focus: true },
@@ -434,6 +446,17 @@ function dropAccounts(draft, ids) {
   }
   return kept;
 }
+/**
+ * What the retirement tile and the Dashboard row say, and where they send the person, while the verdict rests on our guesses
+ * (`standing().retireGuessedWhat`): only the balances guessed -> "Type your 401(k)" (question 4); otherwise what they spend.
+ * -> { words, dash, id } (id: the Get started screen to open)
+ */
+export function retireGuessAsk(st) {
+  const bal = st?.retireGuessedWhat === "balance";
+  if (st?.retireGuessedWhat === "saving") return { words: "Partly our guesses. Check what you put in each month ›", dash: "Partly our guesses of what you put in", id: null, href: "#/retirement/contributions", line: "Partly our guesses of what you put in each month." };
+  return bal ? { words: "Partly our guesses. Type your 401(k) ›", dash: "Partly our guesses of your savings", id: "have-amounts", line: "Partly our guesses of your savings." }
+    : { words: "Partly our guesses. Type what you spend ›", dash: "Partly our guesses of your spending", id: "spend", line: "Partly our guesses of your spending." };
+}
 /** Q2's own $0 401(k): its own id, so question 4b's "On my own" IRA never takes its place (review UX 4). */
 export const workPlanId = (pid) => `setup-workplan-${pid}`;
 export const workPlanAcct = (p, pid) => byId(L(p, "accounts"), workPlanId(pid)) ?? null;
@@ -459,7 +482,19 @@ const workPlanEmpty = (p, a) => !(Math.abs(Number(a.balance) || 0) > 0) && !(p?.
  */
 function applyWorkPlan(draft, person, answer, job, today) {
   const pid = person.id, kept = [], was = workPlanAnswer(draft, pid);
-  const takeBack = () => { const a = workPlanAcct(draft, pid); if (a && workPlanEmpty(draft, a)) kept.push(...dropAccounts(draft, [a.id])); };
+  const takeBack = () => {
+    const a = workPlanAcct(draft, pid);
+    if (!a) return;
+    if (workPlanEmpty(draft, a)) { kept.push(...dropAccounts(draft, [a.id])); return; }
+    // a balance in it that is our guess goes (the next look at question 4 guesses it again where it belongs); one the person typed
+    // stays, in an account named plainly, not "<name>'s plan at work" (follow-up F10)
+    if (job && isGuess(draft, `accounts[${a.id}].balance`) && !referenced(draft, a.id)) {
+      const rows = (draft.retirement.contributions ?? []).filter((c) => c.accountId === a.id).map((c) => c.id);
+      kept.push(...dropAccounts(draft, [a.id]));
+      clearGuess(draft, `accounts[${a.id}].balance`);
+      for (const id of rows) { clearGuess(draft, `retirement.contributions[${id}].amount`); clearGuess(draft, `retirement.contributions[${id}].employerMatch`); }
+    } else if (/plan at work/i.test(a.name ?? "")) a.name = person.name !== "Me" || adults(draft).length > 1 ? `${possessive(person)} retirement savings` : "My retirement savings";
+  };
   const write = (fields) => {
     const wp = { ...(draft.retirement.workPlans?.[pid] ?? {}) };
     for (const [k, x] of Object.entries(fields)) { if (x === undefined) delete wp[k]; else wp[k] = x; }
@@ -969,6 +1004,8 @@ function applyHaveGuessed(draft, v, today, guess) {
         const sameMonth = typedPut !== null && oc && Math.round(perYear(Number(oc.amount) || 0, oc.period) / 12) === Math.round(typedPut);
         put(draft.retirement.contributions, cid, { ...(sameMonth ? {} : { amount: monthly, period: "monthly" }), employerMatch: yearly, ...(oc && oc.accountId !== id ? { accountId: id } : {}) }, { accountId: id, personId: pid, period: "monthly", amount: monthly });
         const row = byId(draft.retirement.contributions, cid);
+        // the share the chip said, kept beside the dollars so Contributions can say "5% of pay" (follow-up F5); dollars typed: none
+        if (!sameMonth) { const chip = pctOnScreen(v, pid); if (!gPut && chip !== null && chip > 0 && typedPut !== null) row.pctOfPay = chip; else delete row.pctOfPay; }
         if (gPut) { if (row.period !== "monthly") row.period = "monthly"; markGuess(draft, cpath, gPut, today); } else clearGuess(draft, cpath);
         if (gMatch) markGuess(draft, mpath, gMatch, today); else clearGuess(draft, mpath);
       }
@@ -1713,19 +1750,23 @@ function cashKinds(plan) {
  * aside for a goal, or this year's tax not paid yet), so "$0 in checking, savings and cash" never follows $8,500 typed.
  * Nothing held back: the line it always was.
  */
+/** Months of bills as the Emergency fund page and Your plan say them: whole months, one decimal only under 2 (design log 2026-09-15). */
+export function monthsWords(m) { const t = m >= 100 ? "100+" : m < 2 ? String(Math.round(m * 10) / 10) : String(Math.round(m)); return `${t} month${t === "1" ? "" : "s"}`; }
 export function cushionHave(plan, c) {
   const cur = plan?.meta?.currency ?? "USD";
   const m = (n) => fmtMoney(Math.round(Number(n) || 0), cur);
   const cov = (Math.round((c.covered ?? 0) * 10) / 10).toFixed(1);
   const goalsHeld = c.earmarked > 0.5 ? and2(c.goals?.length ? c.goals : ["your goals"]) : null, tax = c.taxOwed > 0.5;
-  if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${cov} of ${c.months} months.`;
+  // cash above the months aimed for is said so, not "17.9 of 6 months" (follow-up B4)
+  const over = (c.covered ?? 0) > c.months, pace = over ? `${cov} months, well over the ${c.months} you want` : `${cov} of ${c.months} months`;
+  if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${pace}.`;
   // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
-  if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward the cushion: ${cov} of ${c.months} months.`;
+  if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward the cushion: ${pace}.`;
   const allOf = (x) => Math.abs(x - c.all) < 0.5;
   const parts = goalsHeld && tax ? `${m(c.earmarked)} is set aside for ${goalsHeld} and ${m(c.taxOwed)} is this year's tax not paid yet`
     : goalsHeld ? `${allOf(c.earmarked) ? "all" : m(c.earmarked)} of it is set aside for ${goalsHeld}`
     : `${allOf(c.taxOwed) ? "all" : m(c.taxOwed)} of it is this year's tax not paid yet`;
-  return `You have ${m(c.all)} in ${cashKinds(plan)}; ${parts}, so ${c.now > 0.5 ? `${m(c.now)} counts` : "none counts"} toward the cushion: ${cov} of ${c.months} months.`;
+  return `You have ${m(c.all)} in ${cashKinds(plan)}; ${parts}, so ${c.now > 0.5 ? `${m(c.now)} counts` : "none counts"} toward the cushion: ${pace}.`;
 }
 /** A tax figure said "about": to the $10. */
 const about = (n) => Math.round((Number(n) || 0) / 10) * 10;
@@ -2147,6 +2188,8 @@ export function standing(plan, { today }) {
   const runway = liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;
   const runwayStatus = runway !== null ? liq?.status ?? "unknown" : "unknown";
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
+  // no retirement savings on file and nothing going in: the reveal says "not known yet", as Will the money last? does (path review UX 2)
+  const retireSavingsUnknown = !!retire && savingsUnknown(proj);
   const retired = allRetired(plan);
   // the spending is mostly our guesses (spec 8.1): the left-over figure, the cushion and the retirement verdict wait for it
   const spareWaits = !!(nba?.ready && nba.spare.waits);
@@ -2161,8 +2204,11 @@ export function standing(plan, { today }) {
   // (401(k), IRA, Roth) whose balance is a guess is half or more
   const retireAccts = L(plan, "accounts").filter((a) => ["401k", "ira", "roth"].includes(a.type) && Number(a.balance) > 0);
   const retireTotal = retireAccts.reduce((t, a) => t + Number(a.balance), 0);
-  const retireBalanceGuessed = !!retire && retireTotal > 0 && retireAccts.filter((a) => isGuess(plan, `accounts[${a.id}].balance`)).reduce((t, a) => t + Number(a.balance), 0) / retireTotal >= 0.5;
-  const retireGuessed = retireSpendGuessed || retireBalanceGuessed;
+  const retireBalanceGuessed = !!retire && retireTotal > 0 && retireAccts.filter((a) => isGuess(plan, `accounts[${a.id}].balance`) && plan.guesses?.[`accounts[${a.id}].balance`]?.k !== "account.retire.split").reduce((t, a) => t + Number(a.balance), 0) / retireTotal >= 0.5;
+  // the total typed and only its split between two people ours, or the balances typed: what they put in each month may still be ours
+  // (the tile then asks them to check that, not to "type your 401(k)" again)
+  const retireSavingGuessed = !!retire && (Array.isArray(plan?.retirement?.contributions) ? plan.retirement.contributions : []).some((c) => Number(c.amount) > 0 && isGuess(plan, `retirement.contributions[${c.id}].amount`));
+  const retireGuessed = retireSpendGuessed || retireBalanceGuessed || retireSavingGuessed;
   const spendNow = spendRowsNow(plan);
   const drawing = retired && spare !== null && spare < 0 && !spareWaits;
   // short only on the careful month (Side income's "count on" holds part of uneven pay back): what a month that brings the
@@ -2231,7 +2277,7 @@ export function standing(plan, { today }) {
         : first === "protect" ? "Life cover for the people who count on you comes first. The moves below start there."
         : runwayStatus === "warn" || runwayStatus === "bad" ? (first && first !== "starter" && first !== "full-fund"
           ? (spare !== null ? "Your month works. The move below comes first, then a bigger cushion for surprises." : "The move below comes first, then a cushion for surprises.")
-          : spare !== null ? "Your month works. Building your cushion for surprises is next." : "A cushion for surprises is the thing to build first.")
+          : spare !== null ? "Your month works. Building your emergency fund is next." : "An emergency fund is the thing to build first.")
           : retire && retire.verdict !== "on track" ? "Your month and your cushion look good. Retirement could use a closer look."
             : spare !== null && spare >= 0 && runwayStatus === "ok" && (!retire || retire.verdict === "on track") ? "You're in good shape. Here's how to make it even better."
               : "A few more answers will fill this in.";
@@ -2263,7 +2309,8 @@ export function standing(plan, { today }) {
     // then, so the tile can say why it reads less than the accounts hold
     ...(runway !== null && ((liq?.earmarked ?? 0) > 0.5 || (liq?.taxOwed ?? 0) > 0.5) ? { cushionHeld: { all: liq.nowAll, earmarked: liq.earmarked, taxOwed: liq.taxOwed, now: liq.now, goals: heldFor(plan), ...(liq.taxOwed > 0.5 ? { taxDue: liq.tax?.owedNow ?? liq.taxOwed } : {}), ...(liq.earmarked > 0.5 && cushionLike(plan) ? { cushionGoal: cushionLike(plan) } : {}) } } : {}),
     // (retireGuessedWhat: "spending" | "balance" -- what the tile should ask the person to type)
-    ...(retireGuessed ? { retireGuessed: true, retireGuessedWhat: retireSpendGuessed ? "spending" : "balance" } : {}),
+    ...(retireSavingsUnknown ? { retireSavingsUnknown: true } : {}),
+    ...(retireGuessed ? { retireGuessed: true, retireGuessedWhat: retireSpendGuessed ? "spending" : retireBalanceGuessed ? "balance" : "saving" } : {}),
     ...(spendNow.guessed ? { spendGuessed: { monthly: spendNow.guessedMonthly, count: spendNow.guessed, rows: spendNow.monthly, typed: spendNow.typedMonthly } } : {}),
   };
 }

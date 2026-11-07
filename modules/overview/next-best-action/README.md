@@ -387,3 +387,7 @@ Contributions already say. With nothing typed there is still no step. Test: "HSA
 ## Left-over given, and the year's saving (2026-11-07)
 `spare.year` is `core/math/leftover.js` `yearSaving(spare)` (a year: `cash` = (left-over + goal saving) x 12, `cashFull` at the month all uneven pay comes in, `retirement`, `debt`, `total`); every page that says how much is saved a year reads it. `spare.fromLeft` is the note `guide.setup.spendLeft` while the spending rows are as we wrote them (spending worked out from a left-over the person gave): the left-over is theirs, so `spare.waits` is false whatever else in the month is a guess.
 `spare.leftOver` is `leftOverOf(spare)` (`core/math/leftover.js`): the left-over as a person means it, the checking account's rise before goal saving (the month all uneven pay comes in when some is held back); a typed left-over is worked against it.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- **F2.** When the step names the common match ("50% of what you put in up to 6% of pay") the raise sentence leaves out "(plans usually add about 4% of pay)": one usual match per step. Alone, the sentence keeps it.
+- **F3.** "By our guess, Sam puts money in and gets a match." when the amount and the match are both our guesses; typed, the fact stands.

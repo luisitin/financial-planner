@@ -133,7 +133,7 @@ export function compute(plan, params = {}) {
   // not covered = that less the weaker liability cover (`uncovered`)
   if (autos.length || homesPol.length) {
     const okLiab = weakest >= exposed;
-    add({ id: "liability", ok: okLiab, title: okLiab ? "Your liability cover protects your net worth" : `${money(exposed - weakest)} of what you own is not covered`,
+    add({ id: "liability", ok: okLiab, title: okLiab ? "Your liability cover protects your net worth" : `${money(exposed - weakest)} of ${shielded > 0 ? "your net worth outside retirement accounts" : "your net worth"} is not covered`,
       text: `Your net worth is ${money(nw.netWorth)}; ${shielded > 0 ? `${money(shielded)} of it is in retirement accounts, which are mostly out of a creditor's reach, leaving ${money(exposed)} exposed` : `all of it is exposed`}. Cover for someone hurt: ${[autos.length ? `${money(inCar)} in a car accident` : null, homesPol.length ? `${money(atHome)} at home${homeLiabilityKnown ? "" : ` (${money(HOME_LIABILITY_DEFAULT)} assumed for the home policy: enter its liability limit below)`}` : null].filter(Boolean).join(", ")}${umbrella > 0 ? `, the umbrella's ${money(umbrella)} included` : ""}.${okLiab ? "" : suggestedUmbrella > 0 ? " An umbrella policy closes the gap (below)." : ` Raising the ${autos.length && inCar === weakest ? "car" : "home"} policy's liability limit to ${money(Math.max(exposed, autos.length && inCar === weakest ? AUTO_MIN : UMBRELLA_UNDER.home))} closes it and usually costs little.`}`, go: null });
   }
   // 4. an umbrella (the policies under it name the homes rented out too: review 2026-11-06, UX 12, the umbrella pays only after

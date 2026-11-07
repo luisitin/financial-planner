@@ -215,3 +215,6 @@ one guide whose steps come and go with the household (`pathVariant` in journeys.
 
 ## The step card keeps clear of the page's last button (path part 3)
 `.gn-root.card { margin-top: 20px }` in the frame's own STYLE.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- The cushion step is "Emergency fund" (name, title "See your emergency fund", short "See emergency fund"), as the page and the menu call it.

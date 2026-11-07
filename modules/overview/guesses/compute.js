@@ -36,7 +36,8 @@ import { perYear, perMonth, activeOn } from "../../../core/math/periods.js";
 import { estimators as debtEstimators } from "./estimators/debts.js";
 import { estimators as spendEstimators, ROWS as SPEND_ROWS, ROW_NAME, MUST, housingName, householdWords, missingSpend, spendPath, spendTenure, OFF as ROW_HOLDS, bankSpend, bankHeldWords, BANK } from "./estimators/spend.js";
 import { profileOf as profileFor } from "./estimators/common.js";
-import { estimators as savingEstimators } from "./estimators/saving.js";
+import { estimators as savingEstimators, personOf } from "./estimators/saving.js";
+import { money as fmtMoney } from "../../../core/format.js";
 import { estimators as homeEstimators } from "./estimators/home.js";
 import { estimators as payEstimators } from "./estimators/pay.js";
 import { estimators as goalEstimators } from "./estimators/goals.js";
@@ -126,6 +127,8 @@ function recordName(plan, path) {
   if (first.name === "retirement" && segs[1]?.name === "socialSecurity") { const p = byId(L(plan?.household, "people"), segs[2]?.name); return p ? p.name : null; }
   return null;
 }
+/** The name of the adult a retirement-account guess is for (null when it is nobody's: the household's). */
+const personName = (plan, path) => { const pid = personOf(plan, path); const x = L(plan?.household, "people").find((p) => p?.id === pid && p.role !== "dependent"); return x ? x.name : null; };
 const possessive = (name) => (!name || name === "Me" ? "Your" : `${name}'s`);
 const kindOfUnit = (u) => (u === "rate" ? "percent" : u === "list" ? "list" : u === "age" || u === "year-date" ? "number" : "money");
 const hrefOf = (path, def) => {
@@ -177,6 +180,11 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
     label = `${record}: ${DEBT_FIELD[ledgerDebt[1]]}`;
   } else if (e.k === "overview/setup:ss") {
     label = `${possessive(record)} Social Security at full retirement age`;
+  } else if (/^account\.(retire\.balance|retire\.split|ira\.balance)$/.test(e.k) && personName(plan, e.path) !== null) {
+    // the person's savings, not the account's name beside the estimator's label: "Sam's retirement savings at work" (follow-up F7)
+    const who = possessive(personName(plan, e.path)), tot = plan?.guide?.setup?.taps?.["retire-joint"]?.total;
+    label = e.k === "account.retire.balance" ? `${who} retirement savings at work` : e.k === "account.ira.balance" ? `${who} retirement savings on your own`
+      : tot > 0 ? `${who} share of your ${fmtMoney(tot)} retirement savings` : `${who} share of your retirement savings`;
   } else if (record && /^spend\./.test(e.k)) {
     // a spending row reads as its row on Expenses: "Rent", "Home costs", "Groceries"
     label = record;

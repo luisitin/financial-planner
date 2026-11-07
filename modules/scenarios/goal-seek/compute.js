@@ -4,7 +4,7 @@
 // the return it needs, the lump sum it is short (or the room it has today), and the Social Security
 // claiming age that lets you spend the most.
 import { project, copyInputs } from "../../../core/math/retirement.js";
-import { buildInputs, healthAdded, workingNow, withStops } from "../../retirement/projection/compute.js";
+import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -191,7 +191,7 @@ export function compute(plan, params = {}) {
     const withLump = (x) => { const c = copyInputs(I); c.events.push({ year: c.startYear, amount: -x, label: "lump sum" }); return c; };
     if (ok0) {
       const spare = largestWhere((x) => meets(withLump(-x)), 0, Math.max(10000, Object.values(I.balances).reduce((s, v) => s + v, 0)), 50);
-      add({ id: "lump", icon: "💰", title: "Room today", value: spare ?? 0, current: 0, unit: "once", status: "room", sentence: `About ${fmt(spare ?? 0, "down")} could come out of savings today and the plan would still get there. Not a suggestion to spend it: a measure of the cushion.`, go: ["balance", "net-worth"] });
+      add({ id: "lump", icon: "💰", title: "Room today", value: spare ?? 0, current: 0, unit: "once", status: "room", sentence: `About ${fmt(spare ?? 0, "down")} could come out of savings today and the plan would still get there. Not a suggestion to spend it: a measure of the room you have.`, go: ["balance", "net-worth"] });
     } else {
       const short = smallestWhere((x) => meets(withLump(x)), 0, 1e7, 50);
       add({ id: "lump", icon: "💰", title: "What it is short today", value: short, current: 0, unit: "once", status: short === null ? "cannot" : "needs", sentence: short === null ? "More than ten million dollars today: look at the other changes." : `About ${fmt(short, "up")} more in savings today would get there (an inheritance, a sale, a bonus).`, go: ["balance", "net-worth"] });
@@ -234,7 +234,7 @@ export function compute(plan, params = {}) {
       sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly / scale, "down")} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt((best.monthly - nowAt.monthly) / scale, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
-  return { ready: true, missing: [], legacy, scale, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
+  return { ready: true, missing: [], legacy, scale, noSavings: !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })(), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
 }
 
 /** The "room for bad luck" target: spending 15% above the plan (the Plan health score's full marks, FULL_RETIREMENT, is the same 1.15). */

@@ -69,3 +69,6 @@
 - The umbrella checks name the rentals' landlord policies among those underneath it (UX 12).
 - "Go there" on a rental insured by a homeowners policy opens that policy's form (`query: { edit }`, UX 11).
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- The lawsuit check's title uses the tile's base: "$218,000 of your net worth outside retirement accounts is not covered" (or "of your net worth" with no retirement accounts).

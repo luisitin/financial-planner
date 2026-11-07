@@ -65,7 +65,8 @@ export function render(page, ctx) {
     const stands = (d.scale ?? 1) !== 1 ? `With ${Math.round((d.scale - 1) * 100)}% more spending than you plan, the money` : "As it stands the money";
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, d.meets ? "Your plan gets there, with room" : "What it would take"),
-      ui.h("p", { class: "lede" }, d.meets
+      // no retirement savings on file: never "the money runs out in 2065" (the Will the money last? page says "we don't know yet")
+      d.noSavings ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first. ", ui.h("a", { href: "#/balance/net-worth" }, "What you own ›")) : ui.h("p", { class: "lede" }, d.meets
         ? `${stands} lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
         : d.success ? `${stands} lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `${stands} runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`)));
 

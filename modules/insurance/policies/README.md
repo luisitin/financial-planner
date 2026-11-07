@@ -63,3 +63,6 @@ Review 2026-11-06 (round 7): the cover tile for the unnamed first adult ("Me") r
 - The form (UX 11): a link to one policy (`#/insurance/policies?edit=<id>`, from Auto, home, umbrella's "Go there") opens its
   form once; "Which home" starts on the one home a home or landlord policy's name names, until one is picked.
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- `pairHomes` tie-break: a landlord policy that names two homes of the same name goes to the one rented out, and a policy named for a paired home is still free for another unpaired home of that name.

@@ -225,3 +225,12 @@ export function addToNetWorth(draft, rentalId, { today = "", uid } = {}) {
   }
   return { accountId: r.accountId, loanAccountId: r.loanAccountId ?? null, made };
 }
+
+/**
+ * What the page says after "It's the same home": the account on Net worth and the rental are one home, counted once. When the two
+ * carry the same name it reads "Linked: Condo on Net worth is this rental, counted once." (follow-up C9), not "the Condo ... is Condo".
+ */
+export function linkedWords(accountName, rentalName) {
+  const same = String(accountName ?? "").trim().toLowerCase() === String(rentalName ?? "").trim().toLowerCase();
+  return same ? `Linked: ${accountName} on Net worth is this rental, counted once.` : `Linked: the ${accountName} on Net worth is ${rentalName}, counted once.`;
+}

@@ -1,6 +1,6 @@
 // modules/debt/mortgage/view.js -- DOM only. The mortgage today, what extra or biweekly
 // payments would save, a recast, when mortgage insurance can go, the year-by-year balance.
-import { compute, loanHome, setMortgageStart } from "./compute.js";
+import { compute, loanHome, setMortgageStart, seeLoanWords } from "./compute.js";
 import { twoDates } from "../payoff/compute.js";
 import { purchaseDateFrom } from "../../property/home/compute.js";
 // the loan's own home only (a second loan with no home of its own never writes to the main home): ok when a Net worth home account (or the rental) is there to hold the year
@@ -20,7 +20,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today(), extra: state.extra ?? undefined, lump: state.lump, ...(which ? { accountId: which } : {}) });
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   // the others a tap away, as outlined buttons (UX 6: a 16 px link)
-  const pick = d.others?.length ? ui.h("div", { class: "row" }, ...d.others.map((o) => ui.h("a", { class: "btn secondary", href: `#/debt/mortgage?loan=${encodeURIComponent(o.id)}` }, `See ${o.name} ›`))) : null;
+  const pick = d.others?.length ? ui.h("div", { class: "row" }, ...d.others.map((o) => ui.h("a", { class: "btn secondary", href: `#/debt/mortgage?loan=${encodeURIComponent(o.id)}` }, `${seeLoanWords(o.name)} ›`))) : null;
   const monthsText = (m) => !Number.isFinite(m) ? "never" : `${Math.floor(m / 12)} yr ${m % 12} mo`;
 
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }

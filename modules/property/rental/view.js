@@ -1,7 +1,7 @@
 // modules/property/rental/view.js -- DOM only. Each rental from rent to cash in hand: the headline figures,
 // the year line by line, the checks a lender makes, the tax with depreciation, the whole return; editing in a
 // fold; adding another behind an outlined button.
-import { compute, DEFAULTS, DSCR_MIN, RECOVERY_YEARS, addToNetWorth, keepLoanDetails, livedIn } from "./compute.js";
+import { compute, DEFAULTS, DSCR_MIN, RECOVERY_YEARS, addToNetWorth, keepLoanDetails, livedIn, linkedWords } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let askNo = null;     // the rental whose "No, a different place" waits for "Add a second home" (review 2026-11-06, UX 1)
@@ -63,7 +63,7 @@ export function render(page, ctx) {
       const what = both ? `its value (${money(r.value)}) and its loan (${money(loanTyped)}) are` : !r.accountId ? `its value (${money(r.value)}) is` : `its loan (${money(loanTyped)}) is`;
       // money 12: the payment is said only when there is one; else Debts is where it goes
       const add = () => { pending = `${r.name} added to your net worth${loanTyped > 0 ? (r.loan.payment > 0 ? `, with its loan on Debts at ${pct(r.loan.rate)} and ${money(r.loan.payment)} a month` : `. Its loan is on Net worth: add its rate and payment on Debts`) : ""}.`; askNo = null; store.update((p) => { addToNetWorth(p, r.id, { today, uid: ui.uid }); }); };
-      const link = (a) => () => { pending = `Linked: the ${a.name} on Net worth is ${r.name}, counted once.`; askNo = null; store.update((p) => { const x = (p.property ?? []).find((y) => y.id === r.id); if (x) x.accountId = a.id; }); };
+      const link = (a) => () => { pending = linkedWords(a.name, r.name); askNo = null; store.update((p) => { const x = (p.property ?? []).find((y) => y.id === r.id); if (x) x.accountId = a.id; }); };
       const after = `your net worth would go from ${money(d.netWorth)} to ${money(d.netWorth + r.wouldAdd)}`;
       let card;
       if (r.twin && askNo === r.id) {

@@ -223,7 +223,7 @@ export const RESULT_ROWS = [
   { key: "net", group: 0, name: "What you own, minus what you owe", page: "balance/net-worth", data: (p) => (p?.accounts ?? []).length > 0 },
   { key: "month", group: 0, step: "month", name: "Your month", page: "cashflow/expenses" },
   { key: "debts", group: 0, step: "debts", name: "Your debts", page: "debt/payoff" },
-  { key: "cushion", group: 0, step: "cushion", name: "Your cash cushion", page: "balance/liquidity" },
+  { key: "cushion", group: 0, step: "cushion", name: "Emergency fund", page: "balance/liquidity" },
   { key: "protect", group: 1, step: "protect", name: "Cover for your family", page: "insurance/life-needs" },
   { key: "retire", group: 1, step: "retire", name: "Your retirement", page: "retirement/projection" },
   { key: "fix-retire", group: 1, step: "fix-retire", name: "What would help", page: "scenarios/goal-seek" },

@@ -113,3 +113,6 @@ saving and removing (cleaning, replacing by id, dates, the kinds).
   with it before list order (money 6). A home rented out also carries its policy's `kind`; one on file as a homeowners policy
   reads "(on file as a homeowners policy: check its kind on Policies)" (UX 11). Other rows are as before.
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- Two homes of one name (a home and a rental both "Condo"): the landlord policy goes to the rental row and the home policy to the home (`pairHomes` tie-break), so "No home insurance on file" no longer shows for a home that has one. "Linked: Condo on Net worth is this rental, counted once." when the names match (`linkedWords`).

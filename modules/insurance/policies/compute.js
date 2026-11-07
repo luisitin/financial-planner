@@ -49,6 +49,15 @@ export function pairHomes(homes, policies, { lone = "only" } = {}) {
   const out = homes.map(() => null), used = new Set();
   homes.forEach((h, i) => { const p = h.accountId ? policies.find((x) => x.accountId === h.accountId && !used.has(x)) : null; if (p) { out[i] = p; used.add(p); } });
   const holds = (p, h) => namesHome(p, h.name);
+  // tie-break (follow-up C7): two homes of the same name, a landlord policy that names both: it goes with the one rented out, so the
+  // other keeps the policy that is left (before, neither was paired and "No home insurance on file" showed for a home that has one)
+  let tieBroke = false;
+  for (const p of policies) {
+    if (used.has(p) || p.kind !== "landlord" || (p.accountId && homes.some((o) => o.accountId === p.accountId))) continue;
+    const named = homes.map((_, i) => i).filter((i) => !out[i] && holds(p, homes[i]));
+    const rented = named.filter((i) => homes[i].rental);
+    if (named.length > 1 && rented.length === 1) { out[rented[0]] = p; used.add(p); tieBroke = true; }
+  }
   // by name, again and again while it pairs: a policy that names only this home of those left, and the only such policy
   for (let more = true; more;) {
     more = false;
@@ -61,11 +70,11 @@ export function pairHomes(homes, policies, { lone = "only" } = {}) {
     });
   }
   // left over: not used, not tied to another home, and not named for a home that already has its policy
-  const free = () => policies.filter((p) => !used.has(p) && !(p.accountId && homes.some((o) => o.accountId === p.accountId)) && !homes.some((o, k) => out[k] && namesHome(p, o.name)));
+  const free = () => policies.filter((p) => !used.has(p) && !(p.accountId && homes.some((o) => o.accountId === p.accountId)) && !homes.some((o, k) => out[k] && namesHome(p, o.name) && !homes.some((q, j) => j !== k && !out[j] && namesHome(p, q.name))));
   // by kind, when a landlord policy is left (review 2026-11-06, money 6: "Rental dwelling policy" listed first went to the home
   // lived in): landlord policies with the homes rented out (`rental`), homeowners policies with the others, one to one in order
   // within each group when its counts match. With no landlord policy nothing tells them apart, and the order rule is as before
-  if (free().some((p) => p.kind === "landlord")) {
+  if (tieBroke || free().some((p) => p.kind === "landlord")) {
     for (const [rental, kind] of [[true, "landlord"], [false, "home"]]) {
       const hs = homes.map((_, i) => i).filter((i) => !out[i] && !!homes[i].rental === rental), ps = free().filter((p) => p.kind === kind);
       if (hs.length && hs.length === ps.length) hs.forEach((i, k) => { out[i] = ps[k]; used.add(ps[k]); });

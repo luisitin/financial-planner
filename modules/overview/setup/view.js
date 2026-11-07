@@ -13,8 +13,8 @@ import {
   applyGoalPicks, applyGoalDetails, sumSplit, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered,
-  WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
+  WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
+  retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, isGuess } from "../../../core/estimate/index.js";
@@ -817,6 +817,16 @@ export function render(page, ctx) {
         return ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), sub);
       };
       const tapWrap = ui.h("div", { hidden: true });
+      const putFold = (pid, p, ...boxes) => {
+        // said No to a plan at work: the match is "0" and "none" from that answer, not typed here, so only dollars put in count (UX 5)
+        const noPlan = plan.retirement?.workPlans?.[pid]?.plan === false;
+        const typedIn = noPlan ? String(v[`contrib-${pid}`] ?? "").trim() !== "" : ["contrib", "match"].some((k) => String(v[`${k}-${pid}`] ?? "").trim() !== "") || (v[`pct-${pid}`] !== null && v[`pct-${pid}`] !== undefined) || (v[`matchMode-${pid}`] ?? null) !== null;
+        const f = ui.h("details", { class: "fold su-fold" },
+          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What goes in, and the match"), ui.h("span", { class: "fold-status" }, "our guess"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")),
+          ui.h("div", { class: "fold-body" }, ...boxes));
+        f.open = typedIn;
+        return f;
+      };
       const jointLine = ui.h("p", { class: "su-sub", role: "status", hidden: true });
       let tapQ = null;
       const refresh = () => {
@@ -824,7 +834,7 @@ export function render(page, ctx) {
         let ask = null;
         const shares = {};
         const nameOf = (id) => { const x = ad.find((a) => a.id === id); return x ? (x.name === "Me" ? "You" : x.name) : ""; };
-        const hintFor = (a, id) => (tapQ && !v.joint && a.retire[id] > 0 ? "Is it yours alone or both of yours? Answer just below the boxes." : "");
+        const hintFor = (a, id) => (tapQ && !v.joint && a.retire[id] > 0 ? "Is it yours alone or both of yours? Answer just below this box." : "");
         for (const b of greys) {
           const blank = b.blank(args), g = blank ? guessFor(b.key(args), b.path(), args) : null;
           const shown = g ? (b.year ? String(g.value) : b.pct ? shownPct(g.value) : shownMoney(g.value)) : "";
@@ -850,7 +860,8 @@ export function render(page, ctx) {
         // the couple's one tap: shown once one box is typed and the other empty, kept while it has an answer
         const pids = Object.keys(args.retire), one = pids.length === 2 && pids.filter((p) => args.retire[p] > 0).length === 1 && pids.filter((p) => args.retire[p] === null).length === 1;
         if (ask && ask.question !== tapQ) { tapQ = ask.question; swap(tapWrap, fieldset(ask.question, seg(ask.options, v.joint ?? null, (val) => { v.joint = val; refresh(); }, ask.question), "Tell us and we'll share it out by pay. Not sure? We count it as one person's.")); }
-        if (one && tapQ) tapWrap.hidden = false;
+        // the question sits right under the box that was typed in, not at the bottom of the page
+        if (one && tapQ) { const typed = greys.find((b) => b.retire && b.pid !== undefined && args.retire[b.pid] > 0); const at = typed?.input.closest(".su-field"); if (at && at.nextSibling !== tapWrap) at.after(tapWrap, jointLine); tapWrap.hidden = false; }
         else { tapWrap.hidden = true; tapQ = null; delete v.joint; }
       };
       for (const h of HAVE.filter((x) => haveKeys(plan).includes(x.key))) {
@@ -876,6 +887,7 @@ export function render(page, ctx) {
           // paid by their own business: no employer, so no pay stub (review 2026-11-02)
           const ownBiz = payLineNow(plan.income ?? [], pid, today)?.type === "business";
           // which kind of IRA, right under "Where" (round 8): one tap, or none (then as before: an IRA, or the Roth set on Net worth)
+          const rk = retireKindsFor(plan, pid);
           const iraBox = ui.h("div", {});
           const drawIra = () => swap(iraBox, v[`kind-${pid}`] === "own" ? fieldset("Which kind of IRA?", seg(IRA_KINDS, v[`iraKind-${pid}`] ?? null, (val) => { v[`iraKind-${pid}`] = val; }, named(p, "which kind of IRA") ?? "Which kind of IRA?"), iraKindHelp(ownBiz)) : "");
           drawIra();
@@ -934,7 +946,8 @@ export function render(page, ctx) {
           };
           const drawMatch = () => {
             if (!works()) {
-              swap(matchBox, v[`kind-${pid}`] === "own" ? "" : field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub."));
+              // (nothing to ask for the employer's share of a plan they said they have not got)
+              swap(matchBox, v[`kind-${pid}`] === "own" || plan.retirement?.workPlans?.[pid]?.plan === false ? "" : field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub."));
               return;
             }
             const mline = ui.h("span", { class: "su-live", "aria-live": "polite" });
@@ -950,10 +963,12 @@ export function render(page, ctx) {
           drawExtra();
           const balCfg = { pid, key: () => (haveArgs(plan, v, today).joint ? "account.retire.split" : v[`kind-${pid}`] === "own" ? "account.ira.balance" : "account.retire.balance"), path: () => `accounts[${balId()}].balance`, blank: (a) => a.retire[pid] === null, help: "Add up every account of that kind.", retire: true };
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
-            fieldset("Where", seg([...RETIRE_KINDS, { value: "unsure", label: "Not sure" }], v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawIra(); drawExtra(); refresh(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA. Not sure? We'll count it as through work."),
-            iraBox,
+            fieldset(rk.label, seg(rk.kinds, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawIra(); drawExtra(); refresh(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ad.length > 1 && ad[0].id !== pid ? null : rk.help ? rk.help : ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA. Not sure? We'll count it as through work."),
+            rk.iraFold ? ui.h("details", { class: "fold su-fold", style: "margin-bottom:16px" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Is it a Roth IRA?"), ui.h("span", { class: "fold-status" }, "optional"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a")), ui.h("div", { class: "fold-body" }, iraBox)) : iraBox,
             greyField("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; refresh(); }, { label: named(p, "retirement saved so far") }), { ...balCfg, aria: named(p, "retirement saved so far") ?? "Retirement saved so far" }),
-            putBox, matchBox));
+            // a couple: what goes in a month and the match are folded until needed (open when something is typed in them), so the
+            // page is not two long forms and the one-tap question sits right under the box that triggers it (follow-up F6)
+            !rk.putIn ? null : ad.length > 1 ? putFold(pid, p, putBox, matchBox) : putBox, !rk.putIn || ad.length > 1 ? null : matchBox));
         }
       }
       add(card, tapWrap, jointLine);
@@ -1530,10 +1545,8 @@ export function render(page, ctx) {
     add(card, ui.h("div", { class: "su-done-head" }, any ? ui.h("div", { class: "su-check", "aria-hidden": "true" }, "✓") : ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, "🌱"),
       ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money so far.` : "You did it. Here is your money so far.") : "You're set up. The numbers come next."),
       ui.h("p", {}, st.headline)));
-    const counters = [];
     const fig = (cls, label, value, sub, status, href) => {
       const s = ui.stat(label, typeof value === "number" ? money(value) : value, sub);
-      if (typeof value === "number") counters.push({ el: s.querySelector(".stat-value"), to: value });
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
     };
     const couple = st.later.some((l) => l.key === "couple");
@@ -1555,20 +1568,19 @@ export function render(page, ctx) {
     const held = cushionHeldWords(st, plan);
     // the cash is held for the owner's own "Emergency fund" goal, not ticked as the cushion: where to say it is (F-034)
     const heldAsk = cushionHeldAsk(st);
-    const cushionFig = st.runway === null ? fig("open", "Safety cushion", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
-      : st.runwayWaits ? fig("calm", "Safety cushion", `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
-      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Safety cushion", `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
+    const cushionFig = st.runway === null ? fig("open", "Emergency fund", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
+      : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsWords(st.runway)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
+      : st.runway >= (st.runwayTarget ?? 6) && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash: well over the ${st.runwayTarget ?? 6} you want.`, "● Covered", null)
+      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsWords(st.runway), held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
+      // no retirement savings on file: "not known yet", never "Short at 65" while Will the money last? says it does not know
+      : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see.", "Add them ›", setupHref("have-amounts"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
-      : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", "Partly our guesses. Type what you spend ›", "● Our guesses for now", setupHref("spend"))
+      : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", retireGuessAsk(st).words, "● Our guesses for now", retireGuessAsk(st).href ?? setupHref(retireGuessAsk(st).id))
       : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection");
     add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
-    if (!reduced() && counters.length) {
-      const t0 = performance.now(), dur = 800;
-      for (const c of counters) c.el.textContent = money(0);
-      const tick = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); for (const c of counters) c.el.textContent = money(c.to * e).replace(/,/g, ",​"); if (k < 1 && card.isConnected) requestAnimationFrame(tick); };
-      requestAnimationFrame(tick);
-    }
+    // (the figures are shown as they are at once: they used to count up from $0, so a look at the screen while they ran read
+    // $380 and -$10,085 where the next screens say $384 and -$10,200; follow-up B4)
     // what's next: the rest of the path, one page at a time, ending at Your plan. The first moves, our guesses and what the plan
     // counts on moved to Your plan (overview/plan), where the whole picture is
     const ps = pathSummary(plan, { off: offKeys(ctx), today });

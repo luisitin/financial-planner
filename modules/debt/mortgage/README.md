@@ -75,3 +75,6 @@ insurance in it (balance/liabilities `loanEscrow`, overview/guesses README): the
 recast figures and the mortgage-insurance dates all run on `toLoan`, so the page's years left are the loan's (tested against Debts,
 Pay off debts and the Timeline for every age). Source and formulas: overview/guesses README "When the home was bought". Tests:
 tests/home-purchase.test.mjs.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- The button to another loan reads "See the loan ›" when that loan's own name is a generic one ("Mortgage", "Loan"); else "See Condo loan ›" (`seeLoanWords`).

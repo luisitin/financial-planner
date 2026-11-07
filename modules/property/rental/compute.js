@@ -11,11 +11,11 @@ import { compute as computeState } from "../../taxes/state/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../../core/math/finance.js";
 import { withoutIncomeRent, known, knownWithout } from "../../taxes/federal/known.js";
-import { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts } from "./running.js";
+import { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts, linkedWords } from "./running.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 
 /** Defaults for what is not typed (running.js): vacancy 5% of rent, maintenance 1% of the value a year, land 20% of the price (not depreciated), appreciation 3.5%. */
-export { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts };
+export { DEFAULTS, runningOf, loanOf, rentalValue, valueAccountOf, twinAccount, rentalsOf, keepLoanDetails, addToNetWorth, livedIn, candidateAccounts, linkedWords };
 /** Residential rental buildings are depreciated straight-line over 27.5 years, mid-month in the first year (IRS Publication 527). */
 export const RECOVERY_YEARS = 27.5;
 /** The special allowance for rental losses with active participation: $25,000, less half of modified AGI above $100,000, gone at $150,000 (IRC 469(i)(2), (3)(A)); $12,500 and $50,000 married filing separately and living apart all year, none filing separately otherwise (469(i)(5)). */

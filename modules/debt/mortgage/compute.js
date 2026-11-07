@@ -148,3 +148,9 @@ export function compute(plan, params = {}) {
   const out = { mortgage: { id: row.id, name: row.name, balance, rate, payment: whole, toLoan: required, escrow, extra: row.extra, termMonths: row.detail.termMonths ?? null, startDate: row.detail.startDate ?? "" }, home: home ? { value: own?.rental ? own.value : Number(home.balance) || 0, name: home.name, ...(own?.rental ? { rental: true } : {}) } : null, others, base, withExtra, biweekly, recast, pmi, schedule, hasData: true };
   return { ...out, start: loanStart(plan, row, today, baseMonths) };
 }
+
+/** The button to another loan: "See Condo loan ›"; "See the loan ›" when its own name is a generic one ("Mortgage", "Loan"), which reads oddly after "See" (follow-up C9). */
+export function seeLoanWords(name) {
+  const n = String(name ?? "").trim();
+  return !n || /^(a |the |my |our )?(home |house |mortgage |bank |second )?(mortgage|loan|home loan|mortgage loan|house loan)$/i.test(n) ? "See the loan" : `See ${n}`;
+}

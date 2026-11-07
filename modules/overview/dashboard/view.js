@@ -7,6 +7,7 @@ import { pathSummary } from "../guide/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
 import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
+import { retireGuessAsk, monthsWords } from "../setup/compute.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
 
@@ -102,10 +103,11 @@ export function render(root, ctx) {
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
       else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
       if (st.runway === null) rows.push({ dot: "", k: "Safety cushion", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
-      else if (st.runwayWaits) rows.push({ dot: "", k: "Safety cushion", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
-      else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: `${(Math.round(st.runway * 10) / 10).toFixed(1)} months`, href: "#/balance/liquidity" });
+      else if (st.runwayWaits) rows.push({ dot: "", k: "Safety cushion", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsWords(st.runway)}`, href: "#/balance/liquidity" });
+      else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsWords(st.runway), href: "#/balance/liquidity" });
       if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });
-      else if (st.retireGuessed) rows.push({ dot: "", k: "Retirement", s: "Partly our guesses of your spending", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", href: "#/retirement/projection" });
+      else if (st.retireSavingsUnknown) rows.push({ dot: "", k: "Retirement", s: "Add your retirement savings to see", v: "Not known yet", open: true, href: back("have-amounts") });
+      else if (st.retireGuessed) rows.push({ dot: "", k: "Retirement", s: retireGuessAsk(st).dash, v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", href: "#/retirement/projection" });
       else rows.push({ dot: st.retire.verdict === "on track" ? "ok" : "warn", k: "Retirement", s: st.retire.verdict === "on track" ? "The money lasts" : "Small changes help", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: "#/retirement/projection" });
       // time for the monthly update: the oldest balance is 25 days old or more (or one has no date)
       const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;

@@ -146,7 +146,7 @@ export function render(root, ctx) {
         [[`Prices rise about ${pc(a.inflation)} a year`, ""],
           [`Money in the stock market grows about ${pc(a.returnStocks)} a year, safer investments about ${pc(a.returnBonds)}`, "Before rising prices are taken off. Some years they go down."],
           [`The plan runs to age ${a.planEndAge}`, "So the money is planned to last"],
-          [`A cash cushion of ${a.emergencyMonths} months of the bills you have to pay`, "For a lost job or a big repair"]]
+          [`An emergency fund of ${a.emergencyMonths} months of the bills you have to pay`, "For a lost job or a big repair"]]
           .map(([b, m]) => ui.h("li", {}, ui.h("b", {}, b), m ? ui.h("span", {}, m) : null))),
       ui.h("div", { class: "pl-btns" },
         a.looked ? null : ui.h("button", { type: "button", class: "secondary", onClick: () => { pending = "Saved: you've looked over what we're counting on."; ctx.store.update((q) => applyGuesses(q, today)); } }, "These sound fine"),

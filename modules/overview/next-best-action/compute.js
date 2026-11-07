@@ -28,7 +28,7 @@ import { leftMarker, leftOverOf, yearSaving } from "../../../core/math/leftover.
 import { money as fmtMoney } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
 import { isGuess } from "../../../core/estimate/index.js";
-import { payOf, matchTerms, usualShare, typedTiers, compLimit, ageInYear, deferralLimit } from "../guesses/estimators/saving.js";
+import { payOf, jobPayOf, matchTerms, usualShare, typedTiers, compLimit, ageInYear, deferralLimit } from "../guesses/estimators/saving.js";
 
 // the unnamed first adult ("Me" from Get started) and the unnamed partner ("My spouse") read "you" and "your spouse" in a
 // sentence; any other name reads as typed, exactly as before (round 7, 2026-11-06)
@@ -325,7 +325,7 @@ export function compute(plan, params = {}) {
     const raise = [], shortTyped = [];
     for (const p of contributing) {
       const c = (plan.retirement?.contributions ?? []).find((x) => x.id === `setup-contrib-${p.id}` && x.period === "monthly");
-      const pay = payOf(plan, p.id, today);
+      const pay = jobPayOf(plan, p.id, today);
       if (!c || !(pay > 0)) continue;
       const guessedPut = isGuess(plan, `retirement.contributions[${c.id}].amount`), guessedMatch = isGuess(plan, `retirement.contributions[${c.id}].employerMatch`);
       // a match the person typed ("I know it") is not argued with; a formula typed on Work benefits decides what gets all of it
@@ -342,7 +342,7 @@ export function compute(plan, params = {}) {
       const x = { p, rowId: c.id, accountId: c.accountId, nowPct: guessedPut && rate !== null && Math.abs(rate - now) < 0.003 ? rate : now, nowMonthly: Number(c.amount), wantPct: needed, wantMonthly, wantMatch, more: Math.max(0, wantMonthly - Number(c.amount)), formula: !!tiers };
       if (guessedPut) raise.push(x); else if (guessedMatch && !tiers) shortTyped.push(x);
     }
-    const raiseWords = raise.map((x) => `${NameOf(x.p.name)} 401(k): put in ${share(x.wantPct)} of pay (${exact(x.wantMonthly)} a month${x.more >= 5 ? `, about ${exact(x.more)} more than the ${exact(x.nowMonthly)} we guess goes in now` : ""}) to ${x.formula ? "get" : "likely get"} about ${exact(x.wantMatch)} a month from the employer${x.formula ? " (the match you typed on Work benefits)" : " (plans usually add about 4% of pay)"}.`).join(" ")
+    const raiseWords = raise.map((x) => `${NameOf(x.p.name)} 401(k): put in ${share(x.wantPct)} of pay (${exact(x.wantMonthly)} a month${x.more >= 5 ? `, about ${exact(x.more)} more than the ${exact(x.nowMonthly)} we guess goes in now` : ""}) to ${x.formula ? "get" : "likely get"} about ${exact(x.wantMatch)} a month from the employer${x.formula ? " (the match you typed on Work benefits)" : USUAL_NOTE}.`).join(" ")
       + shortTyped.map((x) => ` ${NameOf(x.p.name)} 401(k): ${isYou(x.p.name) ? "you put in" : "puts in"} ${share(Math.round(x.nowPct * 1000) / 1000)} of pay (${exact(x.nowMonthly)} a month). Many employers add their full match at ${share(x.wantPct)} (${exact(x.wantMonthly)} a month). Check your pay stub, and if it does, that is worth about ${exact(x.wantMatch)} a month.`).join("");
     // what starting it takes from take-home pay a month (review D2): the amount a paycheck less the income tax it saves (Work
     // benefits' costPerCheck; Social Security and Medicare still apply, IRC 3121(v)(1)(A)), times the paychecks, over 12. The
@@ -359,7 +359,16 @@ export function compute(plan, params = {}) {
     const missingWords = otherMissing.length ? `${whoLeads(otherMissing.map((p) => p.name))} ${otherMissing.length === 1 ? verbFor(otherMissing[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file.` : "";
     const before = !had ? "" : toAsk.length ? `${[plannedWords, missingWords].filter(Boolean).join(" ")}${missingMatch.length ? ` Check whether the employer matches, and put in at least enough to get all of it.${otherMissing.length ? " If the 401(k) is from a job left, or there is no match, say so on Retirement contributions." : " If there is no match, say so on Retirement contributions."}` : ""}${left}`.trim() : !contributing.length ? ""
       // (with a 401(k) still to start, "Everyone with a 401(k)" would not be true: those who put money in, by name)
-      : (() => { const who = matched.length ? matched : onFile.length ? contributing : []; return `${whoLeads(who.map((p) => p.name)) || "Everyone with a 401(k)"} ${who.length > 1 || (who.length === 1 && isYou(who[0].name)) ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`; })();
+      : (() => {
+        const who = matched.length ? matched : onFile.length ? contributing : [];
+        const many = who.length > 1 || (who.length === 1 && isYou(who[0].name));
+        // what goes in and the match are both our guesses: said as ours, not as a fact (follow-up F3)
+        const row = (p) => (plan.retirement?.contributions ?? []).find((c) => c.id === `setup-contrib-${p.id}`);
+        const ours = who.length > 0 && who.every((p) => { const c = row(p); return c && isGuess(plan, `retirement.contributions[${c.id}].amount`) && (!matched.includes(p) || isGuess(plan, `retirement.contributions[${c.id}].employerMatch`)); });
+        const lead = whoLeads(who.map((p) => p.name)) || "Everyone with a 401(k)";
+        const said = ours ? `By our guess, ${lead} ${many ? "put" : "puts"} money in${matched.length ? ` and ${many ? "get" : "gets"} a match` : ""}.` : `${lead} ${many ? "put" : "puts"} money in${matched.length ? " with a match" : ""}.`;
+        return `${said} If the employer would match more, raise the contribution to get every dollar.`;
+      })();
     const asking = fresh.filter((x) => x.kind === "ask");
     // only a question (no 401(k) on file, no typed match, no plan we know of, and nothing to do for a 401(k) on file): it is
     // asked right after costly debt, not before it -- a sure 20%+ on a card today beats a match that may not exist (round 8
@@ -382,7 +391,11 @@ export function compute(plan, params = {}) {
       return `${first}, and ${has >= 1 ? `about ${exact(has)} is left each month` : "the month has nothing spare"}: ${[extraWords, trimWords].filter(Boolean).join(" and ")}.`;
     };
     matchStep = () => add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length || asking.length ? "check" : fresh.length || onFile.length || raise.length || shortTyped.length ? "now" : "done",
-      detail: [before, freshWords([...onFile, ...fresh], { exact, money }), raiseWords, costWords()].filter(Boolean).join(" "),
+      detail: (() => {
+        const fw = freshWords([...onFile, ...fresh], { exact, money });
+        // one usual match in a step: when the common 50% up to 6% is named, the raise does not say "about 4% of pay" too (follow-up F2)
+        return [before, fw, fw.includes(COMMON) ? raiseWords.replaceAll(USUAL_NOTE, "") : raiseWords, costWords()].filter(Boolean).join(" ");
+      })(),
       // the take-home pay it takes a month, and the same a year for the run below (a step with room takes up to it a month)
       ...(monthlyCost >= 0.5 ? { monthlyCost, roomYearly: monthlyCost * 12 } : {}),
       ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: accountsOf(p), ...(saidPlan(p) ? { saidPlan: true } : {}) })),
@@ -684,6 +697,8 @@ function tierWords(tiers, name) {
   return `${share(t[0].rate)} of what ${nameIn(name)} ${verbFor(name, "puts", "put")} in, up to ${share(t[0].upTo)} of pay${t.slice(1).map((x) => `, then ${share(x.rate)} up to ${share(x.upTo)}`).join("")}`;
 }
 /** The common match the words name (Work benefits' DEFAULT_TIERS: 50% on the first 6% of pay, Vanguard How America Saves 2025, Figure 8). */
+/** The raise's own note on the usual match (left out when the step names the common match: one figure per step). */
+const USUAL_NOTE = " (plans usually add about 4% of pay)";
 const COMMON = `${share(DEFAULT_TIERS[0].rate)} of what you put in up to ${share(DEFAULT_TIERS[0].upTo)} of pay`;
 
 /**

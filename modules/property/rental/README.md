@@ -154,3 +154,6 @@ the IRS's Table A-6 differs by up to $19 in a year, both lawful (Pub. 946).
 - `rentAfterCosts` rows carry `parts` (each rental a line holds rent of, and whether it is the only line holding it), and
   `loanPaymentOf(plan, r)` gives a rental's loan payment a month, for Income's line.
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
+- "Linked: Condo on Net worth is this rental, counted once." when the account and the rental share a name (`linkedWords` in running.js).
