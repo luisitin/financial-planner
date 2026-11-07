@@ -14,15 +14,26 @@
 // taxable part of Social Security, gains and dividends from the taxable bucket), with optional
 // Roth conversions that fill a bracket before required withdrawals begin. The plan "fails" in
 // the first year the buckets cannot cover the gap.
+//
+// The ways other than the same spending every year set the year's WITHDRAWAL from savings, and guaranteed income comes on top
+// (round 8, widow-1; the owner, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the
+// page"): a share of what is left takes savings x the rate, the years-left way takes pmt(savings) over the years left, and
+// guardrails takes what the year's spending target needs once income has paid what it can (max(0, target + health cover + tax -
+// income)), testing that withdrawal against savings. Guaranteed income pays the year's tax and health cover first; whatever of
+// them it cannot pay comes out of savings on top of the share (review D1: with no income, the share is what is spent, as before).
+// So spending + health cover + tax = guaranteed income + everything taken out of savings. Before, the rate set all of the year's
+// spending and income only reduced the withdrawal afterwards, so a widow with $50,400 of pension and Social Security was planned
+// on $16,880.
 import { pmt } from "./finance.js";
 import { rmdFactor } from "./rmd.js";
 import { federalTax, roomUnder, bracketTop, largestAtOrUnder } from "./tax.js";
 
 export const STRATEGIES = {
   "fixed-real": "The same spending every year, adjusted for inflation",
-  "percent": "A fixed percentage of what is left each year",
-  "guardrails": "Inflation-adjusted, cut 10% after a bad stretch, raise 10% after a good one",
-  "vpw": "Spend what the remaining years can afford (variable percentage)",
+  "percent": "A fixed percentage of what is left each year, on top of income",
+  // batch 5b UX review 8: one plain name ("Trim after bad years", How much to take out), and the report's "Spending:" line says it
+  "guardrails": "What you plan, trimmed by a tenth after bad years and raised back after good ones",
+  "vpw": "Spend what the remaining years can afford, on top of income",
 };
 
 /**
@@ -47,6 +58,18 @@ export const STRATEGIES = {
  *                                                   // first and only the rest comes out of savings (rows: eventOut has it, eventSpending is that part)
  *   spendingChanges: [{ fromYear, factor }] | undefined   // fixed-real and guardrail spending times the factor from that year on (a survivor, say),
  *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw", withdrawalRate (for percent/guardrails, e.g. 0.04),
+ *     fixed-real: spending = spending.yearly x inflation; savings pay max(0, spending + health cover - income) + one-offs + tax.
+ *     percent / vpw: the year's share W = savings x rate / pmt(expected real return, years left, savings) (start of year; the
+ *       expected return even in a market sequence, as Bogleheads' VPW uses a set return: UX review 14); savings pay W + one-offs
+ *       + whatever of the year's tax and health cover income cannot pay (max(0, tax + health cover - income)); spending =
+ *       W + max(0, income - tax - health cover) (review D1).
+ *     guardrails: a spending target G, the plan's figure in the first retired year. Each later year, the withdrawal G would need
+ *       this year (max(0, G + health cover + tax - income), worked out with this year's income and tax) is tested against savings:
+ *       above 1.2 x rate, G x 0.9; below 0.8 x rate while that withdrawal is above $0, G x 1.1 but never above the plan's figure
+ *       grown with inflation; otherwise G follows prices, except that after a losing year it does not rise with them while it
+ *       needs a withdrawal (it still falls with them: review D4; with nothing drawn it follows prices: verify R1); G is never above
+ *       the plan's figure at the year's prices. Savings pay max(0, G + health cover + tax - income) + one-offs; spending = max(G, income - tax
+ *       - health cover). (Rows: spending is that year's spending.)
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
  *   tax: { mode: "flat" } (rates.taxRate on pre-tax withdrawals, the default) |
  *        { mode: "brackets", filingStatus, paramsFor: (year) => federal params, gainShare (part of a taxable withdrawal that is gain, 0.5),
@@ -116,32 +139,32 @@ export function project(inputs, options = {}) {
       if (inc.taxable === false) continue;
       if (inc.kind === "social") incomeSocial += amt; else incomeTaxable += amt;
     }
-    // 3. spending in retirement (nominal), by strategy
-    let spending = 0;
+    // 3. spending in retirement (nominal), by strategy. The same spending every year sets spending; the other ways set the
+    // year's withdrawal (draw) or, for guardrails, a spending target (floor) whose withdrawal is worked out with the year's tax below
+    let spending = 0, draw = 0, floor = 0;
+    const drawMode = retired && strategy !== "fixed-real";
     const total = buckets.cash + buckets.taxable + buckets.deferred + buckets.free;
     if (retired) {
       const yearsLeft = Math.max(1, I.endYear - year + 1);
       if (strategy === "fixed-real") spending = baseSpend * priceLevel;
-      else if (strategy === "percent") spending = Math.max(0, total * wr) + 0;
-      else if (strategy === "vpw") { const realRet = (1 + portfolioReturn) / (1 + infl) - 1; spending = Math.max(0, pmt(Math.max(-0.5, realRet), yearsLeft, total, 0, true)); }   // paid at the start of the year, before that year's return (Bogleheads VPW)
-      else if (strategy === "guardrails") {
-        if (guardSpend === null) guardSpend = baseSpend * priceLevel;
-        else {
-          const rateNow = total > 0 ? guardSpend / total : 1;
-          if (rateNow > wr * 1.2) guardSpend *= 0.9; else if (rateNow < wr * 0.8) guardSpend *= 1.1;
-          else if (lastReal !== null && lastReal >= 0) guardSpend *= 1 + infl;   // skip the inflation raise after a losing year
-        }
-        spending = guardSpend;
+      else if (strategy === "percent") draw = Math.max(0, total * wr);
+      else if (strategy === "vpw") {
+        // paid at the start of the year, before that year's return (Bogleheads VPW), priced at the plan's EXPECTED real return:
+        // that year's own return (a crash, a boom) swung the payment between $0 and twice the plan (UX review 14)
+        const expected = stockShare * I.returns.stocks + (1 - stockShare) * I.returns.bonds;
+        const realRet = (1 + expected) / (1 + r.inflation) - 1;
+        draw = Math.max(0, pmt(Math.max(-0.5, realRet), yearsLeft, total, 0, true));
       }
     }
     // what-if hooks: a spending change from a year on (fixed-real and guardrails), one-off money out of or into savings
     const factor = (I.spendingChanges ?? []).reduce((f, s) => (year >= s.fromYear ? f * s.factor : f), 1);
-    if (factor !== 1 && (strategy === "fixed-real" || strategy === "guardrails")) spending *= factor;
+    if (factor !== 1 && strategy === "fixed-real") spending *= factor;
     // an event marked `spending` (health cover) is part of the year's spending: guaranteed income pays it first, like the rest
     let eventOut = 0, eventSpending = 0;
     for (const e of eventsIn.get(year) ?? []) { const amt = (Number(e.amount) || 0) * priceLevel; if (amt >= 0) { eventOut += amt; if (e.spending) eventSpending += amt; } else buckets.taxable += -amt; }
     // 4. the gap, required withdrawals, Roth conversions, then withdrawals in order until spending and the year's tax are covered
     const need = Math.max(0, spending + eventSpending - income) + (eventOut - eventSpending);
+    const other = eventOut - eventSpending;
     const withdrawn = { cash: 0, taxable: 0, deferred: 0, free: 0 };
     let rmd = 0, conversion = 0, taxes = 0, taxInfo = null;
     const taxableStart = buckets.taxable;
@@ -165,23 +188,55 @@ export function project(inputs, options = {}) {
     };
     // proceeds so far (the RMD) count against what has to come out; iterate because the tax on a withdrawal is itself something to cover
     let netOut = rmd, shortfall = 0;
+    // the ways that set a withdrawal: what savings pay this year. The share (or, for guardrails, what the target needs once income has
+    // paid what it can) and the one-offs; guaranteed income pays the year's tax and health cover first, and savings pay whatever of them
+    // it cannot, on top of the share (review D1). A Roth conversion's own tax comes from savings on top (taxSpend: the year's tax before
+    // any conversion), so it does not cut spending
+    let taxSpend = null;
+    const wantTotal = () => { const t = taxSpend ?? taxes; return other + (strategy === "guardrails" ? Math.max(0, floor + eventSpending + t - income) : draw + Math.max(0, eventSpending + t - income)) + (taxes - t); };
+    // the ways that set a withdrawal settle to a ten-thousandth of a cent: tax that income cannot pay is grossed up here (review D1),
+    // and a looser stop compounds to more than a cent over decades; the same spending every year keeps its own $0.0005, to the bit
+    const tol = drawMode ? 1e-6 : 0.0005;
     const settle = () => {
       for (let round = 0; round < 60; round++) {
         taxes = taxFor();
-        const want = need + taxes - netOut;
-        if (want <= 0.0005) { shortfall = 0; return; }
+        const want = (drawMode ? wantTotal() : need + taxes) - netOut;
+        if (want <= tol) { shortfall = 0; return; }
         let got = 0;
         for (const b of order) {
-          if (got >= want - 0.0005) break;
+          if (got >= want - tol) break;
           if (buckets[b] <= 0) continue;
           const take = Math.min(want - got, buckets[b]);
           buckets[b] -= take; withdrawn[b] += take; got += take;
         }
         netOut += got;
-        if (got < want - 0.0005) { taxes = taxFor(); shortfall = need + taxes - netOut; return; }
+        if (got < want - tol) { taxes = taxFor(); shortfall = (drawMode ? wantTotal() : need + taxes) - netOut; return; }
       }
     };
+    // guardrails: the first retired year spends the plan's figure; each later year tests the withdrawal last year's target would need
+    // now (this year's income, health cover and tax: a trial settle, undone) against savings, then moves the target
+    if (drawMode && strategy === "guardrails") {
+      if (guardSpend === null) guardSpend = baseSpend * priceLevel;
+      else {
+        const keep = { b: { ...buckets }, w: { ...withdrawn }, netOut, taxes, shortfall, taxInfo };
+        floor = guardSpend * factor;
+        settle();
+        const trial = Math.max(0, wantTotal() - other);
+        Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
+        const rateNow = total > 0 ? trial / total : trial > 0 ? 1 : 0;
+        if (rateNow > wr * 1.2) guardSpend *= 0.9;
+        else if (rateNow < wr * 0.8 && trial > 0) guardSpend = Math.min(guardSpend * 1.1, baseSpend * priceLevel);   // back up, never past the plan's own figure
+        // after a losing year: no rise with prices, but a fall still applies (review D4); only while savings pay toward the target:
+        // while income pays for everything nothing is drawn, so the target follows prices (verify R1: frozen a year at a time
+        // with nothing drawn, it sank below the plan unseen and, never drawn on, was never raised back)
+        else if (lastReal !== null) guardSpend *= lastReal >= 0 || trial <= 0 ? 1 + infl : Math.min(1, 1 + infl);
+        // never past the plan's own figure at this year's prices: a cut of a tenth in a year prices fall by more than that would be one
+        guardSpend = Math.min(guardSpend, baseSpend * priceLevel);
+      }
+      floor = guardSpend * factor;
+    }
     settle();
+    if (drawMode) taxSpend = taxes;
     // Roth conversions: once the year's spending withdrawals are known, convert what fits under the chosen bracket's top, tax included
     // (when the tax on the conversion has to come from pre-tax money it is itself income, so the amount is trimmed until the year ends at the top)
     if (brackets && I.rothConversion && retired && rmd === 0 && buckets.deferred > 0 && shortfall <= 0.005 && (!rmdAge || ages[0] < rmdAge) && (I.rothConversion.untilAge === undefined || I.rothConversion.untilAge === null || ages[0] < I.rothConversion.untilAge)) {
@@ -213,7 +268,11 @@ export function project(inputs, options = {}) {
     }
     if (shortfall > 0.005 && success) { success = false; failYear = year; failAge = ages[0]; }
     if (shortfall <= 0.005) shortfall = 0;
-    const surplus = Math.max(0, netOut - need - taxes);
+    // the ways that set a withdrawal spend the share, and what income leaves after the year's tax (before any conversion) and health
+    // cover (review D1); guardrails spend their target, or all of an income that pays for more
+    if (drawMode) spending = strategy === "guardrails" ? Math.max(floor, income - taxSpend - eventSpending) : draw + Math.max(0, income - taxSpend - eventSpending);
+    // (the same spending every year keeps its own expression, netOut - need - taxes, so its figures stay identical to the bit)
+    const surplus = Math.max(0, drawMode ? netOut - wantTotal() : netOut - need - taxes);
     if (surplus > 0) buckets.taxable += surplus;   // the required withdrawal beyond what the year needed
     totalWithdrawn += withdrawn.cash + withdrawn.taxable + withdrawn.deferred + withdrawn.free; totalTaxes += taxes; totalConverted += conversion;
     // 5. growth on what is left (contributions and withdrawals mid-year would be finer; end-of-year is the common simple choice)

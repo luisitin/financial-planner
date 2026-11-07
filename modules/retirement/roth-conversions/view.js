@@ -1,10 +1,11 @@
-// modules/retirement/roth-conversions/view.js -- DOM only. Whether conversions help this plan
-// and which bracket to fill, the options side by side, the year-by-year window, and the
-// switch that puts the chosen setting into the projection.
+// modules/retirement/roth-conversions/view.js -- DOM only. The answer first: how much to move to a Roth, what it leaves at the
+// end after tax, and one filled button that puts it in the plan; then each way as one line with its figure and one button, and
+// the year-by-year list, the rules and the official names under "How this is worked out"; the settings last (round 8, Batch 5b:
+// the owner, 2026-11-06, "Just make sure a layman can easily understand and use the page"). A "way" is a fill rate: each year,
+// convert only what would be taxed at up to that rate (the bracket's top, in compute.js).
 import { compute } from "./compute.js";
-import { FILL_RATES } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { nameIn, NameOf, nameOf, verbFor } from "../../../core/words.js";
+import { NameIn, nameIn, nameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;
 
@@ -14,110 +15,204 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving pre-tax money into a Roth in the cheap years before required withdrawals, paying a low rate now instead of a higher one later. It needs the same things as the Projection page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
     return;
   }
   const best = d.options.find((o) => o.best), none = d.none;
-  const helps = d.helps;
   const pct = (r) => `${Math.round(r * 100)}%`;
+  // "at the 10% rate", never "up to 10%": that read as 10% of the account (UX review 4)
+  const wayName = (o) => (o.fillRate ? `At the ${pct(o.fillRate)} rate` : "No conversions");
+  const rateWords = (r) => (r === 0.1 ? "the lowest rate, 10%" : `no more than ${pct(r)}`);
   const years = (ys) => (ys.length > 1 ? `${ys[0]} to ${ys.at(-1)}` : String(ys[0]));
-  // the help with marketplace cover before 65 (the premium tax credit), said in the hero when the plan has those years (round 8,
-  // equity-1: "fill the 12% bracket" was called best while it wiped the credit out, and the note sat in the fold): what the
-  // best setting gives up, and the lowest setting whose income passes the line where it stops
+  const r100 = (n) => money(Math.round(n / 100) * 100);
+  // the amounts to tell the 401(k) or IRA firm, year by year in a few words: "about $4,300 in 2028, then about $18,500 a year from
+  // 2033 to 2040" (runs of years; a run that grows says where it starts and ends; more than two runs: the total and the span)
+  const movesWords = (moves = []) => {
+    const runs = [];
+    for (const m of moves) { const last = runs.at(-1); if (last && m.year === last.at(-1).year + 1) last.push(m); else runs.push([m]); }
+    const runWords = (run) => {
+      if (run.length === 1) return `about ${r100(run[0].real)} in ${run[0].year}`;
+      const xs = run.map((m) => m.real), lo = Math.min(...xs), hi = Math.max(...xs);
+      return hi <= lo * 1.25 ? `about ${r100(xs.reduce((a, b) => a + b, 0) / xs.length)} a year from ${run[0].year} to ${run.at(-1).year}` : `from about ${r100(run[0].real)} in ${run[0].year} to about ${r100(run.at(-1).real)} in ${run.at(-1).year}`;
+    };
+    if (!runs.length) return "";
+    return runs.length <= 2 ? runs.map(runWords).join(", then ") : `about ${r100(moves.reduce((t, m) => t + m.real, 0))} from ${moves[0].year} to ${moves.at(-1).year}`;
+  };
+  // the plan works tax out at a flat rate until conversions are on, and turning them on switches it to the real rates: said before
+  // and after the tap, so the change in Will the money last? is not taken for the conversions' doing (UX review 3)
+  const flatNow = (plan.retirement?.taxMode ?? "flat") !== "brackets";
+  const flatPct = pct(Number(plan.retirement?.taxRate ?? 0.15));
+  // the plan's own setting into the projection: conversions run on the federal rates (the brackets), so those go on with them
+  const useWay = (o) => {
+    const mv = movesWords(o.moves);
+    pending = o.fillRate ? `Done: your plan now converts at the ${pct(o.fillRate)} rate${mv ? `: ${mv}` : ""}.${flatNow ? ` It also works out tax at the real rates now, not a flat ${flatPct}: that alone changes what Will the money last? says.` : ""}` : "Conversions turned off.";
+    store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: !!o.fillRate, fillRate: o.fillRate ?? p.retirement.rothConversion?.fillRate ?? 0.22 }; if (o.fillRate) p.retirement.taxMode = "brackets"; });
+  };
+  const canConvert = d.verdict !== "no-pretax" && d.verdict !== "no-years";
+  // the help with marketplace cover before 65 (the premium tax credit), said plainly when the plan has those years (round 8,
+  // equity-1): what stops it, and that every figure counts it; each way's own loss is on its line
   const market = d.options.some((o) => o.creditReal > 0 || o.cliffYears.length);
-  const lossy = d.options.find((o) => o.fillRate !== null && o.cliffYears.length && o.creditLostReal >= 1);
   const line = d.options.find((o) => o.cliffIncome)?.cliffIncome;
-  const marketWords = market ? [
-    `Before 65, what you convert counts as income for the help with marketplace health insurance (the premium tax credit), which stops altogether once income passes four times the poverty line${line ? ` (about ${money(line)} a year for your household)` : ""}.`,
-    helps && best.creditLostReal >= 1 && best !== lossy ? ` Filling the ${pct(best.fillRate)} bracket gives up about ${money(best.creditLostReal)} of it, against no conversions.` : "",
-    // what each figure is compared with (round 8 review UX 4: Health cover's figure for the same years is against income just under the line)
-    lossy ? ` From the ${pct(lossy.fillRate)} bracket up, income in ${years(lossy.cliffYears)} passes that line: about ${money(lossy.creditLostReal)} less help than with no conversions.` : "",
-    " Every figure here counts it.",
-  ].join("") : null;
-  // no years to convert in (round 8, widow-3): say why and what still works, never "conversions do not help"
+  // no years to convert in (round 8, widow-3): say what still works, never "conversions do not help"
   const nw = d.noWindow, who = nw ? nw.name : null;
   // another adult's own pre-tax money, still before their own required withdrawals (round 8 review D3): any part of it can be converted
-  const youngerWords = (nw?.younger ?? []).map((y) => `${NameOf(y.name)} ${money(y.deferredNow)} has no required withdrawals until ${y.startYear}, so ${nameIn(y.name)} can convert any part of it each year before then; each conversion is taxed as income that year.`).join(" ");
-  const heirs = "Why converting can still be worth it: pre-tax money you leave is taxed when your heirs take it out, and most heirs other than a husband or wife must empty an inherited IRA within 10 years, often in their own working years. A Roth they inherit comes out tax-free once it has been open five years.";
-  const title = d.verdict === "no-pretax" ? "Nothing to convert"
-    : d.verdict === "no-years" ? (nw.reason === "started" ? "Converting once required withdrawals have started" : nw.reason === "owner-younger" ? `Converting ${nameOf(nw.younger[0].name)} pre-tax money` : "No years to convert in before required withdrawals")
-    : !none.success ? "The money runs out with or without conversions" : helps ? `Filling the ${pct(best.fillRate)} bracket helps this plan` : "Conversions do not help this plan much";
-  const lede = d.verdict === "no-pretax" ? "A conversion moves pre-tax money (a 401(k) or traditional IRA) into a Roth. There is none on file; if you have some, add it on the Net worth page."
-    : d.verdict === "no-years" ? (nw.reason === "started"
-      ? `This page only works out conversions before ${d.rmdStartAge}, the age required withdrawals start, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}. After that you can still convert what is above each year's required withdrawal: take that year's required amount first (it cannot be converted), then anything more moved to a Roth is taxed as income that year and never again.${youngerWords ? ` ${youngerWords}` : ""}`
-      : nw.reason === "owner-younger" ? `This page works out conversions by ${nameOf(who)} age only, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}, past the age required withdrawals start. ${youngerWords}`
-      : nw.reason === "until" ? `You chose to stop converting at ${d.untilAge}, and retirement starts at ${nw.retireAge}, so no years are left to convert in. Change "Convert each year" below.`
-      : `Required withdrawals start at ${d.rmdStartAge}, and ${nameIn(who)} ${verbFor(who, "retires", "retire")} at ${nw.retireAge}, so the plan has no years between retiring and them to convert in. Once they start you can still convert what is above each year's required withdrawal.`)
-    : !none.success
-      ? `With no conversions it runs out in ${none.failYear}${best.fillRate !== null && best.failYear !== none.failYear ? `; filling the ${pct(best.fillRate)} bracket moves that to ${best.failYear}` : "; no conversion setting changes that year"}. Conversions rearrange tax, they do not add money: the Projection page is the place to fix the plan first.`
-    : helps
-      ? `Converting up to the top of the ${pct(best.fillRate)} bracket each year${d.span ? ` from ${d.span.from} to ${d.span.to}` : ""} moves about ${money(best.totalConvertedReal)} into the Roth, cuts lifetime federal tax from ${money(none.taxesReal)} to ${money(best.taxesReal)} and leaves ${money(best.endAfterTaxReal - none.endAfterTaxReal)} more at the end after tax (${money(best.endAfterTaxReal)} against ${money(none.endAfterTaxReal)}, today's dollars). Required withdrawals drop from ${money(none.rmdReal)} to ${money(best.rmdReal)}.`
-      : `Run with each bracket filled, the plan ends with no more money after tax than with no conversions (${money(none.endAfterTaxReal)}): the tax you would pay now is about what the money would be taxed at later, and conversions drag more of Social Security into tax. ${d.span ? "Worth another look if income in retirement turns out lower than planned." : ""}`;
-  const canConvert = d.verdict !== "no-pretax" && d.verdict !== "no-years";
-  // the plan's own setting leaves at least $1,000 less than the best, or runs out while the best lasts (round 8 review UX 3: a green
-  // "your plan" pill on 12% while it left $100,620 less than 10%, and the projection and every page after it used it): said, with the switch
-  const behind = d.behind ? d.options.find((o) => o.chosen) : null;
-  const switchTo = () => {
-    pending = best.fillRate ? `The projection now fills the ${pct(best.fillRate)} bracket with conversions.` : "Conversions turned off.";
-    store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: !!best.fillRate, fillRate: best.fillRate ?? p.retirement.rothConversion?.fillRate ?? 0.22 }; if (best.fillRate) p.retirement.taxMode = "brackets"; });
-  };
-  const bb = d.behind, bestName = best.fillRate ? `the ${pct(best.fillRate)} bracket` : "not converting";
-  const behindWords = bb ? (bb.fails
-    ? `Your plan is set to fill the ${pct(bb.fillRate)} bracket, and with it the money runs out in ${bb.failYear}; with ${bestName} it lasts to the end.`
-    : `Your plan is set to fill the ${pct(bb.fillRate)} bracket. That leaves about ${money(bb.byBest)} less than ${bestName}${bb.byNone !== null ? `, and ${money(bb.byNone)} less than not converting` : ""}${bb.creditMore >= bb.byBest / 2 ? ", mostly because it gives up more of the help with health insurance before 65" : ""}.`) : null;
-  root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, title),
-    ui.h("p", { class: "lede" }, lede),
-    behind ? ui.h("p", {}, ui.h("strong", {}, behindWords)) : null,
-    behind ? ui.row(ui.button(best.fillRate ? `Switch to the ${pct(best.fillRate)} bracket` : "Turn conversions off", switchTo)) : null,
-    canConvert && marketWords ? ui.h("p", {}, marketWords) : null,
-    d.verdict === "no-years" && nw.reason !== "until" ? ui.h("p", {}, heirs) : null,
-    d.verdict === "no-years" && nw.reason === "started" ? ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")) : null,
-    canConvert ? ui.h("p", { class: "muted small" }, `A conversion is taxed as ordinary income in the year it happens and the money is then never taxed again. The window is retirement to the required-withdrawal age (${d.rmdStartAge}); the tax on it is paid from cash and taxable money, which is why the pot dips before it gains. What is left is compared after the tax still owed on pre-tax money.`) : null,
-    d.verdict === "no-years" && d.on ? ui.row(ui.button("Turn conversions off", () => { pending = "Conversions turned off."; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: false }; }); }, { class: "secondary" })) : null,
-  ));
+  const youngerWords = (nw?.younger ?? []).map((y) => `${NameIn(y.name)} can move any part of ${nameOf(y.name)} ${money(y.deferredNow)} to a Roth each year until ${y.startYear}, when ${nameOf(y.name)} required withdrawals start. Each move is taxed as income that year.`);
+  const heirsShort = "It can pay for your heirs: they must empty an inherited IRA within 10 years and pay tax on it, while a Roth comes out tax-free.";
+  // the plan's own setting leaves at least $1,000 less than the best, or runs out while the best lasts (round 8 review UX 3): said, with the switch
+  const bb = d.behind, behind = bb ? d.options.find((o) => o.chosen) : null;
+  // the best way, when the plan does not use it yet: the page's one filled button
+  // (only when it helps: with the money running out either way the page says to fix the plan first)
+  const offerBest = d.verdict === "helps" && best && !best.chosen && best.offer && (best.fillRate === null || best.totalConvertedReal >= 1);
+  // a gain under 2% of what is left with none is little: said so, and the button is outlined (UX review 13: $4,948 after 50 years
+  // under a filled button)
+  const gain = best && none ? best.endAfterTaxReal - none.endAfterTaxReal : 0;
+  const small = d.verdict === "helps" && gain < 0.02 * Math.max(1, none.endAfterTaxReal);
+  // why the first move waits (UX review 13): the years before it have no room at that rate, the year's other income already fills it
+  const firstMove = best?.moves?.[0]?.year ?? null;
+  // today's dollars, and the plan's flat rate until conversions are on, on one small line (UX review 3)
+  const dollarsWords = `Amounts are in today's dollars.${flatNow ? ` This page uses the real tax rates; your plan uses a flat ${flatPct} until you turn conversions on.` : ""}`;
+  // said as what the setting does, not as "nothing could be converted": the rate's limit counts gains and dividends too (see README)
+  const waitWords = d.helps && firstMove && d.span && firstMove > d.span.from + 1 ? `Until ${firstMove}, your other income fills the ${pct(best.fillRate)} rate (investment gains and dividends count), so this converts nothing before then.` : null;
+  // a setting whose every conversion year owes no tax (the deduction covers it) is not "taxed at 10%" (Kim: $0 of tax in each year)
+  const untaxed = !!best && d.shown === best.fillRate && (d.table ?? []).length > 0 && d.table.every((r) => r.taxes < 0.5);
+
+  // ---- the answer ------------------------------------------------------------------------------------------------------------------
+  const hero = ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"));
+  const say = (text, cls) => hero.append(ui.h("p", cls ? { class: cls } : {}, ...[text].flat()));
+  if (d.verdict === "no-pretax") {
+    say("There is nothing to convert: a conversion moves money from a 401(k) or traditional IRA into a Roth, and none is on file.", "lede");
+    say(["If you have one, add it on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), "."]);
+  } else if (d.verdict === "no-years") {
+    if (nw.reason === "started") {
+      // a do-or-don't in two short lines (UX review 12: "It can pay for your heirs" left her asking "so should I?")
+      say("You can still move money to a Roth once each year's required amount is out. You pay the tax on it now, at your rate.", "lede");
+      for (const y of youngerWords) say(y);
+      say("It pays off only if your heirs would pay a higher rate on an inherited IRA later.");
+    } else if (nw.reason === "owner-younger") {
+      const [y0, ...more] = youngerWords;
+      say(y0, "lede");
+      for (const y of more) say(y);
+      say(heirsShort);
+    } else if (nw.reason === "until") {
+      say(`You chose to stop converting at ${d.untilAge}, and retirement starts at ${nw.retireAge}, so no years are left to convert in.`, "lede");
+      say('Change "Convert each year" under Conversion settings below.');
+    } else {
+      say(`Required withdrawals start at ${d.rmdStartAge}, and ${nameIn(who)} ${verbFor(who, "retires", "retire")} at ${nw.retireAge}: there are no years between to convert in.`, "lede");
+      say("Once they start, you can still convert once each year's required amount is out.");
+      say(heirsShort);
+    }
+  } else if (!none.success) {
+    say(`The money runs out in ${none.failYear} with or without conversions${best.fillRate !== null && best.failYear !== none.failYear ? `; converting at the ${pct(best.fillRate)} rate moves that to ${best.failYear}` : ""}.`, "lede");
+    // one outlined button, not a link inside the sentence (batch 5b UX review: links in a sentence are hard to tap on a phone)
+    say("Conversions move tax around; they do not add money. Will the money last? shows what would fix the plan.");
+    hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?")));
+  } else if (d.helps && small) {
+    say(`Converting makes little difference for you: about ${money(gain)} more at the end, after tax.`, "lede");
+    say(`It would move to a Roth ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${rateWords(best.fillRate)}`}.`);
+    if (waitWords) say(waitWords, "small");
+    say(dollarsWords, "small");
+  } else if (d.helps) {
+    // the amounts to move, year by year, first (UX review 4: the hero gave a rate, never a dollar figure)
+    say(`Move to a Roth ${movesWords(best.moves)}.`, "lede");
+    say(untaxed ? `No tax is due in those years, and it leaves about ${money(gain)} more at the end, after tax.` : `Each move is taxed at ${rateWords(best.fillRate)}, and leaves about ${money(gain)} more at the end, after tax.`);
+    if (waitWords) say(waitWords, "small");
+    say(dollarsWords, "small");
+  } else {
+    say(`Moving money to a Roth would not leave you more at the end (${money(none.endAfterTaxReal)} after tax): the tax now is about what it would be later.`, "lede");
+    if (d.span) say("Worth another look if your income in retirement turns out lower than planned.", "muted small");
+  }
+  // the plan's own setting, well behind the best: said in two short lines, with the switch as the filled button
+  if (bb) {
+    const bestShort = best.fillRate ? `the ${pct(best.fillRate)} rate` : "none";
+    say(bb.fails
+      ? `Your plan converts at the ${pct(bb.fillRate)} rate, and with it the money runs out in ${bb.failYear}; at ${bestShort} it lasts to the end.`
+      : `Your plan converts at the ${pct(bb.fillRate)} rate: that leaves about ${money(bb.byBest)} less than ${bestShort}${bb.byNone !== null ? `, and ${money(bb.byNone)} less than none` : ""}.`);
+    if (!bb.fails && bb.creditMore >= bb.byBest / 2) say("Mostly because it gives up more of the help with health insurance before 65.", "small");
+  }
+  if (bb || offerBest) hero.append(ui.row(ui.button(best.fillRate ? `Convert at the ${pct(best.fillRate)} rate${bb ? " instead" : ""}` : "Turn conversions off", () => useWay(best), small && !bb ? { class: "secondary" } : {})));
+  if (d.verdict === "no-years" && nw.reason === "started") hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")));
+  if (d.verdict === "no-years" && d.on) hero.append(ui.row(ui.button("Turn conversions off", () => { pending = "Conversions turned off."; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: false }; }); }, { class: "secondary" })));
+  root.append(hero);
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
-  // with nothing to try, the projection's notes are about settings this page no longer shows (round 8 review UX 9: "set your own
-  // figure on this page" sat alone under the answer, meaning the Projection page)
-  // and the projection's "on this page" means the Projection page here (its own words are in projection/compute.js)
-  if (canConvert) for (const n of d.notes) root.append(ui.notice("info", n.replace(/ on this page\b/, " on the Projection page")));
-  // with no years to convert in, the settings below would compare five identical runs: the page stops here, with the settings
-  // fold only when the until-age is what closed the window
+  // the projection's own notes, plainly: its "on this page" is Will the money last? here (the page's own name, not "the Projection
+  // page"), its "brackets" the federal rates (round 8 review UX 9; batch 5b UX 18: the spending note says where to change it)
+  const noteWords = (n) => n.replace("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ.", "Spending is today's expenses; change it under Retirement settings on Will the money last?")
+    .replace(/ on this page\b/, " on Will the money last?").replace(/the federal brackets/g, "the federal tax rates");
+  if (canConvert) for (const n of d.notes) root.append(ui.notice("info", noteWords(n)));
+
+  // ---- the ways: one line each, its figure against not converting, one button ---------------------------------------------------
+  // each way as a difference from not converting (UX review 11: totals here and on Will the money last? were different figures);
+  // a rate that leaves less than not converting has no button and is folded away (UX review 10: three costly "Use this one")
+  const diffOf = (o) => (o.fillRate === null ? "" : !o.success ? `runs out ${o.failYear}` : Math.abs(o.endAfterTaxReal - none.endAfterTaxReal) < 0.5 ? "the same" : o.endAfterTaxReal > none.endAfterTaxReal ? `${money(o.endAfterTaxReal - none.endAfterTaxReal)} more` : `${money(none.endAfterTaxReal - o.endAfterTaxReal)} less`);
+  const worse = (o) => o.fillRate !== null && !o.chosen && !o.best && (!o.success || o.endAfterTaxReal < none.endAfterTaxReal - 0.5);
+  const record = (o, button) => ui.h("li", {},
+    // green only means good: the plan's setting well behind the best is amber (round 8 review UX 3)
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o), o.best ? ui.h("span", { class: "pill accent" }, "best") : null, o.chosen ? ui.h("span", { class: o === behind ? "pill warn" : o.best ? "pill ok" : "pill" }, "yours") : null), ui.h("span", { class: "rec-value" }, diffOf(o))),
+    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already fills it.") : "Keeps it all pre-tax."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
+    // the best one's button is the filled one above
+    !button || !o.offer || (o.best && (bb || offerBest)) ? null : ui.h("div", { class: "rec-foot" }, ui.button(o.fillRate ? "Use this one" : "Turn conversions off", () => useWay(o), { class: "secondary" })));
+  const keep = d.options.filter((o) => !worse(o)), rest = d.options.filter(worse);
+  if (canConvert) root.append(ui.card("How much to convert",
+    ui.h("p", { class: "muted small" }, "What each rate leaves at the end, after tax, against not converting, in today's dollars."),
+    market ? ui.h("p", { class: "small" }, `Before 65, what you convert counts as income for the help with health insurance, which stops once income passes ${line ? `about ${money(line)} a year` : "a set line"}.`) : null,
+    ui.h("ul", { class: "records" }, keep.map((o) => record(o, true))),
+    rest.length ? ui.h("details", { class: "fold" },
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `Other rates: each leaves less than not converting (${rest.length})`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("ul", { class: "records" }, rest.map((o) => record(o, false)))) : null,
+  ));
+
+  // ---- How this is worked out --------------------------------------------------------------------------------------------------------
+  const shownName = `the ${pct(d.shown)} rate`;
+  const heirs = ["Pre-tax money you leave is taxed when your heirs take it out.", "Most heirs other than a husband or wife must empty an inherited IRA within 10 years, often in their own working years.", "A Roth they inherit comes out tax-free once it has been open five years."];
+  const why = nw?.reason === "started" ? [`This page only works out conversions before ${d.rmdStartAge}, the age required withdrawals start, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}.`, "After that, take each year's required amount first (it cannot be converted); anything more moved to a Roth is taxed that year and never again."]
+    : nw?.reason === "owner-younger" ? [`This page works out conversions by ${nameOf(who)} age only, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}, past the age required withdrawals start.`] : [];
+  const showTable = canConvert && d.table.length;
+  root.append(ui.h("details", { class: "card fold fold-card" },
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How this is worked out"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+    ui.h("div", { class: "fold-body" },
+      ui.h("p", { class: "small" }, "A conversion moves money from a 401(k) or traditional IRA into a Roth. It is taxed as income that year, and never again."),
+      ...why.map((t) => ui.h("p", { class: "small" }, t)),
+      ...(d.verdict === "no-years" && nw.reason !== "until" ? heirs.map((t) => ui.h("p", { class: "small" }, t)) : []),
+      canConvert ? ui.h("p", { class: "small" }, `The years tried run from retirement to ${d.rmdStartAge}, when required withdrawals start. The tax is paid from cash and savings, so the total dips before it gains.`) : null,
+      canConvert ? ui.h("p", { class: "small" }, `What is left at the end counts the tax still owed on pre-tax money. With no conversions it is ${money(none.endAfterTaxReal)}.`) : null,
+      canConvert ? ui.h("p", { class: "small" }, `Will the money last? counts 401(k) and IRA money at its full value before tax, so its "left at the end" is a different figure.`) : null,
+      canConvert && flatNow ? ui.h("p", { class: "small" }, `It also uses a flat ${flatPct} until conversions are on.`) : null,
+      canConvert ? ui.h("p", { class: "small" }, "Each way's tax over the plan, and its required withdrawals:") : null,
+      canConvert ? ui.h("ul", { class: "records" }, d.options.map((o) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o))),
+        ui.h("div", { class: "rec-sub" }, `Tax over the plan ${money(o.taxesReal)}; required withdrawals ${money(o.rmdReal)}${o.cliffYears.length ? `; income passes the health insurance line in ${years(o.cliffYears)}` : ""}.`)))) : null,
+      showTable ? ui.h("p", { class: "small" }, `Year by year, ${d.on ? "your plan's setting" : "the best way"}: ${shownName}. Income before is what the plan already has that year; amounts in each year's dollars.`) : null,
+      showTable ? ui.h("div", { class: "only-wide" }, ui.table([
+        { key: "year", label: "Year" }, { key: "ages", label: d.people.length > 1 ? "Ages" : "Age", render: (r) => r.ages.join(" / ") },
+        { key: "incomeBefore", label: "Income before", align: "right", render: (r) => money(r.incomeBefore) },
+        { key: "conversion", label: "Convert", align: "right", render: (r) => money(r.conversion) },
+        { key: "taxes", label: "Tax that year", align: "right", render: (r) => money(r.taxes) },
+        { key: "bracketRate", label: "Taxed at up to", align: "right", render: (r) => (r.bracketRate !== null ? fmt.pct(r.bracketRate, 0) : "-") },
+        { key: "irmaa", label: "Medicare", render: (r) => (r.irmaa ? "extra charge" : "") },
+      ], d.table)) : null,
+      showTable ? ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(r.conversion))),
+        ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
+      showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account count toward each rate's limit, so a year with large ones leaves little room to convert.") : null,
+      showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,
+      showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
+      canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,
+      canConvert && !market ? ui.h("p", { class: "small" }, "Before 65, a conversion counts as income for the help with marketplace health insurance.") : null,
+      canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
+      ui.h("p", { class: "small" }, "Pay the tax from cash or savings, not from the conversion itself: that is worse and, before 59½, has a penalty."),
+      ui.h("p", { class: "small" }, "Five years: under 59½, each conversion must sit in the Roth five years before it comes out without a penalty."),
+      ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (Medicare's extra charge)."),
+      ui.h("p", { class: "muted small" }, "Rules from IRS Publications 590-A and 590-B."),
+    )));
+
+  // ---- settings, last -----------------------------------------------------------------------------------------------------------------
+  // with no years to convert in, the settings would compare five identical runs: only when the stop age is what closed the window
   if (!canConvert && !(d.noWindow?.reason === "until")) return;
-  if (canConvert) root.append(ui.card("Fill which bracket?",
-    ui.h("ul", { class: "records" }, d.options.map((o) => ui.h("li", { style: o.best ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
-      // green only means good: the plan's setting well behind the best is amber, plain when it is merely not the best (round 8 review UX 3)
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, o.best ? ui.h("span", { class: "pill accent" }, "best") : null, o.chosen ? ui.h("span", { class: o === behind ? "pill warn" : o.best ? "pill ok" : "pill" }, "your plan") : null), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
-      ui.h("div", { class: "rec-sub" }, `${o.success ? "Left at the end after tax. " : ""}${o.fillRate ? `${money(o.totalConvertedReal)} converted; tax` : "Tax"} over the plan ${money(o.taxesReal)}; required withdrawals ${money(o.rmdReal)}${o.creditLostReal >= 1 ? `; ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions` : ""}. Today's dollars.`),
-      !o.offer ? null : ui.h("div", { style: { marginTop: "8px" } }, ui.button(o.fillRate ? `Use this` : "Turn conversions off", () => {
-        pending = o.fillRate ? `The projection now fills the ${Math.round(o.fillRate * 100)}% bracket with conversions (and uses the federal brackets).` : "Conversions turned off.";
-        store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: !!o.fillRate, fillRate: o.fillRate ?? p.retirement.rothConversion?.fillRate ?? 0.22 }; if (o.fillRate) p.retirement.taxMode = "brackets"; });
-      }, { class: "secondary" }))))),
-  ));
-  // the plan's own setting when conversions are on (it is what the projection uses), else the best one
-  if (canConvert && d.table.length) root.append(ui.card(d.on ? `Your plan's setting, the ${Math.round(d.shown * 100)}% bracket, year by year` : `Year by year, filling the ${Math.round(d.shown * 100)}% bracket`,
-    ui.h("p", { class: "muted small" }, "Income before the conversion is what the plan already has that year (pensions, a partner's pay, pre-tax withdrawals for spending); the conversion is what still fits under the bracket's top after deductions, and the tax is the whole year's. Amounts in the dollars of each year."),
-    ui.h("div", { class: "only-wide" }, ui.table([
-      { key: "year", label: "Year" }, { key: "ages", label: d.people.length > 1 ? "Ages" : "Age", render: (r) => r.ages.join(" / ") },
-      { key: "incomeBefore", label: "Income before", align: "right", render: (r) => money(r.incomeBefore) },
-      { key: "conversion", label: "Convert", align: "right", render: (r) => money(r.conversion) },
-      { key: "taxes", label: "Tax that year", align: "right", render: (r) => money(r.taxes) },
-      { key: "bracketRate", label: "Ends in", align: "right", render: (r) => r.bracketRate !== null ? fmt.pct(r.bracketRate, 0) : "-" },
-      { key: "irmaa", label: "Medicare", render: (r) => r.irmaa ? "surcharge line crossed" : "" },
-    ], d.table)),
-    ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(r.conversion))), ui.h("div", { class: "rec-sub" }, `${money(r.incomeBefore)} of income before · ${money(r.taxes)} of tax that year${r.bracketRate !== null ? ` · ends in the ${fmt.pct(r.bracketRate, 0)} bracket` : ""}${r.irmaa ? " · crosses the Medicare surcharge line" : ""}`)))),
-    d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare surcharge (IRMAA): from 65, premiums rise once income two years earlier passed about 109,000 (218,000 filing jointly, 2026). Conversions in the years from 63 on can trip it; the years before are cleaner.") : null,
-  ));
   const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...[60, 62, 63, 65, 67, 70, 72].map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
   root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Conversion settings"), ui.h("span", { class: "fold-status" }, d.on ? `on, ${Math.round(d.fillRate * 100)}% bracket` : "off"), ui.h("span", { class: "fold-chev" }, "›")),
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Conversion settings"), ui.h("span", { class: "fold-status" }, d.on ? `on, at the ${pct(d.fillRate)} rate` : "off"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" },
-      ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of the Medicare surcharge")),
-      ui.h("ul", { class: "records" }, [
-        ["What is converted", "Pre-tax money (401(k), IRA) moves to the Roth bucket; the projection assumes the tax is paid from cash and taxable accounts, which is the way that works. Paying it out of the conversion itself is worse and, before 59½, penalised."],
-        ...(market ? [] : [["Marketplace health insurance", "Before 65, a conversion counts as income for the help with marketplace premiums (the premium tax credit), and under the law now that help stops altogether at four times the poverty line. Check the year's income before converting."]]),
-        ["Five-year rule", "Each conversion's principal must sit in the Roth five years before it can come out penalty-free (if you are under 59½). Earnings wait for 59½ and five years from the first Roth."],
-      ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))))));
+      ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes")))));
 }

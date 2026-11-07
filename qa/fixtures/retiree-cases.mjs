@@ -86,3 +86,52 @@ export function fullBracketRetiree() {
     accounts: [{ id: "c", name: "Checking", type: "checking", balance: 30000 }, { id: "i", name: "IRA", type: "ira", balance: 300000, ownerId: "d" }],
     income: [{ id: "p", name: "Pension", type: "pension", personId: "d", amount: 5000 }] });
 }
+
+/**
+ * Pat and Jo, both 60 in 2026 (born 1966), stop work at 62 (2028) and take Social Security at 67 (2033): $2,600 and $1,900 a
+ * month at full retirement age. Nothing comes in between: $15,000 in checking, Pat's $560,000 401(k) and Jo's $200,000 IRA pay
+ * for everything. $5,000 a month of spending, filing jointly, the quick flat 15% (round 8,
+ * Batch 5b: the couple who retire before any income starts).
+ */
+export function bridgeCouple() {
+  const p = emptyPlan();
+  p.household.people.push(
+    { id: "pat", name: "Pat", role: "self", birthDate: "1966-03-01", retirementAge: 62, lifeExpectancy: null },
+    { id: "jo", name: "Jo", role: "partner", relation: "spouse", birthDate: "1966-09-15", retirementAge: 62, lifeExpectancy: null },
+  );
+  p.household.filingStatus = "married_joint"; p.household.state = "OH";
+  p.accounts.push(
+    { id: "chk", name: "Checking", type: "checking", balance: 15000, asOf: "2026-11-06", ownerId: "" },
+    { id: "k", name: "Pat's 401(k)", type: "401k", balance: 560000, asOf: "2026-11-06", ownerId: "pat" },
+    { id: "ira", name: "Jo's IRA", type: "ira", balance: 200000, asOf: "2026-11-06", ownerId: "jo" },
+  );
+  p.income.push(
+    { id: "s1", name: "Pat's pay", type: "salary", personId: "pat", amount: 7000, period: "monthly", growth: 0.03, taxable: true },
+    { id: "s2", name: "Jo's pay", type: "salary", personId: "jo", amount: 4500, period: "monthly", growth: 0.03, taxable: true },
+  );
+  p.expenses.push({ id: "x1", name: "Everything", category: "groceries", essential: true, period: "monthly", inflates: true, amount: 5000 });
+  Object.assign(p.retirement, { spendingMonthly: 5000, taxMode: "flat", taxRate: 0.15, strategy: "fixed-real", withdrawalRate: 0.04,
+    socialSecurity: { pat: { claimAge: 67, monthlyAtFRA: 2600 }, jo: { claimAge: 67, monthlyAtFRA: 1900 } } });
+  p.retirement.contributions.push({ id: "c1", accountId: "k", personId: "pat", amount: 1000, period: "monthly", employerMatch: 0 });
+  return p;
+}
+
+/**
+ * Kim, 45 (born 1981-05-20), single, stopped work this year with only savings: $20,000 in checking, a $950,000 brokerage
+ * account, a $380,000 401(k) and a $70,000 Roth; $3,300 a month of spending and no Social Security or pension on file.
+ */
+export function earlyRetiree() {
+  const p = emptyPlan();
+  p.household.people.push({ id: "kim", name: "Kim", role: "self", birthDate: "1981-05-20", retirementAge: 45, lifeExpectancy: null });
+  p.household.filingStatus = "single"; p.household.state = "CO";
+  p.accounts.push(
+    { id: "chk", name: "Checking", type: "checking", balance: 20000, asOf: "2026-11-06", ownerId: "" },
+    { id: "brk", name: "Brokerage", type: "brokerage", balance: 950000, asOf: "2026-11-06", ownerId: "kim" },
+    { id: "k", name: "Old 401(k)", type: "401k", balance: 380000, asOf: "2026-11-06", ownerId: "kim" },
+    { id: "r", name: "Roth IRA", type: "roth", balance: 70000, asOf: "2026-11-06", ownerId: "kim" },
+  );
+  p.expenses.push({ id: "x1", name: "Everything", category: "groceries", essential: true, period: "monthly", inflates: true, amount: 3300 });
+  Object.assign(p.retirement, { spendingMonthly: 3300, taxMode: "flat", taxRate: 0.15, strategy: "fixed-real", withdrawalRate: 0.04, socialSecurity: {} });
+  p.guide = { ...(p.guide ?? {}), setup: { status: { kim: "retired" }, ss: { kim: "later" }, at: "done" } };
+  return p;
+}

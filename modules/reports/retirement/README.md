@@ -32,3 +32,14 @@ Carlo run here passes `careful: false`: the careful figure (9 of 10 markets) is 
   when its figures cannot be worked out (settleReport)".
 
 Review 2026-11-06 (round 7): "Your required withdrawals begin in 2065" and the survivor line ("$2,900 a month (you) or $2,900 a month (your spouse)") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only). The Social Security table's name column is a label and stays.
+
+Round 8 batch 5b review D3 (2026-11-06): `plan.spendingMonthly` is what the plan spends a month in its first retirement year,
+today's dollars: the settings figure on the same spending every year, the way's own first-year figure (`spendingReal` of the
+retirement year's row) on a way that sets its own withdrawal, the figure `coverage` is worked on; `plan.plannedMonthly` is the
+settings figure. The widow on "A share of what is left" read "at $3,000 a month" beside "income covers 78%" of her $64,868;
+it reads about $5,406. Test: "batch 5b review D3". The view's wording ("Planned a month") is the designer's (not changed here).
+
+Round 8 batch 5b UX review 8 (2026-11-06): `plan.strategy` is the engine's description of the way (`STRATEGIES` in
+core/math/retirement.js). Guardrails now reads "What you plan, trimmed by a tenth after bad years and raised back after good
+ones" (the words of How much to take out's "Trim after bad years"), not "Your spending, cut 10% after a bad stretch, back up
+after a good one". Test: "batch 5b UX review 8: the report says guardrails in the words the retirement pages use".

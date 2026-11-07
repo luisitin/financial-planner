@@ -8,11 +8,13 @@ import { RETURNS } from "../historical/data/returns.js";
 // what a required withdrawal adds to the year's federal tax (round 8, widow-2): the same figure as Required withdrawals
 import { rowIncome, addedTax, withdrawalTax, payThisYear } from "../rmd/compute.js";
 
+// `short`: the way in a few plain words, for its one line on the page; `how`: the rule, for "How this is worked out"
 export const DESCRIPTIONS = {
-  "fixed-real": { name: "Same spending every year", how: "Take what you need, raise it with inflation, whatever the markets do. Steady, but a bad decade can drain the pot.", from: "The classic '4% rule' (Bengen 1994, the Trinity study)." },
-  "percent": { name: "A share of what is left", how: "Take the same percentage of the balance every year. It can never run out, but a bad year cuts your spending straight away.", from: "Percent-of-portfolio rule." },
-  "guardrails": { name: "Guardrails", how: "Start like the 4% rule; cut 10% when withdrawals climb past 4.8% of the pot, raise 10% when they fall under 3.2%, and skip the inflation raise after a losing year.", from: "Guyton and Klinger (2006), simplified." },
-  "vpw": { name: "Spend what the years left can afford", how: "Each year, take the amount that would spread the balance evenly over the years you have left at the expected real return. Higher early, more variable, never runs out early.", from: "Bogleheads variable percentage withdrawal." },
+  "fixed-real": { name: "Same spending every year", short: "the same each year, raised with prices, whatever markets do", how: "Spend the same every year, raised with prices; savings pay what income does not. Steady, but a bad decade can drain savings.", from: "The classic '4% rule' (Bengen 1994, the Trinity study)." },
+  "percent": { name: "A share of what is left", short: "a set share of savings each year on top of your income, so it moves with markets", how: "Take the same share of savings each year and spend it on top of your income. It never runs out, but a bad year cuts spending at once.", from: "Percent-of-portfolio rule." },
+  // one plain name on every page (UX review 8: "Guardrails" here, another phrase in the settings list, a third in the hero)
+  "guardrails": { name: "Trim after bad years", short: "what you plan, trimmed by a tenth after bad years and raised back after good ones", how: "Spend what you plan. Trim it by a tenth when what you take passes 1.2 times the starting share of savings; raise it back, never past your plan, when it falls under 0.8 times. Nothing is trimmed while income pays for everything.", from: "Guyton and Klinger's guardrails (2006), simplified." },
+  "vpw": { name: "Spend what the years left can afford", short: "what savings can pay over the years left, on top of your income", how: "Take what would spread savings evenly over the years left and spend it on top of your income. More early on; it moves with markets and never runs out early.", from: "Bogleheads variable percentage withdrawal." },
 };
 /** The worst start year in history for this horizon: the one whose fixed-real run fails first or ends lowest. */
 export function worstWindow(inputs) {
@@ -32,95 +34,114 @@ export const RULE_OF = { "fixed-real": "spend", guardrails: "spend", percent: "s
 /**
  * The first retirement year of one way, in the words "take $X from savings; with your $G of income, that pays for ..." (round 8,
  * widow-1; review D6, D7 and UX 1), all in today's dollars, from the way's own run with the plan's expected returns (row r):
- *   rule "spend" (the same spending every year, guardrails): spend = the year's spending (the row's own figure, the one shown
- *     beside the way), health = its health cover, other = its other one-off costs, tax = the year's tax, take = everything that
- *     comes out of savings that year (a required withdrawal beyond the need included), short = what savings could not pay that
- *     year, back = the part of the withdrawal the engine puts back into savings after the year's need and its tax
- *     (core/math/retirement.js: surplus = withdrawn - need - taxes). With nothing short and nothing back,
- *     take + income = spend + health + other + tax, when the income does not already cover the spending and health cover.
- *   rule "share" (a share of what is left, spend what the years left can afford), when the engine's figure is held (below): the
- *     way's amount read as what it is, a withdrawal on top of the income: take = max(that amount, the required withdrawal),
- *     spend = take + income, before tax. Offered, it reads like the spend ways.
- * -> { year (the first retirement year), rule, take, spend, health, other, tax, short, back, need, income, required, beforeTax }
+ *   spend = the year's spending (the row's own figure, the one shown beside the way), health = its health cover, other = its
+ *   other one-off costs, tax = the year's tax, take = everything that comes out of savings that year (a required withdrawal
+ *   beyond the need included), short = what savings could not pay that year, need = what savings pay toward spending, health
+ *   cover and one-off costs before tax, back = the part of the withdrawal the engine puts back into savings (core/math/retirement.js:
+ *   the same spending every year puts back withdrawn - need - tax, its income beyond the need unspent; the other ways spend all of
+ *   their income, so they put back withdrawn - (spend + health + one-offs + tax - income)). With nothing short and nothing back,
+ *   take + income = spend + health + other + tax, unless the same spending every year leaves income unspent.
+ * -> { year (the first retirement year), rule, take, spend, health, other, tax, short, back, need, income, required }
  */
-function firstOf(key, r, held) {
+function firstOf(key, r) {
   if (!r) return null;
   const pl = r.priceLevel || 1, real = (n) => (Number(n) || 0) / pl;
   const income = r.incomeReal, required = real(r.rmd);
-  if (RULE_OF[key] === "share" && held) { const take = Math.max(r.spendingReal, required); return { year: r.year, rule: "share", take, spend: take + income, health: 0, other: 0, tax: 0, short: 0, back: 0, need: 0, income, required, beforeTax: true }; }
   const out = Object.values(r.withdrawn ?? {}).reduce((t, x) => t + (Number(x) || 0), 0);
-  const need = Math.max(0, r.spending + r.eventSpending - r.income) + (r.eventOut - r.eventSpending);
-  return { year: r.year, rule: RULE_OF[key] ?? "spend", take: real(out), spend: r.spendingReal, health: real(r.eventSpending), other: real(r.eventOut - r.eventSpending), tax: real(r.taxes),
-    short: real(r.shortfall), back: Math.max(0, real(out - need - r.taxes)), need: real(need), income, required, beforeTax: false };
+  const other = r.eventOut - r.eventSpending;
+  // what savings pay toward the year (before tax), and with its tax: the same spending every year leaves income above its need unspent
+  const fixed = key === "fixed-real";
+  const need = fixed ? Math.max(0, r.spending + r.eventSpending - r.income) + other : Math.max(0, r.spending + r.eventSpending + other - r.income);
+  // (the same spending every year keeps its own expression, out - need - tax, so its figure stays identical to the bit)
+  const back = fixed ? out - need - r.taxes : out - Math.max(0, r.spending + r.eventSpending + other + r.taxes - r.income);
+  return { year: r.year, rule: RULE_OF[key] ?? "spend", take: real(out), spend: r.spendingReal, health: real(r.eventSpending), other: real(other), tax: real(r.taxes),
+    short: real(r.shortfall), back: Math.max(0, real(back)), need: real(need), income, required };
 }
 
 /**
- * The guard on one way's expected run (round 8, widow-1; review D2): the engine takes a percentage or guardrail way's figure as
- * all of the year's spending and only then counts guaranteed income against it, so with income it plans on too little. A way other
- * than the same spending every year is held (not offered) when its first-year spending is under what the plan spends
- * ("below-spending"), or when in any retired year it plans on less than that year's guaranteed income ("below-income": the
- * savings then pay nothing toward spending, yet the way cuts it; guardrails did this to a widow from her first year and, for a
- * retiree with $45,000 of income and a 1% draw, from her second). -> { held, under: { year, spending, income } | null }
+ * The guard on one way's expected run, kept as a safety net (round 8, widow-1; review D2). Until the owner's answer of 2026-11-06
+ * ("You can do as you please. Just make sure a layman can easily understand and use the page") the engine took a share or
+ * guardrail way's figure as all of the year's spending and counted guaranteed income only afterwards, so a widow with $50,400
+ * of income was planned on $16,880. The engine now spends the income on top of the way's withdrawal (core/math/retirement.js),
+ * so no way should leave any of the year's guaranteed income unused. A way other than the same spending every year is still held
+ * (not offered) if, in any retired year of its expected run, its spending, health cover and tax together come to less than that
+ * year's guaranteed income ("below-income"). -> { held, under: { year, spending, income } | null }
  */
-export function guardOf(key, run, planned) {
+export function guardOf(key, run) {
   if (key === "fixed-real") return { held: null, under: null };
-  const ret = run.rows.filter((x) => x.retired);
-  if (!ret.length) return { held: null, under: null };
-  if (ret[0].spendingReal < planned - 0.5) return { held: "below-spending", under: null };
-  const u = ret.find((x) => x.spendingReal < x.incomeReal - 0.5);
+  const u = run.rows.find((x) => x.retired && (x.spending + (x.eventSpending ?? 0) + x.taxes) / (x.priceLevel || 1) < x.incomeReal - 0.5);
   return u ? { held: "below-income", under: { year: u.year, spending: u.spendingReal, income: u.incomeReal } } : { held: null, under: null };
 }
 
-/** heldWays(inputs) -> { [way]: null | "below-spending" | "below-income" }: the guard on each way's expected run (three runs of the engine). */
-export function heldWays(inputs) {
-  return Object.fromEntries(Object.keys(STRATEGIES).map((key) => [key, key === "fixed-real" ? null : guardOf(key, project({ ...inputs, strategy: key }), inputs.spending.yearly).held]));
-}
-
 /**
- * wayOptions(plan, { today }) -> [{ value, label }]: the ways the Projection page's settings offer (round 8 review UX 7: its list
- * set the ways this page does not offer, with no reason given): the ones not held, and the one the plan already uses.
+ * inputsByWay(plan, params, built) -> { [way]: inputs } | null: the inputs the plan would have with each way saved (review D2).
+ * The health cover before 65 is priced on the plan's own income, and that income depends on the way (a way that takes less can
+ * put the household under the line where the help with health insurance stops, or over the one where it ends), so each way is
+ * run on its own build: the figure beside "Use this one" is the run the plan gets once that way is saved. `built`: the plan's own
+ * buildInputs result, reused for the way already saved.
  */
-export function wayOptions(plan, params = {}) {
-  const b = buildInputs(plan, params);
-  return wayOptionsFor(b.inputs ?? null, plan.retirement?.strategy ?? "fixed-real");
+export function inputsByWay(plan, params = {}, built = null) {
+  const b = built ?? buildInputs(plan, params);
+  if (!b?.inputs) return null;
+  return Object.fromEntries(Object.keys(STRATEGIES).map((key) => [key, key === b.inputs.strategy ? b.inputs
+    : buildInputs({ ...plan, retirement: { ...(plan.retirement ?? {}), strategy: key } }, params).inputs ?? b.inputs]));
 }
-/** wayOptionsFor(inputs | null, chosen) -> the same, from inputs already built (the Projection page's own); every way when there are none. */
-export function wayOptionsFor(inputs, chosen = "fixed-real") {
-  const held = inputs ? heldWays(inputs) : {};
-  const mine = inputs?.strategy ?? chosen;
-  return Object.entries(STRATEGIES).filter(([k]) => k === mine || !held[k]).map(([value, label]) => ({ value, label }));
+/** The inputs of one way from a map of them, or the same inputs for every way (one inputs object). */
+const wayInputs = (byWay, key) => (byWay && typeof byWay.startYear === "number" ? byWay : byWay?.[key]);
+
+/** heldWays(byWay | inputs) -> { [way]: null | "below-income" }: the guard on each way's expected run, on its own inputs (three runs of the engine). */
+export function heldWays(byWay) {
+  return Object.fromEntries(Object.keys(STRATEGIES).map((key) => [key, key === "fixed-real" ? null : guardOf(key, project({ ...wayInputs(byWay, key), strategy: key })).held]));
 }
 
 /**
- * compute(plan, { today }) -> { ready, rows: [{ key, name, how, from, expected: { firstYear, lowest, endReal, success }, worst: { ... },
- *   first (firstOf), offer ("Use this one" is shown), held: null | "below-spending" | "below-income", under (guardOf) }], worstStartYear,
- *   chosen, chosenHeld, spendingYearly }
+ * wayOptions(plan, { today }, built) -> [{ value, label }]: the ways the Projection page's settings offer (round 8 review UX 7: its
+ * list set the ways this page does not offer, with no reason given): the ones not held, and the one the plan already uses, by the
+ * names this page gives them (UX review 8: one name for each way on every page).
+ */
+export function wayOptions(plan, params = {}, built = null) {
+  const byWay = inputsByWay(plan, params, built);
+  return wayOptionsFor(byWay, plan.retirement?.strategy ?? "fixed-real");
+}
+/** wayOptionsFor(byWay | inputs | null, chosen) -> the same, from inputs already built; every way when there are none. */
+export function wayOptionsFor(byWay, chosen = "fixed-real") {
+  const held = byWay ? heldWays(byWay) : {};
+  const mine = STRATEGIES[chosen] ? chosen : "fixed-real";
+  return Object.keys(STRATEGIES).filter((k) => k === mine || !held[k]).map((value) => ({ value, label: DESCRIPTIONS[value].name }));
+}
+
+/**
+ * compute(plan, { today }) -> { ready, rows: [{ key, name, short, how, from, expected: { firstYear, lowest, highest, endReal, success, failAge },
+ *   worst: { ... }, first (firstOf), offer ("Use this one" is shown), held: null | "below-income", under (guardOf) }], worstStartYear,
+ *   chosen, chosenHeld, spendingYearly, withdrawalRate, endYear (the plan's last year), figureMonthly (what Retirement settings
+ *   shows a month, before health cover: buildInputs' own, for "Plan on $X a month") }
  * Amounts are real (today's dollars) yearly spending.
- * The guard (round 8, widow-1; review D2; the engine change is the owner's question): the engine takes a percentage or guardrail
- * way's figure as all of the year's spending and only then counts guaranteed income against it, so for a widow with $50,400 of
- * pension and Social Security, 4% of her $422,000 became "$16,880 a year" of spending, and "Use this one" planned on that against
- * the $36,000 she spends. guardOf holds such a way; the same spending every year is never held.
+ * Each way is the engine's own run of it: the share and years-left ways take their withdrawal and spend it on top of guaranteed
+ * income, guardrails spend what the plan spends while savings allow (owner's answer, 2026-11-06). guardOf stays as a safety net;
+ * the same spending every year is never held.
  */
 export function compute(plan, params = {}) {
   const b = buildInputs(plan, params);
   if (!b.inputs) return { ready: false, missing: b.missing };
+  // each way on the inputs the plan would have with it saved (review D2: its own health cover before 65)
+  const byWay = inputsByWay(plan, params, b);
   const years = b.inputs.endYear - b.inputs.startYear + 1;
-  const worst = years <= RETURNS.length ? worstWindow(b.inputs) : null;
+  const worst = years <= RETURNS.length ? worstWindow(byWay["fixed-real"]) : null;
   const summarise = (r) => { const ret = r.rows.filter((x) => x.retired); return { firstYear: ret[0]?.spendingReal ?? 0, lowest: ret.length ? Math.min(...ret.map((x) => x.spendingReal)) : 0, highest: ret.length ? Math.max(...ret.map((x) => x.spendingReal)) : 0, endReal: r.endBalanceReal, success: r.success, failAge: r.failAge }; };
   const planned = b.inputs.spending.yearly;
   const rows = Object.keys(STRATEGIES).map((key) => {
-    const run = project({ ...b.inputs, strategy: key });
+    const run = project({ ...byWay[key], strategy: key });
     const r0 = run.rows.find((x) => x.retired) ?? null;
-    const { held, under } = guardOf(key, run, planned);
+    const { held, under } = guardOf(key, run);
     return {
       key, ...DESCRIPTIONS[key],
       expected: summarise(run),
-      worst: worst ? summarise(project({ ...b.inputs, strategy: key }, { sequence: worst.seq })) : null,
-      first: firstOf(key, r0, held), held, under, offer: key !== b.inputs.strategy && !held,
+      worst: worst ? summarise(project({ ...byWay[key], strategy: key }, { sequence: worst.seq })) : null,
+      first: firstOf(key, r0), held, under, offer: key !== b.inputs.strategy && !held,
     };
   });
   const chosenRow = rows.find((r) => r.key === b.inputs.strategy);
-  return { ready: true, rows, worstStartYear: worst?.startYear ?? null, chosen: b.inputs.strategy, chosenHeld: chosenRow?.held ?? null, spendingYearly: planned, withdrawalRate: b.inputs.withdrawalRate };
+  return { ready: true, rows, worstStartYear: worst?.startYear ?? null, chosen: b.inputs.strategy, chosenHeld: chosenRow?.held ?? null, spendingYearly: planned, withdrawalRate: b.inputs.withdrawalRate, endYear: b.inputs.endYear, figureMonthly: b.figureMonthly ?? null };
 }
 
 /**

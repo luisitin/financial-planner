@@ -3,6 +3,36 @@
 No JavaScript or repository returns are imported. Asset histories come from the
 separately downloaded NYU workbook. Single untaxed bucket examples isolate the
 spending policies; taxes/bucket rules have their own golden pages.
+
+Owner's decision, 2026-11-06 (round 8, widow-1), quoted: "You can do as you
+please. Just make sure a layman can easily understand and use the page". The
+ways other than the same spending every year set the year's WITHDRAWAL from
+savings, and guaranteed income is spent on top of it:
+  percent      share = savings at the start of the year x rate
+  vpw          share = beginning-of-year annuity payment over the years left,
+               priced at the plan's expected real return even when history
+               replays another one (a set rate, as Bogleheads' VPW does)
+  guardrails   a spending target, the plan's figure in the first retired year;
+               the withdrawal it needs = max(0, target + tax - income); each
+               later year that withdrawal (worked out with that year's income)
+               is tested against savings: above 1.2 x rate the target falls 10%,
+               below 0.8 x rate it rises 10% only while something is drawn and
+               never above the plan's figure grown with inflation, otherwise it
+               moves with prices, except that a year after a negative real
+               return it does not go up (falling prices still bring it down)
+               while it needs a withdrawal (verify R1: when income pays for
+               all of it nothing is drawn, and it moves with prices);
+               in today's money it is never above the plan
+  The pension pays the year's tax first. For the share ways, savings pay the
+  share plus whatever tax the pension cannot pay; spending = share + what is
+  left of the pension after tax. Either way spending + tax = pension + all
+  that comes out of savings (guardrails: never below the target).
+The 'income-first' group below tests exactly that, with a pension and an
+optional flat tax on a pre-tax bucket; the four policy groups keep their
+untaxed, income-free cases (only guardrail raises change there).
+Review of 2026-11-06 (batch 5b): the tax a pension cannot pay is no longer
+taken out of the share (D1), the target follows falling prices after a
+losing year (D4), and the years-left payment uses the expected return (UX 14).
 """
 from copy import deepcopy
 from math import prod, isclose
@@ -65,12 +95,21 @@ def simulate(inp,seq=None,strategy=None):
         if j>=delay:
             if kind=='fixed-real':spend=base*price
             elif kind=='percent':spend=max(0,b*wr)
-            elif kind=='vpw':spend=max(0,annuity(b,max(-.5,(1+r)/(1+inflation)-1),n-j,True))
+            elif kind=='vpw':
+                # the payment is priced at the plan's own expected real return, whatever this year's market does
+                planned=mix*float(inp['returns']['stocks'])+(1-mix)*float(inp['returns']['bonds'])
+                spend=max(0,annuity(b,max(-.5,(1+planned)/(1+float(inp['rates']['inflation']))-1),n-j,True))
             else:
+                # No income and no tax in these cases, so the withdrawal the target needs is the target itself.
                 if guard is None:guard=base*price
-                elif (guard/b if b>0 else 1)>wr*1.2:guard*=.9
-                elif (guard/b if b>0 else 1)<wr*.8:guard*=1.1
-                elif prior_real is not None and prior_real>=0:guard*=1+inflation
+                else:
+                    draw=guard;ratio=draw/b if b>0 else (1 if draw>0 else 0)
+                    if ratio>wr*1.2:guard*=.9
+                    elif ratio<wr*.8 and draw>0:guard=min(guard*1.1,base*price)
+                    # prices move the target; after a losing year only a fall in prices does, while savings pay toward it
+                    # (verify R1: a year income pays for everything draws nothing, so the target follows prices)
+                    elif prior_real is not None and (prior_real>=0 or inflation<0 or draw<=0):guard*=1+inflation
+                    guard=min(guard,base*price)   # in today's money the target never passes the plan (a cut in a year of deep deflation)
                 spend=guard
         need=max(0,spend);cash_take=min(max(0,cash),need)
         invested_take=min(max(0,invested),need-cash_take);taken=cash_take+invested_take;lack=max(0,need-taken)
@@ -140,6 +179,73 @@ def page_summary(inp):
                      'worst':simulate(inp,w['seq'],p)['summary'] if w else None} for p in POLICIES]}
 
 
+def income_first(inp):
+    """The owner's 2026-11-06 rule from the module docstring, written out for one pension and one bucket.
+
+    The bucket is either untaxed (taxable) or pre-tax at a flat rate t on what is taken. Nothing
+    else is modelled: no required withdrawals (everyone is 60 when the plan starts), no health cover.
+    """
+    n=inp['endYear']-inp['startYear']+1;kind=inp['strategy'];wr=float(inp['withdrawalRate'])
+    pretax=float(inp['balances']['deferred'])>0;b=float(inp['balances']['deferred' if pretax else 'taxable'])
+    t=float(inp['rates']['taxRate']) if pretax else 0.;base=float(inp['spending']['yearly'])
+    pension=sum(float(x['yearly']) for x in inp['incomes']);price=1.;guard=None;prior_real=None;fail=None;rows=[];takes=[]
+    for j in range(n):
+        f=float(inp['rates']['inflation']);r=float(inp['returns']['stocks'])
+        if j:price*=1+f
+        income=pension*price
+        if kind=='percent':draw=max(0.,b*wr)
+        elif kind=='vpw':draw=max(0.,annuity(b,max(-.5,(1+r)/(1+f)-1),n-j,True))
+        else:
+            # the withdrawal a target needs once the pension has paid what it can: (target - income) grossed up for the tax
+            needs=lambda target:max(0.,target-income)/(1-t)
+            if guard is None:guard=base*price
+            else:
+                ratio=needs(guard)/b if b>0 else (1 if needs(guard)>0 else 0)
+                if ratio>wr*1.2:guard*=.9
+                elif ratio<wr*.8 and needs(guard)>0:guard=min(guard*1.1,base*price)
+                # after a losing year no rise with prices, unless the pension pays for the whole target (nothing drawn: verify R1)
+                elif prior_real is not None and (prior_real>=0 or f<0 or needs(guard)<=0):guard*=1+f
+                guard=min(guard,base*price)
+            draw=needs(guard)
+        if kind=='guardrails':
+            taken=min(max(0.,b),draw);tax=t*taken
+            lack=max(0.,(guard-income+tax)-taken)
+            spend=max(guard,income-tax)
+        else:
+            # the pension pays the tax first; tax it cannot pay comes out of savings on top of the share, and is itself taxed:
+            # out = share + t x out - pension once t x share passes the pension, so out = (share - pension) / (1 - t)
+            out=draw if t*draw<=income else (draw-income)/(1-t)
+            taken=min(max(0.,b),out);tax=t*taken
+            lack=max(0.,draw+max(0.,tax-income)-taken)
+            spend=draw+max(0.,income-tax)
+        if lack>.005 and fail is None:fail=60+j
+        b=(b-taken)*(1+r);takes.append(taken)
+        rows.append({'retired':True,'income':money(income),'spending':money(spend),'spendingReal':money(spend/price),'taxes':money(tax),
+                     'withdrawn':{('deferred' if pretax else 'taxable'):money(taken)},'shortfall':money(lack if lack>.005 else 0),'totalReal':money(b/price)})
+        prior_real=(1+r)/(1+f)-1
+    return {'rows':rows,'success':fail is None,'failAge':fail,'endBalanceReal':b/price,'takes':takes}
+
+
+def income_first_second(inp,result):
+    """Second derivation: closed-form growth of one bucket with constant returns, and spending from the identity
+    spending = income + everything taken out - tax, in a year savings could pay (guardrails: the target, or the whole
+    pension after tax when it covers it)."""
+    n=inp['endYear']-inp['startYear']+1;r=float(inp['returns']['stocks']);f=float(inp['rates']['inflation'])
+    pretax=float(inp['balances']['deferred'])>0;b0=float(inp['balances']['deferred' if pretax else 'taxable']);t=float(inp['rates']['taxRate']) if pretax else 0.
+    w=result['takes']
+    end=b0*(1+r)**n-sum(w[j]*(1+r)**(n-j) for j in range(n))
+    assert isclose(end/(1+f)**(n-1),result['endBalanceReal'],abs_tol=.003,rel_tol=1e-9),(end,result['endBalanceReal'])
+    if inp['strategy']=='percent' and result['success']:
+        wr=float(inp['withdrawalRate']);close(b0*((1-wr)*(1+r))**n/(1+f)**(n-1),result['endBalanceReal'])
+    pension=sum(float(x['yearly']) for x in inp['incomes'])
+    for j,row in enumerate(result['rows']):
+        income=pension*(1+f)**j if j else pension
+        if inp['strategy']!='guardrails':
+            if float(row['shortfall'])==0:assert abs(float(row['spending'])-(income+w[j]*(1-t)))<=.011,(row,income,w[j])
+            else:assert float(row['spending'])>=w[j]*(1-t)-.011,(row,w[j])
+        else:assert float(row['spending'])>=income-t*w[j]-.011 and float(row['spending'])<=max(income,float(inp['spending']['yearly'])*(1+f)**j)+.011
+
+
 ROWS=[];AUDITS=0
 
 
@@ -190,9 +296,33 @@ def build():
                     # Reconstruct second-year threshold in balance units.
                     if len(result['rows'])>1:
                         bal=(float(inp['balances']['taxable'])-first)*(1+float(inp['returns']['stocks']))
-                        predicted=first*(.9 if bal<first/.048 else 1.1 if bal>first/.032 else 1+float(inp['rates']['inflation']) if float(inp['returns']['stocks'])>=float(inp['rates']['inflation']) else 1)
+                        # The 10% raise stops at the plan's figure grown with inflation (owner's decision, 2026-11-06).
+                        infl=float(inp['rates']['inflation'])
+                        # after a losing year (return below inflation) the target does not rise with prices, but falls with them (review D4)
+                        predicted=first*(.9 if bal<first/.048 else min(1.1,1+infl) if bal>first/.032 and first>0 else 1+infl if float(inp['returns']['stocks'])>=infl or infl<0 else 1)
                         close(predicted,float(result['rows'][1]['spending']))
             add(policy,i,expected,inp=inp,check=check,note='Full annual path, first/last nominal and real spending, and depletion; no taxes or external income.')
+
+    for i in range(100):
+        # Guaranteed income first (owner's decision 2026-11-06): a pension on top of the way's own withdrawal,
+        # an untaxed or a flat-taxed pre-tax bucket, and pensions above, near and below the planned spending.
+        policy=('percent','vpw','guardrails')[i%3];year=2026 if i%2==0 else 2056
+        n=1+i%30 if i<60 else [1,2,3,30,50][i%5] if i<90 else [1,2,60,100,120][i%5]
+        b=[10000,100000,500000,2000000][i%4] if i<60 else [0,.01,1,1000,12000][i%5] if i<90 else [.01,1e6,1e9,1e10,100][i%5]
+        s=[12000,24000,40000,60000][i%4] if i<90 else [.01,1e6,1e7,0,1][i%5]
+        pension=[0,5000,20000,45000,70000][i%5] if i<60 else [0,.01,39999.99,40000,40000.01][i%5] if i<90 else [1e6,0,.01,1e7,100][i%5]
+        # A taxed pre-tax bucket for the two ways whose withdrawal is set before tax (tax = rate x withdrawal, exact). Guardrails
+        # gross the target's withdrawal up for its own tax, which the app settles to within $0.0005 a year: a cent-rounded key
+        # cannot hold that, so its taxed cases are in tests/retirement-ways.test.mjs and here it draws from an untaxed bucket.
+        r=[0,.03,-.02,.10][i%4];f=[0,.02,.03,-.01][(i//4)%4];t=[0,.10,.15,.22,.30][(i//3)%5] if i%2 and policy!='guardrails' else 0
+        inp=engine(year,n,b,s,r,f);inp['strategy']=policy;inp['withdrawalRate']=rate([.03,.04,.05][i%3] if i<90 else [0,.04,1,.04,.5][i%5])
+        inp['incomes']=[{'name':'Example pension','yearly':money(pension),'personIndex':0,'startAge':60,'cola':True,'taxable':True}]
+        if t:inp['balances']={'cash':'0.00','taxable':'0.00','deferred':money(b),'free':'0.00'};inp['rates']['taxRate']=rate(t)
+        result=income_first(inp)
+        expected={k:result[k] for k in ('success','failAge')};expected['endBalanceReal']=money(result['endBalanceReal'])
+        expected['rows']={'0':result['rows'][0],str(n-1):result['rows'][-1]}
+        add('income-first',i,expected,inp=inp,check=lambda:income_first_second(inp,result),
+            note='Owner 2026-11-06: the withdrawal is set by the way, the pension is spent on top, tax comes off; guardrails test the withdrawal its target needs and never raise past the plan.')
 
     for i in range(100):
         # The beginning-year unit-payment PV includes k=0. Since 2026-10-30 (F-030) the app pays VPW at the
@@ -247,6 +377,6 @@ def build():
 
 
 if __name__=='__main__':
-    build();assert len(ROWS)==800 and AUDITS==80
+    build();assert len(ROWS)==900 and AUDITS==90
     path=write_page('withdrawal-strategy',ROWS)
     print(f'{path.name}: {len(ROWS)} rows; {AUDITS} second checks; {sum(bool(r.get("todo")) for r in ROWS)} TODOs')

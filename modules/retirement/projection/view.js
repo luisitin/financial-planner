@@ -4,10 +4,11 @@ import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJob
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, RULE_WORDS, leftWords, leftWhy } from "../careful.js";
+import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords } from "../careful.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
-// the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given)
-import { wayOptionsFor } from "../withdrawal-strategy/compute.js";
+// the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
+// by the names that page gives them (batch 5b UX review 8)
+import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
 
 /** "a, b and c" */
 const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -38,47 +39,69 @@ export function render(root, ctx) {
   const PAGES = { "What you save for retirement": "#/retirement/contributions", "Social Security page": "#/retirement/social-security", "Numbers we assume": "#/system/assumptions", "Taxes pages": "#/taxes/federal" };
   // (the links are 44 px tall: inline links on a phone are hard to hit)
   const linked = (text) => String(text).split(/\((What you save for retirement|Social Security page|Numbers we assume|Taxes pages)\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part], class: "pj-link" }, part), ")"] : part);
-  // plain words for the way spending is carried: the engine's labels say "adjusted for inflation"
-  const plainWay = (label) => String(label).replace("adjusted for inflation", "in today's dollars").replace("Inflation-adjusted,", "Rising with prices,");
   // the line below is markets doing exactly as well as average every year; the careful figure (9 of 10 markets, from the
   // Monte Carlo page's engine) fills in under it once worked out (round 5, 2026-11-02: the average figure lasts in only
   // about 4 of 10 markets, and every page called it the most you could spend)
   // health cover (marketplace to 65, then Medicare) is added on top of the spending figure unless it already includes it (2026-11-02)
   const healthOn = healthAdded(d.health);
   const onTop = healthOn ? " on top of health cover" : "";
-  const verdictText = { "on track": `On track if markets do as well as average: the plan then carries ${money(d.affordable)} a year of spending${onTop}, in today's dollars; you plan on ${money(d.spendingYearly)}.`, tight: `Tight. If markets do as well as average the plan carries about ${money(d.affordable)} a year${onTop}; you plan on ${money(d.spendingYearly)}. Small changes matter here.`, short: `Short. If markets do as well as average, ${money(d.spendingYearly)} a year${onTop} runs out in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan carries is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
+  // what the plan spends in its first retirement year: with a way that sets its own withdrawal that is the way's figure, not the
+  // one in the settings, and "Paid by income" below is against it (round 8, Batch 5b: "you plan on $36,000" sat beside "Paid by
+  // income 299%" of the $16,880 the way then planned)
+  const r0 = d.rows.find((r) => r.year === d.atRetirement?.year) ?? null;
+  // a way that moves with markets is said as itself (batch 5b UX review 5: "The money lasts", "On track" and "you plan on $72,380"
+  // beside "$0 left" and more than the plan can carry): what it spends a month the first year, how low it goes, and a way that
+  // spends savings down says so
+  const moving = d.strategy !== "fixed-real" && !!r0;
+  const retiredRows = d.rows.filter((r) => r.retired);
+  const lowest = retiredRows.length ? Math.min(...retiredRows.map((r) => r.spendingReal)) : 0;
+  const thisYear = Number(String(fmt.today()).slice(0, 4));
+  const movingText = moving ? `About ${money(r0.spendingReal / 12)} a month ${r0.year === thisYear ? "this year" : `in ${r0.year}`}, about ${money(lowest / 12)} at the lowest if markets do as well as average.` : null;
+  const spentDown = moving && d.strategy === "vpw" && d.result.success && d.atEnd.totalReal < 1 ? `Savings are spent down to $0 by ${d.atEnd.year} on purpose.` : null;
+  const planOn = `you plan on ${money(d.spendingYearly)}`;
+  const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average it carries ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average it carries about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan carries is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
   // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
   // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
   const steady = d.strategy === "fixed-real";
   // under 9 in 10 at the planned spending: said here, in amber, next to the figure (one verdict word on every page: the headline
   // above stays the average-market verdict that the Dashboard, Quick answers, Timeline and Goal seek also show; review 2026-11-05)
   const fewer = (share) => (share !== null && share < CAREFUL_CHANCE ? ui.h("span", { class: "pill warn" }, "fewer than 9 in 10") : null);
-  const careWords = (y, mo, share, shareN = null) => steady
-    ? ["Even in a bad run of years (only 1 in 10 is worse), the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}. At the ${money(d.spendingYearly)} you plan, it lasts in `, share, " of the runs we tried (", ui.h("a", { href: "#/retirement/monte-carlo", class: "pj-link" }, "Chance the money lasts"), ").", fewer(shareN)]
-    : ["Even in a bad run of years (only 1 in 10 is worse), the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}, spent the same every year. Your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy", class: "pj-link" }, "How much to take out"), ")."];
+  // the chance in the words How much to take out uses (UX review 7); the page it comes from is a button below, not a link (UX 17)
+  // two short paragraphs, not one of five lines on a phone: what lasts even in a bad run of years, then how often the plan's own
+  // figure does (path part 3: "Even in a bad run of years (only 1 in 10 is worse)" on this first screen, not "9 of 10 markets")
+  const careWords = (y, mo) => steady
+    ? ["Even in a bad run of years (only 1 in 10 is worse), the money carries about ", y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}.`]
+    : ["Spent the same every year instead, about ", mo, ` a month${onTop} would last even in a bad run of years (only 1 in 10 is worse).`];
+  const shareWords = (share, shareN = null) => [`At the ${money(d.spendingYearly)} you plan, it lasts in `, share, ".", fewer(shareN)];
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
   const noCare = !(d.affordable >= 1);
-  const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts even in a bad run of years. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12)), slot("98%")));
+  const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts even in a bad run of years. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12))));
+  const careLine2 = noCare || !steady ? null : ui.h("p", { style: { color: "var(--muted)" } }, ...shareWords(slot("about half of markets (47%)")));
   const careSub = `a year${onTop}, today's dollars; ${money(d.affordable)} if markets do as well as average`;
   const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`) : ui.stat("Spending that lasts, even in a bad run of years", "...", careSub));
   // nothing saved for retirement is on file and the income alone does not carry the spending: the page cannot say the money
   // runs out, only that it does not know yet (review UX 3: a 26-year-old who never mentioned savings read "Runs out in 2065")
   const unknownYet = savingsUnknown(d);
-  const headline = ui.h("h1", {}, unknownYet ? "We don't know yet" : d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`);
+  const headline = ui.h("h1", {}, unknownYet ? "We don't know yet" : d.verdict === "short" ? `Runs out in ${d.shortYear}` : moving ? "Your spending moves with markets" : d.verdict === "on track" ? "The money lasts" : "It lasts, just");
   if (!noCare) whenCareful(ctx, careLine, (c) => {
     // nothing worked out, or nothing lasts in 9 of 10 markets even at $0: no careful line, the average figure named as such
-    if (!c || !(c.yearly > 0)) { careLine.remove(); careStat.replaceChildren(ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
+    if (!c || !(c.yearly > 0)) { careLine.remove(); careLine2?.remove(); careStat.replaceChildren(ui.stat("Spending it can carry", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
     careLine.style.minHeight = `${careLine.offsetHeight}px`;   // never shorter than the placeholder it replaces
     careLine.style.color = "";
     careLine.removeAttribute("aria-busy");
-    // the share rounded down, so a figure just under 9 in 10 never reads "90%" (review 2026-11-05)
-    careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly)), `${Math.floor(c.planned * 100)}%`, c.planned).filter((x) => x !== null));   // replaceChildren writes a null as the text "null"
+    // the share rounded down, so a figure just under 9 in 10 never reads "90%" (review 2026-11-05), in the shared words (UX review 7)
+    careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly))));
+    if (careLine2) { careLine2.style.color = ""; careLine2.replaceChildren(...shareWords(chanceWords(c.planned), c.planned).filter((x) => x !== null)); }   // replaceChildren writes a null as the text "null"
     careStat.replaceChildren(ui.stat("Spending that lasts, even in a bad run of years", money(c.yearly), careSub));
+    // under 6 in 10 at the planned spending the headline says so, in the same words (UX review 7: "It lasts, just" over 47%)
+    if (steady && d.verdict !== "short" && Number.isFinite(c.planned) && c.planned < 0.6) headline.textContent = `Lasts in ${chanceWords(c.planned, { exact: false })}`;
   });
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,
   // or nobody ("nobody in the plan works now")
+  // the projection's own note about the spending figure, said where it can be changed (UX review 18: "on this page")
+  const noteWords = (n) => n.replace("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ.", "Spending is today's expenses; change it under Retirement settings below.");
   const rb = d.retireBy ?? { name: d.people[0].name, age: d.atRetirement.age, first: true };
   // the first adult has stopped while a partner with pay works on (seventh pass): retirement starts now, the pay counted as income
   // "you" and "your" for the first adult Get started left unnamed ("you at 65", "your spouse's pay"; round 7)
@@ -87,11 +110,18 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
     unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. ", ui.h("a", { href: "#/balance/net-worth", class: "pj-link" }, "What you own")) : ui.h("p", { class: "lede" }, verdictText),
+    spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
     unknownYet ? null : careLine,
+    unknownYet ? null : careLine2,
     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
-    ui.h("p", { class: "muted small" }, linked(`Retirement starts in ${d.atRetirement.year} (${startWho}); the plan runs to ${d.atEnd.year}. Expected returns, ${plainWay(STRATEGIES[d.strategy]).toLowerCase()}.${d.notes.length ? " " + d.notes.join(" ") : ""}`), ...(d.otherLeft?.length ? [" ", ...leftWords(ui, money, d.otherLeft)] : [])),
-    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›")),
+    // in the normal text colour (grey on the hero's tint was under 4.5:1), short (UX review 17, 18)
+    ui.h("p", { class: "small" }, `Retirement starts in ${d.atRetirement.year} (${startWho}); the plan runs to ${d.atEnd.year}.`),
+    d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
+    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
+    // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
+    // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›"),
+      noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
   ));
   // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
   if (!unknownYet) root.append(ui.card(null, ui.row(
@@ -208,7 +238,8 @@ function settingsCard(ctx, d) {
   // or Get started's own less the health insurance among today's bills that the health line replaces
   const spendNow = d.figureMonthly ?? (Number(rt.spendingMonthly) > 0 ? Number(rt.spendingMonthly) : null);
   const less = d.health?.fromSetup && d.health.removedMonthly > 0 ? `: Get started's figure from today's bills, less ${fmt.money(Math.round(d.health.removedMonthly), plan.meta.currency)} a month of health insurance` : "";
-  const ways = wayOptionsFor(d.ready ? d.inputs : null, rt.strategy ?? "fixed-real");
+  // each way judged on its own run (review D2), as How much to take out does
+  const ways = d.ready ? wayOptions(plan, { today: fmt.today() }, { inputs: d.inputs }) : wayOptionsFor(null, rt.strategy ?? "fixed-real");
   const waysLeft = Object.keys(STRATEGIES).length - ways.length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
@@ -217,8 +248,8 @@ function settingsCard(ctx, d) {
     { key: "stocksRetired", label: "Share in stocks once retired", type: "percent", min: 0, max: 100 },
     { key: "taxMode", label: "How tax is worked out", type: "select", options: [{ value: "flat", label: "A flat rate on pre-tax withdrawals (quick)" }, { value: "brackets", label: "The federal brackets on each year's income" }], help: "the brackets use the filing status from the People page and the rules on the Taxes pages" },
     { key: "taxRate", label: "Flat rate on money taken from pre-tax accounts", type: "percent", min: 0, max: 60, help: "used by the flat setting only" },
-    { key: "strategy", label: "How much to take out each year", type: "select", options: ways, help: waysLeft ? `${waysLeft === 1 ? "One way is" : `${waysLeft} ways are`} left out: on your plan ${waysLeft === 1 ? "it" : "they"} would plan on less than you spend or than your income (How much to take out says why)` : undefined },
-    { key: "withdrawalRate", label: "Starting withdrawal rate", type: "percent", min: 1, max: 15, help: "for the percentage and guardrail methods; 4 is the classic figure" },
+    { key: "strategy", label: "How much to take out each year", type: "select", options: ways, help: waysLeft ? `${waysLeft === 1 ? "One way is" : `${waysLeft} ways are`} left out: on your plan ${waysLeft === 1 ? "it" : "they"} would leave some of your income unspent (How much to take out says when)` : "How much to take out compares them on your plan" },
+    { key: "withdrawalRate", label: "Starting withdrawal rate", type: "percent", min: 1, max: 15, help: `the share of savings "${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from; 4 is the classic figure` },
   ];
   const values = { spendingMonthly: spendNow, stocksNow: rt.stocksNow ?? 0.7, stocksRetired: rt.stocksRetired ?? 0.5, taxMode: rt.taxMode ?? "flat", taxRate: rt.taxRate ?? 0.15, strategy: rt.strategy ?? "fixed-real", withdrawalRate: rt.withdrawalRate ?? 0.04 };
   const form = ui.form(FIELDS, values, (v) => {

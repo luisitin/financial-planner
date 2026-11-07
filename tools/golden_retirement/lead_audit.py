@@ -103,28 +103,55 @@ def ledger(I,options=None):
             if a>=number(c['startAge']) and (c.get('endAge') is None or a<=number(c['endAge'])):
                 incomes.append(dict(name=c['name'],amount=number(c['yearly'])*(price if c.get('cola',True) else 1)))
         income=sum(x['amount'] for x in incomes);retired=year>=I['retireYear'];spend=0;balance=sum(balances.values());strategy=I.get('strategy','fixed-real');wr=number(I.get('withdrawalRate',.04))
+        t=number(rate.get('taxRate',0));plan=number(I['spending']['yearly'])*price;draw=None
+        def gross(spendable):
+            # what has to come out, in the order cash, taxable, pre-tax (at 1-t), Roth, to hand over this much to spend
+            g=0
+            for bucket in ['cash','taxable','deferred','free']:
+                factor=1-t if bucket=='deferred' else 1;part=min(max(0,balances[bucket])*factor,spendable);g+=part/factor;spendable-=part
+            return g+spendable
         if retired:
-            if strategy=='percent':spend=max(0,balance*wr)
+            # Owner 2026-11-06: these ways set the withdrawal; income is spent on top and tax comes off it.
+            if strategy=='percent':draw=max(0,balance*wr)
             elif strategy=='vpw':
-                real=max(-.5,(1+r)/(1+infl)-1);years=I['endYear']-year+1;spend=max(0,balance/sum((1+real)**-j for j in range(0,int(years))))
+                # priced at the expected return of this year's mix and the expected inflation, not the replayed market (UX 14)
+                planned=mix*number(I['returns']['stocks'])+(1-mix)*number(I['returns']['bonds'])
+                real=max(-.5,(1+planned)/(1+number(rate['inflation']))-1);years=I['endYear']-year+1;draw=max(0,balance/sum((1+real)**-j for j in range(0,int(years))))
             elif strategy=='guardrails':
-                if guard is None:guard=number(I['spending']['yearly'])*price
-                elif balance<guard/(1.2*wr):guard*=.9
-                elif balance>guard/(.8*wr):guard*=1.1
-                elif priorReal>=0:guard*=1+infl
-                spend=guard
-            else:spend=number(I['spending']['yearly'])*price
+                if guard is None:guard=plan
+                else:
+                    test=gross(max(0,guard-income))
+                    if balance<test/(1.2*wr) or (balance<=0 and test>0):guard*=.9
+                    elif test>0 and balance>test/(.8*wr):guard=min(guard*1.1,plan)
+                    elif priorReal>=0 or infl<0 or test<=0:guard*=1+infl   # a losing year stops a rise, never a fall (D4), and only while something is drawn (verify R1)
+                    guard=min(guard,plan)   # and never above the plan at this year's prices
+                draw=gross(max(0,guard-income))
+            else:spend=plan
         need=max(0,spend-income);taken=dict.fromkeys(balances,0);mandatory=0
         if I.get('rmd') and ages[0]>=I['rmd']['startAge'] and balances['deferred']>0:
             mandatory=balances['deferred']/RMD_FACTORS[min(120,int(ages[0]))];balances['deferred']-=mandatory;taken['deferred']=mandatory
-        left=max(0,need-mandatory*(1-number(rate.get('taxRate',0))))
-        for bucket in ['cash','taxable','deferred','free']:
-            factor=1-number(rate.get('taxRate',0)) if bucket=='deferred' else 1
-            available=max(0,balances[bucket])*factor
-            spendable=min(available,left);take=spendable/factor
-            taken[bucket]+=take;balances[bucket]-=take;left-=spendable
-        tax=taken['deferred']*number(rate.get('taxRate',0))
-        balances['taxable']+=max(0,mandatory*(1-number(rate.get('taxRate',0)))-need)
+        if draw is None:
+            left=max(0,need-mandatory*(1-number(rate.get('taxRate',0))))
+            for bucket in ['cash','taxable','deferred','free']:
+                factor=1-number(rate.get('taxRate',0)) if bucket=='deferred' else 1
+                available=max(0,balances[bucket])*factor
+                spendable=min(available,left);take=spendable/factor
+                taken[bucket]+=take;balances[bucket]-=take;left-=spendable
+            tax=taken['deferred']*number(rate.get('taxRate',0))
+            balances['taxable']+=max(0,mandatory*(1-number(rate.get('taxRate',0)))-need)
+        else:
+            # the withdrawal, gross; a required amount counts toward it and what it forces out beyond it is reinvested. For the share
+            # ways, tax that income cannot pay is taken too (D1): repeat until the tax on what has come out stops adding to it
+            want=lambda:draw if strategy=='guardrails' else draw+max(0,taken['deferred']*t-income)
+            for _ in range(500):
+                left=max(0,want()-sum(taken.values()));got=0
+                for bucket in ['cash','taxable','deferred','free']:
+                    take=min(max(0,balances[bucket]),left-got);taken[bucket]+=take;balances[bucket]-=take;got+=take
+                if left-got>1e-9 or got<1e-10:break
+            left=max(0,want()-sum(taken.values()))
+            tax=taken['deferred']*t;balances['taxable']+=max(0,sum(taken.values())-want())
+            spend=max(guard,income-tax) if strategy=='guardrails' else draw+max(0,income-tax)
+            if strategy=='guardrails':left=max(0,guard-income+tax-sum(taken.values()))
         if left>.005 and success:success=False;failYear=year;failAge=ages[0]
         for bucket in balances:balances[bucket]*=1+number(step.get('cash',rate['cash'])) if bucket=='cash' else 1+r
         total=sum(balances.values());withdrawsum+=sum(taken.values());taxsum+=tax

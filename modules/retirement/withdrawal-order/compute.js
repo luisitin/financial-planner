@@ -18,7 +18,9 @@ export function compute(plan, params = {}) {
   const tax = taxSettings(plan, { mode: "brackets" });
   const current = orderKey(b.inputs.withdrawalOrder);
   const options = Object.entries(WITHDRAWAL_ORDERS).map(([key, def]) => {
-    const inputs = { ...b.inputs, withdrawalOrder: def.order, tax };
+    // on the plan's own spending, the same every year (round 8, Batch 5b): the share, years-left and guardrail ways spend what an
+    // order saves in tax instead of keeping it, so "left at the end" would not show it
+    const inputs = { ...b.inputs, strategy: "fixed-real", withdrawalOrder: def.order, tax };
     const r = project(inputs);
     const taxesReal = r.rows.reduce((s, x) => s + x.taxes / x.priceLevel, 0);
     const rmdReal = r.rows.reduce((s, x) => s + x.rmd / x.priceLevel, 0);

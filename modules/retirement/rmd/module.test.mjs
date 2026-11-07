@@ -91,7 +91,7 @@ test("round 8 (widow-2 and widow-3): the page says what the withdrawal adds to t
   const root = node("root", []);
   render(root, { ui, fmt: { ...fmt, today: () => today }, plan: migrate(widowPlan()), store: { update() {} } });
   const text = root.textContent.replace(/\s+/g, " ");
-  assert.ok(/adds about \$3,429 to your federal income tax for 2026/.test(text), text.slice(0, 900));
+  assert.ok(/It adds about \$3,429 to your 2026 federal tax: ask your bank or broker to hold that back when they send it\./.test(text), text.slice(0, 900));
   assert.ok(!/Taxed at the plan's 15%/.test(text));
   assert.ok(/you can still move more to a Roth/.test(text), "conversions after the withdrawal");
 });
@@ -140,7 +140,7 @@ test("round 8 review D1: filing separately, each required withdrawal is priced o
   assert.ok(Math.abs(thisYearTax(apart, { today }).total - 2 * 3513.72) < 0.01);
   // the page: each card is that spouse's own figure
   const text = await fakePage(migrate(separateCouple()));
-  assert.ok(/adds about \$1,951 to Al's federal income tax/.test(text) && /adds about \$1,951 to Bea's federal income tax/.test(text), text.slice(0, 1400));
+  assert.ok(/It adds about \$1,951 to Al's 2026 federal tax/.test(text) && /It adds about \$1,951 to Bea's 2026 federal tax/.test(text), text.slice(0, 1400));
 });
 test("round 8 review D4: filing jointly, the two cards add up to what the two withdrawals add together", async () => {
   const today = "2026-11-06";
@@ -157,22 +157,24 @@ test("round 8 review D4: filing jointly, the two cards add up to what the two wi
 test("round 8 review D3: a couple whose pre-tax money belongs to the younger one does not read that withdrawals have started", async () => {
   const text = await fakePage(migrate(youngerOwnerCouple()));
   assert.ok(!/The required amount itself cannot be converted/.test(text), text);
-  assert.ok(/before they start \(a Roth conversion\)/.test(text));
+  assert.ok(/Moving some to a Roth before they start makes them smaller/.test(text), text);
 });
 test("round 8 review D5 and UX 5: the hold-back is for the federal tax, the state is named where it taxes income, and it is not 'if you like'", async () => {
   const text = await fakePage(migrate(widowPlan()));
-  assert.ok(/hold back about \$3,429 for the federal tax/.test(text), text.slice(0, 1600));
+  assert.ok(/It adds about \$3,429 to your 2026 federal tax: ask your bank or broker to hold that back/.test(text), text.slice(0, 1600));
   assert.ok(!/if you like/.test(text));
-  assert.ok(!/your state may tax it too/.test(text), "Florida has no income tax");
+  assert.ok(!/state may tax it too/i.test(text), "Florida has no income tax");
   const ga = migrate(widowPlan()); ga.household.state = "GA";
-  assert.ok(/for the federal tax \(your state may tax it too\)/.test(await fakePage(ga)));
+  assert.ok(/to hold that back when they send it\. Your state may tax it too\./.test(await fakePage(ga)));
 });
 test("round 8 review UX 11: once taken, the card still says what it adds to the year's tax", async () => {
   const p = migrate(widowPlan());
   markTaken(p, 2026, "p-ruth", "2026-11-06");
   const text = await fakePage(p);
-  assert.ok(/withdrawal is taken \(marked November 6, 2026\)/.test(text), text.slice(0, 900));
-  assert.ok(/It adds about \$3,429 to your 2026 federal income tax/.test(text), text.slice(0, 900));
+  assert.ok(/Marked as taken on November 6, 2026\./.test(text), text.slice(0, 900));
+  // batch 5b UX review 2: Estimated payments does not count the withdrawal yet (Batch 1), so the card says what to do itself
+  assert.ok(/It adds about \$3,429 to your 2026 federal tax\. If none was held back, send that to the IRS by January 15, 2027 \(irs\.gov\/payments\)\./.test(text), text.slice(0, 900));
+  assert.ok(!/Estimated payments/.test(text), "no link to a page that says no payment is needed");
 });
 test("round 8 review (with D3): each year's withdrawal is shown at its owner's own age and factor", async () => {
   // Bea's IRA, Al ten years older: her first required withdrawal is in 2035 at 75 (factor 24.6), not "age 84, factor 16.8"
@@ -181,10 +183,10 @@ test("round 8 review (with D3): each year's withdrawal is shown at its owner's o
   assert.deepEqual(d.schedule[0].owners.map((o) => [o.name, o.age, o.factor]), [["Bea", 75, 24.6]]);
   assert.equal(d.schedule[0].age, 84, "the first adult's age, kept for the answer key");
   const text = await fakePage(migrate(youngerOwnerCouple()));
-  assert.ok(/2035 · Bea, age 75 \$[\d,]+ factor 24\.6/.test(text) && /the IRS factor for Bea's age \(24\.6 at 75\)/.test(text), text);
+  assert.ok(/2035 · Bea, 75 \$[\d,]+ The balance divided by 24\.6, the IRS figure at 75/.test(text), text);
   // both withdrawing: both ages and factors
   const both = await fakePage(migrate(separateCouple("married_joint")));
-  assert.ok(/2026 · ages 75 \/ 75 \$[\d,]+ factors 24\.6 \/ 24\.6/.test(both), both);
+  assert.ok(/2026 · Al and Bea, 75 and 75 \$[\d,]+ Each balance divided by the IRS figure for its owner's age \(24\.6 at 75, 24\.6 at 75\)/.test(both), both);
 });
 
 // ---- verify (2026-11-06): this year's pay before retiring ---------------------------------------------------------------------
@@ -228,7 +230,7 @@ test("verify: a withdrawal this year is priced on top of the pay the first adult
   assert.ok(Math.abs(firstYear(p, { today }).requiredTax - 2999.5) < 0.05, "How much to take out says the same");
   // the page
   const text = await fakePage(p);
-  assert.ok(/Taking it adds about \$2,999 to your federal income tax for 2026/.test(text) && /hold back about \$2,999 for the federal tax/.test(text), text.slice(0, 1400));
+  assert.ok(/It adds about \$2,999 to your 2026 federal tax: ask your bank or broker to hold that back when they send it\./.test(text), text.slice(0, 1400));
   // a job that ended last year, or a partner's pay (the projection's own income line), adds nothing here
   assert.equal(payThisYear(retiredThisYear("2025-12-31"), today), 0);
   const q = retiredThisYear("2025-12-31"); q.income[0].personId = "someone-else"; q.household.people.push({ id: "someone-else", name: "Bo", role: "partner", relation: "spouse", birthDate: "1960-01-01", retirementAge: 67, lifeExpectancy: null });
@@ -244,7 +246,8 @@ test("verify: a withdrawal this year is priced on top of the pay the first adult
 test("part 3: plain words on the first screen: no hard word in this page's view or compute strings", () => {
   const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[^]*?\*\//g, "");
   const view = strip(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8"));
-  for (const w of ["you haven't paid tax on yet", 'Not taxed yet, today']) assert.ok(view.includes(w), w);
+  // (batch 5b's page has no balance tile, so "Not taxed yet, today" is gone with it; its first screen names the accounts instead)
+  for (const w of ["you haven't paid tax on yet"]) assert.ok(view.includes(w), w);
   for (const w of ['pre-tax accounts', 'Pre-tax money today', 'Net worth page']) assert.ok(!view.includes(w), w);
 });
 
@@ -252,7 +255,96 @@ test("part 3: plain words on the first screen: no hard word in this page's view 
 test("part 3 review: the Roth sentence and the source line show in the none-on-file state and in the fold", () => {
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
   assert.match(view, /const ROTH_SOURCE = "Rules from IRS Publication 590-B and the SECURE 2\.0 Act\. Roth accounts \(money you already paid tax on\)/);
-  assert.equal((view.match(/ROTH_SOURCE/g) || []).length, 3, "defined once, used under the notice and in the fold");
+  // defined once and used in the none-on-file state; with an account on file batch 5b's fold, "How this is worked out", has the
+  // Roth sentence and the source line in its own words
+  assert.equal((view.match(/ROTH_SOURCE/g) || []).length, 2, "defined once, used under the none-on-file answer");
   const none = view.split("\n").find((l) => l.includes("if (!d.hasDeferred)"));
   assert.ok(none.includes("ROTH_SOURCE"));
+  assert.ok(view.includes("Roth IRAs and, since 2024, Roth 401(k)s have none while the owner is alive.") && view.includes("Rules from IRS Publication 590-B (the Uniform Lifetime Table) and the SECURE 2.0 Act"));
+});
+
+// ---- round 8, Batch 5b (2026-11-06): the owner, "Just make sure a layman can easily understand and use the page" ---------------
+// The first screen says what to take, from where, by when and why, with what it lets her spend; the IRS figures, the year-by-year
+// list and the table are under "How this is worked out". Ruth (qa/fixtures/widow-plan.mjs): $410,000 / 25.5 = $16,078 this year,
+// adding $3,429 to her federal tax (by hand above); $50,400 of Social Security and pension.
+function rmdUi() {
+  const buttons = [];
+  const node = (tag, kids, attrs = {}) => { const x = { tag, attrs, kids: [], append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false && typeof c !== "function") x.kids.push(c); }, replaceChildren(...k) { x.kids = []; x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent ?? "" : String(c))).join(" "); }, style: {}, offsetHeight: 0 }; x.append(...kids); return x; };
+  const isNode = (a) => a && typeof a === "object" && "kids" in a;
+  const ui = new Proxy({
+    h: (tag, attrs, ...k) => (attrs && typeof attrs === "object" && !Array.isArray(attrs) && !isNode(attrs) ? node(tag, k, attrs) : node(tag, [attrs, ...k])),
+    button: (label, fn, opts = {}) => { const b = node("button", [label], opts); b.click = fn; buttons.push(b); return b; },
+  }, { get: (t, k) => t[k] ?? ((...a) => node(String(k), a.filter((x) => x === null || typeof x !== "object" || Array.isArray(x) || isNode(x)))) });
+  return { ui, buttons };
+}
+const outside = (n) => (n && typeof n === "object" ? (n.tag === "details" ? "" : (n.kids ?? []).map(outside).join(" ")) : String(n ?? ""));
+const paragraphs = (n, out = []) => { if (n && typeof n === "object" && n.tag !== "details") { if (n.tag === "p") out.push(n.textContent.replace(/\s+/g, " ").trim()); (n.kids ?? []).forEach((k) => paragraphs(k, out)); } return out; };
+async function rmdPage(plan, today = "2026-11-06") {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const { ui, buttons } = rmdUi();
+  const root = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
+  let saved = null;
+  render(root, { ui, fmt: { ...fmt, today: () => today }, plan, store: { update: (fn) => { saved = structuredClone(plan); fn(saved); } }, api: null, server: null });
+  let fold = "";
+  const walk = (n) => { if (!n || typeof n !== "object") return; if (n.tag === "details" && /How this is worked out/.test(n.textContent)) fold = n.textContent.replace(/\s+/g, " "); (n.kids ?? []).forEach(walk); };
+  root.kids.forEach(walk);
+  return { text: root.textContent, first: root.kids.map(outside).join(" ").replace(/\s+/g, " "), fold, paras: root.kids.flatMap((k) => paragraphs(k)), buttons, saved: () => saved };
+}
+const JARGON = [/factor/i, /IRS figure/i, /bracket/i, /590-B/, /SECURE/, /IRMAA/, /premium tax credit/i, /poverty line/i, /Uniform Lifetime/i];
+
+test("5b page: Ruth reads what to take, from where, by when and why, and what she can spend, in two sentences", async () => {
+  const w = await rmdPage(migrate(widowPlan()));
+  assert.ok(/^Required withdrawals This year, take at least \$16,078 from Ruth's retirement account by December 31: the law requires it\. With your \$50,400 of Social Security and pension, you can spend about\s+a month and the money lasts in 9 of 10 markets\./.test(w.first), w.first.slice(0, 600));
+  // what to do: one line with its figure, one filled button
+  assert.ok(/It adds about \$3,429 to your 2026 federal tax: ask your bank or broker to hold that back when they send it\./.test(w.first), w.first);
+  const taken = w.buttons.filter((b) => /I've taken it/.test(b.textContent));
+  assert.equal(taken.length, 1); assert.ok(!/secondary/.test(taken[0].attrs.class ?? ""), "the page's one action is the filled button");
+  taken[0].click(); assert.equal(w.saved().retirement.rmdTaken[2026]["p-ruth"], "2026-11-06");
+  for (const word of JARGON) assert.ok(!word.test(w.first), `${word} on the first screen: ${w.first}`);
+  assert.ok(w.paras.every((p) => p.length <= 160), w.paras.filter((p) => p.length > 160).join(" | "));
+  // the years ahead in plain words, and the Roth line
+  assert.ok(/Next year's is about \$16,402, in today's dollars\./.test(w.first), w.first);
+  assert.ok(/you can still move more to a Roth/.test(w.first));
+  // the workings: today's balance over the IRS figure for 74, Social Security pulled into tax, the schedule, the table
+  assert.ok(/Ruth's retirement account holds \$410,000 today\. The law divides that by 25\.5, the IRS figure for age 74: \$16,078\./.test(w.fold), w.fold.slice(0, 900));
+  assert.ok(/makes \$13,666 more of the Social Security taxable: about \$3,429 more federal tax in all\./.test(w.fold), w.fold.slice(0, 1200));
+  assert.ok(/2026 · age 74 \$16,078 The balance divided by 25\.5, the IRS figure at 74 · adds about \$3,429 of federal tax/.test(w.fold), w.fold);
+  assert.ok(/74: 25\.5/.test(w.fold) && /Missing it costs 25% of what was not taken \(10% if it is taken within two years\)/.test(w.fold));
+});
+
+test("5b page: taken, two at once, not started yet, and nothing pre-tax", async () => {
+  // taken: said first, with the tax still to cover
+  const p = migrate(widowPlan()); markTaken(p, 2026, "p-ruth", "2026-11-06");
+  const t = await rmdPage(p);
+  // said once (batch 5b UX review 15: hero, notice and card each said "taken")
+  assert.ok(/^Required withdrawals Done for 2026\./.test(t.first), t.first.slice(0, 300));
+  assert.ok(/Marked as taken on November 6, 2026\./.test(t.first) && !/required withdrawal is taken|withdrawal is taken \(marked/.test(t.first), t.first.slice(0, 600));
+  assert.ok(t.buttons.some((b) => /Not yet/.test(b.textContent)));
+  // Al and Bea: both amounts in one sentence, each card with its own figure
+  const c = await rmdPage(migrate(separateCouple()));
+  assert.ok(/This year, take at least \$16,260 from Al's IRA and \$16,260 from Bea's IRA by December 31: the law requires both\./.test(c.first), c.first.slice(0, 600));
+  assert.equal(c.buttons.filter((b) => /I've taken it/.test(b.textContent)).length, 2);
+  // a first one may wait to April 1 of next year
+  const r = await rmdPage(retirees(), "2026-11-02");
+  assert.ok(/take at least \$13,080 from Ruth's IRA by December 31 and \$7,170 from Sam's 401\(k\) by April 1, 2027: the law requires both\./.test(r.first), r.first.slice(0, 600));
+  assert.ok(/This is Sam's first one: it can wait until April 1, 2027, but then 2027 has two, both taxed that year\./.test(r.first));
+  // Bea's withdrawals start in 2035: nothing to do now, and the first one's size
+  const y = await rmdPage(migrate(youngerOwnerCouple()));
+  const d = compute(migrate(youngerOwnerCouple()), { today: "2026-11-06" });
+  assert.ok(new RegExp(`^Required withdrawals Nothing is required yet\\. Required withdrawals from Bea's IRA start in 2035, when Bea turns 75\\. Then the law makes Bea take a share out each year: about \\$${Math.round(d.schedule[0].rmdReal).toLocaleString("en-US")} the first year, in today's dollars, taxed as income\\.`).test(y.first), y.first.slice(0, 600));
+  assert.equal(y.buttons.filter((b) => /I've taken it/.test(b.textContent)).length, 0);
+  for (const word of JARGON) assert.ok(!word.test(y.first), `${word}: ${y.first}`);
+  // two owners starting the same year: "they", and the paragraph stays short (the couple at 60 read four lines of each)
+  const { bridgeCouple } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const two = await rmdPage(migrate(bridgeCouple()));
+  assert.ok(/^Required withdrawals Nothing is required yet\. Required withdrawals from Pat's 401\(k\) and Jo's IRA start in 2041, when they turn 75\. Then the law makes Pat and Jo take a share out each year: about \$[\d,]+ the first year, in today's dollars, taxed as income\./.test(two.first), two.first.slice(0, 500));
+  // an account named without its owner gets the owner's name (batch 5b UX review 16: "from Old 401(k) start in 2056")
+  const { earlyRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const k = await rmdPage(migrate(earlyRetiree()));
+  assert.ok(/Required withdrawals from Kim's Old 401\(k\) start in 2056, when Kim turns 75\./.test(k.first), k.first.slice(0, 500));
+  // nothing pre-tax: no withdrawals, and where to add an account
+  const none = migrate(widowPlan()); none.accounts = none.accounts.filter((a) => a.type !== "ira");
+  const n = await rmdPage(none);
+  assert.ok(/^Required withdrawals The law requires no withdrawals: there is no 401\(k\) or traditional IRA on file\./.test(n.first), n.first);
 });

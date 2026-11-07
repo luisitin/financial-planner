@@ -26,7 +26,7 @@ The hero answers "how much do we take out, and from where?" for the first year o
 - where from: cash first, then the plan's withdrawal order, each named by its accounts.
 Three sentences: nothing needs to come out; or income covers the spending but the law still requires a withdrawal (how much, from which account, the tax on it, and where the rest can go, with a link to Required withdrawals); or take about $X, starting with these accounts, which with the guaranteed income pays for the spending and its tax. Then the most the plan can carry (Will the money last?'s `affordable`, to the $100), or where it runs out.
 Before, the page showed four "first year" spending figures and no amount to take out. A range whose two ends are equal now reads "spending stays at $X".
-Not changed (my choice): the share-of-savings, years-left and guardrail rules still set total spending from the savings alone, as the frozen answer keys in tools/golden_retirement define them, so for a couple with large guaranteed income they can quote spending below it; the hero's figure is the one to act on. Round 8 (below) guards "Use this one" against it; changing the engine is the owner's question.
+Changed in Batch 5b (2026-11-06, the last section): the share-of-savings, years-left and guardrail rules used to set total spending from the savings alone, so for a household with large guaranteed income they could quote spending below it. The owner said yes to the engine change; they now spend guaranteed income on top of their own withdrawal.
 
 ## Tests
 `tests/retirement-pages.test.mjs`: four rows, percent never fails, fixed-real first year equals the planned spending.
@@ -74,6 +74,7 @@ Review fix 2026-11-02: with no tax that year the two take one "and" ("pays for t
 health cover"); it read "..., $4,051 of health cover." with the "and" missing.
 
 ## Round 8 (2026-11-06): what each way takes and spends, and a guard on "Use this one" (widow-1)
+(Superseded by Batch 5b, the last section: the engine changed, `"below-spending"` is gone, and the guard is only a safety net.)
 A widow, 74, with $50,400 a year of pension and Social Security, $12,000 in checking and $410,000 in an IRA, spending $36,000. The
 engine (`core/math/retirement.js`, frozen by `tests/golden/retirement/withdrawal-strategy.csv`) takes the share-of-savings figure,
 4% x $422,000 = $16,880, as all of the year's spending and only then counts income against it; "Use this one" set it, and Will the
@@ -144,3 +145,130 @@ plan's spending or its first-year income (after "Use this one", "you plan on" an
 `firstYear`'s `requiredTax` (the hero's "after about $X of tax on it") is priced, for a first retirement year that is this year,
 on top of the first adult's own pay drawn earlier this year (`rmd/compute.js` `payThisYear`; formula, hand figures and sources in
 the Required withdrawals README), the same figure as that page's card. Test: `rmd/module.test.mjs` "verify: ...".
+
+## Batch 5b (2026-11-06): guaranteed income first, the owner's answer, and a page a layman can use
+The owner's answer to the batch 5 question (change the engine and regenerate the frozen answer key), word for word, 2026-11-06:
+**"You can do as you please. Just make sure a layman can easily understand and use the page"**. So: yes to the engine change and
+to regenerating `tests/golden/retirement/withdrawal-strategy.csv`, on the condition that the pages are easy for a layman.
+
+**The rule (`core/math/retirement.js`, every retired year of a way other than the same spending every year).** In today's dollars
+scaled by the year's price level; `total` is savings at the start of the year, `income` the year's guaranteed income (Social
+Security, pensions, other income), `health` and `one-offs` the year's health cover and one-off costs, `tax` the year's tax before
+any Roth conversion (a conversion's own tax comes from savings on top and cuts nobody's spending):
+- A share of what is left: withdrawal = max(0, total x rate). Years left: withdrawal = max(0, PMT_due(real return, years left,
+  total)), the annuity-due payment (unchanged).
+- Guardrails: a spending target G, the plan's spending in the first retired year. Each later year the withdrawal G needs is
+  worked out (trial year at last year's G: max(0, G + health + one-offs + tax - income), gross of the tax on it); its rate =
+  that withdrawal / total. Over 1.2 x the starting rate: G x 0.9 (capital preservation). Under 0.8 x and something is drawn:
+  G = min(G x 1.1, the plan's spending grown with prices) (prosperity, never above the plan). Else, after a year whose real
+  return was not negative: G x (1 + inflation). A year income pays for everything draws $0 and is never cut.
+- Savings pay: max(withdrawal, G + health + one-offs + tax - income) for the year, plus the conversion tax. Spending =
+  max(G, income + withdrawal - tax - health - one-offs). A required withdrawal above that still comes out; what is not spent
+  goes back into savings (the taxable account), as before. The same spending every year is unchanged, bit for bit.
+- Sources: Bengen (1994) and the Trinity study treat the rate as what leaves the portfolio, with Social Security and pensions
+  on top; Guyton and Klinger (2006), "Decision Rules and Maximum Initial Withdrawal Rates", Journal of Financial Planning: the
+  capital preservation and prosperity rules act on the current withdrawal rate against the initial one (simplified here);
+  Bogleheads, "Variable percentage withdrawal": the VPW amount is the portfolio withdrawal, pensions and Social Security added.
+
+**The widow (qa/fixtures/widow-plan.mjs), by hand.** $50,400 of pension and Social Security, $12,000 + $410,000 saved, $36,000
+planned, flat 15% tax. A share of what is left: 4% x 422,000 = $16,880 taken (the law's $16,078.43 is inside it); before tax
+$16,880 + $50,400 = $67,280; tax 15% x 16,078.43 = $2,411.76, so $64,868.24 to spend (was $16,880 of "spending", not offered).
+Years left: $24,391.28 taken, $72,379.52 to spend. Guardrails: her income pays for the $36,000 and the tax, so nothing is drawn
+for spending, nothing is cut, she spends $47,988.24 (50,400 - 2,411.76) and the whole $16,078.43 goes back into savings (was
+cut to $20,986). The same spending every year: $36,000, unchanged. After "Use this one" on the share way, Will the money last?
+reads "you plan on about $64,868 in 2026" and "Paid by income 78%" (50,400 / 64,868.24); it read $36,000 beside 299%.
+
+**The guard stays, as a safety net.** `guardOf` holds a way only when, in some retired year of its expected run, spending +
+health + tax is under that year's guaranteed income (`"below-income"`); `"below-spending"` is gone. On every qa fixture plan no
+way is held and every way the engine runs is offered (test "5b: on every qa plan ..."). If one ever is, its row in "How this
+is worked out" says why in one line and the Projection page's list leaves it out with the same reason.
+
+**What else follows the rule.** Withdrawal order and Roth conversions compare their options on the same spending every year
+(`strategy: "fixed-real"`): with a draw way the tax a choice saves would be spent, not kept, so "left at the end" would miss it.
+Monte Carlo, History, Sequence risk, Financial independence, Scenarios, Reports and Timeline run the plan's own way through the
+engine and so follow it.
+
+**The page, for a layman.** The first screen answers in plain sentences with the real figures: "This year, take about $16,078
+from Ruth's retirement account: the law requires it. Your $50,400 of Social Security and pension already pays for the $36,000
+you spend." and the 9-in-10-markets line ("You could spend up to about $5,000 a month and the money lasts in about 9 of 10
+markets", a grey bar until it is worked out). Then "Ways to decide how much to take": each way one record, its name, "about $X a
+month" (its first year), one short line ("A set share of savings each year on top of your income, so it moves with markets. Can
+fall to about $4,052 a month; lasts to 95.") and one outlined "Use this one". Method names, the 1.2 / 0.8 tests, the start rate,
+each way's first year in full, the ranges, the worst stretch of history and the sources are under "How this is worked out", one
+short line each. "Not offered:" walls are gone. Account names read as accounts ("Ruth's retirement account":
+`careful.js` `accountName`).
+
+**Tests** (each failed before its change; failing output kept with the batch): `tests/retirement-ways.test.mjs` (the engine: share
+with a pension, with tax, years left, guardrails' start and its cut / raise-back sequence, a small draw that must not compound,
+no income left unspent, a required withdrawal above the draw, health and one-offs, the same spending every year unchanged);
+`module.test.mjs` "5b ..." (the widow's figures, the qa census, Rae, the safety net, each first year adding up for the three
+laypeople, the first screens of the widow, the couple retiring at 62 and the early retiree, a short year, and the projection
+agreeing after "Use this one"); `withdrawal-order` and `roth-conversions` "5b: ..." (their comparisons do not move with the way).
+The answer key: `tools/golden_retirement/withdrawal_strategy.py` (rule above, plus a new `income-first` group of 100 rows) and
+`projection.py` (the guardrails raise), regenerated; every moved row and why is listed with the batch.
+
+## Batch 5b reviews (2026-11-06): what the money and layman reviews changed
+Still under the owner's answer of 2026-11-06, word for word: "You can do as you please. Just make sure a layman can easily
+understand and use the page".
+
+**The rule, corrected (`core/math/retirement.js`).** The share and years-left ways:
+- savings pay `share + max(0, tax + health - income)` + one-offs (+ a conversion's own tax);
+- spending = `share + max(0, income - tax - health)`.
+So guaranteed income pays the year's tax and health cover first, and savings pay whatever of them it cannot, on top of the share.
+In every year savings can pay, spending + health cover + tax = income + everything taken out (review D1: with no income the
+share was cut by its own tax and health cover; 453 qa plans planned $0 to live on in their first retired year, where bc7f3ca
+spent the share. With no income the figures now equal bc7f3ca to the cent: $1,000,000 pre-tax at 20%, 4%: $40,000 spent,
+$50,000 taken, $10,000 tax). Guardrails unchanged by this.
+Guardrails' target G (review D4): after a losing year G does not rise with prices but still falls with them
+(`G x min(1, 1 + inflation)`), and G is never above the plan's spending at the year's prices (a 10% cut in a 1930s year when prices
+fell by more than 10% left spending above the plan in today's dollars). The years-left payment (UX review 14) is priced at the
+plan's expected real return of the retired mix, `(1 + stocks x s + bonds x (1 - s)) / (1 + inflation) - 1` with the expected
+returns and inflation, even in a market sequence (Monte Carlo, History, the worst stretch here): the replayed year's own
+return swung Kim's 1966 stretch between $0 and $100,142 a year. Source: Bogleheads, "Variable percentage withdrawal" (a set
+return per allocation, not the year's market). The expected run is unchanged. The draw ways settle each year's tax to $0.000001
+(the same spending every year keeps its own $0.0005, bit for bit): a gross-up is now routine and a looser stop compounded to
+$0.014 over 28 years.
+
+**Each way on its own run (review D2).** `inputsByWay(plan)` builds each way's inputs from the plan with that way saved: health
+cover before 65 is priced on the plan's own income, which moves with the way (Pat and Jo's share way: $3,450 of health cover
+when priced on the saved way's income, $33,721 on its own, since its income falls under the line where the help stops). The
+figure beside "Use this one", the worst stretch, the guard and the Projection page's list all use it; it equals Will the money
+last? with that way saved (test "5b review D2").
+
+**The page (UX review).**
+- Each way's line names the bad stretch of history on the worse of the two runs (UX 1): "In a bad stretch like 1966 it runs out
+  at 93", "In a bad stretch like 1973 it falls to about $1,339 a month", "Lasts to 95, even in a bad stretch like 1960".
+- After "Use this one" the confirmation says what the plan now spends and how it moves (UX 5): "Your plan now spends what the
+  years left can afford: about $6,032 a month this year (it was $3,000), rising and falling with markets. Savings are spent
+  down to $0 by 2047 on purpose." A way that moves is answered as itself: "This way spends about $6,032 a month this year; in a
+  bad stretch like 1960 it falls to about $4,048."
+- "How much you could spend: four ways" (UX 6), with one line that answers "which one?" once the 9-in-10 figure is in, and an
+  outlined "Plan on $4,600 a month" under the advice; it saves Retirement settings' spending figure
+  (`projection/compute.js saveSpendingFigure`) and confirms "Your plan now spends $4,600 a month on top of health cover (it was
+  $5,000). It lasts in 9 of 10 markets." (checked on the phone: Will the money last? then reads 93%).
+- The chance in the same words as Will the money last? and Required withdrawals (UX 7, `careful.js chanceWords`): "9 of 10
+  markets" at 90% or more, "about half of markets" from 45% to under 60%, else "about N of 10 markets" rounded down (never 9
+  under 90%), with the percent: "about half of markets (47%)".
+- One name for guardrails everywhere: "Trim after bad years" (UX 8); the Projection list uses these four names.
+- One tax figure each (UX 9): the hero gives what is left of the required withdrawal after its real tax ("About $12,650 of it is
+  left after tax": 16,078 - 3,429); the fold names the plan's flat 15% as such beside the real $3,429.
+- Small lines on the hero tint in the normal text colour (grey was 4.39:1, UX 17); no links inside sentences.
+- No blank line under the 9-in-10 sentence (batch 5b, last pass): the line keeps its placeholder's height only when nothing
+  follows it. Under the plan, the chance line and "Plan on ..." follow, and the held height had left 27 px of blank on the couple's
+  and Kim's first screen (measured on the phone, `min-height` 68 px over two lines of words; now none).
+
+## Batch 5b verify (2026-11-07)
+Under the owner's answer of 2026-11-06 ("You can do as you please. Just make sure a layman can easily understand and use the page"):
+- R1 (engine): guardrails' target is held after a losing year (`G x min(1, 1 + inflation)`) only while it needs a withdrawal
+  (`max(0, G + health cover + tax - income) > 0`); while income pays for all of it, G follows prices (`G x (1 + inflation)`, still
+  never above the plan at the year's prices). Frozen with nothing drawn, the target sank below the plan unseen and, never drawn
+  on, was never raised back: the widow through the 1960 window spent $32,946 in today's dollars on a $36,000 plan in 2047 with
+  $470,928 of savings untouched ("Nothing is trimmed while income pays for everything" said otherwise); now $36,000. Test:
+  `tests/retirement-ways.test.mjs` "verify R1" (a $60,000 pension with no raise for prices, three losing years at 10%
+  inflation: 2028 spends $60,500 = $50,000 in today's dollars, was $60,000 = $49,587).
+- R2 (page): when a required withdrawal is due in a year that takes more than it, the answer says the required part comes from the
+  pre-tax account and where the rest comes from ("About $16,078 of it must come from Ruth's retirement account: the law requires
+  it. The rest from Checking."). It said "Take it from Checking first, then Ruth's retirement account", which, read in that order,
+  takes $12,000 from Checking and only $4,880 from the account, $11,198 short of the law (the engine takes the required amount
+  first). With nothing else to take from: "The rest comes from there too." Test: "verify R2".
+- `chanceWords(1)` is "every market tried (100%)", not "9 of 10 markets (100%)".

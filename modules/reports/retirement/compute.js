@@ -19,7 +19,10 @@ export const STEP = 5;
 
 /**
  * compute(plan, { today, maxPaths }) -> {
- *   ready, missing, today, plan: { retireYear, spendingMonthly, affordableMonthly, success, lastsTo, shortYear, shortAge, atRetirementReal, endReal, coverage, strategy, orderLabel, taxMode },
+ *   ready, missing, today, plan: { retireYear, spendingMonthly, plannedMonthly, affordableMonthly, success, lastsTo, shortYear, shortAge, atRetirementReal, endReal, coverage, strategy, orderLabel, taxMode },
+ *   (spendingMonthly: what the plan spends a month in its first retirement year, today's dollars: the settings figure on the same
+ *   spending every year, the way's own first-year figure on a way that sets its own withdrawal, the one `coverage` is worked on;
+ *   plannedMonthly: the settings figure. Round 8 batch 5b review D3: "$3,000 a month" sat beside "income covers 78%" of $64,868)
  *   chance: { rate, paths, bands: [{ year, p10, p50, p90 }], failAges } | null, history: { rate, windows, from, to, worst: [{ startYear, failAge, endReal }] } | null,
  *   socialSecurity: { people: [{ name, claimAge, monthly, options }], survivorMonthly } , order: { best, current, gain } | null, roth: { on, best, gain, span } | null,
  *   rmd: [{ name, startYear, startAge, firstRmdReal }], years: [rows], market: [{ title, success, failAge, endReal }] | null, hitYear
@@ -43,9 +46,11 @@ export function compute(plan, params = {}) {
   const opt = (list, pred) => (list ?? []).find(pred) ?? null;
   const bestOrder = wo.ready ? opt(wo.options, (o) => o.best) : null, curOrder = wo.ready ? opt(wo.options, (o) => o.current) : null;
   const bestRoth = rc?.ready ? opt(rc.options, (o) => o.best) : null, noRoth = rc?.ready ? rc.options[0] : null;
+  const r0 = pr.rows.find((r) => r.year === pr.atRetirement?.year) ?? null;
+  const firstYearly = pr.strategy !== "fixed-real" && r0 ? r0.spendingReal : pr.spendingYearly;
   return {
     ready: true, missing: [], today,
-    plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: STRATEGIES[pr.strategy] ?? pr.strategy, orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
+    plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: firstYearly / 12, plannedMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: STRATEGIES[pr.strategy] ?? pr.strategy, orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
     chance: mc.ready ? { rate: mc.successRate, paths: mc.paths, bands: mc.bands.map((b) => ({ year: b.year, p10: b.p10, p50: b.p50, p90: b.p90 })), failAges: mc.failAges } : null,
     history: hi.ready ? { rate: hi.successRate, windows: hi.windows, from: hi.dataRange[0], to: hi.dataRange[1], worst: hi.worst.slice(0, 3).map((w) => ({ startYear: w.startYear, failAge: w.failAge, endReal: w.endReal })) } : null,
     socialSecurity: { people: ss.people.filter((p) => p.source !== "none").map((p) => ({ name: p.name, claimAge: p.claimAge, monthly: p.monthly, options: p.options.map((o) => ({ claimAge: o.claimAge, monthly: o.monthly })) })), survivorMonthly: ss.couple?.survivorMonthly ?? null, names: Object.fromEntries(ss.people.map((p) => [p.id, p.name])) },

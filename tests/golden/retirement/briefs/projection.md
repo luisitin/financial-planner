@@ -28,6 +28,13 @@ at67; their multiplication by12 tests integration without retesting the excluded
 The partner's pay ends before their retirement age. The age75 surplus examples independently
 use IRS Table III factor24.6 and deposit RMD less tax less spending into taxable.
 
+## Batch 5b (2026-11-06): the guardrails raise is capped at the plan
+The owner's answer to the batch 5 question (change the withdrawal engine and regenerate the frozen keys), 2026-11-06:
+"You can do as you please. Just make sure a layman can easily understand and use the page". The projection's guardrails rows are untaxed with no income, so the withdrawal is the spending; the only rule that
+moves is the raise: strictly below 0.8 times the rate the second year's spending is min(spending x 1.1, the plan's spending
+grown with prices) = spending x (1 + inflation), where it was spending x 1.1. 20 rows' `rows.1.spending` moved (listed with
+the batch); the 1.2 cut and the inflation step are unchanged.
+
 ## Replay manifest
 
 Exact fixed CSV layout (input columns precede expected columns):

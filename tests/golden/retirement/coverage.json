@@ -595,7 +595,7 @@
     },
     "todo": 0,
     "bytes": 1595262,
-    "sha256": "554eedd2e6b0e264a833beca94b5aa334fa2cc20b0fefe1eb68a38fa5b51a487"
+    "sha256": "cbffc5f8b3f03c80488498b6811c086be6793ebc96450c49af01108e5bfe3c9b"
   },
   {
     "page": "rmd",
@@ -915,7 +915,7 @@
   },
   {
     "page": "withdrawal-strategy",
-    "rows": 800,
+    "rows": 900,
     "rules": {
       "fixed-real": {
         "grid": 60,
@@ -939,6 +939,13 @@
         "todo": 0
       },
       "vpw": {
+        "grid": 60,
+        "edge": 30,
+        "extreme": 10,
+        "secondChecks": 10,
+        "todo": 0
+      },
+      "income-first": {
         "grid": 60,
         "edge": 30,
         "extreme": 10,
@@ -975,7 +982,7 @@
       }
     },
     "todo": 0,
-    "bytes": 705182,
-    "sha256": "7b4c66298d2bac3a584f55e2c729ff04c5003bc4366ee93976b3c2641b3823f9"
+    "bytes": 905862,
+    "sha256": "2c2890fd25dbb034597d096f557704843a6c921dd48605c8c466b792958a515a"
   }
 ]

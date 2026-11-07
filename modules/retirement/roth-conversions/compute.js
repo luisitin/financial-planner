@@ -17,7 +17,8 @@ export const FILL_RATES = [0.10, 0.12, 0.22, 0.24];
  *   ready, missing, on, fillRate, untilAge, options: [{ fillRate | null, label, totalConvertedReal, taxesReal, endBalanceReal, endAfterTaxReal, rmdReal, success, failYear, chosen, best,
  *     healthReal (the plan's health cover with this setting: marketplace to 65, then Medicare, today's dollars), creditReal (the help with
  *     marketplace cover before 65, the premium tax credit), creditLostReal (what this setting gives up of it against no conversions),
- *     cliffYears (years its income passes the line where that help stops) }],
+ *     cliffYears (years its income passes the line where that help stops), moves: [{ year, real }] (each year it converts $1 or more,
+ *     today's dollars: the amounts a person tells their 401(k) or IRA firm; batch 5b UX review 4) }],
  *   (options ranked by what is left at the end after the tax still owed on pre-tax money; a failing plan ranks by how late it fails)
  *   best, table: [{ year, ages, incomeBefore, bracketTop, conversion, conversionReal, taxes, taxesReal, bracketRate, taxableIncome, irmaa }] the years with a conversion under the chosen setting,
  *   span: { from, to, years } the conversion years, rmdStartAge, notes, bracketsOn,
@@ -49,15 +50,18 @@ export function compute(plan, params = {}) {
   const tax = taxSettings(plan, { mode: "brackets" });
   const run = (rate) => {
     const bi = buildFor(rate);
-    const inputs = { ...bi.inputs, tax, rothConversion: rate ? { fillRate: rate, untilAge } : null };
+    // on the plan's own spending, the same every year (round 8, Batch 5b): the share, years-left and guardrail ways spend the tax a
+    // conversion saves later instead of keeping it, so "left at the end" would not show it
+    const inputs = { ...bi.inputs, strategy: "fixed-real", tax, rothConversion: rate ? { fillRate: rate, untilAge } : null };
     const r = project(inputs);
-    return { r, inputs, health: bi.health, taxesReal: r.rows.reduce((s, x) => s + x.taxes / x.priceLevel, 0), rmdReal: r.rows.reduce((s, x) => s + x.rmd / x.priceLevel, 0), convertedReal: r.rows.reduce((s, x) => s + x.conversion / x.priceLevel, 0) };
+    return { r, inputs, health: bi.health, taxesReal: r.rows.reduce((s, x) => s + x.taxes / x.priceLevel, 0), rmdReal: r.rows.reduce((s, x) => s + x.rmd / x.priceLevel, 0), convertedReal: r.rows.reduce((s, x) => s + x.conversion / x.priceLevel, 0),
+      moves: r.rows.filter((x) => x.conversion / x.priceLevel >= 1).map((x) => ({ year: x.year, real: x.conversion / x.priceLevel })) };
   };
   const options = [null, ...FILL_RATES].map((rate) => {
-    const { r, health, taxesReal, rmdReal, convertedReal } = run(rate);
+    const { r, health, taxesReal, rmdReal, convertedReal, moves } = run(rate);
     const bridge = health?.bridge ?? null;
     return { fillRate: rate, label: rate ? `Fill the ${Math.round(rate * 100)}% bracket` : "No conversions", totalConvertedReal: convertedReal, taxesReal, endBalanceReal: r.endBalanceReal, endAfterTaxReal: r.endAfterTaxReal, endTaxRate: r.endTaxRate, rmdReal, success: r.success, failYear: r.failYear, chosen: on ? rate === fillRate : rate === null,
-      healthReal: health && !health.included ? health.total : 0, creditReal: bridge?.credit ?? 0, cliffYears: bridge?.cliff?.yearsList ?? [], cliffIncome: bridge?.cliff?.income ?? null };
+      healthReal: health && !health.included ? health.total : 0, creditReal: bridge?.credit ?? 0, cliffYears: bridge?.cliff?.yearsList ?? [], cliffIncome: bridge?.cliff?.income ?? null, moves };
   });
   for (const o of options) o.creditLostReal = Math.max(0, options[0].creditReal - o.creditReal);
   const score = (x) => x.success ? x.endAfterTaxReal : -1e12 + x.failYear;

@@ -105,7 +105,7 @@ projection's tax setting to the brackets for conversions that never happen.
   `"helps"`, `"no-help"`; `noWindow`: `{ reason, age, retireAge, rmdStartAge, name }`, reason `"started"` (at or past that age
   this year), `"late"` (retires at or after it), `"until"` (the chosen until-age comes before retirement), `"none"`.
 - The page then says why and what still works: "This page only works out conversions before 73, the age required withdrawals
-  start, and Ruth is 74. After that you can still convert what is above each year's required withdrawal: take that year's
+  start, and Ruth is 74. After that you can still convert once each year's required amount is out: take that year's
   required amount first (it cannot be converted), then anything more moved to a Roth is taxed as income that year and never
   again", and the heirs' line: "most heirs other than a husband or wife must empty an inherited IRA within 10 years ... A Roth
   they inherit comes out tax-free once it has been open five years". No settings list, no "Use this" (`offer` is false for every
@@ -153,3 +153,59 @@ the tax setting untouched).
 ## Ideas / not yet
 - Stop at the IRMAA line as a choice; partial-year retirements; state tax on conversions.
 - Stay under the marketplace credit line before 65 (needs a per-year ceiling in the engine's conversion step).
+
+## Batch 5b (2026-11-06): compared on the same spending, and a page a layman can use
+The owner's answer, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the page".
+- **Compared on the same spending every year.** With the share, years-left and guardrail ways now spending guaranteed income on
+  top of their withdrawal (How much to take out README), the tax a conversion saves would be spent, not kept, and "left at the
+  end" would miss it. `compute` runs every setting with `strategy: "fixed-real"`, so the ranking is the same whichever way the
+  plan uses. Test "5b: a plan on another way compares its conversion settings at the same spending every year" (failed before).
+- **The first screen.** h1 "Roth conversions"; the answer in one sentence ("Moving about $113,780 to a Roth from 2028 to 2040
+  leaves about $6,702 more at the end, after tax."; the years only when the year-by-year list is the best way's own), then "Each
+  year, convert only what is taxed at up to 10%." and one filled button ("Convert up to 10% each year"; "... instead" when the
+  plan's own setting is behind, said in one line: "Your plan converts up to 12%: that leaves about $100,620 less than up to 10%,
+  and $15,863 less than none."). Each setting is a record "Taxed at up to N%" with "$X left", one line ("Moves about $Y in all.
+  $Z less help with health insurance before 65 than with no conversions.") and an outlined "Use this one" (the best one's button
+  is the filled one). No year with nothing to try says "do not help": the widow reads "Ruth can still move money to a Roth: only
+  what is above each year's required withdrawal, taxed as income that year." and one line on heirs.
+- **Plain words.** "bracket" is "taxed at up to N%", the premium tax credit is "the help with health insurance before 65" (the
+  line it stops at in dollars, not "four times the poverty line"), IRMAA is "Medicare's extra charge for higher incomes". The
+  year-by-year list, each setting's tax and required withdrawals, the rules (five years, paying the tax from savings) and one
+  line of official names are under "How this is worked out", one short line each; "Conversion settings" stays last.
+- Tests: `module.test.mjs` "5b page: ..." (the couple at 60 retiring at 62, the couple saved on 12%, the widow; no paragraph
+  over 160 characters on the first screen), each failing before the change; the batch-5 tests reworded with the page.
+
+## Batch 5b reviews (2026-11-06): what the layman review changed
+Under the owner's answer of 2026-11-06, word for word: "You can do as you please. Just make sure a layman can easily understand
+and use the page".
+- **Dollar amounts, not a rate that reads as a share of the account** (UX 4). Each option carries `moves: [{ year, real }]`
+  (every year it converts $1 or more, today's dollars). The hero: "Move to a Roth about $4,000 in 2028, then about $13,700 a
+  year from 2033 to 2040" (runs of years; a run whose amounts differ by more than a quarter says where it starts and ends; more
+  than two runs: the total and the span; $100s). The button and rows say "the 10% rate", never "up to 10%".
+- **The switch to the real rates is said** (UX 3). Before the tap: "This page uses the real tax rates; your plan uses a flat 15%
+  until you turn conversions on." The confirmation: "Done: your plan now converts at the 10% rate: about $4,000 in 2028, then
+  about $13,700 a year from 2033 to 2040. It also works out tax at the real rates now, not a flat 15%: that alone changes what
+  Will the money last? says." (The couple's 65% to 82% is mostly the real rates: with them and no conversions it reads 85%.)
+- **A small gain is called small** (UX 13): under 2% of what is left with no conversions, "Converting makes little difference
+  for you: about $X more at the end, after tax", and the button is outlined. When the first move comes years after the window
+  opens: "Until 2048, your other income fills the 10% rate (investment gains and dividends count), so this
+  converts nothing before then." It says what the setting does, not that nothing could be converted: the engine fills
+  each rate on taxable income with qualified gains and dividends included, so Kim's brokerage fills it until 2048. That is
+  conservative: a conversion the standard deduction covers owes no tax while her gains stay in the 0% band, and from 2026 she
+  could move up to about the deduction (about $16,100 in 2026) each year at no tax. Measuring the room on ordinary income (with
+  the gains stacked on top, stopping where they would leave the 0% band) is a change to the conversion step in
+  `core/math/retirement.js`, its oracle (`tools/golden_retirement/roth_conversions.py`) and the roth-conversions key: handed
+  off, not in batch 5b. The year rows say "no other taxed income · no tax that year" instead of "$0 of income before · $0 of
+  tax · taxed at up to 10%", and when every year the shown setting converts in owes no tax the hero says "with no tax to pay in
+  those years", not "each taxed at the lowest rate, 10%" (Kim: $0 of tax in each of 2048 to 2055).
+- **Money runs out either way**: "The money runs out in 2051 with or without conversions." / "Conversions move tax around;
+  they do not add money. Will the money last? shows what would fix the plan." and an outlined "Will the money last?" button,
+  not a link inside the sentence. The projection's spending note reads "Spending is today's expenses; change it under
+  Retirement settings on Will the money last?" (the page by its own name, not "the Projection page").
+- **Differences, not totals** (UX 11): each rate is "$6,702 more" / "$259,612 less" / "runs out 2057" against not converting;
+  the fold gives the no-conversions total and says why Will the money last?'s "left at the end" is another figure (pre-tax money
+  at full value, and the flat rate until conversions are on).
+- **Costly rates folded away** (UX 10): a rate that leaves less than not converting (or runs out) is under "Other rates: each
+  leaves less than not converting (N)", with no button.
+- **Ruth, 74** (UX 12): "You can still move money to a Roth once each year's required amount is out. You pay the tax on it now,
+  at your rate." / "It pays off only if your heirs would pay a higher rate on an inherited IRA later."

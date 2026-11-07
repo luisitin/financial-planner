@@ -64,6 +64,10 @@ function fakeUi() {
   }, { get: (t, k) => t[k] ?? ((...a) => node(String(k), a.filter((x) => x === null || typeof x !== "object" || Array.isArray(x) || isNode(x)))) });
   return { ui, buttons };
 }
+/** The words of every node outside a fold (<details>): what the page says before anything is opened. */
+const outside = (n) => (n && typeof n === "object" ? (n.tag === "details" ? "" : (n.kids ?? []).map(outside).join(" ")) : String(n ?? ""));
+/** The words of the fold whose summary says `title`. */
+const foldText = (root, title) => { let hit = ""; const walk = (n) => { if (!n || typeof n !== "object") return; if (n.tag === "details" && new RegExp(title).test(n.textContent)) hit = n.textContent; (n.kids ?? []).forEach(walk); }; root.kids.forEach(walk); return hit.replace(/\s+/g, " "); };
 async function page(plan) {
   const { render } = await import("./view.js");
   const fmt = await import("../../../core/format.js");
@@ -72,7 +76,7 @@ async function page(plan) {
   let saved = null;
   // no server here: the careful (9 of 10 markets) figure never arrives, so the average-market sentence stays
   render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan, store: { update: (fn) => { saved = structuredClone(plan); fn(saved); } }, api: null, server: null });
-  return { text: root.textContent, buttons, saved: () => saved };
+  return { text: root.textContent, first: root.kids.map(outside).join(" ").replace(/\s+/g, " "), fold: (t) => foldText(root, t), buttons, saved: () => saved };
 }
 
 test("round 8 (widow-2): the tax on the required withdrawal is what it adds to the year's federal tax, not the plan's 15%", async () => {
@@ -83,36 +87,44 @@ test("round 8 (widow-2): the tax on the required withdrawal is what it adds to t
   assert.ok(Math.abs(fy.requiredTax - (tax(22800 + fy.required) - tax(22800))) < 0.01, String(fy.requiredTax));
   assert.equal(Math.round(fy.requiredTax), 3429);
   const { text } = await page(migrate(widowPlan()));
-  assert.ok(/after about \$3,429 of tax on it/.test(text), text.slice(0, 700));
+  // batch 5b UX review 9: the figure left after that tax, said plainly; the fold names the plan's flat 15% as such, beside the real figure
+  assert.ok(/About \$12,650 of it is left after tax: it can go into a savings or investment account\./.test(text), text.slice(0, 900));
+  const fold = (await page(migrate(widowPlan()))).fold("How this is worked out");
+  assert.ok(/The tax in each way is the plan's flat 15% on money from pre-tax accounts \(Retirement settings\)\. This year's required withdrawal really adds about \$3,429: Required withdrawals works it out\./.test(fold), fold.slice(0, 900));
 });
 
-test("round 8 (widow-1): each way says what it takes from savings and what you spend; 'Use this one' never plans on less than you spend", async () => {
+// ---- round 8, Batch 5b (2026-11-06): the owner's answer, "You can do as you please. Just make sure a layman can easily understand
+// and use the page": the share, years-left and guardrail ways spend guaranteed income on top of their own withdrawal ------------
+import { guardRetiree, taxedDrawRetiree, shortSavingsRetiree, bridgeCouple, earlyRetiree } from "../../../qa/fixtures/retiree-cases.mjs";
+import { guardOf, heldWays, wayOptions } from "./compute.js";
+const fmtMoney = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+test("5b (widow-1): the widow's share way takes $16,880 from savings and spends about $67,280 before tax; every way is offered", () => {
   const d = compute(migrate(widowPlan()), { today: TODAY8 });
   const by = Object.fromEntries(d.rows.map((r) => [r.key, r]));
-  // a share of what is left: 4% of the $422,000 of savings is $16,880 taken; with $50,400 of income, about $67,280 before tax
-  assert.equal(by.percent.first.rule, "share"); assert.equal(by.percent.first.beforeTax, true);
-  assert.ok(Math.abs(by.percent.first.take - 16880) < 0.01 && Math.abs(by.percent.first.spend - 67280) < 0.01, JSON.stringify(by.percent.first));
-  assert.ok(Math.abs(by.percent.first.income - 50400) < 0.01);
-  // the same spending every year: the law's $16,078 comes out, you spend your $36,000
-  assert.equal(by["fixed-real"].first.rule, "spend");
-  assert.ok(Math.abs(by["fixed-real"].first.take - 410000 / 25.5) < 0.01 && Math.abs(by["fixed-real"].first.spend - 36000) < 0.01);
-  // held: the share ways plan on less than the $36,000 she spends; guardrails plans on less than her $50,400 of income
-  assert.equal(by.percent.offer, false); assert.equal(by.percent.held, "below-spending");
-  assert.equal(by.vpw.offer, false); assert.equal(by.vpw.held, "below-spending");
-  assert.equal(by.guardrails.offer, false); assert.equal(by.guardrails.held, "below-income");
-  assert.equal(by["fixed-real"].held, null);
-  const { text, buttons } = await page(migrate(widowPlan()));
-  assert.equal(buttons.filter((b) => /Use this one/.test(b.textContent)).length, 0, "nothing below what she spends is offered");
-  assert.ok(/take about \$16,880 from savings/.test(text) && /\$67,280/.test(text), text);
-  // already on a share of what is left (the tester tapped it before): said at the top, and the way back is offered
-  const pct = migrate(widowPlan()); pct.retirement.strategy = "percent";
-  const p2 = await page(pct);
-  assert.ok(/Your plan uses "A share of what is left"/.test(p2.text), p2.text.slice(0, 600));
-  const back = p2.buttons.filter((b) => /Use this one/.test(b.textContent));
-  assert.equal(back.length, 1); back[0].click(); assert.equal(p2.saved().retirement.strategy, "fixed-real");
+  // 4% of her $12,000 + $410,000 = $16,880 taken; with $50,400 of income, $67,280 before tax: the law's $16,078.43 at the plan's
+  // flat 15% is $2,411.76 of tax, so $64,868.24 to spend (was $16,880 of "spending" and not offered)
+  const p = by.percent.first;
+  assert.ok(Math.abs(p.take - 16880) < 0.01 && Math.abs(p.income - 50400) < 0.01, JSON.stringify(p));
+  assert.ok(Math.abs(p.spend + p.tax + p.health - 67280) < 0.01 && Math.abs(p.tax - 0.15 * 410000 / 25.5) < 0.01, JSON.stringify(p));
+  assert.ok(Math.abs(p.spend - 64868.24) < 0.01);
+  // spend what the years left can afford: the same $24,391.28 taken as before (verify.md: 422,000 over 22 years at 2.43%), now on
+  // top of the income: 50,400 + 24,391.28 - 2,411.76 = $72,379.52
+  assert.ok(Math.abs(by.vpw.first.take - 24391.28) < 0.01 && Math.abs(by.vpw.first.spend - 72379.52) < 0.01, JSON.stringify(by.vpw.first));
+  // guardrails: her income pays for the $36,000 she plans and the tax, so nothing is drawn for spending and none is cut: she
+  // spends all of it after tax, 50,400 - 2,411.76 = $47,988.24, and the law's whole $16,078.43 goes back into savings
+  const g = by.guardrails.first;
+  assert.ok(Math.abs(g.spend - 47988.24) < 0.01 && Math.abs(g.back - 410000 / 25.5) < 0.01 && g.need < 0.01, JSON.stringify(g));
+  assert.ok(by.guardrails.expected.lowest >= 36000 - 0.5, "never cut below what she plans while her income covers it");
+  // the same spending every year is unchanged: $36,000, and the withdrawal less its tax goes back: 16,078.43 - 2,411.76
+  assert.ok(Math.abs(by["fixed-real"].first.spend - 36000) < 0.01 && Math.abs(by["fixed-real"].first.back - 13666.67) < 0.01);
+  for (const k of ["percent", "guardrails", "vpw"]) { assert.equal(by[k].held, null, k); assert.equal(by[k].offer, true, k); }
+  assert.equal(by["fixed-real"].offer, false, "already hers");
+  assert.deepEqual(heldWays(projectionOf(migrate(widowPlan()), { today: TODAY8 }).inputs), { "fixed-real": null, percent: null, guardrails: null, vpw: null });
+  assert.deepEqual(wayOptions(migrate(widowPlan()), { today: TODAY8 }).map((o) => o.value), ["fixed-real", "percent", "guardrails", "vpw"]);
 });
 
-test("round 8 (widow-1, review D2): on every qa plan, a way offered never makes the plan spend less than it plans on, or in any year less than its income", async () => {
+test("5b: on every qa plan, no way plans spending, health cover and tax below the year's guaranteed income, and every way the engine runs is offered", async () => {
   const plans = [];
   for (const f of ["family-plan", "retirement-plan", "tax-plan", "retired-couple-plan", "widow-plan", "sample-plan", "investments-plan", "guessed-plan", "card-gap-plan", "held-plan", "debt-plan", "retiree-cases"]) {
     const m = await import(`../../../qa/fixtures/${f}.mjs`);
@@ -122,96 +134,217 @@ test("round 8 (widow-1, review D2): on every qa plan, a way offered never makes 
   for (const [name, p] of plans) {
     const d = compute(migrate(structuredClone(p)), { today: TODAY8 });
     if (!d.ready) continue;
-    for (const r of d.rows.filter((x) => x.offer && x.key !== "fixed-real")) {
+    for (const r of d.rows.filter((x) => x.key !== "fixed-real")) {
+      assert.equal(r.held, null, `${name} ${r.key}`);
+      if (!r.offer) continue;
       offered++;
       const q = migrate(structuredClone(p)); q.retirement = { ...(q.retirement ?? {}), strategy: r.key };
       const pr = projectionOf(q, { today: TODAY8 });
-      const first = pr.rows.find((x) => x.retired);
-      assert.ok(first.spendingReal >= pr.spendingYearly - 0.5, `${name} ${r.key}: plans on ${first.spendingReal} against ${pr.spendingYearly}`);
-      // every retired year, not only the first (round 8 review D2: guardrails cut a household to $859 a year under $56,208 of income)
-      for (const x of pr.rows.filter((y) => y.retired)) assert.ok(x.incomeReal <= x.spendingReal + 0.5, `${name} ${r.key} ${x.year}: income ${x.incomeReal} over spending ${x.spendingReal}`);
+      for (const x of pr.rows.filter((y) => y.retired)) assert.ok((x.spending + x.eventSpending + x.taxes) / x.priceLevel >= x.incomeReal - 0.5, `${name} ${r.key} ${x.year}: ${x.spendingReal} + health + tax under ${x.incomeReal}`);
     }
   }
-  assert.ok(offered > 0, "some plan offers another way");
+  assert.ok(offered > 20, String(offered));
 });
 
-// ---- round 8, Batch 5 reviews (2026-11-06): qa/fixtures/retiree-cases.mjs ------------------------------------------------------
-import { guardRetiree, taxedDrawRetiree, shortSavingsRetiree } from "../../../qa/fixtures/retiree-cases.mjs";
-const fmtMoney = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
-test("round 8 review D2: guardrails that cut spending below the year's income in a later year is not offered, and says when", async () => {
-  // Rae: $45,000 of pension and Social Security, $50,000 of spending, a $500,000 IRA. Her savings pay about $5,000 a year, but
-  // the engine tests all $50,000 against her savings and cuts from 2027: $43,689 against $44,563 of income (today's dollars)
+test("5b: guardrails never cut while income and a small draw cover the plan (Rae: $45,000 of income, $50,000 planned)", () => {
+  // before: all $50,000 was tested against her savings and cut from 2027 to $43,689, under her $44,563 of income. Now the
+  // draw ($10,271 in 2026: 50,000 + 5,230.68 of health cover + 40.71 of tax - 45,000) is 2% of savings, so her spending stays at
+  // $50,000 in today's dollars while her pension, which does not rise with prices, shrinks
   const d = compute(migrate(guardRetiree()), { today: TODAY8 });
   const g = d.rows.find((r) => r.key === "guardrails");
-  assert.equal(g.held, "below-income"); assert.equal(g.offer, false);
-  assert.equal(g.under?.year, 2027);
-  assert.ok(Math.abs(g.under.spending - 43689) < 1 && Math.abs(g.under.income - 44563) < 1, JSON.stringify(g.under));
-  const { text, buttons } = await page(migrate(guardRetiree()));
-  assert.ok(/in 2027 it plans on \$43,689 of spending, less than your \$44,563 of income/.test(text), text);
-  assert.equal(buttons.filter((b) => /Use this one/.test(b.textContent)).length, d.rows.filter((r) => r.offer).length);
-  // already on guardrails: the notice says the same, and the answer is for the $50,000 she spends
-  const gr = migrate(guardRetiree()); gr.retirement.strategy = "guardrails";
-  const p2 = await page(gr);
-  assert.ok(/Your plan uses "Guardrails": the planner works this way out as if your income were not there, so in 2027 it plans on \$43,689 of spending, less than your \$44,563 of income, and as low as \$25,468\. The answer below is for the \$50,000 you spend/.test(p2.text), p2.text.slice(0, 700));
+  assert.equal(g.held, null); assert.equal(g.offer, true);
+  assert.ok(Math.abs(g.first.take - (50000 + 5230.68 + g.first.tax - 45000)) < 0.01, JSON.stringify(g.first));
+  const q = migrate(guardRetiree()); q.retirement.strategy = "guardrails";
+  const pr = projectionOf(q, { today: TODAY8 });
+  for (const x of pr.rows.filter((y) => y.retired && y.year <= 2040)) assert.ok(Math.abs(x.spendingReal - 50000) < 0.01, `${x.year}: ${x.spendingReal}`);
 });
-test("round 8 review D6 and UX 1: each way's first line adds up, names the tax and the health cover, and says 'you spend' only of the row's own spending", async () => {
-  // Rae with $24,000 of Social Security and a $900,000 IRA, $60,000 of spending: $48,507 from savings pays for $60,000 of
-  // spending, $5,231 of health cover and $7,276 of tax (48,507 + 24,000 = 72,507 = 60,000 + 5,231 + 7,276)
-  const d = compute(migrate(taxedDrawRetiree()), { today: TODAY8 });
-  const f = d.rows.find((r) => r.key === "fixed-real").first;
-  assert.ok(Math.abs(f.spend - d.rows[0].expected.firstYear) < 0.01, "the row's own spending figure");
-  assert.ok(Math.abs(f.take + f.income - (f.spend + f.health + f.other + f.tax)) < 0.01, JSON.stringify(f));
-  assert.ok(Math.abs(f.tax - 7276) < 1 && Math.abs(f.take - 48507) < 1, JSON.stringify(f));
-  const { text } = await page(migrate(taxedDrawRetiree()));
-  assert.ok(/take about \$48,507 from savings; with your \$24,000 of income, that pays for the \$60,000 you spend, \$5,231 of health cover and about \$7,276 of tax\./.test(text), text);
-  // on every qa fixture, a spend line's "you spend" figure is the row's own first-year spending
-  for (const f2 of ["family-plan", "retirement-plan", "retired-couple-plan", "widow-plan", "retiree-cases"]) {
-    const m = await import(`../../../qa/fixtures/${f2}.mjs`);
-    for (const fn of Object.values(m)) {
-      let p; try { p = fn(); } catch { continue; }
-      if (!p?.household) continue;
-      const dd = compute(migrate(structuredClone(p)), { today: TODAY8 });
-      if (!dd.ready) continue;
-      for (const r of dd.rows) if (r.first && !r.first.beforeTax) assert.ok(Math.abs(r.first.spend - r.expected.firstYear) < 0.01, `${f2} ${fn.name} ${r.key}`);
+
+test("5b: the guard stays as a safety net: a run that plans less than its income is held and says so", () => {
+  const row = (spending, income, taxes) => ({ year: 2030, retired: true, priceLevel: 1, spending, spendingReal: spending, eventSpending: 0, taxes, income, incomeReal: income });
+  assert.deepEqual(guardOf("percent", { rows: [row(60000, 50000, 2000)] }), { held: null, under: null });
+  assert.deepEqual(guardOf("percent", { rows: [row(47000, 50000, 2000)] }), { held: "below-income", under: { year: 2030, spending: 47000, income: 50000 } });
+  assert.deepEqual(guardOf("fixed-real", { rows: [row(10000, 50000, 0)] }), { held: null, under: null }, "the plan's own figure is never held");
+});
+
+test("5b: each way's first year adds up for the three laypeople (widow, the couple retiring at 62, the early retiree)", () => {
+  for (const p of [widowPlan(), bridgeCouple(), earlyRetiree(), taxedDrawRetiree()]) {
+    const d = compute(migrate(p), { today: TODAY8 });
+    for (const r of d.rows) {
+      const f = r.first;
+      // what comes out of savings and the income pay for the spending, health cover, one-offs and tax, plus what goes back
+      const extra = r.key === "fixed-real" ? Math.max(0, f.income - f.spend - f.health) : 0;   // the same spending every year leaves income above its need unspent
+      assert.ok(Math.abs(f.take + f.income - (f.spend + f.health + f.other + f.tax + f.back + extra - f.short)) < 0.02, `${p.household.people[0].name} ${r.key} ${JSON.stringify(f)}`);
+      assert.ok(Math.abs(f.spend - r.expected.firstYear) < 0.01);
+    }
+  }
+  // the couple at 62, nothing coming in until 2033: 4% of the $15,000 + $560,000 + $200,000 (grown two years) is the share way's draw
+  const b = compute(migrate(bridgeCouple()), { today: TODAY8 }).rows.find((r) => r.key === "percent").first;
+  assert.equal(b.year, 2028); assert.ok(b.income < 0.5);
+  assert.ok(Math.abs(b.spend - (b.take - b.tax - b.health)) < 0.01, JSON.stringify(b));
+});
+
+test("5b page: the widow reads the answer first, in plain words, and each way is one line with its figure and one button", async () => {
+  const w = await page(migrate(widowPlan()));
+  // the first screen: what to take and why, what pays for the year, and nothing technical
+  assert.ok(/This year, take about \$16,078 from Ruth's retirement account: the law requires it\./.test(w.first), w.first.slice(0, 900));
+  assert.ok(/Your \$50,400 of Social Security and pension already pays for the \$36,000 you spend\./.test(w.first), w.first.slice(0, 900));
+  // the 9-in-10 figure fills in after the first paint (a grey bar until then: no server in a test, so it stays a bar)
+  assert.ok(/You could spend up to about\s+a month and the money lasts in 9 of 10 markets\./.test(w.first), w.first.slice(0, 900));
+  for (const word of [/bracket/i, /factor/i, /IRMAA/, /premium tax credit/i, /poverty line/i, /Not offered/, /guardrail tests?/i, /withdrawal rate/i]) assert.ok(!word.test(w.first), `${word} on the first screen`);
+  // each way: its name, what it lets you spend a month in the first year, one short line, one button (not on her own way)
+  for (const [name, spend] of [["Same spending every year", 36000], ["A share of what is left", 64868.24], ["Trim after bad years", 47988.24], ["Spend what the years left can afford", 72379.52]])
+    assert.ok(new RegExp(`${name} (yours )?about \\${fmtMoney(spend / 12)} a month`).test(w.first), `${name}: ${w.first}`);
+  const use = w.buttons.filter((b) => /Use this one/.test(b.textContent));
+  assert.equal(use.length, 3);
+  // the details are in "How this is worked out", and add up
+  const how = w.fold("How this is worked out");
+  assert.ok(/take about \$16,880 from savings\. With your \$50,400 of income, that pays for the \$64,868 you spend and about \$2,412 of tax\./.test(how), how);
+  assert.ok(/Your \$50,400 of income pays for the \$47,988 you spend and about \$2,412 of tax, so all of the withdrawal goes back into savings/.test(how), how);
+  // batch 5b UX review 8: one plain name for guardrails; review 6: the card says "spend", not "take"
+  assert.ok(!/Guardrails/.test(w.first) && /How much you could spend: four ways What each way lets you spend a month this year, with your income\./.test(w.first), w.first);
+  // UX review 1: each way's risk names the bad stretch of history, on the worse of the two runs
+  const d = compute(migrate(widowPlan()), { today: TODAY8 });
+  const vpw = d.rows.find((r) => r.key === "vpw");
+  assert.ok(vpw.worst.lowest < vpw.expected.lowest);
+  assert.ok(new RegExp(`Spend what the years left can afford about \\$6,032 a month What savings can pay over the years left, on top of your income\\. In a bad stretch like ${d.worstStartYear} it falls to about \\${fmtMoney(vpw.worst.lowest / 12)} a month\\.`).test(w.first), w.first);
+  assert.ok(new RegExp(`Same spending every year yours about \\$3,000 a month The same each year, raised with prices, whatever markets do\\. Lasts to 95, even in a bad stretch like ${d.worstStartYear}\\.`).test(w.first), w.first);
+  // "Use this one" saves the way and nothing else, and the confirmation says what the plan now spends (UX review 5)
+  use[2].click();
+  assert.equal(w.saved().retirement.strategy, "vpw");
+  const after = await page(w.saved());
+  assert.ok(/Your plan now spends what the years left can afford: about \$6,032 a month this year \(it was \$3,000\), rising and falling with markets\. Savings are spent down to \$0 by 2047 on purpose\./.test(after.first), after.first.slice(0, 900));
+  // with a way that moves, the answer says what it spends and how low it goes, never "the same every year" (UX review 5)
+  assert.ok(new RegExp(`This way spends about \\$6,032 a month this year; in a bad stretch like ${d.worstStartYear} it falls to about \\${fmtMoney(vpw.worst.lowest / 12)}\\.`).test(after.first) && !/the same every year/.test(after.first.split("How much you could spend")[0]), after.first.slice(0, 900));
+  assert.ok(/Yours moves with markets; "Same spending every year" keeps it steady\./.test(after.first), after.first);
+});
+
+test("5b page: the couple retiring at 62 with nothing coming in until 67, and the early retiree with only savings", async () => {
+  const c = await page(migrate(bridgeCouple()));
+  const fy = firstYear(migrate(bridgeCouple()), { today: TODAY8 });
+  assert.ok(new RegExp(`In 2028, your first year of retirement, take about \\${fmtMoney(fy.fromSavings)} from savings\\.`).test(c.first), c.first.slice(0, 900));
+  assert.ok(/Take it from Checking first, then Pat's 401\(k\) and Jo's IRA\. Amounts are in today's dollars\./.test(c.first), c.first.slice(0, 900));
+  assert.ok(new RegExp(`That pays for the \\$60,000 you plan to spend, \\${fmtMoney(fy.health)} of health cover and about \\${fmtMoney(fy.taxes)} of tax\\.`).test(c.first), c.first.slice(0, 900));
+  const k = await page(migrate(earlyRetiree()));
+  const ky = firstYear(migrate(earlyRetiree()), { today: TODAY8 });
+  assert.ok(new RegExp(`This year, take about \\${fmtMoney(ky.fromSavings)} from savings\\. That pays for the \\$39,600 you spend and \\${fmtMoney(ky.health)} of health cover\\. Take it from Checking first, then Brokerage\\.`).test(k.first), k.first.slice(0, 900));
+  // with no income, no way is "on top of your income" and the card does not say "with your income"; a way that can fall far says how far
+  assert.ok(!/on top of your income|with your income/.test(k.first), k.first);
+  assert.ok(/A share of what is left about \$[\d,]+ a month A set share of savings each year, so it moves with markets\. It can fall to about \$[\d,]+ a month\./.test(k.first), k.first);
+  // no stray comma where "on top of your income" was taken out (seen on the phone, 2026-11-06)
+  assert.ok(/Spend what the years left can afford about \$[\d,]+ a month What savings can pay over the years left\. It can fall to/.test(k.first) && !/,\./.test(k.first), k.first);
+  // UX review 1: Kim's own way names the stretch it runs out in, not "Lasts to 95" (the 1966 stretch)
+  const kd = compute(migrate(earlyRetiree()), { today: TODAY8 });
+  const kf = kd.rows.find((r) => r.key === "fixed-real");
+  assert.ok(kf.worst.failAge && kf.worst.failAge < 95);
+  assert.ok(new RegExp(`Same spending every year yours about \\$3,300 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like ${kd.worstStartYear} it runs out at ${kf.worst.failAge}\\.`).test(k.first), k.first);
+  // the couple: the same, in their stretch
+  const cd = compute(migrate(bridgeCouple()), { today: TODAY8 });
+  assert.ok(new RegExp(`Same spending every year yours about \\$5,000 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like ${cd.worstStartYear} it runs out at ${cd.rows[0].worst.failAge}\\.`).test(c.first), c.first);
+  for (const t of [c.first, k.first]) for (const word of [/bracket/i, /factor/i, /Not offered/]) assert.ok(!word.test(t), String(word));
+  // Kim trims after bad years: it starts at the same $3,300, so the confirmation does not say "(it was $3,300)" (seen on the phone, 2026-11-06)
+  const use = k.buttons.filter((b) => b.textContent === "Use this one");
+  assert.equal(use.length, 3);
+  use[1].click();
+  assert.equal(k.saved().retirement.strategy, "guardrails");
+  const ka = await page(k.saved());
+  assert.ok(/Your plan now trims spending by a tenth after bad years: about \$3,300 a month this year, as before, about \$[\d,]+ at the lowest if markets do as well as average\./.test(ka.first) && !/it was \$3,300/.test(ka.first), ka.first.slice(0, 900));
+});
+
+test("5b page: a first year whose savings run short says how much of the year's need they cover", async () => {
+  // Cy: $20,000 of savings, $42,000 of spending, $15,927 of health cover and $1,800 of tax: savings cover $20,000 of $59,727
+  const { first, fold } = await page(migrate(shortSavingsRetiree()));
+  assert.ok(/This year, savings have only about \$20,000 left to take, from Checking and IRA\./.test(first), first.slice(0, 900));
+  assert.ok(/That covers about \$20,000 of the \$59,727 the year needs: the \$42,000 you spend, \$15,927 of health cover and about \$1,800 of tax\./.test(first), first.slice(0, 900));
+  assert.ok(/savings have only about \$20,000 left\. That covers about \$20,000 of the \$59,727 the year needs\./.test(fold("How this is worked out")));
+});
+
+test("5b: after 'Use this one' on a share of what is left, the projection's 'you plan on' and 'Paid by income' agree", async () => {
+  // the widow on the share way: she plans on $64,868 in 2026 and income pays 50,400 / 64,868.24 = 78% of it (was "you plan on
+  // $36,000" beside "Paid by income 299%", 50,400 / 16,880)
+  const pct = migrate(widowPlan()); pct.retirement.strategy = "percent";
+  const pr = projectionOf(pct, { today: TODAY8 });
+  assert.ok(Math.abs(pr.coverage - 50400 / 64868.24) < 1e-6, String(pr.coverage));
+  const el = () => ({ setAttribute() {}, append() {}, style: {} });
+  globalThis.document ??= { createElementNS: el, createElement: el };
+  const { render } = await import("../projection/view.js");
+  const fmt = await import("../../../core/format.js");
+  const { ui } = fakeUi();
+  const root = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
+  render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan: pct, store: { update() {}, get: () => pct }, api: null, server: null });
+  const text = root.textContent;
+  // batch 5b UX review 5: a way that moves with markets is said as itself: what it spends a month, how low it goes
+  assert.ok(/^Will the money last\? |Your spending moves with markets About \$5,406 a month this year, about \$[\d,]+ at the lowest if markets do as well as average\./.test(text) && /Your spending moves with markets/.test(text), text.slice(0, 700));
+  assert.ok(!/The money lasts|On track/.test(text.split("Paid by income")[0]), text.slice(0, 700));
+  assert.ok(/Paid by income 78% of the first retirement year.s spending/.test(text), text.slice(0, 1400));
+  // on the plan's own figure nothing changes: "you plan on $36,000" and 50,400 / 36,000 = 140%
+  const root2 = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
+  render(root2, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan: migrate(widowPlan()), store: { update() {}, get: () => null }, api: null, server: null });
+  assert.ok(/you plan on \$36,000\./.test(root2.textContent) && /Paid by income 140% of the first retirement year.s spending/.test(root2.textContent), root2.textContent.slice(0, 1400));
+});
+
+test("5b review D2: each way's figure is the run the plan gets once that way is saved (its own health cover before 65)", () => {
+  // Pat and Jo retire at 62 with nothing coming in until 67: the help with health insurance before 65 depends on the year's
+  // income, which depends on the way. Every way's first year, lowest year and end must equal Will the money last? with it saved
+  for (const p of [bridgeCouple(), earlyRetiree(), widowPlan()]) {
+    const plan = migrate(p);
+    const d = compute(plan, { today: TODAY8 });
+    for (const r of d.rows) {
+      const q = migrate(structuredClone(p)); q.retirement = { ...(q.retirement ?? {}), strategy: r.key };
+      const pr = projectionOf(q, { today: TODAY8 });
+      const r0 = pr.rows.find((x) => x.retired);
+      const who = `${p.household.people[0].name} ${r.key}`;
+      assert.ok(Math.abs(r.first.spend - r0.spendingReal) < 0.01, `${who}: offered ${r.first.spend}, saved ${r0.spendingReal}`);
+      assert.ok(Math.abs(r.first.health - r0.eventSpending / r0.priceLevel) < 0.01, `${who}: health ${r.first.health} vs ${r0.eventSpending / r0.priceLevel}`);
+      const ret = pr.rows.filter((x) => x.retired);
+      assert.ok(Math.abs(r.expected.lowest - Math.min(...ret.map((x) => x.spendingReal))) < 0.01, `${who}: lowest`);
+      assert.ok(Math.abs(r.expected.endReal - pr.result.endBalanceReal) < 0.01, `${who}: end`);
     }
   }
 });
-test("round 8 review UX 1: a first year whose savings run short says how much of the year's need they cover, on the way and in the answer", async () => {
-  // Cy: $20,000 of savings, $42,000 of spending, $15,927 of health cover and $1,800 of tax: savings cover $20,000 of $59,727
-  const { text } = await page(migrate(shortSavingsRetiree()));
-  assert.ok(/This year: savings have only about \$20,000 left; that covers about \$20,000 of the \$59,727 the year needs\./.test(text), text);
-  assert.ok(!/that pays for the \$42,000 you plan to spend/.test(text), "the answer no longer says it is all paid for");
-  assert.ok(/covers about \$20,000 of the \$59,727 the year needs: the \$42,000 you plan to spend, \$15,927 of health cover and about \$1,800 of tax\./.test(text), text);
+
+test("5b UX review 7 and 8: one chance in the same words on every page, and one name for each way", async () => {
+  const { chanceWords } = await import("../careful.js");
+  // rounded down, never "9 of 10" under 90%; "about half" from 45% to under 60%
+  assert.equal(chanceWords(0.47), "about half of markets (47%)");
+  assert.equal(chanceWords(0.65), "about 6 of 10 markets (65%)");
+  assert.equal(chanceWords(0.899), "about 8 of 10 markets (89%)");
+  assert.equal(chanceWords(0.93), "9 of 10 markets (93%)");
+  // verify: every market tried is said so, not "9 of 10 markets (100%)" (the widow's Will the money last?)
+  assert.equal(chanceWords(1), "every market tried (100%)");
+  assert.equal(chanceWords(0.999), "9 of 10 markets (99%)");
+  assert.equal(chanceWords(0.04), "fewer than 1 in 10 markets (4%)");
+  assert.equal(chanceWords(0.47, { exact: false }), "about half of markets");
+  // the Projection page's list uses How much to take out's names (it said "Your spending, cut 10% after a bad stretch, ...")
+  assert.deepEqual(wayOptions(migrate(widowPlan()), { today: TODAY8 }).map((o) => o.label), ["Same spending every year", "A share of what is left", "Trim after bad years", "Spend what the years left can afford"]);
 });
-test("round 8 review D7 and UX 2: the widow's ways say what goes back and compare the same kind of figure, and the ways not offered are folded", async () => {
-  const { text } = await page(migrate(widowPlan()));
-  assert.ok(/This year: take about \$16,078 from savings \(the least the law allows\); your \$50,400 of income already pays for the \$36,000 you spend, so the withdrawal, less its tax, goes back into savings\./.test(text), text);
-  assert.ok(!/and the rest goes back into savings/.test(text));
-  // every row's figure beside its name is what it takes from savings in the first year
-  for (const [name, take] of [["Same spending every year", 16078], ["A share of what is left", 16880], ["Guardrails", 16078], ["Spend what the years left can afford", 24391]])
-    assert.ok(new RegExp(`${name} (chosen )?\\${fmtMoney(take)} from savings`).test(text), `${name}: ${text}`);
-  assert.ok(!/Amounts are yearly spending/.test(text));
-  assert.ok(/Beside each way: what it takes from savings in the first year/.test(text));
-  assert.ok(/Ways that don't fit your plan yet \(3\)/.test(text), text);
-  assert.ok(/Not offered yet: the planner can only work this way out as if \$16,880 were all you spend, without your \$50,400 of income, so it would plan your retirement on the wrong figure\./.test(text), text);
+
+test("5b UX review 18: Will the money last? says where to change the spending figure, not 'on this page'", async () => {
+  const el = () => ({ setAttribute() {}, append() {}, style: {} });
+  globalThis.document ??= { createElementNS: el, createElement: el };
+  const { render } = await import("../projection/view.js");
+  const fmt = await import("../../../core/format.js");
+  const { fullBracketRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const plan = migrate(fullBracketRetiree());
+  const { ui } = fakeUi();
+  const root = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
+  render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan, store: { update() {}, get: () => plan }, api: null, server: null });
+  assert.ok(/Spending is today's expenses; change it under Retirement settings below\./.test(root.textContent) && !/on this page/.test(root.textContent), root.textContent.slice(0, 900));
 });
-test("round 8 review UX 6: with a way not offered already chosen, the answer is for what the household spends", async () => {
+
+test("verify R2: on a way that takes more than the law requires, the answer still says the required withdrawal comes from the pre-tax account", async () => {
+  // the widow on "A share of what is left": 4% of $422,000 = $16,880 comes out. The law requires $16,078.43 (410,000 / 25.5) from
+  // her retirement account; the engine takes that first and the other $801.57 from Checking. The page said "Take it from Checking
+  // first, then Ruth's retirement account": read in that order, $12,000 from Checking and $4,880 from the account, $11,198 short.
   const pct = migrate(widowPlan()); pct.retirement.strategy = "percent";
-  const { text } = await page(pct);
-  assert.ok(/cover the \$36,000 you plan to spend/.test(text), text.slice(0, 900));
-  assert.ok(!/the \$16,880 you plan to spend/.test(text));
-  assert.ok(/The answer below is for the \$36,000 you spend/.test(text));
-});
-test("round 8 review UX 7: the ways the projection's settings offer are the ways this page offers, plus the one chosen", async () => {
-  const m = await import("./compute.js");
-  assert.equal(typeof m.heldWays, "function"); assert.equal(typeof m.wayOptions, "function");
-  const w = migrate(widowPlan());
-  assert.deepEqual(m.heldWays(projectionOf(w, { today: TODAY8 }).inputs), { "fixed-real": null, percent: "below-spending", guardrails: "below-income", vpw: "below-spending" });
-  assert.deepEqual(m.wayOptions(w, { today: TODAY8 }).map((o) => o.value), ["fixed-real"]);
-  const pct = migrate(widowPlan()); pct.retirement.strategy = "percent";
-  assert.deepEqual(m.wayOptions(pct, { today: TODAY8 }).map((o) => o.value), ["fixed-real", "percent"], "the chosen one stays");
-  for (const p of [migrate(retirementPlan()), migrate(guardRetiree())]) {
-    const d = compute(p, { today: TODAY8 });
-    assert.deepEqual(m.wayOptions(p, { today: TODAY8 }).map((o) => o.value).sort(), d.rows.filter((r) => r.offer || r.key === d.chosen).map((r) => r.key).sort());
-  }
+  const p = await page(pct);
+  assert.ok(/This year, take about \$16,880 from savings\./.test(p.first), p.first.slice(0, 600));
+  assert.ok(/About \$16,078 of it must come from Ruth.s retirement account: the law requires it\. The rest from Checking\./.test(p.first), p.first.slice(0, 600));
+  assert.ok(!/Take it from Checking first/.test(p.first), p.first.slice(0, 600));
+  // with nothing in Checking the whole $16,880 comes from the account: the required $16,078 and $802 more from there
+  const noCash = structuredClone(pct); for (const a of noCash.accounts) if (a.type === "checking" || /checking/i.test(a.name)) a.balance = 0;
+  const n = await page(noCash);
+  assert.ok(/About \$16,078 of it must come from Ruth.s retirement account: the law requires it\. The rest comes from there too\./.test(n.first), n.first.slice(0, 600));
+  // with no required withdrawal the order stays as it was (the early retiree: Checking, then Brokerage)
+  const k = await page(migrate(earlyRetiree()));
+  assert.ok(/Take it from Checking first, then Brokerage\./.test(k.first), k.first.slice(0, 600));
 });

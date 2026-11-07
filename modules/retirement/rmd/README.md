@@ -179,3 +179,48 @@ the Roth sentence and its source moved into the folded IRS table, below the firs
 
 ## Path part 3, review fixes
 - With no account you haven't paid tax on yet, the Roth sentence and the IRS source line show under the notice (`ROTH_SOURCE` in view.js, also in the IRS-table fold); they are below the first screen.
+
+## Batch 5b (2026-11-06): a page a layman can use
+The owner's answer, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the page". View only; `compute`, `thisYear` and `thisYearTax` are unchanged.
+- **The first screen answers in two sentences.** "This year, take at least $16,078 from Ruth's retirement account by December
+  31: the law requires it. With your $50,400 of Social Security and pension, you can spend about $5,000 a month and the money
+  lasts in 9 of 10 markets." The second is `withdrawal-strategy` `firstYear`'s income and sources with Monte Carlo's careful
+  figure (`careful.js` `whenCareful`, a grey bar until it is worked out; "plus health cover" when the plan adds it; at what you
+  plan, how many of 10 when that is fewer than 9). Two people: "take at least $16,260 from Al's IRA and $16,260 from Bea's IRA by
+  December 31: the law requires both"; a first one: "by April 1, 2027". Taken: "Ruth's 2026 required withdrawal is taken."
+  Not started: "Nothing is required yet. Required withdrawals from Bea's IRA start in 2035, when Bea turns 75." and the first
+  one's size. No pre-tax money: "The law requires no withdrawals: there is no 401(k) or traditional IRA on file."
+- **What to do: one card, one line, one filled button.** "It adds about $3,429 to your 2026 federal tax: ask your bank or broker
+  to hold that back when they send it." (each spouse's own return when filing separately; "Your state may tax it too." where it
+  does), the first-year and 401(k) notes when they apply, "Missing it costs 25% of what was not taken." and a filled "I've taken
+  it" (a stat with the amount on each card when two people are due).
+- **The years ahead in a sentence** ("Next year's is about $16,402, in today's dollars. All of them together come to about
+  $410,244.") and the Roth line, with an outlined "Roth conversions".
+- **How this is worked out**: the rule, each withdrawal's workings ("Ruth's retirement account holds $410,000 today. The law
+  divides that by 25.5, the IRS figure for age 74: $16,078.", the Social Security it makes taxable), the penalty in full, the
+  year-by-year list at each owner's own age and IRS figure, the conversion rule, the IRS table and the sources. "factor",
+  "IRS table" and publication names are only there.
+- Tests: `module.test.mjs` "5b page: ..." (the widow, taken, two at once, a first one, not started, no pre-tax money; no
+  paragraph over 160 characters and no jargon on the first screen), each failing before the change; the batch-5 tests reworded
+  with the page.
+
+## Batch 5b reviews (2026-11-06): what the layman review changed
+Under the owner's answer of 2026-11-06, word for word: "You can do as you please. Just make sure a layman can easily understand
+and use the page".
+- Taken: said once (UX 15). The hero reads "Done for 2026."; the green notice stays; the card reads "Marked as taken on
+  November 6, 2026." (with the owner's name when two are due).
+- Once taken, how to pay the tax without a link to a page that disagrees (UX 2: Estimated payments does not count the withdrawal
+  until Batch 1 lands and said "No estimated payments needed"): "It adds about $3,429 to your 2026 federal tax. If none was held
+  back, send that to the IRS by January 15, 2027 (irs.gov/payments)." January 15 of the next year is the fourth instalment date
+  for the year's estimated tax (IRS Form 1040-ES); tax held back from an IRA withdrawal counts as paid evenly through the year
+  (26 U.S.C. 6654(g)), which is why the untaken card asks for it to be held back.
+- An account named without its owner gets the owner's name (UX 16): "from Kim's Old 401(k)"; "Pat's 401(k)" stays as it is.
+- The chance in the same words as the other retirement pages (UX 7, `careful.js chanceWords`): "it lasts in about half of
+  markets (47%)".
+- No links inside sentences (UX 17): "How much to take out" and "Will the money last?" are outlined buttons.
+
+## Batch 5b with path part 3 (merged 2026-11-07)
+Batch 5b's page in path part 3's plain words: with no adults yet the lede says "accounts you haven't paid tax on yet (like a
+401(k) or a traditional IRA)"; with no such account, "If you have one, add it on What you own." and `ROTH_SOURCE` (the Roth
+sentence and the source line) under the answer. Batch 5b's page has no balance tile, so "Not taxed yet, today" went with it;
+with an account on file "How this is worked out" carries the Roth sentence and the sources in its own lines. No figure changed.

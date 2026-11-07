@@ -943,8 +943,8 @@
   },
   {
     "page": "withdrawal-strategy",
-    "rows": 800,
-    "audited": 16,
+    "rows": 900,
+    "audited": 18,
     "cases": [
       {
         "case_id": "withdrawal-strategy-fixed-real-018",
@@ -987,6 +987,16 @@
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
       },
       {
+        "case_id": "withdrawal-strategy-income-first-018",
+        "assertions": 19,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
+        "case_id": "withdrawal-strategy-income-first-078",
+        "assertions": 19,
+        "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
+      },
+      {
         "case_id": "withdrawal-strategy-vpw-beginning-timing-018",
         "assertions": 1,
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
@@ -1002,7 +1012,7 @@
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
       },
       {
-        "case_id": "withdrawal-strategy-worst-history-selection-078",
+        "case_id": "withdrawal-strategy-worst-history-selection-094",
         "assertions": 1,
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
       },
@@ -1012,7 +1022,7 @@
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
       },
       {
-        "case_id": "withdrawal-strategy-page-spending-summaries-094",
+        "case_id": "withdrawal-strategy-page-spending-summaries-078",
         "assertions": 57,
         "method": "lead re-derived from CSV inputs using independent conservation/recurrence/primary-source arithmetic"
       },

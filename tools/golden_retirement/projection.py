@@ -140,15 +140,19 @@ for i in range(100):
     q=(1-w)*(1+r); endb=b*q**n
     add('percent',i,{'success':True,'endBalance':money(endb),'rows':{'0':{'spending':money(b*w)}}},inputs=inp,second=('log product or zero branch',endb,0 if q==0 else b*math.exp(n*math.log(q)),max(0.002,abs(endb)*1e-10)))
 
-    # Guardrails strict cut/raise boundaries, skip inflation after losing real return.
+    # Guardrails strict cut/raise boundaries, skip inflation after losing real return. Owner's decision 2026-11-06 (round 8,
+    # widow-1: "You can do as you please. Just make sure a layman can easily understand and use the page"): the 10% raise
+    # never lifts spending past the plan's own figure grown with inflation, so a raise here is at most 1+f. No income and no
+    # tax in these cases, so the withdrawal tested is the spending itself.
     spend=1200+12*i if i<60 else 1200 if i<90 else [0.01,120000,1200000,12,1200][i%5]
     w=0.04; threshold=[0.032,0.048,0.031999,0.048001,0.04][i%5]
     r=[0,0.01,-0.01,0.05,0][i%5]; f=[0,0.03,0.02,0.01,0.03][i%5]
     start=round(spend+spend/(threshold*(1+r)),2); total=(start-spend)*(1+r)
     q=spend/total if total>0 else 1
-    secondSpend=spend*(0.9 if q>w*1.2 else 1.1 if q<w*0.8 else 1+f if r>=f else 1)
+    # after a losing year (r below f) no rise with prices, a fall still applies (review D4; every f here is >= 0)
+    secondSpend=spend*(0.9 if q>w*1.2 else min(1.1,1+f) if q<w*0.8 else 1+f if r>=f or f<0 else 1)
     inp=engine(year,2,start,spend);inp['strategy']='guardrails';inp['rates']['inflation']=rate(f);inp['returns']={'stocks':rate(r),'bonds':rate(r)}
-    add('guardrails',i,{'rows':{'1':{'spending':money(secondSpend)}}},inputs=inp,second=('compare portfolio to inverse rate thresholds',secondSpend,spend*(0.9 if total<spend/(w*1.2) else 1.1 if total>spend/(w*0.8) else 1+f if (1+r)/(1+f)>=1 else 1),0.001))
+    add('guardrails',i,{'rows':{'1':{'spending':money(secondSpend)}}},inputs=inp,second=('compare portfolio to inverse rate thresholds',secondSpend,spend*(0.9 if total<spend/(w*1.2) else min(1.1,1+f) if total>spend/(w*0.8) else 1+f if (1+r)/(1+f)>=1 or 1+f<1 else 1),0.001))
 
     # VPW via discounted unit payments, not a copy of the PMT implementation. The withdrawal is taken at the
     # start of the year, before that year's return (Bogleheads VPW), so the stream starts at k=0 (annuity due).

@@ -17,7 +17,7 @@ Yearly, in nominal dollars with a price level for the real view. Buckets: cash (
 - Returns: a stock/bond blend gliding from `stocksNow` to `stocksRetired` by the retirement year; a `sequence` option replaces the expected returns year by year (Monte Carlo, history).
 - Success = the buckets cover the gap every year to the last adult's plan-end age. `affordableSpending` finds the largest fixed-real spending that succeeds: the ceiling doubles until it fails, then bisection narrows it to a millionth of a dollar, rounded to the dollar.
 - Required withdrawals: each adult's share of the pre-tax bucket (their own 401(k)s and IRAs; life-insurance cash value is no one's) is kept as its own slice and withdrawn at that person's age and start age (`rmd.owners`); rows carry `rmdBy` per person.
-- Strategies: fixed-real (inflation-adjusted constant), percent of portfolio, guardrails (Guyton-Klinger simplified: cut 10% above 1.2x the rate, raise 10% below 0.8x, no inflation raise after a losing year), VPW (the payment over the years left at the real return, taken at the start of the year: the annuity-due amount, so the money lasts exactly to the end).
+- Strategies: fixed-real (inflation-adjusted constant), percent of portfolio, guardrails (Guyton-Klinger simplified: cut 10% above 1.2x the rate, raise 10% below 0.8x, no inflation raise after a losing year), VPW (the payment over the years left at the real return, taken at the start of the year: the annuity-due amount, so the money lasts exactly to the end). Since Batch 5b (2026-11-06) the three ways other than fixed-real spend guaranteed income on top of their own withdrawal: percent and VPW set the withdrawal, guardrails keeps a spending target (the plan's spending at first) and tests the withdrawal it needs against the rate, raising it back never above the plan's spending grown with prices; spending = income + withdrawal - tax (rules, hand figures and sources in the How much to take out README).
 Modelled on the Bogleheads Retiree Portfolio Model and cFIREsim's spending modules (vendored); simplified taxes (one effective rate on deferred withdrawals) until the Phase 6 tax pages.
 
 ## Pensions from the Income page
@@ -714,3 +714,39 @@ year it is sold):
 - Tests: "batch 6" in `module.test.mjs`: the two plans above; the review's repros (a housing bill for the home's mortgage
   alone, an extra of 300 on the condo's loan, the brackets, rent of 1,100, a sale in 2047, a loan paid off before retirement);
   rent for a place not on Rental analysis unchanged.
+
+## Batch 5b (2026-11-06): the settings list, after the engine change
+The owner's answer, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the page". With guaranteed income counted first, no qa plan has a way held, so "How much to
+take out each year" lists all four; the guard stays (a way whose expected run plans spending + health + tax under a year's
+guaranteed income is left out, "N ways are left out: on your plan they would leave some of your income unspent (How much to
+take out says when)"); with none left out the help reads "How much to take out compares them on your plan". The answer's
+"you plan on" names the way's own first-year spending ("you plan on about $64,868 in 2026, with a set share of what is left
+each year"), so it agrees with "Paid by income" (78% for the widow on the share way). `careful.js` `RULE_WORDS.guardrails` says
+the new rule ("your spending, cut by a tenth after a bad stretch and raised back, never past your plan, after a good one").
+Test: `withdrawal-strategy/module.test.mjs` "5b: after 'Use this one' ...".
+
+## Round 8 batch 5b reviews (2026-11-06): the page for a way that moves, one chance in one set of words
+Under the owner's answer of 2026-11-06, word for word: "You can do as you please. Just make sure a layman can easily understand
+and use the page".
+- A plan on a way that moves with markets is said as itself (UX 5): the headline "Your spending moves with markets", then "About
+  $6,032 a month this year, about $5,049 at the lowest if markets do as well as average." and, for the years-left way, "Savings
+  are spent down to $0 by 2047 on purpose." (not "The money lasts" and "On track" beside "$0 left"). The careful line for it:
+  "Spent the same every year instead, about $5,000 a month would last in 9 of 10 markets." The rule is not described twice.
+- The chance in the same words as How much to take out and Required withdrawals (UX 7, `careful.js chanceWords`), on its own
+  line: "At the $39,600 you plan, it lasts in about half of markets (47%)." Under 6 in 10 the headline says so once the figure
+  is in: "Lasts in about half of markets" (it read "It lasts, just" over 47%). The lede no longer repeats the verdict word:
+  "If markets do as well as average it carries $41,926 a year on top of health cover; you plan on $39,600."
+- The settings list uses How much to take out's four names, each way judged on its own run (`wayOptions`, review D2); the rate's
+  help: 'the share of savings "A share of what is left" and "Trim after bad years" start from' (UX 8).
+- The grey paragraph is two short ones, in the normal text colour (UX 17, 18): "Retirement starts in 2026 (...); the plan runs to
+  2076." and the notes, with "set your own figure on this page" said as "Spending is today's expenses; change it under
+  Retirement settings below." (rewritten in the view; the note's text in `compute.js` is unchanged, other pages show it).
+  "Chance the money lasts" (or "How much to take out") is an outlined button beside "What would change it", not a link.
+
+## Batch 5b with path part 3 (merged 2026-11-07)
+Batch 5b's two hero lines keep path part 3's plain words: "Even in a bad run of years (only 1 in 10 is worse), the money carries
+about $X a year ($Y a month)." and, for a way that moves, "Spent the same every year instead, about $Y a month would last even in
+a bad run of years (only 1 in 10 is worse)."; the tile is "Spending that lasts, even in a bad run of years". The chance line is
+batch 5b's (`chanceWords`). With nothing saved on file (`savingsUnknown`) the hero says "We don't know yet" and leaves out the
+spent-down line, both chance lines and the "Chance the money lasts" button. The "Expected returns, ..." clause (and with it
+`plainWay`) left the hero with batch 5b's shorter paragraphs. No figure changed.

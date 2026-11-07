@@ -68,3 +68,9 @@ rounded to cents only for federal tax and final CSV outputs; rates have six plac
 
 ## Ideas / not yet
 - A proportional order; the step-up in basis on taxable money left to heirs.
+
+## Batch 5b (2026-11-06): compared on the same spending every year
+The owner's answer, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the page". The share, years-left and guardrail ways now spend guaranteed income on top of their
+withdrawal (How much to take out README), so with them the tax an order saves would be spent rather than kept. `compute` runs
+every order with `strategy: "fixed-real"`, so the ranking is the same whichever way the plan uses. Test "5b: ..." in
+`module.test.mjs` (failed before).

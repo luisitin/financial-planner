@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Retirement: the share-of-savings, years-left and trim-after-bad-years ways count guaranteed income (Social Security, pensions) first, so savings pay only what income does not; the answer key regenerated with the owner's yes; How much to take out, Roth conversions and Required withdrawals rewritten for a layperson (claude-b)
 - [builder:claude-b] HSA and Medicare: once you are on Medicare (from 65 with Social Security) nothing more can go into a health savings account, prorated in the year you turn 65; no payroll-tax saving is claimed without pay; the HSA page works its saving on your own federal return; Health, Tax report, Limits, Asset location and Equity say the same (claude-b)
 - [builder:claude-b] Smart guesses, step 4: retirement saving is never left at $0. Get started's question 4b shows a grey figure in every box (what you have in a 401(k) or IRA, what goes in, what your employer adds), with taps for what you put in (None, 3%, 5%, 6%, 10%, Not sure) and the dollars shown as you tap; "$5" is checked as 5%; a couple's "both of ours" is split between you.
 - [builder:claude-b] Next best action's match step says it in your own figures: "put in 6% of pay ($290 a month, about $20 more than the $270 we guess goes in now) to likely get about $190 a month from the employer". Contributions takes "6%" as an amount. When you said your job has a plan with nothing in it yet, the pages say so instead of calling it a job you left.
