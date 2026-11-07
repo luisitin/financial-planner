@@ -26,6 +26,7 @@ import { isGuess, markGuess, clearGuess } from "../../../core/estimate/index.js"
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
 import { escrowMonthly } from "../guesses/estimators/home.js";
 import { profileOf } from "../guesses/estimators/common.js";
+import { payOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
 
@@ -57,7 +58,7 @@ export const SCREENS = [
   { id: "money", q: 2 },
   { id: "ages", q: 3 },
   { id: "have", q: 4 },
-  { id: "have-amounts", q: 4, follow: true, show: (p) => picks(p, "have").some((k) => askOwners(p, k).length > 0) },
+  { id: "have-amounts", q: 4, follow: true, show: (p) => haveKeys(p).some((k) => askOwners(p, k).length > 0) },
   { id: "owe", q: 5 },
   { id: "owe-amounts", q: 5, follow: true, show: (p) => picks(p, "owe").some((k) => k !== "none" && !oweTaken(p, k)) },
   { id: "spend", q: 6 },
@@ -188,6 +189,15 @@ export const STATES = Object.entries(STATE_NAMES).map(([value, label]) => ({ val
 
 // ---- reading the plan
 const setupOf = (p) => p?.guide?.setup ?? {};
+/**
+ * The kinds Q4 and Q4b work on: what was ticked; or, when Q4 was never answered and a job's plan at work was said in Q2
+ * (`retirement.workPlans[id].plan === true`), Retirement, so a plan at work is never left with nothing said about what goes in (C4 review U1).
+ */
+export const haveKeys = (p) => (Array.isArray(setupOf(p).picks?.have) ? setupOf(p).picks.have : planSaidFor(p).length ? ["retire"] : []);
+/** The adults whose job has a retirement plan, said in Get started's Q2. */
+export const planSaidFor = (p) => adults(p).filter((a) => p?.retirement?.workPlans?.[a.id]?.plan === true).map((a) => a.id);
+/** The people whose retirement block Q4b asks although Retirement was not ticked (plan said at work; Q4 never answered). */
+export const retireAskedFor = (p) => (Array.isArray(setupOf(p).picks?.have) ? [] : planSaidFor(p).filter((id) => askOwners(p, "retire").includes(id)));
 export const picks = (p, kind) => (Array.isArray(setupOf(p).picks?.[kind]) ? setupOf(p).picks[kind] : []);
 const people = (p) => (Array.isArray(p?.household?.people) ? p.household.people : []);
 export const adults = (p) => people(p).filter((x) => x.role !== "dependent");
@@ -440,13 +450,16 @@ const andAll = (xs) => (xs.length <= 2 ? xs.join(" and ") : `${xs.slice(0, -1).j
 const plansWords = (plan, ps) => (adults(plan).length > 1 ? `${andAll(ps.map((p) => possessive(p)))} ${ps.length > 1 ? "plans" : "plan"}` : "your plan");
 /**
  * Question 4's line for a plan at work question 2 added, still $0 (review UX 9): "Priya's plan at work is added with $0.
- * Money in it already? Tap Retirement." null when there is none.
+ * Money in it already? Tap Retirement." null when there is none. With Retirement ticked (`ticked`: the tile on screen; by
+ * default the plan's, which C4 ticks for a plan at work, `haveKeys`) the next screen asks what is in it and what goes in, so
+ * the line says so: "Tap Retirement" would untick it (C4 verify V4).
  */
-export function workPlanLine(plan) {
+export function workPlanLine(plan, { ticked = haveKeys(plan).includes("retire") } = {}) {
   const ps = adults(plan).filter((p) => { const a = workPlanAcct(plan, p.id); return a && !(Math.abs(Number(a.balance) || 0) > 0); });
   if (!ps.length) return null;
-  const w = plansWords(plan, ps);
-  return `${w.charAt(0).toUpperCase()}${w.slice(1)} at work ${ps.length > 1 ? "are" : "is"} added with $0. Money in ${ps.length > 1 ? "them" : "it"} already? Tap Retirement.`;
+  const w = plansWords(plan, ps), W = `${w.charAt(0).toUpperCase()}${w.slice(1)}`, many = ps.length > 1;
+  return ticked ? `${W} at work ${many ? "are" : "is"} added. Next we'll ask what is in ${many ? "them" : "it"} and what you put in.`
+    : `${W} at work ${many ? "are" : "is"} added with $0. Money in ${many ? "them" : "it"} already? Tap Retirement.`;
 }
 /** Question 2's "Got it" words for plans at work it just added: "We added Priya's plan at work, with $0 in it for now." */
 export function workPlanAdded(plan, pids) {
@@ -736,7 +749,8 @@ export function applyHavePicks(draft, keys) {
  * a month from pay, "match-<personId>": a month the employer adds (through work only) }. A blank box makes no account
  * (and removes the setup's own, unless something points at it). Returns what had to be kept.
  */
-export function applyHaveAmounts(draft, v, today) {
+export function applyHaveAmounts(draft, v, today, { guess = null } = {}) {
+  if (typeof guess === "function") return applyHaveGuessed(draft, v, today, guess);
   ensure(draft);
   const gone = [], keepC = new Set();
   const several = adults(draft).length > 1;
@@ -781,6 +795,160 @@ export function applyHaveAmounts(draft, v, today) {
       }
     }
   }
+  const kept = dropAccounts(draft, gone);
+  draft.retirement.contributions = draft.retirement.contributions.filter((c) => !c.id?.startsWith?.("setup-contrib-") || keepC.has(c.id));
+  return kept;
+}
+
+// ---- Q4b with our guesses (spec 10, section 7.B): the retirement boxes, what goes in, what the employer adds, and every other box
+/** What the "Other" share box holds: { pct } (a fraction), { blank }, or { bad } with the words to say (a share of pay is 0 to 100). */
+export function readShareOfPay(text) {
+  const t = String(text ?? "").trim().replace(/%$/, "").trim();
+  if (!t) return { blank: true };
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) return { bad: "That isn't a share of pay. Type a number like 7.5." };
+  return n > 100 ? { bad: "A share of pay can't be more than 100%." } : { pct: n / 100 };
+}
+/** The shares of pay Q4b offers as chips (0 is "None"); "Other" opens a percent box. */
+export const SAVING_CHIPS = [0, 0.03, 0.05, 0.06, 0.1];
+/** Whole dollars a month for a share of a year's pay. */
+export const pctToMonthly = (pct, pay) => Math.round(pct * pay / 12);
+/** A person's pay from an employer a year, before tax (what a share of pay is a share of); 0 when none. */
+export const employerPay = (plan, pid, today) => payFromEmployer(plan, pid, today);
+const savingOf = (p, pid) => setupOf(p).saving?.[pid] ?? {};
+const setSaving = (draft, pid, fields) => {
+  const all = { ...(draft.guide.setup.saving ?? {}) }, one = { ...(all[pid] ?? {}) };
+  for (const [k, x] of Object.entries(fields)) { if (x === undefined || x === null) delete one[k]; else one[k] = x; }
+  if (Object.keys(one).length) all[pid] = one; else delete all[pid];
+  if (Object.keys(all).length) draft.guide.setup.saving = all; else delete draft.guide.setup.saving;
+};
+/** The share of pay a person's screen holds (v["pct-<id>"]: a fraction, 0 for None), or null when they typed dollars or nothing. */
+const pctOnScreen = (v, pid) => { const x = v?.[`pct-${pid}`]; return typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 1 ? x : null; };
+/** What a person puts in a month, as Q4b holds it: the share of pay as dollars, else the dollars typed (0 is the person's own 0), else null (blank). */
+export function putInOnScreen(plan, v, pid, today) {
+  const pct = pctOnScreen(v, pid);
+  if (pct !== null) { const pay = employerPay(plan, pid, today); return pct === 0 ? 0 : pay > 0 ? pctToMonthly(pct, pay) : nonneg(v?.[`contrib-${pid}`]); }
+  return nonneg(v?.[`contrib-${pid}`]);
+}
+/**
+ * What Q4b holds for the guesses to read (core/estimate `args`; estimators/saving.js header): the retirement boxes and what each
+ * person puts in (a number, or null for a box left blank), the two cash boxes, and the joint answer once it is given.
+ */
+export function haveArgs(plan, v = {}, today = null) {
+  const out = { retire: {}, contrib: {}, noMatch: {}, checking: null, savings: null };
+  const picked = haveKeys(plan);
+  for (const h of HAVE) {
+    if (!picked.includes(h.key)) continue;
+    for (const pid of askOwners(plan, h.key)) {
+      if (h.perAdult) { out.retire[pid] = nonneg(v[`${h.key}-${pid}`]); out.contrib[pid] = putInOnScreen(plan, v, pid, today); out.noMatch[pid] = v[`matchMode-${pid}`] === "none"; }
+      else if (h.key === "checking" || h.key === "savings") out[h.key] = nonneg(v[h.key]);
+    }
+  }
+  const pids = Object.keys(out.retire), typed = pids.filter((p) => out.retire[p] > 0), blank = pids.filter((p) => out.retire[p] === null);
+  if (pids.length === 2 && typed.length === 1 && blank.length === 1) {
+    if (v.joint === "both") out.joint = { pid: typed[0], total: out.retire[typed[0]] };
+    else if (v.joint === "alone") out.joint = null;
+  }
+  return out;
+}
+/**
+ * Q4b with our guesses (the view passes ctx.guess). A retirement kind that was picked always makes its account, and every
+ * other picked kind does too: a box left blank gets our guess, written through markGuess (balances, what goes in, what the
+ * employer adds). A figure typed is the person's (any guess on it goes); a 0 typed (the "None" and "No match" chips) is theirs
+ * too. "Both of ours" splits the one joint figure typed in a couple by pay, and keeps the total in guide.setup.taps. What the
+ * chips say (a share of pay, "No match") is kept in guide.setup.saving for Back. Every guess is worked out by
+ * `guess(key, { path, args })` from the plan as it was before this save plus the screen's answers (haveArgs), the same call the
+ * screen made for its grey figures. With no guess at all (a plan outside the U.S.: the gate is closed) a blank box does what it
+ * did before the guesses.
+ */
+function applyHaveGuessed(draft, v, today, guess) {
+  ensure(draft);
+  const gone = [], keepC = new Set();
+  const several = adults(draft).length > 1;
+  const ask = (key, path, args) => { let e = null; try { e = guess(key, { path, args }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
+  const args = haveArgs(draft, v, today);
+  const BAL = { checking: "account.cash", savings: "account.cash", invest: "account.invest.balance", home: "home.value", car: "account.car.value" };
+  for (const h of HAVE) {
+    if (!haveKeys(draft).includes(h.key)) continue;
+    for (const pid of askOwners(draft, h.key)) {
+      const kind = RETIRE_KINDS.find((k) => k.value === v[`kind-${pid}`]) ?? RETIRE_KINDS[0];
+      const slot = haveId(h.key, pid), q2 = h.perAdult ? workPlanAcct(draft, pid) : null;
+      const intoQ2 = !!q2 && kind.value === "work";
+      const id = intoQ2 ? q2.id : slot;
+      if (intoQ2 && byId(draft.accounts, slot)) gone.push(slot);
+      // "On my own" after "Through work": what the work plan's box held as our guess goes, so one box is not counted twice
+      if (q2 && !intoQ2 && isGuess(draft, `accounts[${q2.id}].balance`)) { Object.assign(q2, { balance: 0, asOf: today }); clearGuess(draft, `accounts[${q2.id}].balance`); }
+      const balPath = `accounts[${id}].balance`;
+      const joint = h.perAdult && args.joint ? args.joint : null;
+      // "both of ours": the figure typed in one box is the couple's, so both boxes are the split of it, marked
+      let amount = joint ? null : nonneg(v[h.perAdult ? `${h.key}-${pid}` : h.key]);
+      const typedPut = h.perAdult ? args.contrib[pid] : null;
+      const typedMatch = h.perAdult && kind.value === "work" ? nonneg(v[`match-${pid}`]) : null;
+      const old0 = byId(draft.accounts, id);
+      // a box left empty over a balance that is already our guess (question 5 guessed the home) keeps it
+      if (amount === null && old0 && isGuess(draft, balPath) && !h.perAdult) continue;
+      const balKey = h.perAdult ? (joint ? "account.retire.split" : kind.value === "own" ? "account.ira.balance" : "account.retire.balance") : BAL[h.key];
+      const gBal = amount === null ? ask(balKey, balPath, args) : null;
+      const bal = amount ?? gBal?.value ?? null;
+      // contributions and the match: only through work, and only when the person has not said the job has no plan
+      const planAnswer = draft.retirement.workPlans?.[pid]?.plan;
+      const works = h.perAdult && kind.value === "work" && planAnswer !== false && employerPay(draft, pid, today) > 0;
+      const cpath = `retirement.contributions[setup-contrib-${pid}].amount`, mpath = `retirement.contributions[setup-contrib-${pid}].employerMatch`;
+      const gPut = works && typedPut === null ? ask("contrib.amount", cpath, args) : null;
+      const gMatch = works && typedMatch === null ? ask("contrib.match", mpath, { ...args, contrib: { ...args.contrib, [pid]: typedPut } }) : null;
+      const putMonthly = typedPut ?? gPut?.value ?? null;
+      const hasRow = h.perAdult && (putMonthly !== null || typedMatch !== null || gMatch !== null);
+      if (bal === null && !hasRow) {
+        if (intoQ2) { if (Number(q2.balance) !== 0) Object.assign(q2, { balance: 0, asOf: today }); continue; }
+        if (!isGuess(draft, balPath)) gone.push(id);
+        continue;
+      }
+      if (amount !== null) clearGuess(draft, balPath);
+      const person = pid ? byId(adults(draft), pid) : null;
+      const old = byId(draft.accounts, id);
+      const ira = h.perAdult && kind.value === "own" && IRA_KINDS.some((k) => k.value === v[`iraKind-${pid}`]) ? v[`iraKind-${pid}`] : null;
+      if (h.perAdult) {
+        const was = draft.guide.setup.iraKind?.[pid];
+        const want = kind.value === "own" ? ira ?? was ?? null : null;
+        if ((was ?? null) !== want) { draft.guide.setup.iraKind = { ...(draft.guide.setup.iraKind ?? {}) }; if (want) draft.guide.setup.iraKind[pid] = want; else delete draft.guide.setup.iraKind[pid]; if (!Object.keys(draft.guide.setup.iraKind).length) delete draft.guide.setup.iraKind; }
+      }
+      const type = h.perAdult ? (ira ? (ira === "roth" ? "roth" : "ira") : old && kind.group.includes(old.type) ? old.type : kind.type) : undefined;
+      const asked = { balance: bal ?? old?.balance ?? 0, asOf: today, ...(type ? { type } : {}) };
+      if (old && old.balance === asked.balance && (asked.type === undefined || old.type === asked.type)) delete asked.asOf;
+      put(draft.accounts, id, asked, { name: h.perAdult ? (several || person?.name !== "Me" ? `${possessive(person)} retirement` : "My retirement") : h.name, type: h.type, institution: "", asOf: today, ownerId: pid || "", history: [], notes: "" });
+      if (gBal) markGuess(draft, balPath, gBal, today); else if (amount === null) clearGuess(draft, balPath);
+      if (!h.perAdult) continue;
+      if (hasRow) {
+        const cid = `setup-contrib-${pid}`; keepC.add(cid);
+        const oc = byId(draft.retirement.contributions, cid);
+        const yearly = typedMatch !== null ? (oc && Math.round(Number(oc.employerMatch) / 12) === Math.round(typedMatch) ? oc.employerMatch : Math.round(typedMatch * 12)) : gMatch ? gMatch.value : 0;
+        const monthly = putMonthly === null ? 0 : putMonthly;
+        // a typed figure that is the row's own month (a row kept in another period) leaves the row as it is; anything else is monthly dollars
+        const sameMonth = typedPut !== null && oc && Math.round(perYear(Number(oc.amount) || 0, oc.period) / 12) === Math.round(typedPut);
+        put(draft.retirement.contributions, cid, { ...(sameMonth ? {} : { amount: monthly, period: "monthly" }), employerMatch: yearly, ...(oc && oc.accountId !== id ? { accountId: id } : {}) }, { accountId: id, personId: pid, period: "monthly", amount: monthly });
+        const row = byId(draft.retirement.contributions, cid);
+        if (gPut) { if (row.period !== "monthly") row.period = "monthly"; markGuess(draft, cpath, gPut, today); } else clearGuess(draft, cpath);
+        if (gMatch) markGuess(draft, mpath, gMatch, today); else clearGuess(draft, mpath);
+      }
+      // what the chips said, for Back; "No match" is also the answer Contributions keeps as "no match at this job"
+      const pct = pctOnScreen(v, pid), noMatch = hasRow && typedMatch === 0 && v[`matchMode-${pid}`] === "none";
+      const had = savingOf(draft, pid);
+      setSaving(draft, pid, { pct: hasRow && pct !== null && typedPut !== null ? pct : null, match: noMatch ? "none" : null });
+      if (noMatch && draft.retirement.workPlans?.[pid]?.match !== false) draft.retirement.workPlans = { ...(draft.retirement.workPlans ?? {}), [pid]: { ...(draft.retirement.workPlans?.[pid] ?? {}), match: false } };
+      // (and this screen's own answer, Not sure or I know it, replaces a "no match" said earlier on Contributions: the newest
+      // answer stands, so the guess the screen showed is the one the plan keeps; C4 verify V3)
+      else if (!noMatch && (had.match === "none" || (works && hasRow)) && draft.retirement.workPlans?.[pid]?.match === false) {
+        const wp = { ...draft.retirement.workPlans[pid] }; delete wp.match;
+        if (Object.keys(wp).length) draft.retirement.workPlans[pid] = wp; else delete draft.retirement.workPlans[pid];
+        if (!Object.keys(draft.retirement.workPlans).length) delete draft.retirement.workPlans;
+      }
+    }
+  }
+  // the joint answer: the total typed, kept while "both of ours" stands (the split guesses read it)
+  const j = args.joint;
+  const taps = { ...(draft.guide.setup.taps ?? {}) };
+  if (j) taps["retire-joint"] = { pid: j.pid, total: j.total }; else delete taps["retire-joint"];
+  if (Object.keys(taps).length) draft.guide.setup.taps = taps; else delete draft.guide.setup.taps;
   const kept = dropAccounts(draft, gone);
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => !c.id?.startsWith?.("setup-contrib-") || keepC.has(c.id));
   return kept;
@@ -1513,22 +1681,33 @@ export function valuesFor(plan, screen, { today = null } = {}) {
       kids: Object.fromEntries(dependents(plan).map((k) => [k.id, k.birthDate ? Number(k.birthDate.slice(0, 4)) : ""])),
     };
   }
-  if (screen === "have") return picks(plan, "have");
+  if (screen === "have") return haveKeys(plan);
   if (screen === "have-amounts") {
     const o = {};
     // a balance that is one of our guesses reopens empty: the screen shows it grey (spec P2), never as typed text
-    // (no account in the retirement box's place: Q2's plan at work, when something is in it; $0 shows blank)
-    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)), q = h.perAdult && !a ? workPlanAcct(plan, pid) : null; o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : q && Number(q.balance) > 0 ? q.balance : ""; }
+    // (no account in the retirement box's place: Q2's plan at work, when something typed is in it; $0 and our guess show blank)
+    for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)), q = h.perAdult && !a ? workPlanAcct(plan, pid) : null; o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : q && Number(q.balance) > 0 && !isGuess(plan, `accounts[${q.id}].balance`) ? q.balance : ""; }
     for (const p of ad) {
       const c = byId(plan?.retirement?.contributions ?? [], `setup-contrib-${p.id}`), a = acct(haveId("retire", p.id));
       // someone paid by their own business has no employer plan: "On my own" first (review 2026-11-02)
       const ownBusiness = payLineNow(L(plan, "income"), p.id, today)?.type === "business";
       o[`kind-${p.id}`] = a?.type === "ira" ? "own" : a?.type === "roth" ? (Number(c?.employerMatch) > 0 ? "work" : "own") : a || workPlanAcct(plan, p.id) ? "work" : ownBusiness ? "own" : s.status?.[p.id] === "work" || !s.status?.[p.id] ? "work" : "own";
-      o[`contrib-${p.id}`] = c?.amount ? Math.round(c.amount) : ""; o[`match-${p.id}`] = c?.employerMatch ? Math.round(c.employerMatch / 12) : "";
+      // what goes in and what the employer adds reopen empty when they are our guesses (they show grey), "0" when the chips None /
+      // No match said so; the share of pay a chip said stays a chip while the dollars still match it (spec P2)
+      const cp = `retirement.contributions[setup-contrib-${p.id}]`, sv = savingOf(plan, p.id), putGuess = !!c && isGuess(plan, `${cp}.amount`), matchGuess = !!c && isGuess(plan, `${cp}.employerMatch`);
+      o[`contrib-${p.id}`] = putGuess ? "" : c?.amount ? Math.round(perYear(Number(c.amount) || 0, c.period) / 12) : c && sv.pct === 0 && Number(c.amount) === 0 ? "0" : "";
+      const saidNone = plan?.retirement?.workPlans?.[p.id]?.match === false;
+      o[`match-${p.id}`] = matchGuess ? "" : c?.employerMatch ? Math.round(c.employerMatch / 12) : (c && sv.match === "none" && Number(c.employerMatch) === 0) || (saidNone && !(Number(c?.employerMatch) > 0)) ? "0" : "";
+      const pay = employerPay(plan, p.id, today);
+      o[`pct-${p.id}`] = typeof sv.pct === "number" && !putGuess && c && (sv.pct === 0 ? Number(c.amount) === 0 : pay > 0 && Math.round(Number(c.amount)) === pctToMonthly(sv.pct, pay)) ? sv.pct : null;
+      o[`matchMode-${p.id}`] = !matchGuess && ((c && sv.match === "none" && Number(c.employerMatch) === 0) || (saidNone && !(Number(c?.employerMatch) > 0))) ? "none" : !matchGuess && Number(c?.employerMatch) > 0 ? "know" : null;
       // which kind of IRA: the account's own type when it is a Roth, else the answer given here (never a guess shown as one)
       const said = s.iraKind?.[p.id];
       o[`iraKind-${p.id}`] = a?.type === "roth" ? "roth" : a?.type === "ira" && (said === "unsure" || said === "traditional") ? said : null;
     }
+    // "both of ours" while the split guesses stand (the total typed is in taps["retire-joint"])
+    const joint = s.taps?.["retire-joint"];
+    if (joint && ad.some((p) => plan?.guesses?.[`accounts[${acct(haveId("retire", p.id))?.id ?? workPlanId(p.id)}].balance`]?.k === "account.retire.split")) { o.joint = "both"; o[`retire-${joint.pid}`] = joint.total; }
     return o;
   }
   if (screen === "owe") return picks(plan, "owe");
@@ -1582,7 +1761,13 @@ export function reflect(plan, screen, { today = null } = {}) {
     if (then > 0) return { kind: "money", monthly: then, from };
     return lines.some((x) => x.endDate && String(x.endDate) < today) ? { kind: "money", monthly: 0, ended: true } : null;
   }
-  if (screen === "have-amounts") { const t = L(plan, "accounts").filter((a) => isHave(a.id) && a.type !== "property" && a.type !== "vehicle").reduce((s, a) => s + (Number(a.balance) || 0), 0); return t > 0 ? { kind: "have", total: t } : null; }
+  if (screen === "have-amounts") {
+    const mine = L(plan, "accounts").filter((a) => (isHave(a.id) || String(a.id).startsWith("setup-workplan-")) && a.type !== "property" && a.type !== "vehicle");
+    const t = mine.reduce((s, a) => s + (Number(a.balance) || 0), 0);
+    // how many of those balances are our guesses (spec 10: "Got it: about $X ... 3 of the 4 are our guesses")
+    const guessed = mine.filter((a) => Number(a.balance) > 0 && isGuess(plan, `accounts[${a.id}].balance`)).length, of = mine.filter((a) => Number(a.balance) > 0).length;
+    return t > 0 ? { kind: "have", total: t, ...(guessed ? { guessed, of } : {}) } : null;
+  }
   if (screen === "owe" && picks(plan, "owe").includes("none")) return { kind: "debt-free" };
   if (screen === "owe-amounts") {
     const owe = L(plan, "accounts").filter((a) => isOwe(a.id)), t = owe.reduce((s, a) => s + Math.abs(Number(a.balance) || 0), 0);
@@ -1728,7 +1913,13 @@ export function standing(plan, { today }) {
   let spendShare = 0;
   if (!spareWaits && plan?.guesses) { try { spendShare = computeExpenses(plan, { today }).guessedShare ?? 0; } catch { spendShare = 0; } }
   const spendOurs = spareWaits || spendShare >= 0.5;
-  const retireGuessed = !!retire && spendOurs && (isGuess(plan, "retirement.spendingMonthly") || !(Number(plan?.retirement?.spendingMonthly) > 0));
+  const retireSpendGuessed = !!retire && spendOurs && (isGuess(plan, "retirement.spendingMonthly") || !(Number(plan?.retirement?.spendingMonthly) > 0));
+  // the retirement balances are mostly our guesses (spec 8.1): the verdict word waits for them. The share of the money in retirement accounts
+  // (401(k), IRA, Roth) whose balance is a guess is half or more
+  const retireAccts = L(plan, "accounts").filter((a) => ["401k", "ira", "roth"].includes(a.type) && Number(a.balance) > 0);
+  const retireTotal = retireAccts.reduce((t, a) => t + Number(a.balance), 0);
+  const retireBalanceGuessed = !!retire && retireTotal > 0 && retireAccts.filter((a) => isGuess(plan, `accounts[${a.id}].balance`)).reduce((t, a) => t + Number(a.balance), 0) / retireTotal >= 0.5;
+  const retireGuessed = retireSpendGuessed || retireBalanceGuessed;
   const spendNow = spendRowsNow(plan);
   const drawing = retired && spare !== null && spare < 0 && !spareWaits;
   // short only on the careful month (Side income's "count on" holds part of uneven pay back): what a month that brings the
@@ -1823,7 +2014,8 @@ export function standing(plan, { today }) {
     // cash held back from the cushion, set aside for a goal or this year's tax not paid yet (round 8, items 10 and 29): only
     // then, so the tile can say why it reads less than the accounts hold
     ...(runway !== null && ((liq?.earmarked ?? 0) > 0.5 || (liq?.taxOwed ?? 0) > 0.5) ? { cushionHeld: { all: liq.nowAll, earmarked: liq.earmarked, taxOwed: liq.taxOwed, now: liq.now, goals: heldFor(plan), ...(liq.taxOwed > 0.5 ? { taxDue: liq.tax?.owedNow ?? liq.taxOwed } : {}), ...(liq.earmarked > 0.5 && cushionLike(plan) ? { cushionGoal: cushionLike(plan) } : {}) } } : {}),
-    ...(retireGuessed ? { retireGuessed: true } : {}),
+    // (retireGuessedWhat: "spending" | "balance" -- what the tile should ask the person to type)
+    ...(retireGuessed ? { retireGuessed: true, retireGuessedWhat: retireSpendGuessed ? "spending" : "balance" } : {}),
     ...(spendNow.guessed ? { spendGuessed: { monthly: spendNow.guessedMonthly, count: spendNow.guessed, rows: spendNow.monthly, typed: spendNow.typedMonthly } } : {}),
   };
 }

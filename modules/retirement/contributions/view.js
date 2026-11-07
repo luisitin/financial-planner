@@ -1,7 +1,10 @@
 // modules/retirement/contributions/view.js -- DOM only. What goes into each retirement account
 // a year, with the match and the limits, and one folded form to add or edit.
 import { compute } from "./compute.js";
-import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
+import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
+import { readAmount, amountText } from "../../../core/format.js";
+import { clearGuess, isGuess } from "../../../core/estimate/index.js";
+import { payOf } from "../../overview/guesses/estimators/saving.js";
 import { BUCKET_OF } from "../projection/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { leftWords } from "../../overview/next-best-action/compute.js";
@@ -13,6 +16,47 @@ let prefillNote = null;   // a line over the form saying what it was filled in w
 /** A contribution's period for a number of paychecks a year (Work benefits' `paychecks`); anything else goes in once a year. */
 const PERIOD_FOR = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
 
+/** What the amount box holds: dollars ({ amount }), a share of pay ({ pct }, a fraction), blank (null) or neither ({ bad }). "6%" is 0.06. */
+export function readAmountOrShare(text) {
+  const t = String(text ?? "").trim();
+  if (!t) return null;
+  const m = /^(\d*\.?\d+)\s*%$/.exec(t);
+  if (m) return { pct: Number(m[1]) / 100 };
+  const n = readAmount(t);
+  return n === null || n < 0 ? { bad: true } : { amount: n };
+}
+
+/**
+ * Save the edit form over a row. The share kept from "6%" goes (it is set again by `clean` when the new text is a share); a guess
+ * on the amount ends when the amount or the period changed (a changed period is the person's own, and a guess is only ever
+ * monthly dollars), and one on the match when the match changed.
+ */
+export function applyContributionEdit(p, id, clean) {
+  const i = (p.retirement.contributions ?? []).findIndex((c) => c.id === id);
+  if (i < 0) return;
+  const was = p.retirement.contributions[i], { pctOfPay: _gone, ...rest } = was;
+  p.retirement.contributions[i] = { ...rest, ...clean };
+  if (Number(was.amount) !== Number(clean.amount) || (was.period ?? "monthly") !== (clean.period ?? "monthly")) clearGuess(p, `retirement.contributions[${id}].amount`);
+  if (Number(was.employerMatch) !== Number(clean.employerMatch)) clearGuess(p, `retirement.contributions[${id}].employerMatch`);
+}
+
+/**
+ * "Will the money last?" in one sentence, from Get started's standing: the verdict; while it rests mostly on our guesses
+ * (`retireGuessed`, spec 8.1: "never 'Short at 65' on guesses alone") it is said as ours, with what to type first.
+ */
+export function verdictWords(st) {
+  const r = st?.retire ?? null;
+  if (!st?.retirementKnown) return `Once ${st?.retirementMissing ?? "Social Security"} ${/ and |dates/.test(st?.retirementMissing ?? "") ? "are" : "is"} in the plan, this says whether that is enough.`;
+  if (!r) return "";
+  if (st.retireGuessed) {
+    const would = r.verdict === "on track" ? "the money would last to the end of the plan" : r.verdict === "tight" ? "the money would last, with little to spare" : `the money would run out${r.shortAge ? ` at about ${r.shortAge}` : ""}`;
+    return `By our guesses, ${would}. It rests on our guesses of ${st.retireGuessedWhat === "balance" ? "your savings, so type what is in your retirement accounts" : "your spending, so type what you really spend"} to know.`;
+  }
+  return r.verdict === "on track" ? "At this rate the money lasts to the end of the plan: you are on track."
+    : r.verdict === "tight" ? "At this rate the money lasts, with little to spare."
+    : `At this rate the money runs out${r.shortAge ? ` at about ${r.shortAge}` : ""}: saving more is the surest fix.`;
+}
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -20,10 +64,16 @@ export function render(root, ctx) {
   const accounts = (plan.accounts ?? []).filter((a) => BUCKET_OF[a.type] && BUCKET_OF[a.type] !== "cash");
   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   let editing = null;
+  // a record saved from "6%" keeps the share beside the dollars; it is shown only while the dollars still are that share of the person's pay now
+  const shareOf = (c) => {
+    const pay = Number(c?.pctOfPay) > 0 && c.personId ? payOf(plan, c.personId, fmt.today()) : 0;
+    return pay > 0 && Math.abs(Number(c.amount) - c.pctOfPay * pay / perYear(1, c.period)) < 0.51;
+  };
   const FIELDS = [
     { key: "accountId", label: "Into which account", type: "select", options: accounts.map((a) => ({ value: a.id, label: a.name })) },
     { key: "personId", label: "Whose", type: "select", options: [{ value: "", label: "Household" }, ...people.map((p) => ({ value: p.id, label: p.name }))] },
-    { key: "amount", label: "Your own money", type: "money", required: true, min: 0, help: "each time it goes in" },
+    // dollars each time it goes in, or a share of pay like 6% (worked out from the person's pay when saved)
+    { key: "amount", label: "Your own money", type: "text", required: true, help: "each time it goes in: dollars, like 270, or a share of your pay, like 6%" },
     { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS.filter((o) => o.value !== "once") },
     { key: "employerMatch", label: "Employer adds, a year", type: "money", min: 0, help: "the match or profit sharing, per year; blank for none" },
   ];
@@ -36,7 +86,7 @@ export function render(root, ctx) {
   const matchStep = nba?.ready ? nba.steps.find((s) => s.id === "match" && s.status !== "done") ?? null : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
-    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The Projection page adds these every year until each person retires.` : "What you put into 401(k)s, IRAs, Roths and HSAs each pay period, plus what an employer adds. The projection needs it to know how the pot grows before retirement."),
+    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The Projection page adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
     // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
     // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
     !accounts.length ? ui.h("p", { class: "muted small" }, startable ? "No retirement account yet: one tap below adds your 401(k) to the plan. An IRA, Roth or HSA goes on the " : "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), startable ? "." : " (401(k), IRA, Roth, HSA, brokerage).") : null,
@@ -50,12 +100,8 @@ export function render(root, ctx) {
     // earned pay, a business's income included (what a SEP or solo 401(k) is based on), as How am I doing? counts it
     const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
     const share = pay > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
-    const r = st?.retire ?? null;
-    // what is still missing, named (birth dates or Social Security), not always "Social Security"
-    const said = !st?.retirementKnown ? `Once ${st?.retirementMissing ?? "Social Security"} ${/ and |dates/.test(st?.retirementMissing ?? "") ? "are" : "is"} in the plan, this says whether that is enough.`
-      : !r ? "" : r.verdict === "on track" ? "At this rate the money lasts to the end of the plan: you are on track."
-      : r.verdict === "tight" ? "At this rate the money lasts, with little to spare."
-      : `At this rate the money runs out${r.shortAge ? ` at about ${r.shortAge}` : ""}: saving more is the surest fix.`;
+    // what is still missing, named (birth dates or Social Security), not always "Social Security"; a verdict on our guesses waits
+    const said = verdictWords(st);
     if (!share && !said) return null;
     return ui.h("p", { class: "small" }, `${share}${said} `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›"));
   }
@@ -156,12 +202,33 @@ export function render(root, ctx) {
         ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Add the new 401(k) on Net worth, then come back here to add what goes in each paycheck. Not sure? The job's benefits site says whether there is a plan and a match.")));
       continue;
     }
+    // our guess of what goes in is short of the whole usual match (Get started could not know): one tap puts in the share that
+    // gets all of it, or the person types their own
+    if (a.kind === "guessed") {
+      const row = (plan.retirement?.contributions ?? []).find((x) => x.id === a.rowId);
+      const acct = (plan.accounts ?? []).find((x) => x.id === row?.accountId);
+      if (row) {
+        const m = (n) => fmt.money(Math.round(n), cur), pctText = (x) => `${Number((x * 100).toFixed(1))}%`;
+        root.append(ui.h("section", { class: "card" },
+          ui.h("h2", {}, `Put in ${pctText(a.wantPct)} of ${whose} pay to get the whole match`),
+          ui.h("p", {}, `We guess ${who} put${verb("s", "")} in about ${pctText(Math.round(a.nowPct * 1000) / 1000)} of pay (${m(a.nowMonthly)} a month), the usual for someone like ${who === "you" ? "you" : who}. Most employers that match add the most when you put in ${pctText(a.wantPct)}: ${m(a.wantMonthly)} a month would likely get about ${m(a.wantMatch)} a month from the employer.`),
+          ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+            ui.button(`Put in ${pctText(a.wantPct)} (${m(a.wantMonthly)} a month)`, () => {
+              pending = `${NameOf(a.name)} 401(k): ${m(a.wantMonthly)} a month goes in now. The employer match should be about ${m(a.wantMatch)} a month.`;
+              store.update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
+            }),
+            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
+          ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Your pay stub shows the real figures. Type them here when you have them.")));
+        continue;
+      }
+    }
     const acct = (plan.accounts ?? []).find((x) => x.id === a.accounts[0]);
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Does ${whose} job add money when ${who} ${verb("saves", "save")} for retirement?`),
+      a.saidPlan ? ui.h("p", {}, `${NameOf(a.name)} job has a retirement plan (you said so in Get started), but nothing goes into it yet. Many employers add money when you put some in (a match): free money worth getting in full.`) :
       ui.h("p", {}, `${Who} ${verb("is paid and has", "are paid and have")} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
       ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
-        ui.button(`Yes: add what ${who} ${verb("puts", "put")} in`, () => {
+        ui.button(`Yes, it matches: add what ${who} ${verb("puts", "put")} in`, () => {
           // the 401(k) at the job now: one whose name does not say it is an old one
           const cur = a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)).filter(Boolean);
           const now = cur.find((x) => !/\b(old|former|previous|prior|rollover)\b/i.test(x.name ?? "")) ?? cur[0];
@@ -172,8 +239,8 @@ export function render(root, ctx) {
           pending = { text: `Noted: no match at ${whose} job.` };
           store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
         }, { class: "secondary" }),
-        // one button per 401(k) when there are several, so only the old one is marked
-        ...(a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
+        // one button per 401(k) when there are several, so only the old one is marked (none when the job's plan was said in Get started)
+        ...(a.saidPlan ? [] : a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
           const x = (plan.accounts ?? []).find((y) => y.id === id);
           return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who} left` : `That 401(k) is from a job ${who} left`, () => {
             pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who} left, so no money goes in.` };
@@ -208,14 +275,28 @@ export function render(root, ctx) {
     if (!showForm && !editing) { formHost.append(ui.button("+ Add another contribution", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
     // a new contribution starts on a retirement account, not a brokerage one
     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
-    const values = editing ? { ...editing } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
+    const values = editing ? { ...editing, amount: shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),
       !editing && prefill && prefillNote ? ui.h("p", { class: "muted small" }, prefillNote) : null,
       ui.form(FIELDS, values, (v) => {
-        const clean = { accountId: v.accountId, personId: v.personId || "", amount: v.amount ?? 0, period: v.period, employerMatch: v.employerMatch ?? 0 };
+        // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
+        const said = readAmountOrShare(v.amount);
+        const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };
+        if (said === null || said.bad) return fail("That isn't an amount. Type dollars, like 270, or a share of your pay, like 6%.");
+        let amount = said.amount ?? 0, pctOfPay = null;
+        if (said.pct !== undefined) {
+          const pay = v.personId ? payOf(plan, v.personId, fmt.today()) : 0;
+          if (said.pct > 1) return fail("A share of pay can't be more than 100%.");
+          if (!v.personId) return fail("Pick whose pay the share is of (under Whose), then try again.");
+          if (!(pay > 0)) return fail("We don't have this person's pay yet, so we can't turn a share of it into dollars. Type dollars, or add their pay on Income first.");
+          amount = Math.round(said.pct * pay / perYear(1, v.period) * 100) / 100;
+          pctOfPay = said.pct;
+        }
+        const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
-        store.update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) { const i = p.retirement.contributions.findIndex((c) => c.id === editing.id); if (i >= 0) p.retirement.contributions[i] = { ...p.retirement.contributions[i], ...clean }; } else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
+        if (pctOfPay !== null) { const t = `${pending?.text ?? pending} ${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`; pending = typeof pending === "object" ? { ...pending, text: t } : t; }
+        store.update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
         editing = null; prefill = null; prefillNote = null;
       }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; showForm = !d.hasData; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; store.update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
@@ -227,7 +308,7 @@ export function render(root, ctx) {
       onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, "🏦"),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year` : ""}`)),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
       ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"))))),
   ));
   formCard.append(formHost);

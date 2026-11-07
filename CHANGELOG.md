@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Smart guesses, step 4: retirement saving is never left at $0. Get started's question 4b shows a grey figure in every box (what you have in a 401(k) or IRA, what goes in, what your employer adds), with taps for what you put in (None, 3%, 5%, 6%, 10%, Not sure) and the dollars shown as you tap; "$5" is checked as 5%; a couple's "both of ours" is split between you.
+- [builder:claude-b] Next best action's match step says it in your own figures: "put in 6% of pay ($290 a month, about $20 more than the $270 we guess goes in now) to likely get about $190 a month from the employer". Contributions takes "6%" as an amount. When you said your job has a plan with nothing in it yet, the pages say so instead of calling it a job you left.
+- [builder:claude-b] Will the money last? waits while your retirement balances are our guesses, and says so, instead of a firm answer built on them.
 - [builder:claude-b] A rental is entered once and counted once: Rental analysis offers "Add it to net worth" (or links the home already there), Policies pairs it with its own landlord policy, and Auto, home, umbrella says one figure for what a lawsuit could reach, with a check that a rented-out home has landlord cover.
 - [builder:claude-b] The retirement plan and Income count a rental's rent after what it costs to run (the condo: $937 a month, not $2,100), and its loan payment until the loan is paid off, so a landlord's retirement is no longer overstated.
 - [builder:claude-b] Financial independence counts the same rent after costs, and Needs attention asks "Is Condo on Net worth already?" instead of saying it is missing when it is there.

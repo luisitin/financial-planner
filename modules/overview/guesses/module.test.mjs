@@ -21,7 +21,7 @@ import { READ_ON, NEWEST_READ, STATES, STATE_NAME, STATE_REGION } from "./data/i
 import { COVERAGE, BUILT } from "./coverage.js";
 import { prepareImport, importRecord } from "../../transactions/import/compute.js";
 import { NEVER as NEVER_BUNDLED, UNVERIFIED, unverifiedProblems } from "../../../tools/guess-data-unverified.mjs";
-import { estimators as setupEstimators, oweArgs, askHomeWithMortgage } from "../setup/compute.js";
+import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts } from "../setup/compute.js";
 import { estimate, mergeEstimators, checkEstimators, markGuess, saveField, applies } from "../../../core/estimate/index.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { guessedPlan } from "../../../qa/fixtures/guessed-plan.mjs";
@@ -200,6 +200,10 @@ const PLANS = (() => {
   // C3: the spending taps answered (childcare paid, cover through work; Medicare)
   const care = guessedPlan(); care.guide.setup.taps = { childcare: "yes", "health-cover": "work" }; out.push(["guessed (childcare, cover at work)", care]);
   const careUS = guessedPlan(); careUS.household.state = ""; careUS.guide.setup.taps = { childcare: "yes", "health-cover": "public", hoa: "yes" }; out.push(["guessed (childcare, public cover, no state)", careUS]);
+  // C4: a couple's joint 401(k) figure, "both of ours", split by pay (the split guesses need the tap on file)
+  const both = patLee();
+  applyHaveAmounts(both, { "retire-setup-self": "500000", joint: "both", checking: "28000", home: "450000" }, T0, { guess: (k, o) => estimate(structuredClone(both), k, { ...OPTS, ...o }) });
+  out.push(["Pat and Lee (both of ours)", both]);
   return out;
 })();
 const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`) : [undefined]);
@@ -208,6 +212,8 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
   const keys = Object.keys(REG.estimators);
   // C2 adds what is owed and the payment for each kind, the car loan's rate, and the home (spec 7.C-7.D)
   assert.deepEqual(keys.sort(), [
+    // C4: retirement saving and balances (spec 7.B)
+    "account.car.value", "account.cash", "account.invest.balance", "account.ira.balance", "account.retire.balance", "account.retire.split", "contrib.amount", "contrib.match",
     "debt.car-loan.owed", "debt.car-loan.payment", "debt.car-loan.rate", "debt.credit.owed", "debt.credit.payment", "debt.credit.rate",
     "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.insurance", "home.propertyTax", "home.value",
@@ -289,7 +295,7 @@ const importsOf = (file) => importsIn(fs.readFileSync(file, "utf8"), file);
 // adds two for R12 (the bank files' whole months and transfers, transactions/ledger; the kinds, transactions/categories),
 // read-only, so a row taken from the bank files reads the same months as Expenses' bank card
 const ALLOWED = [/^core\//, /^modules\/overview\/guesses\/(data|estimators)\//, /^modules\/taxes\/federal\/data\/federal\.js$/, /^modules\/retirement\/social-security\/data\/ssa\.js$/,
-  /^modules\/retirement\/historical\/data\/returns\.js$/, /^modules\/taxes\/state\/compute\.js$/, /^modules\/cashflow\/expenses\/compute\.js$/,
+  /^modules\/retirement\/historical\/data\/returns\.js$/, /^modules\/retirement\/contributions\/data\/limits\.js$/, /^modules\/career\/benefits\/data\/benefits\.js$/, /^modules\/taxes\/state\/compute\.js$/, /^modules\/cashflow\/expenses\/compute\.js$/,
   /^modules\/transactions\/ledger\/compute\.js$/, /^modules\/transactions\/categories\/compute\.js$/];
 function reach(start) {
   const seen = new Set(), todo = [start];
@@ -321,12 +327,12 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 3);
+  assert.equal(BUILT, 4);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   assert.equal(COVERAGE.length, 191);
   const row = (page, p) => COVERAGE.find((r) => r.page === page && r.path === p);
-  assert.equal(row("overview/setup", "accounts[setup-have-retire-<pid>].balance")?.how, "later:C4");
+  assert.equal(row("overview/setup", "accounts[setup-have-retire-<pid>].balance")?.how, "guess:account.retire.balance");
   assert.equal(row("debt/refinance", "debtPlan.refinance.rate")?.how, "later:C9");
   assert.equal(new Set(COVERAGE.map((r) => `${r.page}|${r.path}|${r.label}`)).size, COVERAGE.length, "no row twice");
   for (const r of COVERAGE) {
@@ -336,8 +342,8 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
     const later = /^later:C(\d+)$/.exec(r.how);
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
-  // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 57);
+  // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 61);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C2" || r.how === "later:C3").length, 0);
   assert.equal(row("overview/setup", "retirement.spendingMonthly (+ guide.setup.retireAuto)")?.how, "guess:overview/setup:retireSpend");
 });

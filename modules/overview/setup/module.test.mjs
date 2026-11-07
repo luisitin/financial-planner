@@ -2175,7 +2175,8 @@ test("R8 B3 review UX 9: the plan-at-work lines read as plain words, with Tap", 
   const one = empty();
   S.applyYou(one, { who: "me" });
   S.applyMoney(one, { people: { "setup-self": { status: "work", by: "employer", amount: 50000, period: "annual", plan: "yes" } }, today: T6 });
-  assert.equal(S.workPlanLine(one), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanLine(one, { ticked: false }), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanLine(one), "Your plan at work is added. Next we'll ask what is in it and what you put in.", "question 4 not answered yet: C4 ticks Retirement for a plan at work");
   assert.equal(S.workPlanAdded(one, ["setup-self"]), "We added your plan at work, with $0 in it for now.");
 });
 

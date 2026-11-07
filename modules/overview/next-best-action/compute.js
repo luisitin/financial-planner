@@ -18,7 +18,7 @@ import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { offer as payoffOffer, savedPlan } from "../../debt/payoff/compute.js";
 import { yearTaxes, heldAfterTax, aboutTen, fullKind } from "../../cashflow/budget-percent/compute.js";
 import { compute as computeBusiness } from "../../career/business/compute.js";
-import { compute as computeBenefits, DEFAULT_TIERS } from "../../career/benefits/compute.js";
+import { compute as computeBenefits, DEFAULT_TIERS, matchAt, fullMatchAt } from "../../career/benefits/compute.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { compute as computePeople } from "../../household/people/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
@@ -26,6 +26,8 @@ import { rmdAmount } from "../../../core/math/rmd.js";
 import { pmtToReach } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
+import { isGuess } from "../../../core/estimate/index.js";
+import { payOf, matchTerms, usualShare, typedTiers, compLimit, ageInYear, deferralLimit } from "../guesses/estimators/saving.js";
 
 // the unnamed first adult ("Me" from Get started) and the unnamed partner ("My spouse") read "you" and "your spouse" in a
 // sentence; any other name reads as typed, exactly as before (round 7, 2026-11-06)
@@ -289,7 +291,11 @@ export function compute(plan, params = {}) {
   if (atWork.length || leftOnly.length || fresh.length) {
     const owners = adults.filter((p) => atWork.some((a) => a.ownerId === p.id) || (p.role === "self" && atWork.some((a) => !a.ownerId)));
     const working = owners.filter((p) => !noMatch(p.id) && paid(p));
-    const contributing = working.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && k401.some((a) => a.id === c.accountId)));
+    // a row Get started made with nothing going in and nothing from the employer (None, or our guess that people like them do not
+    // put anything in yet) is not "contributing": the match is still free money to ask about (C4)
+    const zeroSetup = (c) => typeof c.id === "string" && c.id.startsWith("setup-contrib-") && !(Number(c.amount) > 0) && !(Number(c.employerMatch) > 0)
+      && (isGuess(plan, `retirement.contributions[${c.id}].amount`) || plan.guide?.setup?.saving?.[c.personId]?.pct === 0);
+    const contributing = working.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && k401.some((a) => a.id === c.accountId) && !zeroSetup(c)));
     const matched = contributing.filter((p) => (plan.retirement?.contributions ?? []).some((c) => c.personId === p.id && Number(c.employerMatch) > 0));
     const missing = working.filter((p) => !contributing.includes(p));
     // a 401(k) on file with nothing going in, whose match is typed on Work benefits or who said the job has a plan with a match
@@ -300,6 +306,35 @@ export function compute(plan, params = {}) {
     const missingMatch = missing.filter((p) => !onFile.some((x) => x.p === p));
     const toAsk = [...missingMatch, ...leftOnly];
     const accountsOf = (p) => atWork.filter((a) => a.ownerId === p.id || (p.role === "self" && !a.ownerId)).map((a) => a.id);
+    // said in Get started that the job has a retirement plan (question 2), or the only 401(k) is the empty one it made: it is not
+    // "a 401(k) from a job left", so that is not asked, and the words say what was said (C4, batch 3's UX 6)
+    const saidPlan = (p) => plan.retirement?.workPlans?.[p.id]?.plan === true || (accountsOf(p).length > 0 && accountsOf(p).every((id) => { const a = accounts.find((x) => x.id === id); return String(id).startsWith("setup-workplan-") && !(Math.abs(Number(a?.balance) || 0) > 0); }));
+    // a 401(k) whose contribution is our guess, short of the share of pay that gets the whole usual match: "put in 6% ($290) to
+    // likely get about $190" (C4). Typed contributions keep the words they had.
+    const MT = matchTerms();
+    const year = Number(String(today ?? "2026-01-01").slice(0, 4));
+    const raise = [], shortTyped = [];
+    for (const p of contributing) {
+      const c = (plan.retirement?.contributions ?? []).find((x) => x.id === `setup-contrib-${p.id}` && x.period === "monthly");
+      const pay = payOf(plan, p.id, today);
+      if (!c || !(pay > 0)) continue;
+      const guessedPut = isGuess(plan, `retirement.contributions[${c.id}].amount`), guessedMatch = isGuess(plan, `retirement.contributions[${c.id}].employerMatch`);
+      // a match the person typed ("I know it") is not argued with; a formula typed on Work benefits decides what gets all of it
+      if (!guessedMatch && Number(c.employerMatch) > 0) continue;
+      const tiers = typedTiers(plan, p.id), comp = Math.min(pay, compLimit(year));
+      const needed = tiers ? fullMatchAt(tiers) : MT.needed, cap = deferralLimit(ageInYear(plan, p.id, year), year);
+      const needYearly = needed * comp;
+      const now = Number(c.amount) * 12 / pay;
+      // already at (or past) the share that gets it all, or the whole limit goes in already: nothing to say
+      if (Number(c.amount) * 12 >= needYearly - 6 || (cap && needYearly > cap) || (cap && Number(c.amount) * 12 >= cap - 6)) continue;
+      const wantMonthly = Math.round(needYearly / 12);
+      const wantMatch = tiers ? Math.round(matchAt(needed, tiers) * comp / 12 / 10) * 10 : Math.round(MT.value * comp / 12 / 10) * 10;
+      const rate = usualShare(plan, p.id, today);
+      const x = { p, rowId: c.id, accountId: c.accountId, nowPct: guessedPut && rate !== null && Math.abs(rate - now) < 0.003 ? rate : now, nowMonthly: Number(c.amount), wantPct: needed, wantMonthly, wantMatch, more: Math.max(0, wantMonthly - Number(c.amount)), formula: !!tiers };
+      if (guessedPut) raise.push(x); else if (guessedMatch && !tiers) shortTyped.push(x);
+    }
+    const raiseWords = raise.map((x) => `${NameOf(x.p.name)} 401(k): put in ${share(x.wantPct)} of pay (${exact(x.wantMonthly)} a month${x.more >= 5 ? `, about ${exact(x.more)} more than the ${exact(x.nowMonthly)} we guess goes in now` : ""}) to ${x.formula ? "get" : "likely get"} about ${exact(x.wantMatch)} a month from the employer${x.formula ? " (the match you typed on Work benefits)" : " (plans usually add about 4% of pay)"}.`).join(" ")
+      + shortTyped.map((x) => ` ${NameOf(x.p.name)} 401(k): ${isYou(x.p.name) ? "you put in" : "puts in"} ${share(Math.round(x.nowPct * 1000) / 1000)} of pay (${exact(x.nowMonthly)} a month). Many employers add their full match at ${share(x.wantPct)} (${exact(x.wantMonthly)} a month). Check your pay stub, and if it does, that is worth about ${exact(x.wantMatch)} a month.`).join("");
     // what starting it takes from take-home pay a month (review D2): the amount a paycheck less the income tax it saves (Work
     // benefits' costPerCheck; Social Security and Medicare still apply, IRC 3121(v)(1)(A)), times the paychecks, over 12. The
     // month-by-month run below takes it from the spare money in the step's place, so every step after it moves by it
@@ -310,7 +345,10 @@ export function compute(plan, params = {}) {
       : leftNames.length === 1 ? ` ${NameOf(leftNames[0])} 401(k) is from a job left: check whether the job now has a plan with a match.`
       : ` ${leftNames.map((n, i) => (i ? nameOf(n) : NameOf(n))).join(" and ")} 401(k)s are from jobs left: check whether the jobs now have a plan with a match.`;
     const had = working.length || leftOnly.length;
-    const before = !had ? "" : toAsk.length ? `${missingMatch.length ? `${whoLeads(missingMatch.map((p) => p.name))} ${missingMatch.length === 1 ? verbFor(missingMatch[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file. Check whether the employer matches, and put in at least enough to get all of it. If the 401(k) is from a job left, or there is no match, say so on Retirement contributions.` : ""}${left}`.trim() : !contributing.length ? ""
+    const planned = missingMatch.filter(saidPlan), otherMissing = missingMatch.filter((p) => !saidPlan(p));
+    const plannedWords = !planned.length ? "" : planned.length === 1 ? `${NameOf(planned[0].name)} job has a retirement plan (you said so in Get started), but nothing goes into it yet.` : `${whoLeads(planned.map((p) => p.name))} each have a job with a retirement plan (you said so in Get started), but nothing goes into them yet.`;
+    const missingWords = otherMissing.length ? `${whoLeads(otherMissing.map((p) => p.name))} ${otherMissing.length === 1 ? verbFor(otherMissing[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file.` : "";
+    const before = !had ? "" : toAsk.length ? `${[plannedWords, missingWords].filter(Boolean).join(" ")}${missingMatch.length ? ` Check whether the employer matches, and put in at least enough to get all of it.${otherMissing.length ? " If the 401(k) is from a job left, or there is no match, say so on Retirement contributions." : " If there is no match, say so on Retirement contributions."}` : ""}${left}`.trim() : !contributing.length ? ""
       // (with a 401(k) still to start, "Everyone with a 401(k)" would not be true: those who put money in, by name)
       : (() => { const who = matched.length ? matched : onFile.length ? contributing : []; return `${whoLeads(who.map((p) => p.name)) || "Everyone with a 401(k)"} ${who.length > 1 || (who.length === 1 && isYou(who[0].name)) ? "put" : "puts"} money in${matched.length ? " with a match" : ""}. If the employer would match more, raise the contribution to get every dollar.`; })();
     const asking = fresh.filter((x) => x.kind === "ask");
@@ -334,19 +372,21 @@ export function compute(plan, params = {}) {
       const trimWords = trim >= 5 ? `trim about ${exact(trim)} a month of spending` : "";
       return `${first}, and ${has >= 1 ? `about ${exact(has)} is left each month` : "the month has nothing spare"}: ${[extraWords, trimWords].filter(Boolean).join(" and ")}.`;
     };
-    matchStep = () => add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length || asking.length ? "check" : fresh.length || onFile.length ? "now" : "done",
-      detail: [before, freshWords([...onFile, ...fresh], { exact, money }), costWords()].filter(Boolean).join(" "),
+    matchStep = () => add({ id: "match", title: "Get the whole employer match", why: "A match is an instant 50% or 100% return; nothing else comes close.", status: toAsk.length || asking.length ? "check" : fresh.length || onFile.length || raise.length || shortTyped.length ? "now" : "done",
+      detail: [before, freshWords([...onFile, ...fresh], { exact, money }), raiseWords, costWords()].filter(Boolean).join(" "),
       // the take-home pay it takes a month, and the same a year for the run below (a step with room takes up to it a month)
       ...(monthlyCost >= 0.5 ? { monthlyCost, roomYearly: monthlyCost * 12 } : {}),
-      ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: accountsOf(p) })),
+      ask: [...missingMatch.map((p) => ({ personId: p.id, name: p.name, accounts: accountsOf(p), ...(saidPlan(p) ? { saidPlan: true } : {}) })),
         ...leftOnly.map((p) => ({ personId: p.id, name: p.name, accounts: [], newJob: true, old: ownOf(p).map((a) => a.id) })),
         // a 401(k) on file and the match known or a plan said: Contributions starts what goes in, in one tap
         ...onFile.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: accountsOf(x.p), kind: x.kind, match: x.match, monthlyCost: x.match ? (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0) / 12 : 0 })),
         // no 401(k) on file: Retirement contributions asks, and one tap there starts the 401(k) (round 8)
-        ...fresh.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: [], noAccount: true, kind: x.kind, match: x.match, monthlyCost: x.kind !== "ask" && x.match ? (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0) / 12 : 0 }))],
+        ...fresh.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: [], noAccount: true, kind: x.kind, match: x.match, monthlyCost: x.kind !== "ask" && x.match ? (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0) / 12 : 0 })),
+        // a contribution that is our guess, short of the whole match: Contributions puts in the share that gets all of it in one tap
+        ...raise.map((x) => ({ personId: x.p.id, name: x.p.name, accounts: [x.accountId], kind: "guessed", rowId: x.rowId, nowPct: x.nowPct, nowMonthly: x.nowMonthly, wantPct: x.wantPct, wantMonthly: x.wantMonthly, wantMatch: x.wantMatch }))],
       // (for Contributions' and Work benefits' cards: the sentence, and whether the month has less than it takes)
       ...(monthlyCost >= 0.5 ? { costWords: costWords(), costShort: !spare.waits && monthlyCost - Math.max(0, spare.monthly) >= 5 } : {}), go: ["retirement", "contributions"] });
-    if (!had && !fresh.length) matchStep = null;
+    if (!had && !fresh.length && !raise.length && !shortTyped.length) matchStep = null;
     else if (!onlyAsk) { matchStep(); matchStep = null; }
   }
 

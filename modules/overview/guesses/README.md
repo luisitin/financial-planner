@@ -502,6 +502,41 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   $2,460 a month", each row ("Utilities and phone, besides the $95 you listed  $310"), "With these, your list comes to
   about $5,000"; "Add our guesses for the rest" (filled, with Undo) and "That's everything" (outlined).
 
+## Retirement saving and balances (estimators/saving.js; spec 7.B, E12-E17, E40; C4, 2026-11-06)
+
+Get started's question 4b ("About how much is in each?") shows a grey figure in every box and writes it, marked, when the box
+is left blank. A picked retirement tile always makes the account. All tables are bundled (data/balances.js, data/pay.js, read
+2026-11-02); the IRS limits are read from `modules/retirement/contributions/data/limits.js`.
+
+| key | formula | persona answer (R11 rounding) |
+|---|---|---|
+| `account.retire.balance` (E12) | Vanguard's median 401(k) balance, everyone $44,115 x [median at this pay / $44,115] x [age group median / $44,115] / [median at the age group's typical pay / $44,115]. The pay line is log-linear between the seven pay groups' typical pays (`VG_PAY_CENTRES`); the age group's typical pay is the Census full-time median at that age. No pay: the age group's median; no age: the pay ratio alone; neither: $44,115. Spread: sqrt(2 ln(average / median)) of the age group. | Sam (24, $48,000) $3,100 (middle half $1,100 to $8,600); Jordan (41, $58,000) $26,000; Lee (59, $40,000) $29,000 |
+| `account.retire.split` (E12s) | the joint figure typed x this adult's share of pay (equal parts when someone has no pay). Applies while the tap `retire-joint` is on file and the typed person's own balance is still this guess. | $500,000 x 85/125 = Pat $340,000; x 40/125 = Lee $160,000 |
+| `account.ira.balance` (E15) | SCF retirement accounts, median among holders, R2 by household income and age, the age residual held between x0.5 and x2, split by pay for a couple | Sam $13,000 (middle half $5,600 to $32,000) |
+| `account.invest.balance` (E16) | the same with the SCF's pooled investment funds | |
+| `account.cash` (E17) | SCF transaction accounts by R2. Checking and savings both picked and both blank: half each of the rounded total. One typed: the other gets the total less it, if $100 or more, else nothing. | Jordan $2,700 -> $1,350 each |
+| `account.car.value` (E40) | SCF vehicles by R2 over the vehicles per household at that age (CE profile) | Sam $12,000 |
+| `contrib.amount` (E13) | participation first: log-odds of Vanguard's 83% plus the pay group's distance from it plus the age group's distance with the age group's typical pay taken out. Under 50%: nothing yet, said so. Else the share of pay: Vanguard's average deferral 7.6% x pay ratio x age ratio (same R2) x median / average (6.6 / 7.6), to 0.1 point, x pay / 12, to $10 (R11), never past the IRS limit. Spread ln(q75 / q25) / 1.349 of the published split of participants (0.64; not "measured", so no range is printed). | Sam 5.0% = $200; Jordan 5.5% = $270; Pat 8.4% = $600; Lee 6.3% = $210 |
+| `contrib.match` (E14) | the usual match, 4% of pay (median value of a promised match) x min(1, share put in / 6%) (median share needed for all of it) x pay / 12, to $10 a month, stored x12 a year. Nothing put in: nothing. "No match at this job": no guess. | Sam $130 a month; Jordan $180; Pat $280; Lee $130 |
+
+Notes where this differs from the spec:
+- **Rounding (R11).** The spec's "5.5% -> $270" rounds the share first (0.1 point) and then the dollars; the estimator does that. The
+  match is rounded as a month ($10) and stored x12, so the screen's monthly box shows the spec's $130 / $180 / $280 (a yearly $50
+  rounding would show $133). Because the spread of what people put in is worked from a bucketed table it is not marked
+  measured, which keeps the dollars at $10 (R11's 2-figure rule for measured spreads would have made Jordan $260).
+- **Participation.** Sam's p is 0.599 here (the spec quotes 0.54); both are over one half, so the result is the same.
+- **Pay-group centres** (`VG_PAY_CENTRES`: $10,000, $21,200, $38,700, $61,200, $86,600, $122,500, $200,000) are the middle of each
+  Vanguard pay band on the log scale, the square root of its two edges rounded to $100 (sqrt(15,000 x 30,000) = 21,213; sqrt(30,000 x
+  50,000) = 38,730; sqrt(50,000 x 75,000) = 61,237; sqrt(75,000 x 100,000) = 86,603; sqrt(100,000 x 150,000) = 122,474). The two open
+  ends are declared ($10,000, $200,000). They are not a measured median; plain (arithmetic) middles would move Jordan's balance 4%.
+- **Spread of what people put in** (`deferralSigma`) is read from the table `vanguard_has2026_deferral_distribution` (Figure 30, five
+  bins; the open bin is closed at 25%), so a data refresh moves it, and the guess lists the table as a source.
+- **Limits (IRS, read 2026-11-06, IR-2025-111 and Notice 2025-67).** 401(k) $24,500; catch-up from 50 $8,000; 60 to 63 $11,250
+  (replaces the $8,000); IRA $7,500, catch-up $1,100. They only cap a guess of what people put in.
+
+Taps: the couple tap (E12's `ask`, key `retire-joint`) shows when exactly one of two adults' retirement boxes is typed and the
+other is blank; "Not sure" counts the figure as one person's.
+
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
   spending rows survey means as shares of after-tax income; rates the published average; choices the mode; ages and
@@ -723,3 +758,34 @@ C2 (built) debts are never dropped; C3 (built) spending; C4 retirement
 saving (and its `FILL_CASES` entry); C5 the questions and the reveal (pay, goal targets; and its `FILL_CASES` entry); C6
 the form kit and the pages outside setup (`restsOn`); C7 (built for debts and spending) existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
 C10 plain words.
+
+Review fixes (C4 review, 2026-11-06). Sources: IRS IR-2025-111 (401(k) $24,500, catch-up $8,000, 60 to 63 $11,250, IRA $7,500 + $1,100;
+read 2026-11-06) and IRS Notice 2025-67 (compensation limit under 401(a)(17) $360,000 for 2026, $350,000 for 2025; read 2026-11-06).
+- **Match on high pay.** The pay the usual match is worked on is `min(pay, compensation limit)` (`compLimit(year)`, read from Work
+  benefits' yearly table), and what is put in is capped at the 401(k) limit for the age reached in the year (`ageInYear`: year minus
+  birth year; 50 from the year one turns 50, the larger amount for 60 to 63). Usual: `4% x min(1, put in / comp / 6%) x comp`.
+- **Typed match formula.** When Work benefits holds match tiers for the person, the guess is that formula on the same pay
+  (`sum of rate x slice of pay up to each upTo`, as Work benefits' matchAt), $10 a month rounding; tiers with no money in them are "no
+  match" and nothing is guessed (a match guessed before them goes to $0). Next best action's "put in X%" step uses the formula's own full-match share, and skips anyone whose match
+  is typed ("I know it").
+- **A guess follows its inputs.** With no pay now (no job, or the pay line ended) a guessed contribution and match go to $0; a row that
+  is not monthly is never given monthly dollars, and saving the edit form with another period ends the guess. A contribution typed in
+  any period still sets the match (its yearly total over 12).
+- **Joint split** adds up to the typed figure: the others get their share to two figures, the person who typed gets the rest.
+- **Cash** counts a typed $0 as typed and takes bank accounts already on file (Net worth's) out of the survey's transaction accounts.
+- **The usual match is said once as "about 4% of pay when you put in 6%"** (Vanguard 2026 Figure 7: median promised match value 4.0%,
+  median share needed 6.0%). Work benefits' assumed formula (50% of the first 6%, 3% of pay: the single most common one) is a different
+  statistic and is left to that page; the step names which one it means.
+- **Retirement verdict** waits (`standing().retireGuessed`, `retireGuessedWhat: "balance"`) when half or more of the money in retirement
+  accounts is a guess.
+
+Final check (C4 verify, 2026-11-06; IRS figures read again that day: IR-2025-111 and Notice 2025-67 pp. 1-2, "individuals who attain
+age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
+- **"No" after "Yes".** When the person says the job has no retirement plan (`retirement.workPlans[id].plan === false`), a guessed
+  contribution is $0 and so is a guessed match; a typed one is left alone. When "no match" is said after our match was saved
+  (Contributions' `workPlans[id].match === false`, or match tiers with no money in them on Work benefits), a guessed match is $0, not
+  frozen at the old figure. Question 4b's own answer (Not sure, I know it) replaces an earlier "no match", so the figure its screen
+  showed is the one settle keeps.
+- **A removed person's account** kept as the household's: its guessed balance stays as it was (no pay or age is left to guess from).
+- **Question 4b reopens** a guessed balance in the plan at work (Q2's account) grey, like every other guess (spec P2), and question 4
+  says "Next we'll ask what is in it" while Retirement is ticked (C4 ticks it for a plan at work), not "Tap Retirement".

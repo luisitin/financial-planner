@@ -11,6 +11,7 @@ import {
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
   applyGoalPicks, applyGoalDetails, sumSplit, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
+  haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
@@ -687,31 +688,82 @@ export function render(page, ctx) {
       head("🏦", "What do you have?", "Tap all that apply. Amounts come next.");
       const v = draft(() => new Set(valuesFor(plan, "have")));
       // the $0 401(k) question 2's "Yes" made: said once, so nobody ticks Retirement only to record it (round 8)
-      const workSaid = workPlanLine(plan);
+      // (said for the Retirement tile as it stands on screen: ticked, the next screen asks what is in it; C4 verify V4)
+      const workSaid = workPlanLine(plan, { ticked: v.has("retire") });
       const workLine = workSaid ? ui.h("p", { class: "su-have" }, workSaid) : null;
-      add(card, tileGroup("What do you have?", HAVE, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => askOwners(plan, o.key).length === 0 }),
+      add(card, tileGroup("What do you have?", HAVE, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); if (o.key === "retire" && workLine) workLine.textContent = workPlanLine(plan, { ticked: v.has("retire") }); }, isHave: (o) => askOwners(plan, o.key).length === 0 }),
         workLine, haveNote(HAVE.flatMap((h) => existingHave(plan, h.key)).map(accLine)));
       current = { apply: (d) => applyHavePicks(d, [...v]) };
       actions();
     },
 
     "have-amounts"() {
-      head("🧮", "About how much is in each?", "Today's balance or value. Round numbers are fine; you can make them exact later.");
-      // a balance that is one of our guesses (question 5 guessed the home): its box is empty with our figure in grey, and
-      // an empty box keeps it (applyHaveAmounts), so the screen never shows a guess as typed text (spec P2)
-      const greyOf = (id) => {
-        const path = `accounts[${id}].balance`, a = (plan.accounts ?? []).find((x) => x.id === id);
-        if (!a || !isGuess(plan, path)) return null;
-        let why = null; try { why = ctx.guess(plan.guesses?.[path]?.k, { path })?.why ?? null; } catch { why = null; }
-        return { shown: groupDigits(String(Math.round(Number(a.balance) || 0))), line: why ? `Our guess: ${why}.` : "Our guess for now." };
-      };
+      // our guesses fill what is left blank (U.S. plans: core/estimate applies); elsewhere the boxes work as they did
+      const guessing = applies(plan);
+      head("🧮", "About how much is in each?", guessing ? "Today's balance or value. Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone like you." : "Today's balance or value. Round numbers are fine; you can make them exact later.");
       const v = draft(() => valuesFor(plan, "have-amounts"));
-      for (const h of HAVE.filter((x) => picks(plan, "have").includes(x.key))) {
+      const shownMoney = (n) => groupDigits(String(Math.round(n)));
+      const shownPct = (r) => String(Math.round(r * 1000) / 10);
+      const isBlank = (x) => { const n = parseMoney(x); return n === null || n < 0; };
+      // every box that can show a grey figure: re-run on each keystroke with what the screen holds (haveArgs), so the grey
+      // figure is exactly what saving the blank box writes (spec 10)
+      const greys = [];
+      const lines = [];            // text lines that follow the answers (a share of pay in dollars, "Not sure" in words)
+      const typoOpen = {};         // { [personId]: "no" } the slip question answered "no"
+      const guessFor = (key, path, args) => { let g = null; if (guessing && key) { try { g = ctx.guess(key, { path, args }); } catch { g = null; } } return g && typeof g.value === "number" ? g : null; };
+      const greyField = (label, control, cfg) => {
+        const input = control.querySelector("input"), sub = ui.h("span", { class: "su-sub", id: `su-h-${++uid}` });
+        input.setAttribute("aria-describedby", sub.id);
+        greys.push({ ...cfg, input, sub, label: cfg.aria ?? label });
+        return ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), sub);
+      };
+      const tapWrap = ui.h("div", { hidden: true });
+      const jointLine = ui.h("p", { class: "su-sub", role: "status", hidden: true });
+      let tapQ = null;
+      const refresh = () => {
+        const args = haveArgs(plan, v, today);
+        let ask = null;
+        const shares = {};
+        const nameOf = (id) => { const x = ad.find((a) => a.id === id); return x ? (x.name === "Me" ? "You" : x.name) : ""; };
+        const hintFor = (a, id) => (tapQ && !v.joint && a.retire[id] > 0 ? "Is it yours alone or both of yours? Answer just below the boxes." : "");
+        for (const b of greys) {
+          const blank = b.blank(args), g = blank ? guessFor(b.key(args), b.path(), args) : null;
+          const shown = g ? (b.pct ? shownPct(g.value) : shownMoney(g.value)) : "";
+          b.input.placeholder = shown;
+          b.input.setAttribute("aria-label", `${b.label}${shown ? `, blank uses our guess of about ${b.pct ? `${shown}%` : `${symbol}${shown}`}` : ""}`);
+          b.sub.textContent = shown ? [`Our guess: ${g.why}.`, b.help].filter(Boolean).join(" ") : b.help ?? "";
+          if (g?.ask && b.retire) ask = g.ask;
+          if (b.retire && g && args.joint) shares[b.pid] = g.value;
+          // the box typed in, while the couple's question is open: say where the answer is (the question sits below both people's boxes)
+          if (b.retire && b.pid !== undefined && !blank) b.sub.textContent = [b.sub.textContent, hintFor(args, b.pid)].filter(Boolean).join(" ");
+        }
+        // "Both of ours": the one figure typed, and what each box now holds (the plan holds the split, the typed box still shows the total)
+        if (args.joint) {
+          const others = Object.entries(shares).filter(([id]) => id !== args.joint.pid).reduce((t, [, x]) => t + x, 0);
+          shares[args.joint.pid] = args.joint.total - others;
+          jointLine.textContent = `Your ${money(args.joint.total)} is split by pay: ${Object.entries(shares).map(([id, x]) => `${nameOf(id)} ${money(x)}`).join(", ")}. Change either box if you know better.`;
+          jointLine.hidden = false;
+        } else jointLine.hidden = true;
+        // answered before (Back to this screen): the question is asked of E12 again without the answer, so the tap stays on screen
+        if (!ask && v.joint) { const open = { ...args }; delete open.joint; for (const b of greys) if (b.retire && b.blank(args)) { const g = guessFor("account.retire.balance", b.path(), open); if (g?.ask) ask = g.ask; } }
+        for (const f of lines) f(args);
+        // the couple's one tap: shown once one box is typed and the other empty, kept while it has an answer
+        const pids = Object.keys(args.retire), one = pids.length === 2 && pids.filter((p) => args.retire[p] > 0).length === 1 && pids.filter((p) => args.retire[p] === null).length === 1;
+        if (ask && ask.question !== tapQ) { tapQ = ask.question; swap(tapWrap, fieldset(ask.question, seg(ask.options, v.joint ?? null, (val) => { v.joint = val; refresh(); }, ask.question), "Tell us and we'll share it out by pay. Not sure? We count it as one person's.")); }
+        if (one && tapQ) tapWrap.hidden = false;
+        else { tapWrap.hidden = true; tapQ = null; delete v.joint; }
+      };
+      for (const h of HAVE.filter((x) => haveKeys(plan).includes(x.key))) {
         for (const pid of askOwners(plan, h.key)) {
           if (!h.perAdult) {
             const label = h.key === "home" ? "Your home" : h.key === "car" ? "Your car" : h.label;
-            const g = greyOf(haveId(h.key));
-            add(card, group(null, field(`${h.icon} ${label}`, moneyIn(v[h.key], (val) => { v[h.key] = val; }, { label: g ? `${label}, blank uses our guess of about ${symbol}${g.shown}` : label, placeholder: g?.shown ?? "" }), g ? [g.line, h.ask ? `${h.ask}${/[.!?]$/.test(h.ask) ? "" : "."}` : null].filter(Boolean).join(" ") : h.ask ?? null)));
+            const id = haveId(h.key);
+            const cashKey = h.key === "checking" || h.key === "savings";
+            add(card, group(null, greyField(`${h.icon} ${label}`, moneyIn(v[h.key], (val) => { v[h.key] = val; refresh(); }, { label }), {
+              key: () => ({ checking: "account.cash", savings: "account.cash", invest: "account.invest.balance", home: "home.value", car: "account.car.value" })[h.key],
+              path: () => `accounts[${id}].balance`, blank: (a) => (cashKey ? a[h.key] === null : isBlank(v[h.key])),
+              help: h.ask ? `${h.ask}${/[.!?]$/.test(h.ask) ? "" : "."}` : null, aria: label,
+            })));
             continue;
           }
           const p = ad.find((x) => x.id === pid);
@@ -722,20 +774,97 @@ export function render(page, ctx) {
           const iraBox = ui.h("div", {});
           const drawIra = () => swap(iraBox, v[`kind-${pid}`] === "own" ? fieldset("Which kind of IRA?", seg(IRA_KINDS, v[`iraKind-${pid}`] ?? null, (val) => { v[`iraKind-${pid}`] = val; }, named(p, "which kind of IRA") ?? "Which kind of IRA?"), iraKindHelp(ownBiz)) : "");
           drawIra();
-          const drawExtra = () => swap(extra,
-            field("You put in a month", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; }, { label: named(p, "put in a month") }), "From pay, if you save. Leave it blank if not."),
-            v[`kind-${pid}`] === "work" ? field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub.") : null);
+          const q2 = workPlanAcct(plan, pid), balId = () => (v[`kind-${pid}`] !== "own" && q2 ? q2.id : haveId(h.key, pid));
+          const payYear = employerPay(plan, pid, today);
+          const cpath = `retirement.contributions[setup-contrib-${pid}].amount`, mpath = `retirement.contributions[setup-contrib-${pid}].employerMatch`;
+          const works = () => v[`kind-${pid}`] !== "own" && payYear > 0 && plan.retirement?.workPlans?.[pid]?.plan !== false;
+          // what goes in: a share of pay (chips), or dollars; blank (Not sure) is our guess
+          const modeOf = () => { const pct = v[`pct-${pid}`]; return pct === null || pct === undefined ? (parseMoney(v[`contrib-${pid}`]) !== null ? "dollars" : "unsure") : pct === 0 ? "0" : SAVING_CHIPS.includes(pct) ? String(pct) : "other"; };
+          let putMode = modeOf(), matchMode = v[`matchMode-${pid}`] ?? "unsure";
+          const putBox = ui.h("div", {}), matchBox = ui.h("div", {});
+          const setPct = (pct) => { v[`pct-${pid}`] = pct; v[`contrib-${pid}`] = pct === null ? "" : pct === 0 ? "0" : String(pctToMonthly(pct, payYear)); };
+          const putLine = ui.h("span", { class: "su-live", "aria-live": "polite" });
+          const typoBox = ui.h("div", {});
+          lines.push((args) => {
+            const pct = v[`pct-${pid}`];
+            if (!works()) return;
+            if (putMode === "unsure" || (putMode === "other" && pct === null)) {
+              const g = guessFor("contrib.amount", cpath, args);
+              putLine.textContent = !g ? "" : g.value > 0 ? `Not sure? We'll count ${money(g.value)} a month. Our guess: ${g.why}.` : `Not sure? We'll count nothing yet. Our guess: ${g.why}.`;
+            } else if (pct === 0) putLine.textContent = "Nothing goes in from your pay.";
+            else if (pct > 0) putLine.textContent = `${shownPct(pct)}% of your pay is ${money(pctToMonthly(pct, payYear))} a month.`;
+            else putLine.textContent = "";
+            // the slip question: "5" in the dollars box, meant as 5% of pay
+            const t = putMode === "dollars" ? parseMoney(v[`contrib-${pid}`]) : null;
+            const g2 = t > 0 && t <= 100 ? guessFor("contrib.amount", cpath, { ...args, contrib: { ...args.contrib, [pid]: null } }) : null;
+            const slip = g2 && typoOpen[pid] !== "no" ? typoCheck(t, { value: g2.value, sigma: g2.sigma }, [{ id: "pct-of-pay", map: (x) => x / 100 * payYear / 12, words: (x, m) => `Did you mean ${x}% of your pay, about ${money(Math.round(m / 10) * 10)} a month?` }]) : null;
+            if (slip) {
+              if (typoBox.dataset.t !== String(t)) {
+                typoBox.dataset.t = String(t);
+                swap(typoBox, ui.h("p", { class: "su-sub", role: "status" }, `${slip.words} ${money(t)} a month is a very small amount.`),
+                  ui.h("div", { class: "su-seg" },
+                    ui.h("button", { type: "button", onClick: () => { setPct(t / 100); putMode = "other"; typoBox.dataset.t = ""; swap(typoBox); drawPut(); refresh(); } }, `Yes, ${t}% of my pay`),
+                    ui.h("button", { type: "button", onClick: () => { typoOpen[pid] = "no"; typoBox.dataset.t = ""; swap(typoBox); } }, `No, ${money(t)} a month`)));
+              }
+              typoBox.dataset.words = slip.words;
+            } else { typoBox.dataset.t = ""; typoBox.dataset.words = ""; swap(typoBox); }
+          });
+          const drawPut = () => {
+            if (!works()) {
+              const moneyBox = moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; v[`pct-${pid}`] = null; refresh(); }, { label: named(p, "put in a month") });
+              swap(putBox, greyField("You put in a month", moneyBox, { key: () => null, path: () => cpath, blank: () => false, help: v[`kind-${pid}`] === "own" ? "Into your IRA, if you save. Leave it blank if not." : "From pay, if you save. Leave it blank if not." }));
+              return;
+            }
+            const opts = [{ value: "0", label: "None" }, ...SAVING_CHIPS.filter((x) => x > 0).map((x) => ({ value: String(x), label: `${shownPct(x)}%` })), { value: "other", label: "Other" }, { value: "unsure", label: "Not sure" }];
+            const chips = fieldset("What you put in from your pay", seg(opts, putMode === "dollars" ? null : putMode, (val) => {
+              putMode = val;
+              if (val === "unsure") setPct(null); else if (val === "other") { if (v[`pct-${pid}`] === null || v[`pct-${pid}`] === undefined || SAVING_CHIPS.includes(v[`pct-${pid}`])) setPct(null); } else setPct(Number(val));
+              drawPut(); refresh();
+            }, named(p, "what you put in from your pay") ?? "What you put in from your pay"), "A share of your pay, taken before you see it. Not sure? We'll use what people your age and pay usually put in.");
+            const pctBad = ui.h("p", { class: "su-sub", role: "alert", "data-words": "" });
+            const other = putMode === "other" ? field("Share of your pay", pctIn(v[`pct-${pid}`] === null || v[`pct-${pid}`] === undefined ? "" : shownPct(v[`pct-${pid}`]), (val) => { const r = readShareOfPay(val); if (r.pct !== undefined) setPct(r.pct); else setPct(null); pctBad.textContent = r.bad ? `${r.bad} We'll use our guess unless you fix it.` : ""; pctBad.dataset.words = r.bad ? r.bad : ""; refresh(); }, named(p, "share of your pay") ?? "Share of your pay", ""), null) : null;
+            const dollars = putMode === "dollars" ? greyField("A month, in dollars", moneyIn(v[`contrib-${pid}`], (val) => { v[`contrib-${pid}`] = val; v[`pct-${pid}`] = null; refresh(); }, { label: named(p, "put in a month, in dollars") }), { key: () => "contrib.amount", path: () => cpath, blank: (a) => a.contrib[pid] === null, help: "What leaves your pay each month." }) : null;
+            const swapMode = ui.h("p", { class: "su-sub", style: "margin-bottom:16px" }, ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { if (putMode === "dollars") { putMode = "unsure"; setPct(null); } else { putMode = "dollars"; v[`pct-${pid}`] = null; } drawPut(); refresh(); } }, putMode === "dollars" ? "Use a share of pay instead" : "A dollar amount a month instead"));
+            swap(putBox, chips, other, other ? pctBad : null, dollars, putLine, typoBox, swapMode);
+          };
+          const drawMatch = () => {
+            if (!works()) {
+              swap(matchBox, v[`kind-${pid}`] === "own" ? "" : field(ownBiz ? "Your business adds a month" : "Your employer adds a month", moneyIn(v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; }, { label: named(p, ownBiz ? "business adds a month" : "employer adds a month") }), ownBiz ? "What the business puts in on top, in a solo 401(k). Leave it blank if none." : "The match, if there is one. It's on your pay stub."));
+              return;
+            }
+            const mline = ui.h("span", { class: "su-live", "aria-live": "polite" });
+            lines.push((args) => { if (!mline.isConnected) return; if (matchMode !== "unsure") { mline.textContent = matchMode === "none" ? "Your employer adds nothing to what you put in." : ""; return; } const g = guessFor("contrib.match", mpath, args); mline.textContent = g ? (g.value > 0 ? `Not sure? We'll count about ${money(g.value / 12)} a month. Our guess: ${g.why}.` : `Not sure? We'll count nothing yet. Our guess: ${g.why}.`) : ""; });
+            swap(matchBox, fieldset(ownBiz ? "What your business adds" : "What your employer adds", seg([{ value: "unsure", label: "Not sure (about 4%)" }, { value: "none", label: "No match" }, { value: "know", label: "I know it" }], matchMode, (val) => {
+              matchMode = val; v[`matchMode-${pid}`] = val === "unsure" ? null : val;
+              if (val === "unsure") v[`match-${pid}`] = ""; else if (val === "none") v[`match-${pid}`] = "0";
+              drawMatch(); refresh();
+            }, named(p, "what your employer adds") ?? "What your employer adds"), "Free money some employers add when you save. It's on your pay stub or benefits site."),
+              matchMode === "know" ? field("A month", moneyIn(v[`match-${pid}`] === "0" ? "" : v[`match-${pid}`], (val) => { v[`match-${pid}`] = val; refresh(); }, { label: named(p, "employer adds a month") }), "What the employer adds each month, on top of yours.") : null, mline);
+          };
+          const drawExtra = () => { drawPut(); drawMatch(); };
           drawExtra();
+          const balCfg = { pid, key: () => (haveArgs(plan, v, today).joint ? "account.retire.split" : v[`kind-${pid}`] === "own" ? "account.ira.balance" : "account.retire.balance"), path: () => `accounts[${balId()}].balance`, blank: (a) => a.retire[pid] === null, help: "Add up every account of that kind.", retire: true };
           add(card, group(`${h.icon} ${ad.length > 1 ? `${possessive(p)} retirement savings` : "Retirement savings"}`,
-            fieldset("Where", seg(RETIRE_KINDS, v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawIra(); drawExtra(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA."),
+            fieldset("Where", seg([...RETIRE_KINDS, { value: "unsure", label: "Not sure" }], v[`kind-${pid}`], (val) => { v[`kind-${pid}`] = val; drawIra(); drawExtra(); refresh(); }, named(p, "retirement through work or on your own") ?? "Retirement through work or on your own"), ownBiz ? "Your own business: an IRA, a SEP-IRA or a solo 401(k) all count as on your own; a solo 401(k) that your business adds to can go under Through work." : "Through work: a 401(k) or 403(b). On your own: an IRA. Not sure? We'll count it as through work."),
             iraBox,
-            (() => { const g = greyOf(haveId(h.key, pid)); return field("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; }, { label: named(p, "retirement saved so far"), placeholder: g?.shown ?? "" }), g ? `${g.line} Add up every account of that kind.` : "Add up every account of that kind."); })(),
-            extra));
+            greyField("Saved so far", moneyIn(v[`${h.key}-${pid}`], (val) => { v[`${h.key}-${pid}`] = val; refresh(); }, { label: named(p, "retirement saved so far") }), { ...balCfg, aria: named(p, "retirement saved so far") ?? "Retirement saved so far" }),
+            putBox, matchBox));
         }
       }
+      add(card, tapWrap, jointLine);
       firstGroup();
-      current = { apply: (d) => applyHaveAmounts(d, v, today), words: (p2) => { const r = reflect(p2, "have-amounts"); return r ? `Got it: ${money(r.total)} saved and invested in all.` : null; } };
-      actions();
+      refresh();
+      const guessOpt = guessing ? { guess: ctx.guess } : {};
+      const words = (p2) => {
+        const r = reflect(p2, "have-amounts");
+        if (!r) return null;
+        if (!r.guessed) return `Got it: ${money(r.total)} saved and invested in all.`;
+        return `Got it: about ${money(about(r.total))} saved and invested in all. ${r.guessed === r.of ? (r.of === 1 ? "It is our guess" : r.of === 2 ? "Both are our guesses" : `All ${r.of} are our guesses`) : `${r.guessed} of the ${r.of} are our guesses`} for now.`;
+      };
+      // a slip in the dollars box ("5" meant as 5% of pay) holds Continue once, as the spending screen does
+      const check = () => { for (const t of card.querySelectorAll("[data-words]")) if (t.dataset.words) return t.dataset.words; return null; };
+      current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words, check };
+      actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: () => { current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words }; forward(); } } : {});
     },
 
     owe() {
