@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test("static files: fingerprinted code addresses, ETags and gzip; an edit shows on the next open; private files refused", async () => {
+test("static files: fingerprinted code addresses, ETags and gzip; an edit shows on the next open; sw.js always checked; private files refused", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "planner-static-"));
   const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
   fs.mkdirSync(path.join(root, "server"));
@@ -25,6 +25,7 @@ test("static files: fingerprinted code addresses, ETags and gzip; an edit shows 
   put("core/ui/base.css", "body { margin: 0 }\n");
   put("modules/x/a.js", "export const a = 1;\n");
   put("modules/x/module.test.mjs", "// a test, never served to the app as code\n");
+  put("sw.js", "self.addEventListener('fetch', () => {});\n");
   const port = 20000 + Math.floor(Math.random() * 20000);
   put("planner.properties", `server.port=${port}\nserver.bind=127.0.0.1\nai.provider=none\ndata.dir=data\n`);
   const child = spawn(process.execPath, [path.join(root, "server", "server.mjs")], { cwd: root, stdio: "ignore" });
@@ -76,6 +77,16 @@ test("static files: fingerprinted code addresses, ETags and gzip; an edit shows 
     assert.notEqual(map2["/modules/x/a.js"], map["/modules/x/a.js"]);
     assert.equal(map2["/core/app.js"], appAt, "an unchanged file keeps its address");
     assert.equal(await (await get(map2["/modules/x/a.js"])).text(), "export const a = 2;\n");
+
+    // the service worker: served as JavaScript, always checked (a changed worker is picked up on the next open), never in the map
+    const sw = await get("/sw.js");
+    assert.equal(sw.status, 200);
+    assert.match(sw.headers.get("content-type"), /^text\/javascript/);
+    assert.equal(sw.headers.get("cache-control"), "no-cache");
+    assert.equal(map["/sw.js"], undefined, "not a module: no hashed address");
+    const swTag = sw.headers.get("etag");
+    assert.equal((await get(`/sw.js?v=${swTag.slice(3, -1)}`)).headers.get("cache-control"), "no-cache", "even with its own hash it is never kept for good");
+    assert.equal((await get("/sw.js", { "if-none-match": swTag })).status, 304);
 
     // private files are still refused
     assert.equal((await get("/planner.properties")).status, 403);

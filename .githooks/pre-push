@@ -1,10 +1,15 @@
 #!/bin/sh
 # Second pass before anything leaves the PC: every commit being pushed, its files, its message
 # and its author/committer email (tools/leak-guard.mjs --commits).
+# A push to main (GitHub Pages serves it to the owner's phone) must also pass tools/main-gate.mjs:
+# old and new files must never run together on the phone (docs/PLAN.md "On a static host").
 zero=0000000000000000000000000000000000000000
 while read local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue
   if [ "$remote_sha" = "$zero" ]; then range="$local_sha --not --remotes"; else range="$remote_sha..$local_sha"; fi
   node tools/leak-guard.mjs --commits "$range" || exit 1
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    node tools/main-gate.mjs "$remote_sha" "$local_sha" </dev/null || exit 1
+  fi
 done
 exit 0

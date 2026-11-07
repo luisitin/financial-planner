@@ -11,6 +11,7 @@
     "build": "node tools/gen-registry.mjs && node tools/build.mjs",
     "check": "node tools/check.mjs",
     "leak-guard": "node tools/leak-guard.mjs --worktree",
+    "skew": "node tools/main-gate.mjs",
     "hooks": "git config core.hooksPath .githooks",
     "prompts": "node tools/gen-prompts.mjs"
   },

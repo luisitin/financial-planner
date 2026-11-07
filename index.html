@@ -19,6 +19,63 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#181c22" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="./core/ui/base.css">
+<script id="opening-guard">
+// The opening guard (docs/PLAN.md "On a static host (GitHub Pages)"). A plain script, so it runs even when the app's
+// own files cannot start. tools/build.mjs leaves it out of the single-file copy; tests/heal.test.mjs runs it.
+// 1. Asks for sw.js, which checks every file against the site on each open, so a phone never runs old and new files
+//    together. Only where a service worker can work: a secure page (https, or localhost) over http(s). Elsewhere (a LAN
+//    address over http, a file, a sandboxed frame) nothing happens and nothing is said.
+// 2. When core/app.js cannot start (its files do not fit together, one did not load, or one threw while starting), the
+//    screen would stay on "Opening your plan..." for ever. It reloads once (never twice in two minutes, never in the
+//    sandbox: core/heal.js, same key), then says so in plain words with a Reload button.
+(function (w) {
+  var KEY = "planner.healAt", WINDOW_MS = 120000;
+  // the folder the app lives in ("https://someone.github.io/financial-planner/"): its own files are under it
+  var HOME = String(w.location.href || "").replace(/[?#].*$/, "").replace(/[^/]*$/, "");
+  function canUseWorker() {
+    try { return !!w.isSecureContext && "serviceWorker" in w.navigator && /^https?:$/.test(w.location.protocol); } catch (e) { return false; }
+  }
+  if (canUseWorker()) {
+    try { w.navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(function () { }); } catch (e) { }
+  }
+  function healOnce() {
+    try {
+      if (/[?&]sandbox(=|&|$)/.test(w.location.search || "")) return false;   // testers see the error at once (core/app.js)
+      var s = w.sessionStorage, now = Date.now(), last = Number(s.getItem(KEY)), since = now - last;
+      if (last > 0 && since >= 0 && since < WINDOW_MS) return false;
+      s.setItem(KEY, String(now));
+      if (s.getItem(KEY) !== String(now)) return false;
+      w.location.reload();
+      return true;
+    } catch (e) { return false; }
+  }
+  function el(tag, cls, text) { var x = w.document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; }
+  w.addEventListener("error", function (e) {
+    var t = e.target, opening = w.document.querySelector("#content .booting");
+    var appFile = t && t.tagName === "SCRIPT" && t.type === "module";     // core/app.js (or a file it needs) did not load
+    var linkError = !!e.error && e.error.name === "SyntaxError";          // "does not provide an export named ...", "Importing binding name ... is not found"
+    // one of the app's own files threw while it was starting (an old core/format.js under a new core/app.js: `import *`
+    // is not checked when the files link, so it is a TypeError, not a SyntaxError). Not the page itself (an inline script).
+    var where = typeof e.filename === "string" ? e.filename.replace(/[?#].*$/, "") : "";
+    var appThrew = !!HOME && where.indexOf(HOME) === 0 && /\.m?js$/.test(where);
+    if (!opening || !(appFile || linkError || appThrew) || healOnce()) return;
+    var pc = !!w.document.querySelector('script[type="importmap"]');      // the PC's server always adds one
+    var box = el("div", "notice error"), row = el("div", "row"), button = el("button", "", "Reload");
+    var more = el("details", "notice-details"), list = el("ul");
+    box.setAttribute("role", "alert");
+    box.appendChild(el("div", "", pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on the PC." : "The app could not open. Reload to try again."));
+    row.style.marginTop = "10px"; button.type = "button";
+    button.addEventListener("click", function () { w.location.reload(); });
+    row.appendChild(button); box.appendChild(row);
+    more.appendChild(el("summary", "", "Show details"));
+    list.appendChild(el("li", "", appFile ? "A file of the app did not load: " + (t.src || "core/app.js") : String(e.message || e.error)));
+    more.appendChild(list); box.appendChild(more);
+    opening.parentNode.replaceChild(box, opening);
+    var pill = w.document.getElementById("status");                       // it would say "Connecting..." for ever
+    if (pill) pill.style.display = "none";
+  }, true);
+})(window);
+</script>
 </head>
 <body>
 <div id="app">

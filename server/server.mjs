@@ -324,8 +324,10 @@ function serveStatic(req, res, url) {
         const body = Buffer.from(html);
         return sendBody(req, res, { body, type, tag: `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 16)}"`, cache: "no-cache" });
       }
-      // an address with this file's current hash never changes: keep it; any other address is checked each time (ETag)
-      const cache = url.searchParams.get("v") === info.hash ? "public, max-age=31536000, immutable" : "no-cache";
+      // an address with this file's current hash never changes: keep it; any other address is checked each time (ETag).
+      // sw.js (the service worker the opening guard registers on http://localhost; docs/PLAN.md "On a static host") is
+      // always checked, whatever its address, so a changed worker is picked up on the next open.
+      const cache = url.searchParams.get("v") === info.hash && realRel !== "sw.js" ? "public, max-age=31536000, immutable" : "no-cache";
       const tag = `W/"${info.hash}"`;
       if (!info.buf) {
         if (String(req.headers["if-none-match"] || "").split(",").map((x) => x.trim()).includes(tag)) { res.writeHead(304, { ETag: tag, "Cache-Control": cache }); return res.end(); }
