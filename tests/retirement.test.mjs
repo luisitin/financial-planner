@@ -115,8 +115,8 @@ test("brackets: Roth conversions fill the chosen bracket before RMDs and stop at
   i.tax.dividendYield = 0.02; i.rothConversion = { fillRate: 0.12, untilAge: 62 };
   const r = project(i);
   const y0 = r.rows[0];
-  near(y0.taxInfo.taxableIncome, 48475, 5);                 // filled to the top of the 12% bracket, gains and dividends from the taxable bucket included
-  assert.ok(y0.conversion > 35000 && y0.conversion < 40000, String(y0.conversion));   // 48,475 + 15,750 less 10,000 of dividends and the gains on what was sold to spend and pay the tax
+  near(y0.taxInfo.ordinaryTaxable, 48475, 5);                 // ordinary taxable income filled to the top of the 12% bracket; the gains and dividends from the taxable bucket sit on top of it (follow-up 2026-11-07, 5b R4: they used to count as filling it)
+  near(y0.conversion, 64225, 5);   // by hand: 48,475 (the 12% top) + 15,750 (the deduction), no other ordinary income; the dividends and gains are taxed on top (before: 35,000-40,000, they counted as filling the bracket)
   near(y0.balances.free, y0.conversion, 0.01); near(y0.withdrawn.taxable, 30000 + y0.taxes, 0.01);
   assert.equal(y0.taxInfo.bracketRate, 0.12);
   assert.ok(r.rows[1].conversion > 0); assert.equal(r.rows[2].conversion, 0);   // 62 in 2027: stopped

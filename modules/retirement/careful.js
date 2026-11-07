@@ -1,4 +1,4 @@
-// modules/retirement/careful.js -- the view side, shared by the pages that show a 9-in-10-markets answer: the spending that
+// modules/retirement/careful.js -- the view side, shared by the pages that show the careful answer (the one that lasts even in a bad run of years): the spending that
 // lasts (Will the money last?, How much to take out, Goal seek: monte-carlo/compute.js carefulSteps) and the age to stop work
 // (Financial independence: fire/compute.js carefulAgeSteps). Each is thousands of runs of the projection, half a second or
 // more here and longer on a phone. So the page is drawn first and the answer filled in after the first paint: on the PC when
@@ -7,6 +7,7 @@
 import { buildInputs } from "./projection/compute.js";
 import { api } from "../../core/api.js";
 import { carefulSteps, CAREFUL_CHANCE } from "./monte-carlo/compute.js";
+import { chanceWords, BAD_RUN, BAD_RUN_NOTE } from "./odds.js";
 
 export { CAREFUL_CHANCE };
 
@@ -74,18 +75,8 @@ export const slot = (ui, like) => ui.h("span", { "aria-hidden": "true", style: {
 /** The withdrawal rules other than steady spending, in plain words (Will the money last?, Financial independence, Goal seek). */
 export const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "spending trimmed by a tenth after bad years", vpw: "spending what the years left can afford" };
 
-/**
- * chanceWords(share, { exact }) -> how often the money lasts, in the same words on every page (round 8 batch 5b UX review 7: How
- * much to take out said "about 4 of 10" where Will the money last? said "47%"): "9 of 10 markets" at 90% or more, "about half of
- * markets" from 45% to under 60%, else "about N of 10 markets" with N rounded down (never 9 under 90%), "every market tried" at 100%
- * (verify: "9 of 10 markets (100%)" read as a slip), "fewer than 1 in 10" under
- * 10%; `exact` adds the percent, rounded down: "about half of markets (47%)".
- */
-export function chanceWords(share, { exact = true } = {}) {
-  const pct = Math.max(0, Math.min(100, Math.floor((Number(share) || 0) * 100)));
-  const words = share >= 1 ? "every market tried" : share >= 0.9 ? "9 of 10 markets" : share >= 0.45 && share < 0.6 ? "about half of markets" : share < 0.1 ? "fewer than 1 in 10 markets" : `about ${Math.min(8, Math.floor(share * 10))} of 10 markets`;
-  return exact ? `${words} (${pct}%)` : words;
-}
+/** chanceWords: how often the money lasts, in the same plain words on every page (odds.js). */
+export { chanceWords, BAD_RUN, BAD_RUN_NOTE };
 
 /** An account's own name, said as an account (round 8, Batch 5b): "Ruth's retirement" reads "Ruth's retirement account"; "Jo's IRA" stays. */
 export const accountName = (n) => (/\b(ira|401\(?k\)?|403\(?b\)?|457|tsp|roth|account|plan|fund|savings|checking|brokerage|cash|pension|annuity|hsa)$/i.test(String(n).trim()) ? n : `${n} account`);

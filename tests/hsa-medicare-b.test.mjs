@@ -103,7 +103,7 @@ test("D3 Health page, self-only: Medicare is read for the adult the plan covers,
     p.insurance.health = HP;
     return p;
   };
-  for (const meIsMo of [true, false]) { const h = health(mk(meIsMo), { today: T }); assert.equal(h.medicareMonths, 0); assert.equal(h.hsaLimit, 4400); assert.equal(h.warnings.length, 0); }
+  for (const meIsMo of [true, false]) { const h = health(mk(meIsMo), { today: T }); assert.equal(h.medicareMonths, 0); assert.equal(h.hsaLimit, 5400); assert.equal(h.warnings.length, 0); }   // Eve is 56: 4,400 + 1,000 catch-up, as on the HSA page (money review M7)
   // and the other way: the covered partner is on Medicare, Me is not
   const q = mk(false); q.taxes.hsa.coveredId = "m";
   const h = health(q, { today: T }); assert.equal(h.medicareMonths, 12); assert.equal(h.hsaLimit, 0);

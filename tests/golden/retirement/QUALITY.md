@@ -97,5 +97,28 @@ words ("You can do as you please. Just make sure a layman can easily understand 
   and was never raised back: the widow, 1960 window, $32,946 a year on a $36,000 plan with $470,928 left). `withdrawal_strategy.py`
   and `lead_audit.py` changed from the rule; regenerated with the same commands: no row moved (no key row has guardrails with
   income and a losing year; `tests/retirement-ways.test.mjs` "verify R1" covers it).
+- Follow-up R3 (2026-11-07, same answer; the owner's standing words "make sure a layman can easily understand and use the page"):
+  once Social Security or a pension covers a trimmed guardrails target, the target is raised back by the way's own raise rule
+  (strictly below 0.8 times the rate, +10%) also when the draw is $0, never above the plan in today's dollars. Before, the raise
+  needed a draw above $0, so a target trimmed while savings paid (the couple retiring at 62, health cover before 65) stayed
+  down for good once Social Security covered it: $38,000 to $43,500 a year on a $60,000 plan for 29 years, ending with $1.27
+  million. `withdrawal_strategy.py` (both branches) and `lead_audit.py` were changed from the rule; regenerated with the same
+  commands (`withdrawal_strategy.py`, `projection.py`, `lead_audit.py`, `roth_conversions.py`): ONE row moved, and no
+  projection, lead-audit or other page's row.
+  - `withdrawal-strategy-income-first-063` (edge, guardrails, a pension of $39,999.99 against a $40,000 plan, prices falling 2%
+    a year): the pension pays for the whole trimmed target, so its draw is $0; the target is now raised back to the plan
+    ($40,000.00) instead of staying at the pension, and the cents of the second-year spending and the worst-stretch
+    fields moved (0.95 to 0.94, 39,203.99 to 39,204.00, 39,999.99 to 40,000.00, 0.00 to 0.01). Nothing else in the key has income
+    that pays for a whole trimmed target. `tests/retirement-ways.test.mjs` covers the couple retiring at 62.
+  - Money review M1 (same day): the raise at a $0 draw waits until savings could pay what the raised target needs without a
+    trim (`needs(up) <= 0` or `needs(up) / savings <= 1.2 x the rate`), else the target follows prices. Without it a retiree with
+    tiny or empty savings was raised on money that was not there, came up short, was trimmed, and was raised again (373 short
+    years that start from empty savings on 18 sampled plans, runs out up to 10 years earlier on 3 of 230). `withdrawal_strategy.py`
+    (income-first) and `lead_audit.py` changed from that rule and were regenerated with the same commands plus `package.py`: the key
+    rows are identical to the ones above (no further row moved, `income-first-063` included); only `coverage.json` changed, for the
+    new hash of `withdrawal-strategy.csv`.
+- Follow-up R4 (2026-11-07): the room under a rate in Roth conversions is worked on ORDINARY taxable income, with qualified
+  dividends and gains stacked on top (IRS Pub. 550; the Qualified Dividends and Capital Gain Tax Worksheet). `roth_conversions.py`
+  asks the oracle's `ordinaryTaxable` instead of `taxableIncome`; its rows carry no qualified income, so no row moved.
 The oracles were changed from the rule first, then the key regenerated; every moved row is listed with the batch. The projection
 key, the lead audit and every other page's key did not move.

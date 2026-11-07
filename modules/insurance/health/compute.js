@@ -86,7 +86,12 @@ export function compute(plan, params = {}) {
   const holderPerson = (pic.coverage === "self" && pic.coveredId ? adults.find((q) => q.id === pic.coveredId) : null) ?? adults.find((q) => q.role === "self") ?? adults[0] ?? null;
   const monthsOn = (tier === "family" ? adults : holderPerson ? [holderPerson] : []).map((q) => adultMedicare(plan, q, b.year).months);
   const medicareMonths = monthsOn.length ? (tier === "family" ? Math.min(...monthsOn) : monthsOn[0]) : 0;
-  const hsaLimit = hsaFull * (12 - medicareMonths) / 12;
+  // the HSA page's own limit (money review M7: this page left out the catch-up from 55, so a household read $4,400 here and $5,400 there):
+  // the covered adult's limit on self-only cover, the household's on family cover; otherwise the cover's limit with the holder's catch-up
+  const hp = holderPerson ? pic.people.find((x) => x.id === holderPerson.id) : null;
+  let hsaLimit = (hsaFull + (hp?.catchUp ?? 0)) * (12 - medicareMonths) / 12;
+  if (tier === "family" && pic.coverage === "family" && Number.isFinite(pic.household?.limit)) hsaLimit = pic.household.limit;
+  else if (tier === "self" && pic.coverage === "self" && hp?.eligible && Number.isFinite(hp.limit)) hsaLimit = hp.limit;
   // the marginal rate: the federal tax the year's HSA limit taken off income saves, per dollar, plus payroll tax for
   // contributions from pay. Worked over the limit, not over $1,000, since a credit that falls in steps of income (the
   // child care credit: a point per 4,000 over 150,000 joint) would make a small probe land on a step or miss it
@@ -152,5 +157,5 @@ export function compute(plan, params = {}) {
       crossovers.push({ id: x.id, name: x.name, ranges });
     }
   }
-  return { tier, expected, medicareMonths, marginal, taxRate, hsaLimit, year: limitsYear, hdhp: rules, plans, best: best?.id ?? null, crossovers, count: plans.length, warnings };
+  return { tier, expected, medicareMonths, marginal, payrollRate: payroll, taxRate, hsaLimit, year: limitsYear, hdhp: rules, plans, best: best?.id ?? null, crossovers, count: plans.length, warnings };
 }

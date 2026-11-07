@@ -31,7 +31,7 @@ test("F1 widow, 74 and on Social Security: the HSA limit is 0, 4,400 typed is to
   near(d.hsa.over, 4400); near(d.hsa.excess, 4400);
   assert.equal(d.hsa.deducted, 0);
   near(d.hsa.taxSaved, 0); near(d.hsa.ficaSaved, 0); near(d.hsa.savedTotal, 0);
-  assert.ok(d.notes.some((n) => /can't add to an HSA; you can still spend what is in it on medical bills, tax-free/.test(n) && /4,400 going into Ada's HSA is 4,400 too much/.test(n) && /Take it out/.test(n)), d.notes.join("|"));
+  assert.ok(d.notes.some((n) => /^Ada is on Medicare \(people 65 or older who get Social Security are signed up for Medicare Part A\)\./.test(n) && /4,400 going into Ada's HSA is 4,400 too much/.test(n) && /Take it out/.test(n)), d.notes.join("|"));
 });
 
 test("F1 no wages, no payroll tax: a 50-year-old with a pension and no pay saves income tax only", () => {

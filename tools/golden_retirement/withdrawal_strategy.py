@@ -105,7 +105,7 @@ def simulate(inp,seq=None,strategy=None):
                 else:
                     draw=guard;ratio=draw/b if b>0 else (1 if draw>0 else 0)
                     if ratio>wr*1.2:guard*=.9
-                    elif ratio<wr*.8 and draw>0:guard=min(guard*1.1,base*price)
+                    elif ratio<wr*.8:guard=min(guard*1.1,base*price)   # also when nothing is drawn (5b R3)
                     # prices move the target; after a losing year only a fall in prices does, while savings pay toward it
                     # (verify R1: a year income pays for everything draws nothing, so the target follows prices)
                     elif prior_real is not None and (prior_real>=0 or inflation<0 or draw<=0):guard*=1+inflation
@@ -202,7 +202,7 @@ def income_first(inp):
             else:
                 ratio=needs(guard)/b if b>0 else (1 if needs(guard)>0 else 0)
                 if ratio>wr*1.2:guard*=.9
-                elif ratio<wr*.8 and needs(guard)>0:guard=min(guard*1.1,base*price)
+                elif ratio<wr*.8 and (needs(guard)>0 or needs(min(guard*1.1,base*price))<=0 or (b>0 and needs(min(guard*1.1,base*price))/b<=wr*1.2)):guard=min(guard*1.1,base*price)   # raised back also when the pension pays for the whole target, but only if savings could pay the raised one without a trim (5b R3; money review M1)
                 # after a losing year no rise with prices, unless the pension pays for the whole target (nothing drawn: verify R1)
                 elif prior_real is not None and (prior_real>=0 or f<0 or needs(guard)<=0):guard*=1+f
                 guard=min(guard,base*price)

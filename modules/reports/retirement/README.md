@@ -43,3 +43,6 @@ Round 8 batch 5b UX review 8 (2026-11-06): `plan.strategy` is the engine's descr
 core/math/retirement.js). Guardrails now reads "What you plan, trimmed by a tenth after bad years and raised back after good
 ones" (the words of How much to take out's "Trim after bad years"), not "Your spending, cut 10% after a bad stretch, back up
 after a good one". Test: "batch 5b UX review 8: the report says guardrails in the words the retirement pages use".
+
+Follow-up 2026-11-07: "In 93% of 2,000 pretend futures the money lasts" (was "simulated markets"); "the middle 80% of the pretend futures".
+- Verify (2026-11-07): the last two "simulations" on the page (the loading line and the foot) and the chart's label say "pretend futures", as the rest of the page and `modules/retirement/odds.js` do.

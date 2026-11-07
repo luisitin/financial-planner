@@ -121,3 +121,9 @@ Tests: module.test.mjs "round 8 review" and the updated item 1 tests.
   contribution on that 401(k): the year's amount at the match's share of pay / paychecks, to the cent; the employer's match
   only when typed on Work benefits, else 0 and "type what the employer adds once you know it") and "Type my own amount" (the
   form, filled in with that amount, and a line saying so). No "That 401(k) is from a job X left" about the 401(k) just added.
+
+## Follow-up 2026-11-07 (HSA verify R1)
+`compute()` reads `hsaPictureMedicare` (taxes/federal/hsa-medicare.js, the picture the HSA page and the return use), so someone on Medicare has an HSA limit of 0 here too, and the
+warning says why ("Ruth: on Medicare all year, and once you are on Medicare you cannot add to an HSA. 4,400 goes in, this year's limit is 0. Change it on the HSA page."; in the
+year someone turns 65, "on Medicare from July ... (only the months before Medicare count)"). The two files import each other (hsaPicture / hsaPictureMedicare); both are only
+called at run time, so the cycle is harmless.

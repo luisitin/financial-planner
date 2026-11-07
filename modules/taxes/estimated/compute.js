@@ -96,10 +96,12 @@ export function compute(plan, params = {}) {
   // without a penalty. Rounded up to 100. (Round 8, widow-2: "No estimated payments needed" on an RMD of 16,078.)
   const wd = yt.known?.withdrawal ?? null;
   const thisYearNow = today ? Number(String(today).slice(0, 4)) === fed.year : false;
-  const holdBack = needsEstimates && remaining > 0 && wd && !wd.typed && wd.total >= 1 && thisYearNow && (wd.spending > 0 || wd.people.some((x) => !x.taken))
-    ? { amount: Math.min(Math.ceil(remaining / 100) * 100, Math.ceil(wd.total)), short: remaining, withdrawal: wd.total, required: wd.required, people: wd.people.filter((x) => !x.taken).map((x) => ({ name: x.name, amount: x.amount })),
+  // a withdrawal already taken cannot hold anything back: the cap is what is still to come (money review note: $3,900 was shown against $1,369 to come)
+  const toCome = wd ? Math.max(0, wd.total - wd.people.filter((x) => x.taken).reduce((t, x) => t + (Number(x.amount) || 0), 0)) : 0;
+  const holdBack = needsEstimates && remaining > 0 && wd && !wd.typed && toCome >= 1 && thisYearNow && (wd.spending > 0 || wd.people.some((x) => !x.taken))
+    ? { amount: Math.min(Math.ceil(remaining / 100) * 100, Math.ceil(toCome)), short: remaining, withdrawal: wd.total, required: wd.required, people: wd.people.filter((x) => !x.taken).map((x) => ({ name: x.name, amount: x.amount })),
       // what to hold back to owe nothing in April (the whole balance), beside what keeps the penalty away (`amount`)
-      whole: Math.min(Math.ceil(Math.max(0, balanceAtFiling) / 100) * 100, Math.ceil(wd.total)) } : null;
+      whole: Math.min(Math.ceil(Math.max(0, balanceAtFiling) / 100) * 100, Math.ceil(toCome)) } : null;
   // any income counted, this year's withdrawals from the plan included (known.js), not the Income page alone (round 8 review)
   const hasIncome = !!yt.known?.hasIncome || fed.hasIncome;
   const notes = [];

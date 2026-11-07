@@ -5,7 +5,7 @@
 //   vpw:        the year's withdrawal = pmt(real return, years left, savings), paid at the start of the year
 //   guardrails: the first year's withdrawal = max(0, planned spending + health cover + tax - guaranteed income); later years test
 //               that withdrawal against savings (cut the spending target 10% above 1.2 x the rate; back up 10% below 0.8 x the
-//               rate, only while something is drawn and never past the plan's own figure grown with inflation; else inflation)
+//               rate (also when nothing is drawn: 5b R3, 2026-11-07), never past the plan's own figure grown with inflation; else inflation)
 //   spending = guaranteed income + withdrawal - tax - health cover (never below 0; guardrails never below its target)
 //   "fixed-real" is unchanged.
 import { test } from "node:test";
@@ -195,4 +195,48 @@ test("verify R1: while income pays for everything, guardrails' target follows pr
   near(r.rows[2].spending, 60500); near(r.rows[2].spendingReal, 50000); near(out(r.rows[2]), 500);
   for (const x of r.rows.slice(3)) { near(x.spending, 60500, 0.01, String(x.year)); near(x.spendingReal, 50000, 0.01, String(x.year)); near(out(x), 500, 0.01, String(x.year)); }
   // and while savings pay toward the target a losing year still holds it (review D4's rule is unchanged): see the D4 test above
+});
+
+test("5b R3 (follow-up 2026-11-07): a trimmed guardrails target is raised back once Social Security covers it, never past the plan", async () => {
+  // Pat and Jo retire at 62 on a $60,000 plan. Health cover before 65 pushes the withdrawal past 1.2 x the rate, so the target is
+  // trimmed in 2029-2032 (savings paying). From 2033 Social Security and the pension cover it, so nothing is drawn. Before this change
+  // the raise needed a draw above $0: the target sat at $43,539 and then $38,000 for 29 years and they ended with $1,273,219.
+  // Now the way's own raise rule (strictly below 0.8 x the rate: +10% a year) applies with a draw of $0 too, up to the plan.
+  const { bridgeCouple } = await import("../qa/fixtures/retiree-cases.mjs");
+  const { migrate } = await import("../core/schema/migrate.js");
+  const WS = await import("../modules/retirement/withdrawal-strategy/compute.js");
+  const I = WS.inputsByWay(migrate(bridgeCouple()), { today: "2026-11-06" }).guardrails;
+  const P = I.spending.yearly;
+  const r = project({ ...I, strategy: "guardrails" });
+  const ret = r.rows.filter((x) => x.retired);
+  near(P, 60000);
+  const at = (y) => ret.find((x) => x.year === y);
+  // trimmed while savings paid (unchanged), held at $43,539 while the draw is still above $0
+  near(at(2032).spendingReal, 34976.0, 1); near(at(2033).spendingReal, 43539, 1);
+  // then raised back by a tenth a year of the target ($43,539 x 1.1 = $47,893 in 2036's prices: $45,498 here with prices), reaching the plan
+  for (const y of [2036, 2037, 2038, 2039, 2040]) assert.ok(at(y).spendingReal > at(y - 1).spendingReal + 1, `${y} rises`);
+  near(at(2041).spendingReal, 60000, 0.01);
+  // never above the plan, from then on every year
+  for (const x of ret.filter((x) => x.year >= 2041)) near(x.spendingReal, 60000, 0.01, String(x.year));
+  assert.ok(ret.every((x) => x.spendingReal <= P + 0.01), "never above the plan in today's dollars");
+  // 12 years under the plan, not 33; and the cost is told: $577,371 is left at the end, not $1,273,219
+  assert.equal(ret.filter((x) => x.spendingReal < P - 1).length, 12);
+  assert.ok(r.success); near(r.endBalanceReal, 577371, 1);
+});
+
+test("money review M1: with nothing drawn the target is raised back only if savings could pay the raised one without a trim", () => {
+  // A 70-year-old with $5,000 saved, a $40,000 pension raised with prices, a $44,000 plan, 5% returns, 3% prices.
+  // 2026 draws $4,000 ($1,050 left); 2027 the $44,000 target needs 267% of savings, so it is trimmed to $39,600 and the pension pays it
+  // (draw $0). 2028: raising to $43,560 would need $1,124 of the $1,102.50 left, far over the trim line, so it follows prices instead
+  // and the money lasts at $40,000 a year in today's dollars. Before the fix it raised anyway, came up short and swung year to year.
+  const I = { startYear: 2026, endYear: 2033, people: [{ name: "A", birthYear: 1956, retireAge: 70, endAge: 77 }], balances: { cash: 0, taxable: 5000, deferred: 0, free: 0 },
+    contributions: [], incomes: [{ name: "Pension", yearly: 40000, personIndex: 0, startAge: 60, cola: true, taxable: true }], spending: { yearly: 44000 }, retireYear: 2026,
+    rates: { inflation: 0.03, cash: 0.02, salaryGrowth: 0, taxRate: 0, stocksNow: 0.5, stocksRetired: 0.5 }, returns: { stocks: 0.05, bonds: 0.05 }, strategy: "guardrails", withdrawalRate: 0.04, withdrawalOrder: ["taxable", "deferred", "free"], tax: { mode: "flat" } };
+  const r = project(I);
+  assert.ok(r.success, "lasts");
+  assert.ok(r.rows.every((x) => x.shortfall < 0.005), "no short year");
+  near(r.rows[0].spending, 44000, 0.01); near(r.rows[1].spendingReal, 40000, 1); near(r.rows[2].spending, 42436, 1);
+  // and savings that could pay it do get the raise: the same pension with $500,000 saved goes back to the plan at once after a trim
+  const rich = project({ ...I, balances: { cash: 0, taxable: 500000, deferred: 0, free: 0 }, spending: { yearly: 60000 } });
+  assert.ok(rich.rows.every((x) => x.spendingReal <= 60000 + 0.01));
 });

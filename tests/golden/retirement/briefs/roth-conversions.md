@@ -4,7 +4,7 @@
 
 README: "in each retirement year before the required-withdrawal age (and the until-age), once
 
-the year's spending withdrawals are settled, convert pre-tax money to Roth until taxable income
+the year's spending withdrawals are settled, convert pre-tax money to Roth until ORDINARY taxable income (qualified dividends and gains are stacked on top and do not fill the bracket: IRS Pub. 550, follow-up 2026-11-07)
 
 sits at the top of the chosen bracket (roomUnder, then trimmed or topped up so the tax on the
 

@@ -49,7 +49,7 @@ const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
  *   year, limitsYear (the HSA figures' year), fsaYear (the FSA figures' year), wageBase (the Social Security pay limit),
  *   hsa: { coverage ("none"|"self"|"family"), coverageChosen, coveredId, base (the cover's amount), catchUpAmount, catchUpAge, limit, catchUp, contribution
  *     (the household's own money from pay), employer, total, room, over, excess (taxed as pay), deducted (kept out of income),
- *     taxSaved, ficaSaved, socialSecuritySaved, medicareSaved, savedTotal, marginal, years, growthRate, kept (the money within the limit), futureValue,
+ *     taxSaved, ficaSaved, socialSecuritySaved, medicareSaved, savedTotal, marginal, noPay (nobody has pay on file but the Income page has other income: a retiree; HSA money saves no payroll tax), years, growthRate, kept (the money within the limit), futureValue,
  *     futureContributions, balance, balanceGrown, atSixtyFive, aboveWageBase: [names],
  *     people: [{ id, name, role, age, eligible, catchUp, limit, payroll, employer, used, room, over, excess, pay, ficaWith,
  *       ficaWithout, socialSecuritySaved, medicareSaved, ficaSaved, aboveWageBase }] },
@@ -125,7 +125,7 @@ export function compute(plan, params = {}) {
   const hsa = {
     coverage, coverageChosen: pic.coverageChosen, coveredId: pic.coveredId, base: pic.base, catchUpAmount: pic.catchUpAmount, catchUpAge: pic.catchUpAge, limit, catchUp, contribution, employer, total, room, over, excess, deducted,
     taxSaved, ficaSaved, socialSecuritySaved, medicareSaved, savedTotal: taxSaved + ficaSaved, marginal, years, growthRate, kept, futureValue, futureContributions: kept * years,
-    balance: hsaBalance, balanceGrown, atSixtyFive: futureValue + balanceGrown, aboveWageBase: people.filter((p) => p.aboveWageBase).map((p) => p.name), people,
+    balance: hsaBalance, balanceGrown, atSixtyFive: futureValue + balanceGrown, noPay: noWagesHousehold, aboveWageBase: people.filter((p) => p.aboveWageBase).map((p) => p.name), people,
   };
   // the health FSA: each employee elects their own, up to the limit each (IRC 125(i); Notice 2012-40: "each spouse may elect
   // ... up to $2,500 (as indexed for inflation) to his or her health FSA"): the adult marked "Me" (`fsa`), the other (`fsaPartner`)
@@ -150,13 +150,15 @@ export function compute(plan, params = {}) {
   const fsa = { election, excluded, limit: fsaLimit, spent, unspent: Math.max(0, election - spent), daysLeft, carryover: L.fsa?.carryover ?? 660, taxSaved: fsaIncomeSaved + fsaPayrollSaved, incomeTaxSaved: fsaIncomeSaved, payrollTaxSaved: fsaPayrollSaved,
     over: fsaPeople.reduce((t, x) => t + Math.max(0, x.election - fsaLimit), 0), people: fsaPeople.map((x) => ({ id: x.id, name: x.name, election: x.election, over: Math.max(0, x.election - fsaLimit) })) };
   const notes = [];
-  if (coverage === "none" && total > 0) notes.push(`${fmtInt(total)} is going into an HSA, but you said you have no high-deductible health plan. Only someone covered by one can put money in an HSA, so all of it is taxed as pay and charged 6% a year until it is taken out. Take it out before the tax filing deadline, or change the cover below if you do have such a plan.`);
+  // money taken out of nobody's pay (a retiree's, a spouse at home) is not "taxed as pay": it just gets no tax break (follow-up 2026-11-07, HSA R4)
+  const noPayAll = people.every((p) => !(p.pay > 0)) && !b.wagesTyped;
+  if (coverage === "none" && total > 0) notes.push(`${fmtInt(total)} is going into an HSA, but you said you have no high-deductible health plan. Only someone covered by one can put money in an HSA, so all of it ${noPayAll ? "gets no tax break" : "is taxed as pay"} and is charged 6% a year until it is taken out. Take it out before the tax filing deadline, or change the cover below if you do have such a plan.`);
   else {
     const outside = people.filter((p) => !p.eligible && p.used > 0);
     const insideExcess = people.filter((p) => p.eligible).reduce((s, p) => s + p.excess, 0);
     // the unnamed first adult (and the "You" stand-in when no adult is on People) reads "You are not ... your HSA" (round 7)
     const nm = (p) => (p.id === null ? null : p.name);
-    for (const p of outside) notes.push(`${NameIn(nm(p))} ${verbFor(nm(p), "is", "are")} not on the self-only health plan, so the ${fmtInt(p.used)} going into ${nameOf(nm(p))} HSA is not allowed: it is taxed as pay and charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
+    for (const p of outside) notes.push(`${NameIn(nm(p))} ${verbFor(nm(p), "is", "are")} not on the self-only health plan, so the ${fmtInt(p.used)} going into ${nameOf(nm(p))} HSA is not allowed: ${p.pay <= 0 && !b.wagesTyped ? "it gets no tax break" : "it is taxed as pay"} and is charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
     if (outside.length) { if (insideExcess > 0) notes.push(`The covered person's own HSA is over the ${limitsYear} limit by ${fmtInt(insideExcess)}: excess contributions are taxed 6% a year until withdrawn.`); }
     else if (over > 0 && !people.some((x) => x.medicareMonths > 0 && x.excess > 0.005)) notes.push(`The HSA is over the ${limitsYear} limit by ${fmtInt(over)}: excess contributions are taxed 6% a year until withdrawn.`);
     // a spouse 55 or over who does not use their own catch-up cannot hand it to the other (223(b)(3); Pub. 969)
@@ -174,7 +176,11 @@ export function compute(plan, params = {}) {
     // the limit is by months, not by when the money goes in (it can go in until the April filing deadline): never "money added from then"
     const left = 12 - p.medicareMonths;
     const counts = full ? "" : ` Only the ${left} month${left === 1 ? "" : "s"} before ${month} count toward this year's HSA limit.`;
-    const lead = `${NameIn(who)} ${verbFor(who, "is", "are")} on Medicare${full ? "" : ` from ${month}`} (people 65 or older who get Social Security are signed up for Medicare Part A). Once you're on Medicare you can't add to an HSA; you can still spend what is in it on medical bills, tax-free.${back}${counts}`;
+    // the page's headline and first line already say "once you're on Medicare you can't add to an HSA" when nobody covered can (the view's
+    // onMedicare): the note does not say it twice (follow-up 2026-11-07, HSA R3)
+    const heroSays = hh.limit === 0 && coverage !== "none" && people.some((x) => x.eligible && x.medicareMonths >= 12);
+    const rule = heroSays ? "" : " Once you're on Medicare you can't add to an HSA; you can still spend what is in it on medical bills, tax-free.";
+    const lead = `${NameIn(who)} ${verbFor(who, "is", "are")} on Medicare${full ? "" : ` from ${month}`} (people 65 or older who get Social Security are signed up for Medicare Part A).${rule}${back}${counts}`;
     // money that did not come out of pay (a retiree's own) is not "taxed as pay": it just gets no tax break
     const noPay = p.pay <= 0 && !b.wagesTyped;
     const penalty = noPay ? "it gets no tax break and is charged 6% a year until taken out" : "it is taxed as pay and charged 6% a year until taken out";

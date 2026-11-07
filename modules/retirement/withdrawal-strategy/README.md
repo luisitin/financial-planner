@@ -272,3 +272,33 @@ Under the owner's answer of 2026-11-06 ("You can do as you please. Just make sur
   takes $12,000 from Checking and only $4,880 from the account, $11,198 short of the law (the engine takes the required amount
   first). With nothing else to take from: "The rest comes from there too." Test: "verify R2".
 - `chanceWords(1)` is "every market tried (100%)", not "9 of 10 markets (100%)".
+
+## Follow-up 2026-11-07: one plain way of saying the odds
+The owner's standing words: "It should feel easy for a layman ... not ... concepts / words too hard to understand." Every page that says how often
+the money lasts now uses `modules/retirement/odds.js` (`chanceWords`, re-exported by `careful.js`; `BAD_RUN` = "even in a bad run of years",
+`BAD_RUN_NOTE` = "(only 1 in 10 is worse)"). A "pretend future" is one made-up run of good and bad years; the share of pretend futures in which the money lasts is the
+chance. The words, after "the money lasts": 100% "in every pretend future we ran"; 90% or more "even in a bad run of years"; 45% to under 60% "about half
+the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N of 10 pretend futures" (N rounded down, never 9 under 90%); with the number
+"(93 of 100)" after "of 10 pretend futures", else "(93 of 100 pretend futures last)", where it helps. No page says "markets" for a try ("9 of 10 markets", "every market tried", "simulated markets",
+"100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
+"short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
+- The old line above (`chanceWords(1)` is "every market tried (100%)") now reads "in every pretend future we ran"; "You could spend up to about $X a month and the money lasts even in a bad run of years (only 1 in 10 is worse)."; "Yours already lasts even in a bad run of years."
+
+## Follow-up 2026-11-07 (batch 5b R3, decided here, no owner to ask): a trimmed guardrails target is raised back once income covers it
+Decision: the prosperity rule (strictly below 0.8 times the rate: +10%, never above the plan's spending in today's dollars) also applies when the withdrawal the target
+needs is $0 because Social Security or a pension pays for all of it. Before, it needed a withdrawal above $0, so a target trimmed while savings paid stayed down for good once
+income covered it. Why this reading: the page promises "trimmed by a tenth after bad years and raised back after good ones", and the owner's rule ("make sure a layman can
+easily understand and use the page") is not met by a way that never raises back. The cap at the plan keeps it from compounding past what the household said it spends.
+- Pat and Jo (`bridgeCouple`, retiring at 62 on a $60,000 plan; health cover before 65 pushes the withdrawal past 1.2 x the rate): trimmed 2029-2032 to $34,976, held at
+  $43,539 while a withdrawal is still needed, then raised back from 2036 and at the full $60,000 from 2041. Before: $38,000 to $43,500 a year for 29 years under the plan
+  and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
+- Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved
+  (`withdrawal-strategy-income-first-063`, cents), explained in `tests/golden/retirement/QUALITY.md`. Test: `tests/retirement-ways.test.mjs` "5b R3".
+
+Money review M1 (2026-11-07): the raise at a $0 draw waits until savings could pay what the raised target needs without a trim (the withdrawal it would need is $0, or at most
+1.2 x the rate of savings); else the target follows prices. Without it a retiree with little or no savings was raised on money that was not there, came up short, was trimmed and
+raised again: on 230 sampled qa plans (3,926 runs) 373 short years that start from empty savings on 18 plans, and runs that ran out up to 10 years sooner. With it: 0 such years,
+Pat and Jo unchanged ($577,371, 12 years under the plan), key row `income-first-063` unchanged. The cost that remains, said plainly: raising back spends nearer the plan, so less
+is left when pay stops; on 3 of 230 sampled plans that run out anyway, they run out 1 to 8 years sooner. Engine `core/math/retirement.js` (`raisedFits`); oracles
+`withdrawal_strategy.py` (income-first) and `lead_audit.py`; test `tests/retirement-ways.test.mjs` "money review M1". The first screen also says "You plan $X a month." beside
+the figure it could spend, so the plan's own "yours" line below is no surprise. "A bad stretch like the 1970s" (the decade, not 1973).

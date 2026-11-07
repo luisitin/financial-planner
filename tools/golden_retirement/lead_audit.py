@@ -122,7 +122,7 @@ def ledger(I,options=None):
                 else:
                     test=gross(max(0,guard-income))
                     if balance<test/(1.2*wr) or (balance<=0 and test>0):guard*=.9
-                    elif test>0 and balance>test/(.8*wr):guard=min(guard*1.1,plan)
+                    elif (test>0 and balance>test/(.8*wr)) or (test<=0 and (gross(max(0,min(guard*1.1,plan)-income))<=0 or (balance>0 and gross(max(0,min(guard*1.1,plan)-income))<=1.2*wr*balance))):guard=min(guard*1.1,plan)   # raised back also when income pays for the whole target, if savings could pay the raised one without a trim (5b R3; money review M1)
                     elif priorReal>=0 or infl<0 or test<=0:guard*=1+infl   # a losing year stops a rise, never a fall (D4), and only while something is drawn (verify R1)
                     guard=min(guard,plan)   # and never above the plan at this year's prices
                 draw=gross(max(0,guard-income))

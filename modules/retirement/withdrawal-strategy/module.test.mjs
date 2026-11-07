@@ -189,7 +189,7 @@ test("5b page: the widow reads the answer first, in plain words, and each way is
   assert.ok(/This year, take about \$16,078 from Ruth's retirement account: the law requires it\./.test(w.first), w.first.slice(0, 900));
   assert.ok(/Your \$50,400 of Social Security and pension already pays for the \$36,000 you spend\./.test(w.first), w.first.slice(0, 900));
   // the 9-in-10 figure fills in after the first paint (a grey bar until then: no server in a test, so it stays a bar)
-  assert.ok(/You could spend up to about\s+a month and the money lasts in 9 of 10 markets\./.test(w.first), w.first.slice(0, 900));
+  assert.ok(/You could spend up to about\s+a month and the money lasts even in a bad run of years \(only 1 in 10 is worse\)\. You plan \$[\d,]+ a month\./.test(w.first), w.first.slice(0, 900));
   for (const word of [/bracket/i, /factor/i, /IRMAA/, /premium tax credit/i, /poverty line/i, /Not offered/, /guardrail tests?/i, /withdrawal rate/i]) assert.ok(!word.test(w.first), `${word} on the first screen`);
   // each way: its name, what it lets you spend a month in the first year, one short line, one button (not on her own way)
   for (const [name, spend] of [["Same spending every year", 36000], ["A share of what is left", 64868.24], ["Trim after bad years", 47988.24], ["Spend what the years left can afford", 72379.52]])
@@ -206,15 +206,15 @@ test("5b page: the widow reads the answer first, in plain words, and each way is
   const d = compute(migrate(widowPlan()), { today: TODAY8 });
   const vpw = d.rows.find((r) => r.key === "vpw");
   assert.ok(vpw.worst.lowest < vpw.expected.lowest);
-  assert.ok(new RegExp(`Spend what the years left can afford about \\$6,032 a month What savings can pay over the years left, on top of your income\\. In a bad stretch like ${d.worstStartYear} it falls to about \\${fmtMoney(vpw.worst.lowest / 12)} a month\\.`).test(w.first), w.first);
-  assert.ok(new RegExp(`Same spending every year yours about \\$3,000 a month The same each year, raised with prices, whatever markets do\\. Lasts to 95, even in a bad stretch like ${d.worstStartYear}\\.`).test(w.first), w.first);
+  assert.ok(new RegExp(`Spend what the years left can afford about \\$6,032 a month What savings can pay over the years left, on top of your income\\. In a bad stretch like the ${Math.floor(d.worstStartYear / 10) * 10}s it falls to about \\${fmtMoney(vpw.worst.lowest / 12)} a month\\.`).test(w.first), w.first);
+  assert.ok(new RegExp(`Same spending every year yours about \\$3,000 a month The same each year, raised with prices, whatever markets do\\. Lasts to 95, even in a bad stretch like the ${Math.floor(d.worstStartYear / 10) * 10}s\\.`).test(w.first), w.first);
   // "Use this one" saves the way and nothing else, and the confirmation says what the plan now spends (UX review 5)
   use[2].click();
   assert.equal(w.saved().retirement.strategy, "vpw");
   const after = await page(w.saved());
   assert.ok(/Your plan now spends what the years left can afford: about \$6,032 a month this year \(it was \$3,000\), rising and falling with markets\. Savings are spent down to \$0 by 2047 on purpose\./.test(after.first), after.first.slice(0, 900));
   // with a way that moves, the answer says what it spends and how low it goes, never "the same every year" (UX review 5)
-  assert.ok(new RegExp(`This way spends about \\$6,032 a month this year; in a bad stretch like ${d.worstStartYear} it falls to about \\${fmtMoney(vpw.worst.lowest / 12)}\\.`).test(after.first) && !/the same every year/.test(after.first.split("How much you could spend")[0]), after.first.slice(0, 900));
+  assert.ok(new RegExp(`This way spends about \\$6,032 a month this year; in a bad stretch like the ${Math.floor(d.worstStartYear / 10) * 10}s it falls to about \\${fmtMoney(vpw.worst.lowest / 12)}\\.`).test(after.first) && !/the same every year/.test(after.first.split("How much you could spend")[0]), after.first.slice(0, 900));
   assert.ok(/Yours moves with markets; "Same spending every year" keeps it steady\./.test(after.first), after.first);
 });
 
@@ -236,10 +236,10 @@ test("5b page: the couple retiring at 62 with nothing coming in until 67, and th
   const kd = compute(migrate(earlyRetiree()), { today: TODAY8 });
   const kf = kd.rows.find((r) => r.key === "fixed-real");
   assert.ok(kf.worst.failAge && kf.worst.failAge < 95);
-  assert.ok(new RegExp(`Same spending every year yours about \\$3,300 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like ${kd.worstStartYear} it runs out at ${kf.worst.failAge}\\.`).test(k.first), k.first);
+  assert.ok(new RegExp(`Same spending every year yours about \\$3,300 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like the ${Math.floor(kd.worstStartYear / 10) * 10}s it runs out at ${kf.worst.failAge}\\.`).test(k.first), k.first);
   // the couple: the same, in their stretch
   const cd = compute(migrate(bridgeCouple()), { today: TODAY8 });
-  assert.ok(new RegExp(`Same spending every year yours about \\$5,000 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like ${cd.worstStartYear} it runs out at ${cd.rows[0].worst.failAge}\\.`).test(c.first), c.first);
+  assert.ok(new RegExp(`Same spending every year yours about \\$5,000 a month The same each year, raised with prices, whatever markets do\\. In a bad stretch like the ${Math.floor(cd.worstStartYear / 10) * 10}s it runs out at ${cd.rows[0].worst.failAge}\\.`).test(c.first), c.first);
   for (const t of [c.first, k.first]) for (const word of [/bracket/i, /factor/i, /Not offered/]) assert.ok(!word.test(t), String(word));
   // Kim trims after bad years: it starts at the same $3,300, so the confirmation does not say "(it was $3,300)" (seen on the phone, 2026-11-06)
   const use = k.buttons.filter((b) => b.textContent === "Use this one");
@@ -305,15 +305,21 @@ test("5b review D2: each way's figure is the run the plan gets once that way is 
 test("5b UX review 7 and 8: one chance in the same words on every page, and one name for each way", async () => {
   const { chanceWords } = await import("../careful.js");
   // rounded down, never "9 of 10" under 90%; "about half" from 45% to under 60%
-  assert.equal(chanceWords(0.47), "about half of markets (47%)");
-  assert.equal(chanceWords(0.65), "about 6 of 10 markets (65%)");
-  assert.equal(chanceWords(0.899), "about 8 of 10 markets (89%)");
-  assert.equal(chanceWords(0.93), "9 of 10 markets (93%)");
-  // verify: every market tried is said so, not "9 of 10 markets (100%)" (the widow's Will the money last?)
-  assert.equal(chanceWords(1), "every market tried (100%)");
-  assert.equal(chanceWords(0.999), "9 of 10 markets (99%)");
-  assert.equal(chanceWords(0.04), "fewer than 1 in 10 markets (4%)");
-  assert.equal(chanceWords(0.47, { exact: false }), "about half of markets");
+  // follow-up, 2026-11-07 (owner: no hard words): one helper (odds.js) says it everywhere, and no page calls a pretend future a "market"
+  assert.equal(chanceWords(0.47), "about half the time (47 of 100 pretend futures last)");
+  assert.equal(chanceWords(0.65), "in about 6 of 10 pretend futures (65 of 100)");
+  assert.equal(chanceWords(0.899), "in about 8 of 10 pretend futures (89 of 100)");
+  assert.equal(chanceWords(0.93), "even in a bad run of years (93 of 100 pretend futures last)");
+  // verify: every try is said so, not a bad-run line with "(100 of 100 ...)" (the widow's Will the money last?)
+  assert.equal(chanceWords(1), "in every pretend future we ran");
+  assert.equal(chanceWords(0.999), "even in a bad run of years (99 of 100 pretend futures last)");
+  assert.equal(chanceWords(0.04), "in fewer than 1 of 10 pretend futures (4 of 100)");
+  assert.equal(chanceWords(0.47, { exact: false }), "about half the time");
+  assert.equal(chanceWords(0.95, { exact: false }), "even in a bad run of years");
+  // the word "market" never stands for a try, and the same helper is what every page imports
+  for (const s of [0, 0.04, 0.3, 0.47, 0.65, 0.899, 0.93, 0.999, 1]) assert.ok(!/market/i.test(chanceWords(s)), String(s));
+  const odds = await import("../odds.js");
+  assert.equal(odds.chanceWords, chanceWords);
   // the Projection page's list uses How much to take out's names (it said "Your spending, cut 10% after a bad stretch, ...")
   assert.deepEqual(wayOptions(migrate(widowPlan()), { today: TODAY8 }).map((o) => o.label), ["Same spending every year", "A share of what is left", "Trim after bad years", "Spend what the years left can afford"]);
 });

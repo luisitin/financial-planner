@@ -187,5 +187,5 @@ test("first screens a household sees never say the PC is not connected (setup, M
   assert.doesNotMatch(setup, /your own computer and phone/);
   const mc = read("modules/retirement/monte-carlo/view.js");
   assert.doesNotMatch(mc, /^(?!.*ctx\.view\.build).*"[^"\n]*the PC is not connected/m, "the PC clause only in the build view");
-  assert.match(mc, /ctx\.view\.build \? "10,000 runs \(PC\)" : "10,000 runs"/);
+  assert.match(mc, /ctx\.view\.build \? "10,000 pretend futures \(PC\)" : "10,000 pretend futures"/);
 });

@@ -58,3 +58,18 @@ whatever withdrawal rule the plan picked) and `average` (affordableSpending: eve
   income above spending from savings (`need = max(0, spending - income)`, with the tax on top). Paying that tax from the
   income instead changes seven frozen answer keys (roth-conversions-irmaa-010 to -100, `table.0.bracketTop`), so it waits
   for the owner.
+
+## Follow-up 2026-11-07: one plain way of saying the odds
+The owner's standing words: "It should feel easy for a layman ... not ... concepts / words too hard to understand." Every page that says how often
+the money lasts now uses `modules/retirement/odds.js` (`chanceWords`, re-exported by `careful.js`; `BAD_RUN` = "even in a bad run of years",
+`BAD_RUN_NOTE` = "(only 1 in 10 is worse)"). A "pretend future" is one made-up run of good and bad years; the share of pretend futures in which the money lasts is the
+chance. The words, after "the money lasts": 100% "in every pretend future we ran"; 90% or more "even in a bad run of years"; 45% to under 60% "about half
+the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N of 10 pretend futures" (N rounded down, never 9 under 90%); with the number
+"(93 of 100)" after "of 10 pretend futures", else "(93 of 100 pretend futures last)", where it helps. No page says "markets" for a try ("9 of 10 markets", "every market tried", "simulated markets",
+"100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
+"short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
+This page's "runs" are "tries" (the stat "Chance the money lasts" over "2,000 pretend futures"; "the middle pretend future"; "Trying your plan 2,000 times..."; the picker "1,000 pretend futures (quick)"). Reports > Retirement says "In 93% of 2,000 pretend futures the money lasts"; Advisor plan and Compare say "400 tries of good and bad years", not "400 simulated markets".
+
+Money/UX review follow-up (2026-11-07): the heading is "Chance the money lasts" (the menu name; it said "How often does the money last?"); "Runs on this device." is gone
+(only the build view says where it runs); the lede says a pretend future is one made-up run of good and bad years mixed at random; at 100% the verdict says "every pretend
+future", not "almost every".

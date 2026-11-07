@@ -52,10 +52,10 @@ test("the note never says money added from the Medicare month on is not allowed:
 
 test("Health page, Medicare part of the year: it does not say the HSA plan saves no tax while some still goes in", () => {
   const h = health(one({ birth: "1961-07-15", ss: "2026-07-01" }), { today: T });
-  near(h.hsaLimit, 2200);
+  near(h.hsaLimit, 2700);   // 5,400 x 6/12, catch-up included, as on the HSA page (money review M7)
   const w = h.warnings.find((x) => /Medicare/.test(x)) ?? "";
   assert.ok(!/saves no tax/.test(w), w);
-  assert.ok(/From July/.test(w) && /only \$2,200 can go in/.test(w), w);
+  assert.ok(/From July/.test(w) && /only \$2,700 can go in/.test(w), w);
   // on Medicare all year it still says it saves no tax
   const all = health(one({ birth: "1952-03-15", ss: "" }), { today: T });
   assert.ok(all.warnings.some((x) => /saves no tax/.test(x)), all.warnings.join("|"));

@@ -171,6 +171,18 @@ test("round 8 item 5 (landlord-1): the condo counted after its costs: 14,108 of 
   near8(d.balanceAtFiling, 14108 - d.withholding); assert.ok(d.balanceAtFiling > 4250 && d.balanceAtFiling < 4350, "about 4,300 in April, not the 9,844 the gross rent made it");
 });
 
+test("money review (2026-11-07): the hold-back is capped at the part of the withdrawal still to come, not the whole year's", async () => {
+  const { widowPlan } = await import("../../../qa/fixtures/widow-plan.mjs");
+  // the widow spends more than her income, so savings pay on top of the required withdrawal; the required $16,078 is marked taken:
+  // of the year's $19,764 withdrawal only $3,686 is still to come, so at most $3,687 can be held back (it was $4,400, the amount
+  // the tax short of the safe amount rounds to, against a withdrawal that could not carry it)
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const p = migrate(widowPlan()); p.expenses.forEach((e) => { e.amount = e.amount * 2.2; });
+  p.retirement.rmdTaken = { 2026: { "p-ruth": "2026-10-01" } };
+  const d = compute(p, { today: R8 });
+  near8(d.holdBack.withdrawal, 19764, 1); assert.equal(d.holdBack.amount, 3687); assert.equal(d.holdBack.whole, 3687);
+});
+
 test("round 8 item 6 (widow-2): the required withdrawal's tax needs paying in: have about 3,600 held back from the IRA withdrawal", async () => {
   const { widowPlan } = await H8();
   const d = compute(widowPlan(), { today: R8 });

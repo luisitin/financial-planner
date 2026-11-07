@@ -39,3 +39,12 @@
 - **Medicare**: for the adult the plan covers (self-only: the HSA page's "Who the plan covers" choice, else the adult marked "Me"; Medicare months are worked for the return's year) or while any adult is not yet on it (family), someone 65 or older receiving Social Security is on Medicare Part A, so the HSA limit used for the tax saved is 0 from the month it starts (IRC 223(b)(7); Pub. 969, read 2026-11-06), 1/12 for each month before in the year they turn 65. A warning says so in plain words: on Medicare all year, an HSA plan saves no tax on what is paid out of pocket; part of the year, only the prorated limit can go in ("From July you are on Medicare, so this year only $2,200 can go in"), never "saves no tax" while some still does. See the HSA page README for the rule and sources.
 - **No wages**: with no pay for anyone and other income on the Income page, the payroll part of the rate is 0 (only cafeteria-plan pay avoids payroll tax; Pub. 15-B); wages typed on the Federal estimate count as pay.
 - **Q1**: the Health page already works the Federal estimate's steps (known()) with the HSA limit as an adjustment, IRA deduction limits included; the HSA page now does the same (it no longer forces the assumed IRA): decided, the HSA page and this one both show the whole saving, IRA deduction freed included (the owner may change it). The 0.9% extra Medicare tax is still left out of this page's rate.
+
+## Follow-up 2026-11-07 (HSA verify R3)
+The line under the plans' totals names the limit and the rate only when money can go in: "HSA tax savings count your care paid through the account, up to the $4,400
+self-only limit, at 12% (income tax)" ("plus payroll tax" only when the payroll part is over 0: the result's `payrollRate`); on Medicare all year (limit 0) it says
+"No HSA tax savings are counted: once you're on Medicare you can't add to an HSA. Money already in the account can still pay for care, tax-free."
+
+Money review M7 (2026-11-07): `hsaLimit` is the HSA page's own limit (`taxView(...).hsa.picture`): the covered adult's limit on self-only cover, the household's on family cover,
+catch-up from 55 and the months before Medicare included. It read $4,400 where the HSA page said $5,400 (66, working), "only $2,200 can go in" for $2,700 (turning 65 in July) and
+$8,750 for $9,750 (couple). Test: `tests/hsa-medicare-d.test.mjs`.

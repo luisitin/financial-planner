@@ -93,3 +93,6 @@ were made*, instead of "$0 is paid so far" for someone who may have paid every q
   what to hold back to owe nothing in April, beside `amount`, which only keeps the penalty away (90% of the year's tax).
   The widow: 3,600 against 4,000.
 - **The button:** it says "Your IRA withdrawals" (How much to take out) when no withdrawal is required yet.
+
+Money review note (2026-11-07): the hold-back is capped at the part of this year's withdrawal still to come (the whole year's withdrawal less the required amounts marked taken),
+not the whole year's: the widow who had taken her required $16,078 and spends more was shown a hold-back her remaining $3,686 could not carry. Test in `module.test.mjs`.

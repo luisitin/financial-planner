@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, FICA, HIGH_RATE, monthLines } from "./compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
-import { emptyPlan } from "../../../core/schema/migrate.js";
+import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
+import { widowPlan } from "../../../qa/fixtures/widow-plan.mjs";
 
 const TODAY = "2026-10-30";
 const step = (d, id) => d.steps.find((s) => s.id === id);
@@ -73,6 +74,42 @@ test("an HSA account but no high-deductible plan this year: no HSA step (IRC 223
   assert.ok(step(compute(p, { today: TODAY }), "hsa"), "with self-only cover the step is there");
   p.taxes.hsa = { ...p.taxes.hsa, coverage: "none" };
   assert.equal(step(compute(p, { today: TODAY }), "hsa"), undefined);
+});
+
+test("HSA R1 (follow-up 2026-11-07): someone on Medicare is never told to fill the health savings account; a part-year limit and the catch-up are the HSA page's", () => {
+  const p = familyPlan();
+  if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: p.household.people[0].id });
+  // the family's first adult is under 55: the plain limit, no Medicare
+  const open = step(compute(p, { today: TODAY }), "hsa");
+  assert.ok(open && open.roomYearly > 0 && /limit \$[\d,]+, self-only cover/.test(open.detail), JSON.stringify(open));
+  // a widow of 74 who gets Social Security: on Medicare, so her limit is 0: never "fill"; the 4,400 typed has to come out (verify
+  // 2026-11-07: the step was left out, so the Dashboard said nothing of a 6% charge the HSA page warns of), and with nothing typed no step
+  const w = migrate(widowPlan());
+  w.accounts.push({ id: "hsa-w", name: "Ruth's HSA", type: "hsa", balance: 3000, ownerId: w.household.people[0].id });
+  w.taxes = { ...(w.taxes ?? {}), hsa: { coverage: "self", contribution: 4400 } };
+  const out = step(compute(w, { today: "2026-11-06" }), "hsa");
+  assert.ok(out && out.status !== "done" && out.roomYearly === 0 && !/^Fill/.test(out.title), JSON.stringify(out));
+  assert.equal(out.title, "Take this year's money out of the health savings account");
+  assert.equal(out.detail, "Nothing can go in this year, so take the $4,400 out before the tax filing deadline.");
+  delete w.taxes.hsa.contribution;
+  assert.equal(step(compute(w, { today: "2026-11-06" }), "hsa"), undefined, "nor with nothing going in");
+});
+
+test("money review M6: more in the HSA than the limit is never 'at the limit': it says how much to take out", () => {
+  // Ruth turns 65 in July and gets Social Security from July: the limit is the 6 months before Medicare with the catch-up, 5,400 x 6/12 = 2,700;
+  // 4,400 typed is 1,700 too much (the HSA page and Contributions say so)
+  const p = migrate(widowPlan());
+  p.household.people[0].birthDate = "1961-07-15";
+  p.income.find((x) => x.type === "social").startDate = "2026-07-01";
+  p.accounts.push({ id: "hsa-w", name: "Ruth's HSA", type: "hsa", balance: 3000, ownerId: "p-ruth" });
+  p.taxes = { ...(p.taxes ?? {}), hsa: { coverage: "self", contribution: 4400, employer: 0, fsa: 0, fsaSpent: 0 } };
+  const over = step(compute(p, { today: "2026-11-06" }), "hsa");
+  assert.ok(over && over.status !== "done" && over.roomYearly === 0, JSON.stringify(over));   // "now", or "later" behind other steps: never "done"
+  assert.equal(over.detail, "$1,700 over this year's limit ($2,700): take it out before the tax filing deadline.");
+  assert.ok(!/At this year's limit/.test(JSON.stringify(over)));
+  // within the limit: unchanged
+  p.taxes.hsa.contribution = 2700;
+  assert.equal(step(compute(p, { today: "2026-11-06" }), "hsa").detail, "At this year's limit.");
 });
 
 test("the match step: a 401(k) from a job left moves the question to the job now; no match leaves nothing to check; the step names who to ask", () => {

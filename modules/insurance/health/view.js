@@ -64,7 +64,7 @@ export function render(page, ctx) {
     const cross = d.crossovers.map((c) => c.ranges.length ? `${c.name} would be cheaper with bills ${c.ranges.map((r) => r.to === null ? `over ${money(r.from)}` : r.from === 0 ? `under ${money(r.to + 250)}` : `between ${money(r.from)} and ${money(r.to)}`).join(" or ")} a year.` : `${c.name} costs more at any level of bills.`);
     root.append(ui.card("All in, a year", ui.h("p", { class: "muted small" }, `A quiet year is ${money(QUIET)} of bills, a bad year ${money(BAD)} (a hospital stay). Tap a plan to change it.`), list,
       cross.length ? ui.h("p", { class: "hp-d", style: { marginTop: "10px" } }, cross.join(" ")) : null,
-      d.plans.some((x) => x.hsa) ? ui.h("p", { class: "hp-d" }, `HSA tax savings count your care paid through the account, up to the ${money(d.hsaLimit)} ${d.tier === "family" ? "family" : "self-only"} limit, at ${Math.round(d.taxRate * 1000) / 10}% (income tax plus payroll tax). Money left in the account keeps growing tax-free.`) : null));
+      d.plans.some((x) => x.hsa) ? ui.h("p", { class: "hp-d" }, d.hsaLimit <= 0 ? "No HSA tax savings are counted: once you're on Medicare you can't add to an HSA. Money already in the account can still pay for care, tax-free." : `HSA tax savings count your care paid through the account, up to the ${money(d.hsaLimit)} ${d.tier === "family" ? "family" : "self-only"} limit, at ${Math.round(d.taxRate * 1000) / 10}% (income tax${d.payrollRate > 0 ? " plus payroll tax" : ""}). Money left in the account keeps growing tax-free.`) : null));
   }
 
   // add or edit a plan

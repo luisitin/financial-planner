@@ -490,12 +490,20 @@ export function compute(plan, params = {}) {
 
   // 5. the HSA, for those who have one and a high-deductible plan this year (none: nobody may put money in, IRC 223(c)(1))
   const hsaUsed = (con.byPerson ?? []).flatMap((p) => p.limits).filter((l) => l.kind === "hsa").reduce((s, l) => s + l.used, 0);
-  if (accounts.some((a) => a.type === "hsa") && con.hsa?.coverage !== "none") {
-    const family = plan.taxes?.hsa?.coverage === "family";
-    const hsaLimit = family ? L.hsa.family : L.hsa.limit;
+  // read from the Medicare-aware picture (the HSA page's own, follow-up 2026-11-07, HSA R1): once someone is on Medicare nobody is told to
+  // fill the account (their limit is 0), and a part-year limit is the months before Medicare, with the catch-up from 55
+  const pic = con.hsa;
+  // money already typed in while nothing may go in (on Medicare all year, say) is still a step: it has to come out (verify 2026-11-07: the
+  // widow with 4,400 typed was told by the HSA page and Contributions, and by nothing on the Dashboard)
+  if (accounts.some((a) => a.type === "hsa") && pic && pic.coverage !== "none" && (pic.household.limit > 0 || hsaUsed >= 1)) {
+    const family = pic.coverage === "family";
+    const hsaLimit = pic.household.limit;
     const room = Math.max(0, hsaLimit - hsaUsed);
-    add({ id: "hsa", title: "Fill the health savings account", why: "Tax-free going in, growing and coming out for health costs: the only triple tax break.", status: room > 0 ? "now" : "done", roomYearly: room,
-      detail: room > 0 ? `${money(room)} of room left this year (limit ${money(hsaLimit)}, ${family ? "family" : "self-only"} cover).` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
+    // more in than the limit allows (the part year before Medicare, or a self-only plan with the family amount typed): never "at the limit"
+    // (money review M6); the extra has to come out by the filing deadline or a 6% charge applies every year
+    const tooMuch = Math.max(0, hsaUsed - hsaLimit);
+    add({ id: "hsa", title: tooMuch >= 1 ? (hsaLimit > 0 ? "Take the extra out of the health savings account" : "Take this year's money out of the health savings account") : "Fill the health savings account", why: tooMuch >= 1 ? "Money over the limit is charged 6% every year it stays in." : "Tax-free going in, growing and coming out for health costs: the only triple tax break.", status: room > 0 || tooMuch >= 1 ? "now" : "done", roomYearly: room,
+      detail: tooMuch >= 1 ? (hsaLimit > 0 ? `${money(tooMuch)} over this year's limit (${money(hsaLimit)}): take it out before the tax filing deadline.` : `Nothing can go in this year, so take the ${money(tooMuch)} out before the tax filing deadline.`) : room > 0 ? `${money(room)} of room left this year (limit ${money(hsaLimit)}, ${family ? "family" : "self-only"} cover).` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
   }
 
   // 6. an IRA for each adult with earned income

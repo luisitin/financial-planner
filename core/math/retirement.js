@@ -65,8 +65,9 @@ export const STRATEGIES = {
  *       W + max(0, income - tax - health cover) (review D1).
  *     guardrails: a spending target G, the plan's figure in the first retired year. Each later year, the withdrawal G would need
  *       this year (max(0, G + health cover + tax - income), worked out with this year's income and tax) is tested against savings:
- *       above 1.2 x rate, G x 0.9; below 0.8 x rate while that withdrawal is above $0, G x 1.1 but never above the plan's figure
- *       grown with inflation; otherwise G follows prices, except that after a losing year it does not rise with them while it
+ *       above 1.2 x rate, G x 0.9; below 0.8 x rate, G x 1.1 but never above the plan's figure grown with inflation, also when that
+ *       withdrawal is $0 because income pays for the whole target and savings could pay the raised target without a trim (follow-up 2026-11-07, 5b R3 and money review M1: a target trimmed while savings paid was
+ *       never raised back once Social Security covered it: $38,000 to $43,500 on a $60,000 plan for 29 years); otherwise G follows prices, except that after a losing year it does not rise with them while it
  *       needs a withdrawal (it still falls with them: review D4; with nothing drawn it follows prices: verify R1); G is never above
  *       the plan's figure at the year's prices. Savings pay max(0, G + health cover + tax - income) + one-offs; spending = max(G, income - tax
  *       - health cover). (Rows: spending is that year's spending.)
@@ -166,7 +167,7 @@ export function project(inputs, options = {}) {
     const need = Math.max(0, spending + eventSpending - income) + (eventOut - eventSpending);
     const other = eventOut - eventSpending;
     const withdrawn = { cash: 0, taxable: 0, deferred: 0, free: 0 };
-    let rmd = 0, conversion = 0, taxes = 0, taxInfo = null;
+    let rmd = 0, conversion = 0, taxes = 0, taxInfo = null, gainsMoved = 0;
     const taxableStart = buckets.taxable;
     const rmdBy = people.map(() => 0);
     owners.forEach((o, k) => {
@@ -183,7 +184,7 @@ export function project(inputs, options = {}) {
     const taxFor = () => {
       if (!brackets) return flatRate * withdrawn.deferred;
       const r = federalTax({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + conversion, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params);
-      taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
+      taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
       return Math.max(0, r.totalTax);
     };
     // proceeds so far (the RMD) count against what has to come out; iterate because the tax on a withdrawal is itself something to cover
@@ -224,8 +225,17 @@ export function project(inputs, options = {}) {
         const trial = Math.max(0, wantTotal() - other);
         Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
         const rateNow = total > 0 ? trial / total : trial > 0 ? 1 : 0;
+        // with nothing drawn the raise waits until savings could pay what the raised target needs without a trim (money review M1: with
+        // savings empty or tiny the raise would be paid by money that is not there, then trimmed, then raised again)
+        const raisedFits = () => {
+          if (trial > 0) return true;
+          floor = Math.min(guardSpend * 1.1, baseSpend * priceLevel) * factor; settle();
+          const need = Math.max(0, wantTotal() - other);
+          Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
+          return need <= 0 || (total > 0 && need / total <= wr * 1.2);
+        };
         if (rateNow > wr * 1.2) guardSpend *= 0.9;
-        else if (rateNow < wr * 0.8 && trial > 0) guardSpend = Math.min(guardSpend * 1.1, baseSpend * priceLevel);   // back up, never past the plan's own figure
+        else if (rateNow < wr * 0.8 && raisedFits()) guardSpend = Math.min(guardSpend * 1.1, baseSpend * priceLevel);   // back up, never past the plan's own figure; also when income pays for the whole target and savings could pay the raised one (nothing drawn: 5b R3, M1)
         // after a losing year: no rise with prices, but a fall still applies (review D4); only while savings pay toward the target:
         // while income pays for everything nothing is drawn, so the target follows prices (verify R1: frozen a year at a time
         // with nothing drawn, it sank below the plan unseen and, never drawn on, was never raised back)
@@ -243,10 +253,11 @@ export function project(inputs, options = {}) {
       const top = bracketTop(I.rothConversion.fillRate ?? 0.22, tax.filingStatus, params);
       if (Number.isFinite(top)) {
         const base = { b: { ...buckets }, w: { ...withdrawn }, netOut, taxes, shortfall };
+        const pre = taxInfo ? { t: taxInfo.taxableIncome, q: Math.max(0, taxInfo.taxableIncome - taxInfo.ordinaryTaxable) } : null;   // before converting: taxable income and the dividends and gains stacked in it
         const restore = () => { Object.assign(buckets, base.b); Object.assign(withdrawn, base.w); netOut = base.netOut; taxes = base.taxes; shortfall = base.shortfall; conversion = 0; };
         // how far over the top the year ends after converting c and settling its tax (Infinity: the year would come up short)
         let last = null, lastF = 0;
-        const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.taxableIncome ?? 0) - top; return lastF; };
+        const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.ordinaryTaxable ?? 0) - top; return lastF; };
         const most = base.b.deferred;
         const guess = Math.min(most, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
         // taxable income rises at least a dollar for each dollar converted, so one probe brackets the answer and a secant step finishes it
@@ -254,16 +265,22 @@ export function project(inputs, options = {}) {
         const TOL = 1e-3;   // a tenth of a cent of taxable income: the tax gross-up itself settles to $0.0005
         if (guess > 0) {
           const fg = over(guess);
-          if (fg <= 0 && fg > -TOL) c = guess;
+          // on the top to a tenth of a cent, EITHER side: ordinary taxable income is taxable income less the qualified part (5b R4), and
+          // that subtraction can leave the guess a hair (1e-11) over the top; read as "over" it fell to the branch below, whose step back by
+          // the same hair was still over, and the year converted $0 (verify 2026-11-07: the equity couple skipped 2032 and 2034 at 12%)
+          if (fg < TOL && fg > -TOL) c = guess;
           else if (fg <= 0) { const hi = Math.min(most, guess - fg), fh = hi > guess ? over(hi) : fg; c = fh <= 0 ? hi : largestAtOrUnder(over, guess, fg, hi, fh, TOL, TOL); }
           else if (!Number.isFinite(fg)) c = largestAtOrUnder(over, 0, -1, guess, fg, TOL, TOL);
-          else { const lo = Math.max(0, guess - fg), fl = over(lo); c = fl > 0 ? 0 : fl > -TOL ? lo : largestAtOrUnder(over, lo, fl, guess, fg, TOL, TOL); }
+          else { const lo = Math.max(0, guess - fg), fl = over(lo); c = fl >= TOL ? 0 : fl > -TOL ? lo : largestAtOrUnder(over, lo, fl, guess, fg, TOL, TOL); }
         }
         if (c > 0) {
           if (last !== c) over(c);
           for (let k = 0; k < 4 && c > 0 && lastF > 0; k++) { c = Math.max(0, c - lastF - TOL); over(c); }   // a hair over the top: step back under it, so the year never ends in the next bracket
         }
         if (c <= 0) { restore(); taxes = taxFor(); }
+        // gains and dividends the conversion pushed past a gains-rate top (0% to 15%, 15% to 20%): each of those dollars costs the gains rate
+        // difference on top of the bracket's rate, so "taxed at 10%" is a little low for the year (money review M4); told, not capped
+        else if (pre && pre.q > 0 && taxInfo) for (const t of params.status[tax.filingStatus]?.ltcgBrackets ?? []) if (pre.t < t && taxInfo.taxableIncome > t) gainsMoved += Math.min(pre.q, taxInfo.taxableIncome - t);
       }
     }
     if (shortfall > 0.005 && success) { success = false; failYear = year; failAge = ages[0]; }
@@ -284,7 +301,7 @@ export function project(inputs, options = {}) {
     lastReal = (1 + portfolioReturn) / (1 + infl) - 1;
     rows.push({
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
-      contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, taxes, taxInfo, shortfall,
+      contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, gainsMoved, taxes, taxInfo, shortfall,
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }

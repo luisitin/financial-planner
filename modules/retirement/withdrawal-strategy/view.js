@@ -4,7 +4,7 @@
 // layman can easily understand and use the page").
 import { compute, firstYear, DESCRIPTIONS } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, monthlyOf, accountName as acct, chanceWords } from "../careful.js";
+import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
 import { saveSpendingFigure } from "../projection/compute.js";
 
@@ -16,6 +16,8 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 /** "One. Two." -> ["One.", "Two."] */
 const sentences = (t) => String(t).split(/(?<=\.) (?=[A-Z])/);
 
+// "a bad stretch like the 1970s", not a single year (money review UX 9: 1973 read as a date to look up)
+const decade = (yr) => `the ${Math.floor(Number(yr) / 10) * 10}s`;
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
@@ -82,27 +84,27 @@ export function render(root, ctx) {
     return out;
   })();
 
-  // the spending that lasts in 9 of 10 markets (Monte Carlo's careful figure), filled in after the first paint; the average-market
+  // the spending that lasts even in a bad run of years (Monte Carlo's careful figure), filled in after the first paint; the average-market
   // figure until then, and when it cannot be worked out (not with a held way: it is worked on the plan's own way)
   const averageWords = fy ? `You could spend up to about ${money(Math.round(fy.affordable / 100) * 100)} a year${onTop} if markets do as well as average.` : "";
-  const carefulWords = (mo) => [`You could spend up to about `, mo, ` a month${onTop} and the money lasts in 9 of 10 markets.`];
+  const carefulWords = (mo) => [`You could spend up to about `, mo, ` a month${onTop} and the money lasts ${BAD_RUN} ${BAD_RUN_NOTE}.${d.spendingYearly > 0 ? ` You plan ${money(d.spendingYearly / 12)} a month.` : ""}`];   // the plan's own figure beside it, so "yours" below is not a surprise (money review UX 9)
   // under what the plan spends: say so, with how often the plan's own figure lasts, in the words Will the money last? uses (UX 7)
   // two short lines, not one of four on a phone: the figure that lasts, then how often the plan's own figure does
-  const underWords = (mo) => [`To last in 9 of 10 markets, spend up to about `, mo, ` a month${onTop}.`];
-  const underChance = (share) => `At your ${money(d.spendingYearly / 12)}, the money lasts in ${chanceWords(share)}.`;
+  const underWords = (mo) => [`To last ${BAD_RUN}, spend up to about `, mo, ` a month${onTop}.`];
+  const underChance = (share) => `At your ${money(d.spendingYearly / 12)}, the money lasts ${chanceWords(share)}.`;
   const careLine2 = ui.h("p");
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   const chosenRow = d.rows.find((r) => r.key === d.chosen);
   const endAt = (x) => (x && !(x.success || x.failAge >= endAge) ? x.failAge : null);
   // the plan's own way, when it moves with markets: what it spends this year and how low it goes in a bad stretch (UX 5: the page
-  // said "the same every year" and "9 of 10 markets" about a way that is neither)
+  // said "the same every year" and "lasts in 9 of 10" about a way that is neither)
   const movingWords = (r) => {
     const f = r.first, w = r.worst, e = r.expected;
     if (!f) return null;
     const now = `This way spends about ${money(f.spend / 12)} a month ${yearOf(r)}`;
     if (endAt(e)) return `${now}, and runs out at ${endAt(e)} even if markets do as well as average.`;
-    if (w && endAt(w)) return `${now}; in a bad stretch like ${d.worstStartYear} it runs out at ${endAt(w)}.`;
-    if (w && w.lowest < e.lowest) return `${now}; in a bad stretch like ${d.worstStartYear} it falls to about ${money(w.lowest / 12)}.`;
+    if (w && endAt(w)) return `${now}; in a bad stretch like ${decade(d.worstStartYear)} it runs out at ${endAt(w)}.`;
+    if (w && w.lowest < e.lowest) return `${now}; in a bad stretch like ${decade(d.worstStartYear)} it falls to about ${money(w.lowest / 12)}.`;
     return `${now}; at the lowest, about ${money(e.lowest / 12)} if markets do as well as average.`;
   };
   // the advice has its button (UX 6): "Plan on $4,600 a month" writes Retirement settings' spending figure
@@ -124,9 +126,9 @@ export function render(root, ctx) {
         if (!under) careLine.style.minHeight = `${careLine.offsetHeight}px`;
         careLine.replaceChildren(...(under ? underWords(mo) : carefulWords(mo)));
         if (under) careLine2.replaceChildren(underChance(c.planned));
-        if (Number.isFinite(c.planned)) which.replaceChildren(c.planned >= 0.9 ? "Yours already lasts in 9 of 10 markets. The others move what you spend up and down with markets." : `To make yours safer, spend a little less${under && monthly >= 100 ? " (the button above)" : ""}, or let spending trim after bad years.`);
+        if (Number.isFinite(c.planned)) which.replaceChildren(c.planned >= 0.9 ? `Yours already lasts ${BAD_RUN}. The others move what you spend up and down with the stock market.` : `To make yours safer, spend a little less${under && monthly >= 100 ? " (the button above)" : ""}, or let spending trim after bad years.`);
         if (under && monthly >= 100) planOn.replaceChildren(ui.row(ui.button(`Plan on ${mo} a month`, () => {
-          pending = `Your plan now spends ${mo} a month${onTop} (it was ${money(d.spendingYearly / 12)}). It lasts in 9 of 10 markets.`;
+          pending = `Your plan now spends ${mo} a month${onTop} (it was ${money(d.spendingYearly / 12)}). It lasts ${BAD_RUN}.`;
           store.update((p) => saveSpendingFigure(p, monthly, d.figureMonthly));
         }, { class: "secondary" })));
       });
@@ -168,9 +170,9 @@ export function render(root, ctx) {
     const w = r.worst, e = r.expected, y = d.worstStartYear;
     let risk;
     if (endAt(e)) risk = `Runs out at ${endAt(e)} even if markets do as well as average.`;
-    else if (w && endAt(w)) risk = `In a bad stretch like ${y} it runs out at ${endAt(w)}.`;
-    else if (r.key !== "fixed-real" && f && Math.min(e.lowest, w?.lowest ?? Infinity) < f.spend * 0.9) risk = w && w.lowest <= e.lowest ? `In a bad stretch like ${y} it falls to about ${money(w.lowest / 12)} a month.` : `It can fall to about ${money(e.lowest / 12)} a month.`;
-    else risk = w ? `Lasts to ${endAge}, even in a bad stretch like ${y}.` : `${cap(lasts(e))}.`;
+    else if (w && endAt(w)) risk = `In a bad stretch like ${decade(y)} it runs out at ${endAt(w)}.`;
+    else if (r.key !== "fixed-real" && f && Math.min(e.lowest, w?.lowest ?? Infinity) < f.spend * 0.9) risk = w && w.lowest <= e.lowest ? `In a bad stretch like ${decade(y)} it falls to about ${money(w.lowest / 12)} a month.` : `It can fall to about ${money(e.lowest / 12)} a month.`;
+    else risk = w ? `Lasts to ${endAge}, even in a bad stretch like ${decade(y)}.` : `${cap(lasts(e))}.`;
     return `${cap(short)}. ${risk}`;
   };
   // the confirmation says what the plan now spends, and how it moves (UX 5: "Your plan now uses ..." hid that spending doubled)

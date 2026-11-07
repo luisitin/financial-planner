@@ -293,3 +293,14 @@ income of any kind. The landlord household (`qa/fixtures/round8-rental.mjs`): 25
 loan on Debts the page said "$21,452 a year of rent" (11,240 + the $10,212 loan payment that comes back only from 2051).
 Formula source: property/rental README ("Income after running costs"). Test: "round 8 batch 6 verify: a rental's loan
 payment ... is not rent".
+
+## Follow-up 2026-11-07: one plain way of saying the odds
+The owner's standing words: "It should feel easy for a layman ... not ... concepts / words too hard to understand." Every page that says how often
+the money lasts now uses `modules/retirement/odds.js` (`chanceWords`, re-exported by `careful.js`; `BAD_RUN` = "even in a bad run of years",
+`BAD_RUN_NOTE` = "(only 1 in 10 is worse)"). A "pretend future" is one made-up run of good and bad years; the share of pretend futures in which the money lasts is the
+chance. The words, after "the money lasts": 100% "in every pretend future we ran"; 90% or more "even in a bad run of years"; 45% to under 60% "about half
+the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N of 10 pretend futures" (N rounded down, never 9 under 90%); with the number
+"(93 of 100)" after "of 10 pretend futures", else "(93 of 100 pretend futures last)", where it helps. No page says "markets" for a try ("9 of 10 markets", "every market tried", "simulated markets",
+"100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
+"short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
+Financial independence says "the money lasts even in a bad run of years" and, when no age reaches it, "the money lasts in about 3 of 10 pretend futures (38 of 100), which does not cover a bad run of years."

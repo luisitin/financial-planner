@@ -5,6 +5,8 @@
 import { perYear, periodLabel } from "../../../core/math/periods.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { LIMITS } from "./data/limits.js";
+// (a cycle with hsa-medicare.js, which reads hsaPicture from here: both only call each other at run time)
+import { hsaPictureMedicare } from "../../taxes/federal/hsa-medicare.js";
 
 const LIMIT_KIND = { "401k": "401k", ira: "ira", roth: "ira", hsa: "hsa" };   // Roth and traditional IRA share one limit; Roth 401(k) counts with the 401(k)
 const TABLE_YEARS = Object.keys(LIMITS).map(Number).sort((a, b) => a - b);
@@ -155,6 +157,7 @@ export function hsaPicture(plan, year, { contributions } = {}) {
   };
 }
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const HSA_LABEL = { none: "HSA (no high-deductible plan)", self: "HSA (self-only coverage)", family: "HSA (family coverage)" };
 
 /**
@@ -170,7 +173,8 @@ export function compute(plan, params = {}) {
   const L = limitsFor(year);
   const people = plan.household?.people ?? [];
   const items = contributionItems(plan);
-  const hsa = hsaPicture(plan, year, { contributions: items });
+  // the Medicare-aware picture, the one the HSA page and the tax return read (follow-up 2026-11-07, HSA R1): someone on Medicare has a limit of 0
+  const hsa = hsaPictureMedicare(plan, year, { contributions: items });
   const warnings = [];
   const byPerson = people.filter((p) => p.role !== "dependent").map((p) => {
     const mine = items.filter((i) => i.personId === p.id);
@@ -182,7 +186,9 @@ export function compute(plan, params = {}) {
         const hp = hsa.people.find((x) => x.id === p.id);
         if (!hp || !hp.used) continue;
         limits.push({ kind, label: HSA_LABEL[hsa.coverage], limit: hp.limit, used: hp.used, over: hp.over, catchUp: hp.catchUp, year: L.kindYear.hsa });
-        if (hp.over > 0) warnings.push(!hp.eligible
+        if (hp.over > 0) warnings.push(hp.eligible && hp.medicareMonths > 0
+          ? `${p.name}: ${hp.medicareMonths >= 12 ? "on Medicare all year" : `on Medicare from ${MONTH_NAMES[(hp.firstMedicareMonth ?? 1) - 1]}`}, and once you are on Medicare you cannot add to an HSA. ${Math.round(hp.used).toLocaleString("en-US")} goes in, this year's limit is ${hp.limit.toLocaleString("en-US")}${hp.medicareMonths >= 12 ? "" : " (only the months before Medicare count)"}. Change it on the HSA page.`
+          : !hp.eligible
           ? `${p.name}: ${Math.round(hp.used).toLocaleString("en-US")} goes into an HSA, but ${hsa.coverage === "none" ? "the HSA page says there is no high-deductible health plan" : "only the person on the self-only high-deductible plan can have one"}. If the cover is different, change it on the HSA page.`
           : `${p.name}: HSA contributions of ${Math.round(hp.used).toLocaleString("en-US")} are over the ${L.kindYear.hsa} limit of ${hp.limit.toLocaleString("en-US")}${hp.catchUp ? " (with catch-up)" : ""}${hsa.shared ? ", the share of the family limit left by the other spouse's money" : ""}.`);
         continue;

@@ -371,3 +371,15 @@ Tests: module.test.mjs "round 8 verify"; insurance/life-needs "round 8 item 14".
 
 ## Path part 3, review fixes
 - On-screen "must-pay bills" is now "the bills you have to pay" in the starter and full-fund lines (also Alerts, Health score, Benchmarks, Goals): words only, no figure changes.
+
+## Follow-up 2026-11-07 (HSA verify R1)
+"Fill the health savings account" reads Contributions' Medicare-aware HSA picture: the step is left out when the household's limit is 0 (no high-deductible plan, or everyone the
+cover is for is on Medicare), the limit named is the picture's (catch-up from 55 included, a part year prorated), and the room is that limit less what goes in. The widow on Medicare is
+never told to fill an HSA. Test: "HSA R1 (follow-up 2026-11-07)".
+
+Money review M6 (2026-11-07): more in the HSA than the Medicare-aware limit is never "At this year's limit": the step becomes "Take the extra out of the health savings account"
+("$1,700 over this year's limit ($2,700): take it out before the tax filing deadline."). Test: "money review M6" in `module.test.mjs`.
+
+Verify (2026-11-07): with a limit of 0 and money still typed in (the widow on Medicare with 4,400, or a spouse outside a self-only plan), the step is no longer left out:
+"Take this year's money out of the health savings account" ("Nothing can go in this year, so take the $4,400 out before the tax filing deadline."), as the HSA page and
+Contributions already say. With nothing typed there is still no step. Test: "HSA R1 (follow-up 2026-11-07)".

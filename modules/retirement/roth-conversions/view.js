@@ -71,9 +71,15 @@ export function render(root, ctx) {
   const firstMove = best?.moves?.[0]?.year ?? null;
   // today's dollars, and the plan's flat rate until conversions are on, on one small line (UX review 3)
   const dollarsWords = `Amounts are in today's dollars.${flatNow ? ` This page uses the real tax rates; your plan uses a flat ${flatPct} until you turn conversions on.` : ""}`;
-  // said as what the setting does, not as "nothing could be converted": the rate's limit counts gains and dividends too (see README)
-  const waitWords = d.helps && firstMove && d.span && firstMove > d.span.from + 1 ? `Until ${firstMove}, your other income fills the ${pct(best.fillRate)} rate (investment gains and dividends count), so this converts nothing before then.` : null;
+  // said as what the setting does, not as "nothing could be converted": the rate's room is what ordinary income leaves; qualified dividends and
+  // gains sit on top of it and do not fill it (follow-up 2026-11-07, 5b R4: it blamed investment gains and dividends; verify: withdrawals from an
+  // investment account fill nothing either, so the list names 401(k) or IRA withdrawals)
+  const waitWords = d.helps && firstMove && d.span && firstMove > d.span.from + 1 ? `Until ${firstMove}, your pay, pension, taxable Social Security and 401(k) or IRA withdrawals fill the ${pct(best.fillRate)} rate, so this converts nothing before then.` : null;
   // a setting whose every conversion year owes no tax (the deduction covers it) is not "taxed at 10%" (Kim: $0 of tax in each year)
+  // a conversion that lifts income past the top of the 0% (or 15%) rate on investment gains and dividends makes those pay the next rate
+  // too, so "taxed at 10%" is a little low in those years: said, not hidden (money review M4)
+  const gainsUp = !!best && best.fillRate !== null && d.shown === best.fillRate && (d.table ?? []).some((r) => r.gainsMoved >= 1);
+  const taxedAt = (r) => rateWords(r) + (gainsUp ? ", or a little more in years it also raises the tax on your investment earnings" : "");
   const untaxed = !!best && d.shown === best.fillRate && (d.table ?? []).length > 0 && d.table.every((r) => r.taxes < 0.5);
 
   // ---- the answer ------------------------------------------------------------------------------------------------------------------
@@ -85,9 +91,9 @@ export function render(root, ctx) {
   } else if (d.verdict === "no-years") {
     if (nw.reason === "started") {
       // a do-or-don't in two short lines (UX review 12: "It can pay for your heirs" left her asking "so should I?")
-      say("You can still move money to a Roth once each year's required amount is out. You pay the tax on it now, at your rate.", "lede");
+      say("You can still move money into a Roth account once this year's required amount is out. A Roth is one you pay the tax on now and never owe tax on again.", "lede");
       for (const y of youngerWords) say(y);
-      say("It pays off only if your heirs would pay a higher rate on an inherited IRA later.");
+      say("It pays off only if your children would pay tax at a higher rate on what you leave them.");
     } else if (nw.reason === "owner-younger") {
       const [y0, ...more] = youngerWords;
       say(y0, "lede");
@@ -108,17 +114,23 @@ export function render(root, ctx) {
     hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?")));
   } else if (d.helps && small) {
     say(`Converting makes little difference for you: about ${money(gain)} more at the end, after tax.`, "lede");
-    say(`It would move to a Roth ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${rateWords(best.fillRate)}`}.`);
+    say(`It would move to a Roth ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${taxedAt(best.fillRate)}`}.`);
     if (waitWords) say(waitWords, "small");
     say(dollarsWords, "small");
   } else if (d.helps) {
     // the amounts to move, year by year, first (UX review 4: the hero gave a rate, never a dollar figure)
     say(`Move to a Roth ${movesWords(best.moves)}.`, "lede");
-    say(untaxed ? `No tax is due in those years, and it leaves about ${money(gain)} more at the end, after tax.` : `Each move is taxed at ${rateWords(best.fillRate)}, and leaves about ${money(gain)} more at the end, after tax.`);
+    say(untaxed ? `No tax is due in those years, and it leaves about ${money(gain)} more at the end, after tax.` : `Each move is taxed at ${taxedAt(best.fillRate)}, and leaves about ${money(gain)} more at the end, after tax.`);
     if (waitWords) say(waitWords, "small");
     say(dollarsWords, "small");
   } else {
-    say(`Moving money to a Roth would not leave you more at the end (${money(none.endAfterTaxReal)} after tax): the tax now is about what it would be later.`, "lede");
+    // the reason the figures show (money review M2): where the nearest rate loses mostly through the help with health insurance before 65,
+    // it is not "the tax now is about what it would be later" (it can even be less)
+    const near = d.options.find((o) => o.fillRate && o.success);   // the lowest rate: the one that should cost least
+    const taxLess = near ? none.taxesReal - near.taxesReal : 0;
+    const helpWords = !!near && near.creditLostReal >= 1000 && near.creditLostReal > Math.max(0, taxLess);   // exactly what the sentence says: more help lost than tax saved
+    say(`Moving money to a Roth would not leave you more at the end (${money(none.endAfterTaxReal)} after tax)${helpWords ? "." : ": the tax now is about what it would be later."}`, "lede");
+    if (helpWords) say(`Even at the lowest rate you would end with less. Before 65, what you convert counts as income, and that costs more of the help with health insurance than it saves in tax (at the ${pct(near.fillRate)} rate, about ${money(near.creditLostReal)} of help lost for ${taxLess >= 1 ? `${money(taxLess)} less tax` : `${money(Math.max(0, -taxLess))} more tax`}).`);
     if (d.span) say("Worth another look if your income in retirement turns out lower than planned.", "muted small");
   }
   // the plan's own setting, well behind the best: said in two short lines, with the switch as the filled button
@@ -129,7 +141,7 @@ export function render(root, ctx) {
       : `Your plan converts at the ${pct(bb.fillRate)} rate: that leaves about ${money(bb.byBest)} less than ${bestShort}${bb.byNone !== null ? `, and ${money(bb.byNone)} less than none` : ""}.`);
     if (!bb.fails && bb.creditMore >= bb.byBest / 2) say("Mostly because it gives up more of the help with health insurance before 65.", "small");
   }
-  if (bb || offerBest) hero.append(ui.row(ui.button(best.fillRate ? `Convert at the ${pct(best.fillRate)} rate${bb ? " instead" : ""}` : "Turn conversions off", () => useWay(best), small && !bb ? { class: "secondary" } : {})));
+  if (bb || offerBest) hero.append(ui.row(ui.button(best.fillRate ? `Move money up to the ${pct(best.fillRate)} tax rate${bb ? " instead" : ""}` : "Turn conversions off", () => useWay(best), small && !bb ? { class: "secondary" } : {})));
   if (d.verdict === "no-years" && nw.reason === "started") hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")));
   if (d.verdict === "no-years" && d.on) hero.append(ui.row(ui.button("Turn conversions off", () => { pending = "Conversions turned off."; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: false }; }); }, { class: "secondary" })));
   root.append(hero);
@@ -150,7 +162,7 @@ export function render(root, ctx) {
   const record = (o, button) => ui.h("li", {},
     // green only means good: the plan's setting well behind the best is amber (round 8 review UX 3)
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o), o.best ? ui.h("span", { class: "pill accent" }, "best") : null, o.chosen ? ui.h("span", { class: o === behind ? "pill warn" : o.best ? "pill ok" : "pill" }, "yours") : null), ui.h("span", { class: "rec-value" }, diffOf(o))),
-    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already fills it.") : "Keeps it all pre-tax."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already fills it.") : "Leaves it where it is; you pay tax as you take it out."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
     // the best one's button is the filled one above
     !button || !o.offer || (o.best && (bb || offerBest)) ? null : ui.h("div", { class: "rec-foot" }, ui.button(o.fillRate ? "Use this one" : "Turn conversions off", () => useWay(o), { class: "secondary" })));
   const keep = d.options.filter((o) => !worse(o)), rest = d.options.filter(worse);
@@ -195,7 +207,7 @@ export function render(root, ctx) {
       showTable ? ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {},
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(r.conversion))),
         ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
-      showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account count toward each rate's limit, so a year with large ones leaves little room to convert.") : null,
+      showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
       showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,
       showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
       canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,

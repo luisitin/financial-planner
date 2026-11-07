@@ -4,7 +4,8 @@
 // "Just make sure a layman can easily understand and use the page").
 import { compute, thisYear, thisYearTax, markTaken } from "./compute.js";
 import { firstYear } from "../withdrawal-strategy/compute.js";
-import { whenCareful, monthlyOf, accountName, slot, chanceWords } from "../careful.js";
+import { compute as estimated } from "../../taxes/estimated/compute.js";
+import { whenCareful, monthlyOf, accountName, slot, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 import { rmdFactor, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7); thisYear names
 // someone with no name "You", which reads the same
@@ -44,6 +45,11 @@ export function render(root, ctx) {
   const due = ty.due;
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const endAge = Math.max(...adults.map((p) => Number(p.lifeExpectancy ?? plan.assumptions?.planEndAge ?? 95)), 0) || Number(plan.assumptions?.planEndAge ?? 95);
+  // Estimated payments' hold-back (taxes/estimated holdBack): what to have held back from a withdrawal, which counts as paid evenly
+  // through the year (IRC 6654(g)); null when it does not apply (nothing still to come, or no tax short)
+  let est = null;
+  try { est = withAmt.length ? estimated(plan, { today }) : null; } catch { est = null; }
+  const estLink = ui.h("a", { href: "#/taxes/estimated" }, "Estimated payments");
   const hero = ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Required withdrawals"));
   root.append(hero);
   const out = ui.h("div");
@@ -89,15 +95,15 @@ export function render(root, ctx) {
     if (owners.length) hero.append(ui.h("p", {}, `Then the law makes ${list(names)} take a share out each year${firstOne}.`));
   }
 
-  // what this year's income and savings let you spend, in 9 of 10 markets (Monte Carlo's careful figure, after the first paint)
+  // what this year's income and savings let you spend, even in a bad run of years (Monte Carlo's careful figure, after the first paint)
   const fy = withAmt.length ? firstYear(plan, { today }) : null;
   if (fy && fy.thisYear) {
     const onTop = fy.healthAdded ? " plus health cover" : "";
     const steady = (plan.retirement?.strategy ?? "fixed-real") === "fixed-real";
     const withIncome = fy.income >= 0.5 ? `With your ${money(fy.income)} of ${list(fy.sources)}, you` : "You";
     const averageWords = `${withIncome} can spend about ${money(Math.round(fy.affordable / 100) * 100)} a year${onTop} if markets do as well as average.`;
-    const carefulWords = (mo) => [`${withIncome} can spend about `, mo, ` a month${onTop}${steady ? "" : ", the same every year"}${onTop || !steady ? "," : ""} and the money lasts in 9 of 10 markets.`];
-    const underWords = (mo, share) => [`${fy.income >= 0.5 ? `With your ${money(fy.income)} of ${list(fy.sources)}, the` : "The"} money lasts in 9 of 10 markets at up to about `, mo, ` a month${onTop}. At what you plan, it lasts in ${chanceWords(share)}.`];
+    const carefulWords = (mo) => [`${withIncome} can spend about `, mo, ` a month${onTop}${steady ? "" : ", the same every year"}${onTop || !steady ? "," : ""} and the money lasts ${BAD_RUN} ${BAD_RUN_NOTE}.`];
+    const underWords = (mo, share) => [`${fy.income >= 0.5 ? `With your ${money(fy.income)} of ${list(fy.sources)}, the` : "The"} money lasts ${BAD_RUN} at up to about `, mo, ` a month${onTop}. At what you plan, it lasts ${chanceWords(share)}.`];
     if (fy.verdict === "short") hero.append(ui.h("p", {}, `At what you plan, the money runs out${fy.shortAge ? ` at ${fy.shortAge}` : ""}. Will the money last? shows what would fix it.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?")));
     else {
       const careLine = ui.h("p", { style: { color: "var(--muted)" } }, ...carefulWords(slot(ui, money(5000))));
@@ -122,8 +128,11 @@ export function render(root, ctx) {
       root.append(ui.card(null,
         ui.h("p", { style: { margin: 0 } }, many ? `${NameOf(who)}: marked as taken on ${long(r.taken)}.` : `Marked as taken on ${long(r.taken)}.`),
         // what it adds to the year's tax stays said once it is out (round 8 review UX 11): taken with nothing held back, it is still
-        // owed. Said here with the date, not by a link: Estimated payments does not count the withdrawal yet (Batch 1; UX review 2)
-        addsOf(r) !== null ? ui.h("p", { class: "small" }, `It adds about ${money(addsOf(r))} to ${whoseTax(r)} ${year} federal tax. If none was held back, send that to the IRS by January 15, ${year + 1} (irs.gov/payments).`) : null,
+        // owed. Batch 1 landed, so Estimated payments counts the withdrawal: where it has a hold-back for a withdrawal still to come, the
+        // sentence is a link to it; where it only has payments to make, the date stays and the link follows; else the date alone
+        addsOf(r) !== null ? ui.h("p", { class: "small" }, `It adds about ${money(addsOf(r))} to ${whoseTax(r)} ${year} federal tax. `,
+          est?.holdBack ? ["If none was held back, ", estLink, " shows how much to have held back from a withdrawal still to come."]
+            : [`If none was held back, send that to the IRS by January 15, ${year + 1} (irs.gov/payments).`, ...(est?.needsEstimates ? [" ", estLink, " has the amounts by quarter."] : [])]) : null,
         ui.row(ui.button("Not yet", () => { pending = `${NameOf(who)} ${year} withdrawal is back on the list.`; store.update((p) => markTaken(p, year, r.id, null)); }, { class: "secondary" }))));
       continue;
     }
@@ -144,7 +153,7 @@ export function render(root, ctx) {
     ));
   }
 
-  // ---- the years ahead, in a sentence, and the Roth line -------------------------------------------------------------------------
+  // ---- the years ahead, in a sentence (the Roth line is its own card at the bottom) -------------------------------------------------------------------------
   // started for someone who has pre-tax money (round 8 review D3: a 75-year-old with none read that conversions now come after
   // "this year's required withdrawal" while the IRA was a 66-year-old's, with none due until 2035)
   const started = d.people.some((p) => p.yearsUntil === 0 && p.deferredNow > 0);
@@ -155,13 +164,18 @@ export function render(root, ctx) {
     ui.h("p", {}, withAmt.length && next
       ? `Next year's ${many ? "come to" : "is"} about ${money(next.rmdReal)}, in today's dollars. All of them together come to about ${money(d.totalRmdReal)}.`
       : `They grow to about ${money(biggest)} a year and come to about ${money(d.totalRmdReal)} in all, in today's dollars.`),
-    // once they have started (round 8, widow-3): a conversion is still allowed, after each year's required amount
-    ui.h("p", {}, started
-      ? "Once this year's is out, you can still move more to a Roth: it is taxed as income that year, and then never has to come out."
-      : "Moving some to a Roth before they start makes them smaller, and so the tax on them."),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/roth-conversions" }, "Roth conversions")),
   ));
 
+  // the Roth line, in its own card above the fold card, which is last as technical sections are (follow-up 2026-11-07: "Roth" is a word a layperson does not know and path part 3 bans it on
+  // the first screen, which on this short page reaches the bottom: the card says what a Roth account is instead of its name, and the button says
+  // what the page does; the page it opens is titled Roth conversions and explains the word there)
+  if (d.ready && d.schedule.length) root.append(ui.card("Making them smaller",
+    // once they have started (round 8, widow-3): a conversion is still allowed, after each year's required amount
+    ui.h("p", {}, started
+      ? "Once this year's is out, you can still move more into an account you pay the tax on this year, then never have to take money out of."
+      : "Moving some into an account you pay the tax on now, and never have to take money out of, makes them smaller before they start."),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/roth-conversions" }, "Move some to a tax-free account")),
+  ));
   // ---- How this is worked out ------------------------------------------------------------------------------------------------------
   const couple = d.people.length > 1;
   const owned = (r) => (r.owners?.length ? r.owners : [{ name: d.people[0]?.name, age: r.age, factor: r.factor }]);
@@ -196,4 +210,5 @@ export function render(root, ctx) {
       ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))),
       ui.h("p", { class: "muted small" }, "Rules from IRS Publication 590-B (the Uniform Lifetime Table) and the SECURE 2.0 Act; tax at each year's federal rates."),
     )));
+
 }

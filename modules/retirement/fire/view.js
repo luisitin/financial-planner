@@ -1,10 +1,10 @@
 // modules/retirement/fire/view.js -- DOM only. First the answer from the plan itself (the earliest age to stop work with
-// the money lasting in 9 of 10 markets, Social Security and pensions counted, filled in after the first paint; then the age
+// the money lasting even in a bad run of years, Social Security and pensions counted, filled in after the first paint; then the age
 // if markets do as well as average: compute's withIncome); then the 25-times rule as a quick
 // check, folded: the number, how far along you are, the years to get there at the current pace, and the coast figure.
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
 import { compute, carefulAgeSteps, ruleWords, plannedStopWords, otherEndWords } from "./compute.js";
-import { whenWorked, slot, RULE_WORDS, leftWords } from "../careful.js";
+import { whenWorked, slot, RULE_WORDS, leftWords, chanceWords, BAD_RUN } from "../careful.js";
 
 const STYLE = `
 .fi-root .fi-note { margin-top: 10px; }
@@ -55,7 +55,7 @@ export function render(root, ctx) {
   }
 
   // the answer from the plan: the earliest age to stop with the money lasting to the end, Social Security counted. Two ages:
-  // the one at which it lasts in 9 of 10 markets (worked out after the page is drawn: careful.js) leads; the one at which it
+  // the one at which it lasts even in a bad run of years (worked out after the page is drawn: careful.js) leads; the one at which it
   // lasts if markets do exactly as well as average every year (goal seek's) follows, named as such (round 5 review: 58 read
   // as safe, and lasts in only 4 of 10 markets)
   const who = sayName(w.name), Who = cap(who), age = w.earliestAge, planned = w.plannedAge;
@@ -89,7 +89,7 @@ export function render(root, ctx) {
   const hh = who === "you" ? "You" : others.length ? "The household" : Who;
   const savedWords = (amount, year, before = "") => [`${before}${before && (hh === "You" || hh === "The household") ? hh.toLowerCase() : hh} would have about `, amount, " at retirement in ", year, ", in today's money, savings and investments together."];
   // the average-market age, as the second sentence (no "little to spare" when stopping now: it would have lasted sooner too)
-  const avgWords = () => `If markets do as well as average, ${w.now ? "stopping now" : String(age)} would do${age > (w.ageNow ?? -1) ? ", with little to spare" : ""}.`;
+  const avgWords = () => `If the next years are about average, ${w.now ? "you could stop now" : `stopping at ${age} would do`}${age > (w.ageNow ?? -1) ? ", with little to spare" : ""}.`;
   const hero = ui.h("section", { class: "card accent hero" });
   let head, lede, saved = null, pending = false;
   if (w.retired) {
@@ -99,11 +99,11 @@ export function render(root, ctx) {
     lede = w.lasts ? `You have stopped work, and what you have${withWhat ? `, with ${withWhat},` : ""} lasts to the end of the plan${leaves}.` : `You have stopped work, and at the spending you plan the money runs out${w.failYear ? ` in ${w.failYear}` : ""}.${w.plannedStop ? "" : " Will the money last? shows what would fix it."}`;
   } else if (age === null) {
     head = `Even working to ${w.upTo ?? 75}, the money runs short`;
-    lede = `The money does not last to the end of the plan${w.legacy > 0 ? ` and leave the ${money(w.legacy)} you want to leave` : ""}, even if markets do as well as average and ${works(w.upTo ?? 75)}${alongside}. Will the money last? shows when it runs short and what would fix it.`;
+    lede = `The money does not last to the end of the plan${w.legacy > 0 ? ` and leave the ${money(w.legacy)} you want to leave` : ""}, even if the next years are about average and ${works(w.upTo ?? 75)}${alongside}. Will the money last? shows when it runs short and what would fix it.`;
   } else {
     pending = true;
     head = [`${Who} could stop work at `, slot(ui, String(age))];
-    lede = [`Stopping at `, slot(ui, String(age)), `, the money lasts in 9 of 10 markets${leaves}${alongside}. ${avgWords()}`];
+    lede = [`Stopping at `, slot(ui, String(age)), `, the money lasts ${BAD_RUN}${leaves}${alongside}. ${avgWords()}`];
     saved = savedWords(slot(ui, round100(w.atAgeReal)), slot(ui, String(w.stopYear)));
   }
   const h1 = ui.h("h1", {}, head);
@@ -122,14 +122,14 @@ export function render(root, ctx) {
     if (!c) {
       // it could not be worked out: the average-market age, said plainly
       h1.replaceChildren(age > planned ? `${Who} would need to work until ${age}` : w.now ? `${Who} could stop work now` : `${Who} could stop work at ${age}`);
-      ledeEl.replaceChildren(`If markets do as well as average, the money lasts to the end of the plan${leaves}${alongside}, with little to spare; in a bad run of years it would not. Will the money last? shows the margin.`);
+      ledeEl.replaceChildren(`If the next years are about average, the money lasts to the end of the plan${leaves}${alongside}, with little to spare; in a bad run of years it would not. Will the money last? shows the margin.`);
       savedEl?.replaceChildren(...savedWords(round100(w.atAgeReal), String(w.stopYear)));
       return;
     }
     if (c.age === null) {
       h1.replaceChildren(`Even working to ${c.upTo}, the money may run short`);
-      // "38 of 100", not "38%" next to "9 of 10"; the average-market age at the last age is "only just", not "75 would do"
-      ledeEl.replaceChildren(`Working to ${c.upTo}${alongside ? `${alongside},` : ","} the money lasts in ${Math.round(c.share * 100)} of 100 markets, short of 9 in 10. ${age === c.upTo ? "If markets do as well as average, it only just lasts." : avgWords()} Will the money last? shows what would help.`);
+      // the shared words (odds.js) with the number; the average-market age at the last age is "only just", not "75 would do"
+      ledeEl.replaceChildren(`Working to ${c.upTo}${alongside ? `${alongside},` : ","} the money lasts ${chanceWords(c.share)}, which does not cover a bad run of years. ${age === c.upTo ? "If the next years are average, it only just lasts." : avgWords()} Will the money last? shows what would help.`);
       savedEl?.replaceChildren(...savedWords(round100(w.atAgeReal), String(w.stopYear), `Stopping at ${age}, `));
       return;
     }
@@ -137,7 +137,7 @@ export function render(root, ctx) {
     h1.replaceChildren(sooner > 0 ? (c.atNow ? `${Who} could stop work now` : `${Who} could stop work at ${c.age}`)
       : sooner === 0 ? (c.atNow ? `${Who} could stop work this year, as planned` : `${Who} could stop work at ${planned}, as planned`)
       : `${Who} would need to work until ${c.age}`);
-    ledeEl.replaceChildren(`${c.atNow ? (sooner === 0 ? "Stopping this year" : "Stopping now") : `Stopping at ${c.age}`}${sooner < 0 ? ` (${yrs(-sooner)} past the ${planned} planned)` : ""}, the money lasts in 9 of 10 markets${leaves}${alongside}.${c.age !== age ? ` ${avgWords()}` : ""}`);
+    ledeEl.replaceChildren(`${c.atNow ? (sooner === 0 ? "Stopping this year" : "Stopping now") : `Stopping at ${c.age}`}${sooner < 0 ? ` (${yrs(-sooner)} past the ${planned} planned)` : ""}, the money lasts ${BAD_RUN}${leaves}${alongside}.${c.age !== age ? ` ${avgWords()}` : ""}`);
     savedEl?.replaceChildren(...savedWords(round100(c.atAgeReal), String(c.stopYear)));
   };
   if (pending) whenWorked(ctx, ledeEl, {

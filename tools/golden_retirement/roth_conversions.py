@@ -14,29 +14,29 @@ for i in range(100):
     expected=p['tops'][RATES.index(r)] if r in RATES[:6] else D('Infinity')
     rows.append(case(PAGE,'bracket_top',i,'bracketTop',{'value':'Infinity' if expected.is_infinite() else cents(expected)},args={'0':six(r),'1':status},params=tax_params(year,'0.02'),note=note(i,SOURCE+'; unknown/top rate has no finite ceiling',f'direct statutory table ceiling for rate{r} is {expected}')))
 
-for i in range(100):
+for i in range(100):   # room = extra ordinary income keeping ORDINARY taxable income at the ceiling: qualified dividends and gains are stacked on top (IRS Pub. 550; 5b R4, 2026-11-07). These rows carry no qualified income, so the values equal the old ones.
     year=2026 if i%2==0 else 2056;status=STATUSES[i%5];senior=1 if i%4==0 else 0;p=tax_parameters(year,'0',status)
     rate=FILL[i%4];top=p['tops'][RATES.index(rate)];income=D([0,20000,60000,100000,250000][i%5])
     if 60<=i<90:income=top+p['standard']+D(['-.01','0','.01'][i%3])
     if i>=90:income=D([.01,0,1000000000][i%3])
-    base=tax(income,year=year,inflation='0',status=status,seniors=senior)['taxableIncome']
+    base=tax(income,year=year,inflation='0',status=status,seniors=senior)['ordinaryTaxable']
     if base>top:answer=ZERO
     else:
         lo=ZERO;hi=top+p['standard']+D(12000)
         for _ in range(110):
             mid=(lo+hi)/2
-            if tax(income+mid,year=year,inflation='0',status=status,seniors=senior)['taxableIncome']<=top:lo=mid
+            if tax(income+mid,year=year,inflation='0',status=status,seniors=senior)['ordinaryTaxable']<=top:lo=mid
             else:hi=mid
         answer=lo
     rounded=D(cents(answer));todo=''
     # API returns whole-dollar room and its four adjustments can miss a phaseout root.
     # fixed 2026-10-30 (F-030), was a TODO: roomUnder rounds conversion capacity to whole dollars rather than the source-based cent answer.
     # fixed 2026-10-30 (F-030), was a TODO: Married-separate filers are ineligible for the senior deduction; roomUnder incorrectly includes it.
-    proof=f'exact root: taxable({income}+{cents(answer)})={cents(tax(income+rounded,year=year,inflation="0",status=status,seniors=senior)["taxableIncome"])} versus ceiling{top}'
+    proof=f'exact root: taxable({income}+{cents(answer)})={cents(tax(income+rounded,year=year,inflation="0",status=status,seniors=senior)["ordinaryTaxable"])} versus ceiling{top}'
     if (i+1)%10==0:
         # Independent closed form on a no-senior segment; otherwise invert the affine phaseout segment.
         at=tax(income+answer,year=year,inflation='0',status=status,seniors=senior)
-        assert answer==0 or abs(at['taxableIncome']-top)<D('.000001')
+        assert answer==0 or abs(at['ordinaryTaxable']-top)<D('.000001')
     rows.append(case(PAGE,'room',i,'roomUnder',{'value':cents(answer)},args={'0':{'filingStatus':status,'otherOrdinary':cents(income),'ages65plus':senior},'2':cents(top)},params=tax_params(year,'0'),todo=todo,note=note(i,SOURCE+'; largest extra ordinary income keeping taxable income at ceiling; exact bisection independent of app iterations',proof)))
 
 for rule in ['eligibility','conversion_tax','insufficient','comparison','real_totals','table_span','irmaa','readiness']:

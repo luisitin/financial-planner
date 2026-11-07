@@ -224,3 +224,24 @@ Batch 5b's page in path part 3's plain words: with no adults yet the lede says "
 401(k) or a traditional IRA)"; with no such account, "If you have one, add it on What you own." and `ROTH_SOURCE` (the Roth
 sentence and the source line) under the answer. Batch 5b's page has no balance tile, so "Not taxed yet, today" went with it;
 with an account on file "How this is worked out" carries the Roth sentence and the sources in its own lines. No figure changed.
+
+## Follow-up 2026-11-07: one plain way of saying the odds
+The owner's standing words: "It should feel easy for a layman ... not ... concepts / words too hard to understand." Every page that says how often
+the money lasts now uses `modules/retirement/odds.js` (`chanceWords`, re-exported by `careful.js`; `BAD_RUN` = "even in a bad run of years",
+`BAD_RUN_NOTE` = "(only 1 in 10 is worse)"). A "pretend future" is one made-up run of good and bad years; the share of pretend futures in which the money lasts is the
+chance. The words, after "the money lasts": 100% "in every pretend future we ran"; 90% or more "even in a bad run of years"; 45% to under 60% "about half
+the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N of 10 pretend futures" (N rounded down, never 9 under 90%); with the number
+"(93 of 100)" after "of 10 pretend futures", else "(93 of 100 pretend futures last)", where it helps. No page says "markets" for a try ("9 of 10 markets", "every market tried", "simulated markets",
+"100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
+"short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
+
+## Follow-up 2026-11-07: Roth off the first screen, the hold-back link
+- "Roth" is a word a layperson does not know, and path part 3 bans it on the first screen. This page is shorter than the screen, so moving the card down was not enough: the Roth line and its
+  button moved out of "The years ahead" into their own card, "Making them smaller", just above "How this is worked out" (which stays last: its folded text still counts as on the screen when the page is short, so the sentence about Roth IRAs must sit below the first 844 px), and the card says what a Roth account is instead of its name: "Moving some
+  into an account you pay the tax on now, and never have to take money out of, makes them smaller before they start." / "Once this year's is out, you can still move more into an account you
+  pay the tax on this year, then never have to take money out of." The outlined button is "Move some to a tax-free account" and opens Roth conversions, which names and explains the word.
+  Decision (no owner to ask): the plain description over "a Roth account (one you already paid tax on)", because the walk's check counts any visible "Roth" on the first screen.
+- Once the withdrawal is marked taken, the fallback "send that to the IRS by January 15" stays and gains a link where Estimated payments has something to
+  say: with a hold-back (`taxes/estimated` `holdBack`: a withdrawal still to come) "If none was held back, Estimated payments shows how much to have held
+  back from a withdrawal still to come."; with only payments to make "... January 15, 2027 (irs.gov/payments). Estimated payments has the amounts by quarter."
+  Test: "follow-up 2026-11-07 (B)".

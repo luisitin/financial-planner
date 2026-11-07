@@ -40,3 +40,16 @@ Review 2026-11-06 (round 7): "self-only cover for you", "Your FSA election this 
 - **No wages, no payroll tax.** HSA and FSA money saves Social Security and Medicare tax only when it comes out of pay through an employer's cafeteria plan (IRS Pub. 15-B and Pub. 969, read 2026-11-06). With no pay on file for anyone, no typed wages, and other income on the Income page (a pension, Social Security, a business), the page saves 0 payroll tax. A plan with nothing on the Income page keeps the old convention (the full 7.65%). The same holds for a health FSA: it comes out of pay through an employer, so with no pay on file it saves no payroll tax (a note says so).
 - **Q1 decided: the real return.** The page (`view.js` passes `iraAsAssumed: false`) no longer forces the plan's assumed IRA deduction: it works the saving on the Federal estimate's own return with and without the HSA money, so an HSA that also frees up IRA deductibility (the IRA phase-out uses modified AGI, IRC 219(g)(3)) shows the whole saving (couple-home reworked: 28.4 cents a dollar, was 22).
   `compute()` called without that parameter still keeps the plan's assumed IRA deduction, because the frozen answer key (tests/golden/limits, taxsaved) counts the saving so; the key should be regenerated on the real return when the owner agrees (reports/tax and the tests call it that way).
+
+## Follow-up 2026-11-07 (HSA verify R3, R4)
+- Nobody is told the Medicare rule twice: when the headline already says "Once you're on Medicare you can't add to an HSA" (everyone the cover is for is on Medicare all
+  year), the note under it is "Ruth is on Medicare (people 65 or older who get Social Security are signed up for Medicare Part A)." and the figures; in a part year, or with a
+  spouse still eligible, the note keeps the sentence.
+- The "At 65" tile is only for someone under 65 (`years > 0`); otherwise a balance reads "In the account $3,000 today, for medical bills".
+- "Tax saved" for a household with no pay (`hsa.noPay`) says why it is nothing: "none: on Medicare nothing can go in" (limit 0) or "none: no income tax to save at this income". It is not "only when it comes out of pay": money from your own pocket is deducted on the return too (Form 8889; IRC 223(a); money review M5).
+- Older notes (the spouse outside the self-only plan, no high-deductible plan) say "it gets no tax break" instead of "taxed as pay" when nobody has pay.
+
+Money/UX review (2026-11-07): on Medicare all year the page shows "What you can still do" (spend what is in the account, tax-free; take out what was added this year) in place of
+"Why an HSA comes first", and the form is folded under "Change what you typed". The working household's first paragraph says what an HSA is in two plain sentences.
+Verify (2026-11-07): the "take out" line points at the fold by the name it shows on Medicare ("type 0 under \"Change what you typed\" below"; it named "This year's figures"). Test in `tests/plain-words-followup.test.mjs`.
+Verify (2026-11-07), HSA verify R3's last item: the hero's "Kept invested, this year's money alone is worth about $X at 65" is said only to someone under 65 (`hsa.years > 0`); someone who turned 65 this year read "worth about $2,700 at 65". Test in `tests/plain-words-followup.test.mjs`.

@@ -286,3 +286,26 @@ test("round 8 review UX 3: after 'Yes: add Priya's 401(k)', a start at a common 
   assert.deepEqual(p.retirement.contributions.map((c) => [c.accountId, c.amount, c.period, c.employerMatch]), [[k.id, 133.85, "biweekly", 0]]);
   assert.match(draw().textContent, /Added to your plan: \$134 a paycheck \(6% of pay\)\. Type what the employer adds on it below once you know it\./);
 });
+
+test("HSA R1 (follow-up 2026-11-07): the Contributions page reads the Medicare-aware picture, so a widow on Medicare sees a limit of 0 and the reason", async () => {
+  const { widowPlan } = await import("../../../qa/fixtures/widow-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const p = migrate(widowPlan());
+  const ruth = p.household.people[0];
+  p.accounts.push({ id: "hsa-w", name: "Ruth's HSA", type: "hsa", balance: 3000, ownerId: ruth.id });
+  p.retirement.contributions = [...(p.retirement.contributions ?? []), { id: "c-hsa", accountId: "hsa-w", personId: ruth.id, period: "annual", amount: 4400, employerMatch: 0 }];
+  const d = compute(p, { today: "2026-11-06" });
+  const row = d.byPerson[0].limits.find((l) => l.kind === "hsa");
+  // Ruth is 74 and gets Social Security: on Medicare all year, so the limit is 0 (IRC 223(b)(7); Pub. 969), not 5,400 (4,400 + 1,000 from 55)
+  assert.equal(row.limit, 0); assert.equal(row.used, 4400); assert.equal(row.over, 4400);
+  assert.equal(d.hsa.household.limit, 0);
+  assert.ok(d.warnings.some((w) => /Ruth: on Medicare all year, and once you are on Medicare you cannot add to an HSA\. 4,400 goes in, this year's limit is 0\./.test(w)), JSON.stringify(d.warnings));
+  assert.ok(!d.warnings.some((w) => /over the 2026 limit of 5,400/.test(w)));
+  // someone not on Medicare keeps the plain limit and the plain warning
+  const young = migrate(widowPlan());
+  young.household.people[0].birthDate = "1990-05-05";
+  young.accounts.push({ id: "hsa-y", name: "HSA", type: "hsa", balance: 100, ownerId: young.household.people[0].id });
+  young.retirement.contributions = [{ id: "c-y", accountId: "hsa-y", personId: young.household.people[0].id, period: "annual", amount: 4400, employerMatch: 0 }];
+  const y = compute(young, { today: "2026-11-06" });
+  assert.equal(y.byPerson[0].limits.find((l) => l.kind === "hsa").limit, 4400); assert.equal(y.warnings.length, 0);
+});

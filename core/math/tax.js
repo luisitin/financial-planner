@@ -369,10 +369,16 @@ export function largestAtOrUnder(f, lo, flo, hi, fhi, tol = 1e-6, ftol = 1e-9) {
   return lo;
 }
 
-/** The largest extra ordinary income (a Roth conversion, say) that keeps taxable income at or under `taxableTop`, to a fraction of a cent; 0 if already at or over. */
+/**
+ * The largest extra ordinary income (a Roth conversion, say) that keeps ORDINARY taxable income at or under `taxableTop` (a bracket's
+ * top), to a fraction of a cent; 0 if already at or over. Qualified dividends and long-term gains are stacked on top of ordinary
+ * income, so they do not use up the ordinary brackets (IRS Pub. 550, "Qualified dividends"; the Qualified Dividends and Capital Gain
+ * Tax Worksheet): only taxable income less the qualified part counts here. Follow-up 2026-11-07 (5b R4): it counted all taxable
+ * income, so $32,000 of dividends and gains left a retiree "no room" under the 10% rate.
+ */
 export function roomUnder(inputs, params, taxableTop) {
   const base = pos(inputs.otherOrdinary);
-  const over = (c) => federalTax({ ...inputs, otherOrdinary: base + c }, params).taxableIncome - taxableTop;
+  const over = (c) => federalTax({ ...inputs, otherOrdinary: base + c }, params).ordinaryTaxable - taxableTop;
   const f0 = over(0);
   if (f0 >= 0) return 0;
   let lo = 0, flo = f0, hi = -f0, fhi = over(hi);

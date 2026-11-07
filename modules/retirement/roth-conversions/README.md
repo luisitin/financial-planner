@@ -209,3 +209,40 @@ and use the page".
   leaves less than not converting (N)", with no button.
 - **Ruth, 74** (UX 12): "You can still move money to a Roth once each year's required amount is out. You pay the tax on it now,
   at your rate." / "It pays off only if your heirs would pay a higher rate on an inherited IRA later."
+
+## Follow-up 2026-11-07 (batch 5b R4): gains and dividends do not use up the room
+The room under a rate is what ORDINARY taxable income leaves. Qualified dividends and long-term gains are stacked on top of ordinary income (IRS Pub.
+550; the Qualified Dividends and Capital Gain Tax Worksheet), so they never fill the 10%, 12% ... rates. `core/math/tax.js` `roomUnder` and the
+engine's top-up (`core/math/retirement.js`) now measure `ordinaryTaxable` (taxable income less the qualified part, never below 0) against the bracket's
+top; they measured all taxable income, which counted the gains and dividends as filling the rate. Hand check, single, 2026: $32,000 of qualified
+gains and dividends and no other income, deduction 16,100, the 10% rate ends at 12,400 of ordinary taxable income: room 28,500, tax 1,240 (the gains stay in the
+0% rate: taxable 44,400 under 49,450). Rows with no qualified income are unchanged (the frozen key's `room` rows have none).
+- Kim (45, $950,000 brokerage, no pay): "Converting makes little difference for you: about $4,948 more" is now "no-help": her dividends no longer fill the 10%
+  rate, so it converts about $451,000 in all (before: $22,000), which costs the marketplace help with health insurance before 65 and pushes dividends out
+  of the 0% rate, and leaves far less than not converting. The reason line is "Until 2048, your other income fills the 10% rate (investment gains and dividends
+  count), so this converts nothing before then." -> "Until {year}, your other income (pay, pension, taxable Social Security, withdrawals) fills the {rate}
+  rate, so this converts nothing before then." (shown only when a late start has that cause).
+- The equity household (`earlyRetirees`): the 10% rate converts about $321,740 (was $166,944) and gives up $111,262 of the marketplace help (was $11,548)
+  for $121,042 less tax; it leaves $2,151,634 (was $2,291,778, the best), the 12% rate $2,112,783 (was $2,191,158), so not converting ($2,207,021) is now
+  the best. (The first version of this follow-up showed 10% as best, $2,250,678: a float hair over the top made some years convert $0; see below.)
+- Verify (2026-11-07): ordinary taxable income is taxable income less the qualified part, and that subtraction can leave the engine's first try a hair
+  (1e-11) over the rate's top. The top-up read that as "over", stepped back by the same hair, was still over, and converted $0 for the year (the equity
+  household skipped 2032 and 2034 at 12%; 29 of 197 sampled qa plans moved, none at 3051787). `core/math/retirement.js` now takes a first try within a
+  tenth of a cent of the top, either side, as on it (a hair over is stepped back under, as before). Test: "a year whose first try lands a hair over".
+- Table rows carry `ordinaryTaxable` beside `taxableIncome`; each conversion year ends with `ordinaryTaxable` at the rate's top.
+
+Money review of the follow-up (2026-11-07):
+- M2: when the lowest rate loses more of the help with health insurance before 65 than it saves in tax, the first screen says that ("Even at the lowest rate you would end with
+  less. Before 65, what you convert counts as income, and that costs more of the help ... than it saves in tax (at the 10% rate, about $101,116 of help lost for $31,097 less tax)")
+  instead of "the tax now is about what it would be later" (kept only where no help is lost). Kim: converting at 10% pays $31,097 less tax and gives up $101,116 of help. Not done,
+  the owner's call: stop each year's conversion at the help's income line so a fill never buys a cliff (it would bring back the helpful conversion for households like the
+  surviving-spouse sample, whose old $13,029 gain now reads "no-help" because the bracket-correct room crosses the line). Reach: 17 of 334 sampled plans flip, all one household.
+- M3: the line under the table no longer says gains and dividends "count toward each rate's limit": they are taxed on top of other income and do not use up a rate, but a
+  conversion can push some of them from the 0% rate to 15%.
+- M4: decided to TELL, not to cap. Stopping the fill where taxable income reaches the next gains-rate top (tried) cuts a 22% fill from $48,475 to $22,141 for anyone with gains
+  just under the 0% top, so it changes what "fill" means. Instead the engine records `gainsMoved` per conversion year (dividends and gains the conversion pushed past a gains-rate
+  top) and the hero adds ", or a little more in years it also raises the tax on your investment earnings" when the table shown has any. Kim at 10%: 2026 none, 2027 7,432 pushed
+  (58,382 taxable against the 50,950 top).
+- Words: the button reads "Move money up to the 10% tax rate"; "Leaves it where it is; you pay tax as you take it out."; the no-years lines say what a Roth is and who benefits
+  ("your children would pay tax at a higher rate on what you leave them"). "the lowest rate, 10%" keeps its short form: the line is held to 160 characters.
+- Verify (2026-11-07), money review note: the late-start reason names what fills the rate, "your pay, pension, taxable Social Security and 401(k) or IRA withdrawals" (withdrawals from an investment account fill nothing).

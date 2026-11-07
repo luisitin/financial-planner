@@ -48,7 +48,7 @@ export function render(page, ctx) {
         row("Could spend a month", money(y.affordableMonthly), money(t.affordableMonthly)),
         row("Plans to spend a month", money(y.spendingMonthly), money(t.spendingMonthly)),
         row("Left at the end", money(y.endReal), money(t.endReal))),
-        ui.h("p", { class: "muted small" }, `The advisor's version: ${d.described.join("; ")}. Today's dollars; the chance is over 400 simulated markets.`)));
+        ui.h("p", { class: "muted small" }, `The advisor's version: ${d.described.join("; ")}. Today's dollars; the chance is over 400 pretend futures of good and bad years.`)));
       if (d.effects.length) host.append(ui.card("What makes the difference", ui.h("p", { class: "muted small" }, "Each of their assumptions on its own, put into your plan: how much more or less room it leaves a month (what the plan could spend, less what it plans to spend)."),
         ui.h("ul", { class: "ap-eff" }, d.effects.map((e) => ui.h("li", {}, ui.h("span", {}, e.text[0].toUpperCase() + e.text.slice(1)), ui.h("span", { class: e.roomMonthly >= 0 ? "ap-up" : "ap-down" }, `${e.roomMonthly >= 0 ? "+" : "−"}${money(Math.abs(e.roomMonthly))} a month`))))));
       if (d.feeCost) host.append(ui.card("What the fee costs", ui.row(ui.stat("Over the plan", money(d.feeCost.endReal), "less left at the end, today's dollars"), ui.stat("A month", money(d.feeCost.affordableMonthly), "less you could spend in retirement")),

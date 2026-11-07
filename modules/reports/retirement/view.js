@@ -14,7 +14,7 @@ export function render(page, ctx) {
   const big = (n) => fmt.money(Math.round(n / 1000) * 1000, cur);
   const ageTxt = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y) * 12); return m ? `${y} and ${m} months` : String(y); };
   const longDate = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const host = ui.h("div", {}, ui.notice("info", "Putting the retirement report together (this runs the simulations)..."));
+  const host = ui.h("div", {}, ui.notice("info", "Putting the retirement report together (this tries your plan thousands of times)..."));
   page.append(host);
   settleReport(ctx.computeRemote("reports/retirement", { today: fmt.today() }), host, ui, "retirement report", (d) => {
     host.replaceChildren();
@@ -31,14 +31,14 @@ export function render(page, ctx) {
       ui.h("p", { class: "rp-lead" }, [
         p.retireYear ? `The spending years start in ${p.retireYear}, at ${money(p.spendingMonthly)} a month.` : `The plan spends ${money(p.spendingMonthly)} a month.`,
         p.success ? `At expected returns the money lasts to ${p.lastsTo} and leaves about ${big(p.endReal)}.` : `At expected returns the money runs out in ${p.shortYear}${p.shortAge ? `, at ${p.shortAge}` : ""}.`,
-        d.chance ? `In ${fmt.pct(d.chance.rate, 0)} of ${d.chance.paths.toLocaleString("en-US")} simulated markets it lasts${d.history ? `; replayed through history since ${d.history.from} it lasts in ${fmt.pct(d.history.rate, 0)} of ${d.history.windows} starting years` : ""}.` : "",
+        d.chance ? `In ${fmt.pct(d.chance.rate, 0)} of ${d.chance.paths.toLocaleString("en-US")} pretend futures the money lasts${d.history ? `; replayed through history since ${d.history.from} it lasts in ${fmt.pct(d.history.rate, 0)} of ${d.history.windows} starting years` : ""}.` : "",
         p.coverage !== null ? `Guaranteed income (Social Security and pensions) covers ${fmt.pct(p.coverage, 0)} of spending in the first retirement year.` : "",
       ].filter(Boolean).join(" ")));
     if (d.chance) {
       const years = d.chance.bands.map((b) => b.year);
       sheet.append(section(ui, "The range of outcomes",
-        bandChart({ years, low: d.chance.bands.map((b) => Math.max(0, b.p10)), high: d.chance.bands.map((b) => b.p90), mid: d.chance.bands.map((b) => Math.max(0, b.p50)), marks: p.retireYear ? [{ year: p.retireYear, label: "retire" }] : [], height: 200, label: "Savings by year: the middle 80% of simulated outcomes and the middle one" }),
-        ui.h("p", { class: "rp-sub" }, "The band holds the middle 80% of the simulated outcomes; the line is the middle one. Today's dollars.")));
+        bandChart({ years, low: d.chance.bands.map((b) => Math.max(0, b.p10)), high: d.chance.bands.map((b) => b.p90), mid: d.chance.bands.map((b) => Math.max(0, b.p50)), marks: p.retireYear ? [{ year: p.retireYear, label: "retire" }] : [], height: 200, label: "Savings by year: the middle 80% of pretend futures and the middle one" }),
+        ui.h("p", { class: "rp-sub" }, "The band holds the middle 80% of the pretend futures; the line is the middle one. Today's dollars.")));
     }
     sheet.append(section(ui, "The plan at expected returns",
       figs(ui, [p.retireYear ? ["Spending years start", String(p.retireYear)] : null, p.atRetirementReal !== null ? ["Saved by then", big(p.atRetirementReal)] : null, p.success ? ["The money lasts", `to ${p.lastsTo}`, "good"] : ["The money runs out", String(p.shortYear), "bad"], ["Left at the end", big(p.endReal)], ["Can carry a month if markets do as well as average", money(p.affordableMonthly)], ["Planned a month", money(p.spendingMonthly)]]),
@@ -58,6 +58,6 @@ export function render(page, ctx) {
       wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved in", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") }, { label: "Left", num: true, get: (r) => (r.short > 0 ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)) }], d.years)));
     if (d.market) sheet.append(section(ui, `Market stress tests (hitting ${d.hitYear})`,
       rtable(ui, [{ label: "", get: (m) => m.title }, { label: "Result", num: true, get: (m) => (m.success ? ui.h("span", { class: "rp-ok" }, `lasts, ${big(m.endReal)} left`) : ui.h("span", { class: "rp-bad" }, `runs out at ${m.failAge}`)) }], d.market)));
-    sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. Simulations draw returns around the plan's assumptions; history repeats only in rhyme. Look at it again at least once a year.`));
+    sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. The pretend futures draw returns around the plan's assumptions; history repeats only in rhyme. Look at it again at least once a year.`));
   });
 }

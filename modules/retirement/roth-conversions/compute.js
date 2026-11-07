@@ -20,7 +20,7 @@ export const FILL_RATES = [0.10, 0.12, 0.22, 0.24];
  *     cliffYears (years its income passes the line where that help stops), moves: [{ year, real }] (each year it converts $1 or more,
  *     today's dollars: the amounts a person tells their 401(k) or IRA firm; batch 5b UX review 4) }],
  *   (options ranked by what is left at the end after the tax still owed on pre-tax money; a failing plan ranks by how late it fails)
- *   best, table: [{ year, ages, incomeBefore, bracketTop, conversion, conversionReal, taxes, taxesReal, bracketRate, taxableIncome, irmaa }] the years with a conversion under the chosen setting,
+ *   best, table: [{ year, ages, incomeBefore, bracketTop, conversion, gainsMoved (gains and dividends it pushed to a higher gains rate), conversionReal, taxes, taxesReal, bracketRate, taxableIncome, irmaa }] the years with a conversion under the chosen setting,
  *   span: { from, to, years } the conversion years, rmdStartAge, notes, bracketsOn,
  *   verdict: "no-pretax" | "no-years" | "fails" | "helps" | "no-help", helps, options[].offer ("Use this" / "Turn conversions off"),
  *   noWindow: { reason: "started" | "owner-younger" | "late" | "until" | "none", age (this year), retireAge, rmdStartAge, name,
@@ -79,7 +79,7 @@ export function compute(plan, params = {}) {
     const top = bracketTop(shown, tax.filingStatus, params);
     const info = x.taxInfo ?? {};
     const magi = (info.taxableIncome ?? 0) + (info.deduction ?? 0);
-    return { year: x.year, ages: x.ages, incomeBefore: (info.ordinary ?? 0) - x.conversion, bracketTop: top, conversion: x.conversion, conversionReal: x.conversion / x.priceLevel, taxes: x.taxes, taxesReal: x.taxes / x.priceLevel, bracketRate: info.bracketRate ?? null, taxableIncome: info.taxableIncome ?? 0, irmaa: x.ages[0] >= 63 && magi > irmaaLine(x.year), priceLevel: x.priceLevel };
+    return { year: x.year, ages: x.ages, incomeBefore: (info.ordinary ?? 0) - x.conversion, bracketTop: top, conversion: x.conversion, gainsMoved: x.gainsMoved ?? 0, conversionReal: x.conversion / x.priceLevel, taxes: x.taxes, taxesReal: x.taxes / x.priceLevel, bracketRate: info.bracketRate ?? null, taxableIncome: info.taxableIncome ?? 0, ordinaryTaxable: info.ordinaryTaxable ?? info.taxableIncome ?? 0, irmaa: x.ages[0] >= 63 && magi > irmaaLine(x.year), priceLevel: x.priceLevel };
   });
   const span = table.length ? { from: table[0].year, to: table[table.length - 1].year, years: table.length } : null;
   const rows = table.filter((r) => r.conversion > 0);   // the years something is actually converted (the pot can run dry before the last possible year)

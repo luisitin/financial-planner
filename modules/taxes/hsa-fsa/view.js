@@ -28,30 +28,32 @@ export function render(root, ctx) {
     lede = `You said you have no high-deductible health plan, so the ${money(H.total)} going into an HSA for ${d.year} saves no tax. If you do have such a plan, change the cover under "This year's figures".`;
   } else if (H.total > 0) {
     title = `Your HSA saves about ${money(H.savedTotal)} of tax this year`;
-    lede = `${money(H.total)} goes in for ${d.year} (${money(H.contribution)} from you${H.employer ? `, ${money(H.employer)} from the employer` : ""}) against a limit of ${money(H.limit)}${H.catchUp ? " including the catch-up from 55" : ""}: ${H.room > 0 ? `${money(H.room)} of room left` : H.over > 0 ? `${money(H.over)} over` : "the limit exactly"}. ${H.kept > 0 ? ` Kept invested, this year's money alone is worth about ${money(H.futureValue > 0 ? H.kept * Math.pow(1 + H.growthRate, H.years) : H.kept)} at 65, untaxed if it pays for health costs.` : ""}`;
+    lede = `${money(H.total)} goes in for ${d.year} (${money(H.contribution)} from you${H.employer ? `, ${money(H.employer)} from the employer` : ""}) against a limit of ${money(H.limit)}${H.catchUp ? " including the catch-up from 55" : ""}: ${H.room > 0 ? `${money(H.room)} of room left` : H.over > 0 ? `${money(H.over)} over` : "the limit exactly"}. ${H.kept > 0 && H.years > 0 ? ` Kept invested, this year's money alone is worth about ${money(H.futureValue > 0 ? H.kept * Math.pow(1 + H.growthRate, H.years) : H.kept)} at 65, untaxed if it pays for health costs.` : ""}`;
   } else if (noCover) {
     title = "Health savings and flexible spending accounts";
     lede = `You said you have no high-deductible health plan, so no money can go into an HSA this year: only someone covered by such a plan can put money in. Money already in an HSA can still pay for health costs tax-free. If you pick a high-deductible plan, change the cover below.`;
   } else {
     title = "Health savings and flexible spending accounts";
-    lede = `An HSA is the only account where money goes in untaxed, grows untaxed and comes out untaxed (for health costs), so it beats a 401(k) dollar for dollar. It needs a high-deductible health plan; the ${d.limitsYear} limit is ${money(H.base)} for ${H.coverage === "family" ? "family" : "self-only"} cover, plus ${money(H.catchUpAmount)} a person from age ${H.catchUpAge}. Type what goes in below.`;
+    lede = `An HSA is a savings account for medical costs: no tax on what goes in, on its growth, or on what you spend on medical bills. It needs a health plan with a high deductible. The ${d.limitsYear} limit is ${money(H.base)} for ${H.coverage === "family" ? "family" : "self-only"} cover, plus ${money(H.catchUpAmount)} a person from age ${H.catchUpAge}. Type what goes in below.`;
   }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, title),
     ui.h("p", { class: "lede" }, lede),
-    noCover || onMedicare ? null : ui.h("p", { class: "muted small" }, `Money taken from pay also skips the 7.65% Social Security and Medicare tax, or only the 1.45% Medicare part on pay above the Social Security pay limit${ssLimit ? ` (${ssLimit})` : ""}. After 65 the money can be taken for anything, taxed like a traditional IRA.`),
+    noCover || onMedicare ? null : ui.h("p", { class: "muted small" }, `Money that comes out of your paycheck also skips most payroll tax (7.65%; only 1.45% on pay above ${ssLimit ? `${ssLimit}` : "the Social Security pay limit"}). After 65 you can spend it on anything, and you pay income tax on what is not for medical bills.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
   for (const n of d.notes) root.append(ui.notice("warn", n));
-  const taxSub = H.ficaSaved > 0 || H.taxSaved > 0 ? `${money(H.taxSaved)} income tax + ${money(H.ficaSaved)} payroll tax` : noCover ? "none without a high-deductible plan" : "on your own money from pay";
+  const taxSub = H.ficaSaved > 0 || H.taxSaved > 0 ? `${money(H.taxSaved)} income tax + ${money(H.ficaSaved)} payroll tax` : noCover ? "none without a high-deductible plan" : onMedicare ? "none: on Medicare nothing can go in" : "none: no income tax to save at this income";
   root.append(ui.card(null, ui.row(
     ui.stat(`${d.limitsYear} limit`, money(H.limit), `${coverText}${H.catchUp ? ", with catch-up" : ""}`),
     ui.stat("Room left", money(H.room), H.total > 0 ? `${money(H.total)} in so far` : "nothing in yet"),
     // nothing in and no balance yet: no zero tiles, the hero says what to do first
     H.total > 0 || H.balance > 0 ? ui.stat("Tax saved", money(H.savedTotal), taxSub) : null,
-    H.kept > 0 || H.balance > 0 ? ui.stat("At 65", money(H.atSixtyFive), H.years > 0 ? `${H.years} years at ${fmt.pct(H.growthRate, 1)}: ${money(H.balance)} today plus ${money(H.kept)} a year` : `${money(H.balance)} in the account today`) : null,
+    // "At 65" only for someone not yet 65 (follow-up 2026-11-07, HSA R3: a 74-year-old read "At 65"); then what is in the account today
+    H.years > 0 && (H.kept > 0 || H.balance > 0) ? ui.stat("At 65", money(H.atSixtyFive), `${H.years} years at ${fmt.pct(H.growthRate, 1)}: ${money(H.balance)} today plus ${money(H.kept)} a year`)
+      : H.balance > 0 ? ui.stat("In the account", money(H.balance), "today, for medical bills") : null,
   ),
   H.aboveWageBase.length ? ui.h("p", { class: "muted small" }, `${H.aboveWageBase.map((x, i) => (i ? nameIn(x) : NameIn(x))).join(" and ")} ${H.aboveWageBase.length > 1 || isYou(H.aboveWageBase[0]) ? "earn" : "earns"} more than the Social Security pay limit (${ssLimit}). Pay above it has no Social Security tax, so HSA money from that pay saves only the 1.45% Medicare tax, not the full 7.65%.`) : null,
   ));
@@ -83,10 +85,16 @@ export function render(root, ctx) {
   // "Who the plan covers" matters only for self-only cover: shown while that is the choice
   const coverSelect = form.querySelector('select[name="coverage"]'), whoField = form.querySelector('select[name="coveredId"]')?.closest(".field");
   if (coverSelect && whoField) { const sync = () => { whoField.style.display = coverSelect.value === "self" ? "" : "none"; }; coverSelect.addEventListener("change", sync); sync(); }
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.hasHsa || d.hasFsa ? null : true },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "This year's figures"), ui.h("span", { class: "fold-status" }, H.total > 0 ? `HSA ${money(H.total)}` : noCover ? "no high-deductible plan" : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
+  // on Medicare nothing can go in: a card of what she can still do comes first, the form stays folded (to fix what was typed) and the
+  // case for saving into an HSA is left out (money review UX 3: the widow was still sold one under the headline telling her she cannot)
+  if (onMedicare) root.append(ui.card("What you can still do", ui.h("ul", { class: "records" }, [
+    ["Spend what is in the account", "Pay medical bills from it, tax-free. Keep the receipts."],
+    ...(H.total > 0 ? [["Take out what was added this year", `The ${money(H.total)} typed for ${d.year} cannot stay in. Take it out before the tax filing deadline to avoid a 6% charge each year, then type 0 under "Change what you typed" below.`]] : []),
+  ].map(([t, x]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, x))))));
+  root.append(ui.h("details", { class: "card fold fold-card", open: !onMedicare && !(d.hasHsa || d.hasFsa) ? true : null },
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, onMedicare ? "Change what you typed" : "This year's figures"), ui.h("span", { class: "fold-status" }, H.total > 0 ? `HSA ${money(H.total)}` : noCover ? "no high-deductible plan" : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "The HSA money also lowers the Federal estimate page's income, up to the limit. An HSA account on the Net worth page is counted in the growth figure."), form)));
-  root.append(ui.card("Why an HSA comes first",
+  if (!onMedicare) root.append(ui.card("Why an HSA comes first",
     ui.h("ul", { class: "records" }, [
       ["Three tax breaks, not two", "A 401(k) skips tax going in and pays it coming out; a Roth is the reverse. The HSA skips both, and the payroll tax as well when it comes from a paycheck."],
       ["Pay cash now, reimburse later", "Receipts never expire: pay today's medical bills from your own pocket, let the HSA grow for decades, and reimburse yourself tax-free whenever you like."],

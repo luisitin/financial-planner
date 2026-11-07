@@ -93,7 +93,7 @@ test("round 8 (widow-2 and widow-3): the page says what the withdrawal adds to t
   const text = root.textContent.replace(/\s+/g, " ");
   assert.ok(/It adds about \$3,429 to your 2026 federal tax: ask your bank or broker to hold that back when they send it\./.test(text), text.slice(0, 900));
   assert.ok(!/Taxed at the plan's 15%/.test(text));
-  assert.ok(/you can still move more to a Roth/.test(text), "conversions after the withdrawal");
+  assert.ok(/you can still move more into an account you pay the tax on this year, then never have to take money out of/.test(text), "conversions after the withdrawal, the word explained in passing");
 });
 
 // ---- round 8, Batch 5 reviews (2026-11-06) ------------------------------------------------------------------------------------
@@ -154,10 +154,22 @@ test("round 8 review D4: filing jointly, the two cards add up to what the two wi
   assert.ok(Math.abs(t.byPerson.a + t.byPerson.b - t.total) < 0.01, JSON.stringify(t));
   assert.ok(Math.abs(t.byPerson.a - t.total / 2) < 0.01);
 });
+test("follow-up 2026-11-07 (B): once taken, the January 15 fallback is a link to Estimated payments' hold-back where it applies", async () => {
+  // spending $80,000 a year draws more than the required amount, so Estimated payments has a hold-back for the draw still to come
+  const p = migrate(widowPlan()); p.retirement.spendingMonthly = 80000 / 12;
+  markTaken(p, 2026, "p-ruth", "2026-11-06");
+  const hb = (await import("../../taxes/estimated/compute.js")).compute(p, { today: "2026-11-06" }).holdBack;
+  assert.ok(hb && hb.amount > 0, "the hold-back applies");
+  const text = await fakePage(p);
+  assert.ok(/If none was held back, Estimated payments shows how much to have held back from a withdrawal still to come\./.test(text), text.slice(0, 900));
+  assert.ok(!/send that to the IRS by January 15/.test(text), "the date fallback is gone where the hold-back applies");
+  // the module's own source links it to that page
+  assert.ok(/href: "#\/taxes\/estimated"/.test(fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8")));
+});
 test("round 8 review D3: a couple whose pre-tax money belongs to the younger one does not read that withdrawals have started", async () => {
   const text = await fakePage(migrate(youngerOwnerCouple()));
   assert.ok(!/The required amount itself cannot be converted/.test(text), text);
-  assert.ok(/Moving some to a Roth before they start makes them smaller/.test(text), text);
+  assert.ok(/Moving some into an account you pay the tax on now, and never have to take money out of, makes them smaller before they start/.test(text), text);
 });
 test("round 8 review D5 and UX 5: the hold-back is for the federal tax, the state is named where it taxes income, and it is not 'if you like'", async () => {
   const text = await fakePage(migrate(widowPlan()));
@@ -172,9 +184,9 @@ test("round 8 review UX 11: once taken, the card still says what it adds to the 
   markTaken(p, 2026, "p-ruth", "2026-11-06");
   const text = await fakePage(p);
   assert.ok(/Marked as taken on November 6, 2026\./.test(text), text.slice(0, 900));
-  // batch 5b UX review 2: Estimated payments does not count the withdrawal yet (Batch 1), so the card says what to do itself
-  assert.ok(/It adds about \$3,429 to your 2026 federal tax\. If none was held back, send that to the IRS by January 15, 2027 \(irs\.gov\/payments\)\./.test(text), text.slice(0, 900));
-  assert.ok(!/Estimated payments/.test(text), "no link to a page that says no payment is needed");
+  // batch 5b UX review 2 said the date itself because Estimated payments did not count the withdrawal; Batch 1 has landed, so (follow-up
+  // 2026-11-07) the card keeps the date and adds the link where Estimated payments has payments to make
+  assert.ok(/It adds about \$3,429 to your 2026 federal tax\. If none was held back, send that to the IRS by January 15, 2027 \(irs\.gov\/payments\)\. Estimated payments has the amounts by quarter\./.test(text), text.slice(0, 900));
 });
 test("round 8 review (with D3): each year's withdrawal is shown at its owner's own age and factor", async () => {
   // Bea's IRA, Al ten years older: her first required withdrawal is in 2035 at 75 (factor 24.6), not "age 84, factor 16.8"
@@ -295,7 +307,7 @@ const JARGON = [/factor/i, /IRS figure/i, /bracket/i, /590-B/, /SECURE/, /IRMAA/
 
 test("5b page: Ruth reads what to take, from where, by when and why, and what she can spend, in two sentences", async () => {
   const w = await rmdPage(migrate(widowPlan()));
-  assert.ok(/^Required withdrawals This year, take at least \$16,078 from Ruth's retirement account by December 31: the law requires it\. With your \$50,400 of Social Security and pension, you can spend about\s+a month and the money lasts in 9 of 10 markets\./.test(w.first), w.first.slice(0, 600));
+  assert.ok(/^Required withdrawals This year, take at least \$16,078 from Ruth's retirement account by December 31: the law requires it\. With your \$50,400 of Social Security and pension, you can spend about\s+a month and the money lasts even in a bad run of years \(only 1 in 10 is worse\)\./.test(w.first), w.first.slice(0, 600));
   // what to do: one line with its figure, one filled button
   assert.ok(/It adds about \$3,429 to your 2026 federal tax: ask your bank or broker to hold that back when they send it\./.test(w.first), w.first);
   const taken = w.buttons.filter((b) => /I've taken it/.test(b.textContent));
@@ -305,7 +317,11 @@ test("5b page: Ruth reads what to take, from where, by when and why, and what sh
   assert.ok(w.paras.every((p) => p.length <= 160), w.paras.filter((p) => p.length > 160).join(" | "));
   // the years ahead in plain words, and the Roth line
   assert.ok(/Next year's is about \$16,402, in today's dollars\./.test(w.first), w.first);
-  assert.ok(/you can still move more to a Roth/.test(w.first));
+  assert.ok(/you can still move more into an account you pay the tax on this year/.test(w.first));
+  // the word Roth is not on the page's first screen (path part 3's banned words: the walk checks the first 844 px, and this page is shorter);
+  // the line and its button stay, one tap from the bottom
+  assert.ok(!/Roth/.test(w.first), w.first);
+  assert.ok(/Move some to a tax-free account/.test(w.first));
   // the workings: today's balance over the IRS figure for 74, Social Security pulled into tax, the schedule, the table
   assert.ok(/Ruth's retirement account holds \$410,000 today\. The law divides that by 25\.5, the IRS figure for age 74: \$16,078\./.test(w.fold), w.fold.slice(0, 900));
   assert.ok(/makes \$13,666 more of the Social Security taxable: about \$3,429 more federal tax in all\./.test(w.fold), w.fold.slice(0, 1200));

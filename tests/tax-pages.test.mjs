@@ -181,16 +181,15 @@ test("roth conversions: a big pre-tax pot with high required withdrawals is help
   // still best, by about $28,900 instead of $110,700; without the health line (healthIncluded) the gain is over $100,000 as before
   assert.ok(best.endAfterTaxReal > none.endAfterTaxReal + 20000); assert.ok(best.taxesReal < none.taxesReal); assert.ok(best.rmdReal < none.rmdReal);
   assert.ok(d.options.find((o) => o.fillRate === 0.22).endAfterTaxReal > none.endAfterTaxReal + 20000);
-  assert.ok(Math.abs(d.options.find((o) => o.fillRate === 0.22).creditLostReal - none.creditReal) < 0.01 && none.creditReal > 60000, "the 22% setting gives up all of the credit");
+  // (follow-up 2026-11-07, 5b R4: the room is what ORDINARY income leaves, the brokerage gains sitting on top, so the 22% setting converts
+  // more in the years that count and gives up $38,103 of the $62,228, not all of it: some of its years are not over the line)
+  assert.ok(d.options.find((o) => o.fillRate === 0.22).creditLostReal > 0.5 * none.creditReal && none.creditReal > 60000, "the 22% setting gives up most of the credit");
   { const q = structuredClone(p); q.retirement.healthIncluded = true; const h = roth(q, { today: TODAY }); assert.ok(h.options.find((o) => o.best).endAfterTaxReal > h.options[0].endAfterTaxReal + 100000); }
   assert.equal(d.span.from, 2026); assert.equal(d.span.to, 2040);   // 60 to 74; required withdrawals from 75
-  // every conversion year ends at the top of the shown bracket, and the last ordinary dollar is taxed at that rate.
-  // 2026-11-02, the health line (Ann on the marketplace 2026-2030): the best setting moved from 24% (shown 0.24, every year
-  // 24%) to 22% (end after tax $3,785,280 against $3,774,981 for 24%). The 22% table already read 12% in 2027-2029 before
-  // the health line (gains from brokerage withdrawals fill the top of the bracket, so the last ordinary dollar sits in 12%);
-  // the premiums, also taken from the brokerage, add 2030. So 12% is allowed only in 2027-2030 of a 22% table
-  assert.ok(d.table.every((r) => r.conversion > 0 && Math.abs(r.taxableIncome - r.bracketTop) < 1 && (r.bracketRate === d.shown || (d.shown === 0.22 && r.year >= 2027 && r.year <= 2030 && r.bracketRate === 0.12))), JSON.stringify(d.table.map((r) => [r.year, r.bracketRate, r.taxableIncome, r.bracketTop])));
-  assert.ok(d.table.filter((r) => r.year === 2026 || r.year >= 2031).every((r) => r.bracketRate === d.shown), "outside 2027-2030 every year reads the shown rate");
+  // every conversion year ends with ORDINARY taxable income at the top of the shown bracket (follow-up 2026-11-07, 5b R4: the gains from
+  // brokerage withdrawals are taxed on top of it and no longer fill the bracket), so the last ordinary dollar is taxed at that rate in every year.
+  // Before, with the gains counted in the room, the 22% table read 12% in 2027-2029 and 2030 (a lower last-dollar rate)
+  assert.ok(d.table.every((r) => r.conversion > 0 && Math.abs(r.ordinaryTaxable - r.bracketTop) < 1 && r.bracketRate === d.shown), JSON.stringify(d.table.map((r) => [r.year, r.bracketRate, r.ordinaryTaxable, r.bracketTop])));
   assert.ok(d.table.some((r) => r.ages[0] >= 63 && r.irmaa));
   const couple = roth(taxPlan(), { today: TODAY });
   const cNone = couple.options[0], cBest = couple.options.find((o) => o.best);
