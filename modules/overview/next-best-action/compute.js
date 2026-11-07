@@ -24,6 +24,7 @@ import { compute as computePeople } from "../../household/people/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { rmdAmount } from "../../../core/math/rmd.js";
 import { pmtToReach } from "../../../core/math/finance.js";
+import { leftMarker, leftOverOf, yearSaving } from "../../../core/math/leftover.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
 import { isGuess } from "../../../core/estimate/index.js";
@@ -56,7 +57,7 @@ export const FROM_CASH_MONTHS = 3;
 /**
  * compute(plan, { today }) -> {
  *   ready, missing,
- *   spare: { monthly, gross, guessedShare?, guessedMonthly?, waits? (Expenses' guessed share of the month, only when the plan
+ *   spare: { monthly, leftOver (core/math/leftover.js leftOverOf: before goal saving), year (core/math/leftover.js yearSaving: what the month builds up in a year), fromLeft? (the left-over note while spending was worked out from it), gross, guessedShare?, guessedMonthly?, waits? (Expenses' guessed share of the month, only when the plan
  *            holds guesses; waits: half or more of it is ours, so the figure is not a verdict and no step is dated from it), businessCosts, federalTax, payrollTax, stateTax, careLost (the child care account's money it would lose), stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
  *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses),
  *     full (monthly + held: what a month that brings the Income page's amount leaves), fullAbout (full to the nearest $10),
@@ -164,6 +165,14 @@ export function compute(plan, params = {}) {
   // spending that is mostly our guesses (Get started's guessed rows, Expenses' guessedShare): the left-over figure waits for
   // the real spending (spec 8.1) -- it is still worked out, but no verdict, no dates and no "short" rest on it
   if (exp.guessedMonthly !== undefined) { spare.guessedShare = exp.guessedShare; spare.guessedMonthly = exp.guessedMonthly; spare.waits = exp.guessedShare >= 0.5; }
+  // spending worked out from a left-over the person gave (guide.setup.spendLeft, Get started question 6 or Expenses): the month's
+  // money left is theirs, not a guess, so the figure does not wait, whatever else in the month is still a guess (the rows
+  // absorbed it). `fromLeft` is the note while its rows are as we wrote them (core/math/leftover.js leftMarker).
+  const note = leftMarker(plan);
+  if (note) { spare.waits = false; spare.fromLeft = note; }
+  // what the month builds up over a year, said once for every page (core/math/leftover.js yearSaving)
+  spare.year = yearSaving(spare);
+  spare.leftOver = leftOverOf(spare);   // the left-over as a person means it (before goal saving, the month all uneven pay comes in): what a typed left-over is worked against
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);

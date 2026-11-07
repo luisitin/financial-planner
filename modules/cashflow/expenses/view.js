@@ -3,7 +3,10 @@
 import { bankVsPlan } from "../income-statement/compute.js";
 import { compute, billsFoldOpen, CATEGORIES, closeGap, addFromBank, fromBankWords, BANK_SPREAD } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
-import { isGuess, clearGuess } from "../../../core/estimate/index.js";
+import { isGuess, clearGuess, applies } from "../../../core/estimate/index.js";
+import { applyLeftOver, applyMonthTotal, spendAnswers } from "../../overview/setup/compute.js";
+import { yearSavingWords } from "../../../core/math/leftover.js";
+import { dayWords } from "../../overview/next-best-action/compute.js";
 import { spendMissing, spendSaidComplete, spendAskAgain, spendBankNote, fillOffers } from "../../overview/guesses/compute.js";
 import { missingCard, fillCard, registryOf, sayNotice } from "../../overview/guesses/view.js";
 
@@ -55,6 +58,61 @@ export function render(root, ctx) {
     if (nba?.ready && miss) return linked(ui.stat("Left over", "Depends on your spending", `Your list may be missing about ${fmt.money(Math.round(miss.rest / 10) * 10, cur)} a month. See "Is something missing?" just below.`, { link: true }));
     if (nba?.ready) { const v = nba.spare.monthly, held = nba.spare.held > 0.5, kind = nba.spare.fullKind, about = nba.spare.fullAbout; return linked(ui.stat(v >= 0 ? "Left over" : nba.drawing ? "From savings" : "Short", fmt.money(Math.abs(v), cur), v >= 0 ? `each month, after tax, bills and saving${nba.spare.debtExtra > 0 ? `, and ${fmt.money(nba.spare.debtExtra, cur)} extra on debts` : ""}${held ? `, counting uneven pay at what you can count on` : ""}` : nba.drawing ? "each month, as your retirement plan intends" : held ? `in a lean month; when all your uneven pay comes in, ${kind === "ahead" ? `about ${fmt.money(about, cur)} is left` : kind === "even" ? "it only just about breaks even" : `it is still about ${fmt.money(-about, cur)} short`}` : "more goes out than comes in, after tax and saving", { link: true })); }
     return ui.stat("Before tax", fmt.money(d.leftOver, cur), "pay minus spending each month; tax and saving not taken out yet");
+  };
+  // "Set your month in one number" (owner, 2026-11-07): the month said as what is left over in checking, or as one spending
+  // figure; the other is worked out and written into the same rows Get started's spending question writes (setup compute.js
+  // applyLeftOver / applyMonthTotal). The bills typed on this page stay; the rows are what is not listed here.
+  const monthCard = () => {
+    if (!d.income) return null;
+    const m = (v) => fmt.money(Math.round(v), cur);
+    const note = nba?.ready ? nba.spare.fromLeft : null;
+    const guess = applies(plan) ? ctx.guess : null;
+    const host = ui.h("div");
+    const answers = spendAnswers(plan);
+    const run = (v, fn) => fn(structuredClone(plan), v);
+    const sayNo = (r, know, n) => {
+      const what = know === "left" ? (n < 0 ? "that" : `a ${m(n)} left over`) : `${m(n)} a month`;
+      const text = r.why === "pay" ? "Your pay and bills are needed first to work this out. Add them, then try again."
+        : r.why === "typed" ? `The figures you typed for spending groups (Get started, question 6) come to more than ${what} allows. Change one of them, or type a different amount.`
+        : r.why === "more-than-pay" ? (r.available > 0 ? `That is more than comes in after tax and saving (about ${m(r.available)} a month). Check the amount.` : "That is more than comes in after tax and saving. Check the amount, or add what comes in first.")
+        : r.why === "step" ? "We could not match that exact amount. Try a figure a few dollars higher or lower."
+        : `Your bills and loan payments listed on this page come to ${m(r.over)} a month more than ${what} allows. Which is right: this amount, or your bills? Check the bills below, or type a different amount.`;
+      host.replaceChildren(ui.notice("error", text));
+    };
+    // the same plain choice as Get started, in the person's words: what stays in checking, or what they spend
+    let know = "left";
+    const formHost = ui.h("div");
+    const drawForm = () => {
+      const left = know === "left";
+      formHost.replaceChildren(ui.form([
+        { key: "amount", label: left ? "How much does your checking go up in a normal month?" : "About how much do you spend in a month, in all?", type: "money", required: true,
+          help: left ? "Before you move any to savings. Type a minus sign if it goes down, like -200. Not counting what comes out of your paycheck for retirement, or any extra you pay on debts." : "Everything, loan payments included." },
+      ], { amount: left && note ? note.left : null }, (v) => {
+        if (v.amount === null) { host.replaceChildren(ui.notice("error", "Type an amount first, like 1,000.")); return false; }
+        const ins = left ? { ...answers, left: v.amount } : { ...answers, total: v.amount };
+        const r = left ? run(ins, (c, i) => applyLeftOver(c, i, fmt.today(), { guess })) : run(ins, (c, i) => applyMonthTotal(c, i, fmt.today(), { guess }));
+        if (!r.ok) { sayNo(r, know, v.amount); return false; }
+        const goals = Number(r.spare?.goalSaving) || 0;
+        pending = left ? `Done: with ${m(v.amount)} left over each month, you spend about ${m(r.month)} a month.${goals >= 1 ? ` Your goals take ${m(goals)} of the ${m(v.amount)}.` : ""} ${r.spare ? yearSavingWords(r.spare, m) : ""}`.trim() : `Done: your month is ${m(v.amount)} in all. Your bills are kept and the rest is shared over the usual groups.`;
+        store.update((p) => { if (left) applyLeftOver(p, ins, fmt.today(), { guess }); else applyMonthTotal(p, ins, fmt.today(), { guess }); });
+      }, { submitLabel: "Save my month" }));
+      // the left-over may go below zero ("-200"): a phone's number pad has no minus sign on an iPhone, so this box asks for the
+      // keyboard that has one, as Get started's left-over box does (verify 2026-11-07)
+      if (left) formHost.querySelector?.('input[name="amount"]')?.setAttribute?.("inputmode", "text");
+    };
+    const choice = ui.h("div", { class: "chips", role: "radiogroup", "aria-label": "What do you know?" });
+    const drawChoice = () => choice.replaceChildren(...[["left", "I know what's left over"], ["spend", "I know what I spend"]].map(([k, label]) =>
+      ui.h("button", { type: "button", class: `chip${know === k ? " on" : ""}`, role: "radio", "aria-checked": String(know === k), onClick: () => { know = k; host.replaceChildren(); drawChoice(); drawForm(); } }, label)));
+    drawChoice(); drawForm();
+    const moved = note ? nba.spare.leftOver - note.left : 0;
+    const details = ui.h("details", { class: "fold ex-fold" },
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Set your month in one number"), ui.h("span", { class: "fold-status" }, note ? `${m(note.left)} left over a month` : "left over or spending"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("div", { class: "fold-body" },
+        ui.h("p", { class: "muted small" }, "Not sure of every bill? Tell us what is left over in a normal month, or what you spend in all, and we work out the other."),
+        note ? ui.h("p", { class: "small" }, `Your spending was worked out on ${dayWords(note.on)} from the ${m(note.left)} you said is left over each month.`, Math.abs(moved) >= 10 ? ` Your pay, tax, bills or saving have changed since, so the left-over now reads ${m(nba.spare.leftOver)}. The spending stays as we worked it out. If ${m(note.left)} is still right, type it again below and we will update your spending.` : "") : null,
+        choice, formHost, host));
+    details.open = !!note;
+    return details;
   };
   let editing = null;
   // short each month: say by how much, then the fewest nice-to-haves that close it (tap one to change it), the biggest
@@ -121,6 +179,7 @@ export function render(root, ctx) {
     if (gOpts) { try { offer = fillOffers(plan, { ...gOpts, ignoreLater: true }); } catch { offer = null; } }
     if (!offer?.some((x) => x.case === "spend")) offer = null;
     if (missingSaid) { root.append(sayNotice(ctx, missingSaid, (kind, text, undo = null) => { missingSaid = { kind, text, undo }; })); missingSaid = null; }
+    { const mc = monthCard(); if (mc) root.append(mc); }
     const spendOnly = offer?.length === 1;
     if (offer) root.append(fillCard(ctx, offer, { reg, today: fmt.today(), only: spendOnly ? "spend" : null, ignoreLater: true, title: spendOnly ? "Not sure what you spend?" : null,
       say: (kind, text, undo = null) => { missingSaid = { kind, text, undo }; }, onMine: () => { formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); formHost.querySelector?.("input")?.focus?.(); } }));
@@ -135,6 +194,7 @@ export function render(root, ctx) {
       `Next year about ${fmt.money(d.guessedMonthly > 0 ? Number(d.nextYear.toPrecision(3)) : d.nextYear, cur)} once prices rise.` +
       (d.oneTime ? ` One-time costs coming up: ${fmt.money(d.oneTime, cur)}, not in the monthly total.` : "")),
     ));
+    { const mc = monthCard(); if (mc) root.append(mc); }
     // "Is something missing?" (spec 11.6): the list typed here is far below what households like this spend; one question with
     // our guesses for the rows not listed (overview/guesses spendMissing; nothing is written before a tap)
     const sayMissing = (kind, text, undo = null) => { missingSaid = { kind, text, undo }; };

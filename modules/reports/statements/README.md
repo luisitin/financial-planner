@@ -33,3 +33,6 @@ The income statement and cash-flow statement show every line Next best action ta
   compute does not fail and the page reads a full report; the retirement report, the plan summary and the annual review
   fail inside the retirement projection and now show the notice. Test: reports/tax "every report finishes
   when its figures cannot be worked out (settleReport)".
+
+## Net worth grows or shrinks (2026-11-07)
+`netWorthGrowth` is the month as it reads (left-over after goals, below zero too) plus retirement and goal saving, x 12, plus the debt principal paid; it is no longer clamped at zero, so a household that spends more than it takes in is told net worth shrinks (one answer with Next best action `spare.year`). The saved debt plan's extra (Pay off debts) pays debt down too and is counted, so the figure is `spare.year.total` plus the principal of the Debts page's payments, exactly (verify 2026-11-07; before, the two renter fixtures with a saved plan were $600 a year short).

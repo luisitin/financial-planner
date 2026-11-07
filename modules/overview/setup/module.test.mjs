@@ -2375,3 +2375,390 @@ test("part 3 review: the adjust note sits under the total and says what happened
   assert.ok(view.includes('partsEl, adjustEl);'), "shown right under the total");
   assert.ok(!view.includes("first, body, adjustEl"), "no longer last in the fold");
 });
+
+// ---- Question 6 the other way: "what's left over" (owner, 2026-11-07). Spending and the left-over are one fact said two ways:
+// typing either works out the other, exactly, through the app's own left-over figure (Next best action's spare.monthly).
+const LO = await import("../../../core/math/leftover.js");
+const { ARCHETYPES: HOUSEHOLDS14, TODAY: HH_TODAY } = await import("../../../qa/households/lib/catalog.mjs");
+const { compute: healthScore } = await import("../health-score/compute.js");
+const { compute: planPage } = await import("../plan/compute.js");
+const leftNow = (p, today = PERSONA_TODAY) => LO.leftOverOf(nextBest(p, { today }).spare);
+// reads L to the dollar; a typed 0 reads level (never a hair below it, which would show as "-$0 short"), within the dollar the whole-dollar rows allow
+const readsAs = (read, L) => (L === 0 ? read >= 0 && read <= 1 : Math.abs(read - L) <= 0.5 + 1e-9);
+const monthNow = (p, today = PERSONA_TODAY) => expenses(p, { today }).monthly;
+const guessFor = (p, today = PERSONA_TODAY) => { const before = structuredClone(p); return (k, o = {}) => estimate(before, k, { ...GO, today, ...o }); };
+const LEFTS = [-400, 0, 150, 1000, 2500];
+
+test("L -> spending -> L: the left-over reads exactly what was typed, to the dollar (setup personas, with and without our guesses)", () => {
+  for (const name of ["sam", "jordan", "patLee"]) {
+    for (const withGuess of [true, false]) {
+      for (const L of LEFTS) {
+        const p = withGuess ? persona(name) : { sam, jordan, patLee }[name]();
+        const guess = withGuess ? guessFor(p) : null;
+        const r = S.applyLeftOver(p, { rows: {}, left: L }, PERSONA_TODAY, { guess });
+        const tag = `${name} ${withGuess ? "guessed" : "plain"} L=${L}`;
+        assert.ok(r.ok, `${tag}: ${JSON.stringify(r)}`);
+        const read = leftNow(p);
+        assert.ok(readsAs(read, L), `${tag}: reads ${read}`);
+        assert.equal(monthNow(p), r.month, `${tag}: the month's spending is what was worked out`);
+        assert.deepEqual(p.guide.setup.spendLeft, { left: L, on: PERSONA_TODAY, rows: Math.round(LO.setupRowsMonthly(p)) }, `${tag}: the note`);
+        // the rows are the person's figure shared out, never marked as our guess
+        for (const x of p.expenses.filter((e) => e.id.startsWith("setup-x-"))) assert.ok(!isGuess(p, `expenses[${x.id}].amount`), `${tag}: ${x.id} is not a guess`);
+      }
+    }
+  }
+});
+
+test("L -> spending -> L on the 14 qa households: reads L, or says the bills already in the plan leave no room and writes nothing", () => {
+  let ok = 0, bills = 0;
+  for (const a of HOUSEHOLDS14) {
+    for (const L of [-300, 0, 500, 1500]) {
+      const p = migrate(a.build()), before = structuredClone(p);
+      const r = S.applyLeftOver(p, { rows: {}, left: L }, HH_TODAY, { guess: null });
+      if (r.ok) { ok++; assert.ok(readsAs(leftNow(p, HH_TODAY), L), `${a.id} L=${L}: ${leftNow(p, HH_TODAY)}`); }
+      else { bills++; assert.ok(["bills", "pay", "more-than-pay"].includes(r.why), `${a.id} L=${L}: ${r.why}`); if (r.why === "bills") assert.ok(r.over > 0); assert.deepEqual(p, before, `${a.id} L=${L}: nothing written`); }
+    }
+  }
+  assert.ok(ok > 10 && bills > 0, `both branches ran (${ok} worked out, ${bills} conflicts)`);
+});
+
+test("spending -> L -> spending: the spending comes back to the dollar (personas typed as one total, and the qa households' own bills)", () => {
+  for (const name of ["sam", "jordan", "patLee"]) {
+    for (const X of [1800, 3000, 4800]) {
+      const p = { sam, jordan, patLee }[name]();
+      S.applySpend(p, { mode: "total", total: X });
+      const L = Math.round(leftNow(p)), month0 = monthNow(p);
+      const q = structuredClone(p);
+      const r = S.applyLeftOver(q, { rows: {}, left: L }, PERSONA_TODAY, { guess: null });
+      assert.ok(r.ok, `${name} X=${X}`);
+      assert.equal(LO.setupRowsMonthly(q), X, `${name} X=${X}: the rows add up to what was typed`);
+      assert.equal(monthNow(q), month0, `${name} X=${X}: the month's spending is unchanged`);
+    }
+  }
+  for (const a of HOUSEHOLDS14) {
+    const p = migrate(a.build()), month0 = monthNow(p, HH_TODAY);
+    let L; try { L = Math.round(leftNow(p, HH_TODAY)); } catch { continue; }
+    if (!Number.isFinite(L)) continue;
+    const q = structuredClone(p), r = S.applyLeftOver(q, { rows: {}, left: L }, HH_TODAY, { guess: null });
+    assert.ok(r.ok, `${a.id}: ${JSON.stringify(r)}`);
+    assert.equal(monthNow(q, HH_TODAY), month0, `${a.id}: spending unchanged`);
+    assert.ok(!q.expenses.some((x) => x.id.startsWith("setup-x-")), `${a.id}: the bills already say it all, so no row of ours is added`);
+  }
+});
+
+test("the rows typed stay typed; groups that already add up to more than the left-over allows are said, not written as a negative", () => {
+  const p = persona("jordan"), guess = guessFor(p);
+  const r = S.applyLeftOver(p, { rows: { housing: 900 }, left: 1000 }, PERSONA_TODAY, { guess });
+  assert.ok(r.ok);
+  assert.equal(p.expenses.find((x) => x.id === "setup-x-housing").amount, 900, "the typed rent is untouched");
+  assert.ok(!isGuess(p, "expenses[setup-x-housing].amount"));
+  assert.equal(Math.round(leftNow(p)), 1000);
+  assert.ok(p.expenses.filter((x) => x.id.startsWith("setup-x-")).length > 1, "the rest is shared over the other rows");
+  assert.deepEqual(p.guide.setup.spendSum.typed, ["housing"]);
+  // too much typed
+  const q = persona("jordan"), before = structuredClone(q);
+  const bad = S.applyLeftOver(q, { rows: { housing: 5000, groceries: 3000 }, left: 2500 }, PERSONA_TODAY, { guess: guessFor(q) });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.why, "typed");
+  assert.ok(bad.over > 0 && bad.allowed < 8000, JSON.stringify(bad));
+  assert.deepEqual(q, before, "nothing written");
+  // the bills and loan payments alone are more than the month leaves room for
+  const t = persona("sam"), tb = structuredClone(t);
+  const more = S.applyLeftOver(t, { rows: {}, left: 20000 }, PERSONA_TODAY, { guess: guessFor(t) });
+  assert.equal(more.ok, false); assert.equal(more.why, "more-than-pay", "more than comes in at all: said so, not blamed on the bills"); assert.ok(more.available > 1000 && more.available < 20000, JSON.stringify(more)); assert.deepEqual(t, tb);
+  const worse = S.applyLeftOver(t, { rows: {}, left: more.available - 50 }, PERSONA_TODAY, { guess: guessFor(t) });
+  assert.equal(worse.ok, false); assert.equal(worse.why, "bills"); assert.ok(worse.over > 0); assert.deepEqual(t, tb);
+});
+
+test("spending typed on Expenses as one figure: the whole month (bills and loan payments included) adds up to it", () => {
+  for (const name of ["sam", "jordan", "patLee"]) {
+    for (const T of [2500, 4200, 6000]) {
+      const p = persona(name), guess = guessFor(p);
+      const r = S.applyMonthTotal(p, { ...S.spendAnswers(p), total: T }, PERSONA_TODAY, { guess });
+      assert.ok(r.ok, `${name} ${T}: ${JSON.stringify(r)}`);
+      assert.equal(monthNow(p), T, `${name}: the month is ${T}`);
+    }
+  }
+  const p = persona("sam"), before = structuredClone(p);
+  const bad = S.applyMonthTotal(p, { ...S.spendAnswers(p), total: 100 }, PERSONA_TODAY, { guess: guessFor(p) });
+  assert.equal(bad.ok, false); assert.equal(bad.why, "bills"); assert.deepEqual(p, before);
+});
+
+test("the note: it reopens the question, the left-over does not wait on guesses, and answering as spending clears it", () => {
+  const p = persona("jordan"), guess = guessFor(p);
+  { const q = structuredClone(p); S.applySpend(q, { mode: "rows", rows: {} }, PERSONA_TODAY, { guess }); assert.equal(nextBest(q, { today: PERSONA_TODAY }).spare.waits, true, "before: mostly our guesses, so the figure waits"); }
+  S.applyLeftOver(p, { rows: {}, left: 1000 }, PERSONA_TODAY, { guess });
+  const n = nextBest(p, { today: PERSONA_TODAY });
+  assert.equal(n.spare.waits, false); assert.equal(n.spare.fromLeft.left, 1000);
+  const v = S.valuesFor(p, "spend");
+  assert.equal(v.leftOver, 1000); assert.equal(v.leftOn, PERSONA_TODAY);
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.equal(st.spareWaits, undefined, "the reveal says the figure plainly");
+  // a bill changed since: the rows are the person's again
+  const edited = structuredClone(p); edited.expenses.find((x) => x.id === "setup-x-groceries").amount += 50;
+  assert.equal(LO.leftMarker(edited), null); assert.equal(S.valuesFor(edited, "spend").leftOver, undefined);
+  // answered as spending
+  S.applySpend(p, { mode: "rows", rows: { housing: 900 } }, PERSONA_TODAY, { guess });
+  assert.equal(p.guide.setup.spendLeft, undefined);
+  const plain = persona("sam"); S.applyLeftOver(plain, { rows: {}, left: 300 }, PERSONA_TODAY, { guess: null }); assert.ok(plain.guide.setup.spendLeft);
+  S.applySpend(plain, { mode: "total", total: 2000 }); assert.equal(plain.guide.setup.spendLeft, undefined);
+});
+
+test("when pay changes later, the spending stays as worked out and the left-over moves with the pay", () => {
+  const p = persona("jordan"), guess = guessFor(p);
+  S.applyLeftOver(p, { rows: {}, left: 1000 }, PERSONA_TODAY, { guess });
+  const rows0 = JSON.stringify(p.expenses.filter((x) => x.id.startsWith("setup-x-")));
+  const pay = p.income.find((x) => x.id === "setup-pay-setup-self"); pay.amount = Number(pay.amount) + 12000;
+  assert.equal(JSON.stringify(p.expenses.filter((x) => x.id.startsWith("setup-x-"))), rows0, "spending untouched");
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.ok(st.spare > 1000 + 400, `the left-over moved up with the raise (${st.spare})`);
+  assert.ok(st.leftFrom.moved > 400, "and the note says by how much");
+  assert.ok(LO.leftMarker(p), "the note still holds: the rows are as written");
+});
+
+test("the year's saving is said once: left-over x 12 and goal saving build up in checking and savings, retirement saving counted once", () => {
+  const y = LO.yearSaving({ monthly: 1000, goalSaving: 100, retirementSaving: 500, debtExtra: 50 });
+  assert.deepEqual(y, { cash: 13200, cashFull: 13200, left: 12000, goals: 1200, retirement: 6000, debt: 600, total: 19800 });
+  const m = (n) => `$${n.toLocaleString("en-US")}`;
+  assert.equal(LO.yearSavingWords({ monthly: 1000, goalSaving: 0, retirementSaving: 0 }, m), "About $12,000 a year builds up in checking and savings.");
+  assert.equal(LO.yearSavingWords({ monthly: 1000, goalSaving: 100, retirementSaving: 500 }, m), "About $13,200 a year builds up in checking, savings and your goals, and $6,000 more goes into retirement.");
+  assert.equal(LO.yearSavingWords({ monthly: -200, goalSaving: 0, retirementSaving: 0 }, m), "About $2,400 a year more goes out than comes in, so checking and savings shrink by that.");
+  assert.equal(LO.yearSavingWords({ monthly: 2, goalSaving: 0, retirementSaving: 300 }, m), "Checking and savings stay about level over a year, and $3,600 goes into retirement.");
+  assert.equal(LO.yearSaving(undefined).total, 0);
+});
+
+test("one answer everywhere: the reveal, Your plan, the Dashboard and Your health read the same yearly saving", () => {
+  const p = persona("patLee"), guess = guessFor(p);
+  S.applyLeftOver(p, { rows: {}, left: 1000 }, PERSONA_TODAY, { guess });
+  S.applyGoalPicks(p, ["cushion"]); S.applyGoalDetails(p, { cushion: { months: 3 } }, PERSONA_TODAY);
+  const n = nextBest(p, { today: PERSONA_TODAY });
+  const want = LO.yearSavingWords(n.spare, (x) => `$${x.toLocaleString("en-US")}`);
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.equal(st.yearWords, want);
+  assert.deepEqual(st.year, n.spare.year);
+  assert.deepEqual(n.spare.year, LO.yearSaving(n.spare));
+  const row = planPage(p, { today: PERSONA_TODAY }).groups.flatMap((g) => g.rows).find((r) => r.key === "month");
+  assert.ok(row.line.includes(want), `Your plan says it: ${row.line}`);
+  // the health score's saving share is built from the same total
+  const h = healthScore(p, { today: PERSONA_TODAY }), part = h.parts.find((x) => x.id === "saving");
+  const s = n.spare, afterTax = s.gross - (s.businessCosts ?? 0) - s.federalTax - s.payrollTax - (s.stateTax ?? 0) - (s.held ?? 0);
+  assert.ok(part.detail.includes(`${Math.round((n.spare.year.total / 12 / afterTax) * 100)}%`), part.detail);
+  // views carry the sentence
+  for (const f of ["../dashboard/view.js", "./view.js"]) assert.ok(fs.readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8").includes("yearWords"), `${f} says the year's saving`);
+});
+
+test("the question's screen: two ways to answer, a minus sign allowed, a clear stop when the answer cannot be saved", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  for (const t of ["I know roughly what I spend", "I know what's left over", "How much does your checking go up in a normal month, before you move any to savings?", "Not sure", "My bills are right", "My left-over is right", "Type a minus sign if it usually goes down", "current?.block?.()", "lw.flush()"]) assert.ok(view.includes(t), t);
+  const ex = fs.readFileSync(fileURLToPath(new URL("../../cashflow/expenses/view.js", import.meta.url)), "utf8");
+  for (const t of ["Set your month in one number", "I know what's left over", "I know what I spend", "Save my month", "applyLeftOver", "applyMonthTotal"]) assert.ok(ex.includes(t), t);
+});
+
+// ---- Feature 2 review fixes (money D1-D11, UX 1-8; 2026-11-07)
+const hh = (id) => HOUSEHOLDS14.find((a) => a.id.startsWith(id));
+const readNow = (p, today) => LO.leftOverOf(nextBest(p, { today }).spare);
+
+test("D1: near the mortgage's payment our Home costs row is never taken for the mortgage, and `ok` always means the figure reads back", async () => {
+  const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
+  const base = migrate(condoOnNetWorthPlan());
+  base.expenses = base.expenses.filter((x) => x.id !== "setup-x-housing");
+  const guess = guessFor(base);
+  let ok = 0;
+  for (let L = 1375; L <= 1975; L += 25) {
+    const p = structuredClone(base);
+    const r = S.applyLeftOver(p, { rows: { utilities: 450, groceries: 1200, transport: 600, insurance: 700, childcare: 300, dining: 600, shopping: 800 }, left: L }, PERSONA_TODAY, { guess });
+    if (!r.ok) continue;
+    ok++;
+    assert.ok(Math.abs(readNow(p, PERSONA_TODAY) - L) <= 1, `L=${L} reads ${readNow(p, PERSONA_TODAY)}`);
+    assert.equal(Math.round(expenses(p, { today: PERSONA_TODAY }).debtPayments), 3201, `L=${L}: both mortgages still count from Debts`);
+  }
+  assert.ok(ok > 10, `the band was worked out (${ok})`);
+  // the C2 case stays: a payment typed under housing (no figure given) is the mortgage
+  const q = structuredClone(base); q.expenses.push({ id: "setup-x-housing", name: "Rent or mortgage", category: "housing", amount: 3201, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
+  assert.ok(expenses(q, { today: PERSONA_TODAY }).monthly < expenses(base, { today: PERSONA_TODAY }).monthly + 3201 + 1, "typed: counted once");
+});
+
+test("D1: whenever the answer is ok the left-over reads it back (a plan that steps with the child care credit is not `ok` on a hope)", () => {
+  let ok = 0, step = 0;
+  for (let L = 3100; L <= 3200; L++) {
+    const p = persona("jordan"); p.guide.setup.taps = { ...(p.guide.setup.taps ?? {}), childcare: "yes", "health-cover": "own" };
+    const r = S.applyLeftOver(p, { ...S.spendAnswers(p), rows: {}, left: L }, PERSONA_TODAY, { guess: guessFor(p) });
+    if (r.ok) { ok++; assert.ok(Math.abs(readNow(p, PERSONA_TODAY) - L) <= 1 + 1e-9, `L=${L} reads ${readNow(p, PERSONA_TODAY)}`); assert.ok(Math.abs(r.left - L) <= 1 + 1e-9); }
+    else { step++; assert.equal(r.why, "step", `L=${L}`); }
+  }
+  assert.ok(ok > 80, `most are worked out (${ok} ok, ${step} step)`);
+});
+
+test("D2: the left-over is what lands in checking before goals take their share, so L x 12 builds up whatever the order of entry", () => {
+  for (const [id, L] of [["01", 1000], ["02", 1000], ["03", 1000]]) {
+    const p = migrate(hh(id).build());
+    const r = S.applyLeftOver(p, { rows: {}, left: L }, HH_TODAY, { guess: null });
+    if (!r.ok) { assert.ok(["bills", "more-than-pay"].includes(r.why), `${id}: ${r.why}`); continue; }
+    const n = nextBest(p, { today: HH_TODAY });
+    assert.ok(Math.abs(n.spare.year.cash - L * 12) <= 12, `${id}: the year builds up ${n.spare.year.cash}, not double`);
+    assert.ok(Math.abs(LO.leftOverOf(n.spare) - L) <= 0.5 + 1e-9);
+    // goals first or goals later write the same spending
+    const noGoals = migrate(hh(id).build()); noGoals.goals = [];
+    const r2 = S.applyLeftOver(noGoals, { rows: {}, left: L }, HH_TODAY, { guess: null });
+    assert.ok(r2.ok, id);
+    assert.equal(r2.figure, r.figure, `${id}: the same spending with or without goals`);
+  }
+  // Priya and Tom: kitchen 600 and baby 400 a month; $1,000 left over means about $10,391 spent, not $9,391
+  const two = migrate(hh("02").build()), r = S.applyLeftOver(two, { rows: {}, left: 1000 }, HH_TODAY, { guess: null });
+  assert.ok(r.ok); assert.ok(Math.abs(r.month - 10391) <= 1, `spending ${r.month}`);
+  assert.equal(S.standing(two, { today: HH_TODAY }).yearWords.startsWith("About $12,000 a year builds up in checking, savings and your goals"), true, S.standing(two, { today: HH_TODAY }).yearWords);
+  // a goal edit does not move the note: pay and bills did not change
+  const before = S.standing(two, { today: HH_TODAY }).leftFrom;
+  const g = two.goals.find((x) => Number(x.monthly) >= 600); g.monthly = 300;
+  assert.ok(Math.abs(S.standing(two, { today: HH_TODAY }).leftFrom.moved) < 1, `moved ${S.standing(two, { today: HH_TODAY }).leftFrom.moved} (was ${before.moved})`);
+  // one household whose own bills already leave $1,237 before goals no longer blames "the bills" for $1,000
+  const one = migrate(hh("01").build()), r1 = S.applyLeftOver(one, { rows: {}, left: 1000 }, HH_TODAY, { guess: null });
+  assert.ok(r1.ok, JSON.stringify(r1));
+});
+
+test("D4: a typed 0 reads level, never a hair below zero (no -$0, no short, no Close-the-gap)", () => {
+  for (const name of ["sam", "jordan", "patLee"]) for (const withGuess of [true, false]) {
+    const p = withGuess ? persona(name) : { sam, jordan, patLee }[name]();
+    const r = S.applyLeftOver(p, { rows: {}, left: 0 }, PERSONA_TODAY, { guess: withGuess ? guessFor(p) : null });
+    assert.ok(r.ok, `${name} ${withGuess}`);
+    const n = nextBest(p, { today: PERSONA_TODAY });
+    assert.ok(n.spare.monthly >= -1e-9 || LO.leftOverOf(n.spare) >= 0, `${name}: ${n.spare.monthly}`);
+    assert.ok(readNow(p, PERSONA_TODAY) >= 0 && readNow(p, PERSONA_TODAY) <= 1, `${name}: ${readNow(p, PERSONA_TODAY)}`);
+  }
+});
+
+test("D5: with no guesses the groups the person typed stay, and the rest is one rough row", () => {
+  const p = sam(); S.finishSetup?.(p);
+  const typed = { housing: 900, utilities: 200, groceries: 400, transport: 300, insurance: 200, dining: 150, shopping: 100 };
+  const q = sam();
+  const r = S.applyLeftOver(q, { rows: typed, left: 300 }, PERSONA_TODAY, { guess: null });
+  if (!r.ok) { assert.ok(["typed", "bills", "more-than-pay"].includes(r.why)); return; }
+  for (const [k, v] of Object.entries(typed)) assert.equal(q.expenses.find((x) => x.id === `setup-x-${k}`)?.amount, v, `${k} stays as typed`);
+  assert.ok(q.expenses.find((x) => x.id === "setup-x-total") || r.figure === 2250, "the rest is one rough row");
+  assert.ok(readsAs(readNow(q, PERSONA_TODAY), 300));
+  // typed groups above what the left-over allows: said, not deleted
+  const w = sam(), before = structuredClone(w);
+  const bad = S.applyLeftOver(w, { rows: typed, left: 3000 }, PERSONA_TODAY, { guess: null });
+  assert.equal(bad.ok, false); assert.ok(["typed", "more-than-pay"].includes(bad.why), bad.why); assert.deepEqual(w, before);
+});
+
+test("D6: uneven pay: 'a normal month' is the month all the pay comes in, and the year is said at that month", async () => {
+  const R8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const p = migrate(R8.freelancerPlan());
+  p.income[0].countOn = 4500; S.applySpend(p, { mode: "total", total: 3000 });   // (she counts on 4,500 a month of the 6,500)
+  assert.ok(nextBest(p, { today: HH_TODAY }).spare.held > 0.5, "some pay is held back");
+  const r = S.applyLeftOver(p, { ...S.spendAnswers(p), rows: {}, left: 1000 }, HH_TODAY, { guess: null });
+  assert.ok(r.ok, JSON.stringify(r));
+  const n = nextBest(p, { today: HH_TODAY });
+  assert.ok(Math.abs(n.spare.full + n.spare.goalSaving - 1000) <= 0.5 + 1e-9, `a normal month reads ${n.spare.full}`);
+  assert.ok(n.spare.monthly < 1000, "the lean month is lower");
+  const w = LO.yearSavingWords(n.spare, (x) => `$${x.toLocaleString("en-US")}`);
+  assert.ok(w.includes("when all your uneven pay comes in"), w);
+});
+
+test("D8: a left-over above everything that comes in is not blamed on the bills", () => {
+  const p = persona("sam"), before = structuredClone(p);
+  const r = S.applyLeftOver(p, { rows: {}, left: 5000 }, PERSONA_TODAY, { guess: guessFor(p) });
+  assert.equal(r.ok, false); assert.equal(r.why, "more-than-pay"); assert.ok(r.available > 1000 && r.available < 5000);
+  assert.deepEqual(p, before);
+});
+
+test("D9: the grey figure is today's left-over once spending is answered; a left-over box left empty keeps the spending", () => {
+  const p = persona("sam"), guess = guessFor(p);
+  assert.equal(S.spendAnswered(p), false);
+  S.applySpend(p, { mode: "rows", rows: {}, sum: 3000 }, PERSONA_TODAY, { guess });
+  assert.equal(S.spendAnswered(p), true);
+  const grey = S.leftOverGuess(p, { ...S.spendAnswers(p), rows: {} }, PERSONA_TODAY, guess);
+  assert.equal(Math.round(grey), Math.round(readNow(p, PERSONA_TODAY)), "today's left-over, not our guesses'");
+  // an empty box applies nothing (the view returns before writing guesses): the source says so
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("left empty and the spending already given: kept as it is"));
+});
+
+test("D10: passing through the question again changes nothing, not even the day; after a raise it starts on what it reads now", () => {
+  const p = persona("jordan"), guess = guessFor(p);
+  S.applyLeftOver(p, { rows: {}, left: 1000 }, "2026-11-01", { guess });
+  const again = structuredClone(p);
+  S.applyLeftOver(again, { ...S.valuesFor(again, "spend"), rows: {}, left: 1000 }, "2026-12-15", { guess });
+  assert.deepEqual(again.guide.setup.spendLeft, p.guide.setup.spendLeft, "the note, its day included, is as it was");
+  assert.deepEqual(again.expenses, p.expenses);
+  // a raise: the reading moves, the spending does not; typing the new reading changes no row
+  const pay = p.income.find((x) => x.id === "setup-pay-setup-self"); pay.amount = Number(pay.amount) + 12000;
+  const now = S.leftReading(p, PERSONA_TODAY);
+  assert.ok(now > 1400);
+  const rows0 = JSON.stringify(p.expenses);
+  const r = S.applyLeftOver(p, { ...S.valuesFor(p, "spend"), rows: {}, left: now }, PERSONA_TODAY, { guess });
+  assert.ok(r.ok); assert.equal(JSON.stringify(p.expenses), rows0, "the spending stays as it was");
+  assert.equal(p.guide.setup.spendLeft.left, now);
+});
+
+test("D3 and UX 1: Continue works the answer out then and there, and a left-over that cannot be worked out never falls back to our guesses", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.equal((view.match(/lw\.flush\(\); return lw\.conflict\(\)/g) ?? []).length, 2, "both screens solve before they judge");
+  assert.equal((view.match(/lw\?\.touch\(\)/g) ?? []).length, 2, "a group typed after the left-over asks again");
+  assert.ok(!/applyLeftOver\([^)]*\)\.ok\) return;\s*\n?\s*applySpend/.test(view), "no silent fall back to guesses");
+  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the left-over amount below, then Continue."));
+});
+
+test("one answer: the Statements page no longer says net worth grows when more goes out than comes in", async () => {
+  const { compute: statements } = await import("../../reports/statements/compute.js");
+  let short = 0;
+  for (const id of ["11", "13"]) {
+    const p = migrate(hh(id).build()), nb = nextBest(p, { today: HH_TODAY }), st = statements(p, { today: HH_TODAY });
+    if (!(nb.ready && nb.spare.monthly < 0 && st.cashflow)) continue;
+    short++;
+    const c = st.cashflow;
+    assert.ok(Math.abs(c.netWorthGrowth - (nb.spare.year.cash + nb.spare.year.retirement - nb.spare.year.goals + nb.spare.year.goals + c.debt.principal)) < 1, `${id}: the month as it reads, x 12, plus the debt paid down`);
+    assert.ok(c.netWorthGrowth < (nb.spare.retirementSaving + nb.spare.goalSaving) * 12 + c.debt.principal, `${id}: not clamped at zero`);
+  }
+  assert.ok(short > 0, "a short household was checked");
+  const view = fs.readFileSync(fileURLToPath(new URL("../../reports/statements/view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("Net worth shrinks by about"));
+});
+
+test("verify: after a raise, Continue with the left-over the plan now reads keeps every spending row as it was (our split follows the pay; the screen says the spending stays)", () => {
+  const p = persona("jordan");
+  S.applyLeftOver(p, { rows: {}, left: 1000 }, PERSONA_TODAY, { guess: guessFor(p) });
+  const pay = p.income.find((x) => x.id === "setup-pay-setup-self"); pay.amount = Number(pay.amount) + 12000;
+  const rows0 = JSON.stringify(p.expenses), now = S.leftReading(p, PERSONA_TODAY);
+  // the app's guess reads the plan as it is now (after the raise), as ctx.guess does on the screen
+  const r = S.applyLeftOver(p, { ...S.spendAnswers(p), left: now }, PERSONA_TODAY, { guess: guessFor(p) });
+  assert.ok(r.ok);
+  assert.equal(JSON.stringify(p.expenses), rows0, "no row moved");
+  assert.equal(p.guide.setup.spendLeft.left, now, "the note now holds what it reads");
+  assert.ok(Math.abs(leftNow(p) - now) <= 0.5);
+  // a group typed on the screen, or a different left-over, still writes
+  const q = structuredClone(p);
+  S.applyLeftOver(q, { ...S.spendAnswers(q), rows: { ...S.spendAnswers(q).rows, groceries: 777 }, left: now }, PERSONA_TODAY, { guess: guessFor(q) });
+  assert.equal(q.expenses.find((x) => x.id === "setup-x-groceries").amount, 777);
+  assert.ok(Math.abs(leftNow(q) - now) <= 0.5, "and the left-over still reads what was typed");
+  const z = structuredClone(p);
+  S.applyLeftOver(z, { ...S.spendAnswers(z), left: now - 200 }, PERSONA_TODAY, { guess: guessFor(z) });
+  assert.ok(Math.abs(leftNow(z) - (now - 200)) <= 0.5);
+});
+
+test("verify: a left-over that is all of what comes in, with no bills at all, is said as more than comes in (not 'add your pay')", () => {
+  const R = persona("sam");
+  R.debts = []; R.expenses = []; R.accounts = (R.accounts ?? []).filter((a) => !/owe/.test(a.id));
+  const r0 = S.applyLeftOver(structuredClone(R), { ...S.spendAnswers(R), left: 100000 }, PERSONA_TODAY, { guess: null });
+  assert.equal(r0.why, "more-than-pay");
+  for (const d of [0, 1]) {
+    const q = structuredClone(R), before = structuredClone(q);
+    const r = S.applyLeftOver(q, { ...S.spendAnswers(q), left: r0.available + d }, PERSONA_TODAY, { guess: null });
+    assert.equal(r.ok, false); assert.equal(r.why, "more-than-pay", `L = all of it + ${d}: ${JSON.stringify(r)}`); assert.deepEqual(q, before);
+  }
+});
+
+test("verify: 'Skip: use our guesses' with a left-over that cannot be worked out uses our guesses (it moved on with no spending at all)", () => {
+  // the setup view cannot be rendered in the fake DOM: the source says Skip judges the left-over first and falls back to our guesses
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  const skip = view.slice(view.indexOf('skipLabel: "Skip: use our guesses", onSkip: () => {\n        if (careOpen()'));
+  assert.ok(/const leftFails = leftTyped\(\) && \(lw\.flush\(\), lw\.conflict\(\)\);/.test(skip.slice(0, 2000)), "Skip solves the left-over before it moves on");
+  assert.ok(/apply: leftFails \? \(d\) => applySpend\(d, \{ \.\.\.spendV\(\), sum: v\.sum0 \}, today, \{ guess: ctx\.guess \}\) : apply/.test(skip.slice(0, 2000)), "and writes our guesses when it cannot be worked out");
+  // what that fallback writes for Sam: every blank group our guess, nothing typed lost
+  const p = persona("sam"), before = structuredClone(p), guess = guessFor(p);
+  assert.equal(S.applyLeftOver(p, { ...S.spendAnswers(p), left: 50000 }, PERSONA_TODAY, { guess }).ok, false);
+  assert.deepEqual(p, before, "the left-over itself writes nothing");
+  S.applySpend(p, { ...S.spendAnswers(p), sum: "" }, PERSONA_TODAY, { guess });
+  assert.ok(p.expenses.filter((x) => x.id.startsWith("setup-x-")).length >= 6, "our guessed rows are written");
+});

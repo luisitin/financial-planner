@@ -74,7 +74,7 @@ export function compute(plan, params = {}) {
       income: s.gross * 12, taxes, living, businessCosts, held, fromLiving: s.gross * 12 - taxes - living - businessCosts - held,
       retirement: s.retirementSaving * 12, goals: s.goalSaving * 12, debtExtra, saving: (s.retirementSaving + s.goalSaving) * 12, net: s.monthly * 12,
       debt: { payments, interest: Math.min(interest, payments), principal: Math.max(0, payments - interest) },
-      netWorthGrowth: (s.retirementSaving + s.goalSaving + Math.max(0, s.monthly)) * 12 + Math.max(0, payments - interest),
+      netWorthGrowth: (s.retirementSaving + s.goalSaving + s.monthly) * 12 + debtExtra + Math.max(0, payments - interest),   // (the month as it reads, below zero too: a household that spends more than it takes in is not told its net worth grows; the saved debt plan's extra pays debt down too, so it is counted: verify 2026-11-07; one answer with spare.year.cash)
     };
   }
 

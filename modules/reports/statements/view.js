@@ -66,7 +66,7 @@ export function render(page, ctx) {
           c.debtExtra > 0.5 ? line("Extra on debts", c.debtExtra, { indent: true, paren: true }) : null,
           line(c.net >= 0 ? "Left in cash" : "Taken from cash", c.net, { bold: true })].filter(Boolean)),
         c.debt.payments > 0 ? ui.h("p", {}, `Of the ${money(c.debt.payments)} a year of loan and card payments on the Debts page, about ${money(c.debt.interest)} is interest and ${money(c.debt.principal)} pays down what you owe.`) : null,
-        list(ui, [`Net worth grows by about ${money(c.netWorthGrowth)} a year from saving and paying down debt, before investment returns and changes in what the house is worth.`])));
+        list(ui, [c.netWorthGrowth >= 0 ? `Net worth grows by about ${money(c.netWorthGrowth)} a year from saving and paying down debt, before investment returns and changes in what the house is worth.` : `Net worth shrinks by about ${money(-c.netWorthGrowth)} a year: more goes out than comes in, so savings are used up, before investment returns and changes in what the house is worth.`])));
     }
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)} from the balances and amounts in the plan. Amounts in brackets are money owed or going out.`));
   });

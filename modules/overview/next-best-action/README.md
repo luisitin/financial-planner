@@ -383,3 +383,7 @@ Money review M6 (2026-11-07): more in the HSA than the Medicare-aware limit is n
 Verify (2026-11-07): with a limit of 0 and money still typed in (the widow on Medicare with 4,400, or a spouse outside a self-only plan), the step is no longer left out:
 "Take this year's money out of the health savings account" ("Nothing can go in this year, so take the $4,400 out before the tax filing deadline."), as the HSA page and
 Contributions already say. With nothing typed there is still no step. Test: "HSA R1 (follow-up 2026-11-07)".
+
+## Left-over given, and the year's saving (2026-11-07)
+`spare.year` is `core/math/leftover.js` `yearSaving(spare)` (a year: `cash` = (left-over + goal saving) x 12, `cashFull` at the month all uneven pay comes in, `retirement`, `debt`, `total`); every page that says how much is saved a year reads it. `spare.fromLeft` is the note `guide.setup.spendLeft` while the spending rows are as we wrote them (spending worked out from a left-over the person gave): the left-over is theirs, so `spare.waits` is false whatever else in the month is a guess.
+`spare.leftOver` is `leftOverOf(spare)` (`core/math/leftover.js`): the left-over as a person means it, the checking account's rise before goal saving (the month all uneven pay comes in when some is held back); a typed left-over is worked against it.

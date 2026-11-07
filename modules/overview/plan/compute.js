@@ -80,7 +80,7 @@ const ROW = {
     if (st.spareWaits) return { value: null, line: `Most of your spending is our guesses, so this waits for yours. With our guesses, about ${S.money(Math.round(amt / 10) * 10)} ${word}.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.spare };
     if (st.drawing) return { value: `${S.money(-st.spare)} a month`, line: `About ${S.money(-st.spare)} a month comes from your savings, as planned.`, status: "calm", guessed: !!st.spendGuessed, figure: st.spare };
     if (st.bank) return { value: null, line: `By your plan, about ${S.money(amt)} is left each month. Your bank shows about ${S.money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, status: "warn", short: "your bank shows more going out than your plan lists", guessed: !!st.spendGuessed, figure: st.spare };
-    if (st.spare >= 0) return { value: `${S.money(amt)} a month`, line: `About ${S.money(amt)} is left each month after tax, bills and saving.`, status: "ok", short: `about ${S.money(amt)} left each month`, guessed: !!st.spendGuessed, figure: st.spare };
+    if (st.spare >= 0) return { value: `${S.money(amt)} a month`, line: `About ${S.money(amt)} is left each month after tax, bills and saving.${st.yearWords ? ` ${st.yearWords}` : ""}`, status: "ok", short: `about ${S.money(amt)} left each month`, guessed: !!st.spendGuessed, figure: st.spare };
     return { value: `${S.money(amt)} short`, line: `About ${S.money(amt)} more goes out than comes in each month.`, status: "warn", short: `about ${S.money(amt)} short each month`, guessed: !!st.spendGuessed, figure: st.spare };
   },
   debts(S) {

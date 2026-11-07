@@ -3,6 +3,7 @@
 // much of each month's money is saved, debt, whether retirement is on track, protection (the stress
 // tests' life shocks), goals, and whether the plan knows enough and is up to date. Every part says
 // what it would take to earn the points it is missing.
+import { yearSaving } from "../../../core/math/leftover.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, rentsHome, DTI_LINES, shownShare } from "../../balance/liabilities/compute.js";
 import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown } from "../../retirement/projection/compute.js";
@@ -61,7 +62,7 @@ export function compute(plan, params = {}) {
     // on the careful month, as the spare is: side income above what you count on (after its tax) is off both sides (review 2026-11-02)
     const s = nb.spare, afterTax = s.gross - (s.businessCosts ?? 0) - s.federalTax - s.payrollTax - (s.stateTax ?? 0) - (s.held ?? 0);
     // the saved debt plan's extra pays down what is owed: it adds to what you are worth as surely as saving does
-    const saved = s.retirementSaving + s.goalSaving + (s.debtExtra ?? 0) + s.monthly;
+    const saved = yearSaving(s).total / 12;   // the one yearly saving (core/math/leftover.js): retirement, goals, debt extra and what is left over
     const rate = afterTax > 0 ? saved / afterTax : 0;
     // short on the careful month: said so, with what a month that brings the Income page's amount leaves (review 2026-11-02;
     // Next best action's spare.full, said as its fullAbout, the one figure every page shows, round 5)

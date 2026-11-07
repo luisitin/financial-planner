@@ -67,6 +67,15 @@ export function mortgageLines(lines, months, pay) {
   if (best) for (const l of lines) if (key(l.t) === best.k) out.add(l.t);
   return out;
 }
+/**
+ * Get started's housing row when it is a share of a month the person gave as one figure (the best-guess box, or a left-over worked
+ * into spending): it carries no guess mark but it is not a typed payment either, and it is the home's costs besides the mortgage
+ * whatever its amount (a share near the mortgage's payment was taken for the mortgage and dropped it from the month).
+ */
+export const sharedHousingRow = (plan, x) => {
+  const ss = plan?.guide?.setup?.spendSum;
+  return x?.id === "setup-x-housing" && !!ss && !(Array.isArray(ss.typed) && ss.typed.includes("housing"));
+};
 /** A bill is one of Get started's spending rows whose amount is still our guess (only a plan whose ledger holds its path). */
 export const guessedSetupRow = (plan, x) => typeof x?.id === "string" && x.id.startsWith("setup-x-") && !!plan?.guesses && typeof plan.guesses === "object"
   && Object.prototype.hasOwnProperty.call(plan.guesses, `expenses[${x.id}].amount`) && isGuess(plan, `expenses[${x.id}].amount`);
@@ -123,8 +132,9 @@ export function compute(plan, params = {}) {
   // there the mortgage still comes from Debts. The check below accepts either way of filing it.
   const mortgagePay = debts ? (debts.rows ?? []).filter((r) => r.type === "mortgage").reduce((s, r) => s + (Number(r.payment) || 0), 0) : 0;
   // (Get started's housing row while it is our guess is never the mortgage's payment: it is the home's other costs, worked
-  // out by our guesses, whatever its name or amount; C3 review D1)
-  const isMortgageBill = (x) => x.category === "housing" && !guessedSetupRow(plan, x) && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1);
+  // out by our guesses, whatever its name or amount; C3 review D1. Nor is it once it is a figure worked out from a left-over, which
+  // carries no guess mark: Get started's housing row is always the home's costs besides the mortgage, whatever its amount)
+  const isMortgageBill = (x) => x.category === "housing" && !guessedSetupRow(plan, x)  && !sharedHousingRow(plan, x) && (/mortgage/i.test(x.name ?? "") || Math.abs(x.monthly - mortgagePay) <= mortgagePay * 0.1);
   const mortgageFiled = mortgagePay > 0 && active.some(isMortgageBill);
   const allDebtPayments = debts ? debts.payments : 0;
   const debtPayments = allDebtPayments - (mortgageFiled ? mortgagePay : 0);

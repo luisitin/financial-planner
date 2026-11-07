@@ -120,3 +120,6 @@ it counts a payment the borrower chooses on top. Every
 - **Round 8 batch 4 follow-up (2026-11-07):** the hint's "save about $X a month more" and "spend about $Y a month less" round up
   (a need or a cut that always works), as Goal seek's now do: $243.53 reads $250 (was $240, which fell short). The saving-rate
   hint "about $X a month more" rounds up too.
+
+## Saving share, one yearly figure (2026-11-07)
+The saving part reads `core/math/leftover.js` `yearSaving(spare).total / 12` (retirement saving + goal saving + debt extra + what is left over), the same total as before, so Your plan, the Dashboard and the reveal say the same yearly saving.

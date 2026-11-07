@@ -30,6 +30,8 @@ import { profileOf } from "../guesses/estimators/common.js";
 import { payOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
+import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords } from "../../../core/math/leftover.js";
+export { leftMarker, leftOverOf, yearSaving, yearSavingWords };
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -1261,6 +1263,7 @@ export function applySpend(draft, v, today = null, { guess = null } = {}) {
   ensure(draft);
   const mode = v.mode === "total" ? "total" : "rows";
   if ((draft.guide.setup.spendMode ?? "rows") !== mode || !draft.guide.setup.spendMode) draft.guide.setup.spendMode = mode;
+  delete draft.guide.setup.spendLeft;   // spending answered as spending: a left-over said before no longer drives it (applyLeftOver sets it again)
   const keep = new Set();
   const line = { period: "monthly", inflates: true, startDate: "", endDate: "" };
   if (mode === "total") {
@@ -1343,6 +1346,7 @@ function applySpendGuessed(draft, v, today, guess) {
   const s = draft.guide.setup;
   const mode = args.mode;
   if ((s.spendMode ?? "rows") !== mode || !s.spendMode) s.spendMode = mode;
+  delete s.spendLeft;   // (see applySpend)
   const ask = (key, path, a = args) => { let e = null; try { e = guess(key, { path, args: a }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; };
   const keep = new Set(), zero = [];
   let split = null, figure = null;
@@ -1404,6 +1408,173 @@ export function spendRowsNow(plan) {
   const guessed = rows.filter((x) => isGuess(plan, `expenses[${x.id}].amount`) && plan.guesses?.[`expenses[${x.id}].amount`]?.s !== BANK_SPREAD);
   const m = (list) => list.reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
   return { count: rows.length, guessed: guessed.length, monthly: m(rows), guessedMonthly: m(guessed), typedMonthly: m(rows) - m(guessed) };
+}
+// ---- Question 6 the other way: "what's left over". Spending and the left-over are one fact said two ways (core/math/leftover.js),
+// so either is typed and the other is worked out. The left-over is Next best action's `spare.monthly`, the app's one figure;
+// the spending that makes it read exactly what was typed is found by writing the rows and reading the figure back, so
+// nothing here repeats the tax, saving or debt arithmetic and the two cannot drift apart.
+/** The spending rows for one whole-dollar figure, written the way question 6 saves them (the best-guess figure shared out; with no guesses the rest, after the groups typed, is one rough row). */
+function writeFigure(c, v, fig, today, guess) {
+  // nothing for the rows (the other bills and loan payments already are the whole month): no row, none of ours left behind
+  if (!(fig > 0)) { applySpend(c, { mode: "total", total: 0 }, today); delete c.guide.setup.spendSum; return; }
+  // (no guesses: the same writer with nothing to share by, so the groups typed stay and the rest is one rough row)
+  applySpendGuessed(c, { ...v, mode: "rows", sum: fig, total: undefined }, today, typeof guess === "function" ? guess : () => null);
+}
+/** The typed groups' total on the screen (blank is ours, 0 is theirs): the rows a worked-out figure must leave alone. */
+const typedTotal = (plan, v) => { const a = spendArgs(plan, { ...v, mode: "rows" }); return Object.values(a.rows).reduce((t, x) => t + (x > 0 ? Math.max(1, Math.round(x)) : 0), 0); };
+/**
+ * Work out the spending rows' total for a month that must read a given figure. `v` is the screen as for applySpend (rows typed
+ * stay typed); `want` is { left } (the left-over a month in the person's sense, core/math/leftover.js leftOverOf: before goal saving,
+ * below zero when the account goes down) or { month } (all of the month's spending, loan payments and every bill on Expenses
+ * included). Rows are written on a copy and the figure read back, a few passes at most (a straight line: each dollar of
+ * spending is a dollar less left over), then the whole dollars around the crossing are tried, because some plans step (a
+ * child care credit that moves with the bills): the answer is only `ok` when the figure read back is within a dollar of the
+ * one asked for (half a dollar unless the plan steps), never on a hope.
+ * -> { ok: true, figure (the rows' total, whole dollars), rows (what the rows add up to), month (all the spending a month),
+ *      others (the part of it that is not these rows: other bills, loan payments), left (the left-over as it then reads),
+ *      spare (Next best action's month as it then reads, for the year's saving), typed }
+ *    | { ok: false, why: "pay" (no pay on file: the left-over cannot be worked out)
+ *      | "typed" (the groups typed already add up to more than the figure leaves room for)
+ *      | "bills" (the other bills on Expenses and the loan payments already do)
+ *      | "more-than-pay" (the left-over is more than comes in after tax and saving: `available` a month)
+ *      | "step" (no whole-dollar spending lands within a dollar of it), over (by how much, a month), allowed (the most they may add up to), available }
+ */
+export function solveSpend(plan, v, want, { today, guess = null } = {}) {
+  const left = want?.left !== undefined;
+  const target = left ? Math.round(Number(want.left)) : Math.round(Number(want?.month));
+  if (!Number.isFinite(target)) return { ok: false, why: "pay", over: 0, allowed: 0 };
+  const typed = typedTotal(plan, v);
+  // one try: the rows for a whole-dollar figure on a copy of the plan, and what the month then reads
+  const attempt = (fig) => {
+    const c = structuredClone(plan), w = Math.max(0, Math.round(fig));
+    writeFigure(c, v, w, today, guess);
+    let exp = null, spare = null, m = null;
+    try { exp = computeExpenses(c, { today }); } catch { return null; }
+    if (left) { let n = null; try { n = computeNext(c, { today }); } catch { n = null; } spare = n?.ready ? n.spare : null; if (!spare) return null; m = leftOverOf(spare); }
+    else m = exp.monthly;
+    return { w, c, exp, spare, m, rows: setupRowsMonthly(c) };
+  };
+  const sign = left ? -1 : 1;
+  let fig = typed + 1000, last = null, seen = null;
+  for (let pass = 0; pass < 6; pass++) {
+    last = attempt(fig);
+    // (no rows and no other bills leave no month to read: a left-over that is all of what comes in, said as such, not "add your pay"; verify 2026-11-07)
+    if (!last) return left && seen !== null && Math.round(fig) <= 0 ? { ok: false, why: "more-than-pay", over: Math.max(0, Math.round(target - seen)), allowed: 0, available: Math.round(seen) } : { ok: false, why: "pay", over: 0, allowed: 0 };
+    if (left) seen = last.m + last.exp.monthly;
+    const diff = (target - last.m) * sign;        // dollars to add to the rows to land on the target
+    if (pass > 0 && Math.abs(diff) <= 0.5 + 1e-9) break;
+    fig = last.w + diff;
+    // the pay side of the month: what comes in after tax and saving, before any spending (the left-over is more than that: nothing can be spent)
+    const available = left ? last.m + last.exp.monthly : null;
+    if (left && available - target < -0.5) return { ok: false, why: "more-than-pay", over: Math.round(target - available), allowed: 0, available: Math.round(available) };
+    // below what the typed groups already add up to, the figure cannot be reached: nothing is left to share
+    if (fig < typed - 0.5 || fig < -0.5) {
+      // below zero for all the rows: the other bills and loan payments alone use up the month; else the groups typed are too much
+      return fig < -0.5 ? { ok: false, why: "bills", over: Math.max(0, Math.round(-fig)), allowed: 0, available: available === null ? null : Math.round(available) } : { ok: false, why: "typed", over: Math.max(0, Math.round(typed - fig)), allowed: Math.round(fig), available: available === null ? null : Math.round(available) };
+    }
+  }
+  // the crossing found: keep it when it reads the figure to the dollar (a typed 0 reads level: never a hair below it); else try the
+  // whole dollars around it and keep the closest, none within a dollar being "step" (nothing is written then)
+  const level = left && target === 0;
+  const score = (r) => (level && r.m < 0 ? Infinity : Math.abs(r.m - target));
+  let best = last;
+  if (!(score(best) <= 0.5)) {
+    const seen = new Map([[best.w, best]]);
+    for (let d = -3; d <= 3; d++) {
+      const w = Math.max(typed, best.w + d);
+      if (seen.has(w)) continue;
+      const r = attempt(w);
+      if (r) seen.set(w, r);
+    }
+    for (const r of seen.values()) if (score(r) < score(best) || (score(r) === score(best) && r.w < best.w)) best = r;
+    if (!(score(best) <= 1 + 1e-9)) return { ok: false, why: "step", over: 0, allowed: 0 };
+  }
+  const others = best.exp.monthly - best.rows;
+  // nothing at all to spend on (no bills, no loan payments, and the left-over is all of what comes in): not a month of any household
+  if (best.w === 0 && others < 0.5) return { ok: false, why: "more-than-pay", over: 0, allowed: 0, available: left ? Math.round(best.m + best.exp.monthly) : null };
+  return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others };
+}
+/** Question 6's answers as the plan holds them now, for applyLeftOver / applyMonthTotal called from another page (Expenses): typed groups stay, our figures follow. */
+export function spendAnswers(plan) {
+  const v = valuesFor(plan, "spend");
+  return { ...v, retireMonthly: v.retireTyped ? v.retireMonthly : "", retireAuto: !v.retireTyped };
+}
+/**
+ * Question 6 answered as "what's left over" (v.left a month, a number below zero when the account goes down): writes the same rows
+ * the question writes, our guessed split scaled to the total that makes the left-over read exactly v.left, never touching a
+ * group the person typed, and keeps the note guide.setup.spendLeft { left, on, rows } (core/math/leftover.js leftMarker).
+ * The note's day only moves when the left-over or the rows do (passing through the question again changes nothing).
+ * -> the solveSpend answer; on `ok: false` nothing is written.
+ */
+export function applyLeftOver(draft, v, today = null, { guess = null } = {}) {
+  const left = Math.round(Number(parseMoney(v.left))) + 0;   // (+ 0: never a negative zero)
+  const r = solveSpend(draft, v, { left }, { today, guess });
+  if (!r.ok) return r;
+  ensure(draft);
+  const prev = draft.guide.setup.spendLeft;
+  // the spending already reads this left-over and nothing else on the screen differs (Continue after pay moved, with the box on what it
+  // now reads): the rows stay as they are, row by row. Our split follows the pay, so writing it again moved rent and food while the
+  // screen said "Continue keeps your spending as it is" (verify 2026-11-07, review D10)
+  if (!readsAlready(draft, v, left, today)) writeFigure(draft, v, r.figure, today, guess);
+  const rows = Math.round(setupRowsMonthly(draft));
+  draft.guide.setup.spendLeft = prev && Number(prev.left) === left && Number(prev.rows) === rows ? { ...prev } : { left, on: today ?? "", rows };
+  return r;
+}
+/**
+ * The plan already reads left-over `left` with the screen `v` as the plan holds it: none of the spending rows is our guess, the groups
+ * typed on the screen are the rows' amounts, the taps and a typed retirement figure are as saved. Then applyLeftOver writes only the note.
+ */
+function readsAlready(plan, v, left, today) {
+  if (spendRowsNow(plan).guessed > 0) return false;
+  const mine = L(plan, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
+  if (mine.some((x) => x.period !== "monthly")) return false;
+  const args = spendArgs(plan, { ...v, mode: "rows" }), s = setupOf(plan);
+  for (const [k, x] of Object.entries(args.rows)) {
+    if (x === null || x === undefined) continue;
+    const amt = Math.round(Number(byId(mine, `setup-x-${k}`)?.amount) || 0);
+    if (amt !== (x > 0 ? Math.max(1, Math.round(x)) : 0)) return false;
+  }
+  if (Object.entries(args.taps).some(([k, x]) => (s.taps?.[k] ?? null) !== x)) return false;
+  const later = v.retireAuto === false ? pos(v.retireMonthly) : null;
+  if (later && Number(plan.retirement?.spendingMonthly) !== later) return false;
+  let n = null;
+  try { n = computeNext(plan, { today }); } catch { return false; }
+  if (!n?.ready) return false;
+  const m = leftOverOf(n.spare);
+  return left === 0 ? m >= -1e-9 && m <= 1 : Math.abs(m - left) <= 0.5 + 1e-9;
+}
+/**
+ * The left-over as the plan reads it now (before goal saving, core/math/leftover.js leftOverOf), whole dollars, or null when it
+ * cannot be worked out (no pay yet). What the box on question 6 is filled with after pay or bills moved the figure.
+ */
+export function leftReading(plan, today) {
+  try { const n = computeNext(plan, { today }); return n?.ready ? Math.round(leftOverOf(n.spare)) + 0 : null; } catch { return null; }
+}
+/** Spending already answered by the person (a figure given, groups typed, or worked out from a left-over): the rows are theirs, not our guesses. */
+export const spendAnswered = (plan) => !!leftMarker(plan) || spendRowsNow(plan).typedMonthly > 0.5;
+/**
+ * All of the month's spending typed in one figure (Expenses): the same rows, sized so the whole month, bills and loan payments
+ * included, adds up to `total`. The rows typed stay; -> the solveSpend answer, nothing written on `ok: false`.
+ */
+export function applyMonthTotal(draft, v, today = null, { guess = null } = {}) {
+  const r = solveSpend(draft, v, { month: Math.round(Number(parseMoney(v.total))) }, { today, guess });
+  if (!r.ok) return r;
+  ensure(draft);
+  writeFigure(draft, v, r.figure, today, guess);
+  return r;
+}
+/**
+ * The grey figure in the left-over box: what the month leaves now when the spending is already the person's (given, typed or worked
+ * out), else what it would leave if we guessed the spending (the screen's typed groups kept). Null when it cannot be worked out.
+ */
+export function leftOverGuess(plan, v, today, guess = null) {
+  if (spendAnswered(plan)) return leftReading(plan, today);
+  const c = structuredClone(plan);
+  try { writeBlank(c, v, today, guess); const n = computeNext(c, { today }); return n?.ready ? leftOverOf(n.spare) : null; } catch { return null; }
+}
+function writeBlank(c, v, today, guess) {
+  const blank = { ...v, mode: "rows", sum: "", total: "" };
+  if (typeof guess === "function") applySpendGuessed(c, blank, today, guess); else applySpend(c, { ...blank, mode: "rows" }, today);
 }
 /** Q7. What you are working toward (keys of GOALS; a kind the plan already has is not added). Goals linked from elsewhere stay. */
 export function applyGoalPicks(draft, keys) {
@@ -1780,7 +1951,9 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     const ss = s.spendSum, mine = L(plan, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
     const held = ss && ss.sum > 0 && Array.isArray(ss.typed) && ss.typed.every((k) => byId(mine, `setup-x-${k}`)) && Math.round(mine.reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0)) === ss.sum && mine.every((x) => x.period === "monthly");
     const rowOr = (key) => (held && !ss.typed.includes(key) && byId(mine, `setup-x-${key}`) ? "" : rowOf(key));
-    return { mode: s.spendMode ?? "rows", ...(held ? { sum: ss.sum } : {}), rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOr(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
+    // spending worked out from a left-over (applyLeftOver): the screen reopens on that answer, with the figure the person typed
+    const note = leftMarker(plan);
+    return { mode: s.spendMode ?? "rows", ...(note ? { leftOver: note.left, leftOn: note.on } : {}), ...(held ? { sum: ss.sum } : {}), rows: Object.fromEntries(SPEND.map((x) => [x.key, rowOr(x.key)])), total: byId(L(plan, "expenses"), "setup-x-total")?.amount ?? "", retireMonthly: rt > 0 && !ours ? rt : "", retireTyped: rt > 0 && !s.retireAuto, taps: Object.fromEntries(SPEND_TAPS.map((k) => [k, s.taps?.[k] ?? null])) };
   }
   if (screen === "goals") return picks(plan, "goals");
   if (screen === "goal-details") return Object.fromEntries(GOALS.filter((g) => !g.focus).map((g) => {
@@ -2069,6 +2242,11 @@ export function standing(plan, { today }) {
     // half or more of what you own, or of what you owe, is our guesses (Net worth's partlyGuessed): the tile says so and waits
     ...(nw.partlyGuessed ? { netWorthGuessed: true } : {}),
     spare, runway, runwayTarget: liq?.targetMonths ?? null, runwayStatus, drawing, saved, lean,
+    // what the month builds up in a year, said once (core/math/leftover.js, through Next best action's spare.year): only when the
+    // left-over is known (not waiting on guesses) and not drawn from savings as planned; `leftFrom` when spending was worked out
+    // from a left-over the person gave, with how far the left-over has moved since (pay or bills changed)
+    ...(nba?.ready && !spareWaits && !drawing ? { year: nba.spare.year, yearWords: yearSavingWords(nba.spare, (n) => fmtMoney(n, plan?.meta?.currency ?? "USD")) } : {}),
+    ...(nba?.ready && nba.spare.fromLeft ? { leftFrom: { ...nba.spare.fromLeft, moved: nba.spare.leftOver - nba.spare.fromLeft.left, now: nba.spare.leftOver, spending: nba.spare.spending, goals: nba.spare.goalSaving } } : {}),
     // the full cushion waits on purpose while costly debt is paid first (next-best-action cushionLater): "enough for now"
     cushionLater: (runwayStatus === "warn" || runwayStatus === "bad") ? cushionLater(nba) : null,
     bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null, bankCard,

@@ -399,3 +399,31 @@ test("batch 6: debtsCounted lists the Debts rows the month carries, at the amoun
   q.expenses.find((x) => x.id === "x-mort").amount = 3200;
   assert.deepEqual(by(compute(q, { today: T }).debtsCounted), [{ id: "setup-owe-mortgage", monthly: 2350 }, { id: "condo-loan", monthly: 851 }]);
 });
+
+test("verify: the left-over box on 'Set your month in one number' asks for a keyboard with a minus sign (an iPhone's number pad has none)", async () => {
+  const { render } = await import("./view.js");
+  const mkNode = (tag, kids = []) => {
+    const n = { tag, kids: [], style: {}, attrs: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.kids.push(c); },
+      replaceChildren(...k) { n.kids = []; n.append(...k); }, remove() {}, scrollIntoView() {}, querySelector() { return null; }, setAttribute(k, v) { n.attrs[k] = v; }, set innerHTML(v) { n.kids = []; void v; },
+      get textContent() { return n.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } };
+    n.append(...kids); return n;
+  };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const T = "2026-11-02";
+  const plan = emptyPlan();
+  plan.meta.currency = plan.meta.currency ?? "USD";
+  plan.income = [{ id: "i1", name: "Pay", type: "salary", amount: 60000, period: "annual" }];
+  plan.expenses = [{ id: "x1", name: "Rent", category: "housing", amount: 1200, period: "monthly", essential: true }];
+  const boxes = [];
+  const ui = { h: (tag, a, ...k) => mkNode(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => mkNode("card", [t, ...k]),
+    button: (l) => mkNode("button", [l]), notice: (lv, t) => mkNode("notice", [t]), row: (...k) => mkNode("row", k), stat: (l, v, s) => mkNode("stat", [l, v, s]),
+    form: (f) => { const form = mkNode("form"); if (f.some((x) => x.key === "amount")) { const box = mkNode("input"); boxes.push({ label: f[0].label, box }); form.querySelector = (sel) => (sel === 'input[name="amount"]' ? box : null); } return form; },
+    field: (l, c) => mkNode("field", [l, c]), select: () => mkNode("select"), uid: () => "u1", confirm: () => false };
+  const root = mkNode("root");
+  // (the form lands in the card's host after it is built: the host's querySelector reaches the form's box)
+  const realH = ui.h; ui.h = (tag, a, ...k) => { const n = realH(tag, a, ...k); n.querySelector = (sel) => { for (const c of n.kids) { const r = c?.querySelector?.(sel); if (r) return r; } return null; }; return n; };
+  render(root, { ui, fmt: { ...fmt, today: () => T }, plan, store: { update() {} }, computeOf: () => null, route: { query: {} } });
+  const left = boxes.find((b) => /checking go up/.test(b.label));
+  assert.ok(left, "the left-over box is drawn");
+  assert.equal(left.box.attrs.inputmode, "text");
+});
