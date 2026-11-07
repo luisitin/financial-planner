@@ -31,7 +31,7 @@ test("all transactions, newest first, totals exclude transfers, months and accou
   assert.equal(d.rows.find((r) => r.id === "t4").categoryLabel, "Groceries");
   assert.equal(d.rows.find((r) => r.id === "t7").transfer, true);
 });
-test("filters: month, account, uncategorised, search; paging", () => {
+test("filters: month, account, uncategorized, search; paging", () => {
   const p = samplePlan();
   let d = compute(p, { month: "2026-08" });
   assert.equal(d.matched, 4); near(d.in, 1950); near(d.out, 1608);

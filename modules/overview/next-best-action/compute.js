@@ -196,9 +196,9 @@ export function compute(plan, params = {}) {
   if (spare.monthly < 0) { try { drawing = drawingAsPlanned(plan, { today }); } catch { drawing = null; } }
   if (spare.waits) add({ id: "bills", title: "Type what you really spend", why: "Most of your spending is our guesses, and they decide whether your month works.", status: "now", waits: true,
     detail: `${spare.spending - spare.guessedMonthly < 5 ? `All ${money(spare.spending)} a month of your spending is our guesses for now` : `About ${money(spare.guessedMonthly)} of your ${money(spare.spending)} a month of spending is our guesses`}, so what is left each month is not known yet. With our guesses it would be about ${money(Math.abs(spare.monthly))} ${spare.monthly < 0 ? "short" : "spare"}. Type what you really spend to see what's really left.`, go: ["cashflow", "expenses"] });
-  else if (drawing) add({ id: "bills", title: "Spend within what the plan can carry", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
-    detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can carry about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
-  else add({ id: "bills", title: "Spend less than comes in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
+  else if (drawing) add({ id: "bills", title: "Spend within what the plan can pay for", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
+    detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can pay for about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
+  else add({ id: "bills", title: "Spend less than you bring in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
     detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}${spare.held > 0.5 ? ", counting uneven pay at what you can count on" : ""}.`)
       : shortDetail, go: ["cashflow", "expenses"] });
 
@@ -265,10 +265,10 @@ export function compute(plan, params = {}) {
   // kept when the verify put the need back: Priya's $28,000 is real, but it is not the couple's first move)
   const protectLater = gaps.length > 0 && gaps.every((g) => g.eitherWay) && !(plan.household?.people ?? []).some((q) => q.role === "dependent");
   // the words come from Life insurance needs (protectionGaps' title and sentence), so every page says the same thing
-  const protectStep = () => add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term cover is the cheap way to buy it.", status: "now", gap: null,
+  const protectStep = () => add({ id: "protect", title: "Protect the people who count on you", why: "If an earner died, life insurance keeps the family's plan whole. Term life insurance is the cheap way to buy it.", status: "now", gap: null,
     people: gaps.map((g) => ({ personId: g.id, name: g.name, who: g.who, whose: g.whose, gap: g.gap, cover: g.cover, until: g.until, depends: g.depends, ending: g.endsSoon.length > 0, title: g.title, sentence: g.sentence })),
     // resting on our guesses of the spending: said once, after every person's sentence (C3 fix walk)
-    detail: (gaps.length > 1 && gaps.some((g) => g.rough) ? gaps.map((g) => g.sentence.replace(RESTS_ON, "")).join(" ") + RESTS_ON : gaps.map((g) => g.sentence).join(" ")) + " Cover you already have, through work too, goes on Policies.",
+    detail: (gaps.length > 1 && gaps.some((g) => g.rough) ? gaps.map((g) => g.sentence.replace(RESTS_ON, "")).join(" ") + RESTS_ON : gaps.map((g) => g.sentence).join(" ")) + " Add insurance you already have, including any through work, on Policies.",
     go: ["insurance", "life-needs"] });
   if (gaps.length && !protectLater) protectStep();
 
@@ -350,14 +350,14 @@ export function compute(plan, params = {}) {
     const starting = [...onFile, ...fresh].filter((x) => x.kind !== "ask" && x.match);
     const monthlyCost = starting.reduce((t, x) => t + (Number(x.match.take) || 0) * (Number(x.match.paychecks) || 0), 0) / 12;
     const leftNames = leftOnly.map((p) => p.name);
-    const left = !leftOnly.length ? "" : leftNames.every(asTyped) ? ` ${leftNames.join(" and ")}'s 401(k) is from a job left: check whether the job now has a plan with a match.`
-      : leftNames.length === 1 ? ` ${NameOf(leftNames[0])} 401(k) is from a job left: check whether the job now has a plan with a match.`
+    const left = !leftOnly.length ? "" : leftNames.every(asTyped) ? ` ${leftNames.join(" and ")}'s 401(k) is from a job you left: check whether the job now has a plan with a match.`
+      : leftNames.length === 1 ? ` ${NameOf(leftNames[0])} 401(k) is from a job you left: check whether the job now has a plan with a match.`
       : ` ${leftNames.map((n, i) => (i ? nameOf(n) : NameOf(n))).join(" and ")} 401(k)s are from jobs left: check whether the jobs now have a plan with a match.`;
     const had = working.length || leftOnly.length;
     const planned = missingMatch.filter(saidPlan), otherMissing = missingMatch.filter((p) => !saidPlan(p));
-    const plannedWords = !planned.length ? "" : planned.length === 1 ? `${NameOf(planned[0].name)} job has a retirement plan (you said so in Get started), but nothing goes into it yet.` : `${whoLeads(planned.map((p) => p.name))} each have a job with a retirement plan (you said so in Get started), but nothing goes into them yet.`;
+    const plannedWords = !planned.length ? "" : planned.length === 1 ? `${NameOf(planned[0].name)} job has a retirement plan (you said so in Set up my plan), but nothing goes into it yet.` : `${whoLeads(planned.map((p) => p.name))} each have a job with a retirement plan (you said so in Set up my plan), but nothing goes into them yet.`;
     const missingWords = otherMissing.length ? `${whoLeads(otherMissing.map((p) => p.name))} ${otherMissing.length === 1 ? verbFor(otherMissing[0].name, "has", "have") : "have"} a 401(k) and pay but no contribution on file.` : "";
-    const before = !had ? "" : toAsk.length ? `${[plannedWords, missingWords].filter(Boolean).join(" ")}${missingMatch.length ? ` Check whether the employer matches, and put in at least enough to get all of it.${otherMissing.length ? " If the 401(k) is from a job left, or there is no match, say so on Retirement contributions." : " If there is no match, say so on Retirement contributions."}` : ""}${left}`.trim() : !contributing.length ? ""
+    const before = !had ? "" : toAsk.length ? `${[plannedWords, missingWords].filter(Boolean).join(" ")}${missingMatch.length ? ` Check whether the employer matches, and put in at least enough to get all of it.${otherMissing.length ? " If the 401(k) is from a job you left, or there is no match, say so on Retirement contributions." : " If there is no match, say so on Retirement contributions."}` : ""}${left}`.trim() : !contributing.length ? ""
       // (with a 401(k) still to start, "Everyone with a 401(k)" would not be true: those who put money in, by name)
       : (() => {
         const who = matched.length ? matched : onFile.length ? contributing : [];
@@ -453,8 +453,8 @@ export function compute(plan, params = {}) {
     const rest = Math.max(0, payOwed - fromSavings);
     const detail = !fromSavings && highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
       : full ? `Pay ${pays.length === 1 ? `the ${pays[0].name}'s ${exact(pays[0].owed)}` : `all ${exact(payOwed)} (${pays.map((d) => d.name).join(" and ")})`} from savings now: ${keep}. Paying it is a sure ${rates} return.${hs.sentence && pays === hs.off ? ` ${hs.sentence}` : ""}`
-      : fromSavings ? `Pay ${money(fromSavings)} of the ${money(payOwed)} (${pays.map((d) => `${d.name} at ${pct(d.rate)}`).join(", ")}) from savings now: ${keep}. The other ${money(rest)} ${pays === hs.off ? "comes from what is left each month" : "keeps going on your Pay off debts plan"}.${hs.sentence && pays === hs.off ? ` ${hs.sentence}` : ""}`
-      : `${highWords(hs.off)}: every extra dollar here earns the rate for sure.${hs.sentence ? ` ${hs.sentence}` : ""}`;
+      : fromSavings ? `Pay ${money(fromSavings)} of the ${money(payOwed)} (${pays.map((d) => `${d.name} at ${pct(d.rate)}`).join(", ")}) from savings now: ${keep}. The other ${money(rest)} ${pays === hs.off ? "comes from what is left each month" : "keeps going on your payoff plan"}.${hs.sentence && pays === hs.off ? ` ${hs.sentence}` : ""}`
+      : `${highWords(hs.off)}: every extra dollar you pay here saves you that interest rate, guaranteed.${hs.sentence ? ` ${hs.sentence}` : ""}`;
     add({ id: "high-debt", title: fromSavings ? "Pay off expensive debt from savings" : "Pay off expensive debt", why: `Debt at ${Math.round(HIGH_RATE * 100)}% or more costs more than investing is likely to earn.`, status: highGap > 0 || fromSavings > 0 ? "now" : "done",
       gap: Math.max(0, highGap - fromSavings), fromSavings, doneDate: full ? today : null, detail, go: ["debt", "payoff"] });
   }
@@ -525,7 +525,7 @@ export function compute(plan, params = {}) {
     // (money review M6); the extra has to come out by the filing deadline or a 6% charge applies every year
     const tooMuch = Math.max(0, hsaUsed - hsaLimit);
     add({ id: "hsa", title: tooMuch >= 1 ? (hsaLimit > 0 ? "Take the extra out of the health savings account" : "Take this year's money out of the health savings account") : "Fill the health savings account", why: tooMuch >= 1 ? "Money over the limit is charged 6% every year it stays in." : "Tax-free going in, growing and coming out for health costs: the only triple tax break.", status: room > 0 || tooMuch >= 1 ? "now" : "done", roomYearly: room,
-      detail: tooMuch >= 1 ? (hsaLimit > 0 ? `${money(tooMuch)} over this year's limit (${money(hsaLimit)}): take it out before the tax filing deadline.` : `Nothing can go in this year, so take the ${money(tooMuch)} out before the tax filing deadline.`) : room > 0 ? `${money(room)} of room left this year (limit ${money(hsaLimit)}, ${family ? "family" : "self-only"} cover).` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
+      detail: tooMuch >= 1 ? (hsaLimit > 0 ? `${money(tooMuch)} over this year's limit (${money(hsaLimit)}): take it out before the tax filing deadline.` : `Nothing can go in this year, so take the ${money(tooMuch)} out before the tax filing deadline.`) : room > 0 ? `${money(room)} of room left this year (limit ${money(hsaLimit)}, ${family ? "family" : "self-only"} coverage).` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
   }
 
   // 6. an IRA for each adult with earned income

@@ -14,7 +14,7 @@ export default {
   needs: ["household", "income", "taxes"],
   writes: ["taxes"],
   heavy: false,
-  purpose: "Quarterly estimated payments: the safe-harbour amount, what is due each quarter and when, and where you stand today.",
+  purpose: "Quarterly estimated payments: the safe-harbor amount, what is due each quarter and when, and where you stand today.",
   aliases: ["estimated tax", "quarterly", "1040-es", "safe harbor", "safe harbour", "penalty", "self-employed tax"],
   compute,
   render,

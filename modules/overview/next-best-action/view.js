@@ -38,7 +38,7 @@ export function render(page, ctx) {
   page.append(root);
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Next best action"),
-      ui.h("p", { class: "lede" }, "What to do with your next spare dollar, in the order most planners agree on: the bills, a small cash cushion, the employer match, expensive debt, a full emergency fund, then the tax-sheltered accounts. It needs:"),
+      ui.h("p", { class: "lede" }, "What to do with your next spare dollar, in the order most planners agree on: the bills, a starter emergency fund, the employer match, expensive debt, a full emergency fund, then the tax-sheltered accounts. It needs:"),
       ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Income"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"))));
     return;
   }
@@ -57,7 +57,7 @@ export function render(page, ctx) {
     ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
     ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),
     // retired and drawing as planned: say that, not "the tax-sheltered accounts full"
-    ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${money(-d.spare.monthly)} a month comes from savings. If markets do as well as average, the plan can carry about ${money(d.drawing.affordableMonthly)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less). Check it once a year, or after a big fall in the markets.` : "Bills covered, cushion full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
+    ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${money(-d.spare.monthly)} a month comes from savings. If markets do as well as average, the plan can pay for about ${money(d.drawing.affordableMonthly)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less). Check it once a year, or after a big fall in the markets.` : "Bills covered, emergency fund full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
     n && when(n) ? ui.h("p", {}, when(n)) : null,
     n ? ui.row(ui.h("a", { class: "btn", href: `#/${n.go[0]}/${n.go[1]}` }, "Open the page")) : null));
 
@@ -74,16 +74,16 @@ export function render(page, ctx) {
   const parts = monthLines(s, d.debtPlan).map((x) => [x.key === "spending" && waits ? `Spending (${s.spending - s.guessedMonthly < 5 ? "all" : `about ${money(s.guessedMonthly)}`} of it our guesses)` : x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
-    ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Spare", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
+    ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Left over", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
     ui.h("ul", { class: "nb-key" },
       ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, d.drawing ? "Income before tax" : "Pay and other income, before tax"), ui.h("span", {}, money(s.gross))),
       // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
       parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${money(-v)}` : `- ${money(v)}`))),
       waits ? ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, "With our guesses"), ui.h("span", { class: "muted" }, `about ${money(Math.abs(s.monthly))} ${s.monthly < 0 ? "short" : "spare"}`))
-        : ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Spare each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
+        : ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Left over each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? money(-s.monthly) : money(s.monthly)))),
     waits ? ui.h("p", {}, "Type what you really spend and this becomes your real figure.") : null,
     waits ? ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/setup/spend?back=done" }, "Type what you spend \u203a")) : null,
-    ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is the State page's rate on this income; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State page."} Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
+    ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is the State tax page's rate on this income; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State tax page."} Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
 
   // the order
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The order"),
@@ -102,7 +102,7 @@ export function render(page, ctx) {
     ui.h("div", { class: "fold-body" }, ui.h("ul", {},
       ui.h("li", {}, "It follows the order most planners agree on: the r/personalfinance wiki's \"prime directive\" and the Bogleheads' \"prioritizing investments\". Each step earns more, or protects more, than the ones after it."),
       ui.h("li", {}, `Expensive debt is anything at ${Math.round(HIGH_RATE * 100)}% or more; middling debt ${Math.round(MODERATE_RATE * 100)}% up to that. The mortgage is left to the last step: paying it early is a fine choice, not a must.`),
-      ui.h("li", {}, "The dates assume every spare dollar goes to the steps in order, one-off amounts first, then this year's room in each account; interest on the debts and next year's new limits are left out, so they are about right, not exact."),
+      ui.h("li", {}, "The dates assume every spare dollar goes to the steps in order, one-time amounts first, then this year's room in each account; interest on the debts and next year's new limits are left out, so they are about right, not exact."),
       ui.h("li", {}, "Spare money is pay after federal income tax (the Federal estimate page), Social Security and Medicare tax (7.65% of pay, 15.3% of 92.35% of self-employment profit), spending, and the saving already set up."),
     ))));
 }

@@ -22,7 +22,7 @@ const STYLE = `
 const FIELDS = [
   { key: "name", label: "Plan name", type: "text", required: true, placeholder: "e.g. Gold PPO" },
   { key: "premium", label: "Your premium a month", type: "money", min: 0, help: "what comes out of your pay, not the employer's share" },
-  { key: "deductible", label: "Deductible a year", type: "money", min: 0, help: `for the cover you choose below (family deductible for family cover)` },
+  { key: "deductible", label: "Deductible a year", type: "money", min: 0, help: `for the coverage you choose below (family deductible for family coverage)` },
   { key: "coinsurance", label: "Your share after the deductible", type: "percent", min: 0, max: 100, help: "e.g. 20 for 20%; 0 if it pays everything after the deductible" },
   { key: "oopMax", label: "Out-of-pocket maximum a year", type: "money", min: 0, help: "the most you could pay for care in a year" },
   { key: "hsa", label: "Can have a health savings account (HSA)", type: "checkbox" },
@@ -42,7 +42,7 @@ export function render(page, ctx) {
 
   if (!d.count) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Which health plan?"),
-    ui.h("p", { class: "lede" }, "The cheapest premium is not always the cheapest plan. Enter the plans you can choose from (open enrollment lists them) and this page adds up what each would really cost you: premiums plus your share of the bills, less any HSA money and tax savings, in a quiet year, a usual year and a bad one."),
+    ui.h("p", { class: "lede" }, "The cheapest premium is not always the cheapest plan. Enter the plans you can choose from (your open enrollment papers list them). This page adds up what each would really cost you in a quiet year, a usual year and a bad one: premiums plus your share of the bills, minus any HSA money and tax savings."),
     ui.h("p", { class: "muted small" }, "Each plan's summary of benefits has the four figures: premium, deductible, your share after it, and the out-of-pocket maximum.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
@@ -98,14 +98,14 @@ export function render(page, ctx) {
 
   // the household's settings
   const h = plan.insurance?.health ?? {};
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.count ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "Your cover and your bills"), ui.h("span", { class: "fold-status" }, `${d.tier === "family" ? "family" : "just you"}, ${money(d.expected)} a year`), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(ui.h("details", { class: "card fold fold-card", open: d.count ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "Your coverage and your bills"), ui.h("span", { class: "fold-status" }, `${d.tier === "family" ? "family" : "just you"}, ${money(d.expected)} a year`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
-      { key: "tier", label: "Cover for", type: "select", options: [{ value: "self", label: "Just me" }, { value: "family", label: "Me and family" }] },
-      { key: "expected", label: "Medical bills in a usual year", type: "money", min: 0, help: "what the plan would be charged for your visits, prescriptions and tests (not what you paid). Last year's explanation of benefits shows it; 5,000 if unsure" },
+      { key: "tier", label: "Coverage for", type: "select", options: [{ value: "self", label: "Just me" }, { value: "family", label: "Me and family" }] },
+      { key: "expected", label: "Medical bills in a usual year", type: "money", min: 0, help: "what the plan would be charged for your visits, prescriptions and tests (not what you paid). Last year's explanation of benefits shows it; $5,000 if unsure" },
     ], { tier: d.tier, expected: h.expected ?? "" }, (v) => {
       pending = "Saved.";
       store.update((p) => { p.insurance = p.insurance ?? { policies: [] }; p.insurance.health = { ...(p.insurance.health ?? {}), tier: v.tier, expected: v.expected ?? null }; });
     }, { submitLabel: "Save" }),
-    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(d.hdhp.minDeductible)} and an out-of-pocket maximum of at most ${money(d.hdhp.maxOop)} (${d.tier === "family" ? "family" : "self-only"} cover, ${d.year}).`)));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA and FSA"), ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"))));
+    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(d.hdhp.minDeductible)} and an out-of-pocket maximum of at most ${money(d.hdhp.maxOop)} (${d.tier === "family" ? "family" : "self-only"} coverage, ${d.year}).`)));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA and FSA"), ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"))));
 }

@@ -4,7 +4,7 @@ import { render } from "./view.js";
 export default {
   id: "prioritizer",
   group: "goals",
-  title: "Goal prioritiser",
+  title: "Goal prioritizer",
   icon: "🎯",
   order: 80,
   version: 1,

@@ -68,7 +68,7 @@ export function render(page, ctx) {
   const stepList = (p) => list(stepsOf(p).map((s) => `${money(s.benefit)} on ${fmt.date(s.endDate)}`));
   // what ends, as the subject of a sentence: "$300,000 term policy ends on 12/31/2030", "$250,000 of term cover ends on
   // 12/31/2033" (two policies that day), "term cover ends in steps, $150,000 on 12/31/2031 and $150,000 on 12/31/2036"
-  const endsWords = (p, end) => (many(p) ? `term cover ends in steps, ${stepList(p)}` : `${money(end.benefit)} ${(end.policies ?? 1) > 1 ? "of term cover" : "term policy"} ends on ${fmt.date(end.endDate)}`);
+  const endsWords = (p, end) => (many(p) ? `term life insurance ends in steps, ${stepList(p)}` : `${money(end.benefit)} ${(end.policies ?? 1) > 1 ? "of term life insurance" : "term policy"} ends on ${fmt.date(end.endDate)}`);
   // the cover that has ended by afterEnd's year: all the steps added up
   const endedSum = (p, end) => (stepsOf(p).length ? stepsOf(p).reduce((t, s) => t + s.benefit, 0) : end.benefit);
   const afterOf = (p) => (p.method === "child" && ending(p) ? p.child?.afterEnd ?? null : null);
@@ -90,14 +90,14 @@ export function render(page, ctx) {
     const c = p.child, s0 = sh(c), kw = kidsOf(p, d), col = collegeWords(c);
     const kids = [s0.costs > 0 ? "costs until 18" : null, s0.college > 0 ? col : null].filter(Boolean);
     const rest = [s0.debts > 0 ? "debts" : null, "a funeral"].filter(Boolean);
-    const others = [s0.savings > 0 ? saidSaved(p) : null, p.cover > 0 ? `the ${money(p.cover)} of cover on file` : null].filter(Boolean);
+    const others = [s0.savings > 0 ? saidSaved(p) : null, p.cover > 0 ? `the ${money(p.cover)} of coverage on file` : null].filter(Boolean);
     const s = ssCovers(c) && kids.length
       ? `If ${nm(p)} died, Social Security for ${kw} would cover their ${list(kids)}, and ${list(others) || "what is on file"} would pay the ${list(rest)}.`
       : `If ${nm(p)} died, ${list([s0.counted > 0 ? `Social Security for ${kw}` : null, ...others].filter(Boolean)) || "what is on file"} would cover ${kw}'s ${list([...kids, ...rest])}.`;
     // covered in every year from now, not only today: said when the need would be larger later
     // (the cover still paying in that year: a policy that ends before it does not pay then)
     const inForce = sizedYear(p)?.coverInForce ?? p.cover;
-    const later = peakLater(p, d) && inForce > 0 ? ` The ${money(inForce)} of cover ${inForce < p.cover ? `still on file in ${sizedOf(p).year}` : "on file"} also covers the most they would need, about ${money(p.need)} ${diedIn(p, sizedOf(p))}.` : "";
+    const later = peakLater(p, d) && inForce > 0 ? ` The ${money(inForce)} of coverage ${inForce < p.cover ? `still on file in ${sizedOf(p).year}` : "on file"} also covers the most they would need, about ${money(p.need)} ${diedIn(p, sizedOf(p))}.` : "";
     return s + later + leftOutWords(c);
   };
   // the rule of thumb's parts, a funeral always among them (as Next best action says it)
@@ -117,7 +117,7 @@ export function render(page, ctx) {
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" },
         ui.h("h1", {}, "How much life insurance?"),
-        ui.h("p", { class: "lede" }, "If one of you died, how much money would the rest of the family need to stay on track? This page works it out from your own plan and checks it against the cover you have. It needs the basics first:"),
+        ui.h("p", { class: "lede" }, "If one of you died, how much money would the rest of the family need to stay on track? This page works it out from your own plan and checks it against the coverage you have. It needs the basics first:"),
         ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))),
         ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"), ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
@@ -150,7 +150,7 @@ export function render(page, ctx) {
         // nothing needed today: what pays for it, named (Social Security, the savings)
         const pays = list([sh(c).counted > 0 ? "Social Security" : null, sh(c).savings > 0 ? "savings" : null].filter(Boolean)) || "what is on file";
         const now = c.today > 0 ? `Today it would be ${money(c.today)}` : `If ${nm(p)} died today, ${pays} would pay for everything ${kw} would need`;
-        return `${first}. ${now}; ${p.cover > 0 ? `${money(p.cover)} of cover is on file` : "no life insurance is on file"}.${p.termUntil ? ` Term cover until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual way to buy it.` : ""}`;
+        return `${first}. ${now}; ${p.cover > 0 ? `${money(p.cover)} of coverage is on file` : "no life insurance is on file"}.${p.termUntil ? ` Term life insurance until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual way to buy it.` : ""}`;
       }
       // the plan together runs short too (round 8 item 14): never "on track"
       const base = p.method === "plan" ? `If ${nm(p)} died this year, ${whoOf(p, d)} would need about ${money(p.need)} ${p.plan?.eitherWay ? "to last as long as your plan together does" : "to stay on track"}`
@@ -158,7 +158,7 @@ export function render(page, ctx) {
         : `If ${nm(p)} died, a common rule of thumb puts what ${whoOf(p, d)} would need at about ${money(p.need)}`;
       // a rule of thumb standing in for a second adult's missing birth date: say how to get the plan's own answer
       const sm = p.method === "dime" && p.survivorMissing ? (p.survivorMissing.birthDate ? ` Add ${nameOf(p.survivorMissing.name)} birth date on People and the answer comes from your own plan instead.` : ` Check ${checkWho(p.survivorMissing.name)} on People: once ${nameOf(p.survivorMissing.name)} plan can be worked out, the answer comes from your own plan instead.`) : "";
-      return `${base}; ${p.cover > 0 ? `${money(p.cover)} of cover is on file` : "no life insurance is on file"}.${sm}${p.termUntil ? ` Term cover until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual way to buy it.` : ""}`;
+      return `${base}; ${p.cover > 0 ? `${money(p.cover)} of coverage is on file` : "no life insurance is on file"}.${sm}${p.termUntil ? ` Term life insurance until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual way to buy it.` : ""}`;
     };
     // what a single parent's need is for, never a part Social Security covers or a college left out: " to grow up and go to
     // college", " to go to college (Social Security would cover their costs until 18)", " for the debts and a funeral (...)"
@@ -174,12 +174,12 @@ export function render(page, ctx) {
     };
     // once cover that ends is gone: "Once Jo's $50,000 term policy ends on 12/31/2030", "Once Jo's term cover has ended
     // ($100,000 on 12/31/2028 and $50,000 on 12/31/2035)"
-    const onceWords = (p) => { const e = ending(p), w = nm(p) === "you" ? "your" : `${nm(p)}'s`; return many(p) ? `Once ${w} term cover has ended (${stepList(p)})` : `Once ${w} ${money(e.benefit)} ${(e.policies ?? 1) > 1 ? "of term cover" : "term policy"} ends on ${fmt.date(e.endDate)}`; };
+    const onceWords = (p) => { const e = ending(p), w = nm(p) === "you" ? "your" : `${nm(p)}'s`; return many(p) ? `Once ${w} term life insurance has ended (${stepList(p)})` : `Once ${w} ${money(e.benefit)} ${(e.policies ?? 1) > 1 ? "of term life insurance" : "term policy"} ends on ${fmt.date(e.endDate)}`; };
     const smallLine = (p) => p.pay > 0 && ending(p)
       ? `${onceWords(p)}, ${p.method === "child" ? kidsOf(p, d) : whoOf(p, d)} would be about ${money(gapOf(p))} short${afterOf(p) ? ` (${diedIn(p, afterOf(p))})` : ""}: a small gap that savings or a modest policy covers.`
       : p.pay > 0
       ? `If ${nm(p)} died ${peakLater(p, d) ? `in ${sizedOf(p).year}` : "this year"}, ${whoOf(p, d)} would be about ${money(p.gap)} short${peakLater(p, d) ? inDollars(sizedOf(p)) : ""}: a small gap that savings or a modest policy covers.`
-      : `${ending(p) ? onceWords(p) : `If ${nm(p)} died this year`}, ${whoOf(p, d)} would be about ${money(gapOf(p))} short: the income that stops with ${nm(p)}, such as a pension or Social Security. With no pay to replace, buying cover now is optional; this shows the gap so you can decide.`;
+      : `${ending(p) ? onceWords(p) : `If ${nm(p)} died this year`}, ${whoOf(p, d)} would be about ${money(gapOf(p))} short: the income that stops with ${nm(p)}, such as a pension or Social Security. With no pay to replace, buying life insurance now is optional; this shows the gap so you can decide.`;
     // a rule of thumb standing in for the plan's own answer (a second adult's missing birth date): the headline says so, as
     // "How to get it" does
     const ruleUntil = (p) => (p.method === "dime" && p.survivorMissing ? `, by a rule of thumb until ${p.survivorMissing.birthDate ? `${nameOf(p.survivorMissing.name)} birth date is in` : `${nameOf(p.survivorMissing.name)} plan can be worked out`}` : "");
@@ -187,10 +187,10 @@ export function render(page, ctx) {
     const coveredLine = () => {
       const ones = d.people.filter((p) => p.dependants);
       // short for retirement whoever lives (round 8 item 14): life cover does not fix that, and "on track" is not said
-      if (d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0)) return "Your plan is short for retirement either way, whoever lives, so life cover would not fix it. Will the money last? shows what does.";
+      if (d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0)) return "Your plan is short for retirement either way, whoever lives, so life insurance would not fix it. Will the money last? shows what does.";
       if (ones.length && ones.every((p) => p.method === "child")) return ones.map((p) => coveredChild(p, d)).join(" ");
-      if (ones.length && ones.every((p) => p.method === "dime")) return ones.map((p) => `If ${nm(p)} died, the ${money(p.cover)} of cover on file would pay what a common rule of thumb says ${whoOf(p, d)} would need (${dimeNames(p.dime)}).`).join(" ");
-      return `With the cover on file${anyCover ? "" : " (none yet)"} and the savings you have, the family's plan stays on track if one of you died this year.`;
+      if (ones.length && ones.every((p) => p.method === "dime")) return ones.map((p) => `If ${nm(p)} died, the ${money(p.cover)} of coverage on file would pay what a common rule of thumb says ${whoOf(p, d)} would need (${dimeNames(p.dime)}).`).join(" ");
+      return `With the coverage on file${anyCover ? "" : " (none yet)"} and the savings you have, the family's plan stays on track if one of you died this year.`;
     };
     // "How to get it": what to buy, for how long, and who to name, for everyone who is short (a local toggle, nothing saved)
     const how = raised.length ? howCard(raised, d) : null;
@@ -200,7 +200,7 @@ export function render(page, ctx) {
       if (!how.hidden) how.scrollIntoView({ behavior: "smooth", block: "start" });
     }, { "aria-expanded": "false", "aria-controls": "ln-how" }) : null;
     host.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, raised.length === 1 ? `${Nm(raised[0])} ${nm(raised[0]) === "you" ? "need" : "needs"} about ${money(gapOf(raised[0]))} more life cover${ruleUntil(raised[0])}` : raised.length ? `${NamesIn(raised.map((p) => p.name))} need more life cover` : small.length ? "Close to covered" : d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0 && !(p.cover > 0)) ? "No life cover needed now" : depends ? "Your family is covered" : "Nobody depends on one income"),
+      ui.h("h1", {}, raised.length === 1 ? `${Nm(raised[0])} ${nm(raised[0]) === "you" ? "need" : "needs"} about ${money(gapOf(raised[0]))} more life insurance${ruleUntil(raised[0])}` : raised.length ? `${NamesIn(raised.map((p) => p.name))} need more life insurance` : small.length ? "Close to covered" : d.people.length && d.people.every((p) => p.plan?.eitherWay && p.need === 0 && !(p.cover > 0)) ? "No life insurance needed now" : depends ? "Your family is covered" : "Nobody depends on one income"),
       ui.h("p", { class: "lede" }, raised.length ? raised.map(lineOf).join(" ")
         : small.length ? small.map(smallLine).join(" ")
         : depends ? coveredLine() : "No one else in the plan lives on one person's pay, so life insurance only needs to pay for a funeral and debts."),
@@ -210,7 +210,7 @@ export function render(page, ctx) {
     if (d.unassignedCover > 0) host.append(ui.notice("warn", `A ${money(d.unassignedCover)} life policy on Policies names nobody, so it is not counted for anyone. Pick who it covers on Policies.`));
     for (const p of d.people) host.append(personCard(p, d));
     for (const u of d.unplanned ?? []) host.append(unplannedCard(u));
-    host.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/stress-tests" }, "Stress tests: other things that could go wrong"))));
+    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/stress-tests" }, "Stress tests: other things that could go wrong"))));
   }
 
   // a single parent with nothing to buy: what pays for what ("Social Security covers Child 1's costs until 18 and college, and
@@ -248,7 +248,7 @@ export function render(page, ctx) {
   // an adult the plan cannot run for (no birth date): what is known, and what to add
   function unplannedCard(u) {
     const card = ui.card(`If ${sayName(u.name)} died this year`);
-    const known = [u.pay > 0 ? `pay of about ${money(u.pay)} a year` : null, u.cover > 0 ? `${money(u.cover)} of life cover${u.coverWork > 0 ? `, ${money(u.coverWork)} of it through work` : ""}` : `no life cover on ${nameIn(u.name)}`].filter(Boolean);
+    const known = [u.pay > 0 ? `pay of about ${money(u.pay)} a year` : null, u.cover > 0 ? `${money(u.cover)} of life insurance${u.coverWork > 0 ? `, ${money(u.coverWork)} of it through work` : ""}` : `no life insurance on ${nameIn(u.name)}`].filter(Boolean);
     card.append(ui.h("p", {}, `${NameOf(u.name)} own answer needs ${u.birthDate ? `${nameOf(u.name)} birth date` : `${nameOf(u.name)} details on People`}: without it the plan cannot be run for ${nameIn(u.name)}. On file: ${list(known)}.`),
       ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn secondary small", href: "#/household/people" }, u.birthDate ? "Add it on People" : "Check it on People")));
     return card;
@@ -259,7 +259,7 @@ export function render(page, ctx) {
     const card = ui.card(peakLater(p, d) ? `If ${sayName(p.name)} died` : `If ${sayName(p.name)} died this year`);
     if (!p.dependants) {
       card.append(ui.h("p", {}, `No one else in the plan depends on ${nameOf(p.name)} income, so life insurance would only need to pay for the funeral and any debts: about ${money(p.dime.debts + p.dime.finalExpenses)}.`),
-        ui.h("p", { class: "muted small" }, p.cover > 0 ? `${NameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.cover)} of cover.` : "Add a partner or children on People if someone does."));
+        ui.h("p", { class: "muted small" }, p.cover > 0 ? `${NameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.cover)} of coverage.` : "Add a partner or children on People if someone does."));
       return card;
     }
     // cover that ends soon, before the need does: covered now, short from the day it ends
@@ -267,8 +267,8 @@ export function render(page, ctx) {
     const short = p.gap > 0 || !!end;
     // no need: one sentence, not a "$0" tile over the rules of thumb
     if (p.need > 0) card.append(ui.row(
-      ui.stat("Cover needed", money(p.need), p.method === "plan" ? "from your plan" : peakLater(p, d) ? `the most, ${diedIn(p, sizedOf(p))}` : p.method === "child" ? childSub(p.child) : `${dimeNames(p.dime)} added up`),
-      ui.stat("Cover you have", money(p.cover), p.coverWork > 0 ? `${money(p.coverWork)} of it through work` : p.cover > 0 ? "on Policies" : "none on file"),
+      ui.stat("Coverage needed", money(p.need), p.method === "plan" ? "from your plan" : peakLater(p, d) ? `the most, ${diedIn(p, sizedOf(p))}` : p.method === "child" ? childSub(p.child) : `${dimeNames(p.dime)} added up`),
+      ui.stat("Coverage you have", money(p.cover), p.coverWork > 0 ? `${money(p.coverWork)} of it through work` : p.cover > 0 ? "on Policies" : "none on file"),
     ));
     // a single parent's cover that ends soon: covered until then (when it pays each year's need until it ends), then what
     // they would need after it ends, with that figure's year; never "short by" the whole series' figure "from then"
@@ -290,8 +290,8 @@ export function render(page, ctx) {
     const worth = sy && sy.coverInForce > 0 ? (() => {
       const w = Math.round(sy.coverWorth / 100) * 100, under = sy.need - w;
       const what = sy.coverInForce < p.cover ? `the ${money(sy.coverInForce)} still on file then` : `the ${money(p.cover)} on file`;
-      const unit = p.gap > 0 && under > 0 ? `: about ${money(under)} short in today's money, which is the ${money(p.gap)} more cover in ${sy.year}'s dollars (rounded up to the next $1,000)` : "";
-      return ` If ${nm(p)} died in ${sy.year}, ${what} would be worth about ${money(w)} in today's money, against ${money(sy.need)} needed then${unit}.`;
+      const unit = p.gap > 0 && under > 0 ? `: about ${money(under)} short in today's dollars, which is the ${money(p.gap)} more coverage in ${sy.year}'s dollars (rounded up to the next $1,000)` : "";
+      return ` If ${nm(p)} died in ${sy.year}, ${what} would be worth about ${money(w)} in today's dollars, against ${money(sy.need)} needed then${unit}.`;
     })() : "";
     // a couple's (or the rule of thumb's) cover that ends by next year: "Covered until" only when the cover on file meets the
     // need today (gap 0), and every date named (verification 8b, review 2026-11-06: short $35,000 today read "Covered until
@@ -304,15 +304,15 @@ export function render(page, ctx) {
     };
     // short for retirement either way and no cover asked for: plain words, not a green "good" (round 8 review, UX 5)
     const eitherNone = !short && p.need === 0 && p.plan?.eitherWay;
-    card.append(ui.h("p", { class: `ln-verdict ${short ? "bad" : eitherNone ? "" : "ok"}` }, end && ae ? endWords() : end ? coupleEnd() : short ? `Short by about ${money(p.gap)}.` : p.need === 0 && p.plan?.eitherWay ? `No life cover needed for this: your plan is short for retirement either way, whoever lives.${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of cover on file.` : ""}` : p.need === 0 ? `No extra money needed: ${p.survivorName ? `${sayWhose(p.survivorName)} ${p.plan?.survivorPay > 0 ? "pay" : "income"} and your savings keep the plan on track` : p.method === "child" ? childEnough(p, d) : "the plan holds on its own"}.${p.method === "child" ? leftOutWords(p.child) : ""}${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of cover on top.` : ""}` : Math.round(p.spare) > 0 ? `Covered, with about ${money(p.spare)} to spare.` : "Covered, with nothing to spare."));
+    card.append(ui.h("p", { class: `ln-verdict ${short ? "bad" : eitherNone ? "" : "ok"}` }, end && ae ? endWords() : end ? coupleEnd() : short ? `Short by about ${money(p.gap)}.` : p.need === 0 && p.plan?.eitherWay ? `No life insurance needed for this: your plan is short for retirement either way, whoever lives.${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of coverage on file.` : ""}` : p.need === 0 ? `No extra money needed: ${p.survivorName ? `${sayWhose(p.survivorName)} ${p.plan?.survivorPay > 0 ? "pay" : "income"} and your savings keep the plan on track` : p.method === "child" ? childEnough(p, d) : "the plan holds on its own"}.${p.method === "child" ? leftOutWords(p.child) : ""}${p.cover > 0 ? ` ${Nm(p)} ${nm(p) === "you" ? "have" : "has"} ${money(p.cover)} of coverage on top.` : ""}` : Math.round(p.spare) > 0 ? `Covered, with about ${money(p.spare)} to spare.` : "Covered, with nothing to spare."));
     if (worth) card.append(ui.h("p", { class: "small" }, worth.trim()));
     // without the cover through work (compute's `gapIfJobEnds`: a single parent's year by year, `ifJobEnds`, with its year)
     const jobYear = p.method === "child" && p.child?.ifJobEnds && p.child.ifJobEnds.year > d.startYear ? ` (${diedIn(p, p.child.ifJobEnds)})` : "";
     // a couple's term cover that ends by next year, which the figure leaves out too (compute's `jobEnding`): "once Ana's
     // $200,000 term policy ends on 6/30/2027" (review 2026-11-06 follow-up)
     const je = p.method === "child" ? null : p.jobEnding;
-    const jobOnce = je ? ` once ${sayWhose(p.name)} ${je.policies > 1 ? `${money(je.benefit)} of term cover has ended (by ${fmt.date(je.endDate)})` : `${money(je.benefit)} term policy ends on ${fmt.date(je.endDate)}`}` : "";
-    if (p.coverWork > 0 && p.gapIfJobEnds > gapOf(p)) card.append(ui.notice("warn", `${money(p.coverWork)} of ${sayWhose(p.name)} cover comes with the job and ends with it. Without it ${p.method === "child" ? kidsOf(p, d) : "the family"} would be short about ${money(p.gapIfJobEnds)}${jobYear}${jobOnce}.`));
+    const jobOnce = je ? ` once ${sayWhose(p.name)} ${je.policies > 1 ? `${money(je.benefit)} of term life insurance has ended (by ${fmt.date(je.endDate)})` : `${money(je.benefit)} term policy ends on ${fmt.date(je.endDate)}`}` : "";
+    if (p.coverWork > 0 && p.gapIfJobEnds > gapOf(p)) card.append(ui.notice("warn", `${money(p.coverWork)} of ${sayWhose(p.name)} coverage comes with the job and ends with it. Without it ${p.method === "child" ? kidsOf(p, d) : "the family"} would be short about ${money(p.gapIfJobEnds)}${jobYear}${jobOnce}.`));
     // a second adult whose own plan cannot be built: the rule of thumb stands in, and this says what to add
     if (p.survivorMissing) card.append(ui.notice("info", [p.survivorMissing.birthDate
       ? `Add ${nameOf(p.survivorMissing.name)} birth date on People: the answer then comes from ${nameOf(p.survivorMissing.name)} own plan (pay, Social Security and savings) instead of a rule of thumb.`
@@ -323,15 +323,15 @@ export function render(page, ctx) {
     // said as what it is: the death does not make the money run out sooner, so cover is not the fix. Cover asked for and not on
     // file: with today's cover it runs out sooner than the plan together would, as before
     if (p.plan && !p.plan.withCover.success && p.plan.withCover.failAge) card.append(ui.notice("warn", p.plan.eitherWay && !(p.gap > 0)
-      ? [`${NameOf(p.survivorName)} money would run out at about ${p.plan.withCover.failAge} if ${nm(p)} died, and so would your plan together: ${p.need > 0 ? "with the cover above, a death does not make it run out sooner, so more cover is not the fix" : "a death does not make it run out sooner, so life cover is not the fix"}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›")]
-      : `With today's cover, ${nameOf(p.survivorName)} money would run out at ${nameOf(p.survivorName)} age ${p.plan.withCover.failAge}.`));
+      ? [`${NameOf(p.survivorName)} money would run out at about ${p.plan.withCover.failAge} if ${nm(p)} died, and so would your plan together: ${p.need > 0 ? "with the coverage above, a death does not make it run out sooner, so more coverage is not the fix" : "a death does not make it run out sooner, so life insurance is not the fix"}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›")]
+      : `With the insurance you have today, ${nameOf(p.survivorName)} money would run out at ${nameOf(p.survivorName)} age ${p.plan.withCover.failAge}.`));
 
     // how the plan's answer is worked out, then the two rules of thumb folded (they leave out the survivor's pay, Social
     // Security and savings, so they run several times higher and read as rival answers when shown at the same weight)
     const ways = ui.h("ul", { class: "ln-ways" });
     if (p.plan && p.plan.need !== null) {
       const g = p.plan.gapYears.filter((x) => x.amount > 0);
-      const living = g.length ? ` Before ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "retires", "retire")}, the household would be short about ${money(g[0].amount)} a year at first; that is counted.` : ` ${NameOf(p.survivorName)} pay${p.plan.benefits ? " and Social Security" : ""} would cover the household's living costs until retirement.`;
+      const living = g.length ? ` Before ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "retires", "retire")}, the household would be short about ${money(g[0].amount)} a year at first; the amount above already includes that.` : ` ${NameOf(p.survivorName)} pay${p.plan.benefits ? " and Social Security" : ""} would cover the household's living costs until retirement.`;
       card.append(ui.h("p", { class: "small" }, `How it is worked out: the smallest lump sum that keeps ${nameOf(p.survivorName)} plan ${p.plan.eitherWay ? `going as long as your plan together's, which runs out${p.plan.jointFailYear ? ` in ${p.plan.jointFailYear}` : ""} either way` : "on track to the end"}, spending ${Math.round(SURVIVOR_SPENDING * 100)}% of what you spend together, after a funeral of about ${money(FUNERAL)}. ${NameOf(p.name)} savings pass to ${nameIn(p.survivorName)}.${living}`));
     }
     // a single parent: the answer part by part
@@ -340,7 +340,7 @@ export function render(page, ctx) {
     const dimeParts = [di.debts > 0 ? `debts ${money(di.debts)}` : null, `funeral ${money(di.finalExpenses)}`, di.incomeYears > 0 ? `${di.incomeYears < 1.5 ? (di.incomeYears < 0.5 ? "less than a year" : "a year") : `${Math.round(di.incomeYears)} years`} of pay ${money(di.income)}` : null, di.mortgage > 0 ? `mortgage ${money(di.mortgage)}` : null, di.education > 0 ? `education ${money(di.education)}` : null].filter(Boolean);
     const dimeTitle = `${dimeNames(di)} added up`;
     ways.append(way(dimeTitle.charAt(0).toUpperCase() + dimeTitle.slice(1), money(di.total), `${dimeParts.join(" + ")}.${di.incomeYears > 0 ? " Pay counts until the youngest child turns 18." : d.children.length ? " No child is under 18, so no pay is counted." : " With no children, no pay is counted."}`));
-    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, what ${nameIn(p.name)} would have spent on ${selfOf(p.name)} taken out), in today's money.`));
+    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, what ${nameIn(p.name)} would have spent on ${selfOf(p.name)} taken out), in today's dollars.`));
     const rules = p.lifetime.years > 0 ? 2 : 1;
     card.append(ui.h("details", { class: "ln-more" }, ui.h("summary", {}, rules === 2 ? "Two rules of thumb, for comparison" : "A rule of thumb, for comparison"), ways,
       p.plan && p.plan.need !== null ? ui.h("p", { class: "muted small" }, `${rules === 2 ? "Both leave" : "It leaves"} out ${nameOf(p.survivorName)} own pay, Social Security for the family and the savings you already have, so ${rules === 2 ? "they come" : "it comes"} out higher. ${rules === 2 ? "They are quick checks" : "It is a quick check"}; the figure above is the one built from your numbers.`)
@@ -360,7 +360,7 @@ export function render(page, ctx) {
     if (p.method === "child" && p.termUntil && p.termUntil.year > d.startYear && p.need > 0) card.append(...howLong(p, d));
     else if (p.termUntil && p.termUntil.year > d.startYear && p.need > 0) {
       const growing = d.children.filter((c) => c.age < 18).map((c) => c.name);
-      card.append(ui.h("h3", { style: { margin: "16px 0 4px" } }, "For how long"), ui.h("p", {}, `${p.method === "dime" ? `The rule of thumb is largest now and gets smaller every year, as fewer years of ${sayWhose(p.name)} pay are left to count` : `The need is largest now and shrinks as savings grow${growing.length === 1 ? ` and ${sayName(growing[0])} grows up` : growing.length ? " and the children grow up" : ""}`}. Cover that lasts until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual choice; a term policy is the cheap way to buy it.`));
+      card.append(ui.h("h3", { style: { margin: "16px 0 4px" } }, "For how long"), ui.h("p", {}, `${p.method === "dime" ? `The rule of thumb is largest now and gets smaller every year, as fewer years of ${sayWhose(p.name)} pay are left to count` : `The need is largest now and shrinks as savings grow${growing.length === 1 ? ` and ${sayName(growing[0])} grows up` : growing.length ? " and the children grow up" : ""}`}. Coverage that lasts until about ${p.termUntil.year} (${whyOf(p.termUntil)}) is the usual choice; a term policy is the cheap way to buy it.`));
     }
     return card;
   }
@@ -383,9 +383,9 @@ export function render(page, ctx) {
     // the shape is read in today's money with a tolerance (compute's `rising`: a dip under 2% of the largest is not "going
     // down"); the cover is sized in that year's dollars (compute's `sized`), said once when prices make it larger
     const s = sizedOf(p), dollarsBigger = s.need > c.peak.need;
-    const inToday = dollarsBigger ? "In today's money, the" : "The";
+    const inToday = dollarsBigger ? "In today's dollars, the" : "The";
     const rising = c.rising ?? (() => { const upTo = ys.filter((y) => y.year <= c.peak.year); return upTo.every((y, i) => i === 0 || y.need >= upTo[i - 1].need); })();
-    const largest = `${dollarsBigger ? "In today's money it" : "It"} is largest if ${nm(p)} died in ${c.peak.year}`;
+    const largest = `${dollarsBigger ? "In today's dollars it" : "It"} is largest if ${nm(p)} died in ${c.peak.year}`;
     const text = c.steady
       ? `${inToday} need is largest now and gets smaller every year. ${ends}.`
       : c.peak.year === d.startYear
@@ -395,21 +395,21 @@ export function render(page, ctx) {
           : `The need goes down for a few years, then grows: ${why}. ${largest}. ${ends}.`;
     // a level policy pays the same dollars every year while prices rise: sized to the most in that year's dollars, said once
     const size = dollarsBigger
-      ? ` A policy pays the same dollars every year while prices rise, so it is sized to the most in that year's dollars: about ${money(p.need)}, if ${nm(p)} died in ${s.year}. Cover for that amount that lasts until about ${t.year} covers every year; a term policy is the cheap way to buy it.`
-      : ` Cover for the largest amount, ${money(p.need)}, that lasts until about ${t.year} covers every year; a term policy is the cheap way to buy it.`;
+      ? ` A policy pays the same dollars every year while prices rise, so it is sized to the most in that year's dollars: about ${money(p.need)}, if ${nm(p)} died in ${s.year}. Coverage for that amount that lasts until about ${t.year} covers every year; a term policy is the cheap way to buy it.`
+      : ` Coverage for the largest amount, ${money(p.need)}, that lasts until about ${t.year} covers every year; a term policy is the cheap way to buy it.`;
     const out = [ui.h("h3", { style: { margin: "16px 0 4px" } }, "For how long"), ui.h("p", {}, `${text}${size}`)];
     if (ys.length > 1) {
       const ul = ui.h("ul", { class: "ln-ways ln-years" });
       for (const y of ys) {
         // the year the cover is sized to: marked, and its figure in that year's dollars said under it
         const top = y.year === s.year && y.need > 0;
-        const li = way(y.year === d.startYear ? `${y.year} (today)` : `${y.year}`, y.need > 0 ? money(y.need) : "nothing", top && dollarsBigger ? `About ${money(p.need)} in ${y.year}'s dollars, the most of any year: the cover is sized to it.${(y.coverInForce ?? 0) > 0 && !ending(p) ? (y.coverInForce < p.cover ? ` The ${money(y.coverInForce)} still on file in ${y.year} would be worth about ${money(Math.round(y.coverWorth / 100) * 100)} in today's money.` : ` The ${money(p.cover)} on file would be worth about ${money(Math.round(y.coverWorth / 100) * 100)} in today's money then.`) : ""}` : "");
+        const li = way(y.year === d.startYear ? `${y.year} (today)` : `${y.year}`, y.need > 0 ? money(y.need) : "nothing", top && dollarsBigger ? `About ${money(p.need)} in ${y.year}'s dollars, the most of any year: the coverage is sized to it.${(y.coverInForce ?? 0) > 0 && !ending(p) ? (y.coverInForce < p.cover ? ` The ${money(y.coverInForce)} still on file in ${y.year} would be worth about ${money(Math.round(y.coverWorth / 100) * 100)} in today's dollars.` : ` The ${money(p.cover)} on file would be worth about ${money(Math.round(y.coverWorth / 100) * 100)} in today's dollars then.`) : ""}` : "");
         if (top) li.classList.add("ln-peak");
         if (!(top && dollarsBigger)) li.querySelector(".ln-d")?.remove();
         ul.append(li);
       }
       out.push(ui.h("details", { class: "ln-more" }, ui.h("summary", {}, `The need year by year, to ${ys.at(-1).year}`),
-        ui.h("p", { class: "muted small" }, `What ${kw} would need if ${nm(p)} died at the start of each year, in today's money: ${many ? "the children" : sayName(c.children[0])} that much older, the debts and savings as your plan projects them, everything else as today.`), ul));
+        ui.h("p", { class: "muted small" }, `What ${kw} would need if ${nm(p)} died at the start of each year, in today's dollars: ${many ? "the children" : sayName(c.children[0])} that much older, the debts and savings as your plan projects them, everything else as today.`), ul));
     }
     return out;
   }
@@ -445,7 +445,7 @@ export function render(page, ctx) {
       // the share steps down as a child turns 18, like childcare: "half of it, about $1,460 a month until Child 1 turns 18 in
       // 2040"; "two thirds of it, about $1,947 a month until Child 2 turns 18 in 2037, then half, about $1,460 a month ..."
       const shareText = (c.shareSteps ?? []).map((s, i) => `${i ? "then " : ""}${half(s.fraction)}${i ? "" : " of it"}, about ${money(s.monthly)} a month until ${s.who.length ? `${list(s.who.map(sayName))} ${s.who.length > 1 ? "turn" : "turns"} 18 in ` : ""}${s.until}`).join(", ");
-      ul.append(way(`${cap(theirs)} costs until 18`, money(s.costs), `${care} share of the rest of what the household spends${shareText ? ` (${shareText})` : ""}, in today's money.${careNot}`));
+      ul.append(way(`${cap(theirs)} costs until 18`, money(s.costs), `${care} share of the rest of what the household spends${shareText ? ` (${shareText})` : ""}, in today's dollars.${careNot}`));
     }
     ul.append(collegeWay(c, go, d));
     if (c.years > 0) {
@@ -480,22 +480,22 @@ export function render(page, ctx) {
     if (s.savings > 0) ul.append(way(`Savings that pass to ${ssWho}`, `${MINUS}${money(s.savings)}`, "Checking, savings and investments outside retirement accounts. Retirement accounts are left out: tax comes off on the way out."));
     // every part is in today's money; one years away counts for less (or more) by the real bond return, the costs and college alike
     const r = c.realDiscount ?? 0, pct = `${+(Math.abs(r) * 100).toFixed(1)}%`;
-    const disc = Math.abs(r) >= 0.0005 ? ` Every part is in today's money; a cost years away counts for a little ${r > 0 ? "less" : "more"}, because money set aside now grows about ${pct} a year ${r > 0 ? "faster" : "slower"} than prices.` : " Every part is in today's money.";
+    const disc = Math.abs(r) >= 0.0005 ? ` Every part is in today's dollars; a cost years away counts for a little ${r > 0 ? "less" : "more"}, because money set aside now grows about ${pct} a year ${r > 0 ? "faster" : "slower"} than prices.` : " Every part is in today's dollars.";
     // Social Security covers the children's own part: say so, and what the debts and the funeral still need (every figure a
     // shown part or a sum of them: 12,300 - 1,900 = 10,400)
     const covers = ssCovers(c) ? `Social Security covers ${theirs} ${list([s.costs > 0 ? "costs" : null, s.college > 0 ? collegeWords(c) : null].filter(Boolean))}` : "";
     const restNames = s.debts > 0 ? "the debts and the funeral" : "the funeral";
     let words;
     if (covers) words = s.net < 0
-      ? `${covers}, and the savings come to about ${money(-s.net)} more than ${restNames}, so no cover is needed${peakLater(p, d) ? " today" : ""}.`
+      ? `${covers}, and the savings come to about ${money(-s.net)} more than ${restNames}, so no coverage is needed${peakLater(p, d) ? " today" : ""}.`
       : `${covers}; ${restNames} still ${s.debts > 0 ? "need" : "needs"} ${money(s.rest)}${s.savings > 0 ? `, less the ${money(s.savings)} saved: about ${money(s.net)}` : ""}, rounded up to the next $1,000.`;
     else {
       const pay = list([s.counted > 0 ? "Social Security" : null, s.savings > 0 ? "the savings" : null].filter(Boolean)) || "what is on file";
-      words = s.net < 0 ? `${cap(pay)} ${s.counted > 0 && s.savings > 0 ? "come" : "comes"} to about ${money(-s.net)} more than all of this, so no cover is needed${peakLater(p, d) ? " today" : ""}.` : `Added up${s.net % 1000 ? `, about ${money(s.net)},` : ""} and rounded up to the next $1,000.`;
+      words = s.net < 0 ? `${cap(pay)} ${s.counted > 0 && s.savings > 0 ? "come" : "comes"} to about ${money(-s.net)} more than all of this, so no coverage is needed${peakLater(p, d) ? " today" : ""}.` : `Added up${s.net % 1000 ? `, about ${money(s.net)},` : ""} and rounded up to the next $1,000.`;
     }
     // the largest need is later than today: this is today's figure, and the cover is sized to the largest (For how long)
-    const laterWords = peakLater(p, d) ? ` The cover is sized to a later year: about ${money(p.need)} ${diedIn(p, sizedOf(p))} (see For how long).` : "";
-    const total = way(peakLater(p, d) ? "Needed today" : "Cover needed", money(c.today ?? p.need), `${words}${disc}${laterWords}`, true);
+    const laterWords = peakLater(p, d) ? ` The coverage is sized to a later year: about ${money(p.need)} ${diedIn(p, sizedOf(p))} (see For how long).` : "";
+    const total = way(peakLater(p, d) ? "Needed today" : "Coverage needed", money(c.today ?? p.need), `${words}${disc}${laterWords}`, true);
     total.classList.add("ln-total");
     ul.append(total);
     return [ui.h("h3", { style: { margin: "16px 0 0" } }, "How it is worked out"), ul];
@@ -509,7 +509,7 @@ export function render(page, ctx) {
     // the Education page's figures quoted as that page shows them (to the $10, its `shownAmount`), the share chosen there said
     const pctOf = (x) => `${Math.round(x * 100)}%`;
     const say = (x) => x.from === "planner"
-      ? `The Education page puts ${list(x.figures.map((f, i) => `${sayWhose(f.name)}${i ? "" : " college"} at ${money(f.full ?? f.amount)}${(f.share ?? 1) < 1 ? ` (${pctOf(f.share)} of it counted, the share you chose there: ${money(f.amount)})` : ""}`))} in today's money${x.saved > 0 ? `, less the ${money(x.saved)} set aside in your goal “${x.name}”` : ""}.`
+      ? `The Education page puts ${list(x.figures.map((f, i) => `${sayWhose(f.name)}${i ? "" : " college"} at ${money(f.full ?? f.amount)}${(f.share ?? 1) < 1 ? ` (${pctOf(f.share)} of it counted, the share you chose there: ${money(f.amount)})` : ""}`))} in today's dollars${x.saved > 0 ? `, less the ${money(x.saved)} set aside in your goal “${x.name}”` : ""}.`
       : `Your goal “${x.name}” is ${money(x.gross)} for ${named(x.for)}${x.saved > 0 ? `, less the ${money(x.saved)} set aside` : ""}.`;
     // counted from the year each child turns 18, discounted like the costs
     const seen = new Set(), kids = ck.filter((k) => !seen.has(k.name) && seen.add(k.name));
@@ -544,11 +544,11 @@ export function render(page, ctx) {
       // adult's missing birth date) before buying on it
       const sm = p.method === "dime" ? p.survivorMissing : null;
       if (p.method === "dime") {
-        const rule = `This is a rule of thumb: ${dimeNames(p.dime)} added up come to about ${money(p.need)}${p.cover > 0 ? `, ${money(gapOf(p))} more than the cover on file` : ""}.`;
+        const rule = `This is a rule of thumb: ${dimeNames(p.dime)} added up come to about ${money(p.need)}${p.cover > 0 ? `, ${money(gapOf(p))} more than the coverage on file` : ""}.`;
         const fix = !sm ? "" : sm.birthDate
           ? ` Add ${nameOf(sm.name)} birth date on People first: the answer then comes from your own plan, with ${nameOf(sm.name)} pay, Social Security and savings counted, instead of a rule of thumb.`
           : ` Check ${checkWho(sm.name)} on People first: once ${nameOf(sm.name)} plan can be worked out, the answer comes from your own plan instead of a rule of thumb.`;
-        if (many) card.append(ui.h("h3", {}, `Cover on ${nm(p)}`));
+        if (many) card.append(ui.h("h3", {}, `Life insurance on ${nm(p)}`));
         card.append(ui.h("p", {}, `${rule}${fix}`));
         if (sm) card.append(toPeople(sm.birthDate ? "Add it on People" : "Check it on People"));
       }
@@ -560,7 +560,7 @@ export function render(page, ctx) {
         const ae = afterOf(q);
         const left = ae ? leftOf(q, ae) : 0;
         // the year short the most is not the year of the largest need: the figure is the shortfall, the cover then "with" it
-        if (ae) return ae.most === false ? ` (the most ${kidsOf(q, d)} would be short as cover on file ends, ${diedIn(q, ae)}${left > 0 ? `, with ${leftWords(q, ae)}` : ""})` : ` (the most ${kidsOf(q, d)} would need after ${money(endedSum(q, ending(q)))} of cover ends, ${diedIn(q, ae)}${left > 0 ? `, less ${leftWords(q, ae)}` : ""})`;
+        if (ae) return ae.most === false ? ` (the most ${kidsOf(q, d)} would be short as coverage on file ends, ${diedIn(q, ae)}${left > 0 ? `, with ${leftWords(q, ae)}` : ""})` : ` (the most ${kidsOf(q, d)} would need after ${money(endedSum(q, ending(q)))} of coverage ends, ${diedIn(q, ae)}${left > 0 ? `, less ${leftWords(q, ae)}` : ""})`;
         return peakLater(q, d) ? ` (the most ${kidsOf(q, d)} would need, ${diedIn(q, sizedOf(q))}${q.cover > 0 ? `, less the ${money(q.cover)} on file` : ""})` : "";
       };
       // the length to ask for on a quote: the shortest usual term that reaches the year (TERM_LENGTHS)
@@ -573,17 +573,17 @@ export function render(page, ctx) {
       const check = p.coverWork > 0 ? workCover : `Check what work already gives ${you ? "you" : nm(p)} first: it often pays one or two years of pay and ends with the job.`;
       const buy = sm
         // the amount waits for the plan's own answer; the kind and length of cover do not
-        ? `When you know the amount: ${term ? `a level term policy${term}` : "level term cover"}. ${check}`
+        ? `When you know the amount: ${term ? `a level term policy${term}` : "level term life insurance"}. ${check}`
         : job
-          ? `${term ? `A level term policy${term}. Buy at least ${money(least)} now` : `Buy at least ${money(least)} of level term cover now`}; ${money(p.gapIfJobEnds)} keeps ${p.method === "child" ? kidsOf(p, d) : whoOf(p, d)} covered even after a job change. ${workCover}`
+          ? `${term ? `A level term policy${term}. Buy at least ${money(least)} now` : `Buy at least ${money(least)} of level term life insurance now`}; ${money(p.gapIfJobEnds)} keeps ${p.method === "child" ? kidsOf(p, d) : whoOf(p, d)} covered even after a job change. ${workCover}`
           : `A level term policy for about ${money(least)}${peakWords(p)}${term}. ${check}`;
-      if (many && p.method !== "dime") card.append(ui.h("h3", {}, `Cover on ${nm(p)}`));
+      if (many && p.method !== "dime") card.append(ui.h("h3", {}, `Life insurance on ${nm(p)}`));
       card.append(ui.h("p", {}, `${buy} Get two or three quotes from an independent agent or an online quote site.`));
     }
     // an adult the plan cannot run for: what is on file, and what to add first
     for (const u of unplanned) {
-      card.append(ui.h("h3", {}, `Cover on ${sayName(u.name)}`),
-        ui.h("p", {}, `${NameOf(u.name)} own answer needs ${u.birthDate ? `${nameOf(u.name)} birth date` : `${nameOf(u.name)} details on People`} first. ${u.cover > 0 ? `${money(u.cover)} of life cover on ${nameIn(u.name)} is on file${u.coverWork > 0 ? `, ${money(u.coverWork)} of it through work` : ""}.` : `No life cover on ${nameIn(u.name)} is on file.`}`));
+      card.append(ui.h("h3", {}, `Life insurance on ${sayName(u.name)}`),
+        ui.h("p", {}, `${NameOf(u.name)} own answer needs ${u.birthDate ? `${nameOf(u.name)} birth date` : `${nameOf(u.name)} details on People`} first. ${u.cover > 0 ? `${money(u.cover)} of life insurance on ${nameIn(u.name)} is on file${u.coverWork > 0 ? `, ${money(u.coverWork)} of it through work` : ""}.` : `No life insurance on ${nameIn(u.name)} is on file.`}`));
     }
     card.append(ui.h("p", { class: "muted small" }, "Level term: the payout and the price stay the same until the policy ends."));
     const minors = d.children.filter((c) => c.age < 18).map((c) => sayName(c.name));

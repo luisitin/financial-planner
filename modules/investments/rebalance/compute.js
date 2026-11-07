@@ -4,6 +4,7 @@
 // before gains in taxable accounts, and buys the underweight classes with the cash freed in
 // the same account, so nothing has to move between accounts.
 import { compute as computeAllocation } from "../allocation/compute.js";
+import { withA } from "../../../core/words.js";
 import { ASSET_CLASSES } from "../holdings/compute.js";
 
 const BUCKET_RANK = { deferred: 0, free: 1, taxable: 2, none: 3 };
@@ -54,7 +55,7 @@ export function compute(plan, params = {}) {
       if (amount < 1) continue;
       const gain = h.costBasis > 0 ? amount * (h.gain / h.value) : 0;
       const taxable = h.bucket === "taxable";
-      trades.push({ kind: "sell", account: h.accountName, accountId: h.accountId, bucket: h.bucket, symbol: h.symbol, cls: r.cls, label: r.label, amount, taxNote: taxable ? (gain > 0 ? `realises about ${round(gain).toLocaleString("en-US")} of gain` : gain < 0 ? `books a ${round(-gain).toLocaleString("en-US")} loss` : "") : "no tax inside this account" });
+      trades.push({ kind: "sell", account: h.accountName, accountId: h.accountId, bucket: h.bucket, symbol: h.symbol, cls: r.cls, label: r.label, amount, taxNote: taxable ? (gain > 0 ? `realizes about $${round(gain).toLocaleString("en-US")} of gain` : gain < 0 ? `books ${withA("$" + round(-gain).toLocaleString("en-US"))} loss` : "") : "no tax inside this account" });
       if (taxable) { taxableSells += amount; gainRealised += gain; }
       cashByAccount.set(h.accountId, (cashByAccount.get(h.accountId) ?? 0) + amount);
       toSell -= amount;
@@ -85,6 +86,6 @@ export function compute(plan, params = {}) {
     : null;
   if (overOnlyBlended.length && !onlyInFund) notes.push(`${overOnlyBlended.map((o) => o.label).join(" and ")} ${overOnlyBlended.length > 1 ? "are" : "is"} over mostly inside ${blended.length > 1 ? "your balanced or target-date funds" : `${blended[0].symbol || blended[0].name || "your target-date fund"}`}, which ${blended.length > 1 ? "keep" : "keeps"} ${blended.length > 1 ? "their" : "its"} own mix and ${blended.length > 1 ? "are" : "is"} not sold here. To shift the mix, send new money to the other funds, or pick a target that matches the fund.`);
   if (leftover.length && a.flaggedCount > 0 && !onlyInFund) notes.push("Part of the buying could not be placed inside an account where something was sold; use new money for it, or sell in another account.");
-  if (gainRealised > 0) notes.push(`The full rebalance sells ${round(taxableSells).toLocaleString("en-US")} in taxable accounts and realises about ${round(gainRealised).toLocaleString("en-US")} of gain; the Capital gains page shows what that costs this year.`);
+  if (gainRealised > 0) notes.push(`The full rebalance sells ${round(taxableSells).toLocaleString("en-US")} in taxable accounts and realizes about ${round(gainRealised).toLocaleString("en-US")} of gain; the Capital gains page shows what that costs this year.`);
   return { ready: true, waiting: null, blended, overOnlyBlended, onlyInFund, needed: a.flaggedCount > 0, rows: a.rows, band: a.band, total: a.total, newMoney, newMoneyBuys, afterNewMoney, newMoneyEnough: newMoney > 0 && stillOff.length === 0, trades, sells, buys: trades.filter((t) => t.kind === "buy"), taxableSells, gainRealised, leftover, notes, flaggedCount: a.flaggedCount, worst: a.worst };
 }

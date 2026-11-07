@@ -248,7 +248,7 @@ test("Review 7, Asset location: interest and dividends bear the 3.8% like Tax-lo
   assert.ok(location(none, { today: T }).marginal <= 0.10 + 1e-9, "never 22% for a household with no income");
 });
 
-test("Review 5, Benefits and the HSA page: the same HSA money saves the same, the 0.9% Medicare tax included (equity household)", () => {
+test("Review 5, Benefits and the HSA and FSA page: the same HSA money saves the same, the 0.9% Medicare tax included (equity household)", () => {
   const p = equityPlan();
   p.accounts.push({ id: "xhsa", name: "HSA", type: "hsa", balance: 0, ownerId: "mo" });
   p.retirement.contributions.push({ id: "xc", accountId: "xhsa", personId: "mo", period: "annual", amount: 4400, employerMatch: 0 });
@@ -288,7 +288,7 @@ function familyHsaPlan(p) {
   return p;
 }
 
-test("Review 6, Health: the landlord's HSA saving works the rental allowance again with the deduction, as the HSA page does", () => {
+test("Review 6, Health: the landlord's HSA saving works the rental allowance again with the deduction, as the HSA and FSA page does", () => {
   const p = familyHsaPlan(landlordPlan());
   const h = health(p, { today: T });
   const me = p.household.people[0].id;

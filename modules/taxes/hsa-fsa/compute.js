@@ -152,13 +152,13 @@ export function compute(plan, params = {}) {
   const notes = [];
   // money taken out of nobody's pay (a retiree's, a spouse at home) is not "taxed as pay": it just gets no tax break (follow-up 2026-11-07, HSA R4)
   const noPayAll = people.every((p) => !(p.pay > 0)) && !b.wagesTyped;
-  if (coverage === "none" && total > 0) notes.push(`${fmtInt(total)} is going into an HSA, but you said you have no high-deductible health plan. Only someone covered by one can put money in an HSA, so all of it ${noPayAll ? "gets no tax break" : "is taxed as pay"} and is charged 6% a year until it is taken out. Take it out before the tax filing deadline, or change the cover below if you do have such a plan.`);
+  if (coverage === "none" && total > 0) notes.push(`${fmtInt(total)} is going into an HSA, but you said you have no high-deductible health plan. Only someone covered by one can put money in an HSA, so all of it ${noPayAll ? "gets no tax break" : "is taxed as wages"} and is charged 6% a year until it is taken out. Take it out before the tax filing deadline, or change the coverage below if you do have such a plan.`);
   else {
     const outside = people.filter((p) => !p.eligible && p.used > 0);
     const insideExcess = people.filter((p) => p.eligible).reduce((s, p) => s + p.excess, 0);
     // the unnamed first adult (and the "You" stand-in when no adult is on People) reads "You are not ... your HSA" (round 7)
     const nm = (p) => (p.id === null ? null : p.name);
-    for (const p of outside) notes.push(`${NameIn(nm(p))} ${verbFor(nm(p), "is", "are")} not on the self-only health plan, so the ${fmtInt(p.used)} going into ${nameOf(nm(p))} HSA is not allowed: ${p.pay <= 0 && !b.wagesTyped ? "it gets no tax break" : "it is taxed as pay"} and is charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
+    for (const p of outside) notes.push(`${NameIn(nm(p))} ${verbFor(nm(p), "is", "are")} not on the self-only health plan, so the ${fmtInt(p.used)} going into ${nameOf(nm(p))} HSA is not allowed: ${p.pay <= 0 && !b.wagesTyped ? "it gets no tax break" : "it is taxed as wages"} and is charged 6% a year until taken out. Only the person the plan covers can have an HSA.`);
     if (outside.length) { if (insideExcess > 0) notes.push(`The covered person's own HSA is over the ${limitsYear} limit by ${fmtInt(insideExcess)}: excess contributions are taxed 6% a year until withdrawn.`); }
     else if (over > 0 && !people.some((x) => x.medicareMonths > 0 && x.excess > 0.005)) notes.push(`The HSA is over the ${limitsYear} limit by ${fmtInt(over)}: excess contributions are taxed 6% a year until withdrawn.`);
     // a spouse 55 or over who does not use their own catch-up cannot hand it to the other (223(b)(3); Pub. 969)
@@ -183,7 +183,7 @@ export function compute(plan, params = {}) {
     const lead = `${NameIn(who)} ${verbFor(who, "is", "are")} on Medicare${full ? "" : ` from ${month}`} (people 65 or older who get Social Security are signed up for Medicare Part A).${rule}${back}${counts}`;
     // money that did not come out of pay (a retiree's own) is not "taxed as pay": it just gets no tax break
     const noPay = p.pay <= 0 && !b.wagesTyped;
-    const penalty = noPay ? "it gets no tax break and is charged 6% a year until taken out" : "it is taxed as pay and charged 6% a year until taken out";
+    const penalty = noPay ? "it gets no tax break and is charged 6% a year until taken out" : "it is taxed as wages and charged 6% a year until taken out";
     if (p.eligible && p.used > 0 && p.excess > 0.005) notes.push(`${lead} ${full ? "The" : `This year's limit is only ${fmtInt(p.limit)}, so the`} ${fmtInt(p.used)} going into ${nameOf(who)} HSA is ${fmtInt(p.excess)} too much: ${penalty}. Take it out before the tax filing deadline${p.limit > 0 ? `, or lower it to ${fmtInt(p.limit)} or less` : " and stop adding to it"}.`);
     else if (p.eligible || p.used > 0) notes.push(lead);
   }

@@ -19,7 +19,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Categories"),
     ui.h("p", { class: "lede" }, "Every transaction gets one category. The list starts with the same categories as the Expenses and Income pages; rename or hide the ones you do not use and add your own."),
-    d.total ? ui.h("p", { class: "muted small" }, `${d.total} transactions on file, ${d.uncategorised} still uncategorised.`) : null,
+    d.total ? ui.h("p", { class: "muted small" }, `${d.total} transactions on file, ${d.uncategorised} still uncategorized.`) : null,
   ));
 
   const formCard = ui.card(null);
@@ -51,7 +51,7 @@ export function render(root, ctx) {
         editing.hidden
           ? ui.button("Show it again", () => { const id = editing.id; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
           : ui.button(editing.builtIn ? `Hide ${editing.label}` : `Remove ${editing.label}`, () => {
-            if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorised. Continue?`)) return;
+            if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorized. Continue?`)) return;
             const id = editing.id, builtIn = editing.builtIn; editing = null;
             store.update((p) => {
               p.categories = p.categories ?? [];

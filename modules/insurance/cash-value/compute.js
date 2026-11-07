@@ -41,7 +41,7 @@ export function compute(plan) {
     if (yearsPaid === null) missing.push("the years you have paid premiums");
     if (!(surrender > 0)) missing.push("what cashing it in would pay today (the surrender value)");
     if (!(cashValueLater > 0)) missing.push(`the cash value in ${laterYears} years from an in-force illustration`);
-    if (termQuote === null) missing.push("a term quote for the same cover");
+    if (termQuote === null) missing.push("a term quote for the same coverage");
     let keepReturn = null, altValue = null, breakeven = null, verdict = null;
     if (cashValueLater > 0 && (surrender > 0 || premiumYearly > 0)) keepReturn = rateFor(cashValueLater, laterYears, premiumYearly, surrender, true);
     if (cashValueLater > 0 && termQuote !== null) {

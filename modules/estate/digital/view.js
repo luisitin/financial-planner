@@ -29,7 +29,7 @@ export function render(page, ctx) {
 
   if (!d.count) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Your digital life"),
-    ui.h("p", { class: "lede" }, "If something happened to you, could someone you trust get into your email, your photos, your password manager or your crypto? This page lists the accounts that matter and how each could be reached."),
+    ui.h("p", { class: "lede" }, "If something happened to you, could someone you trust get into your email, your photos, your password manager or your crypto? This page lists the accounts that matter and how someone you trust could get into each one."),
     ui.h("p", { class: "muted small" }, "Never type a password or a recovery phrase here. Write only where it is kept and who can get to it.")));
   else root.append(ui.card(null, ui.row(ui.stat("Accounts with a plan", `${d.planned} of ${d.count}`, "someone could get in"), ui.stat("Still to plan", String(d.missing.length), d.missing.length ? d.missing.map((k) => KINDS[k].label.toLowerCase()).join(", ") : "the key accounts are covered"))));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
@@ -80,5 +80,5 @@ export function render(page, ctx) {
   };
   drawForm();
   root.append(ui.card(null, out, formHost));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/documents" }, "Documents"), ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/documents" }, "Estate documents"), ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"))));
 }

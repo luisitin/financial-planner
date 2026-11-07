@@ -116,8 +116,8 @@ export function render(page, ctx) {
       const intro = `A tax loss of ${money(-r.taxable)} after costs, interest (${money(r.interest)}) and depreciation.`;
       const saving = -r.tax > 0.5 ? `, saving about ${money(-r.tax)}` : P.profits > 0.5 ? ", against your other rentals' profit" : "";
       if (r.lossUsable > 0.5 && r.lossCarried <= 0.5) return `${intro} All of it counts this year${P.profits > 0.5 && P.againstOther > 0.5 ? `: your other rentals' profit absorbs part of it and the rest lowers your other income` : P.profits > 0.5 ? `: your other rentals' profit absorbs it` : ": it lowers your other income"}${-r.tax > 0.5 ? `, saving about ${money(-r.tax)}` : ""}.`;
-      if (r.lossUsable > 0.5) return `${intro} ${money(r.lossUsable)} of it counts this year${saving}${many ? ": its share of what your rentals' profits and the allowance can take, split by the size of each rental's loss" : ""}. ${money(r.lossCarried)} waits for a year with rental profit, or the sale. ${d.lossRoom > 0.5 ? `At your income up to ${money(d.lossRoom)} of rental losses can come off other income this year (${shrink}${d.rates.separate ? " filing separately" : ""}).` : d.separateTogether ? "Filing separately while living with your spouse, none of it can come off other income this year (if you lived apart all year, tick that on the Federal estimate)." : `At your income the allowance that lets rental losses come off other income is gone (it ends at ${money(R.to)}${d.rates.separate ? " filing separately" : ""}).`}`;
-      if (d.separateTogether) return `${intro} You file separately and lived with your spouse during the year, so a rental loss cannot lower your other income this year${P.profits > 0.5 ? ` (only your rentals' profit can absorb it)` : ""}: ${money(r.lossCarried)} waits for a year with rental profit, or the sale. If you lived apart all year, tick that on the Federal estimate.`;
+      if (r.lossUsable > 0.5) return `${intro} ${money(r.lossUsable)} of it counts this year${saving}${many ? ": its share of what your rentals' profits and the allowance can take, split by the size of each rental's loss" : ""}. ${money(r.lossCarried)} waits for a year with rental profit, or the sale. ${d.lossRoom > 0.5 ? `At your income up to ${money(d.lossRoom)} of rental losses can come off other income this year (${shrink}${d.rates.separate ? " filing separately" : ""}).` : d.separateTogether ? "Filing separately while living with your spouse, none of it can come off other income this year (if you lived apart all year, check that box on the Federal estimate)." : `At your income the allowance that lets rental losses come off other income is gone (it ends at ${money(R.to)}${d.rates.separate ? " filing separately" : ""}).`}`;
+      if (d.separateTogether) return `${intro} You file separately and lived with your spouse during the year, so a rental loss cannot lower your other income this year${P.profits > 0.5 ? ` (only your rentals' profit can absorb it)` : ""}: ${money(r.lossCarried)} waits for a year with rental profit, or the sale. If you lived apart all year, check that box on the Federal estimate.`;
       return `${intro} At your income (${money(d.rates.magi)}${d.rates.onReturn ? ` on ${d.rates.onReturn}'s return` : ""}) the allowance that lets rental losses come off other income is gone: ${shrink}${d.rates.separate ? " filing separately" : ""}. ${money(r.lossCarried)} waits for a year with rental profit, or the sale.`;
     };
     root.append(ui.card("Tax", ui.h("p", {}, `Depreciation: the building (${money(r.basis)}, the price less the land) is written off over ${RECOVERY_YEARS} years: ${money(r.depreciation)} this year. It lowers the tax without costing cash.`),
@@ -129,7 +129,7 @@ export function render(page, ctx) {
     root.append(editor(src, false));
   }
   root.append(editor(null, false));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Net worth"), ui.h("a", { class: "btn secondary", href: "#/taxes/federal" }, "Federal tax"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Net worth"), ui.h("a", { class: "btn secondary", href: "#/taxes/federal" }, "Federal tax"))));
 
   // add or edit one rental
   function editor(r, open) {
@@ -143,10 +143,10 @@ export function render(page, ctx) {
     const values = r ? { ...r, loanAccountId: r.loanAccountId ?? "", accountId: r.accountId ?? "" } : { vacancy: DEFAULTS.vacancy, maintenance: DEFAULTS.maintenance, landShare: DEFAULTS.landShare, appreciation: DEFAULTS.appreciation, loanAccountId: "", accountId: "" };
     const form = ui.form([
       { key: "name", label: "Name", type: "text", placeholder: "e.g. Duplex on Elm" },
-      { key: "value", label: "What it is worth today", type: "money", min: 0, help: homes.length ? "used while it is not picked on Net worth below" : null },
+      { key: "value", label: "What it is worth today", type: "money", min: 0, help: homes.length ? "used unless you pick the home from Net worth below" : null },
       homes.length ? { key: "accountId", label: "Its value on Net worth", type: "select", options: [{ value: "", label: "Not on Net worth" }, ...homes.map((a) => ({ value: a.id, label: `${a.name} (${money(Math.abs(Number(a.balance) || 0))})` }))], help: "pick it if Net worth already lists this home: it is then counted once, at the value there" } : null,
       { key: "purchasePrice", label: "What you paid", type: "money", min: 0 },
-      { key: "purchaseDate", label: "When it was first rented out", type: "date", help: "depreciation starts then" },
+      { key: "purchaseDate", label: "When it was first rented out", type: "date", help: "the yearly tax write-off for wear and tear (depreciation) starts then" },
       { key: "rentMonthly", label: "Rent a month", type: "money", min: 0 },
       { key: "vacancy", label: "Allowance for empty months", type: "percent", min: 0, max: 50 },
       { key: "propertyTax", label: "Property tax a year", type: "money", min: 0 },

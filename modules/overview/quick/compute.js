@@ -14,8 +14,8 @@ import { money as fmtMoney } from "../../../core/format.js";
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
 export const MOST_ASKED = [
-  { key: "goals/house", icon: "🏠", title: "How much home can I afford?", line: "The monthly cost, the cash you need on the day, and when you will have it." },
-  { key: "property/rent-vs-buy", icon: "🔑", title: "Should I rent or buy?", line: "Who comes out ahead after the years you stay, and the rent where they are even." },
+  { key: "goals/house", icon: "🏠", title: "How much home can I afford?", line: "The monthly cost, the cash you need at closing, and when you will have it." },
+  { key: "property/rent-vs-buy", icon: "🔑", title: "Should I rent or buy?", line: "Who comes out ahead after the years you stay, and the rent at which they come out even." },
   { key: "goals/vehicle", icon: "🚗", title: "Pay cash for a car or borrow?", line: "What to save a month to pay cash, or the loan for the rest." },
   { key: "property/purchase", icon: "🛋️", title: "Save up or pay over time?", line: "A sofa, a laptop, a ring: what saving, a payment plan or paying now each costs." },
   { key: "insurance/health", icon: "🩺", title: "Which health plan costs least?", line: "Premiums plus your share of the bills, in a quiet, a usual and a bad year." },
@@ -58,7 +58,7 @@ export function answerFor(guide, plan, params = {}) {
       headline: d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`,
       // the carried figure is markets doing exactly as well as average (about a 4 in 10 chance); Will the money last? gives the
       // figure that lasts in 9 of 10 markets, too slow to work out on every page this line shows on (round 5, 2026-11-02)
-      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health cover" : ""} the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan on ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health cover" : ""}; if markets do as well as average the plan carries ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year, less in a bad run of years (Will the money last? shows how much less).`,
+      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""} the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan on ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""}; if markets do as well as average the plan can pay for ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year, less in a bad run of years (Will the money last? shows how much less).`,
       status: d.verdict === "on track" ? "ok" : "warn",
       // quoted for Your plan (overview/plan): the same projection's verdict and the age the money runs out (null when it lasts)
       verdict: d.verdict, shortAge: d.shortAge ?? null,

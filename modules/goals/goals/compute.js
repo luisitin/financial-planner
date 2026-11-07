@@ -143,7 +143,7 @@ export function plannerFigure(g, gr, page, r, plan = null) {
     const share = Math.min(1, Math.max(0, Number(c.share ?? 1)));
     const part = share < 1 ? ` for ${Math.round(share * 100)}% of it` : "";
     return grows
-      ? { amount: Math.round((c.totalToday * share) / 1000) * 1000, words: `in today's money${part}`, monthly: c.neededMonthly ?? null }
+      ? { amount: Math.round((c.totalToday * share) / 1000) * 1000, words: `in today's dollars${part}`, monthly: c.neededMonthly ?? null }
       : { amount: Math.round(((c.total ?? 0) * share) / 1000) * 1000, words: `in the dollars of those years${part}`, monthly: c.neededMonthly ?? null };
   }
   if (page === "goals/vehicle") {
@@ -153,7 +153,7 @@ export function plannerFigure(g, gr, page, r, plan = null) {
   }
   if (page === "goals/emergency-fund") {
     if (r.goal?.id !== g.id || !(r.target > 0)) return null;
-    if (!r.goal.isEmergencyFund) return { amount: null, note: "Its money counts toward the cushion only once it is ticked as your emergency fund on that page." };
+    if (!r.goal.isEmergencyFund) return { amount: null, note: "Its money counts toward your emergency fund only once it is checked off as your emergency fund on that page." };
     const other = Math.max(0, (Number(r.now) || 0) - (Number(gr?.funded) || 0));
     const amount = Math.max(0, r.target - other);
     return amount > 0 ? { amount, words: `for ${r.months} months of the bills you have to pay${other > 0 ? `, less the $${Math.round(other).toLocaleString("en-US")} of other cash that counts` : ""}`, monthly: null } : null;

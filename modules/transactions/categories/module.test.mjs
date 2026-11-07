@@ -21,12 +21,12 @@ test("the owner's edits: rename, hide, add", () => {
   assert.equal(categoriesOf(p, { all: true }).find((c) => c.id === "pets").hidden, true);
   const coffee = list.find((c) => c.id === "coffee");
   assert.equal(coffee.builtIn, false); assert.equal(coffee.icon, "☕");
-  assert.equal(categoryLabel(p, "coffee"), "Coffee"); assert.equal(categoryLabel(p, ""), "Uncategorised"); assert.equal(categoryLabel(p, "ghost"), "ghost");
+  assert.equal(categoryLabel(p, "coffee"), "Coffee"); assert.equal(categoryLabel(p, ""), "Uncategorized"); assert.equal(categoryLabel(p, "ghost"), "ghost");
   assert.equal(categoryIcon(p, ""), "❔"); assert.equal(categoryById(p, "nope"), null);
   assert.equal(list[0].kind, "expense", "spending first, then income, then transfer");
   assert.equal(slug("Coffee & Tea!"), "coffee-tea"); assert.equal(slug(""), "category");
 });
-test("compute counts usage per category and the uncategorised", () => {
+test("compute counts usage per category and the uncategorized", () => {
   const d = compute(samplePlan());
   assert.equal(d.total, 16); assert.equal(d.uncategorised, 4);
   const groc = d.categories.find((c) => c.id === "groceries");

@@ -37,7 +37,7 @@ test("the page lists today's older guesses: the typical rates and payments, Soci
   assert.deepEqual(d.rows.map((r) => r.label), [
     "Mortgage: payment a month", "Mortgage: interest rate", "Credit cards: payment a month", "Credit cards: interest rate",
     "Ana's Social Security at full retirement age", "Bo's Social Security at full retirement age", "Spending a month once work stops",
-    "Emergency fund: safety cushion to aim for", "Emergency fund: accounts that hold the cushion",
+    "Emergency fund to aim for", "Accounts that hold the emergency fund",
   ]);
   const row = (label) => d.rows.find((r) => r.label === label);
   assert.deepEqual([row("Mortgage: interest rate").value, row("Mortgage: interest rate").why, row("Mortgage: interest rate").sources], [0.0724, "the average rate on a new 30-year mortgage", ["mortgage_rate_pmms_weekly_2026"]]);
@@ -48,8 +48,8 @@ test("the page lists today's older guesses: the typical rates and payments, Soci
   assert.equal(row("Mortgage: payment a month").stale, false, "the rate and the balance are the ones it was worked out from");
   assert.equal(row("Ana's Social Security at full retirement age").why, "worked out from the pay on file with Social Security's formula");
   assert.equal(row("Ana's Social Security at full retirement age").basis, "yours");
-  assert.equal(row("Emergency fund: safety cushion to aim for").why, "3 months of the bills you have to pay");
-  assert.equal(row("Emergency fund: accounts that hold the cushion").kind, "list");
+  assert.equal(row("Emergency fund to aim for").why, "3 months of the bills you have to pay");
+  assert.equal(row("Accounts that hold the emergency fund").kind, "list");
   assert.ok(d.rows.every((r) => r.legacy && r.why.length <= 70 && r.href), "each legacy, with a why of at most 70 characters and a page");
   assert.deepEqual([d.big.length, d.small.length], [7, 2]);
   assert.deepEqual(d.sources.used.map((s) => s.id), ["mortgage_rate_pmms_weekly_2026", "cc_apr_fed_g19", "card_minimum_payment_rule_cfpb"]);
@@ -113,7 +113,7 @@ test("C2 Better guesses are ready: the older guesses that would change, each wor
     // and insurance) is counted as all loan payment, so the $185,000 "ends" in about 2044 instead of 2056 (C2 review, UX 1).
     // The card never lowers retirement spending; the older figure stays until the person types one.
     // (the cushion holds three months of the must-pay bills: the payment's $20 more, verify 2026-11-07, makes $12,400 -> $12,500)
-    ["Emergency fund: safety cushion to aim for", 12000, 12500],
+    ["Emergency fund to aim for", 12000, 12500],
   ]);
   assert.ok(!offers.some((x) => x.k === "overview/setup:retireSpend"));
   // the card rate and payment are the same figures today: not offered; nor is Social Security (worked out from pay, unchanged)

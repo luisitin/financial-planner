@@ -23,7 +23,7 @@ test("matchRule: contains, direction, account", () => {
   assert.equal(matchRule({ contains: "", category: "x" }, tx), false);
   assert.equal(matchRule({ contains: "hulu", category: "x" }, tx), false);
 });
-test("applyRules files uncategorised transactions, renames payee, counts hits, leaves categorised alone unless forced", () => {
+test("applyRules files uncategorized transactions, renames payee, counts hits, leaves categorised alone unless forced", () => {
   const rules = [{ id: "r1", contains: "kroger", category: "groceries", payee: "Kroger" }, { id: "r2", contains: "kroger", category: "other" }];
   const txs = [
     { id: "a", payee: "Kroger Dayton", rawPayee: "KROGER #0421 DAYTON OH", amount: -50, category: "" },
@@ -40,12 +40,12 @@ test("applyRules files uncategorised transactions, renames payee, counts hits, l
   const forced = applyRules(rules, txs, { force: true });
   assert.equal(forced.txs[1].category, "groceries"); assert.equal(forced.changed, 2);
 });
-test("ruleFor builds the rule the Categorise page saves", () => {
+test("ruleFor builds the rule the Categorize page saves", () => {
   const r = ruleFor("AMAZON MKTPL*2K3AB1 AMZN.COM/BILL WA", "shopping");
   assert.equal(r.contains, "amazon mktpl", "cut at the code: the words before it"); assert.equal(r.category, "shopping"); assert.equal(r.payee, "Amazon Mktpl"); assert.equal(r.wholeWords, true); assert.equal(r.direction, "any");
   assert.equal(matchRule(r, { rawPayee: "AMAZON MKTPL*9Z9 AMZN.COM/BILL WA", payee: "x", amount: -1 }), true, "next month's Amazon line matches");
 });
-test("compute lists rules with match counts and how many uncategorised they would fix", () => {
+test("compute lists rules with match counts and how many uncategorized they would fix", () => {
   const p = emptyPlan();
   p.rules.push({ id: "r1", contains: "kroger", category: "groceries" });
   p.transactions.push({ id: "a", payee: "Kroger", rawPayee: "KROGER 1", amount: -5, category: "" }, { id: "b", payee: "Kroger", rawPayee: "KROGER 2", amount: -5, category: "groceries" }, { id: "c", payee: "Shell", rawPayee: "SHELL", amount: -5, category: "" });

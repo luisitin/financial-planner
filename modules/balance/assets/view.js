@@ -104,7 +104,7 @@ export function render(page, ctx) {
           x.flags.includes("list-it") ? ui.h("span", { class: "pill warn" }, "Ask about listing it") : null),
         x.details || x.proof ? ui.h("div", { class: "rec-sub" }, [x.details, x.proof ? `Receipt and photos: ${x.proof}` : null].filter(Boolean).join(" · ")) : null,
         ui.h("div", { class: "rec-foot" }, ui.h("span", { class: "rec-actions" },
-          ui.button("Change", () => { editing = x.id; adding = false; rerender(); }, { class: "secondary small" }),
+          ui.button("Edit", () => { editing = x.id; adding = false; rerender(); }, { class: "secondary small" }),
           ui.button("Remove", () => {
             if (!ui.confirm(`Remove ${x.name} from your belongings?`)) return;
             pending = { text: `${x.name} removed.` };
@@ -120,7 +120,7 @@ export function render(page, ctx) {
   // how the figures are worked out
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "How \"worth now\" is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", {}, "For a belonging: your own figure if you gave one (an appraisal, or what one sells for used). Otherwise what you paid, less an even share for every year since you bought it, over the years it lasts. Jewelry, art and other things that keep their value stay at what you paid."),
+    ui.h("p", {}, "For a belonging: your own figure if you gave one (an appraisal, or what one sells for used). Otherwise, what you paid minus an equal amount for each year you have owned it, spread over the years it lasts. Jewelry, art and other things that keep their value stay at what you paid."),
     ui.h("p", {}, "Why it matters: a policy that pays \"actual cash value\" pays about the worth now, after wear and age. One that pays \"replacement cost\" pays what a new one costs, and many pay the worth now first and the rest once you have replaced it. Your policy says which."),
     ui.h("p", {}, "Homes: the value on Net worth against what you paid, as a yearly rate. Cars: the share of its value a car loses in a year, set on the car costs page."),
     ui.h("p", { class: "muted small" }, "The years each kind of thing lasts are round examples. Change them to fit.")));

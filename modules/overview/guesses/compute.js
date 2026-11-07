@@ -113,8 +113,8 @@ export const LEGACY_WORDS = {
 const LEGACY_SETUP = {
   "overview/setup:ss": { label: "Social Security at full retirement age", why: "worked out from the pay on file with Social Security's formula", weight: "big" },
   "overview/setup:retireSpend": { label: "Spending a month once work stops", why: "today's bills without childcare, plus loans still running then", weight: "big" },
-  "overview/setup:cushionTarget": { label: "Safety cushion to aim for", why: "months of the bills you have to pay (Assumptions says how many)", weight: "small" },
-  "overview/setup:cushionFunds": { label: "Accounts that hold the cushion", why: "your checking, savings and cash accounts", weight: "small" },
+  "overview/setup:cushionTarget": { label: "Emergency fund to aim for", why: "months of the bills you have to pay (Assumptions says how many)", weight: "small" },
+  "overview/setup:cushionFunds": { label: "Accounts that hold the emergency fund", why: "your checking, savings and cash accounts", weight: "small" },
 };
 
 /** A debt's figures in the words of Q5b's boxes and the older rows (LEGACY_WORDS). */
@@ -202,7 +202,7 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
   }
   if (frozen) why = "Type the real figure; we can't update this one any more.";
   if (!why && known) why = known.why;
-  if (!why) why = "what Get started filled in when the box was left empty";
+  if (!why) why = "what Set up my plan filled in when the box was left empty";
   // older guesses keep the setup's own order (each debt's payment then rate; people in household order)
   const segs = parsePath(e.path);
   const person = e.k === "overview/setup:ss" ? Math.max(0, L(plan?.household, "people").findIndex((x) => x.id === segs[2]?.name)) : 0;

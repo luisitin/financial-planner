@@ -84,7 +84,7 @@ export function compute(plan) {
     // a guess from the line itself when nothing in the plan says: money moved between your own accounts, a well-known shop
     const onCard = g.ids.every((id) => isCardAccount(acctOf.get(txOf.get(id)?.accountId)));
     if (!suggestion && transferGuess(g.rawPayee, plan, g.total >= 0, { onCard })) suggestion = { category: "transfer", label: categoryLabel(plan, "transfer"), why: onCard && g.total >= 0 ? "it looks like a payment to the card from your other accounts" : "it looks like money moved between your own accounts", guess: true };
-    if (!suggestion && g.total < 0) { const c = shopGuess(g.rawPayee); if (c) suggestion = { category: c, label: categoryLabel(plan, c), why: "usual for this kind of shop", guess: true }; }
+    if (!suggestion && g.total < 0) { const c = shopGuess(g.rawPayee); if (c) suggestion = { category: c, label: categoryLabel(plan, c), why: "usual for this kind of business", guess: true }; }
     return { ...g, suggestion, in: g.total >= 0 };
   }).sort((a, b) => b.count - a.count || Math.abs(b.total) - Math.abs(a.total));
   return { groups: list, uncategorised: open.length, total: txs.length, done: txs.length - open.length, share: txs.length ? (txs.length - open.length) / txs.length : 1 };

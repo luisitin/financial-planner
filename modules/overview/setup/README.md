@@ -22,15 +22,15 @@ Address: `#/overview/setup/<screen>`, so the phone's Back button works. Get star
 | 3 | `ages` | per adult: birth month and year, when you'd like to stop working (or already retired), Social Security (estimate it / my statement figure / I already get it / I won't get any; a retiree under 62 sees "Not yet: I have my statement figure" first); children's birth years | `birthDate`, `retirementAge`, `retirement.socialSecurity`, `income` (`setup-ss-<person>`) |
 | 4 | `have` | tiles: checking, savings, retirement, investments, a home, a car | `guide.setup.picks.have` |
 | 4b | `have-amounts` | about how much in each; retirement per adult with through work / on my own (then "Which kind of IRA?" Traditional / Roth / Not sure), a month from pay, the employer's match | `accounts` (`setup-have-<kind>`, `setup-have-retire-<person>`; "Through work" into question 2's `setup-workplan-<person>` when it is there), `retirement.contributions` (`setup-contrib-<person>`) |
-| 5 | `owe` | tiles: credit cards, car loan, student loans, mortgage, another loan, or "No, I'm debt free" | `guide.setup.picks.owe` |
+| 5 | `owe` | tiles: credit cards, car loan, student loans, mortgage, another loan, or "No, I'm debt-free" | `guide.setup.picks.owe` |
 | 5b | `owe-amounts` | cards first: "Do you pay the whole bill every month?"; then how much you owe, the payment a month, the rate if you know it; with a mortgage and no home in the plan, what the home would sell for | liability `accounts` (`setup-owe-<kind>`), `debts` (`setup-debt-<kind>`), `setup-have-home` |
-| 6 | `spend` | one box, "Your best guess for a normal month" (the grey guess in it); under "Split it up (optional)": the groups (bills you have to pay, with the loan payments shown read-only, and everything else, with subtotals), the health cover tap, and "once you stop working, about how much a month?"; the total with its parts under the box | `expenses` (`setup-x-<category>`, `setup-x-total`), `retirement.spendingMonthly` |
+| 6 | `spend` | one box, "Your best guess for a normal month" (the gray guess in it); under "Split it up (optional)": the groups (bills you have to pay, with the loan payments shown read-only, and everything else, with subtotals), the health insurance tap, and "once you stop working, about how much a month?"; the total with its parts under the box | `expenses` (`setup-x-<category>`, `setup-x-total`), `retirement.spendingMonthly` |
 | 7 | `goals` | tiles: a safety cushion, paying off debt, buying a home, retiring well, education, a big trip, a car, something else | `guide.setup.picks.goals`, `guide.setup.focus` |
 | 7b | `goal-details` | how much and by when (1, 2, 3, 5 years or a date); "Is any of your savings already for this?" (the cash accounts as pills, or None of it); the cushion: how many months (1 to 12), with what counts toward it | `goals` (`setup-goal-<kind>`, `fundedBy`), `assumptions.emergencyMonths` |
 | | `done` | where you stand (four figures; one not known yet links to the question that fills it), your first three moves, what is not counted yet, the plan's guesses | `assumptions.reviewedAt` ("These sound fine") |
 
 Follow-up screens (4b, 5b, 7b) show only when their question needs them (`SCREENS[].show`), and count half a step on the
-bar. An address whose screen no longer applies (5b after "debt free") moves on to the next screen that does
+bar. An address whose screen no longer applies (5b after "debt-free") moves on to the next screen that does
 (`resolveScreen`), with `history.replaceState` so Back does not loop.
 
 **Moving around (view.js).**
@@ -380,7 +380,7 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
 - **The screen (view.js).** One line: "Start with what you pay a month. Leave the rest empty and we'll work it out."
   The boxes in this order: Paid a month, Still owed, Interest rate a year (and, with a mortgage and no home on file,
   what the home would sell for; with a home on file, a line "Your home: about $X ... Change"). Each blank box shows
-  our guess grey (its placeholder) with "Our guess: why." under it; its accessible name adds ", blank uses our guess of
+  our guess gray (its placeholder) with "Our guess: why." under it; its accessible name adds ", blank uses our guess of
   about $X". At most one tap per screen, for the first debt that has one: the mortgage's "When did you take out this
   mortgage, or last refinance it?" (shown once the payment is typed and the balance is blank), else the car loan's "When
   did you get this car loan?". The "Got it" line says which balances are our guesses ("Got it: about $X still owed in
@@ -391,12 +391,12 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
   `applyOweGuessed`: the screen's answers go through `oweArgs(plan, x, kind, { askHome })` (`{ owed, payment, rate (a
   fraction), start?, home? }`, a box that reads back what the plan holds stays the plan's figure, a blank box null) and
   each blank box gets `guess("debt.<kind>.owed" | ".payment" | ".rate" | "home.value", { path, args })`: the same call
-  the screen's placeholder made, so the grey figure is what is saved. A guessed box is written with `markGuess` (the
+  the screen's placeholder made, so the gray figure is what is saved. A guessed box is written with `markGuess` (the
   ledger; a rate or payment also mirrors the older `rateGuessed` / `paymentGuessed` flag, so Liabilities and the debt
   guide read it as before), a typed one with `clearGuess`. The tap's answer is saved in `guide.setup.taps`
   (`"mortgage-start"`, `"car-loan-start"`; values in docs/DATA_MODEL.md). When the gate is closed (not U.S. dollars,
   "outside the U.S.") the old behaviour stays: a blank balance saves nothing and the rate is the typical one.
-- **`valuesFor("owe-amounts")`**: a guessed balance, payment, rate or home reopens blank (grey again), never as typed
+- **`valuesFor("owe-amounts")`**: a guessed balance, payment, rate or home reopens blank (gray again), never as typed
   text; the tap's answer comes back as `start`.
 - **`reflect("owe-amounts")`** adds `{ guessed, of }` (balances that are our guess, of how many) only when one is.
 - **`standing()`** adds `netWorthGuessed: true` when net worth's compute says `partlyGuessed` (a guessed balance is half
@@ -405,14 +405,14 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
   the calm "● Our guesses for now" status, never "A solid base"; a section "Our guesses for now" lists the guessed home
   and debts ("Mortgage: still owed about $110,000, rate 4.6%, $880 a month") with a link to Our guesses for you.
 - **Choices.** The skip button saves our guesses (the spec's "Skip: use our guesses"); "Skip this question" elsewhere
-  is unchanged. Q4b's own guesses are C4's; a home value saved on Q5b as a guess shows grey on Q4b (below). The done
+  is unchanged. Q4b's own guesses are C4's; a home value saved on Q5b as a guess shows gray on Q4b (below). The done
   screen's "Not counted yet" no longer lists a guessed debt (it is counted now).
 - **Answer keys** (module.test.mjs, the walks in `qa/fixtures/setup-personas.mjs`): Jordan's mortgage known only by
   its $1,100 payment is kept at $110,000 owed, 4.6%, home $210,000 (net worth $100,000, partly our guesses); Pat and
   Lee's at $210,000 (they owe more than $100,000; net worth $978,000 → $768,000; Timeline's debt-free year none →
   2041; Pay off debts lists it; Next best action's spending +$1,600); Sam's car loan $12,000 at 11.2% and card payment
   $90 at 22.4%; skipping every box keeps the card ($1,800, $50), the car loan ($14,000, $480) and the mortgage
-  ($110,000, $880). For every walk the grey figure equals what is saved and the settle after the save moves nothing;
+  ($110,000, $880). For every walk the gray figure equals what is saved and the settle after the save moves nothing;
   typing over a guess ends its entry and the payment guess follows the typed balance; the 2010s tap gives $116,000;
   outside the U.S. nothing differs from the old function.
 
@@ -420,9 +420,9 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
 - **A 0 typed is the person's.** `oweArgs` reads owed and payment with `nonneg`: a box left empty is null (our guess
   fills it), a 0 typed is 0. "Still owed: 0" saves no debt (as before the guesses); a $0 payment (a loan on hold) is
   saved as typed and reopens as 0 (`valuesFor`), so a second Continue never puts our guess over it.
-- **Our guessed home is asked as a grey box, never as a line "from question 4".** `askHomeWithMortgage` is also true
+- **Our guessed home is asked as a gray box, never as a line "from question 4".** `askHomeWithMortgage` is also true
   while the setup home's balance is our guess. On Q4b, `valuesFor("have-amounts")` returns "" for a balance that is our
-  guess and the box shows it grey with its why-line; `applyHaveAmounts` keeps our guess when that box stays empty (it
+  guess and the box shows it gray with its why-line; `applyHaveAmounts` keeps our guess when that box stays empty (it
   used to drop the home and leave the mortgage standing: net worth −$110,000) and clears the mark when a figure is
   typed, even the same one. Plans with no guesses behave exactly as before.
 - **A plan from before the guesses going back through Q5b.** Its mortgage was dropped, so Q6 asked "Rent" and the
@@ -431,15 +431,15 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
   not $2,580). Answering Q6 again (now asked as "Home costs besides the mortgage") names it "Home costs", and the
   mortgage payment counts from Debts again.
 - **The screen.** "Skip: use our guesses" saves what is on the screen (typed boxes stay typed) with every empty box
-  guessed: the same save as Continue. Each grey figure's line is "Our guess: why." followed by the box's own help (where
+  guessed: the same save as Continue. Each gray figure's line is "Our guess: why." followed by the box's own help (where
   to find it). The tap sits under "Still owed", with "Tell us and we'll work out what's left from your payment."; the
   owed line is announced when it changes (`aria-live`). A payment that covers the typical balance says so ("typical in
   Ohio at your age and pay; your payment covers it"). The tap is still offered only once a payment is typed: without a
   payment the spec's work-back (E21) has nothing to work from, and the reviews showed a tap paired with the typical
   balance makes a steep payment (now refused in E22/E27).
-- **No grey examples in boxes** (spec 10's general change, brought forward: grey now means what is counted): `moneyIn`
+- **No gray examples in boxes** (spec 10's general change, brought forward: gray now means what is counted): `moneyIn`
   has no default "0"; the pay box's "65,000", the rough total's "3,500", the goal targets' 60,000 / 4,000 / 10,000 and
-  "e.g. A new kitchen" are gone; the goal boxes' help says "For example, 4,000." The grey uses `--muted` (scoped to
+  "e.g. A new kitchen" are gone; the goal boxes' help says "For example, 4,000." The gray uses `--muted` (scoped to
   `.su-root`: 4.8:1 light, about 6:1 dark).
 - **The done screen.** "About" figures that add up our guesses have three significant figures ("about $159,000");
   "Got it: about $16,600 still owed in all, by our guesses. The payments you typed stay as you typed them." or "One
@@ -452,23 +452,23 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
 
 ## Spending with our guesses (smart guesses C3, 2026-11-06; spec 7.0, 7.A, 7.F, 8.1, 10, 14.4)
 Before C3 a spending box left empty was $0: someone who knew only the rent had a month of rent alone, and the left-over
-figure, the cushion and the retirement check rested on it. Now every row of Q6 shows our guess grey
+figure, the cushion and the retirement check rested on it. Now every row of Q6 shows our guess gray
 (modules/overview/guesses/estimators/spend.js, formulas and sources in that README) and saving a blank box writes it.
 - **The screen (view.js `spend()`, U.S. plans; `spendPlain()` keeps the old screen when the guesses' gate is closed).**
-  The screen line "Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone
-  like you." One basis line for the grey figures ("The grey figures are what a household like yours usually spends: one
+  The screen line "Round numbers are fine. Leave a box empty and we'll use the gray figure: what's typical for someone
+  like you." One basis line for the gray figures ("The gray figures are what a household like yours usually spends: one
   adult renting in Texas on about $48,000 a year.", `spendBasis`), in place of a why-line per box. A renter whose rent is
   ours reads "Type your rent first: it decides most of the total." Each blank box's placeholder is
   `ctx.guess("spend.<row>", { path, args: spendArgs(plan, v) })` and its accessible name ends ", blank uses our guess
   of about $X"; the group sums, "In all, about a month" and its parts ("$1,100 you typed + $4,710 our guesses + $1,850
-  loan payments") add the grey figures, so the total is the sum of the rows. Taps under their rows, shown while the
-  row's guess asks and kept once answered: "How do you get health cover?" (insurance and health), "Do you pay for
-  childcare or after-school care?" (childcare: no grey figure until Yes), "Do you pay an HOA or condo fee?" (home costs,
+  loan payments") add the gray figures, so the total is the sum of the rows. Taps under their rows, shown while the
+  row's guess asks and kept once answered: "How do you get health insurance?" (insurance and health), "Do you pay for
+  childcare or after-school care?" (childcare: no gray figure until Yes), "Do you pay an HOA or condo fee?" (home costs,
   only where 35-65% of the state's owners pay one). "One rough total" left empty shows the rows' guesses added up and
   saves them as rows. Retirement: under 50 (the oldest adult; no birth dates counts as under), one muted line "We'll
   plan on about $1,900 a month once you stop working: today's costs without childcare and loans that end by then.
-  Change it on Will the money last?"; from 50, or once typed, the box with our grey figure and "Our guess: about $4,070
-  a month of costs, plus the $1,600 of loan payments still running then. Health cover is added on Will the money
+  Change it on Will the money last?"; from 50, or once typed, the box with our gray figure and "Our guess: about $4,070
+  a month of costs, plus the $1,600 of loan payments still running then. Health insurance is added on Will the money
   last?". A typed row far from what households like this spend that a slip explains is asked about once ("$15,000 a
   month for rent? Did you mean $15,000 a year ($1,250 a month)? Continue keeps what you typed.", R9 `year-as-month`).
   "Got it: about $3,190 a month. All 7 amounts are our guesses for now." ("6 of the 7 amounts are our guesses" when some
@@ -488,14 +488,14 @@ figure, the cushion and the retirement check rested on it. Now every row of Q6 s
   them). From 50 (spec 7.F): each everyday row x what households 65-74 spend on it over households 55-64 (utilities
   0.880, groceries 0.953, car and transit 0.792, eating out 0.876, shopping 0.859), plus the home costs that go on (the
   housing row, and a mortgage's property tax and insurance when it is paid off before work stops), the other bills on
-  Expenses (as retireDefault counts them) and the loans still running then; never health cover (the projection's health
+  Expenses (as retireDefault counts them) and the loans still running then; never health insurance (the projection's health
   line). A mortgage still running when work stops is in the loans with its whole payment, which holds the home's tax and
   insurance (E22), and the figure is one amount for every year, so they are not added a second time (C3 money review D9;
   `loansRunningThen`). Pat and Lee: about $3,790 + the $1,600 mortgage = $5,390 (7.H's "$4,100 + mortgage while it lasts"
   added the $280 of tax and insurance on top of the payment that pays them: about $280 a month too much for life). Will the money last?
   uses a figure in the ledger as saved (settle keeps it in step with the rows), instead of working today's bills out
   again (`setupFigure`), which is the under-50 formula.
-- **`valuesFor("spend")`**: a guessed row reopens blank (grey), a 0 typed as 0, our retirement figure blank; `taps`.
+- **`valuesFor("spend")`**: a guessed row reopens blank (gray), a 0 typed as 0, our retirement figure blank; `taps`.
   **`reflect("spend")`** adds `{ guessed, count, rows }` (how many rows are ours, of how many, and the screen's rows a
   month) when one is.
 - **The waiting verdict (8.1; `standing()`).** Next best action's `spare.waits` (half or more of the month is our
@@ -508,11 +508,11 @@ figure, the cushion and the retirement check rested on it. Now every row of Q6 s
   guesses. Type what you spend ›"; the first move "Type what you really spend" goes back to this screen; "Our guesses for
   now" starts with "Spending: about $3,000 a month, besides the $900 you typed". The Dashboard's three rows say the same
   (its view, the designer's lane, claimed for C3).
-- **Answer keys** (module.test.mjs): blank rows saved as marked rows equal to the grey figures, the settle after moving
+- **Answer keys** (module.test.mjs): blank rows saved as marked rows equal to the gray figures, the settle after moving
   nothing, for the three walks; Got it's rows ($2,680, 7 ours; Jordan $3,900) and its month in all ($3,190 for Sam);
   Skip and a blank rough total write the rows; a
   typed total writes no guess; one row typed keeps the others ours and the total is their sum; a 0 stays 0 through a
-  settle and a second save; the grey figure typed in is the person's; under 50 the line ($2,680 for Sam), from 50 the
+  settle and a second save; the gray figure typed in is the person's; under 50 the line ($2,680 for Sam), from 50 the
   box ($5,390 for Pat and Lee), a typed figure stays; the verdict waits and speaks plainly once every row is typed; the
   walk replays' left-over figures within $100 of 7.H (with C4's contributions stood in; Jordan's 7.H -$780 is -$605 here
   because the app's tax engine counts the child and dependent care credit on her $900 of childcare, $175 a month, which
@@ -676,11 +676,11 @@ changes: every blank row is our guess, as before. A plan saved with the old "One
 The "Skip: use our guesses" childcare reminder opens the fold. "Must-pay bills" is "Bills you have to pay" on screen. Tests: "part 3 ...".
 
 ## Q6 remembers the figure (path part 3 fix, 2026-11-06)
-The top box's figure is saved as `guide.setup.spendSum: { sum, typed }` (whole dollars; `typed` = the groups typed in the fold). Reopening puts `sum` back in the box, keeps the typed groups as typed and shows the rest as the share of the figure (grey). A new figure re-shares only the blank groups, so the rows always add up to it and no "Monthly spending (rough)" row appears unless nothing can be shared. The figure is read back only while the setup bills still add up to `sum`; if a bill was changed or removed on Expenses, the screen opens as for typed rows and never overwrites it. Leaving the box empty removes `spendSum` and the blank groups go back to our marked guesses. A decimal figure is rounded once, so the rows and the retirement guess agree. A decimal group typed beside the figure is rounded the same way (at least $1), so the sum always matches. While a figure is given, the line under the box says the grey figures are the figure shared out.
+The top box's figure is saved as `guide.setup.spendSum: { sum, typed }` (whole dollars; `typed` = the groups typed in the fold). Reopening puts `sum` back in the box, keeps the typed groups as typed and shows the rest as the share of the figure (gray). A new figure re-shares only the blank groups, so the rows always add up to it and no "Monthly spending (rough)" row appears unless nothing can be shared. The figure is read back only while the setup bills still add up to `sum`; if a bill was changed or removed on Expenses, the screen opens as for typed rows and never overwrites it. Leaving the box empty removes `spendSum` and the blank groups go back to our marked guesses. A decimal figure is rounded once, so the rows and the retirement guess agree. A decimal group typed beside the figure is rounded the same way (at least $1), so the sum always matches. While a figure is given, the line under the box says the gray figures are the figure shared out.
 
 ## Year you bought it (2026-11-07, owner's request)
 Question 4 (the home's value) has an optional "Year you bought it" box; question 5 (the mortgage) says the year once it is given
-("You said you bought it in 2025", with "Change the year") and has the box itself only when there is none. Blank shows the grey guess
+("You said you bought it in 2025", with "Change the year") and has the box itself only when there is none. Blank shows the gray guess
 (`home.boughtYear`) in the box's help in words; typed, it is the purchase date (July 1 of the year) on the Home page's entry for the home
 when there is one, else on `property[setup-home]` (`applyBought`, `boughtYearOn`, `homeEntryFor`: one entry; the Get started entry is
 removed when the box is emptied, when the home is unpicked or its account goes). `parseYear(v, thisYear)` takes the year of the plan's
@@ -692,7 +692,7 @@ home was bought".
 ## Spending or what's left over: either one, the other is worked out (owner's request, 2026-11-07)
 The owner: "often, people know approximately that their checking goes up say $1k each month and they save occasionally when they have too much in checking ... we can use their leftover estimate to calculate how much will be saved each year."
 
-**What changed.** Question 6 opens with a plain choice: "I know roughly what I spend" (the box and the groups as before) or "I know what's left over" ("How much does your checking go up in a normal month, before you move any to savings?"). The grey figure in that box is the left-over the month would read on our spending guesses; a minus sign is allowed ("-200": it usually goes down); **Not sure** empties the box, and an empty box saves our spending guesses as before. The same choice sits on Expenses ("Set your month in one number"), where the other figure is "what I spend each month, in all". Before, only spending could be typed, and the year's saving was never said.
+**What changed.** Question 6 opens with a plain choice: "I know roughly what I spend" (the box and the groups as before) or "I know what's left over" ("How much does your checking go up in a normal month, before you move any to savings?"). The gray figure in that box is the left-over the month would read on our spending guesses; a minus sign is allowed ("-200": it usually goes down); **Not sure** empties the box, and an empty box saves our spending guesses as before. The same choice sits on Expenses ("Set your month in one number"), where the other figure is "what I spend each month, in all". Before, only spending could be typed, and the year's saving was never said.
 
 **The arithmetic is the exact inverse of the app's own left-over figure.** The left-over is Next best action's `spare.monthly` (the one figure on the Dashboard, Expenses, Forecast, Income statement, Income, Next best action and the reveal): take-home pay after federal, payroll and state tax and the retirement saving out of pay, less spending (the Debts payments included, counted once), less the goal saving and the extra on debts the plan already sets aside. Typing a left-over `L` writes spending so that figure then reads `L`. It is found by *writing the rows on a copy of the plan and reading the figure back* (`solveSpend`; every dollar of spending is a dollar less left over, so two passes land it, six at most), so no tax, saving or debt arithmetic is repeated here and the two cannot drift apart. Formula: spending the rows must add up to = pay available after tax and the retirement saving out of pay - the extra on debts - bills and loan payments already in the plan (everything that is not a Get started row) - `L`. Whole dollars, so the figure reads `L` to within half a dollar; if the plan steps (the child care credit moves with the bills) the nearest whole dollars around the crossing are tried and the answer is `ok` only when one reads `L` within a dollar, else the screen says "We could not match that exact amount" and nothing is written. A typed 0 is written so it reads level or a hair above (never -$0 "short"). Spending typed gives the left-over as before.
 - Rows written: the same rows the question writes (`setup-x-<row>`), our guessed split scaled to the total (`sumSplit`), no guess mark on them (the figure is the person's own, so the month is not "mostly our guesses" and the left-over stops waiting; Next best action sets `spare.waits = false` while the note below holds). With no guesses for the plan (outside the U.S.) the total is one rough row.
@@ -713,8 +713,8 @@ Tests ("L -> spending -> L", "spending -> L -> spending", "the rows typed stay t
 - **`ok` means read back (D1).** `solveSpend` never returns `ok` on a hope: after the passes it keeps the figure only if it reads `L` (half a dollar; a dollar when the plan steps), else it tries the whole dollars around the crossing, else `why: "step"`. Get started's housing row, once it is a share of a figure the person gave (`spendSum`) and not a typed payment, is never taken for the mortgage on Expenses (`sharedHousingRow`).
 - **No negative, no blame on the wrong thing (D8).** A left-over above everything that comes in after tax and saving says "That is more than comes in after tax and saving (about $X a month)" (`why: "more-than-pay"`), not "your bills".
 - **Typed groups with no guesses (D5).** Without our guesses (outside the U.S.) the left-over way keeps the groups typed and writes the rest as one rough row (the same writer, nothing to share by).
-- **Continue and the stop (D3, UX 1).** `current.block` solves the answer then and there (`lw.flush()`), so a tap within a moment of typing, or a group typed after the left-over, is judged on the screen as it stands; a left-over that cannot be worked out writes nothing and never falls back to our guesses. An empty left-over box with spending already given keeps that spending (the grey figure is then today's left-over).
-- **Words (UX 2-8).** One question per conflict ("What you typed in the groups below, $X a month, is more than a $1,000 left over allows. With that left over, your groups can add up to at most $Y a month. Which is right?"), no total or "we changed our guesses" line while two answers are at odds, "Pick one of the two answers below, then Continue."; the grey line reads "Not sure? Tap Not sure and we'll use a typical month: about $960 left over." (or "short"); the intro is neutral; the Expenses card uses the same two choices as the question; the reveal adds "That means about $X a month goes on bills and spending."; with goals the year reads "in checking, savings and your goals".
+- **Continue and the stop (D3, UX 1).** `current.block` solves the answer then and there (`lw.flush()`), so a tap within a moment of typing, or a group typed after the left-over, is judged on the screen as it stands; a left-over that cannot be worked out writes nothing and never falls back to our guesses. An empty left-over box with spending already given keeps that spending (the gray figure is then today's left-over).
+- **Words (UX 2-8).** One question per conflict ("What you typed in the groups below, $X a month, is more than a $1,000 left over allows. With that left over, your groups can add up to at most $Y a month. Which is right?"), no total or "we changed our guesses" line while two answers are at odds, "Pick one of the two answers below, then Continue."; the gray line reads "Not sure? Tap Not sure and we'll use a typical month: about $960 left over." (or "short"); the intro is neutral; the Expenses card uses the same two choices as the question; the reveal adds "That means about $X a month goes on bills and spending."; with goals the year reads "in checking, savings and your goals".
 - **One answer (D7).** Reports > Statements no longer clamps a short month at zero ("Net worth shrinks by about $X a year" when more goes out than comes in); it reads the same month as `spare.year`. 50/30/20 keeps its own definition: a budgeting share (needs / wants / savings, a debt's extra counts as saving as the rule does) with the shortfall on its own line; it states no yearly figure.
 - **Verify, 2026-11-07.** `applyLeftOver` writes only the note when the plan already reads the left-over typed and nothing else on the screen differs (no row is our guess, the groups typed are the rows' amounts, the taps and a typed retirement figure are as saved): after a raise, Continue with the box on what it now reads keeps every row as it was. Before, our split was written again from the new pay, so rent and food moved while the screen said "Continue keeps your spending as it is" (the total stayed). And a left-over that is all of what comes in, with no bills at all, is `more-than-pay`, not "add your pay". "Skip: use our guesses" with a left-over typed that cannot be worked out now writes our guesses (the groups typed kept); before, it moved on with no spending at all.
 

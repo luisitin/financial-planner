@@ -1,6 +1,7 @@
 // modules/investments/dividends/view.js -- DOM only. The yearly income first, what it covers,
 // then each holding's share and the accounts it lands in.
 import { compute } from "./compute.js";
+import { withA } from "../../../core/words.js";
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -8,12 +9,12 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Dividends and interest"), ui.h("p", { class: "lede" }, "What your holdings pay out each year, by fund and by account, and what it covers of your spending. It needs your holdings first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Dividends and interest"), ui.h("p", { class: "lede" }, "What your holdings pay out each year, by fund and by account, and how much of your spending it covers. It needs your holdings first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `About ${money(d.total)} a year in dividends and interest`),
-    ui.h("p", { class: "lede" }, `${money(d.monthly)} a month, a ${fmt.pct(d.yieldOverall, 2)} yield on ${money(d.portfolio)}.${d.coversShare !== null ? ` That covers ${fmt.pct(d.coversShare, 0)} of your monthly spending.` : ""}${d.sheltered > 0 ? ` ${money(d.sheltered)} of it grows untaxed inside retirement accounts.` : ""}`),
+    ui.h("p", { class: "lede" }, `${money(d.monthly)} a month, ${withA(fmt.pct(d.yieldOverall, 2))} yield on ${money(d.portfolio)}.${d.coversShare !== null ? ` That covers ${fmt.pct(d.coversShare, 0)} of your monthly spending.` : ""}${d.sheltered > 0 ? ` ${money(d.sheltered)} of it grows untaxed inside retirement accounts.` : ""}`),
     ui.h("p", { class: "muted small" }, "Yields are typical figures for each fund's class unless you typed the fund's own; distributions vary quarter to quarter. Income you reinvest still counts as income, and is still taxed in a taxable account."),
   ));
   for (const n of d.notes) root.append(ui.notice("info", n));

@@ -1,7 +1,7 @@
 # Money calendar  (`household/calendar`)
 
 **Status:** usable (phase 10; built by claude-b from codex's idle lane)
-**Purpose:** Puts your bills, paydays, tax deadlines, open enrolment, required minimum distribution dates and policy
+**Purpose:** Puts your bills, paydays, tax deadlines, open enrollment, required minimum distribution dates and policy
 renewals on one calendar.
 
 A list by month rather than a grid: a month grid does not fit a 390 px phone with words in it. Next month, three months

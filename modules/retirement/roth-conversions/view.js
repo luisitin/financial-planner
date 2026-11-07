@@ -15,7 +15,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   const best = d.options.find((o) => o.best), none = d.none;
@@ -70,7 +70,7 @@ export function render(root, ctx) {
   // why the first move waits (UX review 13): the years before it have no room at that rate, the year's other income already fills it
   const firstMove = best?.moves?.[0]?.year ?? null;
   // today's dollars, and the plan's flat rate until conversions are on, on one small line (UX review 3)
-  const dollarsWords = `Amounts are in today's dollars.${flatNow ? ` This page uses the real tax rates; your plan uses a flat ${flatPct} until you turn conversions on.` : ""}`;
+  const dollarsWords = `Amounts are in today's dollars.${flatNow ? ` This page uses the actual tax rates for each year; your plan uses a flat ${flatPct} tax rate until you turn conversions on.` : ""}`;
   // said as what the setting does, not as "nothing could be converted": the rate's room is what ordinary income leaves; qualified dividends and
   // gains sit on top of it and do not fill it (follow-up 2026-11-07, 5b R4: it blamed investment gains and dividends; verify: withdrawals from an
   // investment account fill nothing either, so the list names 401(k) or IRA withdrawals)
@@ -150,7 +150,7 @@ export function render(root, ctx) {
   root.append(out);
   // the projection's own notes, plainly: its "on this page" is Will the money last? here (the page's own name, not "the Projection
   // page"), its "brackets" the federal rates (round 8 review UX 9; batch 5b UX 18: the spending note says where to change it)
-  const noteWords = (n) => n.replace("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ.", "Spending is today's expenses; change it under Retirement settings on Will the money last?")
+  const noteWords = (n) => n.replace("The plan assumes you will spend in retirement what you spend today; set your own figure on this page if it will differ.", "Retirement spending is set to what you spend today; change it under Retirement settings on Will the money last?")
     .replace(/ on this page\b/, " on Will the money last?").replace(/the federal brackets/g, "the federal tax rates");
   if (canConvert) for (const n of d.notes) root.append(ui.notice("info", noteWords(n)));
 
@@ -162,7 +162,7 @@ export function render(root, ctx) {
   const record = (o, button) => ui.h("li", {},
     // green only means good: the plan's setting well behind the best is amber (round 8 review UX 3)
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o), o.best ? ui.h("span", { class: "pill accent" }, "best") : null, o.chosen ? ui.h("span", { class: o === behind ? "pill warn" : o.best ? "pill ok" : "pill" }, "yours") : null), ui.h("span", { class: "rec-value" }, diffOf(o))),
-    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already fills it.") : "Leaves it where it is; you pay tax as you take it out."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already uses up that bracket.") : "Leaves it where it is; you pay tax as you take it out."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
     // the best one's button is the filled one above
     !button || !o.offer || (o.best && (bb || offerBest)) ? null : ui.h("div", { class: "rec-foot" }, ui.button(o.fillRate ? "Use this one" : "Turn conversions off", () => useWay(o), { class: "secondary" })));
   const keep = d.options.filter((o) => !worse(o)), rest = d.options.filter(worse);

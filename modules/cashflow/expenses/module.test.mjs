@@ -105,7 +105,7 @@ test("the before-tax overspend sentence is also returned on its own, so a page t
   assert.equal(compute(p, { today: "2026-09-15" }).overspend, null);
 });
 
-test("closeGap: the fewest nice-to-haves that close the gap, a trim on the last, must-pays only when that is not enough", () => {
+test("closeGap: the fewest could be cuts that close the gap, a trim on the last, bills you have to pay only when that is not enough", () => {
   const items = [
     { id: "a", name: "Eating out", amount: 400, monthly: 400, active: true, essential: false, period: "monthly" },
     { id: "b", name: "Streaming", amount: 45, monthly: 45, active: true, essential: false, period: "monthly" },
@@ -156,7 +156,7 @@ test("each debt is matched to its own expense: the car payment listed does not d
   const listed = d.active.reduce((t, x) => t + x.monthly, 0);
   assert.ok(Math.abs(d.monthly - (listed + 400)) < 0.01);
   assert.ok(Math.abs(d.essentialMonthly - (d.active.filter((x) => x.essential).reduce((t, x) => t + x.monthly, 0) + 190)) < 0.01, "the required $190 is a must-pay; the $210 extra is not");
-  assert.ok(Math.abs(d.essentialMonthly + d.optionalMonthly - d.monthly) < 0.01, "must-pay and nice-to-have add up to the total: the $210 extra is a nice-to-have");
+  assert.ok(Math.abs(d.essentialMonthly + d.optionalMonthly - d.monthly) < 0.01, "must-pay and could be cut add up to the total: the $210 extra is a could be cut");
   assert.deepEqual(d.warnings, [], "nothing is missing any more, so no 'a payment may be missing' warning");
   const cat = d.byCategory.find((c) => c.category === "debt");
   assert.equal(cat.label, "Loan and card payments (some from Debts)"); assert.ok(Math.abs(cat.monthly - 810) < 0.01);
@@ -231,7 +231,7 @@ test("short only in a lean month: the tile and Close the gap give the full month
   const lean = text(at(297));
   assert.match(lean, /in a lean month; when all your uneven pay comes in, about \$300 is left/);
   assert.match(lean, /A month that brings the Income page's amount leaves about \$300, so this is about the lean months\./);
-  assert.doesNotMatch(lean, /The rest has to come from a must-pay|The biggest must-pays/, "no must-pay to cut when good months make up for lean ones");
+  assert.doesNotMatch(lean, /The rest has to come from a must-pay|The biggest bills you have to pay/, "no must-pay to cut when good months make up for lean ones");
   const short = text(at(-123));
   assert.match(short, /when all your uneven pay comes in, it is still about \$120 short/);
   assert.match(short, /Even a month that brings the Income page's amount is about \$120 short\. This is the first thing to fix\./);

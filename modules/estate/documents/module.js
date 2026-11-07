@@ -4,7 +4,7 @@ import { render } from "./view.js";
 export default {
   id: "documents",
   group: "estate",
-  title: "Documents checklist",
+  title: "Estate documents",
   icon: "📜",
   order: 10,
   version: 1,

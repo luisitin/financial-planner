@@ -37,7 +37,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, "The smallest gain per share first (the biggest losses at the top). Tell the brokerage which lot when you sell (\"specific identification\"), or it sells the oldest."),
     ui.h("ul", { class: "records" }, d.sellFirst.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${x.lot.shares} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
-      ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} days` : ""}`)))),
+      ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} ${x.lot.daysToLong === 1 ? "day" : "days"}` : ""}`)))),
   ));
   // lots per holding, with the add form
   const holdingsWithPrice = d.holdings;

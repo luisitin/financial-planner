@@ -14,7 +14,7 @@ const FIELDS = (people, homes) => [
   homes.length ? { key: "accountId", label: "Which home", type: "select", options: [{ value: "", label: "Not tied to one home" }, ...homes.map((a) => ({ value: a.id, label: a.name || "Home" }))], help: "the home on Net worth this policy insures" } : null,
   { key: "personId", label: "Who it covers", type: "select", options: [{ value: "", label: "Household / everyone" }, ...people.map((p) => ({ value: p.id, label: p.name }))] },
   { key: "insurer", label: "Insurer", type: "text", placeholder: "the company" },
-  { key: "benefit", label: "What it pays", type: "money", min: 0, help: "life: the death benefit; disability and care: the monthly benefit; home and landlord: the dwelling cover; auto and umbrella: the liability limit; health: the out-of-pocket maximum" },
+  { key: "benefit", label: "What it pays", type: "money", min: 0, help: "life: the death benefit; disability and care: the monthly benefit; home and landlord: the dwelling coverage; auto and umbrella: the liability limit; health: the out-of-pocket maximum" },
   { key: "premium", label: "Premium", type: "money", min: 0, help: "what you pay each time" },
   { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS.filter((o) => o.value !== "once") },
   { key: "endDate", label: "Ends", type: "date", help: "term life: the last day of the term" },
@@ -37,12 +37,12 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "What protects you?"),
       ui.h("p", { class: "lede" }, "List every insurance policy: life, disability, long-term care, health, home, car, umbrella. With them on file the plan can tell whether a death, an illness or a lawsuit would sink it, and what each one costs you a year."),
-      ui.h("p", { class: "muted small" }, "The policy's declarations page or the insurer's app has every figure the form asks for. Cover through work counts too: it is in your benefits portal."),
+      ui.h("p", { class: "muted small" }, "The policy's declarations page or the insurer's app has every figure the form asks for. Coverage through work counts too: it is in your benefits portal."),
     ));
   } else {
     root.append(ui.card(null, ui.row(
       ui.stat("Premiums a year", money(d.premiumYearly), `${money(d.premiumMonthly)} a month`),
-      ...d.byPerson.filter((p) => p.life > 0 || p.disabilityMonthly > 0).map((p) => ui.stat(isYou(p.name) ? "Your life cover" : `${p.name}: life cover`, money(p.life), p.disabilityMonthly ? `disability ${money(p.disabilityMonthly)} a month` : "no disability cover on file")),
+      ...d.byPerson.filter((p) => p.life > 0 || p.disabilityMonthly > 0).map((p) => ui.stat(isYou(p.name) ? "Your life insurance" : `${p.name}: life insurance`, money(p.life), p.disabilityMonthly ? `disability ${money(p.disabilityMonthly)} a month` : "no disability insurance on file")),
     )));
   }
   for (const w of d.warnings) root.append(ui.notice("warn", w));

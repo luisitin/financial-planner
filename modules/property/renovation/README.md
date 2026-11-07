@@ -16,7 +16,7 @@
 - Value added = cost × the share it adds back: national averages from the 2024 Cost vs. Value report (Zonda,
   Remodeling magazine), rounded to 5% (`PROJECTS`), or your own.
 - A loan: level payment `pmt(rate/12, years×12, amount)`; month by month, interest = balance × rate / 12.
-- **In today's money** (how the ways are ranked): every payment discounted at the plan's blended return,
+- **In today's dollars** (how the ways are ranked): every payment discounted at the plan's blended return,
   Σ payment / (1 + r/12)^m, minus the cash received, less the tax the interest saves discounted the same way
   (top rate × deductible share × Σ interest / (1 + r/12)^m, only when itemizing). Cash = 0. The best is the cheapest that
   fits, a later way winning only when cheaper by more than $1.
@@ -24,7 +24,7 @@
   (lenders' usual combined limit).
 - Cash-out refinance: a new loan of mortgage + cost + closing costs (default 3% of mortgage + cost) at `refiRate` over
   `refiYears`, against keeping the old mortgage on its own payment: the payment change, the extra interest (negative when
-  the new loan costs less interest), and in today's money PV(new payments) − PV(old payments) − cost less the tax change.
+  the new loan costs less interest), and in today's dollars PV(new payments) − PV(old payments) − cost less the tax change.
   It fits only when the new loan is at most 80% of the home's value (`refiLtv`; HUD Mortgagee Letter 2019-11, FHA cash-out
   refinances: "The maximum LTV is 80 percent of the Adjusted Value", read 2026-10-31; other lenders' limits were not
   checked, and a VA loan can go higher). Until 2026-10-31 it used the line's 85% test without its own costs.

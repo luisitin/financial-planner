@@ -4,7 +4,7 @@ A personal financial planning app you own: one HTML shell, one folder per page, 
 in code on your PC, a local model (Ollama) for the language work, and nothing in the cloud.
 Open it from your phone on the LAN; the PC holds the plan and does the heavy computing.
 
-This is one household's personal planning app, shared as-is under the [MIT licence](LICENSE).
+This is one household's personal planning app, shared as-is under the [MIT license](LICENSE).
 No real financial data is in the repo: the plan lives in the git-ignored `data/` folder, and
 every household, statement and account number under `qa/` and in the tests is invented.
 Not financial advice.

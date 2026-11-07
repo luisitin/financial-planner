@@ -1,7 +1,7 @@
 # Healthcare before 65  (`retirement/healthcare`)
 
 **Status:** usable (phase 5)
-**Purpose:** Health cover between retiring and Medicare at 65: the marketplace (ACA) benchmark plan for the people it covers each year, the premium tax credit on the plan's own income, what is left to pay, and the cliff where the credit stops.
+**Purpose:** Health insurance between retiring and Medicare at 65: the marketplace (ACA) benchmark plan for the people it covers each year, the premium tax credit on the plan's own income, what is left to pay, and the cliff where the credit stops.
 
 ## Inputs
 `household` (ages, children), the plan's income through `retirement/medicare` `planIncome` (the brackets in retired years, pay less pre-tax saving in working years), `retirement.aca`. Writes `retirement.aca = { benchmarkMonthly (the household's benchmark today), rules: "law"|"enhanced" }`.
@@ -29,7 +29,7 @@
 - The state's own subsidies and Medicaid.
 
 ## In the plan's verdict (2026-11-02)
-`retirement/projection` `buildInputs` adds each marketplace year's `cost` (after the credit) to the plan as a "Health cover"
+`retirement/projection` `buildInputs` adds each marketplace year's `cost` (after the credit) to the plan as a "Health insurance"
 engine line in that year, every year listed here (fourth pass below), on top of the spending figure, unless
 `retirement.healthIncluded` says the spending figure already includes cover (or, with spending taken from today's expenses,
 the health-insurance premium line it carries gives way to this). So Will the money last?, the careful spending figure, Monte
@@ -75,13 +75,13 @@ year included.
   60: 2033 and 2034 are gone); no year before the household's retirement is priced (the projection's working years).
 - No marketplace years: the page names the real reason, person by person (`noBridgeWhy`, `whyNoBridge`): "Ruth and Sam are 65
   or over, so Medicare is the cover: no one in your plan needs the marketplace." for the retired couple seed (it said
-  "everyone works until 65, or a partner's job covers the gap"); "In your plan no one needs marketplace cover: Ana works until
+  "everyone works until 65, or a partner's job covers the gap"); "In your plan no one needs marketplace coverage: Ana works until
   65 and Bo works until 62, then is on Ana's plan at work until 65." for the family. The Compare what-ifs prompt shows only
   when someone is under 65.
 
 ## Review 2026-11-06 (sixth pass)
 Who works is the projection's one work rule, now shared with Financial independence and Goal seek (projection README, "Review
-2026-11-06 (health cover, sixth pass)"): a retirement contribution counts as work when it goes to a plan at work (a 401(k), or
+2026-11-06 (health insurance, sixth pass)"): a retirement contribution counts as work when it goes to a plan at work (a 401(k), or
 one with a match) or nobody else has pay, and the household's retirement year is never after the first adult's own. No
 fixture's marketplace years move: Lee with her IRA saving kept and Sam working is still priced 2033-2034 (a spousal IRA is not a
 job), and the 68/63 couple's Bo 2026-2027.

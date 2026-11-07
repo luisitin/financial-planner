@@ -11,7 +11,7 @@ figure for the population. This page lists every such figure still in use, the o
 first, each with one plain "Our guess:" line, a box to type the real figure and "That's about right" to keep ours.
 
 ## The one rule (what the person sees)
-- A grey figure in an empty box is exactly what the plan counts if the box stays empty. An empty box with no grey
+- A gray figure in an empty box is exactly what the plan counts if the box stays empty. An empty box with no gray
   figure counts as nothing. What the person types always wins and is never moved.
 - One why-line per guess, at most 70 characters after "Our guess: ", naming the answers it used; no publisher, year or
   statistics words on screen. Publisher, table, year and read date sit in one fold here ("Where our guesses come from").
@@ -20,7 +20,7 @@ first, each with one plain "Our guess:" line, a box to type the real figure and 
 ## How it is stored (core/estimate; docs/CONVENTIONS.md "Guesses"; docs/DATA_MODEL.md `guesses`)
 A guess is an ordinary value in its field plus one ledger entry `plan.guesses[path] = { k, v, u, s, at, d }`. The
 field counts as a guess only while it still equals `v` (`same()`, per unit: rates within 1e-9, money within $0.005).
-- **S1** only a page that saves a box the person saw with its grey figure creates one (`markGuess`, `saveField`).
+- **S1** only a page that saves a box the person saw with its gray figure creates one (`markGuess`, `saveField`).
 - **S2** any typed value, equal or not, ends it (`saveField` clears it).
 - **S3** `settle` (inside `store.update`, after the page's change) refreshes untouched entries in tier order; it never
   creates one, never writes a field whose value differs from `v`, and is idempotent.
@@ -77,7 +77,7 @@ spending are counted now. Type the real figures on Expenses and Debts when you h
 now" this page keeps the offer folded ("Skipped for now: your mortgage and your spending", the same card inside, with
 `ignoreLater`); the 30 days apply to the Dashboard only. With the card (or the fold) and no guess in use yet, it is the
 page (the "every figure is one you typed" card would say the opposite). **The card's questions** (C7 UX review 5):
-question 6's taps the rows still need (health cover; childcare with a child; an HOA fee where the state's share is
+question 6's taps the rows still need (health insurance; childcare with a child; an HOA fee where the state's share is
 asked), each as chips (`role="radio"`); an answer redraws the card with the figures it gives (`fillOffers` with `taps`;
 nothing is written), the question stays with its answer picked, and "Use these guesses" writes the answers where
 question 6 keeps them (`guide.setup.taps`, creating `guide.setup` with them alone on a plan Get started never saw).
@@ -114,8 +114,8 @@ $2,840). The older figure stays until the person types one (spec 17.4: keeping i
 **"Is this the same loan?"** ("Is this the same home?"; "Did you add any of these twice?" for more): "You added Home
 loan, $205,000. We also have Mortgage, with our guess of about $210,000 still owed. If they're the same loan, it's
 counted twice now." with "Yes, the same loan" (filled; notice "Done: Home loan counts once, and our guess for Mortgage
-is gone.") and "No, two loans" (outlined; "Kept both: ... We won't ask again."). The grey figures in the boxes use `--muted` (scoped to `.gs-root`:
-4.8:1 in light mode, about 6:1 in dark; Chrome's own grey is 3.7:1 on the dark panel).
+is gone.") and "No, two loans" (outlined; "Kept both: ... We won't ask again."). The gray figures in the boxes use `--muted` (scoped to `.gs-root`:
+4.8:1 in light mode, about 6:1 in dark; Chrome's own gray is 3.7:1 on the dark panel).
 Ranking in C1 is by static weight (estimator `weight`, or the legacy weights below); the measured ranking (spec 11.2,
 `compute(plan, { ranges: true })`, the "If it's off ..." line) arrives in C8.
 
@@ -399,7 +399,7 @@ age, from the middle of `home.boughtYear` (`startOf` returns that start with `st
 offered (the mortgage page asks it too, with four buttons that write the same tap Get started keeps; review D3). Verify 2026-11-07:
 the first fix used no start, the usual balance and a full new 30 years, and once the tax and insurance came off the payment that read
 as "paid off in 2056" for a 60-year-old who typed 1995; counted from the guessed year it reads about 18 years, as with no year typed.
-Your plan says such a loan as "loan from about 2013, our guess", never "bought 2013", and Get started's grey line under "Still owed"
+Your plan says such a loan as "loan from about 2013, our guess", never "bought 2013", and Get started's gray line under "Still owed"
 says "counted like most owners your age, from about 2013: a 1995 loan would be paid off by now" (it said "typical in 2013 with 14% paid
 up front" under "You said you bought it in 1995").
 
@@ -503,7 +503,7 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   since 2023 / 12` (the home's value typed or our `home.value`; none: the AHS mean $1,363 x CPI / 12), plus the HOA fee
   by the share of the state's owners who pay one (ACS 2025; U.S. with no state): under 35% left out, over 65% the state's
   median fee (with or without a mortgage), in between asked ("Do you pay an HOA or condo fee?"; unanswered or Not sure
-  takes the likelier side; the spec has the box wait for the answer, but a box with no grey figure would save nothing,
+  takes the likelier side; the spec has the box wait for the answer, but a box with no gray figure would save nothing,
   so the likelier side is shown while it asks), plus property tax and insurance (`home.propertyTax`, `home.insurance`,
   or the Home page's typed ones) when there is no mortgage or the escrow tap says they are not in the payment. A bill
   typed under another kind whose name says it is one of those two parts (`PROPERTY_TAX_BILL`: property, real estate, home
@@ -541,8 +541,8 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   holds the home's property tax and insurance (E22), so those two are added on top only when the mortgage ends before
   work stops (C3 money review D9). Pat and Lee: about $3,790 of costs plus the $1,600 payment, $5,390 (spec 7.H's "$4,100
   + mortgage" counted the $280 of tax and insurance twice; the figure is one amount for every year of retirement).
-- **The basis line (`spendBasis`)**: "The grey figures are what a household like yours usually spends: one adult
-  renting in Texas on about $48,000 a year." (`householdWords` is the part after the colon.) With R12 on: "The grey
+- **The basis line (`spendBasis`)**: "The gray figures are what a household like yours usually spends: one adult
+  renting in Texas on about $48,000 a year." (`householdWords` is the part after the colon.) With R12 on: "The gray
   figures are what your bank files show going out on each, a month over September and October." (the months read, M8)
 - **R12, the person's own bank files (`bankSpend`, C7; spec 2.2 R12, 7.A).** A month (before this one) is read when
   all of these hold, looked at newest first: it is at most `BANK.maxAge` = 12 months old (else held "old"); it is whole
@@ -623,7 +623,7 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
 
 ## Retirement saving and balances (estimators/saving.js; spec 7.B, E12-E17, E40; C4, 2026-11-06)
 
-Get started's question 4b ("About how much is in each?") shows a grey figure in every box and writes it, marked, when the box
+Get started's question 4b ("About how much is in each?") shows a gray figure in every box and writes it, marked, when the box
 is left blank. A picked retirement tile always makes the account. All tables are bundled (data/balances.js, data/pay.js, read
 2026-11-02); the IRS limits are read from `modules/retirement/contributions/data/limits.js`.
 
@@ -836,7 +836,7 @@ same change. What it changed in the estimators:
 - **Home insurance follows the home** (`insuranceYear`): the state's average HO-3 premium in 2025 prices, scaled by this
   home's value against the state's typical owner-occupied home (ACS 2025), at least $350 a year. It moves the mortgage payment
   guess's insurance part with it.
-- **Spending rows** (spend.js `buildModel`): health cover and medicine follow the oldest adult's age (CE 2025 by age) and the
+- **Spending rows** (spend.js `buildModel`): health insurance and medicine follow the oldest adult's age (CE 2025 by age) and the
   household's size; a household with a child under 18 never gets a row (but groceries) smaller than the same adults without
   one, because the survey's household types stand in for age; the rows are sized on take-home before typed pre-tax saving
   (`takeHome(..., { sizing: true })`), so saving more never raises the guessed dining and the retirement figure after it.
@@ -894,7 +894,7 @@ income); every 7.H spending cell (rows, envelope, k, totals, R11 noted); the env
 qa household archetype, spending is never $0, S's living share 0.70-0.85, J's flexible rows scaled and housing not,
 flat above the top fifth; monotone at a bucket edge and in the spread; the HOA hurdle (Ohio left out, Arizona asked,
 Yes adds the fee), childcare always asked (Yes $1,400 for J, No and Not sure nothing, the NDCP and no-state
-fallbacks), health cover asked once; E05 by tap (work, Medicare, Medicaid); a bill typed later on Expenses comes off
+fallbacks), health insurance asked once; E05 by tap (work, Medicare, Medicaid); a bill typed later on Expenses comes off
 its row (and comes back when removed); the 7.F ratios and N's figure from 50; the $15,000 rent slip; the rows agree with
 setup's; the basis line and E10.
 C7 (each failed before the change): the three 7.H households made before the guesses are offered Get started's own
@@ -958,7 +958,7 @@ age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
   frozen at the old figure. Question 4b's own answer (Not sure, I know it) replaces an earlier "no match", so the figure its screen
   showed is the one settle keeps.
 - **A removed person's account** kept as the household's: its guessed balance stays as it was (no pay or age is left to guess from).
-- **Question 4b reopens** a guessed balance in the plan at work (Q2's account) grey, like every other guess (spec P2), and question 4
+- **Question 4b reopens** a guessed balance in the plan at work (Q2's account) gray, like every other guess (spec P2), and question 4
   says "Next we'll ask what is in it" while Retirement is ticked (C4 ticks it for a plan at work), not "Tap Retirement".
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)

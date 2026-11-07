@@ -29,7 +29,7 @@ export function render(page, ctx) {
     const p = d.plan;
     sheet.append(ui.h("h1", {}, "Retirement report"), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}prepared ${longDate(d.today)} · today's dollars unless said otherwise`),
       ui.h("p", { class: "rp-lead" }, [
-        p.retireYear ? `The spending years start in ${p.retireYear}, at ${money(p.spendingMonthly)} a month.` : `The plan spends ${money(p.spendingMonthly)} a month.`,
+        p.retireYear ? `Retirement, when you live on your savings, starts in ${p.retireYear}, at ${money(p.spendingMonthly)} a month.` : `The plan spends ${money(p.spendingMonthly)} a month.`,
         p.success ? `At expected returns the money lasts to ${p.lastsTo} and leaves about ${big(p.endReal)}.` : `At expected returns the money runs out in ${p.shortYear}${p.shortAge ? `, at ${p.shortAge}` : ""}.`,
         d.chance ? `In ${fmt.pct(d.chance.rate, 0)} of ${d.chance.paths.toLocaleString("en-US")} pretend futures the money lasts${d.history ? `; replayed through history since ${d.history.from} it lasts in ${fmt.pct(d.history.rate, 0)} of ${d.history.windows} starting years` : ""}.` : "",
         p.coverage !== null ? `Guaranteed income (Social Security and pensions) covers ${fmt.pct(p.coverage, 0)} of spending in the first retirement year.` : "",

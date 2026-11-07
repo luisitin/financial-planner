@@ -57,7 +57,7 @@ export function runMix(weights, { from = 1871, to = Infinity, start = 10000, rea
 export function compute(plan, params = {}) {
   const { mix: t, source } = targetMix(plan);
   // "own" is the target chosen on Allocation; with none chosen it is the Projection's stock share, and says so
-  const own = { ...toHistoryWeights(t), label: source === "own" ? "Your target mix" : "The Projection's mix" };
+  const own = { ...toHistoryWeights(t), label: source === "own" ? "Your target mix" : "The mix on Will the money last?" };
   const h = computeHoldings(plan, params);
   const held = h.hasData && h.classifiedShare > 0 ? { ...toHistoryWeights(Object.fromEntries(h.byClass.filter((c) => c.cls !== "unknown").map((c) => [c.cls, c.share]))), label: "What you hold" } : null;
   const pick = (m, fallback) => { if (!m) return fallback; if (typeof m === "string") { if (m === "own") return own; if (m === "held" && held) return held; const p = PRESETS.find((x) => x.key === m); return p ? { stocks: p.stocks, bonds: p.bonds, bills: p.bills, label: p.label } : fallback; } return { stocks: Number(m.stocks) || 0, bonds: Number(m.bonds) || 0, bills: Number(m.bills) || 0, label: m.label ?? "Custom" }; };
@@ -69,6 +69,6 @@ export function compute(plan, params = {}) {
   const a = runMix(mixA, { from, real }), b = runMix(mixB, { from, real });
   const notes = [];
   if (from < 1928) notes.push("Before 1928 the figures come from Shiller's S&P and long-bond series; cash is the January long-bond yield standing in for short rates, so treat the cash part of those years as approximate.");
-  notes.push("Stocks are the S&P 500 (large US companies); international stocks, REITs and gold in your mix are run as US stocks here, for want of a history as long. One rebalance a year, no fees, no taxes.");
+  notes.push("Stocks are the S&P 500 (large US companies); international stocks, real estate funds (REITs) and gold in your mix are treated as US stocks here, because their records do not go back as far. One rebalance a year, no fees, no taxes.");
   return { a, b, mixA, mixB, own, held, ownSource: source, defaultA, from, real, firstYear: HISTORY[0].year, lastYear: HISTORY[HISTORY.length - 1].year, presets: PRESETS, startYears: START_YEARS, notes };
 }

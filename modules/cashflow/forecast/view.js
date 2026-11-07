@@ -24,7 +24,7 @@ export function render(root, ctx) {
   const drifts = d.end < d.start - 0.5 && long.end < long.start - 0.5;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.shortfallDate ? `Short on ${fmt.date(d.shortfallDate)}` : "Cash-flow forecast"),
-    ui.h("p", { class: "lede" }, d.shortfallDate ? `At this pace the everyday accounts go below zero on ${fmt.date(d.shortfallDate)}. Move money in before then, or push a bill.` : `The lowest point in the next ${state.days} days is ${fmt.money(d.lowest.balance, cur)} on ${fmt.date(d.lowest.date)}. No shortfall expected${drifts ? `, but the everyday accounts end ${fmt.money(d.start - d.end, cur)} lower than today` : ""}.`),
+    ui.h("p", { class: "lede" }, d.shortfallDate ? `At this pace the everyday accounts go below zero on ${fmt.date(d.shortfallDate)}. Move money in before then, or push back a bill.` : `The lowest point in the next ${state.days} days is ${fmt.money(d.lowest.balance, cur)} on ${fmt.date(d.lowest.date)}. No shortfall expected${drifts ? `, but the everyday accounts end ${fmt.money(d.start - d.end, cur)} lower than today` : ""}.`),
   ));
   const acctSel = ui.select([{ value: "", label: "All everyday accounts" }, ...d.accounts.map((a) => ({ value: a.id, label: a.name }))], state.accountId, { "aria-label": "Account", onChange: (e) => { state.accountId = e.target.value; redraw(); } });
   const daysSel = ui.select([{ value: "30", label: "30 days" }, { value: "60", label: "60 days" }, { value: "90", label: "90 days" }], String(state.days), { "aria-label": "How far ahead", onChange: (e) => { state.days = Number(e.target.value); redraw(); } });

@@ -185,7 +185,7 @@ The owner's answer, 2026-11-06: "You can do as you please. Just make sure a laym
 - **The first screen answers in two sentences.** "This year, take at least $16,078 from Ruth's retirement account by December
   31: the law requires it. With your $50,400 of Social Security and pension, you can spend about $5,000 a month and the money
   lasts in 9 of 10 markets." The second is `withdrawal-strategy` `firstYear`'s income and sources with Monte Carlo's careful
-  figure (`careful.js` `whenCareful`, a grey bar until it is worked out; "plus health cover" when the plan adds it; at what you
+  figure (`careful.js` `whenCareful`, a grey bar until it is worked out; "plus health insurance" when the plan adds it; at what you
   plan, how many of 10 when that is fewer than 9). Two people: "take at least $16,260 from Al's IRA and $16,260 from Bea's IRA by
   December 31: the law requires both"; a first one: "by April 1, 2027". Taken: "Ruth's 2026 required withdrawal is taken."
   Not started: "Nothing is required yet. Required withdrawals from Bea's IRA start in 2035, when Bea turns 75." and the first

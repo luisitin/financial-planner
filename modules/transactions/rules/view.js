@@ -20,11 +20,11 @@ export function render(root, ctx) {
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Rules"),
-    ui.h("p", { class: "lede" }, "A rule files a transaction for you: when the bank's description contains some text, give it this category and a readable name. Rules run on every import. The Categorise page writes one each time you confirm a payee, so you rarely need to type them here."),
-    d.total ? ui.h("p", { class: "muted small" }, `${d.count} rule${d.count === 1 ? "" : "s"}. ${d.uncategorised} transaction${d.uncategorised === 1 ? "" : "s"} still uncategorised${d.wouldFix ? `, ${d.wouldFix} of them would be filed by the rules below` : ""}.`) : null,
+    ui.h("p", { class: "lede" }, "A rule files a transaction for you: when the bank's description contains some text, give it this category and a readable name. Rules run on every import. The Categorize page writes one each time you confirm a payee, so you rarely need to type them here."),
+    d.total ? ui.h("p", { class: "muted small" }, `${d.count} rule${d.count === 1 ? "" : "s"}. ${d.uncategorised} transaction${d.uncategorised === 1 ? "" : "s"} still uncategorized${d.wouldFix ? `, ${d.wouldFix} of them would be filed by the rules below` : ""}.`) : null,
   ));
   if (d.wouldFix) root.append(ui.card(null, ui.row(
-    ui.button(`File ${d.wouldFix} uncategorised transaction${d.wouldFix === 1 ? "" : "s"} now`, () => store.update((p) => {
+    ui.button(`File ${d.wouldFix} uncategorized transaction${d.wouldFix === 1 ? "" : "s"} now`, () => store.update((p) => {
       const r = applyRules(p.rules ?? [], p.transactions ?? []);
       p.transactions = r.txs;
       for (const rule of p.rules ?? []) rule.hits = (rule.hits ?? 0) + (r.hits[rule.id] ?? 0);

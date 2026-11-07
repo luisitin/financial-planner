@@ -6,7 +6,7 @@ import { compute as computeHoldings, targetDateMix } from "../holdings/compute.j
 import { buildInputs } from "../../retirement/projection/compute.js";
 
 export const RULES = {
-  plan: { label: "The plan's path", note: "the Projection page's stock share now and in retirement, gliding between them" },
+  plan: { label: "The plan's path", note: "the stock share on Will the money last? now and in retirement, gliding between them" },
   age: { label: "110 minus age", note: "the classic rule of thumb; 100 minus age for the cautious, 120 minus age for the bold" },
   "target-date": { label: "Target-date fund shape", note: "90% stocks far out, 50% at the retirement year, 30% seven years after" },
 };

@@ -50,14 +50,14 @@ export function compute(plan, params = {}) {
 
   // 1. the cash cushion: months of the bills you have to pay in usable cash against the plan's target
   const liq = computeLiquidity(plan, { today });
-  if (liq.runwayMonths === null) add("cushion", "Cash cushion", null, "No bills you have to pay yet, so the cushion cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
-  else add("cushion", "Cash cushion", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${Math.round(liq.runwayMonths * 10) / 10} months of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
+  if (liq.runwayMonths === null) add("cushion", "Emergency fund", null, "No bills you have to pay yet, so the emergency fund cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
+  else add("cushion", "Emergency fund", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${Math.round(liq.runwayMonths * 10) / 10} months of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
 
   // 2. saving: retirement, goals and what is left over, as a share of income after tax
   const nb = computeNext(plan, { today });
   if (!nb.ready) add("saving", "Saving each month", null, "Income and expenses are needed to see how much of each month is saved.", "Fill in the Income and Expenses pages.", ["cashflow", "income"]);
   // retired and drawing from savings as the plan intends: the saving rule is for working years, so full marks
-  else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can carry (${money(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
+  else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can pay for (${money(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
   else {
     // on the careful month, as the spare is: side income above what you count on (after its tax) is off both sides (review 2026-11-02)
     const s = nb.spare, afterTax = s.gross - (s.businessCosts ?? 0) - s.federalTax - s.payrollTax - (s.stateTax ?? 0) - (s.held ?? 0);
@@ -69,7 +69,7 @@ export function compute(plan, params = {}) {
     // within $5 of $0 it "only just about breaks even" (fullKind), never "about $0" (round 5)
     const full = s.full ?? s.monthly + (s.held ?? 0), about = s.fullAbout ?? full, kind = s.fullKind ?? (full >= 0 ? "ahead" : "short");
     const shortWords = `About ${money(-s.monthly)} a month more goes out than comes in after tax${(s.held ?? 0) > 0.5 ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${kind === "ahead" ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}.`;
-    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, spare ${money(Math.max(0, s.monthly))} a month).` : shortWords, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(roundUp(Math.max(0, SAVING_TARGET * afterTax - saved)))} a month more.`, ["overview", "next-best-action"]);
+    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, left over ${money(Math.max(0, s.monthly))} a month).` : shortWords, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(roundUp(Math.max(0, SAVING_TARGET * afterTax - saved)))} a month more.`, ["overview", "next-best-action"]);
   }
 
   // 3. debt: expensive balances against a year's income, and the share of income that goes to payments
@@ -86,8 +86,8 @@ export function compute(plan, params = {}) {
   const line = renter ? { good: DTI_LINES.renter.good, max: DTI_LINES.renter.high } : DTI;
   const dtiShown = shownShare(renter ? li.dtiRequired : li.dti);
   const dtiShare = dtiShown === null ? 1 : dtiShown <= line.good + 1e-9 ? 1 : dtiShown <= line.max + 1e-9 ? 0.5 : 0;
-  const dtiWords = dtiShown === null ? "" : renter ? `Required payments take ${Math.round(dtiShown * 100)}% of gross income; for renters the guideline is ${Math.round(line.good * 100)}% or less (rent not counted).` : `Payments take ${Math.round(dtiShown * 100)}% of gross income${dtiShown > DTI.good + 1e-9 ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.`;
-  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${expensive.map((r) => r.name).join(" and ")} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of gross income.`, ["debt", "payoff"]);
+  const dtiWords = dtiShown === null ? "" : renter ? `Required payments take ${Math.round(dtiShown * 100)}% of income before tax; for renters the guideline is ${Math.round(line.good * 100)}% or less (rent not counted).` : `Payments take ${Math.round(dtiShown * 100)}% of income before tax${dtiShown > DTI.good + 1e-9 ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.`;
+  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${expensive.map((r) => r.name).join(" and ")} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
 
   // 4. retirement: the spending the plan can carry against the spending it plans
   const pr = computeProjection(plan, { today });
@@ -151,7 +151,7 @@ export function compute(plan, params = {}) {
     ["assumptions looked over in the last year", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
   ];
   const have = checks.filter((c) => c[1]);
-  add("knows", "The plan knows enough", have.length / checks.length, have.length === checks.length ? "Everything the score leans on is filled in and current." : `${have.length} of ${checks.length} things the score leans on are filled in and current.`, `Still to do: ${checks.filter((c) => !c[1]).map((c) => c[0]).join("; ")}.`, ["overview", "alerts"]);
+  add("knows", "The plan knows enough", have.length / checks.length, have.length === checks.length ? "Everything the score depends on is filled in and current." : `${have.length} of ${checks.length} things the score depends on are filled in and up to date.`, `Still to do: ${checks.filter((c) => !c[1]).map((c) => c[0]).join("; ")}.`, ["overview", "alerts"]);
 
   const score = Math.round(parts.reduce((s, p) => s + p.points, 0));
   const band = BANDS.find((b) => score >= b.min).label;

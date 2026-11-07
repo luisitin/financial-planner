@@ -78,7 +78,7 @@ export function render(root, ctx) {
       ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}: about right, within a few hundred dollars.` : owes > 0 ? (sched ? ` ${paidBy}, so about ${money(owes)} is still to pay: ${schedWords}.` : es?.holdBack ? ` ${paidBy}, so about ${money(owes)} is still to pay. Ask the IRA firm to hold back about ${money(es.holdBack.amount)} of tax from a withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${es.holdBack.whole > es.holdBack.amount + 50 ? ` (that is enough to avoid the penalty; about ${money(es.holdBack.whole)} leaves nothing to pay in April)` : ""}.` : ` ${paidBy}, so you would owe about ${money(owes)} at filing time.`) : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
       : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
     owes !== null ? ui.row(noPay ? ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, es?.holdBack ? "How to have tax held back" : oweMost >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, oweMost >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
-    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate in the way of the Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}; it leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, care for an adult who cannot look after themselves, and state tax.`),
+    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate laid out like Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}; it leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, care for an adult who cannot look after themselves, and state tax.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -94,8 +94,8 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     negative ? ui.stat("Credits back", money(-total), owes !== null ? `more than the tax; with withholding, about ${money(-owes)} back in April` : "more than the tax: it comes back with the refund")
       : ui.stat("Federal tax", money(total), rets ? "the two returns added up" : sched ? (sched.behind > 0.5 ? `${money(sched.behind)} behind now${sched.nextDue ? `, ${money(sched.nextDue.amount)} by ${fmt.date(sched.nextDue.due)}` : ""}` : sched.nextDue ? `${money(sched.nextDue.amount)} due by ${fmt.date(sched.nextDue.due)}` : `about ${money(owes)} still to pay`)
-        : es?.holdBack ? `about ${money(es.holdBack.amount)} to have held back from the IRA withdrawal` : owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : `about ${money(-owes)} back in April` : "before withholding"),
-    negative ? null : ui.stat("Of your income", ratePct(full.rate), "the effective rate"),
+        : es?.holdBack ? `about ${money(es.holdBack.amount)} to have held back from the IRA withdrawal` : owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : owes > -0.5 ? "nothing to pay or get back in April" : `about ${money(-owes)} back in April` : "before withholding"),
+    negative ? null : ui.stat("Of your income", ratePct(full.rate), "your overall rate"),
     noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} bracket and self-employment tax, less its deductions`)
       : ui.stat("On the next dollar", fmt.pct(k.nextDollar, 0), k.careSets === "covers" ? (cents === 0 && !careCoversAll ? "the credits cover it" : "the child care credit covers it")
         : k.careSets === "falls" || k.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} bracket, and a smaller child care credit`
@@ -139,7 +139,7 @@ export function render(root, ctx) {
   const pages = ["Income", "Contributions", ...(d.care?.expensesAll > 0 ? ["Expenses"] : []), ...k.lines.filter((l) => l.from === "plan").map((l) => PAGE[l.key]).filter(Boolean)];
   const pageList = [...new Set(pages)];
   root.append(ui.card("What the plan already knows",
-    ui.h("p", { class: "muted small" }, `Yearly figures from your ${pageList.join(", ")} and People pages. Blank fields below keep these; a typed figure replaces the plan's.`),
+    ui.h("p", { class: "muted small" }, `Yearly figures from your ${pageList.join(", ")} and People pages. Leave a box blank to use the plan's figure; anything you type replaces it.`),
     ui.h("ul", { class: "records" }, k.sources.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label, " ", ui.h("span", { class: s.from === "typed" ? "pill accent" : "pill" }, s.from === "typed" ? "typed" : "from the plan")), ui.h("span", { class: "rec-value" }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
       s.detail ? ui.h("div", { class: "rec-sub" }, s.detail) : null))),
@@ -160,7 +160,7 @@ function figuresFold(ctx, d) {
   const FIELDS = [
     { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) money, the health FSA and the child care account)" },
     { key: "iraWithdrawals", label: "IRA and 401(k) withdrawals this year", type: "money", min: 0, help: "the taxable part (Form 1099-R box 2a); leave blank to use the plan's required withdrawal" },
-    { key: "otherOrdinary", label: "Other ordinary income", type: "money", min: 0, help: "interest, non-qualified dividends, Roth conversions; withdrawals go in the box above" },
+    { key: "otherOrdinary", label: "Other income taxed at regular rates", type: "money", min: 0, help: "interest, non-qualified dividends, Roth conversions; withdrawals go in the box above" },
     { key: "qualifiedIncome", label: "Qualified dividends", type: "money", min: 0, help: "taxed at the lower gains rates; long-term gains come from the Capital gains page" },
     { key: "taxExemptInterest", label: "Tax-exempt interest", type: "money", min: 0, help: "municipal bonds; counts toward Social Security taxation only" },
     { key: "socialSecurity", label: "Social Security benefits this year", type: "money", min: 0, help: "leave blank to use the Income page" },
@@ -213,8 +213,8 @@ function yearFold(ctx, d) {
   const yearOptions = [...new Set([...d.years, thisYear, thisYear + 1])].sort().map((y) => ({ value: String(y), label: `${y}${d.years.includes(y) ? "" : " (inflated from the last table)"}` }));
   const FIELDS = [
     { key: "year", label: "Tax year", type: "select", options: yearOptions },
-    { key: "dependentsUnder17", label: "Children under 17 at year end", type: "number", min: 0, step: "1", help: "blank = counted from the People page" },
-    { key: "otherDependents", label: "Other dependents", type: "number", min: 0, step: "1", help: "blank = counted from the People page" },
+    { key: "dependentsUnder17", label: "Children under 17 at year end", type: "number", min: 0, step: "1", help: "leave blank to count from the People page" },
+    { key: "otherDependents", label: "Other dependents", type: "number", min: 0, step: "1", help: "leave blank to count from the People page" },
     { key: "blind", label: "Blind (you or your spouse)", type: "number", min: 0, max: 2, step: "1", help: "adds the same allowance as age 65" },
   ];
   const separate = d.filingStatus === "married_separate";

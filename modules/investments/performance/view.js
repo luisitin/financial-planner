@@ -17,7 +17,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `${pc(o.twrAnnual)} a year${o.years >= 0.9 ? "" : " so far"}`),
     ui.h("p", { class: "lede" }, `From ${fmt.date(o.from)} to ${fmt.date(o.to)}: ${money(o.start)} grew to ${money(o.end)} with ${money(o.deposits)} added, so the investments themselves made ${signed(o.gain)}. The plan assumes ${fmt.pct(d.expected, 1)} a year${d.benchmark ? `; a plain ${Math.round(d.stockShare * 100)}/${Math.round((1 - d.stockShare) * 100)} index mix made ${pc(d.benchmark.annual)} a year over ${d.benchmark.from === d.benchmark.to ? d.benchmark.from : `${d.benchmark.from}-${d.benchmark.to}`}` : ""}.`),
-    ui.h("p", { class: "muted small" }, "Time-weighted: deposits between two points are treated as arriving mid-period (Modified Dietz) and the periods chain-linked. Money-weighted: the rate that makes every deposit and the end value balance (the IRR, with real dates). Deposits come from the ledger for the account when it has entries, else from the Contributions page."),
+    ui.h("p", { class: "muted small" }, "Time-weighted: deposits between two points are treated as arriving mid-period (Modified Dietz) and the periods chain-linked. Money-weighted: the rate that makes every deposit and the end value balance (the IRR, with real dates). Deposits come from the ledger for the account when it has entries, else from the Retirement contributions page."),
   ));
   for (const n of d.notes) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(

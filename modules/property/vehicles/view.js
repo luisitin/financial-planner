@@ -30,7 +30,7 @@ export function render(page, ctx) {
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What your cars cost"),
       ui.h("p", { class: "lede" }, "A car costs far more than its payment: the value it loses, fuel, insurance, repairs. This page adds it up per year and per mile, and compares keeping it with buying new or leasing."),
-      ui.h("p", { class: "muted small" }, "Add the car below, or on Accounts as a Vehicle with what it is worth.")));
+      ui.h("p", { class: "muted small" }, "Add the car below, or on Net worth as a Vehicle with what it is worth.")));
     root.append(details(null, true));
     return;
   }
@@ -78,7 +78,7 @@ export function render(page, ctx) {
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.vehicles = { ...(p.whatIfs.vehicles ?? {}), ...v }; });
     }, { submitLabel: "Compare" })));
   root.append(details(null, false));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/vehicle" }, "Save for a car"), ui.h("a", { class: "btn secondary", href: "#/insurance/property" }, "Home and car insurance"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/vehicle" }, "Save for a car"), ui.h("a", { class: "btn secondary", href: "#/insurance/property" }, "Home and car insurance"))));
 
   // a car's details (stored as a property entry linked to its vehicle account)
   function details(c, open) {

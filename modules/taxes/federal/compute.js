@@ -436,8 +436,8 @@ export function taxInputs(plan, params = {}) {
   const wageParts = [pretax401k > 0 ? `less ${fmtInt(pretax401k)} of pre-tax 401(k) contributions` : null, fsaExcluded > 0 ? `less the ${fmtInt(fsaExcluded)} health FSA` : null,
     dcKept > 0.5 ? `less the ${fmtInt(dcKept)} child care account${dcTaxed > 0.5 ? ` that stays out of income` : ""}` : null, dcLost > 0.5 ? `less ${fmtInt(dcLost)} of it that would be lost (no care to pay)` : null,
     hsaEmployerTaxed > 0 ? `plus ${fmtInt(hsaEmployerTaxed)} of employer HSA money over the limit` : null].filter(Boolean);
-  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA, FSA and child care account money from pay are already left out)${dcTaxed > 0.5 ? `, plus ${fmtInt(dcTaxed)} of the child care account taxed as pay` : ""}` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
-  if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as pay. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
+  sources.push({ key: "wages", label: "Wages", amount: wages, from: wagesTyped ? "typed" : "plan", detail: wagesTyped ? `as typed (W-2 box 1: pre-tax 401(k), HSA, FSA and child care account money from pay are already left out)${dcTaxed > 0.5 ? `, plus ${fmtInt(dcTaxed)} of the child care account taxed as wages` : ""}` : `pay and bonuses on the Income page${wageParts.length ? `, ${wageParts.join(", ")}` : ""}` });
+  if (!wagesTyped && k401Over > 0) notes.push(`${fmtInt(k401Over)} of pre-tax 401(k) money is over this year's limit, so it is taxed as wages. Ask the plan to pay it back by April 15, or it is taxed again when it comes out.`);
   for (const x of fsaPeople) if (!wagesTyped && x.election > x.excluded) notes.push(`${fsaPeople.length > 1 && x.name ? `${W.NameOf(x.name)} health FSA` : "The health FSA"} election is over this year's limit of ${fmtInt(fsaLimit)}: only ${fmtInt(x.excluded)} comes off ${fsaPeople.length > 1 && x.name ? W.nameOf(x.name) : "your"} pay before tax.`);
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   let gains = netGains(t.gains, filingStatus);
@@ -448,7 +448,7 @@ export function taxInputs(plan, params = {}) {
   if (rental) sources.push({ key: "rental", label: "Rent", amount: rental, from: "plan", detail: "Income page, before expenses" });
   if (investment) sources.push({ key: "investment", label: "Dividends and interest", amount: investment, from: "plan", detail: "Income page, counted as ordinary; type the qualified part below" });
   if (other) sources.push({ key: "other", label: "Other income", amount: other, from: "plan", detail: "Income page" });
-  if (otherTyped) sources.push({ key: "otherTyped", label: "Other ordinary income", amount: otherTyped, from: "typed", detail: "interest, IRA withdrawals, conversions" });
+  if (otherTyped) sources.push({ key: "otherTyped", label: "Other income taxed at regular rates", amount: otherTyped, from: "typed", detail: "interest, IRA withdrawals, conversions" });
   if (gains.netShort > 0) sources.push({ key: "shortGains", label: "Short-term gains", amount: gains.netShort, from: "plan", detail: "Capital gains page" });
   if (gains.netLoss < 0) sources.push({ key: "loss", label: "Capital loss allowed", amount: gains.lossAllowed, from: "plan", detail: gains.carryForward < 0 ? `${fmtInt(-gains.netLoss)} lost in all; ${fmtInt(-gains.carryForward)} carries forward` : "Capital gains page" });
   const qualifiedTyped = Number(ty.qualifiedIncome) || 0;
@@ -461,12 +461,12 @@ export function taxInputs(plan, params = {}) {
   const taxExemptInterest = Number(ty.taxExemptInterest) || 0;
   const adjustmentsTyped = Number(ty.adjustments) || 0;
   const adjustments = adjustmentsTyped + iraDeductible + hsaContrib;
-  if (iraDeductible) sources.push({ key: "ira", label: "IRA contributions", amount: -iraDeductible, from: "plan", detail: `Contributions page; assumed deductible${iraOver > 0 ? `; ${fmtInt(iraOver)} over the IRA limit is not deducted` : ""}` });
+  if (iraDeductible) sources.push({ key: "ira", label: "IRA contributions", amount: -iraDeductible, from: "plan", detail: `Retirement contributions page; assumed deductible${iraOver > 0 ? `; ${fmtInt(iraOver)} over the IRA limit is not deducted` : ""}` });
   if (iraOver > 0) notes.push(`${fmtInt(iraOver)} of traditional IRA money is over this year's limit, so it is not deducted. Take it out (with what it earned) before the filing deadline to avoid a 6% tax each year it stays.`);
-  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: `HSA page or Contributions page${hsaExcess > 0 ? `; ${fmtInt(hsaExcess)} over the limit for your cover or for Medicare gets no tax break` : ""}` });
+  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: `HSA and FSA page or Retirement contributions page${hsaExcess > 0 ? `; ${fmtInt(hsaExcess)} over the limit for your coverage or for Medicare gets no tax break` : ""}` });
   if (hsaExcess > 0) notes.push(hsa.household.limit === 0 && hsa.coverage === "none"
-    ? `${fmtInt(hsaExcess)} goes into an HSA, but the HSA page says you have no high-deductible health plan, so it is taxed as pay.`
-    : `${fmtInt(hsaExcess)} of HSA money is over the limit for your cover or for Medicare, so it gets no tax break (money taken from pay is taxed as pay). The HSA and FSA page shows who is over.`);
+    ? `${fmtInt(hsaExcess)} goes into an HSA, but the HSA and FSA page says you have no high-deductible health plan, so it is taxed as wages.`
+    : `${fmtInt(hsaExcess)} of HSA money is over the limit for your coverage or for Medicare, so it gets no tax break (money taken from pay is taxed as wages). The HSA and FSA page shows who is over.`);
   if (adjustmentsTyped) sources.push({ key: "adjustments", label: "Other adjustments", amount: -adjustmentsTyped, from: "typed" });
   // the people: age allowances and dependents by age at the end of the tax year
   const ages65plus = adults.filter((p) => ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65).length;
@@ -523,8 +523,8 @@ export function taxInputs(plan, params = {}) {
     if (A.taxedAsPay > 0.5) {
       if (A.separate) {
         for (const x of A.people.filter((y) => y.taxedAsPay > 0.5)) notes.push(x.received > A.limit + 0.005
-          ? `${x.name ? W.NameOf(x.name) : "The"} child care account pays ${fmtInt(x.received)} of care, over the ${fmtInt(A.limit)} a separate return can keep out of income: ${fmtInt(x.taxedAsPay)} of it is taxed as pay${x.name ? ` on ${W.nameOf(x.name)} return` : ""}.`
-          : `Only ${fmtInt(x.excluded)} of ${x.name ? W.nameOf(x.name) : "the"} child care account stays out of income on a separate return: no more than the lower earner's earned income. The other ${fmtInt(x.taxedAsPay)} is taxed as pay.`);
+          ? `${x.name ? W.NameOf(x.name) : "The"} child care account pays ${fmtInt(x.received)} of care, over the ${fmtInt(A.limit)} a separate return can keep out of income: ${fmtInt(x.taxedAsPay)} of it is taxed as wages${x.name ? ` on ${W.nameOf(x.name)} return` : ""}.`
+          : `Only ${fmtInt(x.excluded)} of ${x.name ? W.nameOf(x.name) : "the"} child care account stays out of income on a separate return: no more than the lower earner's earned income. The other ${fmtInt(x.taxedAsPay)} is taxed as wages.`);
       } else {
         // two accounts: the part taxed as pay is shared by what each put in, the split every page says (Benefits, Paycheck)
         const split = many ? ` (${A.people.filter((x) => x.taxedAsPay > 0.5).map((x) => `${x.name === null || x.name === undefined ? "one" : W.nameIn(x.name)} ${fmtInt(x.taxedAsPay)}`).join(", ")}, by what each put in)` : "";
@@ -533,10 +533,10 @@ export function taxInputs(plan, params = {}) {
         // "has none counted for <year>" when that pay is on the Income page but ended, has not started or is one-time
         const tail = uncountedOf(A.joint ? zero.map((x) => x.id) : [c.filerId]).length ? ` counted for ${year}` : "";
         notes.push(A.earnedCapped && A.excluded < 0.5
-          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${W.nameIn(zero[0].name)} ${W.verbFor(zero[0].name, "has", "have")} none${tail}` : `there is none${tail}`})` : `your earned income (there is none${tail})`}. All ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
+          ? `None of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? `the lower earner's earned income (${zero.length === 1 && zero[0].name ? `${W.nameIn(zero[0].name)} ${W.verbFor(zero[0].name, "has", "have")} none${tail}` : `there is none${tail}`})` : `your earned income (there is none${tail})`}. All ${fmtInt(A.taxedAsPay)} is taxed as wages${split}.`
           : A.earnedCapped
-          ? `Only ${fmtInt(A.excluded)} of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? "the lower earner's earned income" : "your earned income"}. The other ${fmtInt(A.taxedAsPay)} is taxed as pay${split}.`
-          : `The child care account${many ? "s" : ""} pay${many ? "" : "s"} ${fmtInt(A.received)} of care, over this year's limit of ${fmtInt(A.limit)} for the household: ${fmtInt(A.taxedAsPay)} of it is taxed as pay${split}.`);
+          ? `Only ${fmtInt(A.excluded)} of the ${fmtInt(A.received)} child care account${many ? "s" : ""} stays out of income: no more than ${A.joint ? "the lower earner's earned income" : "your earned income"}. The other ${fmtInt(A.taxedAsPay)} is taxed as wages${split}.`
+          : `The child care account${many ? "s" : ""} pay${many ? "" : "s"} ${fmtInt(A.received)} of care, over this year's limit of ${fmtInt(A.limit)} for the household: ${fmtInt(A.taxedAsPay)} of it is taxed as wages${split}.`);
       }
     }
   }
@@ -620,7 +620,7 @@ export function taxInputs(plan, params = {}) {
   // (Review 2026-11-06, verifier follow-up: H-0221 and H-0228, whose pay ended this year)
   if (nothingCounted) notes.push(uncounted.length ? `Nothing on the Income page is counted for ${year}.${uncountedWords(uncounted) ? ` ${uncountedWords(uncounted)}` : ""} The estimate is built from what you type below.` : "Nothing on the Income page yet: the estimate is built from what you type below.");
   if (adults.length >= 2 && filingStatus === "single") notes.push("Two adults but the filing status is Single (People page). Married couples usually file together.");
-  if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, tick that under Year and people.");
+  if (filingStatus === "married_separate" && socialSecurity > 0 && !livedApart) notes.push("Filing separately while living together, up to 85% of Social Security is taxed from the first dollar. If you and your spouse lived apart all year, check that box under Year and people.");
   return {
     year, params: P, filingStatus, livedApart, inputs, sources, notes, itemized, people: { ages65plus, dependentsUnder17, otherDependents, adults: adults.length }, pretax401k, gains, separate,
     standard: separate ? separate.reduce((s, x) => s + standardDeduction(filingStatus, P, { ages65plus: x.ages65plus, blind: x.blind }), 0) : standardDeduction(filingStatus, P, { ages65plus, blind: inputs.blind }),
@@ -747,7 +747,7 @@ function careSub(c, care) {
   const why = c.base < c.qualified ? `no more than ${care?.joint ? "the lower of your two pays" : "your pay"}`
     : c.benefits > 0 ? `${n(c.cap)} for ${who}, less the ${n(c.benefits)} ${accountsSay(care).pay}${accountsSay(care).many ? " free of tax" : ""}`
     : c.qualified < c.expenses ? `the most for ${who}` : null;
-  const counts = c.base < c.expenses ? `${n(c.base)} of your ${n(c.expenses)} of child care counts` : `all ${n(c.expenses)} of your child care counts`;
+  const counts = c.base < c.expenses ? `$${n(c.base)} of your $${n(c.expenses)} of child care counts` : `all $${n(c.expenses)} of your child care counts`;
   const capped = c.credit < c.tentative - 0.5 ? `; only ${n(c.credit)} fits under the tax, and none of it comes back as a refund` : "";
   return `${counts}${why ? ` (${why})` : ""}, at ${pct}% for your income${capped}`;
 }

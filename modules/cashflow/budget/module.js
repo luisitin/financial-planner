@@ -14,7 +14,7 @@ export default {
   needs: ["budgets", "transactions", "categories"],
   writes: ["budgets"],
   heavy: false,
-  purpose: "An envelope for each kind of spending: what is spent so far this month, what is left, and whether the pace is right.",
+  purpose: "An envelope for each kind of spending: what you have spent so far this month, what is left, and whether you are on pace.",
   aliases: ["budget", "envelopes", "spending limit", "how much can I spend", "over budget"],
   compute,
   render,

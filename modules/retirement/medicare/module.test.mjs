@@ -131,7 +131,7 @@ test("seventh pass: spouseYears names the years someone 65 or over has stopped w
   near(compute(t, { today: TODAY }).lifetime, d.lifetime);
 });
 
-test("verify 2026-11-06: no tick question for someone whose Medicare a line on Expenses pays, and the page knows when health cover is not added", () => {
+test("verify 2026-11-06: no tick question for someone whose Medicare a line on Expenses pays, and the page knows when health insurance is not added", () => {
   // Pat (67) has stopped, Lou (60) works part-time to 66; Expenses list "Pat's Medicare premiums". Will the money last? keeps that
   // line and adds no Medicare for Pat, but this page said it "counts Pat's Medicare" in 2026-2031 unless the box was ticked, and
   // ticking it said "Pat's Medicare is left out" while the line stayed in the spending

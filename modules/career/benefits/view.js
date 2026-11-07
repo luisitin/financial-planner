@@ -43,7 +43,7 @@ export function render(page, ctx) {
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Open enrollment"),
-      ui.h("p", { class: "lede" }, "What to choose when your employer asks: how much to put in the 401(k), the health savings account, the flexible spending accounts, the stock purchase plan, and what each one costs a paycheck after the tax it saves."),
+      ui.h("p", { class: "lede" }, "What to choose when your employer asks: how much to put in the 401(k), the health savings account, the flexible spending accounts and the stock purchase plan, and what each one costs per paycheck after the tax it saves."),
       d.why === "no-person"
         ? [ui.h("p", { class: "muted small" }, "Your pay is on the Income page but not linked to anyone: add yourself on People, then choose whose pay it is on Income."), ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Income"))]
         : [ui.h("p", { class: "muted small" }, "First add your pay on the Income page as \"Pay from a job\"."), ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your pay on Income"))]));
@@ -56,19 +56,19 @@ export function render(page, ctx) {
 
   if (!mineSaved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Open enrollment"),
     ui.h("p", { class: "lede" }, `${NameOf(d.person.name)} workplace benefits for ${d.planYear}: how much to put in the 401(k), the health savings account, the flexible spending accounts and the stock plan, and what each costs a paycheck after the tax it saves.`),
-    ui.h("p", { class: "muted small" }, "Put in your employer's match and your choices under \"Your employer's match\" and the folds after it, near the end.")));
+    ui.h("p", { class: "muted small" }, "Put in your employer's match and your choices under \"Your employer's match\" and the sections after it, near the end.")));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
   // the 401(k)
   const k = d.k401;
   const k401 = ui.card(`Your 401(k) for ${d.planYear}`);
   if (k.tiersAssumed) k401.append(ui.h("p", { class: "bn-say" }, k.leftBehind > 0.5
-    ? `If your employer matches 50 cents a dollar on the first 6% of pay (a common match), you leave about ${money(k.leftBehind)} a year of its money behind. Put in your employer's real match under "Your employer's match".`
+    ? `If your employer matches 50 cents on the dollar for the first 6% of pay (a common match), you leave about ${money(k.leftBehind)} a year of its money behind. Put in your employer's real match under "Your employer's match".`
     : `This assumes a common match: 50 cents a dollar on the first 6% of pay. Put in your employer's real match under "Your employer's match".`));
   else if (k.fullMatch <= 0) k401.append(ui.h("p", { class: "bn-say" }, "Your employer does not match: the 401(k) is worth it for the tax it saves."));
   else if (k.leftBehind > 0.5) k401.append(ui.notice("warn", `You put in ${pct(k.nowPct)} of pay; the match runs to ${pct(k.fullPct)}. You leave ${money(k.leftBehind)} a year of your employer's money behind.`));
   else k401.append(ui.h("p", { class: "bn-say" }, `You get the whole match: ${money(k.fullMatch)} a year from your employer.`));
-  if (k.nowMatchPlan > 0 && Math.abs(k.nowMatchPlan - k.nowMatch) > 1) k401.append(ui.h("p", { class: "muted small" }, `The Contributions page says your employer adds ${money(k.nowMatchPlan)} a year now.`));
+  if (k.nowMatchPlan > 0 && Math.abs(k.nowMatchPlan - k.nowMatch) > 1) k401.append(ui.h("p", { class: "muted small" }, `The Retirement contributions page says your employer adds ${money(k.nowMatchPlan)} a year now.`));
   if (k.nowYearly <= 0) k401.append(ui.h("p", {}, "Nothing goes into a 401(k) now."));
   const label = { now: "what you put in now", match: "the whole match", max: `the ${d.limitsYear} limit` };
   // what a choice takes from take-home pay a month on top of what goes in now, against the month's spare money: the filled
@@ -80,7 +80,7 @@ export function render(page, ctx) {
   const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now" && fits(o))?.key ?? null;
   k401.append(ui.h("ul", { class: "records" }, k.options.map((o) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct(o.pct)} of pay: ${label[o.key]}`), ui.h("span", { class: "rec-value" }, money(o.perCheck))),
-    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k) and takes ${money(o.costPerCheck)} from take-home pay, ${o.costFrom === "paycheck" ? "less the tax the paycheck stops taking out" : "after the tax it saves"}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if your month has about ${money(Math.round(moreAMonth(o) / 10) * 10)} spare: it has about ${money(spare)}.` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k); ${o.costFrom === "paycheck" ? "because less tax comes out, your take-home pay drops by only" : "after the tax it saves, it costs you"} ${money(o.costPerCheck)}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if your month has about ${money(Math.round(moreAMonth(o) / 10) * 10)} spare: it has about ${money(spare)}.` : ""}`),
     // nothing going in yet: the same button starts the 401(k) (round 8 item 1: it used to send you to Contributions, then Net worth)
     o.key !== "now" ? ui.h("div", { class: "rec-foot" }, ui.button(k.hasAccount ? `Use ${pct(o.pct)}` : `Start it at ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
   k401.append(ui.h("p", { class: "muted small" }, [
@@ -99,7 +99,7 @@ export function render(page, ctx) {
       ui.stat("You can put in", money(h.room), `a year: the ${h.coverage === "family" ? "family" : "self-only"} limit ${money(h.limit)} less ${money(h.employer)} from your employer`),
       h.elect > 0 ? ui.stat("Tax saved", money(h.saved), `on the ${money(h.elect)} you chose; ${money(h.maxSaved)} if you fill it`) : ui.stat("Tax saved if you fill it", money(h.maxSaved), "a year"),
     ), ui.h("p", { class: "muted small" }, `Through the paycheck it skips income tax and Social Security and Medicare${h.stateTaxed ? "; your state still taxes it" : ""}. Unused money stays yours and can be invested.`),
-    ui.row(ui.button("Use these on the HSA page", () => { pending = "Saved on the HSA and FSA page."; store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: h.coverage, contribution: h.elect, employer: h.employer, fsa: d.fsa.elect }; }); })),
+    ui.row(ui.button("Use these on the HSA and FSA page", () => { pending = "Saved on the HSA and FSA page."; store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.hsa = { ...(p.taxes.hsa ?? {}), coverage: h.coverage, contribution: h.elect, employer: h.employer, fsa: d.fsa.elect }; }); })),
     d.planYear > d.year ? ui.h("p", { class: "muted small" }, `The HSA and FSA page shows ${d.year}, so until January it checks these against ${d.year}'s limits.`) : null));
   }
 
@@ -128,13 +128,13 @@ export function render(page, ctx) {
     root.append(ui.card("Employee stock purchase plan", ui.row(
       ui.stat("Put in a year", money(e.yearly), `${pct(e.pct)} of pay, ${money(e.perCheck)} a paycheck${e.capped ? "; capped: the law lets you buy at most $25,000 of stock a year" : ""}`),
       ui.stat("Gain if sold at once", money(e.afterTax), `after tax: ${pct(e.discount, 0)} off is ${pct(1 / (1 - e.discount) - 1)} on the money`),
-    ), ui.h("p", { class: "muted small" }, `${e.lookback ? "With a look-back, the price is the discount off the lower of the start and end prices, so the gain can be larger. " : ""}Selling the shares as soon as they are bought keeps the discount without betting on your employer, whose stock already rides with your pay. The discount is taxed as pay.`),
+    ), ui.h("p", { class: "muted small" }, `${e.lookback ? "With a look-back, the price is the discount off the lower of the start and end prices, so the gain can be larger. " : ""}Selling the shares as soon as they are bought keeps the discount without betting on your employer, whose stock already rides with your pay. The discount is taxed as wages.`),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/career/equity" }, "Equity compensation"), ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"))));
   }
 
   // life cover through work
-  if (d.life) root.append(ui.card("Life insurance through work", ui.h("p", {}, `Cover above ${money(50000)} counts as pay: ${money(d.life.imputed)} a year on ${money(d.life.cover)} of cover at ${d.life.ageKnown ? "your age" : "age 40 (add a birth date on People)"}, about ${money(d.life.tax)} in tax.`),
-    ui.h("p", { class: "muted small" }, "Usually still cheap cover, but it ends when the job does. How much the family needs is on Life insurance needs."),
+  if (d.life) root.append(ui.card("Life insurance through work", ui.h("p", {}, `Life insurance above ${money(50000)} counts as wages: ${money(d.life.imputed)} a year on ${money(d.life.cover)} of life insurance at ${d.life.ageKnown ? "your age" : "age 40 (add a birth date on People)"}, about ${money(d.life.tax)} in tax.`),
+    ui.h("p", { class: "muted small" }, "Usually still cheap insurance, but it ends when the job does. How much the family needs is on Life insurance needs."),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life insurance needs"))));
 
   // the paycheck in sum
@@ -143,7 +143,7 @@ export function render(page, ctx) {
   const lost = dc.elect && dc.forfeited > 0.5 ? dc.forfeited : 0;
   const taxPart = d.total.savedYearly + lost;
   root.append(d.total.any ? ui.card("Each paycheck", ui.row(
-    ui.stat("Taken from each paycheck", money(d.total.perCheck), d.total.perCheckFrom === "paycheck" ? `what take-home falls by, as the Paycheck page works it; ${d.paychecks} paychecks a year` : `after the tax the choices save; ${d.paychecks} paychecks a year`),
+    ui.stat("Taken from each paycheck", money(d.total.perCheck), d.total.perCheckFrom === "paycheck" ? `how much your take-home pay drops, as the Paycheck page works it; ${d.paychecks} paychecks a year` : `after the tax the choices save; ${d.paychecks} paychecks a year`),
     d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly)} put in before tax`)
       : ui.stat("Costs a year", money(-d.total.savedYearly), lost ? `the ${money(lost)} the child care account would lose, less the ${money(Math.max(0, taxPart))} of tax the choices save` : dc.elect && dc.creditLost > 0.5 ? "the child care credit the account costs is more than the tax the choices save" : "more than the tax the choices save"),
   ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.${dc.elect && dc.creditLost > 0.5 ? ` The ${money(dc.creditLost)} of child care credit the account costs is not taken from paychecks: it shows up as a smaller refund (or a bigger bill) when you file.` : ""}`))
@@ -154,10 +154,10 @@ export function render(page, ctx) {
   const tiers = k.tiers.length ? k.tiers : [];
   const statusMatch = k.tiersAssumed ? "assumed: 50% up to 6%" : !tiers.length ? "no match" : `${pct(tiers[0].rate, 0)} up to ${pct(tiers[0].upTo)}${tiers[1] ? ", then more" : ""}`;
   root.append(fold("match", "Your employer's match", statusMatch, [
-    { key: "rate1", label: "For each dollar you put in, they add", type: "percent", min: 0, max: 300, help: "50 means 50 cents a dollar; 0 if there is no match" },
-    { key: "upTo1", label: "On what you put in up to", type: "percent", min: 0, max: 100, help: "a share of pay; 6 means the first 6%" },
+    { key: "rate1", label: "For each dollar you put in, they add", type: "percent", min: 0, max: 300, help: "50 means 50 cents for every dollar you put in; 0 if there is no match" },
+    { key: "upTo1", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, help: "a share of pay; 6 means the first 6%" },
     { key: "rate2", label: "Then they add (a second step, if any)", type: "percent", min: 0, max: 300 },
-    { key: "upTo2", label: "On what you put in up to", type: "percent", min: 0, max: 100, help: "the share of pay where the second step stops" },
+    { key: "upTo2", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, help: "the share of pay where the second step stops" },
     { key: "paychecks", label: "Paychecks a year", type: "number", min: 1, max: 52, step: "1" },
     { key: "planYear", label: "Choosing for the year", type: "select", options: [d.year, d.year + 1].map((y) => ({ value: String(y), label: String(y) })) },
   ], { rate1: k.tiersAssumed ? DEFAULT_TIERS[0].rate : tiers[0]?.rate ?? 0, upTo1: k.tiersAssumed ? DEFAULT_TIERS[0].upTo : tiers[0]?.upTo ?? 0, rate2: tiers[1]?.rate ?? null, upTo2: tiers[1]?.upTo ?? null, paychecks: d.paychecks, planYear: String(d.planYear) }, (v, w) => {
@@ -180,15 +180,15 @@ export function render(page, ctx) {
     { key: "esppOffered", label: "My employer offers a stock purchase plan", type: "checkbox" },
     { key: "esppPct", label: "Share of pay I put in", type: "percent", min: 0, max: 50 },
     { key: "esppDiscount", label: "Discount", type: "percent", min: 0, max: 15, help: "usually 15; the law allows at most 15" },
-    { key: "esppLookback", label: "The price looks back to the start of the period", type: "checkbox" },
+    { key: "esppLookback", label: "The price is the lower of the price at the start of the offering and on the purchase day (a \"look-back\")", type: "checkbox" },
   ], { esppOffered: !!d.espp, esppPct: d.espp?.pct ?? null, esppDiscount: d.espp?.discount ?? 0.15, esppLookback: d.espp?.lookback ?? true }, (v, w) => Object.assign(w, v)));
-  root.append(fold("life", "Life cover through work", d.life ? money(d.life.cover) : "none above $50,000", [
-    { key: "lifeCover", label: "Life cover through work", type: "money", min: 0, help: "often one or two times pay" },
+  root.append(fold("life", "Life insurance through work", d.life ? money(d.life.cover) : "none above $50,000", [
+    { key: "lifeCover", label: "Life insurance through work", type: "money", min: 0, help: "often one or two times pay" },
     { key: "lifePaid", label: "What you pay for it a year", type: "money", min: 0 },
   ], { lifeCover: s.lifeCover ?? null, lifePaid: s.lifePaid ?? null }, (v, w) => Object.assign(w, v)));
   if (d.people.length > 1) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Whose benefits"), ui.h("span", { class: "fold-status" }, d.person.name), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([{ key: "personId", label: "Whose benefits", type: "select", options: d.people.map((p) => ({ value: p.id, label: p.name || "Someone" })) }], { personId: pid }, (v) => { pending = "Saved."; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.benefits = { ...(p.whatIfs.benefits ?? {}), personId: v.personId }; }); }, { submitLabel: "Show" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/health" }, "Pick a health plan"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability cover"), ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Contributions"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/health" }, "Pick a health plan"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability insurance"), ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Contributions"))));
 
   /** The child care account in plain words: before an amount, that it shares the care with the credit; after, what it really does. */
   function dcWords(x) {
@@ -213,16 +213,16 @@ export function render(page, ctx) {
     const taxed = own.taxedAsPay ?? x.taxedAsPay;
     const rest = (x.split ?? []).filter((y) => y.id !== d.person.id);
     if (taxed > 0.5) out.push(x.earnedCapped && x.low !== null
-      ? `${money(taxed)} of the child care account is taxed as pay: no more than ${x.separate || x.joint ? "the lower earner's" : "your"} earned income (${money(x.low)}) stays out of income.`
-      : x.separate ? `${money(taxed)} of the child care account is taxed as pay: it is over the ${money(x.limit)} a separate return keeps out of income.`
-      : `${money(taxed)} of the child care account is taxed as pay: ${rest.length ? `with the ${money(x.others)} chosen by others, the household's accounts are ${money(x.householdTaxed)} over its limit of ${money(x.limit)}, shared by what each puts in (${rest.map((y) => `${y.name ?? "the other"} ${money(y.taxedAsPay)}`).join(", ")})` : `it is over the household's limit of ${money(x.limit)}`}.`);
+      ? `${money(taxed)} of the child care account is taxed as wages: no more than ${x.separate || x.joint ? "the lower earner's" : "your"} earned income (${money(x.low)}) stays out of income.`
+      : x.separate ? `${money(taxed)} of the child care account is taxed as wages: it is over the ${money(x.limit)} a separate return keeps out of income.`
+      : `${money(taxed)} of the child care account is taxed as wages: ${rest.length ? `with the ${money(x.others)} chosen by others, the household's accounts are ${money(x.householdTaxed)} over its limit of ${money(x.limit)}, shared by what each puts in (${rest.map((y) => `${y.name ?? "the other"} ${money(y.taxedAsPay)}`).join(", ")})` : `it is over the household's limit of ${money(x.limit)}`}.`);
     if (x.creditLost > 0.5) out.push(`The child care account costs ${money(x.creditLost)} of child care credit: care the account pays cannot count for the credit too.`);
     // "think about skipping the account" only when no amount is worth it (best: the amount it is worth most at)
     const better = x.best && x.best.saved > 0.5 ? x.best : null;
     if (x.saved <= -0.5) out.push(`In all the child care account costs ${money(-x.saved)} a year more than it saves${x.creditLost > 0.5 && !(x.forfeited > 0.5) ? (better ? `: at ${money(x.elect)} the credit alone is worth more, but ${money(better.elect)} in the account would save ${money(better.saved)} a year` : ": for you the credit alone is worth more, so think about skipping the account") : ""}.`);
     else if (x.saved >= 0.5) out.push(`In all the child care account saves ${money(x.saved)} a year${x.creditLost > 0.5 ? ", after the credit it costs" : ""}.`);
     else out.push("In all the child care account saves nothing.");
-    if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the deduction, less the tax the paycheck stops taking out)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
+    if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the deduction; less tax comes out of each paycheck)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
     return out.join(" ");
   }
   function fold(key, title, status, fields, values, apply) {
@@ -232,8 +232,8 @@ export function render(page, ctx) {
   function use401k(o) {
     // (review UX 8: "is started" claimed more than the app does: it is in the plan, and signing up at work starts it; review D2:
     // with what the month has left after it)
-    pending = { left: true, text: k.hasAccount ? `Your 401(k) is now ${pct(o.pct)} of pay on the Contributions page${k.tiersAssumed ? "; the employer match there is left as it was" : ""}. To actually change it, set ${pct(o.pct)} with human resources or your job's benefits site.`
-      : `Added to your plan: ${pct(o.pct)} of pay, ${money(o.perCheck)} a paycheck, on the Contributions page${k.tiersAssumed ? "" : `, with ${money(o.match)} a year from your employer`}. To actually start it, sign up at ${pct(o.pct)} with human resources or your job's benefits site.` };
+    pending = { left: true, text: k.hasAccount ? `Your 401(k) is now ${pct(o.pct)} of pay on the Retirement contributions page${k.tiersAssumed ? "; the employer match there is left as it was" : ""}. To actually change it, set ${pct(o.pct)} with human resources or your job's benefits site.`
+      : `Added to your plan: ${pct(o.pct)} of pay, ${money(o.perCheck)} a paycheck, on the Retirement contributions page${k.tiersAssumed ? "" : `, with ${money(o.match)} a year from your employer`}. To actually start it, sign up at ${pct(o.pct)} with human resources or your job's benefits site.` };
     store.update((p) => {
       const accounts = p.accounts = p.accounts ?? [];
       const list = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && accounts.find((a) => a.id === x.accountId)?.type === "401k");

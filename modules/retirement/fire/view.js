@@ -25,7 +25,7 @@ export function render(root, ctx) {
   const host = ui.h("div", { class: "fi-root" }, ui.h("style", {}, STYLE));
   root.append(host);
   if (!d.ready) {
-    host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Financial independence"), ui.h("p", { class: "lede" }, "The pot that could pay for your life without a paycheck, and how far you are from it. It needs what you spend:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/cashflow/expenses" }, "Expenses"))));
+    host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Financial independence"), ui.h("p", { class: "lede" }, "The savings that could pay your living costs without a paycheck, and how far you are from that amount. It needs what you spend:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/cashflow/expenses" }, "Expenses"))));
     return;
   }
   const w = d.withIncome;
@@ -36,12 +36,12 @@ export function render(root, ctx) {
   const ruleLede = `Spending ${money(d.spendingYearly)} a year needs about ${money(d.fiNumber)} to live on for good, taking out ${fmt.pct(d.withdrawalRate, 0)} a year. You have ${money(d.invested)} invested, not counting cash in the bank: ${fmt.pct(d.progress, 0)} of the way.${d.yearsToFi !== null && d.yearsToFi > 0 ? ` At ${money(d.savingYearly)} a year of saving and growth of ${fmt.pct(d.realReturn, 1)} a year above inflation, you get there around ${d.fiYear}${d.fiAge ? ` (age ${d.fiAge})` : ""}.` : ""}`;
   const statRow = () => ui.row(
     ui.stat("Enough to live on", money(d.fiNumber), `${times} times yearly spending`),
-    ui.stat("Still to go", money(d.gap), "in today's money"),
+    ui.stat("Still to go", money(d.gap), "in today's dollars"),
     ui.stat("Saving a year", money(d.savingYearly), d.savingsRate !== null ? `${fmt.pct(d.savingsRate, 0)} of income: what goes into retirement accounts plus what is left over` : "what goes into retirement accounts plus what is left over"),
     d.coast ? ui.stat("Enough to stop saving", money(d.coast.number), d.coast.reached ? `you have it: with no more saving, growth alone gets there by ${d.retireAge}` : `with this much today, growth alone gets there by ${d.retireAge}`) : null,
   );
   const moveList = () => ui.h("ul", { class: "records" }, [
-      ["Spend less", `Every dollar a year you no longer need cuts the amount by ${times}. That works on both ends: less to save for, and more saved.`],
+      ["Spend less", `Every dollar a year you no longer need cuts the amount you need by $${times}. That works on both ends: less to save for, and more saved.`],
       ["Save more", `How much of your pay you save matters far more than returns. Starting from nothing, at ${fmt.pct(d.realReturn, 1)} growth above inflation and taking out ${fmt.pct(d.withdrawalRate, 1)} a year: saving half of income takes about ${d.fromZero.half ?? "over 100"} years; saving a tenth, ${d.fromZero.tenth ? `about ${d.fromZero.tenth}` : "over 100"}.`],
       ["Stop saving early", "Once you have the amount under Enough to stop saving, you could stop putting money in and growth alone would get there by your retirement age; your pay only has to cover today."],
       ["Growth", `It uses ${fmt.pct(d.realReturn, 1)} a year above inflation (your stock and bond assumptions blended). Real years are far more uneven.`],
@@ -75,11 +75,11 @@ export function render(root, ctx) {
   const otherWords = w.otherYearly > 0 ? `${money(w.otherYearly)} a year of ${listOf((kinds.length ? kinds : ["other"]).map((k) => KINDS[k]))}${endWords}` : "";
   // Social Security already being paid says so (review: "from 2020" for someone who claimed in 2020; recheck 2026-11-05: and
   // for Social Security typed on the Income page, which starts this year in the plan)
-  const ssWhen = !w.ssFrom ? "" : w.ssPaidNow ? `already being paid${w.ssFullFrom > w.startYear ? ` (all of it from ${w.ssFullFrom})` : ""}` : `from ${w.ssFrom}${w.ssFullFrom && w.ssFullFrom !== w.ssFrom ? ` (all of it from ${w.ssFullFrom})` : ""}`;
+  const ssWhen = !w.ssFrom ? "" : w.ssPaidNow ? `already being paid${w.ssFullFrom > w.startYear ? ` (both benefits from ${w.ssFullFrom})` : ""}` : `from ${w.ssFrom}${w.ssFullFrom && w.ssFullFrom !== w.ssFrom ? ` (both benefits from ${w.ssFullFrom})` : ""}`;
   // more than all the spending is "more than", never a share capped at 100%
   const ssOf = !w.ssShare ? "" : w.ssShare >= 1 ? `, more than the ${money(w.spendingYearly)} a year you plan to spend` : `, ${fmt.pct(w.ssShare, 0)} of the ${money(w.spendingYearly)} a year you plan to spend`;
   const income = w.ssFrom
-    ? `It counts Social Security ${ssWhen}: about ${round100(w.ssYearly)} a year in today's money${ssOf}${otherWords ? `, plus ${otherWords}` : ""}.`
+    ? `It counts Social Security ${ssWhen}: about ${round100(w.ssYearly)} a year in today's dollars${ssOf}${otherWords ? `, plus ${otherWords}` : ""}.`
     : w.ssNone ? `No Social Security is counted: you said you won't get it.${otherWords ? ` It counts ${otherWords}.` : ""}`
     : otherWords ? `It counts ${otherWords}; no Social Security is in the plan yet.` : "No Social Security is in the plan yet, so this counts only your savings.";
   const how = `Worked out year by year from your plan: what you have and keep putting in, returns after inflation, taxes${w.ssFrom ? ", Social Security" : ""} and your spending once retired.`;
@@ -87,7 +87,7 @@ export function render(root, ctx) {
   const leaves = w.legacy > 0 ? ` and leaves the ${money(w.legacy)} you want to leave` : "";
   const works = (a) => `${who} work${who === "you" ? "" : "s"} until ${a}`;
   const hh = who === "you" ? "You" : others.length ? "The household" : Who;
-  const savedWords = (amount, year, before = "") => [`${before}${before && (hh === "You" || hh === "The household") ? hh.toLowerCase() : hh} would have about `, amount, " at retirement in ", year, ", in today's money, savings and investments together."];
+  const savedWords = (amount, year, before = "") => [`${before}${before && (hh === "You" || hh === "The household") ? hh.toLowerCase() : hh} would have about `, amount, " at retirement in ", year, ", in today's dollars, savings and investments together."];
   // the average-market age, as the second sentence (no "little to spare" when stopping now: it would have lasted sooner too)
   const avgWords = () => `If the next years are about average, ${w.now ? "you could stop now" : `stopping at ${age} would do`}${age > (w.ageNow ?? -1) ? ", with little to spare" : ""}.`;
   const hero = ui.h("section", { class: "card accent hero" });

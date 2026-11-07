@@ -17,7 +17,7 @@ const FIELDS = (laterYears) => [
   { key: "basis", label: "Premiums paid in total (optional)", type: "money", min: 0, help: "empty: the premium a year times the years paid" },
   { key: "laterYears", label: "Years ahead to compare", type: "number", min: 1, max: 40, step: "1" },
   { key: "cashValueLater", label: `Cash value then, from an in-force illustration`, type: "money", min: 0, help: `ask the insurer for an "in-force illustration"; use the projected column ${laterYears} years ahead` },
-  { key: "termQuote", label: "Term premium a year for the same cover", type: "money", min: 0, help: "0 if the family no longer needs the cover" },
+  { key: "termQuote", label: "Term premium a year for the same coverage", type: "money", min: 0, help: "0 if the family no longer needs the coverage" },
 ];
 
 export function render(page, ctx) {
@@ -51,7 +51,7 @@ export function render(page, ctx) {
       const alt = x.termQuote > 0 ? `cash in (${money(x.netCash)} after tax), buy term for ${money(x.termQuote)} a year and invest the other ${money(Math.max(0, x.premiumYearly - x.termQuote))} a year` : `cash in (${money(x.netCash)} after tax) and invest it with the ${money(x.premiumYearly)} a year`;
       card.append(ui.h("p", { class: `cv-verdict ${x.verdict === "keep" ? "ok" : "warn"}` }, x.verdict === "keep" ? `Keeping it looks better, by about ${money(x.cashValueLater - x.altValue)} in ${x.laterYears} years.` : x.verdict === "cash-in" ? `Cashing in and buying term looks better, by about ${money(x.altValue - x.cashValueLater)} in ${x.laterYears} years.` : "The two come out about even."),
         ui.h("p", { class: "cv-d" }, `The other way, ${alt}, comes to about ${money(x.altValue)} in ${x.laterYears} years at ${pct(d.returnRate)} a year, against ${money(x.cashValueLater)} of cash value. ${x.breakeven !== null ? `Keeping wins when investments would earn less than ${rate(x.breakeven)} a year.` : ""}`),
-        x.verdict !== "keep" ? ui.notice("warn", "Never cancel a policy before the new cover is in force: a medical exam can change the term price, or rule it out. A \"1035 exchange\" can move the cash value into another policy or an annuity without tax.") : null);
+        x.verdict !== "keep" ? ui.notice("warn", "Never cancel a policy before the new policy is in force: a medical exam can change the term price, or rule it out. A \"1035 exchange\" can move the cash value into another policy or an annuity without tax.") : null);
     } else if (x.missing.length) card.append(ui.h("p", { class: "muted small" }, `To compare keeping it with cashing in: ${x.missing.join("; ")}.`));
 
     const p0 = plan.insurance.policies.find((y) => y.id === x.id) ?? {};
@@ -64,5 +64,5 @@ export function render(page, ctx) {
     card.append(fold);
     root.append(card);
   }
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Is the cover still needed?"), ui.h("a", { class: "btn secondary", href: "#/insurance/term-vs-permanent" }, "Term vs permanent"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Is the coverage still needed?"), ui.h("a", { class: "btn secondary", href: "#/insurance/term-vs-permanent" }, "Term vs permanent"))));
 }

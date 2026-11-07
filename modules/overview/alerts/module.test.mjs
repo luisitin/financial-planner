@@ -186,7 +186,7 @@ test("protection: no life cover on an earner others depend on, and no guardian f
   const g = a.find((x) => x.id === "guardian");
   assert.equal(g.level, "info"); assert.equal(g.title, "No one is named to raise Cy if you both died"); assert.deepEqual(g.go, ["estate", "documents"]);
   p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 100000, premium: 20, period: "monthly" }] };
-  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life cover is about $212,000 short");   // the health line: was 135,000, then 187,000 before the seventh pass's Medigap Plan G default
+  assert.equal(compute(p, { today: "2026-11-02" }).alerts.find((x) => x.id === "life-cover-p-ana").title, "Ana's life insurance is about $212,000 short");   // the health line: was 135,000, then 187,000 before the seventh pass's Medigap Plan G default
   p.insurance.policies[0].benefit = 350000;   // 300,000 before the seventh pass (the need is 312,000 with the Medigap Plan G default)
   assert.ok(!compute(p, { today: "2026-11-02" }).alerts.some((x) => x.id.startsWith("life-cover")), "covered: nothing");
 });
@@ -392,7 +392,7 @@ test("estimated tax: nothing ever typed asks what was paid instead of saying '$0
   p.expenses = [{ id: "e1", name: "Rent", category: "housing", amount: 1800, period: "monthly", essential: true }];
   p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 30000 }];
   const a = compute(p, { today: T }).alerts.find((x) => x.id === "estimates-behind");
-  assert.match(a.title, /type what you have paid/); assert.match(a.detail, /none are typed yet\. If none were made, about \$[\d,]+ was due by now/);
+  assert.match(a.title, /type what you have paid/); assert.match(a.detail, /you have not typed any yet\. If none were made, about \$[\d,]+ was due by now/);
   assert.doesNotMatch(a.detail, /\$0 is paid so far/);
   const step = nbaOf(p, { today: T }).steps.find((s) => s.id === "tax");
   assert.equal(step.title, "Type or pay this year's estimated tax"); assert.match(step.detail, /^No estimated payments are typed for 2026 yet\. If none were made/);

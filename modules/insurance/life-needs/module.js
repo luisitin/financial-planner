@@ -14,7 +14,7 @@ export default {
   needs: ["household", "accounts", "debts", "income", "expenses", "goals", "retirement", "assumptions", "insurance"],
   writes: [],
   heavy: true,
-  purpose: "How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the cover you have.",
+  purpose: "How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the coverage you have.",
   compute,
   render,
 };

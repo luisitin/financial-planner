@@ -106,7 +106,7 @@ test("fifth pass: the marketplace counts untaxed Social Security: the 68/63 coup
   assert.equal(d.underLineYears, 0);
 });
 
-test("fifth pass: why no one needs marketplace cover names the real reason, never 'everyone works until 65' for retirees", async () => {
+test("fifth pass: why no one needs marketplace coverage names the real reason, never 'everyone works until 65' for retirees", async () => {
   const H = "2026-11-02";
   const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
   // a retired couple of 72 and 69 (the retired couple seed's ages): both on Medicare

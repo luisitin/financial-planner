@@ -14,7 +14,7 @@ export default {
   needs: ["household", "income", "retirement", "assumptions"],
   writes: ["retirement"],
   heavy: false,
-  purpose: "Health cover between retiring and Medicare: the marketplace credit on your plan's own income, what is left to pay, and the cliff where the credit stops.",
+  purpose: "Health insurance between retiring and Medicare: the marketplace credit on your plan's own income, what is left to pay, and the cliff where the credit stops.",
   compute,
   render,
 };

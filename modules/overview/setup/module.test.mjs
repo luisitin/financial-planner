@@ -363,7 +363,7 @@ test("where you stand: read from the pages' own computes; the first move is Next
   assert.ok(!st.later.some((l) => l.key === "state"), "Ohio's tax is counted"); assert.equal(st.stateTaxCounted, true);
   const ca = family(); covered(ca); ca.household.state = "CA";
   const sc = S.standing(ca, { today: T });
-  assert.ok(sc.later.some((l) => l.key === "state" && /^California's income tax: type its rate on the State page/.test(l.label)), "California's graduated rate is typed there");
+  assert.ok(sc.later.some((l) => l.key === "state" && /^California's income tax: type its rate on the State tax page/.test(l.label)), "California's graduated rate is typed there");
   assert.equal(sc.stateTaxCounted, false);
   assert.equal(dashboard(p).doneCount, dashboard(p).total, "the dashboard's setup steps are all done");
 });
@@ -518,7 +518,7 @@ test("the cushion's money follows the accounts while it is the setup's choice; n
 
 test("the headline never contradicts the cards under it", () => {
   const head = (p) => S.standing(p, { today: T }).headline;
-  assert.match(head(family()), /^Life cover for the people who count on you comes first/, "protection is move 1");
+  assert.match(head(family()), /^Life insurance for the people who count on you comes first/, "protection is move 1");
   assert.match(head(covered(family())), /costly debt comes first/, "the 22% card is move 1 once both are covered");
   // no pay at all: never "your month works"
   const n = empty(); S.applyYou(n, { who: "me" }); S.applyMoney(n, { people: { "setup-self": { status: "none" } } });
@@ -527,7 +527,7 @@ test("the headline never contradicts the cards under it", () => {
   // a thin cushion with a good month
   const w = empty(); S.applyYou(w, { who: "me" }); S.applyMoney(w, { people: { "setup-self": { status: "work", amount: 90000 } } });
   S.applyHavePicks(w, ["checking"]); S.applyHaveAmounts(w, { checking: 6000 }, T); S.applySpend(w, { mode: "total", total: 3000 });
-  assert.match(head(w), /Building your cushion|then a bigger cushion/);
+  assert.match(head(w), /Building your emergency fund|then a bigger emergency fund/);
   const firstId = S.standing(w, { today: T }).moves[0]?.id;
   if (firstId && firstId !== "starter" && firstId !== "full-fund") assert.match(head(w), /The move below comes first/, "the sentence never names a different first step than the button");
   S.applyHaveAmounts(w, { checking: 30000 }, T);
@@ -547,7 +547,7 @@ test("someone retired living on savings is told calmly, with the retirement chec
   assert.equal(st.drawing, true);
   assert.match(st.headline, /^You draw about \$[\d,]+ a month from savings \(\$414,000 saved\)/);
   assert.equal(st.moves[0].id, "guide-retire");
-  assert.ok(!st.moves.some((m) => m.title === "Spend less than comes in"));
+  assert.ok(!st.moves.some((m) => m.title === "Spend less than you bring in"));
 });
 
 test("the first moves are in plain words: no 'each of you' for one adult, no 'backdoor', a guessed rate says so", () => {
@@ -567,7 +567,7 @@ test("the first moves are in plain words: no 'each of you' for one adult, no 'ba
   assert.match(low.detail, /22\.4% a year \(a typical rate: type yours on What you owe\)/);
   assert.doesNotMatch(text, /each of you|backdoor|for sure/);
   assert.ok(moves.some((m) => m.id === "ira" && m.title === "A retirement account of your own (an IRA)"));
-  assert.equal(S.revealWords({ id: "full-fund", title: "A full emergency fund (4 months)", detail: "x" }, p).title, "Build your cushion to 4 months");
+  assert.equal(S.revealWords({ id: "full-fund", title: "A full emergency fund (4 months)", detail: "x" }, p).title, "Build your emergency fund to 4 months");
   const f = S.standing(family(), { today: T }).moves.find((m) => m.id === "ira");
   if (f) assert.match(f.title, /each of you/);
   // a 401(k) with nothing going in is a question first: it may be an old job's, or the job may not match
@@ -661,7 +661,7 @@ test("review: a plan made without names says 'yourself' and 'your spouse', never
   assert.match(m.title, /yourself|your spouse/);
 });
 
-test("where you stand: a debt step the saved debt plan pays off is not a move, and the left-over figure says where the extra goes", () => {
+test("where you stand: a debt step the saved debt plan pays off is not a move, and the leftover figure says where the extra goes", () => {
   const p = familyPlan(T);
   p.insurance = { ...(p.insurance ?? {}), policies: [{ id: "t1", kind: "term", personId: "p-ana", benefit: 400000, premium: 25, period: "monthly", throughWork: false }] };
   p.accounts.find((a) => a.id === "a-chk").balance += 6000;
@@ -1087,7 +1087,7 @@ test("C2 the mortgage rate follows the year bought: Jordan 2020 4.4%, Pat and Le
   assert.equal(debtRow(old, "mortgage").rate, 0.0724, "no guess passed: today's behaviour");
 });
 
-test("C2 the grey figure is what is saved, and the settle after the save moves nothing (three walks and a skip-all)", () => {
+test("C2 the gray figure is what is saved, and the settle after the save moves nothing (three walks and a skip-all)", () => {
   const skipAll = jordan(); S.applyOwePicks(skipAll, ["mortgage", "credit", "car-loan"]);
   const walks = [
     ["Jordan", jordan(), { mortgage: { payment: "1,100" } }],
@@ -1100,7 +1100,7 @@ test("C2 the grey figure is what is saved, and the settle after the save moves n
     const grey = oweWithGuesses(p, values);
     assert.ok(Object.keys(grey).length > 0, name);
     for (const [path, want] of Object.entries(grey)) {
-      assert.ok(want !== null, `${name}: ${path} has a grey figure`);
+      assert.ok(want !== null, `${name}: ${path} has a gray figure`);
       assert.equal(getAt(p, path), want, `${name}: ${path}`);
     }
     const after = structuredClone(p);
@@ -1131,7 +1131,7 @@ test("C2 typing over a guess makes it yours: its ledger entry goes, and the gues
   oweWithGuesses(p, { mortgage: {}, credit: {}, "car-loan": {} });
   const n = Object.keys(p.guesses).length;
   const values = S.valuesFor(p, "owe-amounts");
-  assert.deepEqual([values.mortgage.owed, values.mortgage.payment, values.mortgage.rate, values.mortgage.home], ["", "", "", ""], "a saved guess reopens as a grey figure, never typed text");
+  assert.deepEqual([values.mortgage.owed, values.mortgage.payment, values.mortgage.rate, values.mortgage.home], ["", "", "", ""], "a saved guess reopens as a gray figure, never typed text");
   oweWithGuesses(p, { ...values, mortgage: { ...values.mortgage, owed: "150,000" } });
   settle(p, GO);
   assert.equal(Object.keys(p.guesses).length, n - 1);
@@ -1222,7 +1222,7 @@ test("C2 the done screen: net worth partly our guesses, the guessed debts listed
 test("C2 review: a 0 typed in Still owed is the person's: no debt, no guess (as before the guesses)", () => {
   const p = jordan(); const grey = oweWithGuesses(p, { mortgage: { owed: "0" } });
   assert.equal(acct(p, "setup-owe-mortgage"), undefined);
-  assert.equal(grey["accounts[setup-owe-mortgage].balance"], undefined, "a box holding 0 shows no grey figure");
+  assert.equal(grey["accounts[setup-owe-mortgage].balance"], undefined, "a box holding 0 shows no gray figure");
   assert.equal(p.guesses?.["accounts[setup-owe-mortgage].balance"], undefined);
   // a $0 payment typed (a loan on hold) is kept as typed, not replaced by our guess
   const s = sam(); oweWithGuesses(s, { "car-loan": { owed: 8000, payment: "0" } });
@@ -1270,7 +1270,7 @@ test("C2 review: a card's usual minimum is never more than what is owed, after r
   assert.equal(debtRow(s, "credit").minPayment, 90, "Sam's 7.H card payment");
 });
 
-test("C2 review: the home Q5b guessed stays a grey box on Q5b (never 'from question 4')", () => {
+test("C2 review: the home Q5b guessed stays a gray box on Q5b (never 'from question 4')", () => {
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 1100 } });
   assert.equal(S.askHomeWithMortgage(j), true);
   assert.equal(S.valuesFor(j, "owe-amounts").mortgage.home, "");
@@ -1303,7 +1303,7 @@ test("C2 review: tax and insurance typed on Home move the mortgage guesses (sett
 test("C2 fix (D1): a $0 payment typed stays the person's when Q5b is opened again and saved", () => {
   const s = sam(); oweWithGuesses(s, { "car-loan": { owed: 8000, payment: "0" } });
   const again = S.valuesFor(s, "owe-amounts");
-  assert.equal(again["car-loan"].payment, 0, "the box reopens holding the 0 typed, not empty with our grey figure");
+  assert.equal(again["car-loan"].payment, 0, "the box reopens holding the 0 typed, not empty with our gray figure");
   oweWithGuesses(s, again);
   assert.equal(debtRow(s, "car-loan").minPayment, 0);
   assert.equal(isGuess(s, "debts[setup-debt-car-loan].minPayment"), false);
@@ -1312,10 +1312,10 @@ test("C2 fix (D1): a $0 payment typed stays the person's when Q5b is opened agai
   assert.ok(debtRow(old, "car-loan").minPayment > 0);
 });
 
-test("C2 fix (D6): question 4b shows our guessed home grey (never typed text) and keeps it when its box stays empty", () => {
+test("C2 fix (D6): question 4b shows our guessed home gray (never typed text) and keeps it when its box stays empty", () => {
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 1100 } });
   const v = S.valuesFor(j, "have-amounts");
-  assert.equal(v.home, "", "a saved guess reopens empty (the screen draws it grey)");
+  assert.equal(v.home, "", "a saved guess reopens empty (the screen draws it gray)");
   S.applyHaveAmounts(j, v, PERSONA_TODAY);
   assert.equal(acct(j, "setup-have-home").balance, 210000, "Continue with the box empty keeps our guess, so the mortgage never stands alone");
   assert.equal(isGuess(j, "accounts[setup-have-home].balance"), true);
@@ -1392,9 +1392,9 @@ test("C3 blank rows are saved as our guesses, the Got it line counts them, and t
     assert.equal(isGuess(p, "retirement.spendingMonthly"), true);
     // valuesFor reopens our guesses empty (grey), the typed row as typed
     const v = S.valuesFor(p, "spend");
-    for (const k of Object.keys(grey)) assert.equal(v.rows[k], "", `${name} ${k} reopens grey`);
+    for (const k of Object.keys(grey)) assert.equal(v.rows[k], "", `${name} ${k} reopens gray`);
     if (typed.childcare) assert.equal(v.rows.childcare, 900);
-    assert.equal(v.retireMonthly, "", "our retirement figure reopens grey");
+    assert.equal(v.retireMonthly, "", "our retirement figure reopens gray");
   }
   // "Got it: about $2,680 a month. 7 of these are our guesses for now." (Sam; 7.H $2,690, see the guesses tests on R11)
   const s = persona("sam"); spendWithGuesses(s, { mode: "rows", rows: {} });
@@ -1446,7 +1446,7 @@ test("C3 typing one row keeps the others our guesses and the total is their sum;
   assert.deepEqual([row(p, "dining").amount, p.guide.setup.spendZero], [150, undefined]);
 });
 
-test("C3 retirement spending: under 50 one line, written as our guess; from 50 the box's grey figure; a figure typed stays typed", () => {
+test("C3 retirement spending: under 50 one line, written as our guess; from 50 the box's gray figure; a figure typed stays typed", () => {
   const s = persona("sam");
   const { later } = spendWithGuesses(s, { mode: "rows", rows: {} });
   // under 50: today's rows without childcare (and loans still running then: none for Sam): $2,680
@@ -1577,7 +1577,7 @@ test("C3 review D4: with no pay on file and every bill our guess, the retirement
 test("C3 review D7: One rough total typed as 0 is the person's 0 (nothing guessed, nothing written), as before C3", () => {
   const p = samAtQ6();
   const { grey } = spendWithGuesses(p, { mode: "total", total: "0" });
-  assert.deepEqual(grey, {}, "no grey figure is drawn under a typed total");
+  assert.deepEqual(grey, {}, "no gray figure is drawn under a typed total");
   assert.deepEqual(p.expenses.filter((x) => x.id.startsWith("setup-x-")), []);
   assert.deepEqual(Object.keys(p.guesses ?? {}).filter((k) => k.startsWith("expenses")), []);
 });
@@ -1706,7 +1706,7 @@ test("C3 UX 4: a parent who skips with the childcare tap unanswered is told chil
   assert.equal(S.standing(s, { today: PERSONA_TODAY }).childcareMissing, undefined, "no children");
 });
 
-test("C3 UX 3: on must-pay bills that are mostly our guesses, no cushion step is ticked and no money moves out of the cushion", () => {
+test("C3 UX 3: on must-pay bills that are mostly our guesses, no cushion step is ticked and no money moves out of the emergency fund", () => {
   // Sam with $40,000 in savings and the $3,000 card at 22.4%: on typed bills the card is paid from savings above the cushion
   const p = persona("sam");
   S.applyHaveAmounts(p, { checking: 1200, savings: 40000 }, PERSONA_TODAY); settle(p, GO);
@@ -1752,7 +1752,7 @@ test("C3 UX 7 and 12: life cover and the shortfall alert, resting on our spendin
   assert.equal(two.length, 2);
   const move = nextBest(c, { today: PERSONA_TODAY }).steps.find((x) => x.id === "protect");
   assert.equal(move.detail.split(RESTS_ON).length - 1, 1, move.detail);
-  assert.ok(move.detail.endsWith(`${RESTS_ON} Cover you already have, through work too, goes on Policies.`));
+  assert.ok(move.detail.endsWith(`${RESTS_ON} Add insurance you already have, including any through work, on Policies.`));
 });
 
 // ---- Round 8, batch 3 (2026-11-06): Get started asks what it needs. Invented households shaped like the round-8 testers'
@@ -1869,7 +1869,7 @@ test("R8 item 10: savings already for a goal is linked to it (fundedBy), so it i
   assert.equal((Math.round(st.runway * 10) / 10).toFixed(1), "0.8");
   assert.notEqual(st.runwayStatus, "ok", "not 'Covered'");
   assert.deepEqual(st.cushionHeld, { all: 25000, earmarked: 22000, taxOwed: 0, now: 3000, goals: ["the home"] });
-  assert.equal(S.cushionHeldWords(st, p), "Your $22,000 is set aside for the home, so your cushion is $3,000.");
+  assert.equal(S.cushionHeldWords(st, p), "Your $22,000 is set aside for the home, so your emergency fund is $3,000.");
   // before the answer: counted as cushion, as the round-8 tester saw it
   const before = coupleHome();
   assert.equal(S.standing(before, { today: T6 }).runwayStatus, "ok");
@@ -1909,13 +1909,13 @@ test("R8 item 10: a goal of the owner's that looks like the cushion itself is na
   const st = S.standing(p, { today: T6 });
   assert.deepEqual(st.cushionHeld, { all: 15700, earmarked: 11500, taxOwed: 0, now: 4200, goals: ['the "Emergency fund" goal'], cushionGoal: "Emergency fund" });
   assert.equal(S.cushionHeldWords(st, p), '$11,500 more sits in your "Emergency fund" goal.');
-  assert.equal(S.cushionHeldAsk(st), "Count it as your cushion? Say so on Emergency fund ›");
+  assert.equal(S.cushionHeldAsk(st), "Count it as your emergency fund? Say so on Emergency fund ›");
   // two goals hold cash: the question names the one that looks like the cushion
   const two = migrate(familyPlan(T6));
   two.goals.find((g) => g.id === "g-trip").fundedBy = ["a-chk"];
   const st2 = S.standing(two, { today: T6 });
   assert.deepEqual(st2.cushionHeld.goals, ['the "Emergency fund" goal', 'the "Japan trip" goal']);
-  assert.equal(S.cushionHeldAsk(st2), 'Is the "Emergency fund" goal your safety cushion? Say so on Emergency fund ›');
+  assert.equal(S.cushionHeldAsk(st2), 'Is the "Emergency fund" goal your emergency fund? Say so on Emergency fund ›');
   // ticked as the emergency fund (Emergency fund's checkbox): its money is cushion, nothing to say
   const ticked = migrate(familyPlan(T6));
   ticked.goals.find((g) => g.id === "g-ef").isEmergencyFund = true;
@@ -1943,20 +1943,20 @@ test("R8 item 29: money that is this year's unpaid tax is said so on question 7b
   const c = S.cushion(p, 6, T6);
   assert.deepEqual([c.all, c.taxOwed, c.now, c.exact], [8500, 8500, 0, 20580]);
   assert.equal(c.exact, emergency(p, { today: T6 }).target, "the same target as Emergency fund");
-  assert.equal(S.cushionHave(p, c), "You have $8,500 in checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward the cushion: 0.0 of 6 months.");
+  assert.equal(S.cushionHave(p, c), "You have $8,500 in checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward your emergency fund: 0.0 of 6 months.");
   assert.equal(Math.round(c.taxDue * 100) / 100, 9248.7, "owed now: $15,898.44 x 10/12 - $4,000");
   // part of it: the rest counts
   acct(p, "setup-have-savings").balance = 15000;
   const d = S.cushion(p, 6, T6);
   assert.ok(d.taxOwed > 0 && d.taxOwed < d.all);
-  assert.match(S.cushionHave(p, d), /^You have \$18,500 in checking and savings; \$[\d,]+ of it is this year's tax not paid yet, so \$[\d,]+ counts toward the cushion: \d\.\d of 6 months\.$/);
+  assert.match(S.cushionHave(p, d), /^You have \$18,500 in checking and savings; \$[\d,]+ of it is this year's tax not paid yet, so \$[\d,]+ counts toward your emergency fund: \d\.\d of 6 months\.$/);
   // nothing held back: the sentence is the one it always was
   const h = family();
   const e = S.cushion(h, null, T);
   assert.equal(S.cushionHave(h, e), `You already have $${Math.round(e.now).toLocaleString("en-US")} in checking, savings and cash: ${(Math.round(e.covered * 10) / 10).toFixed(1)} of 4 months.`);
   // the done screen's cushion tile says it too
   const st = S.standing(p, { today: T6 });
-  assert.equal(S.cushionHeldWords(st, p), `Your $18,500 includes $${Math.round(st.cushionHeld.taxOwed).toLocaleString("en-US")} of this year's tax not paid yet, so your cushion is $${Math.round(st.cushionHeld.now).toLocaleString("en-US")}.`);
+  assert.equal(S.cushionHeldWords(st, p), `Your $18,500 includes $${Math.round(st.cushionHeld.taxOwed).toLocaleString("en-US")} of this year's tax not paid yet, so your emergency fund is $${Math.round(st.cushionHeld.now).toLocaleString("en-US")}.`);
 });
 
 test("R8 item 35: 'On my own' asks which kind of IRA: Roth saves a Roth, Traditional an IRA, Not sure an IRA said to be our guess", () => {
@@ -2049,7 +2049,7 @@ test("R8 B3 review D3: a ticked account holding more than its goals need stays t
   assert.equal(goalOf(b, "setup-goal-cushion").funded, 16800);
   assert.equal(goalOf(b, "setup-goal-trip").funded, 4000);
   assert.equal(liquidity(b, { today: T6 }).now, 29000);
-  assert.equal(S.cushionHeldWords(S.standing(b, { today: T6 }), b), "Your $4,000 is set aside for the trip, so your cushion is $29,000.");
+  assert.equal(S.cushionHeldWords(S.standing(b, { today: T6 }), b), "Your $4,000 is set aside for the trip, so your emergency fund is $29,000.");
   // the home with no amount yet and the savings ticked: nothing is held for it, so the cushion uses the savings
   const c = sky({ goals: ["cushion", "home"], details: { cushion: { months: 6 }, home: { years: 3, funds: ["setup-have-savings"] } } });
   assert.deepEqual(c.goals.find((g) => g.id === "setup-goal-cushion").fundedBy, ["setup-have-checking", "setup-have-savings"]);
@@ -2073,7 +2073,7 @@ test("R8 B3 verify: an account ticked on 7b never gives its goal's money to the 
     const p = at(savings);
     assert.equal(goalOf(p, "setup-goal-car").funded, 15000, `savings ${savings}: the car keeps its $15,000`);
     assert.equal(liquidity(p, { today: T6 }).now, 3000 + savings - 15000, `savings ${savings}: the cushion is what the car leaves`);
-    assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `Your $15,000 is set aside for the next car, so your cushion is $${(3000 + savings - 15000).toLocaleString("en-US")}.`);
+    assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `Your $15,000 is set aside for the next car, so your emergency fund is $${(3000 + savings - 15000).toLocaleString("en-US")}.`);
   }
   // enough left over for the cushion too ($15,000 + $13,800): the cushion is on both accounts, every page one figure
   const both = at(28800);
@@ -2154,7 +2154,7 @@ test("R8 B3 review D5: question 7b's figure is Emergency fund's when a must-pay 
 test("R8 B3 review D4, D8, D9, D10: the help lines say only what is true", () => {
   assert.doesNotMatch(S.iraKindHelp(true), /SEP/, "a SEP-IRA is not an IRA for the limit or the deduction");
   assert.equal(S.iraKindHelp(false), "Roth: taxed going in, tax-free coming out. Not sure? We count it as Traditional for now.");
-  assert.match(S.GOAL_FUNDS_HELP, /^Tap an account if money in it is for this\. Up to this goal's amount then counts here, not as your safety cushion\.$/);
+  assert.match(S.GOAL_FUNDS_HELP, /^Tap an account if money in it is for this\. Up to this goal's amount then counts here, not as your emergency fund\.$/);
   assert.match(S.goalAmountHelp("home"), /VA and USDA loans can take none/);
   assert.match(S.goalAmountHelp("home"), /mortgage insurance or a fee/);
   const young = S.ssGettingHelp(50);
@@ -2175,15 +2175,15 @@ test("R8 B3 review UX 3: tax not paid yet that is more than the cash is named, w
   const c = S.cushion(p, 6, T6);
   assert.ok(c.taxDue > c.all, `tax ${c.taxDue}`);
   const about = `$${(Math.round(c.taxDue / 10) * 10).toLocaleString("en-US")}`;
-  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward the cushion: 0.0 of 6 months.`);
-  assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `This year's tax not paid yet (about ${about}) is more than the $8,500 you have, so none of it is cushion yet.`);
+  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward your emergency fund: 0.0 of 6 months.`);
+  assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `This year's tax not paid yet (about ${about}) is more than the $8,500 you have, so none of it counts toward your emergency fund yet.`);
 });
 
 test("R8 B3 review UX 5: cash in the owner's own 'Emergency fund' goal is asked about, not called 'set aside'", () => {
   const p = migrate(familyPlan(T6));
   const st = S.standing(p, { today: T6 });
   assert.equal(S.cushionHeldWords(st, p), '$11,500 more sits in your "Emergency fund" goal.');
-  assert.equal(S.cushionHeldAsk(st), "Count it as your cushion? Say so on Emergency fund ›");
+  assert.equal(S.cushionHeldAsk(st), "Count it as your emergency fund? Say so on Emergency fund ›");
 });
 
 test("R8 B3 review UX 9: the plan-at-work lines read as plain words, with Tap", () => {
@@ -2359,7 +2359,7 @@ test("part 3 fix 2: a decimal group typed beside a figure is rounded once; the r
 
 test("part 3 fix 2: the basis line names the person's figure once one is given, not a household like theirs", () => {
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
-  assert.ok(view.includes("shared out the way a household like yours usually spends it"));
+  assert.ok(view.includes("divided up the way a household like yours usually spends it"));
 });
 
 test("part 3 fix: the box left empty after a figure forgets it, and the blank groups go back to our marked guesses", () => {
@@ -2558,7 +2558,7 @@ test("one answer everywhere: the reveal, Your plan, the Dashboard and Your healt
 
 test("the question's screen: two ways to answer, a minus sign allowed, a clear stop when the answer cannot be saved", () => {
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
-  for (const t of ["I know roughly what I spend", "I know what's left over", "How much does your checking go up in a normal month, before you move any to savings?", "Not sure", "My bills are right", "My left-over is right", "Type a minus sign if it usually goes down", "current?.block?.()", "lw.flush()"]) assert.ok(view.includes(t), t);
+  for (const t of ["I know roughly what I spend", "I know what's left over", "How much does your checking go up in a normal month, before you move any to savings?", "Not sure", "My bills are right", "What's left over is right", "Type a minus sign if it usually goes down", "current?.block?.()", "lw.flush()"]) assert.ok(view.includes(t), t);
   const ex = fs.readFileSync(fileURLToPath(new URL("../../cashflow/expenses/view.js", import.meta.url)), "utf8");
   for (const t of ["Set your month in one number", "I know what's left over", "I know what I spend", "Save my month", "applyLeftOver", "applyMonthTotal"]) assert.ok(ex.includes(t), t);
 });
@@ -2672,7 +2672,7 @@ test("D8: a left-over above everything that comes in is not blamed on the bills"
   assert.deepEqual(p, before);
 });
 
-test("D9: the grey figure is today's left-over once spending is answered; a left-over box left empty keeps the spending", () => {
+test("D9: the gray figure is today's left-over once spending is answered; a left-over box left empty keeps the spending", () => {
   const p = persona("sam"), guess = guessFor(p);
   assert.equal(S.spendAnswered(p), false);
   S.applySpend(p, { mode: "rows", rows: {}, sum: 3000 }, PERSONA_TODAY, { guess });
@@ -2706,7 +2706,7 @@ test("D3 and UX 1: Continue works the answer out then and there, and a left-over
   assert.equal((view.match(/lw\.flush\(\); return lw\.conflict\(\)/g) ?? []).length, 2, "both screens solve before they judge");
   assert.equal((view.match(/lw\?\.touch\(\)/g) ?? []).length, 2, "a group typed after the left-over asks again");
   assert.ok(!/applyLeftOver\([^)]*\)\.ok\) return;\s*\n?\s*applySpend/.test(view), "no silent fall back to guesses");
-  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the left-over amount below, then Continue."));
+  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the leftover amount below, then Continue."));
 });
 
 test("one answer: the Statements page no longer says net worth grows when more goes out than comes in", async () => {

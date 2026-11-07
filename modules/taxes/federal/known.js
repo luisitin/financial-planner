@@ -483,7 +483,7 @@ export function iraStep({ plan, fed, inputs }) {
   // only what was put in comes out tax-free; what it earns is taxed when it comes out (Pub. 590-B, Form 8606), unlike a Roth
   const detail = cut.length
     ? `${cut.map((x) => `${words(x)}, so at ${joint ? "your joint income of about " : "about "}${fmtInt(x.magi)}${joint ? "" : " of income"} ${x.deductible > 0.5 ? `only ${fmtInt(x.deductible)} of ${whose(x.name)} ${fmtInt(x.traditional)} comes off` : `none of ${whose(x.name)} ${fmtInt(x.traditional)} comes off`} (the limit fades out from ${fmtInt(x.range[0])} to ${fmtInt(x.range[1])})`).join("; ")}. The ${fmtInt(after)} put in after tax comes out tax-free later; what it earns is taxed. Keep a record of it (Form 8606); the Limits page says whether a Roth IRA does better`
-    : `Contributions page; ${rows.some((x) => x.rule !== "none") ? "within the income limit for someone with a plan at work" : "no plan at work, so all of it comes off"}`;
+    : `Retirement contributions page; ${rows.some((x) => x.rule !== "none") ? "within the income limit for someone with a plan at work" : "no plan at work, so all of it comes off"}`;
   // none deductible is 0, not "-0" (round 8 review: the row read "-$0")
   const line = { key: "ira", label: "IRA contributions", amount: deductible > 0.005 ? -deductible : 0, from: "plan", detail };
   return { inputs: next, line, ira: { people: rows, deductible, assumed: assumedAll, basis } };

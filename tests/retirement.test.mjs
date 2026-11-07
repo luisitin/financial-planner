@@ -128,7 +128,7 @@ test("brackets: Roth conversions fill the chosen bracket before RMDs and stop at
   const w = project(k).rows[0];                             // an RMD at 60 (forced for the test): 100,000 / 27.4 factor floor... rmdFactor(60) is Infinity, so no RMD
   assert.equal(w.rmd, 0);
 });
-test("what-if hooks: one-off money out and in, a spending change, calendar bounds on contributions and incomes", () => {
+test("what-if hooks: one-time money out and in, a spending change, calendar bounds on contributions and incomes", () => {
   // money out in a working year comes from cash first, then taxable; money in lands in taxable
   const out = base(); out.events = [{ year: 2026, amount: 15000, label: "six months without pay" }, { year: 2027, amount: -40000, label: "inheritance" }];
   const r = project(out);
@@ -156,11 +156,11 @@ test("what-if hooks: one-off money out and in, a spending change, calendar bound
 // pays it first; an unmarked event still comes out of savings on top of spending
 test("events marked spending are paid by guaranteed income first", () => {
   const rich = () => { const I = base(); I.incomes = [{ name: "Pension", yearly: 60000, personIndex: 0, startAge: 60, cola: true, taxable: false }]; I.contributions = []; return I; };
-  const marked = rich(); marked.events = [{ year: 2028, amount: 8000, label: "Health cover", spending: true }];
+  const marked = rich(); marked.events = [{ year: 2028, amount: 8000, label: "Health insurance", spending: true }];
   const r = project(marked).rows.find((x) => x.year === 2028);
   near(r.eventOut, 8000); near(r.eventSpending, 8000);
   near(r.withdrawn.cash + r.withdrawn.taxable + r.withdrawn.deferred + r.withdrawn.free, 0);   // 60,000 of income covers 50,000 + 8,000
-  const plain = rich(); plain.events = [{ year: 2028, amount: 8000, label: "one-off" }];
+  const plain = rich(); plain.events = [{ year: 2028, amount: 8000, label: "one-time" }];
   const q = project(plain).rows.find((x) => x.year === 2028);
   near(q.eventSpending, 0); near(q.withdrawn.cash, 8000);   // a one-off still comes out of savings
   // no income yet (Social Security from 67): the marked event adds to the gap one for one, 50,000 + 8,000

@@ -28,7 +28,7 @@ export function render(root, ctx) {
   const dismiss = (r) => ui.button("Not a bill", () => store.update((p) => { p.recurringIgnored = [...new Set([...(p.recurringIgnored ?? []), r.key])]; }), { class: "secondary small" });
 
   if (d.missed.length) root.append(ui.card("Looks missed",
-    ui.h("p", { class: "muted small" }, "Expected by now and not seen. Paid another way, cancelled, or the bank file is not up to date?"),
+    ui.h("p", { class: "muted small" }, "Expected by now and not seen. Paid another way, canceled, or the bank file is not up to date?"),
     ui.h("ul", { class: "page-list" }, d.missed.map((r) => row(r, ui.h("span", {}, ui.h("div", { class: "small" }, `expected ${fmt.date(r.next)}`), dismiss(r)), ui.h("span", { class: "pill warn" }, "missed"))))));
   if (d.dueSoon.length) root.append(ui.card("Due in the next two weeks",
     ui.h("ul", { class: "page-list" }, d.dueSoon.map((r) => row(r, ui.h("span", { class: "small" }, r.days === 0 ? "today" : r.days === 1 ? "tomorrow" : `in ${r.days} days`, ui.h("div", { class: "muted small" }, fmt.date(r.next))))))));

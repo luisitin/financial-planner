@@ -95,7 +95,7 @@ export function render(root, ctx) {
         twoCol ? ui.field("Money out column", sel("debit", true)) : null,
         twoCol ? ui.field("Money in column", sel("credit", true)) : null,
         ui.field("Debit/credit type column", sel("type", true), "only if the amounts are all positive and another column says which way"),
-        ui.field("Amounts look backwards", flip, prep.flipAuto ? "ticked for you: this is a card file that lists charges as positive numbers" : "tick if spending shows as positive in the preview below"),
+        ui.field("Amounts look backwards", flip, prep.flipAuto ? "checked for you: this is a card file that lists charges as positive numbers" : "check this box if spending shows as positive in the preview below"),
       )),
     );
     const ok = prep.add.length, dup = prep.skip.length, bad = prep.bad.length, needCat = prep.add.filter((t) => !t.category).length;

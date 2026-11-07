@@ -26,7 +26,7 @@ test("applyChanges: a copy of the plan, the original untouched; the engine input
   assert.equal(a.inputs.people[0].retireAge, 60); assert.equal(a.inputs.spending.yearly, 72000);
   assert.ok(a.inputs.contributions.some((c) => c.bucket === "taxable" && c.yearly === 6000));
   near(a.inputs.returns.stocks, base.returns.stocks - 0.01); near(a.inputs.returns.bonds, base.returns.bonds - 0.01);
-  assert.deepEqual(a.inputs.events.at(-1), { year: 2030, amount: -50000, label: "one-off" });
+  assert.deepEqual(a.inputs.events.at(-1), { year: 2030, amount: -50000, label: "one-time" });
   assert.equal(applyChanges(emptyPlan(), {}, { today: TODAY }).inputs, null);
 });
 

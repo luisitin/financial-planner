@@ -18,8 +18,8 @@ export function render(root, ctx) {
     { key: "symbol", label: "Symbol", type: "text", required: true, placeholder: "e.g. VTI, FXAIX, AAPL" },
     { key: "name", label: "Name", type: "text", placeholder: "filled in for common funds" },
     { key: "shares", label: "Shares", type: "number", required: true, min: 0, step: "any" },
-    { key: "price", label: "Price a share", type: "money", min: 0, help: "the latest you have; blank uses what you paid" },
-    { key: "costBasis", label: "What you paid in all", type: "money", min: 0, help: "the cost basis on the statement" },
+    { key: "price", label: "Price a share", type: "money", min: 0, help: "the latest you have; leave blank to use what you paid" },
+    { key: "costBasis", label: "What you paid in all", type: "money", min: 0, help: "what you paid (the statement calls it \"cost basis\")" },
     { key: "assetClass", label: "Asset class", type: "select", options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
     { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, help: "yearly fund fee; blank uses the table for common funds" },
     { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, help: "dividends and interest a year; blank uses a typical figure" },
@@ -28,7 +28,7 @@ export function render(root, ctx) {
     ui.h("h1", {}, d.hasData ? `${money(d.total)} invested` : "What you hold"),
     ui.h("p", { class: "lede" }, d.hasData
       ? `${d.items.length} holding${d.items.length === 1 ? "" : "s"} in ${d.byAccount.filter((a) => a.count).length} account${d.byAccount.filter((a) => a.count).length === 1 ? "" : "s"}, ${d.costTotal > 0 ? `${signed(d.gain)} against what you paid` : "cost not entered yet"}; ${fmt.pct(d.stockShare, 0)} in stocks. Allocation, Fees, Dividends and the tax pages all read this list.`
-      : "The funds and stocks in each investment account: symbol, shares, price, what you paid. Type them in or import the positions file your brokerage exports; common funds classify themselves."),
+      : "The funds and stocks in each investment account: symbol, shares, price, what you paid. Type them in or import the positions file your brokerage exports; the app fills in the type for common funds."),
     !accounts.length ? ui.h("p", { class: "muted small" }, "First add the investment accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), " (brokerage, 401(k), IRA, Roth, HSA, 529).") : null,
   ));
   const out = ui.h("div");

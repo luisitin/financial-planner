@@ -14,7 +14,7 @@ export default {
   needs: ["income", "household", "retirement", "taxes", "equity", "holdings", "accounts", "assumptions", "whatIfs"],
   writes: ["whatIfs"],
   heavy: false,
-  purpose: "Compares job offers on total compensation, including benefits and equity, not just salary.",
+  purpose: "Compares job offers on everything they pay, including benefits and stock, not just salary.",
   aliases: ["job offer", "new job", "total compensation", "should I take the job", "compare jobs"],
   compute,
   render,

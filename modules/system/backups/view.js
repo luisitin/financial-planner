@@ -112,7 +112,7 @@ function draw(page, ctx) {
     }
     if (copy.error) {
       if (copy.status === 422) box.append(ui.notice("error", "This copy is damaged and cannot be opened. Pick another copy from the list."), ui.h("div", { class: "rec-foot" }, close));
-      else if (copy.status === 404) box.append(ui.notice("warn", "This copy is no longer on your PC (older copies are removed as new ones are made)."),
+      else if (copy.status === 404) box.append(ui.notice("warn", "This copy is no longer on your computer (older copies are removed as new ones are made)."),
         ui.h("div", { class: "rec-foot" }, ui.button("Read the list again", () => { names = null; picked = null; delete copies[b.name]; redraw(); }, { class: "secondary small" }), close));
       else box.append(ui.notice("error", "Your PC did not send this copy. Check that the PC is on and the planner is running on it, then tap Try again."),
         ui.h("div", { class: "rec-foot" }, ui.button("Try again", () => { delete copies[b.name]; redraw(); }, { class: "secondary small" }), close));

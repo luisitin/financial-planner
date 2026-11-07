@@ -15,7 +15,7 @@ export default {
   writes: ["whatIfs", "income"],
   heavy: false,
   purpose: "Maps out how your salary could grow with raises and promotions, shown in today's dollars.",
-  aliases: ["raise", "pay rise", "promotion", "salary growth", "career earnings", "lifetime earnings"],
+  aliases: ["raise", "pay raise", "promotion", "salary growth", "career earnings", "lifetime earnings"],
   compute,
   render,
 };

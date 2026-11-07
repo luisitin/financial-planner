@@ -5,7 +5,7 @@ import { render } from "./view.js";
 export default {
   id: "categorizer",
   group: "ai",
-  title: "Categoriser",
+  title: "Categorizer",
   icon: "🤖",
   order: 30,
   version: 1,
@@ -16,7 +16,7 @@ export default {
   needs: ["transactions", "rules", "categories"],
   writes: ["transactions", "rules"],
   heavy: false,
-  purpose: "Categorises transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed.",
+  purpose: "Categorizes transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed.",
   compute,
   render,
 };

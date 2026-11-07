@@ -4,7 +4,7 @@ import { render } from "./view.js";
 export default {
   id: "categorize",
   group: "transactions",
-  title: "Categorise",
+  title: "Categorize",
   icon: "✅",
   order: 30,
   version: 1,
@@ -15,7 +15,7 @@ export default {
   writes: ["transactions", "rules"],
   heavy: false,
   purpose: "File the transactions that have no category yet, one payee at a time, with suggestions.",
-  aliases: ["uncategorised", "file transactions", "sort transactions", "AI suggestions", "review"],
+  aliases: ["uncategorized", "uncategorised", "file transactions", "sort transactions", "AI suggestions", "review"],
   compute,
   render,
 };

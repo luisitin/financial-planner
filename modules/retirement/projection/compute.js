@@ -27,7 +27,7 @@ import { isYou, nameIn, nameOf, verbFor, namesIn, NamesIn } from "../../../core/
 export const WITHDRAWAL_ORDERS = {
   "taxable-first": { label: "Taxable, then pre-tax, then Roth", order: ["taxable", "deferred", "free"], note: "the textbook order: let tax-sheltered money grow longest" },
   "deferred-first": { label: "Pre-tax, then taxable, then Roth", order: ["deferred", "taxable", "free"], note: "drains the 401(k) early, in low-tax years, before required withdrawals" },
-  "roth-last-taxable": { label: "Pre-tax, then Roth, then taxable", order: ["deferred", "free", "taxable"], note: "keeps taxable money (and its step-up at death) for last" },
+  "roth-last-taxable": { label: "Pre-tax, then Roth, then taxable", order: ["deferred", "free", "taxable"], note: "keeps taxable investment accounts for last (heirs then owe no tax on the growth up to the day of death)" },
   "roth-first": { label: "Roth, then taxable, then pre-tax", order: ["free", "taxable", "deferred"], note: "the usual worst: spends the tax-free money first" },
 };
 export const orderKey = (order) => Object.keys(WITHDRAWAL_ORDERS).find((k) => WITHDRAWAL_ORDERS[k].order.join() === (order ?? []).join()) ?? "custom";
@@ -698,7 +698,7 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   // 3. a premium taken out of the carried spending, back in the retirement years while someone still works
   const premiumYears = [];
   if (workPremium > 0) for (let y = retireYear; y <= endYear; y++) if (workers(y).length) { premiumYears.push(y); add(y, workPremium * 12); }
-  const events = [...byYear].sort((a, b) => a[0] - b[0]).map(([year, amount]) => ({ year, amount, label: "Health cover", kind: "health", spending: true }));
+  const events = [...byYear].sort((a, b) => a[0] - b[0]).map(([year, amount]) => ({ year, amount, label: "Health insurance", kind: "health", spending: true }));
   const sum = (arr, k) => arr.reduce((t, y) => t + y[k], 0);
   const over = bYears.filter((y) => y.overCliff > 0);
   // underLine: the years the plan's income is under the poverty line (no credit; Medicaid may cover people with that income)
@@ -826,7 +826,7 @@ export function buildInputs(plan, params = {}) {
   if (typed) spendingSource = "typed";
   else if (ex && ex.monthly > 0) {
     spendingSource = "expenses";
-    notes.push("Retirement spending is taken as today's expenses; set your own figure on this page if it will differ.");
+    notes.push("The plan assumes you will spend in retirement what you spend today; set your own figure on this page if it will differ.");
   }
   else { spendingSource = "none"; missing.push("what you will spend in retirement (a figure here, or your expenses on the Expenses page)"); }
   // who works when (pay or a "work" answer, and under their retirement age; the health line's and Healthcare before 65's one
@@ -932,7 +932,7 @@ export function buildInputs(plan, params = {}) {
     inputs.events = [...(inputs.events ?? []), ...h.events];
     health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
-  if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (What you save for retirement), so nothing is added until retirement.");
+  if (!contributions.length && retireYear > year) notes.push("You have not entered any retirement saving (What you save for retirement), so the plan adds nothing to savings before you retire.");
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
@@ -1112,7 +1112,7 @@ export function onJobWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${x
     const w = nameIn(p.worker), works = verbFor(p.worker, "works", "work"), job = `${nameOf(p.worker)} job`;
     out.push(others.length
       ? `In ${yrs} ${who(others)} ${are(others)} 65 or over while ${w} still ${works}: ${p.byTick ? `you said a plan through ${job} covers ${who(others)} (Medicare page)` : `a plan through ${job} can cover ${who(p.names)}`}, so Medicare ${those} is not added (the Medicare page counts ${it}).`
-      : `In ${yrs} ${w} ${are([p.worker])} 65 or over but still ${works}: cover comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
+      : `In ${yrs} ${w} ${are([p.worker])} 65 or over but still ${works}: health insurance comes through the job, so Medicare ${those} is not added (the Medicare page counts ${it}).`);
     // the worker is presumed (no pay and no Get started answer; fifth pass): said, so "Ana's job" is not read as a fact
     if (p.presumedUntil) out.push(`No pay is listed for ${w} and Get started does not say ${w} ${verbFor(p.worker, "has", "have")} stopped work, so the plan takes ${w} as working until ${p.presumedUntil}.`);
   }
@@ -1134,7 +1134,7 @@ export function spouseWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${
   const whose = (xs) => (many(xs) ? (withYou(xs) ? "your" : "their") : nameOf(xs[0])), whom = (xs) => (many(xs) ? (withYou(xs) ? "you" : "them") : nameIn(xs[0]));
   return (j.parts ?? []).flatMap((p) => {
     const w = nameIn(p.worker);
-    return [`In ${span(p.fromYear, p.untilYear, p.years)} ${list(p.names.map(nameIn))} ${many(p.names) || isYou(p.names[0]) ? "are" : "is"} 65 or over while ${w} still ${verbFor(p.worker, "works", "work")}: ${whose(p.names)} Medicare is counted. If a plan through ${nameOf(p.worker)} job covers ${whom(p.names)}, tick the box on the Medicare page.`,
+    return [`In ${span(p.fromYear, p.untilYear, p.years)} ${list(p.names.map(nameIn))} ${many(p.names) || isYou(p.names[0]) ? "are" : "is"} 65 or over while ${w} still ${verbFor(p.worker, "works", "work")}: ${whose(p.names)} Medicare is counted. If a plan through ${nameOf(p.worker)} job covers ${whom(p.names)}, check the box on the Medicare page.`,
       // the worker is presumed (no pay and no Get started answer; fifth pass): said, as onJobWords does
       ...(p.presumedUntil ? [`No pay is listed for ${w} and Get started does not say ${w} ${verbFor(p.worker, "has", "have")} stopped work, so the plan takes ${w} as working until ${p.presumedUntil}.`] : [])];
   });

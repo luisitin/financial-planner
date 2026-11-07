@@ -145,12 +145,12 @@ test("D6 a health FSA saves no payroll tax for a person with no pay", () => {
   near(w.fsa.payrollTaxSaved, 2000 * 0.0765);
 });
 
-test("D7 no-pay wording: money that did not come from pay is not 'taxed as pay'", () => {
+test("D7 no-pay wording: money that did not come from pay is not 'taxed as wages'", () => {
   const d = compute(one({ birth: "1952-03-15", pay: 0, pension: 22800, ss: "" }), { today: T });
   const note = d.notes.find((n) => /too much/.test(n));
-  assert.ok(note && !/taxed as pay/.test(note) && /no tax break and is charged 6% a year/.test(note), note);
+  assert.ok(note && !/taxed as wages/.test(note) && /no tax break and is charged 6% a year/.test(note), note);
   const src = readFileSync(new URL("../modules/taxes/federal/compute.js", import.meta.url), "utf8");
-  assert.match(src, /over the limit for your cover or for Medicare/);
+  assert.match(src, /over the limit for your coverage or for Medicare/);
 });
 
 test("D8 on Medicare with nothing going in, the page does not invite contributions", async () => {
@@ -170,7 +170,7 @@ test("N2 Health page works Medicare months for the return's year", () => {
   assert.match(src, /adultMedicare\(plan, [a-z]+, b\.year\)/);
 });
 
-test("Other pages: Tax report works the HSA as the HSA page does; Limits uses the Medicare-aware picture", async () => {
+test("Other pages: Tax report works the HSA as the HSA and FSA page does; Limits uses the Medicare-aware picture", async () => {
   const { compute: limits } = await import("../modules/investments/limits/compute.js");
   const w = widowPlan(); w.accounts.push({ id: "h", name: "HSA", type: "hsa", balance: 3000, ownerId: "p-ruth" });
   w.taxes.hsa = { coverage: "self", contribution: 4400, employer: 0, fsa: 0, fsaSpent: 0 };

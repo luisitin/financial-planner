@@ -58,7 +58,7 @@ export function compute(plan, params = {}) {
     { label: pct1(I.rates.inflation + NUDGE.inflation), inputs: fromInputs((c) => { c.rates.inflation += NUDGE.inflation; }) });
   if (ageNow !== null && ageNow < retireAge) {
     const earlier = Math.max(ageNow + 1, retireAge - NUDGE.retireYears), later = retireAge + NUDGE.retireYears;
-    if (earlier < retireAge) add("retire", `When ${nameIn(self.name)} ${verbFor(self.name, "retires", "retire")}`, "the household's spending years start then; saving stops", `age ${retireAge}`,
+    if (earlier < retireAge) add("retire", `When ${nameIn(self.name)} ${verbFor(self.name, "retires", "retire")}`, "the household retires then and saving stops", `age ${retireAge}`,
       { label: `age ${earlier}`, inputs: fromPlan((p) => { p.household.people.find((q) => q.id === self.id).retirementAge = earlier; }) },
       { label: `age ${later}`, inputs: fromPlan((p) => { p.household.people.find((q) => q.id === self.id).retirementAge = later; }) });
   }
@@ -71,7 +71,7 @@ export function compute(plan, params = {}) {
     add("saving", "How much you save", "into retirement accounts, employer money included", `${fmtMoney(now / 12, plan.meta?.currency ?? "USD")} a month`,
       { label: `${Math.round(100 - NUDGE.saving * 100)}%`, inputs: fromInputs((c) => { for (const x of c.contributions) x.yearly *= 1 - NUDGE.saving; }) },
       { label: `${Math.round(100 + NUDGE.saving * 100)}%`, inputs: fromInputs((c) => { for (const x of c.contributions) x.yearly *= 1 + NUDGE.saving; }) });
-    add("raises", "Pay rises", "a year; saving grows with pay", pct1(I.rates.salaryGrowth),
+    add("raises", "Pay raises", "a year; saving grows with pay", pct1(I.rates.salaryGrowth),
       { label: pct1(I.rates.salaryGrowth - NUDGE.raises), inputs: fromInputs((c) => { c.rates.salaryGrowth -= NUDGE.raises; }) },
       { label: pct1(I.rates.salaryGrowth + NUDGE.raises), inputs: fromInputs((c) => { c.rates.salaryGrowth += NUDGE.raises; }) });
   }

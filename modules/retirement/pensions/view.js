@@ -35,14 +35,14 @@ export function render(page, ctx) {
     ui.h("p", { class: "lede" }, "A pension pays a monthly amount for life. The big choices come when it starts: take it monthly or as a lump sum, and whether to keep paying a partner after you die. This page works out what each is worth, with your own life expectancy."),
     ui.h("p", { class: "muted small" }, "The pension's annual statement or the plan's website has the monthly amount at your retirement age; ask for the lump sum and the survivor options when you get close."),
     d.fromIncome.length ? ui.h("p", { class: "muted small" }, `Already counted from the Income page: ${d.fromIncome.map((x) => `${x.name} (${money(x.monthly)} a month)`).join(", ")}. Add it here too to see the choices.`) : null));
-  else root.append(ui.card(null, ui.row(ui.stat("Pensions a month", money(d.totalMonthly), `${d.items.length} pension${d.items.length === 1 ? "" : "s"}, in the plan`), ui.stat("Worth over a lifetime", money(d.items.reduce((s, x) => s + x.lifetime, 0)), "expected, in today's money"))));
+  else root.append(ui.card(null, ui.row(ui.stat("Pensions a month", money(d.totalMonthly), `${d.items.length} pension${d.items.length === 1 ? "" : "s"}, in the plan`), ui.stat("Worth over a lifetime", money(d.items.reduce((s, x) => s + x.lifetime, 0)), "expected, in today's dollars"))));
 
   for (const x of d.items) {
     const card = ui.card(x.name);
     card.append(ui.h("p", { class: "pn-d" }, `${NameIn(x.personName)}: ${money(x.monthly)} a month from ${x.startAge} (${x.startYear})${x.endAge ? ` to ${x.endAge}` : " for life"}, ${x.cola ? "rising with prices each year" : "the same dollars every year"}.`));
     const list = ui.h("ul", { class: "pn-list" });
     list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, "Against inflation"), ui.h("div", { class: "pn-d" }, x.cola ? "It rises with prices, so it keeps what it buys." : `With no cost-of-living raises, by ${nameOf(x.personName)} 85th birthday ${money(x.monthly)} buys what about ${money(x.atEightyFive)} buys today, at ${pct(d.inflation)} inflation.`)));
-    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `Worth about ${money(x.lifetime)}`), ui.h("div", { class: "pn-d" }, `The payments over the years ${nameIn(x.personName)} ${verbFor(x.personName, "is", "are")} likely to live, in today's money, discounted at what safe bonds earn above inflation (${pct(d.realRate)}). It is what the same income would cost to buy.`)));
+    list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `Worth about ${money(x.lifetime)}`), ui.h("div", { class: "pn-d" }, `The payments over the years ${nameIn(x.personName)} ${verbFor(x.personName, "is", "are")} likely to live, in today's dollars, discounted at what safe bonds earn above inflation (${pct(d.realRate)}). It is what the same income would cost to buy.`)));
     if (x.lump) {
       const l = x.lump;
       const verdict = l.verdict === "monthly" ? ["ok", "The monthly payments look better."] : l.verdict === "lump" ? ["warn", "The lump sum looks better."] : ["", "About even."];
@@ -51,10 +51,10 @@ export function render(page, ctx) {
     }
     if (x.survivor) {
       const s = x.survivor;
-      list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `For ${nameIn(s.partnerName)} after ${nameIn(x.personName)} ${verbFor(x.personName, "dies", "die")}`), ui.h("div", { class: `pn-v ${s.better === "joint" ? "ok" : s.better === "single" ? "warn" : ""}` }, s.better === "joint" ? "The survivor option is worth more on average." : s.better === "single" ? "The single-life option is worth more on average." : "About even on average."),
+      list.append(ui.h("li", {}, ui.h("div", { class: "pn-t" }, `For ${nameIn(s.partnerName)} after ${nameIn(x.personName)} ${verbFor(x.personName, "dies", "die")}`), ui.h("div", { class: `pn-v ${s.better === "joint" ? "ok" : s.better === "single" ? "warn" : ""}` }, s.better === "joint" ? "The survivor option is worth more on average." : s.better === "single" ? "The option that pays for your life only is worth more on average." : "About even on average."),
         ui.h("div", { class: "pn-d" }, `Single life pays ${money(x.monthly)} a month while ${nameIn(x.personName)} ${verbFor(x.personName, "lives", "live")} (worth about ${money(s.single)}); the survivor option pays ${money(s.monthly)}, and ${money(s.survivorMonthly)} to ${nameIn(s.partnerName)} after (worth about ${money(s.joint)}), counting both of your chances of living each year. The survivor option is insurance: it matters most if ${nameIn(s.partnerName)} would struggle without it.`)));
     }
-    card.append(list, ui.row(ui.button("Change", () => { editing = (plan.retirement.pensions ?? []).find((y) => y.id === x.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
+    card.append(list, ui.row(ui.button("Edit", () => { editing = (plan.retirement.pensions ?? []).find((y) => y.id === x.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
     root.append(card);
   }
 
@@ -62,7 +62,7 @@ export function render(page, ctx) {
   const fields = [
     { key: "name", label: "Pension", type: "text", required: true, placeholder: "e.g. County retirement plan" },
     { key: "personId", label: "Whose", type: "select", options: people.map((p) => ({ value: p.id, label: p.name })) },
-    { key: "monthly", label: "Monthly amount", type: "money", min: 0, help: "single-life, at the age it starts" },
+    { key: "monthly", label: "Monthly amount", type: "money", min: 0, help: "for your life only (nothing for a survivor), at the age it starts" },
     { key: "startAge", label: "Starts at age", type: "number", min: 40, max: 80, step: "1" },
     { key: "cola", label: "Rises with prices each year (a cost-of-living raise)", type: "checkbox" },
     { key: "endAge", label: "Stops at age (optional)", type: "number", min: 40, max: 120, step: "1", help: "empty: for life" },
@@ -95,5 +95,5 @@ export function render(page, ctx) {
   };
   drawForm();
   root.append(ui.card(null, out, formHost));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?"), ui.h("a", { class: "btn secondary", href: "#/retirement/longevity" }, "How long to plan for"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?"), ui.h("a", { class: "btn secondary", href: "#/retirement/longevity" }, "How long to plan for"))));
 }

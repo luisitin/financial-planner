@@ -51,10 +51,10 @@ export function render(page, ctx) {
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How the score is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
-        ui.h("li", {}, "Cash cushion: months of the bills you have to pay in usable cash, against the plan's target (Emergency fund)."),
+        ui.h("li", {}, "Emergency fund: months of the bills you have to pay in usable cash, against the plan's target (Emergency fund)."),
         ui.h("li", {}, "Saving: retirement saving, goal saving and what is left over, as a share of income after federal and payroll tax; 20% earns full marks (the 20 of the 50/30/20 rule)."),
         ui.h("li", {}, "Debt: most points for no card-type debt (10% interest or more); the rest for payments under 36% of pay before tax, or 20% if you rent."),
-        ui.h("li", {}, "Retirement: the steady spending the plan can carry against what it plans: nothing at 60%, full marks at 115% (room for bad luck)."),
+        ui.h("li", {}, "Retirement: the steady spending the plan can pay for against what it plans: nothing at 60%, full marks at 115% (room for bad luck)."),
         ui.h("li", {}, "Protection: the share of the stress tests' life shocks the money survives (a job loss, never working again, a death, a long life, a care home)."),
         ui.h("li", {}, "Goals: the share of dated goals done or on track. The plan knows enough: seven things filled in and current."),
         ui.h("li", {}, "A part the plan cannot judge yet scores nothing and says what to add: filling it in is the quickest way up."),
@@ -76,4 +76,4 @@ function ring(score, band, tone) {
 /** A part's page, with the target it was worked out for when it has one (round 8 review: Goal seek opened on "Just last"). */
 const hrefOf = (p) => `#/${p.go[0]}/${p.go[1]}${p.query ? `?${Object.entries(p.query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")}` : ""}`;
 const fmtPts = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-const label = (k) => ({ cushion: "cash cushion", saving: "saving", debt: "debt", retirement: "retirement", protection: "protection", goals: "goals", knows: "a complete plan" })[k];
+const label = (k) => ({ cushion: "emergency fund", saving: "saving", debt: "debt", retirement: "retirement", protection: "protection", goals: "goals", knows: "a complete plan" })[k];

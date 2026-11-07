@@ -72,7 +72,7 @@ test("an umbrella's cost: $150 to $300 for the first million, about $75 for the 
 });
 
 // ---- round 8 batch 6: one figure for "a lawsuit could reach", and a rented-out home's policy (landlord-7) ------------------
-test("batch 6: a lawsuit could reach 318,000; 218,000 of it is not covered, after 100,000 of liability cover", async () => {
+test("batch 6: a lawsuit could reach 318,000; 218,000 of it is not covered, after 100,000 of liability coverage", async () => {
   const { condoOnNetWorthPlan } = await import("../../../qa/fixtures/round8-rental.mjs");
   const d = compute(condoOnNetWorthPlan(), { today: "2026-11-06" });
   // net worth 618,000 less the 401(k)s' 300,000; the weaker cover is the home's 100,000 (assumed: no limit entered)
@@ -108,7 +108,7 @@ test("batch 6: a rented-out home needs a landlord policy: checked for each renta
   assert.ok(!compute(withPolicies([HOME, AUTO]), { today: TODAY }).checks.some((x) => x.id.startsWith("rental-")));
 });
 
-test("batch 6: a landlord policy counts as cover on a home: its dwelling cover, liability and deductible", () => {
+test("batch 6: a landlord policy counts as cover on a home: its dwelling coverage, liability and deductible", () => {
   const p = withPolicies([{ ...HOME, kind: "landlord", liability: 300000, deductible: 1000 }, AUTO]);
   const d = compute(p, { today: TODAY });
   assert.equal(d.homes[0].policy?.id, "h"); assert.equal(d.homeLiability, 300000); assert.equal(d.deductibles.total, 1000);

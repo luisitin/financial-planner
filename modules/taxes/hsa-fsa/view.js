@@ -5,7 +5,7 @@ import { isYou, nameIn, NameIn, NameOf } from "../../../core/words.js";
 
 let pending = null;
 
-const COVER_LABEL = { none: "no high-deductible plan", self: "self-only cover", family: "family cover" };
+const COVER_LABEL = { none: "no high-deductible plan", self: "self-only coverage", family: "family coverage" };
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -25,16 +25,16 @@ export function render(root, ctx) {
     lede = H.total > 0 ? `The ${money(H.total)} typed for ${d.year} is too much and gets no tax break, so it saves nothing. You can still spend what is in the account on medical bills, tax-free.` : "You can still spend what is in the account on medical bills, tax-free.";
   } else if (H.total > 0 && noCover) {
     title = "HSA money needs a high-deductible health plan";
-    lede = `You said you have no high-deductible health plan, so the ${money(H.total)} going into an HSA for ${d.year} saves no tax. If you do have such a plan, change the cover under "This year's figures".`;
+    lede = `You said you have no high-deductible health plan, so the ${money(H.total)} going into an HSA for ${d.year} saves no tax. If you do have such a plan, change the coverage under "This year's figures".`;
   } else if (H.total > 0) {
     title = `Your HSA saves about ${money(H.savedTotal)} of tax this year`;
     lede = `${money(H.total)} goes in for ${d.year} (${money(H.contribution)} from you${H.employer ? `, ${money(H.employer)} from the employer` : ""}) against a limit of ${money(H.limit)}${H.catchUp ? " including the catch-up from 55" : ""}: ${H.room > 0 ? `${money(H.room)} of room left` : H.over > 0 ? `${money(H.over)} over` : "the limit exactly"}. ${H.kept > 0 && H.years > 0 ? ` Kept invested, this year's money alone is worth about ${money(H.futureValue > 0 ? H.kept * Math.pow(1 + H.growthRate, H.years) : H.kept)} at 65, untaxed if it pays for health costs.` : ""}`;
   } else if (noCover) {
     title = "Health savings and flexible spending accounts";
-    lede = `You said you have no high-deductible health plan, so no money can go into an HSA this year: only someone covered by such a plan can put money in. Money already in an HSA can still pay for health costs tax-free. If you pick a high-deductible plan, change the cover below.`;
+    lede = `You said you have no high-deductible health plan, so no money can go into an HSA this year: only someone covered by such a plan can put money in. Money already in an HSA can still pay for health costs tax-free. If you pick a high-deductible plan, change the coverage below.`;
   } else {
     title = "Health savings and flexible spending accounts";
-    lede = `An HSA is a savings account for medical costs: no tax on what goes in, on its growth, or on what you spend on medical bills. It needs a health plan with a high deductible. The ${d.limitsYear} limit is ${money(H.base)} for ${H.coverage === "family" ? "family" : "self-only"} cover, plus ${money(H.catchUpAmount)} a person from age ${H.catchUpAge}. Type what goes in below.`;
+    lede = `An HSA is a savings account for medical costs: no tax on what goes in, on its growth, or on what you spend on medical bills. It needs a health plan with a high deductible. The ${d.limitsYear} limit is ${money(H.base)} for ${H.coverage === "family" ? "family" : "self-only"} coverage, plus ${money(H.catchUpAmount)} a person from age ${H.catchUpAge}. Type what goes in below.`;
   }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, title),
@@ -70,8 +70,8 @@ export function render(root, ctx) {
   const meAdult = adults.find((p) => p.role === "self") ?? adults[0], partnerName = adults.find((p) => p !== meAdult)?.name ?? "Partner";
   const FIELDS = [
     { key: "coverage", label: "Health plan for the HSA", type: "select", options: [{ value: "self", label: "High-deductible, self-only" }, { value: "family", label: "High-deductible, family" }, { value: "none", label: "No high-deductible plan" }], help: "only a high-deductible health plan allows an HSA" },
-    adults.length > 1 ? { key: "coveredId", label: "Who the plan covers", type: "select", options: adults.map((p) => ({ value: p.id, label: p.name })), help: "with self-only cover only this person can have an HSA" } : null,
-    { key: "contribution", label: "You put in this year", type: "money", min: 0, help: "your own money for the year, taken from pay; the HSA rows on the Contributions page count if they are more" },
+    adults.length > 1 ? { key: "coveredId", label: "Who the plan covers", type: "select", options: adults.map((p) => ({ value: p.id, label: p.name })), help: "with self-only coverage only this person can have an HSA" } : null,
+    { key: "contribution", label: "You put in this year", type: "money", min: 0, help: "your own money for the year, taken from pay; the HSA rows on the Retirement contributions page count if they are more" },
     { key: "employer", label: "Employer puts in", type: "money", min: 0, help: "counts against the same limit" },
     { key: "fsa", label: adults.length > 1 ? `${NameOf(meAdult?.name)} FSA election this year` : "FSA election this year", type: "money", min: 0, help: "leave blank if you have no FSA" },
     adults.length > 1 ? { key: "fsaPartner", label: `${NameOf(partnerName)} FSA election this year`, type: "money", min: 0, help: "through their own employer; each person can put in up to the limit" } : null,
@@ -98,8 +98,8 @@ export function render(root, ctx) {
     ui.h("ul", { class: "records" }, [
       ["Three tax breaks, not two", "A 401(k) skips tax going in and pays it coming out; a Roth is the reverse. The HSA skips both, and the payroll tax as well when it comes from a paycheck."],
       ["Pay cash now, reimburse later", "Receipts never expire: pay today's medical bills from your own pocket, let the HSA grow for decades, and reimburse yourself tax-free whenever you like."],
-      ["Medicare and the deadline", "No HSA money can go in from the month Medicare starts. Signing up for Medicare after 65 backdates Part A up to six months (not before the month you turn 65), so stop six months before you apply. Contributions for a year can be made until the April filing deadline."],
-      ["FSA is different", "An FSA is a spending account, not a savings account: the money is spent within the year, and unspent balances are forfeited apart from the small carryover."],
+      ["Medicare and the deadline", "No HSA money can go in from the month Medicare starts. If you sign up for Medicare after 65, Part A starts up to six months earlier (but not before the month you turn 65), so stop putting money into the HSA six months before you apply. Contributions for a year can be made until the April filing deadline."],
+      ["FSA is different", "An FSA is a spending account, not a savings account: you must spend the money within the year, and you lose what is left, except a small amount you can carry over."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
   ));
 }

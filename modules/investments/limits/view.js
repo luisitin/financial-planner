@@ -24,8 +24,8 @@ export function render(root, ctx) {
     ui.h("h1", {}, d.hasContributions ? (room > 0 ? `${money(room)} of tax-advantaged room left this year` : "Every account is filled to its limit") : `${d.year} contribution limits`),
     ui.h("p", { class: "lede" }, d.hasContributions
       ? `${money(d.totals.used)} a year is going into 401(k)s, IRAs and HSAs against ${money(d.totals.limit)} of limits for the accounts you have. ${room > 0 ? "Room in a tax-advantaged account is the cheapest place for the next dollar you save." : "Anything more goes to a taxable brokerage account."}`
-      : `Each person may put ${money(d.base["401k"])} into a 401(k), ${money(d.base.ira)} into IRAs (traditional and Roth together) and ${money(d.base.hsa)} into an HSA (${money(d.base.hsaFamily)} with family cover) this year, more from 50 (and 55 for the HSA). Enter what goes in on the Contributions page to see the room left.`),
-    ui.h("p", { class: "muted small" }, `${yearNote} Employer matches do not count against the 401(k) limit; employer HSA money does count against the HSA limit. Health FSA ${money(d.fsa.limit)}; 529 plans have no yearly limit but gifts over ${money(d.gift.exclusion)} a year per child per giver use the gift-tax exclusion (up to ${money(d.gift.superfund)} at once, spread over five years).`),
+      : `Each person may put ${money(d.base["401k"])} into a 401(k), ${money(d.base.ira)} into IRAs (traditional and Roth together) and ${money(d.base.hsa)} into an HSA (${money(d.base.hsaFamily)} with family coverage) this year, more from 50 (and 55 for the HSA). Enter what goes in on the Retirement contributions page to see the room left.`),
+    ui.h("p", { class: "muted small" }, `${yearNote} Employer matches do not count against the 401(k) limit; employer HSA money does count against the HSA limit. Health FSA ${money(d.fsa.limit)}; 529 college plans have no yearly limit, but a gift of more than ${money(d.gift.exclusion)} a year to one child from one giver needs a gift tax return (or up to ${money(d.gift.superfund)} at once, counted over five years).`),
   ));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   for (const n of d.notes) root.append(ui.notice("info", n));
@@ -33,9 +33,9 @@ export function render(root, ctx) {
   const others = (p) => d.people.filter((q) => q !== p).map((q) => nameIn(q.name)).join(" and ");
   const noHsaWhy = (p) => d.hsa.coverage === "none"
     ? "The HSA page says there is no high-deductible health plan, and only people on one can put money in an HSA."
-    : `Only ${d.hsa.coveredName ? `${nameIn(d.hsa.coveredName)} ${verbFor(d.hsa.coveredName, "is", "are")}` : "the person on the plan is"} on the self-only high-deductible health plan. If ${nameIn(p.name)} ${verbFor(p.name, "is", "are")} covered too, set family cover on the HSA page.`;
+    : `Only ${d.hsa.coveredName ? `${nameIn(d.hsa.coveredName)} ${verbFor(d.hsa.coveredName, "is", "are")}` : "the person on the plan is"} on the self-only high-deductible health plan. If ${nameIn(p.name)} ${verbFor(p.name, "is", "are")} covered too, set family coverage on the HSA and FSA page.`;
   const sub = (p, r) => {
-    if (r.kind === "hsa" && !r.eligible) return r.over > 0 ? `${money(r.over)} over: ${noHsaWhy(p)} Money put in anyway is taxed as pay.` : noHsaWhy(p);
+    if (r.kind === "hsa" && !r.eligible) return r.over > 0 ? `${money(r.over)} over: ${noHsaWhy(p)} Money put in anyway is taxed as wages.` : noHsaWhy(p);
     const parts = [r.over > 0 ? `${money(r.over)} over the limit` : `${money(r.room)} of room`];
     if (r.catchUp) parts[0] += ` (includes the ${money(r.catchUp)} catch-up${r.catchUpCapped ? ", the most the pay allows" : ` from ${r.kind === "401k" && p.age >= 60 && p.age <= 63 ? "60 to 63" : r.catchUpAge}`})`;
     else if (r.catchUpCapped) parts[0] += " (no catch-up: it cannot be more than the pay left after the other 401(k) money)";
@@ -57,7 +57,7 @@ export function render(root, ctx) {
   // (round 8, equity-3: "a traditional IRA cuts this year's tax" for a household far over the limit)
   const deductSay = (p, x) => {
     const whose = nameOf(p.name);
-    if (x.rule === "none") return `All ${money(x.traditional)} of the traditional IRA money comes off this year's taxable income: no plan at work.`;
+    if (x.rule === "none") return `All ${money(x.traditional)} of the traditional IRA money comes off this year's taxable income, because you have no retirement plan at work.`;
     const why = x.rule === "spouse" ? "with a spouse who has a plan at work" : "with a plan at work";
     // the limit is tested on the return's income: a couple's joint income on a joint return (round 8 review: "Sam's is about
     // 154,400" was the couple's)
@@ -109,6 +109,6 @@ export function render(root, ctx) {
   const hsaOff = d.people.some((p) => p.rows.some((r) => r.kind === "hsa" && !r.eligible));
   root.append(ui.card("Deadlines",
     ui.h("ul", { class: "records" }, d.deadlines.map((x) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "rec-value" }, fmt.date(x.date))), ui.h("div", { class: "rec-sub" }, x.note)))),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Edit contributions"), hsaOff ? ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA cover") : null),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Edit retirement contributions"), hsaOff ? ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA coverage") : null),
   ));
 }

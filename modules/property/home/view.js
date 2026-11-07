@@ -34,7 +34,7 @@ export function render(page, ctx) {
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your home"),
       ui.h("p", { class: "lede" }, "What your home is worth, how much of it is yours, what it costs to keep, and what selling would leave you."),
-      ui.h("p", { class: "muted small" }, "Add the home on Accounts as Real estate, with what it is worth today; the mortgage as its own account."),
+      ui.h("p", { class: "muted small" }, "Add the home on Net worth as Real estate, with what it is worth today; the mortgage as its own account."),
       ui.row(ui.h("a", { class: "btn", href: "#/balance/accounts" }, "Accounts"))));
     return;
   }
@@ -47,7 +47,7 @@ export function render(page, ctx) {
   d.bought ? ui.h("p", {}, `Bought for ${money(d.bought.price)}${d.bought.date ? ` in ${shortDate(d.bought.date)}` : ""}: ${d.bought.gain >= 0 ? "up" : "down"} ${money(Math.abs(d.bought.gain))}${d.bought.growth !== null ? `, about ${pct(d.bought.growth, 1)} a year` : ""}.`) : ui.h("p", { class: "hm-d" }, "Add what you paid and when, below, to see how it has grown."),
   d.history.length > 1 ? ui.h("ul", { class: "hm-lines" }, d.history.slice(-6).reverse().map((h) => ui.h("li", {}, ui.h("span", {}, shortDate(h.date)), ui.h("span", {}, money(h.value))))) : null));
 
-  root.append(ui.card("A year of keeping it", ui.h("ul", { class: "hm-lines" }, [...d.costs.lines.map((l) => ui.h("li", {}, ui.h("span", {}, l.label), ui.h("span", {}, money(l.amount)))), ui.h("li", { class: "hm-tot" }, ui.h("span", {}, "A year"), ui.h("span", {}, money(d.costs.total)))]),
+  root.append(ui.card("A year of owning it", ui.h("ul", { class: "hm-lines" }, [...d.costs.lines.map((l) => ui.h("li", {}, ui.h("span", {}, l.label), ui.h("span", {}, money(l.amount)))), ui.h("li", { class: "hm-tot" }, ui.h("span", {}, "A year"), ui.h("span", {}, money(d.costs.total)))]),
     ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} of the mortgage that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${pct(d.details.maintenance ?? DEFAULTS.maintenance, 1)} of the value a year; older homes often need more.`)));
 
   const s = d.sale;
@@ -75,13 +75,13 @@ export function render(page, ctx) {
   ].filter(Boolean)),
     ui.h("p", {}, saleText()),
     s.dateMissing && s.gain > 0 ? ui.h("p", { class: "hm-flag" }, "Add when you bought it, below: owned and lived in under two years, the gain is taxed, and owned a year or less it is taxed like pay.") : null,
-    s.owners > 1 && s.gain > 0 ? ui.h("p", { class: "hm-d" }, `Filing separately, a home in neither name is half each: each of you reports half the gain, with up to ${money(s.capEach)} of it tax-free. If it is in one name, choose the owner on Accounts.`) : null,
-    s.test && !s.test.meets && s.reduced === null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "Selling because of a new job, your health or an event you could not foresee? Then part of the gain can still be tax-free: tick that in the home's details below.") : null,
+    s.owners > 1 && s.gain > 0 ? ui.h("p", { class: "hm-d" }, `Filing separately, a home in neither name is half each: each of you reports half the gain, with up to ${money(s.capEach)} of it tax-free. If it is in one name, choose the owner on Net worth.`) : null,
+    s.test && !s.test.meets && s.reduced === null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "Selling because of a new job, your health or an event you could not foresee? Then part of the gain can still be tax-free: check that box in the home's details below.") : null,
     s.otherYear ? ui.h("p", { class: "hm-d" }, `A sale today falls in ${s.year}, so this is ${s.year}'s tax (the Federal estimate is set to ${s.otherYear}).`) : null,
     s.gain !== null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "This assumes the home has been your main home since you bought it; time it was rented out or empty can change the tax-free part.") : null));
 
   root.append(ui.card("Ahead", ui.h("ul", { class: "records" }, d.ahead.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `In ${a.years} years (${a.year})`), ui.h("span", { class: "rec-value" }, money(a.equity))), ui.h("div", { class: "rec-sub" }, `worth about ${money(a.value)}${a.owed > 0.5 ? `, ${money(a.owed)} still owed` : ", the mortgage paid off"}`)))),
-    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), the mortgage paid as now. Not in today's money.`)));
+    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), with the mortgage paid as it is now. Not in today's dollars.`)));
 
   // today's value
   const acct = plan.accounts.find((a) => a.id === d.accountId);
@@ -138,5 +138,5 @@ export function render(page, ctx) {
   if (yearBox) { yearBox.setAttribute("inputmode", "numeric"); yearBox.setAttribute("maxlength", "4"); yearBox.setAttribute("autocomplete", "off"); }
   root.append(ui.h("details", { class: "card fold fold-card", open: e.purchasePrice ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The home's details"), ui.h("span", { class: "fold-status" }, e.purchasePrice ? "price, costs" : wasYear ? `bought ${wasYear}` : "what you paid"), ui.h("span", { class: "fold-chev" }, "›")),
     detailsForm));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"), ui.h("a", { class: "btn secondary", href: "#/property/renovation" }, "A home project"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"), ui.h("a", { class: "btn secondary", href: "#/property/renovation" }, "A home project"))));
 }

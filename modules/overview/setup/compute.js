@@ -172,7 +172,7 @@ export { spendBasis };
 /** What you are working toward. `focus` ones are not saving goals: they put a guide among the first moves instead. */
 export const GOALS = [
   { key: "cushion", icon: "🛟", label: "An emergency fund", line: "For surprises", name: "Emergency fund" },
-  { key: "debt", icon: "💳", label: "Paying off debt", line: "Be debt free", focus: true },
+  { key: "debt", icon: "💳", label: "Paying off debt", line: "Be debt-free", focus: true },
   { key: "home", icon: "🏡", label: "Buying a home", line: "The down payment", name: "House down payment", years: 3 },
   { key: "retire", icon: "🌴", label: "Retiring well", line: "Enough to stop working", focus: true },
   { key: "education", icon: "🎓", label: "Education", line: "Yours or the kids'", name: "Education", years: 10, match: /college|education|school|tuition|529/i },
@@ -1822,12 +1822,12 @@ export function cushionHave(plan, c) {
   const over = (c.covered ?? 0) > c.months, pace = over ? `${cov} months, well over the ${c.months} you want` : `${cov} of ${c.months} months`;
   if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${pace}.`;
   // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
-  if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward the cushion: ${pace}.`;
+  if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward your emergency fund: ${pace}.`;
   const allOf = (x) => Math.abs(x - c.all) < 0.5;
   const parts = goalsHeld && tax ? `${m(c.earmarked)} is set aside for ${goalsHeld} and ${m(c.taxOwed)} is this year's tax not paid yet`
     : goalsHeld ? `${allOf(c.earmarked) ? "all" : m(c.earmarked)} of it is set aside for ${goalsHeld}`
     : `${allOf(c.taxOwed) ? "all" : m(c.taxOwed)} of it is this year's tax not paid yet`;
-  return `You have ${m(c.all)} in ${cashKinds(plan)}; ${parts}, so ${c.now > 0.5 ? `${m(c.now)} counts` : "none counts"} toward the cushion: ${pace}.`;
+  return `You have ${m(c.all)} in ${cashKinds(plan)}; ${parts}, so ${c.now > 0.5 ? `${m(c.now)} counts` : "none counts"} toward your emergency fund: ${pace}.`;
 }
 /** A tax figure said "about": to the $10. */
 const about = (n) => Math.round((Number(n) || 0) / 10) * 10;
@@ -1841,12 +1841,12 @@ export function cushionHeldWords(st, plan) {
   const cur = plan?.meta?.currency ?? "USD";
   const m = (n) => fmtMoney(Math.round(Number(n) || 0), cur);
   const goalsHeld = h.earmarked > 0.5 ? and2(h.goals.length ? h.goals : ["your goals"]) : null, tax = h.taxOwed > 0.5;
-  const rest = h.now > 0.5 ? `so your cushion is ${m(h.now)}.` : "so none of it is cushion yet.";
+  const rest = h.now > 0.5 ? `so your emergency fund is ${m(h.now)}.` : "so none of it counts toward your emergency fund yet.";
   if (goalsHeld && tax) return `Your ${m(h.earmarked)} is set aside for ${goalsHeld} and ${m(h.taxOwed)} is this year's tax not paid yet, ${rest}`;
   // the owner's own goal that looks like the cushion: said as money that may be cushion, and asked (review UX 5)
   if (goalsHeld && h.cushionGoal && h.goals.length === 1) return `${m(h.earmarked)} more sits in your "${h.cushionGoal}" goal.`;
   if (goalsHeld) return `Your ${m(h.earmarked)} is set aside for ${goalsHeld}, ${rest}`;
-  if ((h.taxDue ?? 0) > h.all + 0.5) return `This year's tax not paid yet (about ${m(about(h.taxDue))}) is more than the ${m(h.all)} you have, so none of it is cushion yet.`;
+  if ((h.taxDue ?? 0) > h.all + 0.5) return `This year's tax not paid yet (about ${m(about(h.taxDue))}) is more than the ${m(h.all)} you have, so none of it counts toward your emergency fund yet.`;
   return Math.abs(h.taxOwed - h.all) < 0.5 ? `Your ${m(h.all)} is this year's tax not paid yet, ${rest}` : `Your ${m(h.all)} includes ${m(h.taxOwed)} of this year's tax not paid yet, ${rest}`;
 }
 /**
@@ -1856,8 +1856,8 @@ export function cushionHeldWords(st, plan) {
 export function cushionHeldAsk(st) {
   const h = st?.cushionHeld;
   if (!h?.cushionGoal) return null;
-  if (h.goals.length === 1) return h.taxOwed > 0.5 ? "Is that goal your safety cushion? Say so on Emergency fund ›" : "Count it as your cushion? Say so on Emergency fund ›";
-  return `Is the "${h.cushionGoal}" goal your safety cushion? Say so on Emergency fund ›`;
+  if (h.goals.length === 1) return h.taxOwed > 0.5 ? "Is that goal your emergency fund? Say so on Emergency fund ›" : "Count it as your emergency fund? Say so on Emergency fund ›";
+  return `Is the "${h.cushionGoal}" goal your emergency fund? Say so on Emergency fund ›`;
 }
 const addYears = (iso, years) => { const [y, m, d] = iso.split("-").map(Number); return `${y + years}-${String(m).padStart(2, "0")}-${String(Math.min(d, 28)).padStart(2, "0")}`; };
 /**
@@ -1955,7 +1955,7 @@ export function iraKindHelp(ownBiz = false) { return "Roth: taxed going in, tax-
  * toward the goal up to what the goal still needs (Goals' F-013 sharing, Liquidity's F-020 earmark min(funded - saved,
  * targetThen)); the rest stays cushion.
  */
-export const GOAL_FUNDS_HELP = "Tap an account if money in it is for this. Up to this goal's amount then counts here, not as your safety cushion.";
+export const GOAL_FUNDS_HELP = "Tap an account if money in it is for this. Up to this goal's amount then counts here, not as your emergency fund.";
 /** The plan's guesses looked at (the card at the end): Assumptions counts as reviewed. */
 export function applyGuesses(draft, today) { ensure(draft); draft.assumptions = { ...(draft.assumptions ?? {}), reviewedAt: today }; }
 
@@ -2176,14 +2176,14 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     case "bills": if (step.waits) return { title: "Type what you really spend", detail: step.detail };
       return retired
       ? { title: "See how long your savings last", detail: `About ${money(-(step.spare ?? 0))} a month comes from savings. The retirement check shows how many years that covers.` }
-      : { title: "Spend less than comes in", detail: step.detail };
+      : { title: "Spend less than you bring in", detail: step.detail };
     case "starter": return { title: "Keep one month of bills in cash", detail: step.detail };
     case "protect": {
       const ppl = step.people ?? [];
       // the setup's "Me" reads "yourself" / "your" (Life insurance needs' sayName)
       const names = ppl.map((x) => (x.who === "you" ? "yourself" : x.who ?? x.name)).join(" and ");
       const raise = ppl.length && ppl.every((x) => x.cover > 0);
-      return { title: raise ? (ppl.length === 1 && ppl[0].who === "you" ? "Raise your life cover" : `Raise the life cover on ${names}`) : `Get life insurance on ${names || "the earners"}`, detail: step.detail };
+      return { title: raise ? (ppl.length === 1 && ppl[0].who === "you" ? "Get more life insurance" : `Get more life insurance on ${names}`) : `Get life insurance on ${names || "the earners"}`, detail: step.detail };
     }
     case "match": {
       // a 401(k) with nothing going in: a question first (it may be from a job left, or the job may not match)
@@ -2197,7 +2197,7 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
       if (step.fromSavings > 0) return { title: cards ? "Pay off the cards from your savings" : "Pay off costly debt from your savings", detail: `${step.detail}${list.some((d) => d.guess) ? ` The rate is a typical one: type yours on ${where(list)}.` : ""}` };
       return { title: cards ? "Pay down the cards first" : "Pay off costly debt first", detail: list.length ? `${said(list)}. Each extra dollar paid saves that much interest.` : step.detail };
     }
-    case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your cushion to ${m} months` : "Build your cushion", detail: step.detail }; }
+    case "full-fund": { const m = /\((\d+) months?\)/.exec(step.title)?.[1]; return { title: m ? `Build your emergency fund to ${m} months` : "Build your emergency fund", detail: step.detail }; }
     case "hsa": return { title: "Fill your health savings account", detail: step.detail };
     // "each of you" only when Next best action gives room to more than one earner (review 2026-11-02: a one-earner couple
     // read "An IRA of your own" there and "for each of you ... between you" here)
@@ -2308,7 +2308,7 @@ export function standing(plan, { today }) {
   // the state's income tax comes off the left-over figure once it can be worked out (a flat-rate state, or a rate typed on
   // the State page); until then, say so: a missing state is asked for, a graduated state's rate is asked for
   const st0 = plan?.household?.state;
-  if (L(plan, "income").length && !NO_WAGE_TAX[st0] && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State page, and the left-over figure takes it off` : "Your state: pick it on the State page, so its income tax comes off the left-over figure", href: "#/taxes/state", key: "state" });
+  if (L(plan, "income").length && !NO_WAGE_TAX[st0] && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State tax page, and the leftover figure takes it off` : "Your state: pick it on the State tax page, so its income tax comes off the leftover figure", href: "#/taxes/state", key: "state" });
   // childcare is never guessed without its tap (spec E06): with our spending guesses in, a child under 13 and the tap not
   // answered Yes or No (skipped, or Not sure), say it is not counted, and where to tell us (C3 UX review 4)
   const careAsk = setupOf(plan).taps?.childcare ?? null;
@@ -2317,7 +2317,7 @@ export function standing(plan, { today }) {
     && !L(plan, "expenses").some((x) => x.category === "childcare" && (!today || activeOn(x, today)));
   if (childcareMissing) later.push({ label: "Childcare: do you pay for it, or for after-school care? Tell us and it's counted", href: "#/overview/setup/spend?back=done", key: "childcare" });
   const couple = adults(plan).length >= 2 && (plan?.household?.filingStatus ?? "single") === "single" && adults(plan).some((p) => p.relation === "partner");
-  if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the left-over figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
+  if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the leftover figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
   const estimated = adults(plan).filter((p) => wrote[p.id] !== undefined && Number(ssAll[p.id]?.monthlyAtFRA) === wrote[p.id] && !(ssAll[p.id]?.record ?? []).length);
   if (estimated.length) later.push({ label: `Social Security is estimated from ${estimated.length > 1 ? "your pay" : `${estimated[0].name === "Me" ? "your" : `${estimated[0].name}'s`} pay`}: the statement at ssa.gov/myaccount is exact`, href: "#/retirement/social-security", key: "ss-estimate" });
@@ -2338,11 +2338,11 @@ export function standing(plan, { today }) {
     : lean ? "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix, and the moves below start there."
     : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
       : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
-        : first === "protect" ? "Life cover for the people who count on you comes first. The moves below start there."
+        : first === "protect" ? "Life insurance for the people who count on you comes first. The moves below start there."
         : runwayStatus === "warn" || runwayStatus === "bad" ? (first && first !== "starter" && first !== "full-fund"
-          ? (spare !== null ? "Your month works. The move below comes first, then a bigger cushion for surprises." : "The move below comes first, then a cushion for surprises.")
+          ? (spare !== null ? "Your month works. The move below comes first, then a bigger emergency fund for surprises." : "The move below comes first, then an emergency fund for surprises.")
           : spare !== null ? "Your month works. Building your emergency fund is next." : "An emergency fund is the thing to build first.")
-          : retire && retire.verdict !== "on track" ? "Your month and your cushion look good. Retirement could use a closer look."
+          : retire && retire.verdict !== "on track" ? "Your month and your emergency fund look good. Retirement could use a closer look."
             : spare !== null && spare >= 0 && runwayStatus === "ok" && (!retire || retire.verdict === "on track") ? "You're in good shape. Here's how to make it even better."
               : "A few more answers will fill this in.";
   const empty = !L(plan, "accounts").length || (nw.assets === 0 && nw.liabilities === 0);
@@ -2414,7 +2414,7 @@ export const estimators = {
     },
   },
   "overview/setup:cushionTarget": {
-    tier: 4, order: 5, label: "Safety cushion to aim for", unit: "total", weight: "small", basis: "yours", reads: [],
+    tier: 4, order: 5, label: "Emergency fund to aim for", unit: "total", weight: "small", basis: "yours", reads: [],
     page: () => "#/goals/goals",
     fn(plan, { today }) {
       const c = cushion(plan, null, today);
@@ -2422,7 +2422,7 @@ export const estimators = {
     },
   },
   "overview/setup:cushionFunds": {
-    tier: 4, order: 6, label: "Accounts that hold the cushion", unit: "list", weight: "small", basis: "yours", reads: [],
+    tier: 4, order: 6, label: "Accounts that hold the emergency fund", unit: "list", weight: "small", basis: "yours", reads: [],
     page: () => "#/goals/goals",
     fn(plan) {
       const funds = cushionFundIds(plan);

@@ -21,7 +21,7 @@
 export const EVENTS = {
   marriage: {
     label: "Getting married", icon: "💍", dateLabel: "Wedding day",
-    intro: "Two people's money becomes one plan: taxes, health cover, beneficiaries and a shared budget.",
+    intro: "Two people's money becomes one plan: taxes, health insurance, beneficiaries and a shared budget.",
     steps: [
       { key: "partner", text: "Add your partner to People, so the plan counts both of you.", change: "addPartner" },
       { key: "filing", text: "Taxes: you count as married for the whole year if you are married on December 31. Most couples file jointly.", change: "fileJointly" },
@@ -36,7 +36,7 @@ export const EVENTS = {
   },
   baby: {
     label: "A baby or adoption", icon: "👶", dateLabel: "Birth or adoption day (or the due date)",
-    intro: "A new person to protect and plan for: health cover, a guardian, life insurance, child care and taxes.",
+    intro: "A new person to protect and plan for: health insurance, a guardian, life insurance, child care and taxes.",
     steps: [
       { key: "child", text: "Add the child to People.", change: "addChild" },
       { key: "work-health", text: "Add the child to your health insurance at work: you have at least 30 days after the birth or adoption.", days: 30, go: ["insurance", "health"] },
@@ -53,13 +53,13 @@ export const EVENTS = {
   },
   job: {
     label: "A new job", icon: "💼", dateLabel: "First day at the new job",
-    intro: "New pay, new benefits to choose, health cover in between, and an old retirement account to decide about.",
+    intro: "New pay, new benefits to choose, health insurance in between, and an old retirement account to decide about.",
     steps: [
       { key: "compare", text: "More than one offer? Compare them, benefits and commute included.", go: ["career", "offer-compare"] },
       { key: "pay", text: "Update your pay on Income.", change: "updatePay" },
       { key: "benefits", text: "Sign up for the new job's benefits: ask HR for the deadline.", go: ["career", "benefits"] },
-      { key: "cobra", text: "A gap in health cover? COBRA keeps the old job's plan; you have at least 60 days to choose it.", days: 60, go: ["insurance", "health"] },
-      { key: "own-health", text: "Or buy your own plan: within 60 days of losing the job's cover.", days: 60, go: ["insurance", "health"] },
+      { key: "cobra", text: "A gap in health insurance? COBRA keeps the old job's plan; you have at least 60 days to choose it.", days: 60, go: ["insurance", "health"] },
+      { key: "own-health", text: "Or buy your own plan: within 60 days of losing the job's coverage.", days: 60, go: ["insurance", "health"] },
       { key: "rollover", text: "The old 401(k): leave it, or move it to the new plan or an IRA. Ask for a direct rollover; money paid to you has 20% held back and must go into the new account within 60 days.", go: ["retirement", "contributions"] },
       { key: "w4", text: "Fill in a new Form W-4 at the new job.", go: ["cashflow", "paycheck"] },
       { key: "contacts", text: "Add the new HR or benefits contact.", go: ["household", "contacts"] },
@@ -91,12 +91,12 @@ export const EVENTS = {
   },
   divorce: {
     label: "A divorce", icon: "🧾", dateLabel: "The day it is final",
-    intro: "One plan becomes two: taxes, retirement accounts, health cover, beneficiaries and a new budget.",
+    intro: "One plan becomes two: taxes, retirement accounts, health insurance, beneficiaries and a new budget.",
     steps: [
       { key: "filing", text: "Taxes: if you are divorced on December 31, you count as unmarried for the whole year (single, or head of household with a child living with you).", change: "fileSingle" },
       { key: "people", text: "Remove your former partner on People once the plan should no longer count them.", go: ["household", "people"] },
       { key: "qdro", text: "Splitting a 401(k) or pension needs a court order the plan approves (a qualified domestic relations order). An IRA can be moved to the other person under the divorce papers without tax." },
-      { key: "cobra", text: "Health cover: a former spouse can stay on the work plan through COBRA for up to 36 months. Tell the plan within 60 days of the divorce.", days: 60, go: ["insurance", "health"] },
+      { key: "cobra", text: "Health insurance: a former spouse can stay on the work plan through COBRA for up to 36 months. Tell the plan within 60 days of the divorce.", days: 60, go: ["insurance", "health"] },
       { key: "beneficiaries", text: "Change who gets each account and policy if you die.", go: ["estate", "beneficiaries"] },
       { key: "will", text: "Update your will and powers of attorney.", go: ["estate", "documents"] },
       { key: "withholding", text: "Fill in a new Form W-4.", go: ["taxes", "withholding"] },

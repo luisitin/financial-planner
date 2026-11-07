@@ -24,7 +24,7 @@ test("the return so far, cashing in at a loss (no tax), the return from here", (
   near(d.returnRate, planReturn(planWith([])) - TAX_DRAG);
 });
 
-test("keep or cash in: term for the same cover, the rest invested, against the illustration", () => {
+test("keep or cash in: term for the same coverage, the rest invested, against the illustration", () => {
   const d = compute(planWith([WHOLE]));
   const x = d.items[0];
   near(x.altValue, fv(d.returnRate, 10, 1150 - 180, 6900, true));

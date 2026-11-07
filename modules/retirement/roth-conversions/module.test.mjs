@@ -152,7 +152,7 @@ test("round 8 review UX 9: with no years to convert in, the page carries no note
   assert.ok(!/set your own figure on this page/.test(text), text);
   // with years to convert in, the note stays, saying where to change it by the page's own name (batch 5b UX 18: not "the Projection page")
   const full = (await rothPage(migrate(fullBracketRetiree()))).text;
-  assert.ok(/Spending is today's expenses; change it under Retirement settings on Will the money last\?/.test(full) && !/on this page|Projection page/.test(full), full);
+  assert.ok(/Retirement spending is set to what you spend today; change it under Retirement settings on Will the money last\?/.test(full) && !/on this page|Projection page/.test(full), full);
 });
 
 // round 8, Batch 5b (2026-11-06): with the share, years-left and guardrail ways the tax a conversion saves later would be spent,
@@ -205,7 +205,7 @@ test("5b page: the couple at 60 retiring at 62 read how much to move each year, 
   assert.ok(best.endAfterTaxReal - d.none.endAfterTaxReal < 0.02 * d.none.endAfterTaxReal);
   assert.ok(new RegExp(`^Roth conversions Converting makes little difference for you: about ${$(best.endAfterTaxReal - d.none.endAfterTaxReal)} more at the end, after tax\\. It would move to a Roth about ${h(best.moves[0].real)} in 2028, then about ${h(later)} a year from 2033 to 2040, each taxed at the lowest rate, 10%\\.`).test(w.first), w.first.slice(0, 700));
   // UX 3: the plan's flat rate is named before the tap, and the confirmation names the switch to the real rates
-  assert.ok(/This page uses the real tax rates; your plan uses a flat 15% until you turn conversions on\./.test(w.first), w.first.slice(0, 900));
+  assert.ok(/This page uses the actual tax rates for each year; your plan uses a flat 15% tax rate until you turn conversions on\./.test(w.first), w.first.slice(0, 900));
   for (const word of JARGON) assert.ok(!word.test(w.first), `${word} on the first screen: ${w.first}`);
   assert.ok(!/up to 10%/.test(w.first), "never 'up to 10%'");
   assert.ok(w.paras.every((p) => p.length <= 160), w.paras.filter((p) => p.length > 160).join(" | "));

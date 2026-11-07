@@ -33,28 +33,28 @@ export function render(page, ctx) {
   }
 
   root.append(ui.card(null, ui.row(
-    ui.stat("Your future pay, in today's money", money(d.total), `${money(d.totalAfterTax)} after tax`),
+    ui.stat("Your future pay, in today's dollars", money(d.total), `${money(d.totalAfterTax)} after tax`),
     d.share !== null ? ui.stat("Of everything you have", pct(d.share), `is pay still to come; ${money(d.financial)} is saved`) : null,
   )));
 
   root.append(ui.card("Each earner", ui.h("ul", { class: "records" }, d.people.map((p) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${p.name}, ${p.age}`), ui.h("span", { class: "rec-value" }, money(p.value))),
-    ui.h("div", { class: "rec-sub" }, `${money(p.pay)} a year for ${p.years} more year${p.years === 1 ? "" : "s"} (to ${p.retireAge}); ${{ steady: "a steady", average: "an average", volatile: "a volatile" }[p.risk]} job, valued at ${(p.rate * 100).toFixed(1)}% a year. ${money(p.afterTax)} after tax.`),
+    ui.h("div", { class: "rec-sub" }, `${money(p.pay)} a year for ${p.years} more year${p.years === 1 ? "" : "s"} (to ${p.retireAge}); ${{ steady: "a steady", average: "an average", volatile: "a volatile" }[p.risk]} job: its future pay is reduced by ${(p.rate * 100).toFixed(1)}% for each year away, to give its value today. ${money(p.afterTax)} after tax.`),
     ui.h("div", { class: `rec-sub${p.coverShare !== null && p.coverShare < 0.5 ? " hc-warn" : ""}` }, p.cover > 0 ? `Life insurance on ${nameIn(p.name)}: ${money(p.cover)}, ${pct(p.coverShare)} of it.` : `No life insurance on ${nameIn(p.name)}: the household would lose this pay if ${nameIn(p.name)} died.`))))));
 
   const marks = d.crossYear ? [{ year: d.crossYear, label: "savings pass it" }] : [];
   const years = d.path.map((x) => x.year);
-  root.append(ui.card("Pay still to come against savings", lineChart({ years, series: [{ values: d.path.map((x) => x.financial ?? NaN) }, { values: d.path.map((x) => x.human), color: "var(--text-2)", dash: "5 4" }], marks, label: "the value of pay still to come falling and savings rising, in today's money" }),
+  root.append(ui.card("Pay still to come against savings", lineChart({ years, series: [{ values: d.path.map((x) => x.financial ?? NaN) }, { values: d.path.map((x) => x.human), color: "var(--text-2)", dash: "5 4" }], marks, label: "the value of pay still to come falling and savings rising, in today's dollars" }),
     ui.h("div", { class: "hc-key" }, ui.h("span", {}, "Savings"), ui.h("span", { class: "hc-h" }, "Pay still to come")),
     ui.h("p", {}, d.crossYear ? `Each year of work turns some future pay into savings. Around ${d.crossYear} your savings become worth more than the pay you still have to earn.` : "Each year of work turns some future pay into savings; at today's pace, savings stay below the pay still to come until retirement."),
-    ui.h("p", { class: "muted small" }, `In today's money: pay ${Math.abs(d.real.growth) < 0.0005 ? "keeping pace with prices" : `rising ${(d.real.growth * 100).toFixed(1)}% a year ${d.real.growth > 0 ? "above" : "below"} prices`}, savings as the retirement projection grows them.`)));
+    ui.h("p", { class: "muted small" }, `In today's dollars: pay ${Math.abs(d.real.growth) < 0.0005 ? "keeping pace with prices" : `rising ${(d.real.growth * 100).toFixed(1)}% a year ${d.real.growth > 0 ? "above" : "below"} prices`}, savings as the retirement projection grows them.`)));
 
   const steady = d.people.every((p) => p.risk !== "volatile");
   root.append(ui.card("What it means", ui.h("ul", {},
-    ui.h("li", {}, ui.h("b", {}, "Protect it. "), "Insurance on your life and your ability to work is how this value reaches your family if you cannot earn it: see Life cover and Disability cover below."),
+    ui.h("li", {}, ui.h("b", {}, "Protect it. "), "Insurance on your life and your ability to work is how this value reaches your family if you cannot earn it: see Life insurance and Disability insurance below."),
     ui.h("li", {}, ui.h("b", {}, "Invest around it. "), steady ? "Steady pay behaves like a bond: it lets your savings take more stock risk while you work." : "Volatile pay behaves like a stock: keep more of your savings steady, and avoid piling into your own employer's shares."),
-    ui.h("li", {}, ui.h("b", {}, "Grow it. "), `Raises one point bigger every year would add about ${money(d.raiseGain)} of pay over your careers, in today's money: skills and job moves are often your best investment.`)),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life cover"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability cover"))));
+    ui.h("li", {}, ui.h("b", {}, "Grow it. "), `Raises one percentage point bigger every year would add about ${money(d.raiseGain)} of pay over your careers, in today's dollars: skills and job moves are often your best investment.`)),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life insurance"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability insurance"))));
 
   const s = plan.whatIfs?.humanCapital ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How steady is each job?"), ui.h("span", { class: "fold-status" }, d.people.map((p) => p.risk).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
@@ -62,5 +62,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.humanCapital = { ...(p.whatIfs.humanCapital ?? {}), ...v }; });
     }, { submitLabel: "Save" }),
-    ui.h("p", { class: "muted small" }, "The steadier the pay, the more it is worth today: steady pay is valued at the plan's bond return, average pay two points above it, volatile pay at the stock return.")));
+    ui.h("p", { class: "muted small" }, "The steadier the pay, the more it is worth today: steady pay is reduced at the plan's bond return, average pay at 2 percentage points more, pay that swings a lot at the stock return")));
 }

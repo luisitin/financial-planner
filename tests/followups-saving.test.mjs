@@ -59,11 +59,11 @@ test("F3: 'By our guess' when what goes in and the match are both guesses", () =
   assert.match(matchStep(t).detail ?? "", /^Jordan puts money in with a match\./);
 });
 
-test("F4: 'Type my own amount' opens with the guess grey; any save ends both guesses", () => {
+test("F4: 'Type my own amount' opens with the guess gray; any save ends both guesses", () => {
   const j = worker(jordan()); q4b(j, {}, ["retire"]);
   const r = row(j, ME);
   const start = contributionFormStart(j, r);
-  assert.equal(start.values.amount, "", "the box is empty, the guess is grey");
+  assert.equal(start.values.amount, "", "the box is empty, the guess is gray");
   assert.equal(start.amountHint, String(r.amount));
   assert.equal(start.matchHint, String(r.employerMatch));
   assert.equal(start.values.employerMatch, "");

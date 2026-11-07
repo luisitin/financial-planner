@@ -28,7 +28,7 @@ export function categoriesOf(plan, { all = false } = {}) {
   return list.sort((a, b) => order[a.kind] - order[b.kind] || a.label.localeCompare(b.label));
 }
 export const categoryById = (plan, id) => categoriesOf(plan, { all: true }).find((c) => c.id === id) ?? null;
-export const categoryLabel = (plan, id) => id ? (categoryById(plan, id)?.label ?? id) : "Uncategorised";
+export const categoryLabel = (plan, id) => id ? (categoryById(plan, id)?.label ?? id) : "Uncategorized";
 export const categoryIcon = (plan, id) => id ? (categoryById(plan, id)?.icon ?? "📦") : "❔";
 export const slug = (label) => String(label ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "category";
 

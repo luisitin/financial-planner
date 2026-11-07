@@ -231,7 +231,7 @@ export function compute(plan, params = {}) {
 
   const T = yearTaxes(plan, { today, inc });
   const year = T.year;
-  if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State page under Taxes.");
+  if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State tax page under Taxes.");
   if (T.otherIncomeOnFederal) notes.push("The Federal tax page also counts income that is not on the Income page (investments sold, amounts typed there). Its tax is left out here, as that money is not part of the month.");
   const month = { gross: T.gross / 12, federal: T.federal / 12, payroll: T.payroll / 12, state: T.state / 12, stateKnown: T.stateKnown, bizExpenses: T.business.expenses / 12, careLost: (T.careLost ?? 0) / 12 };
   // the careful month, as the app's left-over figure (Next best action) has it: side income above what you count on is

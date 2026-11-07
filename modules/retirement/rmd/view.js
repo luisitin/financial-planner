@@ -62,7 +62,7 @@ export function render(root, ctx) {
     root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with their birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), ", and this page says when and how much.")));
     return;
   }
-  if (!d.hasDeferred) { hero.append(ui.h("p", { class: "lede" }, "The law requires no withdrawals: there is no 401(k) or traditional IRA on file."), ui.h("p", {}, "If you have one, add it on ", ui.h("a", { href: "#/balance/net-worth" }, "What you own"), "."), ui.h("p", { class: "muted small" }, ROTH_SOURCE)); return; }
+  if (!d.hasDeferred) { hero.append(ui.h("p", { class: "lede" }, "The law requires no withdrawals: there is no 401(k) or traditional IRA on file."), ui.h("p", {}, "If you have one, add it on ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth"), "."), ui.h("p", { class: "muted small" }, ROTH_SOURCE)); return; }
 
   // ---- the answer: what to take, from where, by when, and what you can spend --------------------------------------------------
   if (due.length) {
@@ -98,7 +98,7 @@ export function render(root, ctx) {
   // what this year's income and savings let you spend, even in a bad run of years (Monte Carlo's careful figure, after the first paint)
   const fy = withAmt.length ? firstYear(plan, { today }) : null;
   if (fy && fy.thisYear) {
-    const onTop = fy.healthAdded ? " plus health cover" : "";
+    const onTop = fy.healthAdded ? " plus health insurance" : "";
     const steady = (plan.retirement?.strategy ?? "fixed-real") === "fixed-real";
     const withIncome = fy.income >= 0.5 ? `With your ${money(fy.income)} of ${list(fy.sources)}, you` : "You";
     const averageWords = `${withIncome} can spend about ${money(Math.round(fy.affordable / 100) * 100)} a year${onTop} if markets do as well as average.`;
@@ -206,7 +206,7 @@ export function render(root, ctx) {
       d.ready && d.schedule.length > 12 ? ui.h("p", { class: "muted small" }, `...and ${d.schedule.length - 12} more years, to ${endAge}.`) : null,
       started ? ui.h("p", { class: "small" }, "The required amount itself cannot be moved to a Roth.") : null,
       started ? ui.h("p", { class: "small" }, "What you move after it is taxed that year, then never has to come out, and after five years comes out tax-free for you and your heirs.") : null,
-      ui.h("p", { class: "small" }, "The IRS figure for each age: the balance on December 31 of last year is divided by it."),
+      ui.h("p", { class: "small" }, "The IRS figure for each age: divide last December 31's balance by it to get the year's required withdrawal."),
       ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))),
       ui.h("p", { class: "muted small" }, "Rules from IRS Publication 590-B (the Uniform Lifetime Table) and the SECURE 2.0 Act; tax at each year's federal rates."),
     )));

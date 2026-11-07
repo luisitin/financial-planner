@@ -51,7 +51,7 @@ export function render(page, ctx) {
   // suggestions from the plan
   if (d.suggestions.length) root.append(ui.h("details", { class: "card fold fold-card", open: d.empty || d.suggestions.length <= 3 ? true : null },
     ui.h("summary", {}, ui.h("h2", {}, "From your accounts and policies"), ui.h("span", { class: "fold-status" }, `${d.suggestions.length} to add`), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, "These banks, lenders and insurers are named on what you already have. Add one, then fill in the phone number."),
+    ui.h("p", { class: "muted small" }, "These banks, lenders and insurers come from the accounts and policies you already have. Add one, then fill in the phone number."),
     ui.h("ul", { class: "records" }, d.suggestions.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.firm), ui.h("span", { class: "rec-value" }, s.role === "bank" ? "Bank or lender" : "Insurer")),
       ui.h("div", { class: "rec-sub" }, s.what),
@@ -74,7 +74,7 @@ export function render(page, ctx) {
       c.links.length ? ui.h("div", { class: "rec-sub" }, `Handles: ${c.links.map((l) => `${l.name}${l.last4 ? ` (ending ${l.last4})` : ""}`).join(", ")}`) : null,
       c.notes ? ui.h("div", { class: "rec-sub" }, c.notes) : null,
       ui.h("div", { class: "rec-foot" }, ui.h("span", { class: "rec-actions" },
-        ui.button("Change", () => { editing = c.id; adding = false; rerender(); }, { class: "secondary small" }),
+        ui.button("Edit", () => { editing = c.id; adding = false; rerender(); }, { class: "secondary small" }),
         ui.button("Remove", () => {
           if (!ui.confirm(`Remove ${c.name || c.firm || "this contact"}?`)) return;
           pending = `${c.name || c.firm || "The contact"} removed.`;
@@ -114,7 +114,7 @@ export function render(page, ctx) {
       ui.h("label", {}, ui.h("input", { type: "checkbox", checked: has(kind, id) ? true : null }), label),
       ui.h("input", { type: "text", inputmode: "numeric", maxlength: 4, placeholder: "last 4", "aria-label": `Last four digits for ${label}`, value: lastFour(c?.last4?.[id]) }));
     const links = ui.h("div", { class: "ct-links" },
-      accounts.length || policies.length ? ui.h("p", { class: "muted small" }, "What they handle (tick each one; the last four digits are optional):") : null,
+      accounts.length || policies.length ? ui.h("p", { class: "muted small" }, "What they handle (check each one; the last four digits are optional):") : null,
       ...accounts.map((a) => row("account", a.id, a.name || "Account")),
       ...policies.map((p) => row("policy", p.id, p.name || "Policy")));
     form.insertBefore(links, form.querySelector(".form-actions"));

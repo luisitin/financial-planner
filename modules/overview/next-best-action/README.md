@@ -18,7 +18,7 @@ The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bog
    that keeps the survivor's plan whole, less the cover on Policies). Status "now" with no gap (buying a policy is an
    action, not a sum the spare money fills); `people: [{ personId, name, gap, cover, until, depends }]`. Done (left out)
    once the cover reaches the need. Placed right after the starter cushion: the round-3 walk-through found the family's
-   biggest risk (Bo and Cy $212,000 short if Ana died) worked out on a page nobody opened, and term cover is cheap next
+   biggest risk (Bo and Cy $212,000 short if Ana died) worked out on a page nobody opened, and term life insurance is cheap next
    to the loss it covers. Our own choice of place, noted per the builder instructions; the two wikis above put insurance
    among the basics rather than at a numbered step.
 2. The whole employer match: anyone with pay and a 401(k) but no contribution on file is a "check".
@@ -68,7 +68,7 @@ the Cash-flow statement each showed a different month (round-4 finding). The sim
 the tax cannot be worked out for. Each month's money lists "State income tax" and "Business costs" when there are any.
 
 ## Costly debt from savings (2026-11-02)
-When usable cash, after one-off costs coming up, is more than the full cushion (Emergency fund's `nowAfterOneOffs` -
+When usable cash, after one-time costs coming up, is more than the full cushion (Emergency fund's `nowAfterOneOffs` -
 `target`), the expensive-debt step pays from it today: `fromSavings` = that surplus, up to the expensive debts' balance,
 down to $10; the step's gap is the rest (for the spare money, as before) and `doneDate` is today when it covers all. The
 title reads "Pay off expensive debt from savings" and the detail says what cash stays: "Pay the Visa card's $6,400 from
@@ -102,7 +102,7 @@ changed nothing and the step asked for the same money again (round-4 finding).
 The IRA step reads "An IRA of your own" for a household with one earner ("for each of you" only with two or more), 2026-11-02.
 
 ## The dates
-The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-off gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money, and its `capacity` the spare money that reaches it then (the larger of that month and the next, since the first month can be the crumbs of a step finishing; alerts' `goalsBehind` uses the goals step's to say whether a goal can wait its turn). A saved debt plan's extra joins the spare money from the month its last debt is gone (`debtPlan.months`), and a date reached with it says "with the $410 a month that frees up after July 2027". Interest on the debts and next year's new limits are left out, so the dates are about right.
+The spare money is run month by month for `HORIZON_MONTHS` (120): each month it fills the steps in order, one-time gaps first (debts and cash), then this year's room in each account a twelfth at a time. A gap's `doneDate` is the month it is filled; an account's `startDate` the first month it gets money, and its `capacity` the spare money that reaches it then (the larger of that month and the next, since the first month can be the crumbs of a step finishing; alerts' `goalsBehind` uses the goals step's to say whether a goal can wait its turn). A saved debt plan's extra joins the spare money from the month its last debt is gone (`debtPlan.months`), and a date reached with it says "with the $410 a month that frees up after July 2027". Interest on the debts and next year's new limits are left out, so the dates are about right.
 
 ## Display
 - A federal tax below zero (refundable credits, such as the child tax credit's refundable part, paying back more than the tax) reads "+ $80" on a line "Federal income tax: credits pay back more than the tax" (2026-11-01); it read "- -$80". Its bar segment is 0 wide.
@@ -117,7 +117,7 @@ Not ready without income and expenses. Spare money below zero: the bills are the
 `cushionLater(nba)` -> `{ until } | null`: the starter month of must-pay bills is done, costly debt (10%+) is not yet paid, and the full fund is not done. The order here pays costly debt before the full fund, so other pages must not call the cushion red "thin" at the same time. `until` is the date the spare money clears the costly debt (`high-debt.doneDate`), or Pay off debts' own date when a saved debt plan is on it (`debtPlan.until`). Used by Needs attention (`emergency-later`), Emergency fund ("enough for now") and the Dashboard's Safety cushion line (via setup `standing().cushionLater`). Test: "one cushion verdict".
 
 ## Review fixes 2026-11-02 (paying from savings)
-- Cash for the from-savings move is `min(now, nowAfterOneOffs)`: one-off costs coming lower it, one-off income never raises it (it may already be in the balances).
+- Cash for the from-savings move is `min(now, nowAfterOneOffs)`: one-time costs coming lower it, one-time income never raises it (it may already be in the balances).
 - No must-pay bills marked (cushion target 0): nothing is offered from savings, so it never says "a full cushion" while emptying the account.
 - Savings that cover the whole balance pay it exactly (`fromSavings = owed`, said to the dollar); only a partial amount is rounded down to $10.
 - A saved debt plan aimed at the card no longer hides the move when the cash is there: the debts it reaches are paid from savings too.

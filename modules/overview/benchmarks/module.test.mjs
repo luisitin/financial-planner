@@ -60,7 +60,7 @@ test("round 8: a renter's debt payments against the renters' line (15 to 20% or 
   const d = compute(renterDebtPlan(), { today: "2026-11-06" });
   const x = item(d, "debt");
   assert.equal(x.benchmark, 0.2); assert.equal(x.verdict, "behind");
-  assert.match(x.sentence, /21% of gross income; for renters the guideline is 20% or less, rent not counted/);
+  assert.match(x.sentence, /21% of income before tax; for renters the guideline is 20% or less, rent not counted/);
   assert.match(x.sentence, /like your \$950 rent and a lender would see 50% of your income going to debts: more than most lenders accept/);
   // the family (a mortgage): unchanged
   assert.equal(item(compute(familyPlan(), { today: TODAY }), "debt").benchmark, RULES.debt);
@@ -99,7 +99,7 @@ test("review D3 and D7: a renter's debt row is of the required payments, graded 
   const { renterDebtPlan, renterPayingExtraPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const x = item(compute(renterPayingExtraPlan(), { today: "2026-11-06" }), "debt");
   assert.ok(Math.abs(x.you - 320 / 3250) < 1e-12); assert.equal(x.verdict, "ahead");
-  assert.match(x.sentence, /^\$320 a month of required payments on loans and cards is 10% of gross income/);
+  assert.match(x.sentence, /^\$320 a month of required payments on loans and cards is 10% of income before tax/);
   assert.match(x.sentence, /lender would see 39% of your income going to debts/);
   const p = renterDebtPlan(); p.debts.find((d) => d.id === "setup-debt-credit").minPayment = 140;   // 20.3%, shown as 20%
   assert.equal(item(compute(p, { today: "2026-11-06" }), "debt").verdict, "on par");

@@ -205,7 +205,7 @@ export function render(page, ctx) {
       e.warnings.map((w) => ui.notice("warn", w)),
       editing ? form : ui.h("div", { class: "rec-foot" },
         ui.button(e.kind === "note" ? "Keep this note" : "Add", () => add(e, {})),
-        ui.button("Change", () => { open.add(e.uid); focus = e.uid; redraw(); }, { class: "secondary small" }), skip));
+        ui.button("Edit", () => { open.add(e.uid); focus = e.uid; redraw(); }, { class: "secondary small" }), skip));
   }
 
   function readValues(form) {
@@ -282,7 +282,7 @@ export function render(page, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "Notes you kept"), ui.h("span", { class: "fold-status" }, lines ? `${lines} ${lines === 1 ? "line" : "lines"}` : "none yet"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
     ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "muted small" }, "Entries you keep as a note land here with their day. Change or delete anything, then save."),
+      ui.h("p", { class: "muted small" }, "Entries you keep as a note show up here with their date. Change or delete anything, then save."),
       ui.field("Your notes", notes),
       ui.row(ui.button("Save notes", () => { pending.push({ kind: "ok", text: "Notes saved." }); store.update((draft) => { draft.notes = notes.value.trim(); }); }, { class: "secondary" })))));
   return leave;

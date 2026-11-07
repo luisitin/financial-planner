@@ -16,7 +16,7 @@ test("where a date falls in its year", () => {
   assert.equal(yearFraction("not a date"), 0);
 });
 
-test("the pay path: a raise each year after this one, compounding, deflated to today's money", () => {
+test("the pay path: a raise each year after this one, compounding, deflated to today's dollars", () => {
   const rows = payPath({ pay: 50000, from: 2026, to: 2031, raise: 0.04, inflation: 0.02 });
   assert.equal(rows.length, 5);
   assert.deepEqual(rows.map((r) => r.year), [2026, 2027, 2028, 2029, 2030]);

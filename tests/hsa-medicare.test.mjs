@@ -84,7 +84,7 @@ test("F1 Health page: an HSA plan's limit is 0 on Medicare and the payroll part 
   near(hq.taxRate, hq.marginal);
 });
 
-test("Q1 the HSA page works the saving on the Federal estimate's own return, IRA included", () => {
+test("Q1 the HSA and FSA page works the saving on the Federal estimate's own return, IRA included", () => {
   const p = emptyPlan();
   p.household.filingStatus = "married_joint";
   p.household.people = [{ id: "a", name: "Ada", role: "self", birthDate: "1985-01-01" }, { id: "b", name: "Bo", role: "partner", birthDate: "1986-01-01" }];

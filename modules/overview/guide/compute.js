@@ -224,7 +224,7 @@ export const RESULT_ROWS = [
   { key: "month", group: 0, step: "month", name: "Your month", page: "cashflow/expenses" },
   { key: "debts", group: 0, step: "debts", name: "Your debts", page: "debt/payoff" },
   { key: "cushion", group: 0, step: "cushion", name: "Emergency fund", page: "balance/liquidity" },
-  { key: "protect", group: 1, step: "protect", name: "Cover for your family", page: "insurance/life-needs" },
+  { key: "protect", group: 1, step: "protect", name: "Life insurance for your family", page: "insurance/life-needs" },
   { key: "retire", group: 1, step: "retire", name: "Your retirement", page: "retirement/projection" },
   { key: "fix-retire", group: 1, step: "fix-retire", name: "What would help", page: "scenarios/goal-seek" },
   { key: "take-out", group: 1, step: "take-out", name: "Where to take money from", page: "retirement/withdrawal-strategy" },

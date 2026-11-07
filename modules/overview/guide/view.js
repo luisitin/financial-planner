@@ -44,7 +44,7 @@ export function render(root, ctx) {
   return renderList(wrap, ctx);
 }
 
-const statusLine = (s) => s.finished ? "Done" : s.started ? `In progress: ${s.doneCount} of ${s.total} steps done` : `About ${s.minutes} minutes${s.doneCount ? `. ${s.doneCount} of ${s.total} steps are already in your plan.` : ""}`;
+export const statusLine = (s) => s.finished ? "Done" : s.started ? `In progress: ${s.doneCount} of ${s.total} steps done` : `About ${s.minutes} minutes${s.doneCount ? `. ${s.doneCount} of ${s.total} ${s.total === 1 ? "step" : "steps"} ${s.doneCount === 1 ? "is" : "are"} already in your plan.` : ""}`;
 
 function rowLink(ui, href, icon, title, line, status, onClick) {
   return ui.h("li", {}, ui.h("a", { href, class: "row-link", onClick },

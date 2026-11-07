@@ -99,7 +99,7 @@ test("hsaPicture: self-only cover is the covered adult's only; no high-deductibl
   assert.equal(absent.coverage, "self"); assert.equal(absent.coverageChosen, false); assert.equal(absent.household.limit, 5400);
 });
 
-test("hsaPicture: the HSA page's typed money counts on the covered adult where it is more than the rows; unmarried adults each get the family limit", () => {
+test("hsaPicture: the HSA and FSA page's typed money counts on the covered adult where it is more than the rows; unmarried adults each get the family limit", () => {
   // typed only: 6,000 + 500 on Ana, who is covered
   const only = couple({ coverage: "self", typed: [6000, 500] }); only.retirement.contributions = [];
   const t = hsaPicture(only, 2026);

@@ -153,8 +153,8 @@ test("Review 2026-11-06: filing separately, the safe-amount words say 75,000 of 
   };
   const sep = await page("married_separate"), joint = await page("married_joint");
   assert.equal(compute((() => { const p = taxPlan(); p.household.filingStatus = "married_separate"; p.taxes.priorYear = { tax: 10000, agi: 80000 }; return p; })(), { today: "2026-11-06" }).harbour.priorShare, 1.1);
-  assert.ok(sep.includes("110% if last year's income was over 75,000") && sep.includes("over 75,000 raises") && !sep.includes("150,000"), sep);
-  assert.ok(joint.includes("110% if last year's income was over 150,000") && joint.includes("over 150,000 raises") && !joint.includes("75,000"), joint);
+  assert.ok(sep.includes("110% if last year's income was over $75,000") && sep.includes("over $75,000 raises") && !sep.includes("$150,000"), sep);
+  assert.ok(joint.includes("110% if last year's income was over $150,000") && joint.includes("over $150,000 raises") && !joint.includes("$75,000"), joint);
 });
 
 // ---- round 8, Batch 1: the year's tax is the Federal estimate's with what the plan knows (taxes/federal known.js)

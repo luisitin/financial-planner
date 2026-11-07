@@ -64,7 +64,7 @@ plan already lasts.
 No adult with a birth date, no accounts, or no spending figure: the page lists what is missing and still shows the settings. Already retired: retirement year = this year. A partner retiring after the primary: their pay counts as income until then.
 
 ## Tests
-`module.test.mjs` (inputs from the fixture couple, the run, fallbacks) and `tests/retirement.test.mjs` (the engine: buckets in order, gross-up, RMD, sequences, strategies, affordable spending); events marked spending paid by income first). Health line (2026-11-02): the couple at 62 year by year against Healthcare before 65 and Medicare, the job's years left out whoever is listed first (and the Medicare page's lifetime = added + `onJob`), a removed premium back while a partner works ($77,116 a year), the box (and `showHealth` saying what it would cost), a Medicare line for a parent (all Medicare stays; an added expense never raises what the plan carries) and for the older of a couple (the younger's share only), Get started's "Insurance and health" row (kept; pays a retired couple's Medicare) and its own spending figure (`retireAuto`: the premium comes out), which lines are health cover, no recursion whichever page loads first, and the verdict moving the right way.
+`module.test.mjs` (inputs from the fixture couple, the run, fallbacks) and `tests/retirement.test.mjs` (the engine: buckets in order, gross-up, RMD, sequences, strategies, affordable spending); events marked spending paid by income first). Health line (2026-11-02): the couple at 62 year by year against Healthcare before 65 and Medicare, the job's years left out whoever is listed first (and the Medicare page's lifetime = added + `onJob`), a removed premium back while a partner works ($77,116 a year), the box (and `showHealth` saying what it would cost), a Medicare line for a parent (all Medicare stays; an added expense never raises what the plan carries) and for the older of a couple (the younger's share only), Get started's "Insurance and health" row (kept; pays a retired couple's Medicare) and its own spending figure (`retireAuto`: the premium comes out), which lines are health insurance, no recursion whichever page loads first, and the verdict moving the right way.
 
 ## Review fixes 2026-11-02
 - `householdRetired`: a retirement age left blank is the plan's own (Assumptions, 65 by default), as the projection uses it, so a retired couple added on People with the age blank counts as retired.
@@ -243,14 +243,14 @@ counts 2026 to 2030, and the names the check takes and leaves. It failed on the 
 Test (`module.test.mjs`, "review 2026-11-06: a draw from a business"): the names it takes and leaves; "Owner's draw from
 business account" to 2029 counts 2026 to 2029 and nothing is left out as "accounts". It failed before the change.
 
-## Health cover on top of spending (2026-11-02)
+## Health insurance on top of spending (2026-11-02)
 Before, the engine had no health line: retirement spending was a typed figure or today's expenses (which leave out cover
 paid from pay through work), and the Social Security page asks for the benefit before Medicare is taken out, so Part B was
 never paid by anyone. For the family couple stopping at 62 that left out about $39,700 of marketplace cover to 65 (after
 $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
 - `buildInputs(plan, { today, health = true })` appends one engine event a year in which cover is priced (from the
   household's retirement year, or earlier for someone who has stopped while nobody works: fourth pass below),
-  `{ year, amount, label: "Health cover", kind: "health", spending: true }`, in today's dollars (the engine multiplies by the
+  `{ year, amount, label: "Health insurance", kind: "health", spending: true }`, in today's dollars (the engine multiplies by the
   year's price level): the marketplace cost after any credit (`retirement/healthcare` `years[].cost`: a year in which nobody
   still works and someone who has stopped is under 65) plus Medicare (`retirement/medicare` `years[].totalYearly`: Part B, the drug
   plan, any supplement and the income surcharge for everyone 65 or over). Appended to the events the inputs carry, never
@@ -273,7 +273,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
   Roth conversion fill on Roth conversions, different returns on Goal seek) does not re-price them; one that rebuilds the
   plan (another retirement age on Goal seek, a survivor on Stress tests and Life cover) does. `planIncome` takes a shallow
   copy of the plan (it only reads it), so a plan with years of bank transactions is not copied each time.
-- Not twice: `retirement.healthIncluded === true` ("My spending figure already includes health cover", a box under Health
+- Not twice: `retirement.healthIncluded === true` ("My spending figure already includes health insurance", a box under Health
   cover on this page) adds nothing. Spending carried from today's bills is today's expenses, or Get started's own starting
   figure (`guide.setup.retireAuto === true`: setup's `retireDefault`, today's bills less childcare and loan payments, which
   carries the same lines, worked out live: `setupFigure`, below; review fix 2026-11-02, it was taken as typed and a premium
@@ -283,7 +283,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
     COBRA, an insurance or premium line under Health and medical; not dental, vision, life, care or other insurance), comes
     out of the carried figure (`removedMonthly`, capped at the figure), because today's expenses are carried whole into
     retirement (a work premium ending at retirement is not ended there) and the health line pays for cover from retirement
-    on. While someone still works, from the household's retirement year on, the premium is put back as health cover each
+    on. While someone still works, from the household's retirement year on, the premium is put back as health insurance each
     year (`jobPlan`: the plan at work goes on, and so does what it costs; review fix 2026-11-02, those years had no cover);
   - a "medicare" line (`MEDICARE_LINE`: Medicare, Medigap, Part B or Part D) stays and pays the Medicare of the adults 65 or
     over this year (`paidBy`); everyone else's Medicare is added from 65, per person: a year's `totalYearly` x those left /
@@ -299,7 +299,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
 - Pages that use the spending figure without the health line put the removed premium back: FIRE's FI number is on
   `spending.yearly + removedMonthly x 12` (today's whole spending, as before); Annuities' "Guaranteed income covers" is
   against the first retirement year's spending and its health events, as this page's "Guaranteed income" is.
-- Shown: under "What goes into this", "Health cover: About $400 to $1,470 a month from 2052 until 65 (marketplace, after
+- Shown: under "What goes into this", "Health insurance: About $400 to $1,470 a month from 2052 until 65 (marketplace, after
   the credit), then Medicare about $240 a month for Bo from 2053 and about $480 a month for the two of you from 2055" (only
   the parts that apply; a range when the months differ by more than a quarter; the Medicare range is over the years the
   most are on it, the surcharge moving it, with ", including an income surcharge in 21 of those years (Medicare page)" when
@@ -310,9 +310,9 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
   44 px buttons to both pages and the box, which saves on change and confirms on the next render. Ticked, the record still
   says what cover would cost ("Without that, the plan would add ..."): `compute(plan, { showHealth: true })`, the page's own
   call, works it out for the words only (`health.shown`); `buildInputs`, Monte Carlo and Goal seek never do. The verdict,
-  the careful figure, "Spending in retirement" and Goal seek's spending answer say "on top of health cover" (`healthAdded`);
-  "Guaranteed income" is against spending and health cover; the spending help in Retirement settings follows the box
-  ("before health cover (the plan adds it)" or "health cover included (you said so under Health cover)"). `compute()`
+  the careful figure, "Spending in retirement" and Goal seek's spending answer say "on top of health insurance" (`healthAdded`);
+  "Guaranteed income" is against spending and health insurance; the spending help in Retirement settings follows the box
+  ("before health insurance (the plan adds it)" or "health insurance included (you said so under Health insurance)"). `compute()`
   returns `health`: `{ included, total, bridge: { fromYear, untilYear, years, total, credit, monthlyFirst, monthlyLow,
   monthlyHigh, cliff: { income, year, lost, lostTotal, years, yearsList, overBy } | null } | null, medicare: { fromYear,
   untilYear, monthlyFirst, monthlyAll, allFromYear, allNames, monthlyLow, monthlyHigh, early, joins, enrolled, people, total,
@@ -379,7 +379,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
   $36,000 more over those years"); it read "$210,160 in all" with the $36,000 inside it.
 - A spending figure typed in a scenario (Compare, Advisor's plan) is a typed figure: the lever turns `retireAuto` off in
   the copy, so the premium is not taken out of it (a $6,000 scenario ran on $5,400). Compare's `current.spendingMonthly`,
-  while the plan's figure is Get started's, is what the plan spends before health cover (the "Spend 10% less" starter and
+  while the plan's figure is Get started's, is what the plan spends before health insurance (the "Spend 10% less" starter and
   the editor's "the plan: $4,570"), and Advisor's plan says "yours" from the plan's own run.
 - What moved: none of the fixtures (family, couple at 62, the retirement fixture, the retired couple seed) and no golden
   case; only plans with a partner without pay, a Get started figure saved before a premium changed, a couple all over 65
@@ -412,7 +412,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
   marketplace at 2050-2054 and Bo's Medicare at 2053-2054 on both pages, where the line began in 2055. Lee with no pay and
   nothing said in Get started is on the marketplace from the household's retirement (2033), and no longer listed as on
   Sam's plan 2026-2032 (she had not stopped; the figures are the same).
-- Retirement settings' spending box, its help and the fold status show the figure the plan counts before health cover
+- Retirement settings' spending box, its help and the fold status show the figure the plan counts before health insurance
   (`figureMonthly`, from `buildInputs` and `compute`, to the cent): a typed figure as it is, or Get started's own less the
   health insurance among today's bills that the health line replaces. It showed Get started's figure with the premium still
   in it ($5,170 against the $4,570 the plan counts), so typing $5,000 to spend less raised spending to $5,000. Saving goes
@@ -472,7 +472,7 @@ $29,700 of credits) and about $180,000 of Medicare, all in today's dollars.
   $268,924 -> $300,168. The family ($174,161), the couple at 62 ($219,695), the retirement fixture ($250,160) and the retired
   couple seed ($0 with its Medicare line, $148,037 without) are as the checkers expected.
 
-## Review 2026-11-06 (health cover, sixth pass: merged with the base, the fifth pass's verify fixed)
+## Review 2026-11-06 (health insurance, sixth pass: merged with the base, the fifth pass's verify fixed)
 The health line was merged with the other-income rules (recheck 2026-11-05 and review 2026-11-06 above) and Financial
 independence's work rules, which are newer than it. Both are kept:
 - **Other income** is `otherIncome` as above (rent for life, support and other to an end date or while their owner works,
@@ -480,7 +480,7 @@ independence's work rules, which are newer than it. Both are kept:
   base's name; the fifth pass called it `kind: "pay"`): every page, the medicare page's incomes included, tells it from rent
   by type, never by name. A partner Get started says is retired or not working brings no pay in (fifth pass).
 - **"Paid by income"** (the base's stat, `coverage` and `coverageFrom`): all the income in the first retirement year against
-  that year's spending and health cover (the health line is spending too), "from" the kinds in it. The fifth pass's
+  that year's spending and health insurance (the health line is spending too), "from" the kinds in it. The fifth pass's
   `incomeKinds` (every kind the plan holds) is gone: it did not match the share shown.
 - **"Income counted"** says each line by its own name with its ages, or its years for a line not named for a person
   (`incomeWords`: "Rental condo: $18,000 a year from 2033 (before its costs)", "Lee's pay: $66,000 a year from 56 to 66"),
@@ -691,7 +691,7 @@ year it is sold):
     inflation while the loan ran: 2045 counted 1,028 where 19,709 − 10,212 = 9,497 comes in. The engine adds a negative line
     to the year's income (`core/math/retirement.js` step 2, `income += amt`, then `need = max(0, spending − income)`).
 - The landlord (qa/fixtures/round8-rental.mjs `condoOnNetWorthPlan`): the first retirement year, 2045, was 128% paid by income
-  (Alex's pay 126,252 + the gross rent 25,200, flat, against 109,419 of spending and 9,172 of health cover); now **123%**:
+  (Alex's pay 126,252 + the gross rent 25,200, flat, against 109,419 of spending and 9,172 of health insurance); now **123%**:
   126,252 + 11,240 × 1.03^19 (19,709) = 145,962 against 118,591. The tester's "about 110%" also took the 851 off the rent,
   but Get started's figure (5,200 = 4,350 + the condo's 851, still owed in 2045) already pays it, so that would count it
   twice. From 2051 the 10,212 comes back. The condo only on Rental analysis (`condoOnlyRentalPlan`, the loan not among the
@@ -735,7 +735,7 @@ and use the page".
 - The chance in the same words as How much to take out and Required withdrawals (UX 7, `careful.js chanceWords`), on its own
   line: "At the $39,600 you plan, it lasts in about half of markets (47%)." Under 6 in 10 the headline says so once the figure
   is in: "Lasts in about half of markets" (it read "It lasts, just" over 47%). The lede no longer repeats the verdict word:
-  "If markets do as well as average it carries $41,926 a year on top of health cover; you plan on $39,600."
+  "If markets do as well as average, it can pay for $41,926 a year on top of health insurance; you plan on $39,600."
 - The settings list uses How much to take out's four names, each way judged on its own run (`wayOptions`, review D2); the rate's
   help: 'the share of savings "A share of what is left" and "Trim after bad years" start from' (UX 8).
 - The grey paragraph is two short ones, in the normal text colour (UX 17, 18): "Retirement starts in 2026 (...); the plan runs to
@@ -766,7 +766,7 @@ Decision: the prosperity rule (strictly below 0.8 times the rate: +10%, never ab
 needs is $0 because Social Security or a pension pays for all of it. Before, it needed a withdrawal above $0, so a target trimmed while savings paid stayed down for good once
 income covered it. Why this reading: the page promises "trimmed by a tenth after bad years and raised back after good ones", and the owner's rule ("make sure a layman can
 easily understand and use the page") is not met by a way that never raises back. The cap at the plan keeps it from compounding past what the household said it spends.
-- Pat and Jo (`bridgeCouple`, retiring at 62 on a $60,000 plan; health cover before 65 pushes the withdrawal past 1.2 x the rate): trimmed 2029-2032 to $34,976, held at
+- Pat and Jo (`bridgeCouple`, retiring at 62 on a $60,000 plan; health insurance before 65 pushes the withdrawal past 1.2 x the rate): trimmed 2029-2032 to $34,976, held at
   $43,539 while a withdrawal is still needed, then raised back from 2036 and at the full $60,000 from 2041. Before: $38,000 to $43,500 a year for 29 years under the plan
   and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
 - Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved

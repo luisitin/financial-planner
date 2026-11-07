@@ -20,9 +20,9 @@ export function render(root, ctx) {
   if (d.hasIncome) root.append(ui.card(null, ui.row(
     ui.stat("Bracket", fmt.pct(d.bracketRate, 0), `${statusLabel(d.filingStatus).toLowerCase()}, ${d.year}`),
     ui.stat("Room left", Number.isFinite(d.roomInBracket) ? money(d.roomInBracket) : "no limit", Number.isFinite(d.roomInBracket) ? `before ${fmt.pct(d.nextRate, 0)}` : "the top rate"),
-    ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? (d.careMoves ? "more than the bracket: the child care credit gets smaller" : "more than the bracket: benefits or gains get pulled along")
-      : d.marginal < d.bracketRate - 0.005 && d.careMoves ? (Math.round(d.marginal * 100) === 0 ? (d.careCoversTax ? "less than the bracket: the child care credit covers the tax on more pay" : "less than the bracket: with the child care credit, the credits cover the tax on more pay") : "less than the bracket: the child care credit covers part of the tax on more pay") : d.marginal < d.bracketRate - 0.005 && d.businessDeduction > 0.5 ? "less than the bracket: the 20% business deduction grows with it" : "what it really costs"),
-    ui.stat("Deductions", money(d.deduction + (d.businessDeduction || 0)), d.businessDeduction > 0.5 ? `the usual ${money(d.deduction)} and the business ${money(d.businessDeduction)}, before the ladder` : "come off before the ladder"),
+    ui.stat("Next dollar", fmt.pct(d.marginal, 0), d.marginal > d.bracketRate + 0.005 ? (d.careMoves ? "more than the bracket rate, because the child care credit also shrinks" : "more than the bracket: benefits or gains get pulled along")
+      : d.marginal < d.bracketRate - 0.005 && d.careMoves ? (Math.round(d.marginal * 100) === 0 ? (d.careCoversTax ? "less than the bracket: the child care credit covers the tax on more pay" : "less than the bracket: with the child care credit, the credits cover the tax on more pay") : "less than the bracket: the child care credit covers part of the tax on more pay") : d.marginal < d.bracketRate - 0.005 && d.businessDeduction > 0.5 ? "less than the bracket rate, because the 20% business deduction also grows" : "what it really costs"),
+    ui.stat("Deductions", money(d.deduction + (d.businessDeduction || 0)), d.businessDeduction > 0.5 ? `the usual ${money(d.deduction)} and the business ${money(d.businessDeduction)}, before the ladder` : "come off before the brackets"),
   )));
   if (d.hasIncome && d.separate) root.append(ui.card("Two returns",
     ui.h("ul", { class: "records" }, d.separate.map((x) => ui.h("li", {},
@@ -35,7 +35,7 @@ export function render(root, ctx) {
   const chips = ui.h("div", { class: "chips" }, amounts.map((a) => ui.h("button", { type: "button", class: `chip${a === extra ? " on" : ""}`, onClick: () => { extra = a; root.replaceChildren(); render(root, ctx); } }, `+${fmt.money(a, cur)}`)));
   const custom = ui.input({ type: "number", value: extra, min: 0, step: "1000", inputmode: "numeric", "aria-label": "Extra income", onChange: (e) => { extra = Math.max(0, Number(e.target.value) || 0); root.replaceChildren(); render(root, ctx); } });
   root.append(ui.card("What more income would cost",
-    ui.h("p", { class: "muted small" }, "A raise, a bonus, a Roth conversion, an IRA withdrawal: the tax on the extra alone, through every rung it crosses (and any Social Security or gains it drags into tax)."),
+    ui.h("p", { class: "muted small" }, "A raise, a bonus, a Roth conversion, an IRA withdrawal: the tax on just the extra, bracket by bracket (plus any Social Security or gains it makes taxable)."),
     chips, ui.h("div", { class: "form" }, ui.field("Or an amount", custom)),
     d.extra ? ui.row(
       ui.stat("Extra tax", money(d.extra.tax), `on ${money(d.extra.amount)} more`),
@@ -45,7 +45,7 @@ export function render(root, ctx) {
     d.above.length ? ui.h("ul", { class: "records" }, d.above.map((s) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, Number.isFinite(s.amount) ? `The next ${money(s.amount)}` : "Everything above that"), ui.h("span", { class: "rec-value" }, `at ${fmt.pct(s.rate, 0)}`)), Number.isFinite(s.tax) ? ui.h("div", { class: "rec-sub" }, `${money(s.tax)} of tax on that slice`) : null))) : null,
   ));
   root.append(ui.card(`The ${d.year} ladder`,
-    ui.h("p", { class: "muted small" }, "Ordinary taxable income only (after deductions). The bar shows how much of each rung you fill."),
+    ui.h("p", { class: "muted small" }, "Taxable income only, after deductions and not counting long-term gains. The bar shows how much of each rung you fill."),
     ui.h("ul", { class: "records" }, d.ladder.map((l) => ui.h("li", { style: l.current ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${fmt.pct(l.rate, 0)}`, l.current ? ui.h("span", { class: "pill accent" }, "you are here") : null), ui.h("span", { class: "rec-value" }, Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`)),
       ui.h("div", { class: "rec-sub" }, l.filled > 0 ? `${money(l.filled)} of yours: ${money(l.tax)} of tax` : "none of yours"),

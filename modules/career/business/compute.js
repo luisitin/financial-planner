@@ -16,7 +16,7 @@ import { rulesFor } from "../side-income/data/rules.js";
 import { HOME_OFFICE, SIMPLE, QBI_LINE, QBI_MINIMUM, SIMPLE_DEADLINE, SCORP_COSTS_EXAMPLE, forYear } from "./data/business.js";
 
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
-export const CATEGORIES = { supplies: "Supplies and materials", software: "Software and subscriptions", phone: "Phone and internet", marketing: "Advertising", travel: "Travel (fares, hotels)", meals: "Business meals", equipment: "Equipment", insurance: "Business insurance", contractors: "Help you paid", fees: "Fees and licences", other: "Other" };
+export const CATEGORIES = { supplies: "Supplies and materials", software: "Software and subscriptions", phone: "Phone and internet", marketing: "Advertising", travel: "Travel (fares, hotels)", meals: "Business meals", equipment: "Equipment", insurance: "Business insurance", contractors: "Help you paid", fees: "Fees and licenses", other: "Other" };
 /** The share of a kind of expense the tax law lets you deduct: business meals half (IRC 274(n)(1)); everything else in full. */
 export const DEDUCTIBLE = { meals: 0.5 };
 

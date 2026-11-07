@@ -35,7 +35,7 @@ function draw(page, ctx) {
   const get = (p) => fetch(`${api.base()}${p}`, { headers: api.headers(), cache: "no-store" });
 
   root.append(ui.h("section", { class: "card" }, ui.h("h1", {}, "What changed in your plan"),
-    ui.h("p", { class: "lede" }, "Each time your plan is saved, your PC keeps a copy of how it was just before. Putting the copies in order shows what every save changed, newest first."),
+    ui.h("p", { class: "lede" }, "Each time your plan is saved, your computer keeps a copy of how it was just before. Putting the copies in order shows what every save changed, newest first."),
     store.sandbox() ? ui.notice("warn", "You are in the sandbox (a pretend plan). The changes listed are your real plan's, not the pretend one's.") : null));
 
   // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer

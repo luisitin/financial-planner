@@ -53,7 +53,7 @@ moves, guesses, guessCount, notCounted, assumptions, checkIn: { due, next, nextN
   lines are left out (review of the first build: an empty plan that skipped every question read "ready" and "Nothing urgent").
 - The cushion row has no bare figure while its bills are mostly our guesses ("isn't known yet", like its page); the month row
   says "Spending is our guess (about $X a month). Add your pay to see what is left." when only the pay is missing; the cover row
-  is grey "Not checked yet" until the cover step is passed; the retirement row drops the page's "(Will the money last? shows
+  is grey "Not checked yet" until the life insurance step is passed; the retirement row drops the page's "(Will the money last? shows
   how much less)" pointer.
 - Rows that open a setup screen end in `?back=done&from=plan`: setup's Back ("‹ Your plan") and Save lead back here.
 - `words.js` holds what is shared with the path: `goalsWords` (the Dashboard builds the same sentence inline today),

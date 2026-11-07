@@ -86,7 +86,7 @@ export function compute(plan, params = {}) {
   const notes = [...b.notes];
   if (!b.inputs.balances.deferred) notes.push("No pre-tax retirement money on file (401(k), IRA on the Net worth page), so there is nothing to convert.");
   if (!span) notes.push(`No years to convert in: the first person reaches the required-withdrawal age (${rmdStartAge}) before or at retirement.`);
-  if (on && (rt.taxMode ?? "flat") !== "brackets") notes.push("Conversions only run when the projection uses the federal brackets; turning them on here switches the projection to the brackets.");
+  if (on && (rt.taxMode ?? "flat") !== "brackets") notes.push("Conversions only run when Will the money last? uses the federal brackets; turning them on here switches Will the money last? to the brackets.");
   // why there are no years to try (round 8, widow-3: a widow of 74 read "Conversions do not help this plan much" and was offered
   // "Use this" for conversions that never happen): the first person's required withdrawals have already started ("started"), they
   // retire at or after that age ("late"), or the chosen until-age comes before retirement ("until"). The engine converts by the

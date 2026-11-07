@@ -36,7 +36,7 @@ and the Income page's tile read it, so take-home pay is worked out in one place.
 
 ## Formulas
 - **Pay a paycheck** = the person's salaries a year ÷ paychecks.
-- **Before tax**: the 401(k) (the plan's contributions ÷ paychecks); health, dental and vision cover (typed); the HSA
+- **Before tax**: the 401(k) (the plan's contributions ÷ paychecks); health, dental and vision insurance (typed); the HSA
   (typed, else the HSA and FSA page's, else the plan's HSA saving, else Benefits elections), the health FSA (typed, else
   the HSA and FSA page's, else Benefits elections), the child care FSA (typed, else the Federal estimate's one rule for the
   account, `taxInputs` `care.account`: what is chosen on Benefits elections for this year, at most a plan's 7,500; a note

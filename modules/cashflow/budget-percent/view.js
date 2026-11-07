@@ -49,7 +49,7 @@ export function render(page, ctx) {
   const T = d.targets;
   const head = ui.card("Your month after tax", ui.row(
     ui.stat("After tax", money(m.afterTax), held ? "a month you can count on, to split three ways" : "a month, to split three ways"),
-    ui.stat("Taxes", money(m.federal + m.payroll + m.state), `a month off ${money(m.gross)} of income`),
+    ui.stat("Taxes", money(m.federal + m.payroll + m.state), `a month, out of ${money(m.gross)} of income`),
   ), ui.h("p", { class: "muted small" }, `${m.federal < -0.5 ? `Federal income tax: a credit of ${money(-m.federal)} (the refundable child tax credit)` : `Federal income tax ${money(m.federal)}`}, Social Security and Medicare ${money(m.payroll)}${m.state > 0.5 ? `, state ${money(m.state)}` : m.stateKnown ? ", no state income tax" : ", state not counted"}, a month.${m.careLost > 0.5 ? ` The child care account would lose ${money(m.careLost)} a month (more than the care on Expenses for it to pay back), so that is taken off too.` : ""}${held ? ` Side income above what you count on, after its tax, ${money(m.held)} a month, is left out (Side income): a bonus to save when it comes.` : ""} Aiming for ${pct(T.needs)} needs, ${pct(T.wants)} wants, ${pct(T.savings)} savings${T.from === "50-30-20" ? ", the 50/30/20 rule" : ""}.`));
   root.append(head);
 
@@ -65,13 +65,13 @@ export function render(page, ctx) {
   const say = [];
   const by = Object.fromEntries(d.buckets.map((b) => [b.key, b]));
   if (short) say.push(`${held ? `In a lean month you spend ${money(d.saving.short)} more` : `You spend ${money(d.saving.short)} a month more`} than you take home${split ? `: needs ${pct(by.needs.share)} and wants ${pct(by.wants.share)} leave too little for ${pct(T.savings)} saved` : ""}.`);
-  if (split && by.needs.status === "over") say.push(`Must-pay bills take ${pct(by.needs.share)}, ${money(by.needs.gap)} a month above ${pct(T.needs)}. Your largest: ${d.needs.slice(0, 2).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}. Housing and car costs are usually the ones worth looking at.`);
+  if (split && by.needs.status === "over") say.push(`Bills you have to pay take ${pct(by.needs.share)} of your take-home pay: ${money(by.needs.gap)} a month more than the ${pct(T.needs)} guideline. Your largest: ${d.needs.slice(0, 2).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}. Housing and car costs are usually the ones worth looking at.`);
   if (split && by.wants.status === "over") say.push(`Everything else takes ${pct(by.wants.share)}: trimming ${money(by.wants.gap)} a month reaches ${pct(T.wants)}. The largest: ${d.wants.slice(0, 3).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}.`);
   if (split && !short && by.savings.status === "under") say.push(`Savings reach ${pct(Math.max(0, by.savings.share))}: ${money(-by.savings.gap)} a month more would reach ${pct(T.savings)}.`);
   if (split && !say.length) say.push(`Within your split: needs ${pct(by.needs.share)}, wants ${pct(by.wants.share)}, savings ${pct(by.savings.share)}.`);
   root.append(ui.card("Needs, wants and savings", records, say.length ? ui.h("p", { class: "bp-say" }, ui.h("b", {}, say[0])) : null, ...say.slice(1).map((x) => ui.h("p", {}, x)),
     d.saving.unlisted ? ui.h("p", { class: "muted small" }, `${money(d.saving.leftover)} a month is neither on the Expenses page nor sent to savings, so it counts as saved. If it is really spent, list it on Expenses and this page will show where it goes.`) : null,
-    ui.h("p", { class: "muted small" }, "Needs are the bills marked \"I must pay this\" on Expenses, with loan payments (from the Debts page when Expenses lists none); wants are the rest of the spending; savings are what goes into retirement accounts (your own money, not the employer's), goals and what is left. Taxes come off first, so taxes listed on Expenses are left out.")));
+    ui.h("p", { class: "muted small" }, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out.")));
 
   // the bills in each group, with a button to move one across
   const move = (x, toNeed) => {
@@ -109,5 +109,5 @@ export function render(page, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card", open: openFold === "split" || null }, ui.h("summary", {}, ui.h("h2", {}, "The split to aim for"), ui.h("span", { class: "fold-status" }, `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."),
     splitForm));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"), ui.h("a", { class: "btn secondary", href: "#/cashflow/paycheck" }, "Paycheck"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Spending limits by category"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"), ui.h("a", { class: "btn secondary", href: "#/cashflow/paycheck" }, "Paycheck"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Spending limits by category"))));
 }

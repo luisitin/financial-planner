@@ -74,7 +74,7 @@ export function render(page, ctx) {
     }
     const card = ui.card(`${c.name}: college from ${c.startYear}`);
     card.append(ui.row(
-      ui.stat("Four years would cost", money(c.total), `${c.typeLabel.toLowerCase()}; ${money(c.totalToday)} in today's money`),
+      ui.stat("Four years would cost", money(c.total), `${c.typeLabel.toLowerCase()}; ${money(c.totalToday)} in today's dollars`),
       ui.stat(c.started ? "Started" : "To cover " + pct(c.share), c.started ? "-" : money(c.neededMonthly), c.started ? "college has begun" : `a month for ${Math.round(c.monthsLeft / 12 * 10) / 10} years`),
     ));
     card.append(ui.h("div", { class: "ed2-bar", role: "img", "aria-label": `today's saving covers ${pct(c.coveredShare)}` }, ui.h("span", { style: { width: `${c.coveredShare * 100}%` } })),
@@ -92,7 +92,7 @@ export function render(page, ctx) {
     }, { class: "secondary" })));
     // per child: the kind of college, the share, the years
     const s = plan.whatIfs?.college?.[c.id] ?? {};
-    card.append(ui.h("details", { class: "fold", style: { marginTop: "8px" } }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "College and share"), ui.h("span", { class: "fold-status" }, `${c.typeLabel.toLowerCase()}, ${pct(c.share)}`), ui.h("span", { class: "fold-chev" }, "›")),
+    card.append(ui.h("details", { class: "fold", style: { marginTop: "8px" } }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Type of college and share to cover"), ui.h("span", { class: "fold-status" }, `${c.typeLabel.toLowerCase()}, ${pct(c.share)}`), ui.h("span", { class: "fold-chev" }, "›")),
       ui.form([
         { key: "type", label: "Kind of college", type: "select", options: Object.entries(COSTS).map(([value, x]) => ({ value, label: x.label })) },
         { key: "yearly", label: "A year's cost today (for 'a cost I enter')", type: "money", min: 0 },
@@ -114,7 +114,7 @@ export function render(page, ctx) {
     // only under the credit's income limit, with a student in the first four years (round 8 item 18)
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How fast prices rise"), ui.h("span", { class: "fold-status" }, `${(d.growth * 100).toFixed(1)}% a year`), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.form([{ key: "growth", label: "College prices rise a year", type: "percent", min: 0, max: 15, help: `${(DEFAULT_GROWTH * 100).toFixed(0)}% if empty` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
+      ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, help: `${(DEFAULT_GROWTH * 100).toFixed(0)}% if empty` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = "Saved.";
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), growth: v.growth ?? null }; });
       }, { submitLabel: "Save" })),

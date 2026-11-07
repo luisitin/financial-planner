@@ -10,7 +10,7 @@
 `compute(plan, { today })` -> `{ ready, missing, people[], children[], startYear, spendingYearly, unassignedCover, unplanned[] }`; `unplanned` `[{ id, name, pay, cover, coverWork, birthDate }]` are the adults the plan cannot run for (no birth date): the page shows what is on file for them and what to add. Each person:
 `{ id, name, age, pay, cover, coverWork, survivorName, survivorMissing, plan, child, dime, lifetime, need, method: "plan"|"child"|"dime", gap, spare, gapIfJobEnds, jobEnding, dependants, termUntil, endsSoon, endSteps (a couple's or the rule of thumb's `endsSoon` by date, the same day added up; null for a single parent, whose are `child.endSteps`), gapAfterEnd, raise }`; `survivorMissing` `{ id, name, birthDate }` names a second adult whose own plan cannot be built (no birth date).
 `plan` (couples only): `{ need, gapYears: [{ year, amount, benefits }], firstGap, benefits: { childMonthly, parentMonthly, familyMaxMonthly, childUntil }, withCover: { success, failAge, failYear }, survivorRetireYear, survivorPay }`.
-`child` (a single parent only): `{ children, costs, childcare, share, benefits, benefitsCounted (what of them pays the children's costs and college), benefitsSpare (the rest, kept for the children), kidsShort, benefitMonthly (the first month's), benefitUntil, benefitSteps: [{ monthly, until, who }], familyMaxMonthly, noRecord, college (as counted: discounted, less what is set aside), collegeParts: [{ id, name (null: no goal), from: "goal"|"planner", for, gross (today's money), saved, amount (as counted), tied, partial, figures: [{ name, amount, full (as the Education page shows it), share }] }], collegeKids: [{ name, year (turns 18), gross, value }], collegeLeftOut: [{ name, why: "none"|"share" }], collegeOthers: [{ id, name, for, why: "grown"|"nobirth" }], untiedKids, debts, funeral, savings, net (before the floor at 0), total, years, byYear: [{ year, months, childcare, share, benefits, discount }], fromMonth, realDiscount, childcareMonthly, childcareFor, childcareUntil, careSteps: [{ monthly, until, lastYear, who, ended }], childcareLines, restYearly, shareNow, shareSteps: [{ monthly, fraction, until, who }], perChild: [{ name, costs, childcare, share, college, benefits, counted, short, spare }] (each child's own), shown (`shownChild`: the parts as shown, to the $100, sums from the shown parts: { kids: [{ name, costs, college, benefits, counted, short, spare }], costs, college, benefits, counted, short, spare, debts, funeral, savings, rest, net }), need (today's figure, `childFigure`), today (the same), needByYear: [{ year, need, net, total, kidsShort, costs, college, benefits, benefitsCounted, debts, savings, children, priceLevel, dollars (need x priceLevel: that year's dollars), coverInForce (the cover on file that still pays for a death at any time in that year, `coverIn`, review 2026-11-06), coverWorth (coverInForce / priceLevel: today's money), short (need - coverWorth, at least 0) }] (the need for a death at the start of each year, now to the children's needs' end), peak: { year, need } (the largest in today's money, the earliest year of it), sized: { year, need, real, priceLevel } (the largest in that year's dollars, rounded up to $1,000: the cover to buy, sixth pass), steady (the need never rises from one year to the next), rising (no dip of `SHAPE_TOLERANCE`, 2% of the peak, or more before the peak), needEnds: { year, who, event: "college ends"|"turns 18"|"turn 18" }, and with term cover that ends before the need does (`endsSoon`) afterEnd ({ year, need, real, priceLevel, cover, most }: the year after cover ends that is short the most in that year's dollars, its need rounded up to $1,000, the cover still paying then, and whether that need is also the largest of those years), coveredUntilEnd, coverStays (the cover with no end before the need's) }` (`childNeed()`, `childSeries()`; `collegeValue(amount, birthDate, startYear, realDiscount)`; `collegeLeft(year, start, years)`; `collegeWords(child)`: "college", or "Child 1's college" when some child's is not counted). For a single parent `need` is `sized.need` and `termUntil` is `needEnds` ("Child 1's college ends"). `inDollars(s)`: ", in that year's dollars" after a figure for a later year whose prices are above today's.
+`child` (a single parent only): `{ children, costs, childcare, share, benefits, benefitsCounted (what of them pays the children's costs and college), benefitsSpare (the rest, kept for the children), kidsShort, benefitMonthly (the first month's), benefitUntil, benefitSteps: [{ monthly, until, who }], familyMaxMonthly, noRecord, college (as counted: discounted, less what is set aside), collegeParts: [{ id, name (null: no goal), from: "goal"|"planner", for, gross (today's dollars), saved, amount (as counted), tied, partial, figures: [{ name, amount, full (as the Education page shows it), share }] }], collegeKids: [{ name, year (turns 18), gross, value }], collegeLeftOut: [{ name, why: "none"|"share" }], collegeOthers: [{ id, name, for, why: "grown"|"nobirth" }], untiedKids, debts, funeral, savings, net (before the floor at 0), total, years, byYear: [{ year, months, childcare, share, benefits, discount }], fromMonth, realDiscount, childcareMonthly, childcareFor, childcareUntil, careSteps: [{ monthly, until, lastYear, who, ended }], childcareLines, restYearly, shareNow, shareSteps: [{ monthly, fraction, until, who }], perChild: [{ name, costs, childcare, share, college, benefits, counted, short, spare }] (each child's own), shown (`shownChild`: the parts as shown, to the $100, sums from the shown parts: { kids: [{ name, costs, college, benefits, counted, short, spare }], costs, college, benefits, counted, short, spare, debts, funeral, savings, rest, net }), need (today's figure, `childFigure`), today (the same), needByYear: [{ year, need, net, total, kidsShort, costs, college, benefits, benefitsCounted, debts, savings, children, priceLevel, dollars (need x priceLevel: that year's dollars), coverInForce (the cover on file that still pays for a death at any time in that year, `coverIn`, review 2026-11-06), coverWorth (coverInForce / priceLevel: today's dollars), short (need - coverWorth, at least 0) }] (the need for a death at the start of each year, now to the children's needs' end), peak: { year, need } (the largest in today's dollars, the earliest year of it), sized: { year, need, real, priceLevel } (the largest in that year's dollars, rounded up to $1,000: the cover to buy, sixth pass), steady (the need never rises from one year to the next), rising (no dip of `SHAPE_TOLERANCE`, 2% of the peak, or more before the peak), needEnds: { year, who, event: "college ends"|"turns 18"|"turn 18" }, and with term life insurance that ends before the need does (`endsSoon`) afterEnd ({ year, need, real, priceLevel, cover, most }: the year after cover ends that is short the most in that year's dollars, its need rounded up to $1,000, the cover still paying then, and whether that need is also the largest of those years), coveredUntilEnd, coverStays (the cover with no end before the need's) }` (`childNeed()`, `childSeries()`; `collegeValue(amount, birthDate, startYear, realDiscount)`; `collegeLeft(year, start, years)`; `collegeWords(child)`: "college", or "Child 1's college" when some child's is not counted). For a single parent `need` is `sized.need` and `termUntil` is `needEnds` ("Child 1's college ends"). `inDollars(s)`: ", in that year's dollars" after a figure for a later year whose prices are above today's.
 `termYears(untilYear, startYear)`: the shortest of `TERM_LENGTHS` (10, 15, 20, 25, 30 years, the lengths most companies sell) that lasts until the year, else 30.
 
 ## Formulas
@@ -86,7 +86,7 @@ the month before their birthday month (the 18th for costs and Social Security, t
     for no child under 18, is theirs: it is not counted for the minors and the College line names it ("“Mia college” is not
     counted: it is for Mia, 18 or over, and this answer is for the children under 18"; `collegeOthers`). Only the minors'
     college years are said.
-  - Every other child under 18 gets the Education page's figure: `totalToday` in today's money **as that page shows it**, to
+  - Every other child under 18 gets the Education page's figure: `totalToday` in today's dollars **as that page shows it**, to
     the $10 (`shownAmount`, the function the Education page itself formats with: "$120,110"), x the share chosen there (the
     page says both: "$120,110 (50% of it counted, the share you chose there: $60,055)"), less what a goal with no amount tied
     to them has set aside (`saved`; a goal with no amount tied to no one, Get started's one "Education" goal, stands for all
@@ -97,7 +97,7 @@ the month before their birthday month (the 18th for costs and Social Security, t
     `collegeWords`).
   - Each child's part is **discounted like the costs**: `collegeValue` = amount x (1 + real bond return)^-(the year the child
     turns 18 - the plan's first year), whole years, 0 for a year already reached; what is set aside comes off at face value,
-    like savings. "In today's money" means today's prices everywhere on the page (the costs, the Education page's figure);
+    like savings. "In today's dollars" means today's prices everywhere on the page (the costs, the Education page's figure);
     the total line says once that a cost years away counts for a little less because money set aside now grows that much
     faster than prices ("about 1% a year": 1.04 / 1.03 - 1 = 0.97%).
 - **plus debts** (every liability but mortgages and home-equity lines) **and a funeral** (`FUNERAL`).
@@ -118,7 +118,7 @@ the month before their birthday month (the 18th for costs and Social Security, t
   turning 18 this year) the College line says why it reads $100 rounder ("That is about $104,900 here, to the nearest $100
   like every part of this answer").
 - **The need over time** (fifth pass, `childSeries`, `needByYear`): the same answer worked as if the parent died at the
-  start of each year from now until the children's needs end, in today's money. Year 0 is today's answer (from today's
+  start of each year from now until the children's needs end, in today's dollars. Year 0 is today's answer (from today's
   month); each later year counts from January of that year with the children that much older: costs, childcare and Social
   Security only for the months still under 18 (13), the childcare lines split as today's answer splits them (one child's
   part never grows when another turns 13), each child's college discounted from their 18th year to that year and only the
@@ -126,22 +126,22 @@ the month before their birthday month (the 18th for costs and Social Security, t
   second year), the family maximum for that year of death. The debts are on the payoff plan's schedule (`debt/payoff`, the
   same months as Net worth over time) and the savings that pass are the cash and taxable accounts as the retirement
   projection grows them plus 529 plans as Net worth over time grows them, at the start of that year, divided by the plan's
-  price level for the year before (today's money); spending, pay, the Social Security figure and the goals are as today. The
+  price level for the year before (today's dollars); spending, pay, the Social Security figure and the goals are as today. The
   series runs to the last year with anything left for a child: the youngest's last college year (the Education page's
   first year and years of college), or the year a child with no college counted turns 18.
   **The cover to buy** (sixth pass, `sized`): a level term policy pays the same dollars every year while prices rise, so
   a later year's need has to be multiplied back up by prices: cover = max over the years of (that year's need, as listed,
-  in today's money x the plan's price level for that year, `priceAt`: the same index the series divides by, the retirement
+  in today's dollars x the plan's price level for that year, `priceAt`: the same index the series divides by, the retirement
   projection's price level for the year before, 1.03^(year - 2027) at the default 3%), rounded up to $1,000; the earliest
-  year of the largest is named. The sample: today's $150,000 is the largest in today's money, but 2040's $125,000 is
+  year of the largest is named. The sample: today's $150,000 is the largest in today's dollars, but 2040's $125,000 is
   125,000 x 1.03^13 = $183,566.71 in 2040's dollars, so $184,000 (a $150,000 policy would be worth about $102,100 then:
   $22,900 short). twoss $184,000 x 1.03^10 = $247,280.61, so $248,000; twossrich $222,000; leftout $184,000; Ed and Ann
   $100,000 x 1.03^12, so $143,000. A need largest today that only falls keeps today's figure. The headline, the card, "How
   to get it", Next best action and Needs attention quote it with its year ("That is the most the children would need, if
-  Jo died in 2037, in that year's dollars. Today it would be $11,000"); the year list stays in today's money, the year the
+  Jo died in 2037, in that year's dollars. Today it would be $11,000"); the year list stays in today's dollars, the year the
   cover is sized to marked with its figure in that year's dollars, and "For how long" says once, plainly: "A policy pays the
   same dollars every year while prices rise, so it is sized to the most in that year's dollars: about $184,000, if Jo died
-  in 2040." Cover on file is checked year by year the same way: its payout / that year's price level, in today's money,
+  in 2040." Cover on file is checked year by year the same way: its payout / that year's price level, in today's dollars,
   against that year's need (`coverWorth`, `short`), counting only the cover still in force that year (`coverInForce`,
   review 2026-11-06); `gap` = need - cover, the level cover still to buy so that every year
   is paid (twoss with $200,000: worth $148,818.78 in 2037 against $184,000, so $48,000 more, not "covered"; with $180,000,
@@ -159,7 +159,7 @@ the month before their birthday month (the 18th for costs and Social Security, t
   would need, if Jo died in 2037, in that year's dollars)", and "Covered until" only when the cover pays each year's need
   until it ends (`coveredUntilEnd`).
   `termUntil` (single parent) is when the need ends: the youngest's college ("until about 2044 (Child 1's college ends)"),
-  or 18. "For how long" says when the need is largest in today's money and when it ends; it says the need gets smaller only
+  or 18. "For how long" says when the need is largest in today's dollars and when it ends; it says the need gets smaller only
   when it does every year (`steady`), and grows for a while only when it never dips before its largest by
   `SHAPE_TOLERANCE` (2%) of the largest or more (`rising`, sixth pass: three children whose need goes 155,000, 154,000,
   153,000 before 2034's 180,000 grow for a while; twoss, 11,000 down to 7,000 before 184,000, goes down first); every year
@@ -173,7 +173,7 @@ the month before their birthday month (the 18th for costs and Social Security, t
 dependents are all 18 or over: a grown child, a parent). `gap` = max(0, need - life cover in force on that person); `spare` the other way (a single parent's with cover that ends: the least of cover - need and afterEnd.cover - afterEnd.need, review 2026-11-06); `gapIfJobEnds` without the cover marked through work (a single parent's year by year: the largest of each year's dollars less the cover in force then that is not through work, `ifJobEnds`, verification of review 2026-11-06; a couple's or the rule of thumb's: need - the cover not through work that does not end soon, `jobEnding` being the part that does, follow-up of review 2026-11-06). `termUntil`: the youngest child's 22nd birthday year (`SCHOOL_DONE`), else the survivor's retirement; for a single parent, when the need over time ends (the youngest's college, fifth pass).
 
 ## One answer first, and the gap outside this page (2026-11-02)
-The page opens with one answer: "Ana needs about $212,000 more life cover", who would be short, and how long term cover
+The page opens with one answer: "Ana needs about $212,000 more life cover", who would be short, and how long term life insurance
 should last, with "Add a policy you have" (filled when someone is short). Each person's card keeps the need against the
 cover and says how the plan's answer is worked out; when the plan holds on its own there is no "$0" tile, only the
 sentence. The two rules of thumb (debts, pay, mortgage and college added up; lifetime earnings) are folded under "Two
@@ -191,7 +191,7 @@ Review fixes (2026-11-02):
   survivor's retirement or nothing.
 - The rule of thumb is rounded up to $1,000 like the plan's answer, and is worded as a rule of thumb ("a common rule of
   thumb puts what Cy would need at about $1,530,000"), never as "more than the plan holds".
-- Term cover that ends by next year, before the need ends (`endsSoon`), still raises the step: "Ana's term life cover ends
+- Term life insurance that ends by next year, before the need ends (`endsSoon`), still raises the step: "Ana's term life insurance ends
   1/15/2027: Bo and Cy would then be about $212,000 short" (`gapAfterEnd`).
 - A life policy saved for "Household / everyone" names nobody: `unassignedCover`, a notice here and a sentence in the step
   ("pick who it covers there and it counts"), rather than guessing whose it is.
@@ -328,7 +328,7 @@ years; the couple's figures and page are unchanged):
 Sixth pass (2026-11-05), each fixed as described above (the couple's method, figures and page are unchanged: compute,
 `protectionGaps` and the page's words are identical on the family fixture and on every qa household without a single
 parent, 1,304 plans with the review's cases; the 99 single-parent adults in qa/households all have a need that only falls, so their figures stay):
-- A level policy was sized in today's money though it pays the same dollars every year: the sample's $150,000 is worth
+- A level policy was sized in today's dollars though it pays the same dollars every year: the sample's $150,000 is worth
   about $102,100 in 2040 against $125,000 needed. The cover is now the most of each year's need in that year's dollars
   (sample $184,000 for 2040; twoss $248,000; leftout $184,000; twossrich $222,000; Ed and Ann $143,000), and cover on file
   is checked the same way (twoss with $200,000: $48,000 short, not "covered, $16,000 to spare"; with $180,000: $68,000, not
@@ -354,10 +354,10 @@ either way. Every plan without guesses says exactly what it said before. Test: s
 ## Review 2026-11-06
 Fixes for the verifier's report on the sixth pass (life-verm #1 and #2). The couple's method, figures and words are
 unchanged (endsSoon stays "by next year" for them), apart from the figure without the job (follow-ups, below); the
-figures that moved are single parents with term cover that ends.
+figures that moved are single parents with term life insurance that ends.
 - **Cover that ends before the children's need counted in every later year (high).** twoss with $300,000 ending
   12/31/2030 read "Your family is covered", "Covered, with about $52,000 to spare" and "the $300,000 on file would be worth
-  about $223,200 in today's money" for a death in 2037, when that policy pays nothing from 2031; Needs attention and Next
+  about $223,200 in today's dollars" for a death in 2037, when that policy pays nothing from 2031; Needs attention and Next
   best action said nothing. Each year now counts only the cover in force for a death at any time in it (`coverInForce`:
   no end date, or an end on or after December 31 of that year), and every policy that ends before the children's need
   does is cover that ends (`endsSoon`), however far off. Now: "Jo needs about $248,000 more life cover", "Covered until
@@ -379,12 +379,12 @@ figures that moved are single parents with term cover that ends.
     beside a card that says "short".
   - "Also covers the most they would need" and the "would be worth" lines use the cover in force in that year, and are
     left out when none is.
-- **Two kinds of dollars side by side (low).** "Short by about $68,000" sat over "worth about $133,900 in today's money,
-  against $184,000 needed then". The worth line now says both: "...: about $50,100 short in today's money, which is the
+- **Two kinds of dollars side by side (low).** "Short by about $68,000" sat over "worth about $133,900 in today's dollars,
+  against $184,000 needed then". The worth line now says both: "...: about $50,100 short in today's dollars, which is the
   $68,000 more cover in 2037's dollars (rounded up to the next $1,000)."
 
 ### Verification (review 2026-11-06)
-- **Cover through work beside term cover that ends (high).** "Without it ... would be short about $X" counted every
+- **Cover through work beside term life insurance that ends (high).** "Without it ... would be short about $X" counted every
   policy on file for every year, so a policy ending before the children's need still paid in the later year. twoss with
   $100,000 through work and $150,000 ending 9/30/2029 read "Short by up to about $148,000" with the job and "Without it
   ... short about $98,000" without it; with nothing in force from 2029 it is $248,000 for 2037. A single parent's figure
@@ -395,10 +395,10 @@ figures that moved are single parents with term cover that ends.
   shows only when it is larger than the headline's figure.
 - **Several policies that end (medium).** The page named only the first policy to end: $100,000 and $150,000 both ending
   12/31/2033 read "Covered until 12/31/2033, when $100,000 of it ends"; $10,000 ending 2027 beside $300,000 ending 2041
-  read "Jo's term life cover ends 12/31/2027" and "Covered until 12/31/2027" when every year to 2041 is covered; a ladder
+  read "Jo's term life insurance ends 12/31/2027" and "Covered until 12/31/2027" when every year to 2041 is covered; a ladder
   of $150,000 to 2031 and to 2036 said what to buy "after $150,000 of cover ends". `endSteps` lists the policies not
-  paying in afterEnd's year by end date, the same day added up: one date reads "Jo's $250,000 of term cover ends on
-  12/31/2033" and "when $250,000 of it ends"; several dates read "Jo's term cover ends in steps, $10,000 on 12/31/2027
+  paying in afterEnd's year by end date, the same day added up: one date reads "Jo's $250,000 of term life insurance ends on
+  12/31/2033" and "when $250,000 of it ends"; several dates read "Jo's term life insurance ends in steps, $10,000 on 12/31/2027
   and $300,000 on 12/31/2041" and "$10,000 of it ends on 12/31/2027 and $300,000 on 12/31/2041; after that short by up
   to about $105,000", never "Covered until" the first date; How to get it says "after $300,000 of cover ends" (all the
   steps); Needs attention's title names every date ("ends 12/31/2027 and 12/31/2041").
@@ -420,7 +420,7 @@ figures that moved are single parents with term cover that ends.
   ending the same day read "$100,000 term policy". `endSteps` (a couple's and the rule of thumb's) lists `endsSoon` by
   date, the same day added up, as a single parent's `child.endSteps` does. Short today: "Short by about $35,000 now, and
   by about $185,000 once $150,000 of it ends on 6/30/2027." Several dates: the lede, Needs attention and Next best action
-  say "Ana's term cover ends in steps, $50,000 on 3/31/2027 and $150,000 on 12/31/2027 ...: once it has ended they would
+  say "Ana's term life insurance ends in steps, $50,000 on 3/31/2027 and $150,000 on 12/31/2027 ...: once it has ended they would
   be about $85,000 short" (title "ends 3/31/2027 and 12/31/2027"), the card "Covered for now: $50,000 of it ends on
   3/31/2027 and $150,000 on 12/31/2027; once it has ended, short by about $85,000." The same day: "$250,000 of term
   cover". One policy with the gap at 0 today reads as before. No figure moves.
@@ -450,7 +450,7 @@ figures that moved are single parents with term cover that ends.
 ## Ideas / not yet
 - The couple's need over time (fifth pass, reported, not shown: the couple keeps its method and figures). The same check
   on the family fixture (a death at the start of each year, everyone that much older, the savings grown bucket by bucket as
-  the retirement projection grows them and the debts on the payoff plan, both in today's money, pay and spending as today):
+  the retirement projection grows them and the debts on the payoff plan, both in today's dollars, pay and spending as today):
   Ana $235,000 now, then $222,000 (2027), $213,000, $205,000, $196,000 (2030), $160,000 (2031, the car loan and the card
   gone), $150,000 ... $96,000 (2037), $84,000 (2038) ... $48,000 (2041): it falls every year, so the couple's "largest now
   and shrinks" holds there. Bo needs $0 every year. Held at today's balances instead (no saving after today), Ana's rises

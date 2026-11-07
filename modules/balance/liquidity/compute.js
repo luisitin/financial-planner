@@ -10,7 +10,7 @@ import { taxOwedNow } from "../../taxes/estimated/compute.js";
 // How fast each account type turns into spendable cash.
 export const TIERS = {
   now:   { label: "Usable today",         desc: "cash, checking, savings", types: ["cash", "checking", "savings"] },
-  week:  { label: "Sellable within a week", desc: "brokerage, crypto: sell, then wait for settlement", types: ["brokerage", "crypto"] },
+  week:  { label: "Sellable within a week", desc: "brokerage, crypto: sell, then wait a day or two for the cash to arrive", types: ["brokerage", "crypto"] },
   later: { label: "Locked up or costly to tap", desc: "retirement accounts, HSA, 529, property, vehicles, insurance cash value", types: null },
 };
 const tierOf = (type) => TIERS.now.types.includes(type) ? "now" : TIERS.week.types.includes(type) ? "week" : "later";

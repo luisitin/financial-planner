@@ -11,7 +11,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Rebalance"), ui.h("p", { class: "lede" }, "The trades that bring your mix back to its target, selling where it costs no tax and buying with the cash that frees. It needs your holdings and a target first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Allocation"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Rebalance"), ui.h("p", { class: "lede" }, "The trades that bring your mix back to its target, selling where it costs no tax and buying with the cash that frees up. It needs your holdings and a target first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Allocation"))));
     return;
   }
   // no mix of your own chosen, or most of the money not classified: nothing to trade yet, and what to do first

@@ -221,7 +221,7 @@ export function careYear(st, bucket) {
 const bucketOf = (age) => (ok(age) && age >= 0 ? BUCKETS.find(([, lo, hi]) => age >= lo && age <= hi)?.[0] ?? null : null);
 
 // ---- taps (spec 5.8; answers in guide.setup.taps)
-export const HEALTH_ASK = { key: "health-cover", kind: "hurdle", question: "How do you get health cover?", options: [{ value: "work", label: "Through work" }, { value: "own", label: "On my own or the Marketplace" }, { value: "public", label: "Medicaid or Medicare" }, { value: "unsure", label: "Not sure" }] };
+export const HEALTH_ASK = { key: "health-cover", kind: "hurdle", question: "How do you get health insurance?", options: [{ value: "work", label: "Through work" }, { value: "own", label: "On my own or the Marketplace" }, { value: "public", label: "Medicaid or Medicare" }, { value: "unsure", label: "Not sure" }] };
 export const CHILDCARE_ASK = { key: "childcare", kind: "hurdle", question: "Do you pay for childcare or after-school care?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "unsure", label: "Not sure" }] };
 export const HOA_ASK = { key: "hoa", kind: "hurdle", question: "Do you pay an HOA or condo fee?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "unsure", label: "Not sure" }] };
 const HOA = "acs2025_hoa_condo_fee_by_state";
@@ -620,7 +620,7 @@ function buildModel(plan, today, args, force, lib) {
     if (how === "work") {
       const one = prof.adults.length <= 1 && !kids.length;
       const prem = at(HEALTH.kff_ehbs2026_premiums, "worker contribution, monthly", one ? "single" : "family");
-      put("insurance", { fixed: prem ?? 0, flex: oop, weight: "big", premium: prem, why: "what workers usually pay for cover at work, plus medicine and visits", tables: ["kff_ehbs2026_premiums", ...T_BASE, ...T_REG] });
+      put("insurance", { fixed: prem ?? 0, flex: oop, weight: "big", premium: prem, why: "what workers usually pay for job insurance, plus medicine and visits", tables: ["kff_ehbs2026_premiums", ...T_BASE, ...T_REG] });
     } else if (how === "public") {
       const n65 = prof.adults.filter((x) => ok(x.age) && x.age >= 65).length;
       const year = String(yearOf(today));
@@ -640,7 +640,7 @@ function buildModel(plan, today, args, force, lib) {
       const floorEach = (at(HEALTH.cms_medicare_2026_parts_ab, "partB:standardMonthlyPremium", "value") ?? 0) + (partD ?? 0);
       const qi = prof.adults.length > 1 ? 2455 : 1816;
       const floor = n65 > 0 && (prof.income ?? 0) / 12 > qi ? n65 * floorEach : 0;
-      put("insurance", { fixed: 0, flex: Math.max(flexAmount("insurance"), Math.ceil(floor / 10) * 10), weight: "big", ask: how ? null : HEALTH_ASK, why: "health cover and medicine, typical for a household like yours", tables: [...T_BASE, ...T_REG, ...(floor ? ["cms_medicare_2026_parts_ab", "cms_medicare_part_d_parameters"] : [])] });
+      put("insurance", { fixed: 0, flex: Math.max(flexAmount("insurance"), Math.ceil(floor / 10) * 10), weight: "big", ask: how ? null : HEALTH_ASK, why: "health insurance and medicine, typical for a household like yours", tables: [...T_BASE, ...T_REG, ...(floor ? ["cms_medicare_2026_parts_ab", "cms_medicare_part_d_parameters"] : [])] });
     }
   }
   // E06 childcare: always asked (no published share paying); Yes prices each child under 13 whose age is known
@@ -687,8 +687,8 @@ function buildModel(plan, today, args, force, lib) {
       if (!((bank.byRow[row] ?? 0) > 0.5)) continue;
       const off = typedIn(row), plus = row === "insurance" ? unseen : 0;
       rows[row] = { ...rows[row], fixed: Math.max(0, (bank.byRow[row] ?? 0) - off) + plus, flex: 0, value: undefined, ask: null, sharper: [], bank: true, elsewhere: off,
-        why: row === "insurance" && plus > 0.5 ? fit(`your bank files, ${when}, and cover taken from pay`, "your bank files and the cover taken from pay")
-          : row === "insurance" ? fit(`${bankWhy}; not cover taken from pay`, "your bank files; not cover taken from pay") : bankWhy, tables: [] };
+        why: row === "insurance" && plus > 0.5 ? fit(`your bank files, ${when}, and insurance taken from pay`, "your bank files and the insurance taken from pay")
+          : row === "insurance" ? fit(`${bankWhy}; not insurance taken from pay`, "your bank files; not insurance taken from pay") : bankWhy, tables: [] };
     }
   }
   // a bill typed elsewhere in a row's categories comes off the guess (never counted twice)
@@ -710,8 +710,8 @@ function buildModel(plan, today, args, force, lib) {
  *  with R12 on, the bank files the figures come from. */
 export function spendBasis(plan, { today } = {}) {
   const bank = bankSpend(plan, today, { rows: kidsOf(plan, today).length ? ROWS : ROWS.filter((r) => r !== "childcare") });
-  if (bank?.on) return `The grey figures are what your bank files show going out on each, a month over ${monthsWords(bank.months)}.`;
-  return `The grey figures are what a household like yours usually spends: ${householdWords(plan, { today })}.`;
+  if (bank?.on) return `The gray figures are what your bank files show going out on each, a month over ${monthsWords(bank.months)}.`;
+  return `The gray figures are what a household like yours usually spends: ${householdWords(plan, { today })}.`;
 }
 /** Who the spending guesses take the household to be, in words: "one adult renting in Texas on about $48,000 a year". */
 export function householdWords(plan, { today } = {}) {

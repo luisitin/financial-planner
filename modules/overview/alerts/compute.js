@@ -110,7 +110,7 @@ export function compute(plan, params = {}) {
   // setup
   if (ppl.count === 0) add("no-people", "info", "Add the people in your household", "Ages drive retirement, insurance and how long the money must last.", ["household", "people"]);
   if (nw.count === 0) add("no-accounts", "info", "Add your accounts", "Net worth, the emergency fund and every projection start from your balances.", ["balance", "net-worth"]);
-  if (inc.count === 0) add("no-income", "info", "Enter what comes in", "Income is needed to check spending, debt load and savings rate.", ["cashflow", "income"]);
+  if (inc.count === 0) add("no-income", "info", "Enter what comes in", "The app needs your income to check your spending, your debts and how much you save.", ["cashflow", "income"]);
   if (exp.count === 0) add("no-expenses", "info", "Enter what goes out", "Expenses set the emergency-fund target and what retirement has to cover.", ["cashflow", "expenses"]);
   if (!asm.reviewedAt) add("assumptions-unreviewed", "info", "Look over the assumptions", "Ten numbers drive every projection. Confirm them once.", ["system", "assumptions"], chore);
   else if (asm.stale) add("assumptions-stale", "warn", "Assumptions were reviewed over a year ago", "Rates and inflation move. Look again and confirm.", ["system", "assumptions"]);
@@ -149,7 +149,7 @@ export function compute(plan, params = {}) {
     // a full month within $5 of $0 "only just about breaks even" (spare.fullKind "even"): no "about $0", and red, as good
     // months do not make up for lean ones then (round 5)
     const held = nba?.ready && nba.spare.held > 0.5, kind = held ? nba.spare.fullKind : null, about = held ? nba.spare.fullAbout : null, lean = held && kind === "ahead";
-    add("overspend", lean ? "warn" : "bad", lean ? "Lean months run short" : "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}${held ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${lean ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}. ${lean ? "Good months make up for lean ones; keep a cash cushion for the months in between, or spend less." : "Check the amounts, then find what to cut."}`, ["cashflow", "expenses"]);
+    add("overspend", lean ? "warn" : "bad", lean ? "Lean months run short" : "You spend more than comes in", `About ${money(short)} more goes out each month than comes in${nba?.ready ? ", after tax and saving" : ""}${held ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${lean ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}. ${lean ? "Good months make up for lean ones; keep your emergency fund for the months in between, or spend less." : "Check the amounts, then find what to cut."}`, ["cashflow", "expenses"]);
   }
   // a likely bill in April: the year's federal tax against what the paychecks take out by December (typed, else estimated
   // from pay) and what is already paid, the same answer as Withholding check; flagged from $1,000 left to pay
@@ -172,8 +172,8 @@ export function compute(plan, params = {}) {
     try { e = estimatedOf(plan, { today }); } catch { e = null; }
     if (e?.needsEstimates && e.remaining > 0 && e.holdBack) holdBack = { e, h: e.holdBack };
     // nothing ever typed on Estimated payments is not "$0 paid": ask first, say what is due if none were made (review 2026-11-02)
-    else if (e?.needsEstimates && e.behind > 0 && !e.paidTyped) add("estimates-behind", "warn", `Estimated tax: type what you have paid this year`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments, and none are typed yet. If none were made, about ${money(e.behind)} was due by now: type what you paid on Estimated payments, or pay the past-due part to keep the underpayment penalty small.`, ["taxes", "estimated"]);
-    else if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `Nothing in the plan takes tax out of what comes in, so ${e.year}'s federal tax (about ${money(e.totalTax)}) is paid in four estimated payments; ${money(e.paid)} is paid so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
+    else if (e?.needsEstimates && e.behind > 0 && !e.paidTyped) add("estimates-behind", "warn", `Estimated tax: type what you have paid this year`, `No tax is taken out of your income, so you pay ${e.year}'s federal tax (about ${money(e.totalTax)}) yourself in four estimated payments, and you have not typed any yet. If none were made, about ${money(e.behind)} was due by now: type what you paid on Estimated payments, or pay the past-due part to keep the underpayment penalty small.`, ["taxes", "estimated"]);
+    else if (e?.needsEstimates && e.behind > 0) add("estimates-behind", "warn", `About ${money(e.behind)} of estimated tax is past due`, `No tax is taken out of your income, so you pay ${e.year}'s federal tax (about ${money(e.totalTax)}) yourself in four estimated payments; you have paid ${money(e.paid)} so far. Paying the past-due part now keeps the underpayment penalty small. If a pension or IRA withdrawal has tax taken out, type it on the Federal estimate page.`, ["taxes", "estimated"]);
   }
   // the people who count on an earner (Life insurance needs' answer, the same as Next best action's protection step), and a
   // guardian for the children: the two gaps that would hurt a family most, worked out on pages few people open
@@ -181,7 +181,7 @@ export function compute(plan, params = {}) {
   try { prot = nba?.ready ? (nba.steps.find((x) => x.id === "protect")?.people ?? []) : protectionGaps(plan, { today }); } catch { prot = []; }
   const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0] ?? "the family");
   // the title and sentence are Life insurance needs' own (protectionGaps), the same words as the Dashboard's move
-  for (const g of prot) add(`life-cover-${g.personId}`, "warn", g.title, `${g.sentence} Cover you already have, through work too, goes on Policies.`, ["insurance", "life-needs"]);
+  for (const g of prot) add(`life-cover-${g.personId}`, "warn", g.title, `${g.sentence} Add insurance you already have, including any through work, on Policies.`, ["insurance", "life-needs"]);
   let docs = null;
   try { docs = estateDocs(plan, { today }); } catch { docs = null; }
   if (docs?.minors?.length && docs.items?.find((x) => x.kind === "guardian")?.status !== "done") {

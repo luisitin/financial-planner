@@ -21,7 +21,7 @@ grey sentence at the end of a paragraph said why the plan looked short.
 
 ## The answer first: how much to take out (round 4, 2026-11-02)
 The hero answers "how much do we take out, and from where?" for the first year of retirement (this year, for a household already retired), from Will the money last?'s own engine with the chosen way of spending (`firstYear`, today's dollars):
-- need = spending + one-off costs + the year's tax - guaranteed income (Social Security, pensions, other income), floor 0.
+- need = spending + one-time costs + the year's tax - guaranteed income (Social Security, pensions, other income), floor 0.
 - from savings = everything the engine takes out that year, the required withdrawal included; extra = from savings - need.
 - where from: cash first, then the plan's withdrawal order, each named by its accounts.
 Three sentences: nothing needs to come out; or income covers the spending but the law still requires a withdrawal (how much, from which account, the tax on it, and where the rest can go, with a link to Required withdrawals); or take about $X, starting with these accounts, which with the guaranteed income pays for the spending and its tax. Then the most the plan can carry (Will the money last?'s `affordable`, to the $100), or where it runs out.
@@ -68,10 +68,10 @@ time), so nothing jumps or freezes; with a rule other than steady spending it sa
 9 of 10 markets it keeps the average-market sentence. The figure is settled on the Chance page's 2,000 paths, the same as on
 Will the money last?.
 
-## Health cover in the first-year answer (2026-11-02)
-`firstYear` returns `health` (the projection's health cover that year, today's dollars), and the answer says it with the spending: "That pays for the $84,000 you plan to spend, $4,800 of health cover and about $9,000 of tax." `need` already had it (it is among the year's one-off costs, `eventOut`). `healthAdded` (the plan adds cover in some year) makes the two spending figures say "on top of health cover".
+## Health insurance in the first-year answer (2026-11-02)
+`firstYear` returns `health` (the projection's health insurance that year, today's dollars), and the answer says it with the spending: "That pays for the $84,000 you plan to spend, $4,800 of health insurance and about $9,000 of tax." `need` already had it (it is among the year's one-time costs, `eventOut`). `healthAdded` (the plan adds cover in some year) makes the two spending figures say "on top of health insurance".
 Review fix 2026-11-02: with no tax that year the two take one "and" ("pays for the $78,000 you plan to spend and $4,051 of
-health cover"); it read "..., $4,051 of health cover." with the "and" missing.
+health insurance"); it read "..., $4,051 of health insurance." with the "and" missing.
 
 ## Round 8 (2026-11-06): what each way takes and spends, and a guard on "Use this one" (widow-1)
 (Superseded by Batch 5b, the last section: the engine changed, `"below-spending"` is gone, and the guard is only a safety net.)
@@ -82,7 +82,7 @@ money last? read "you plan on $36,000" next to "Paid by income 299%" (50,400 / 1
 $422,000 pot (8.5%, over its 4.8% line), cut her spending to $20,986 while her income alone covers it. The engine is not changed
 here (the key is frozen; the owner's question is below). What changed:
 - Each way's first retirement year, in today's dollars, from its own run with the plan's expected returns (`first`):
-  - same spending every year, guardrails (`rule: "spend"`): spend = the year's spending + health cover; take = everything taken
+  - same spending every year, guardrails (`rule: "spend"`): spend = the year's spending + health insurance; take = everything taken
     out of savings that year (a required withdrawal included: "the least the law allows; the rest goes back into savings").
   - share of what is left, years-left (`rule: "share"`), when held: the way's amount read as the withdrawal it is: take =
     max(the way's amount, the required withdrawal), spend = take + income, before tax. The widow: take $16,880 (4.0% of what you
@@ -117,10 +117,10 @@ tax") keeps the engine's own tax, so its sums still add up.
   were not there, so in 2027 it plans on $43,689 of spending, less than your $44,563 of income, and as low as $25,468. "Same spending
   every year" plans on what you really spend." Only the expected run decides (it is what "Use this one" plans on).
 - **Each first line adds up (review D6, D7, UX 1).** The parts of the year, in today's dollars, from the way's own run: `spend` =
-  the row's own spending (the figure beside "you spend" is never the spending plus health cover), `health`, `other` (one-off
+  the row's own spending (the figure beside "you spend" is never the spending plus health insurance), `health`, `other` (one-time
   costs), `tax`, `take` (all taken from savings), `short` (the engine's shortfall), `back` = take - need - tax, the part of a
   required withdrawal the engine puts back (core/math/retirement.js: `surplus = netOut - need - taxes`). Words: "take about $48,507
-  from savings; with your $24,000 of income, that pays for the $60,000 you spend, $5,231 of health cover and about $7,276 of tax"
+  from savings; with your $24,000 of income, that pays for the $60,000 you spend, $5,231 of health insurance and about $7,276 of tax"
   (48,507 + 24,000 = 60,000 + 5,231 + 7,276); a year savings run short: "savings have only about $7,286 left; with your $29,808 of
   income that covers about $37,094 of the $57,861 the year needs"; a required withdrawal beyond the need: "your $50,400 of income
   already pays for the $36,000 you spend, so the withdrawal, less its tax, goes back into savings" (no figure: the plan's tax is
@@ -153,7 +153,7 @@ to regenerating `tests/golden/retirement/withdrawal-strategy.csv`, on the condit
 
 **The rule (`core/math/retirement.js`, every retired year of a way other than the same spending every year).** In today's dollars
 scaled by the year's price level; `total` is savings at the start of the year, `income` the year's guaranteed income (Social
-Security, pensions, other income), `health` and `one-offs` the year's health cover and one-off costs, `tax` the year's tax before
+Security, pensions, other income), `health` and `one-offs` the year's health insurance and one-time costs, `tax` the year's tax before
 any Roth conversion (a conversion's own tax comes from savings on top and cuts nobody's spending):
 - A share of what is left: withdrawal = max(0, total x rate). Years left: withdrawal = max(0, PMT_due(real return, years left,
   total)), the annuity-due payment (unchanged).
@@ -214,9 +214,9 @@ understand and use the page".
 **The rule, corrected (`core/math/retirement.js`).** The share and years-left ways:
 - savings pay `share + max(0, tax + health - income)` + one-offs (+ a conversion's own tax);
 - spending = `share + max(0, income - tax - health)`.
-So guaranteed income pays the year's tax and health cover first, and savings pay whatever of them it cannot, on top of the share.
-In every year savings can pay, spending + health cover + tax = income + everything taken out (review D1: with no income the
-share was cut by its own tax and health cover; 453 qa plans planned $0 to live on in their first retired year, where bc7f3ca
+So guaranteed income pays the year's tax and health insurance first, and savings pay whatever of them it cannot, on top of the share.
+In every year savings can pay, spending + health insurance + tax = income + everything taken out (review D1: with no income the
+share was cut by its own tax and health insurance; 453 qa plans planned $0 to live on in their first retired year, where bc7f3ca
 spent the share. With no income the figures now equal bc7f3ca to the cent: $1,000,000 pre-tax at 20%, 4%: $40,000 spent,
 $50,000 taken, $10,000 tax). Guardrails unchanged by this.
 Guardrails' target G (review D4): after a losing year G does not rise with prices but still falls with them
@@ -230,7 +230,7 @@ return per allocation, not the year's market). The expected run is unchanged. Th
 $0.014 over 28 years.
 
 **Each way on its own run (review D2).** `inputsByWay(plan)` builds each way's inputs from the plan with that way saved: health
-cover before 65 is priced on the plan's own income, which moves with the way (Pat and Jo's share way: $3,450 of health cover
+cover before 65 is priced on the plan's own income, which moves with the way (Pat and Jo's share way: $3,450 of health insurance
 when priced on the saved way's income, $33,721 on its own, since its income falls under the line where the help stops). The
 figure beside "Use this one", the worst stretch, the guard and the Projection page's list all use it; it equals Will the money
 last? with that way saved (test "5b review D2").
@@ -244,7 +244,7 @@ last? with that way saved (test "5b review D2").
   bad stretch like 1960 it falls to about $4,048."
 - "How much you could spend: four ways" (UX 6), with one line that answers "which one?" once the 9-in-10 figure is in, and an
   outlined "Plan on $4,600 a month" under the advice; it saves Retirement settings' spending figure
-  (`projection/compute.js saveSpendingFigure`) and confirms "Your plan now spends $4,600 a month on top of health cover (it was
+  (`projection/compute.js saveSpendingFigure`) and confirms "Your plan now spends $4,600 a month on top of health insurance (it was
   $5,000). It lasts in 9 of 10 markets." (checked on the phone: Will the money last? then reads 93%).
 - The chance in the same words as Will the money last? and Required withdrawals (UX 7, `careful.js chanceWords`): "9 of 10
   markets" at 90% or more, "about half of markets" from 45% to under 60%, else "about N of 10 markets" rounded down (never 9
@@ -260,7 +260,7 @@ last? with that way saved (test "5b review D2").
 ## Batch 5b verify (2026-11-07)
 Under the owner's answer of 2026-11-06 ("You can do as you please. Just make sure a layman can easily understand and use the page"):
 - R1 (engine): guardrails' target is held after a losing year (`G x min(1, 1 + inflation)`) only while it needs a withdrawal
-  (`max(0, G + health cover + tax - income) > 0`); while income pays for all of it, G follows prices (`G x (1 + inflation)`, still
+  (`max(0, G + health insurance + tax - income) > 0`); while income pays for all of it, G follows prices (`G x (1 + inflation)`, still
   never above the plan at the year's prices). Frozen with nothing drawn, the target sank below the plan unseen and, never drawn
   on, was never raised back: the widow through the 1960 window spent $32,946 in today's dollars on a $36,000 plan in 2047 with
   $470,928 of savings untouched ("Nothing is trimmed while income pays for everything" said otherwise); now $36,000. Test:
@@ -289,7 +289,7 @@ Decision: the prosperity rule (strictly below 0.8 times the rate: +10%, never ab
 needs is $0 because Social Security or a pension pays for all of it. Before, it needed a withdrawal above $0, so a target trimmed while savings paid stayed down for good once
 income covered it. Why this reading: the page promises "trimmed by a tenth after bad years and raised back after good ones", and the owner's rule ("make sure a layman can
 easily understand and use the page") is not met by a way that never raises back. The cap at the plan keeps it from compounding past what the household said it spends.
-- Pat and Jo (`bridgeCouple`, retiring at 62 on a $60,000 plan; health cover before 65 pushes the withdrawal past 1.2 x the rate): trimmed 2029-2032 to $34,976, held at
+- Pat and Jo (`bridgeCouple`, retiring at 62 on a $60,000 plan; health insurance before 65 pushes the withdrawal past 1.2 x the rate): trimmed 2029-2032 to $34,976, held at
   $43,539 while a withdrawal is still needed, then raised back from 2036 and at the full $60,000 from 2041. Before: $38,000 to $43,500 a year for 29 years under the plan
   and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
 - Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved

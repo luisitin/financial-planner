@@ -639,8 +639,8 @@ rule("HD-PAYOFF-ONE-DATE", "B", (H) => {
     const single = live.length === 1;
     const others = [...(single ? [["debt/payoff", pay?.baseline?.debts?.find((y) => y.id === x.acct.id)?.endDate]] : [["debt/payoff (own payment)", pay?.rollover?.find((y) => y.id === x.acct.id)?.ownEnd]]), ...(x.kind === "mortgage" && mort?.mortgage?.id === x.acct.id ? [["debt/mortgage", mort.base?.endDate]] : []),
       ...(x.kind === "mortgage" ? [["overview/timeline", tl?.events?.find((e) => e.kind === "mortgage")?.date]] : [])];
-    // a second date is allowed when the page says why (the timeline: "... moving onto it once paid off; on its own payment it runs to ...")
-    const labelled = (page) => page === "overview/timeline" && /on its own payment it runs to/.test(tl?.events?.find((e) => e.kind === "mortgage")?.detail ?? "");
+    // a second date is allowed when the page says why (the timeline: "... moving to the mortgage once paid off; with its own payment alone, it would run to ...")
+    const labelled = (page) => page === "overview/timeline" && /with its own payment alone, it would run to/.test(tl?.events?.find((e) => e.kind === "mortgage")?.detail ?? "");
     for (const [page, d] of others) if (d) out.push(res(Math.abs(ym(d) - base) <= 1 || labelled(page), { liabilities: x.row.payoffDate, [page]: d }, `${x.kind} ${page}`));
     if (x.kind === "mortgage" && bp?.rows?.length) {
       const free = bp.rows.find((r) => (Number(r.mortgage) || 0) <= 0.5);

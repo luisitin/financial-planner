@@ -63,7 +63,7 @@ export function render(page, ctx) {
     { key: "salary", label: "Salary a year", type: "money", min: 0, help: "empty: your pay on the Income page" },
     { key: "bonus", label: "Bonus a year (what you expect)", type: "money", min: 0, help: "empty: your bonuses on the Income page" },
     { key: "stockYearly", label: "Stock a year", type: "money", min: 0, help: "empty: your grants as they vest (Employer stock page)" },
-    { key: "matchYearly", label: "Employer's retirement money a year", type: "money", min: 0, help: "empty: the match on the Contributions page" },
+    { key: "matchYearly", label: "Employer's retirement money a year", type: "money", min: 0, help: "empty: the match on the Retirement contributions page" },
     ...shared(),
   ];
   const nowValues = { ...Object.fromEntries(nowFields.map((f) => [f.key, c[f.key] ?? null])) };
@@ -98,7 +98,7 @@ export function render(page, ctx) {
   ].filter(Boolean);
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How it compares"), ui.h("span", { class: "fold-status" }, `${d.years === 1 ? "1 year" : `${d.years} years`}${d.person ? `, ${d.person.name}` : ""}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form(setFields, { personId: d.person?.id ?? "", years: d.years }, (v) => save("Saved.", (w) => { if (v.personId !== undefined) w.personId = v.personId; w.years = v.years ?? DEFAULTS.years; }), { submitLabel: "Save" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/salary" }, "Salary and raises"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Benefits"), ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/salary" }, "Salary and raises"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Work benefits"), ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"))));
 
   function yearCard(o) {
     const y = o.yearly, t = o.tax;
@@ -114,14 +114,14 @@ export function render(page, ctx) {
         `${Math.round(o.time.work).toLocaleString("en-US")} hours of work a year (${o.inputs.hoursWeek} a week, ${o.inputs.ptoDays} days off)`,
         o.time.commuteHours > 0 ? `${Math.round(o.time.commuteHours).toLocaleString("en-US")} hours on the commute` : "no commute",
       ].join("; ") + ".") : null,
-      o.perHour !== null ? ui.h("p", {}, `An ordinary year keeps about ${fmt.money(o.perHour, cur)} for every hour of work and travel.`) : null);
+      o.perHour !== null ? ui.h("p", {}, `In an ordinary year you keep about ${fmt.money(o.perHour, cur)} for every hour of work and commuting.`) : null);
   }
   function shared(forOffer = false) {
     const now = d.options?.[0]?.inputs;
     const same = (v, fallback) => (forOffer && now && d.hasJob ? `empty: the same as your job now (${v})` : fallback);
     return [
       { key: "hsaEmployer", label: "Employer's health account money a year", type: "money", min: 0 },
-      { key: "premium", label: "Health insurance you pay a year", type: "money", min: 0, help: "your share; in 2026 workers paid $1,672 a year on average for cover alone, $7,471 for a family (KFF)" },
+      { key: "premium", label: "Health insurance you pay a year", type: "money", min: 0, help: "your share; in 2026 workers paid $1,672 a year on average for single coverage, $7,471 for family coverage (KFF)" },
       { key: "otherYearly", label: "Other benefits worth a year", type: "money", min: 0, help: "a pension, tuition help, meals, a phone: the ones you would use" },
       { key: "ptoDays", label: "Paid days off a year, holidays too", type: "number", min: 0, max: 100, step: "1", help: same(now?.ptoDays, `empty: ${DEFAULTS.ptoDays}, the average after a year at a job for workers who get paid time off: 11 vacation days and 8 holidays (BLS)`) },
       { key: "hoursWeek", label: "Hours worked a week", type: "number", min: 0, max: 100, step: "1", help: same(now?.hoursWeek, `empty: ${DEFAULTS.hoursWeek}`) },
@@ -139,8 +139,8 @@ export function render(page, ctx) {
       { key: "bonus", label: "Bonus a year (what you expect)", type: "money", min: 0 },
       { key: "signOn", label: "Sign-on bonus (once)", type: "money", min: 0 },
       { key: "stockYearly", label: "Stock a year", type: "money", min: 0, help: "the grant's value divided by the years it vests over" },
-      { key: "matchRate", label: "Retirement match: for each dollar you put in, they add", type: "percent", min: 0, max: 300, help: "50 means 50 cents a dollar" },
-      { key: "matchUpTo", label: "On what you put in up to", type: "percent", min: 0, max: 100, help: "a share of your pay; 6 means the first 6%" },
+      { key: "matchRate", label: "Retirement match: for each dollar you put in, they add", type: "percent", min: 0, max: 300, help: "50 means 50 cents for every dollar you put in" },
+      { key: "matchUpTo", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, help: "a share of your pay; 6 means the first 6%" },
       ...shared(true),
       { key: "movingCost", label: "Moving costs (once)", type: "money", min: 0 },
     ];

@@ -2,7 +2,7 @@
 // like over your likely lifetime, what bonds paying the same would cost, and what buying it does to your
 // plan; one form to add or change a quote. Runs on the PC when connected.
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { nameIn, nameOf, verbFor } from "../../../core/words.js";
+import { nameIn, nameOf, verbFor, withA } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -46,7 +46,7 @@ export function render(page, ctx) {
       const ladderBetter = q.ladderSaving < 0;
       if (q.rate !== null && Number.isFinite(q.rate)) card.append(
         ui.h("p", { class: `an-v ${ladderBetter ? "warn" : "ok"}` }, ladderBetter ? `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: less than the annuity.` : `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: the annuity is ${money(q.ladderSaving)} cheaper.`),
-        ui.h("p", { class: "an-d" }, `It pays ${pct(q.payoutRate)} of the sum a year; over the lifetime ${q.joint ? "the two of you are" : `${nameIn(q.personName)} ${verbFor(q.personName, "is", "are")}`} likely to have, that is like a ${pct(q.rate)} return. The bonds stop at ${q.endAge}; the annuity keeps paying after, which is what it is for.`));
+        ui.h("p", { class: "an-d" }, `It pays ${pct(q.payoutRate)} of the sum a year; over the lifetime ${q.joint ? "the two of you are" : `${nameIn(q.personName)} ${verbFor(q.personName, "is", "are")}`} likely to have, that is like ${withA(pct(q.rate))} return. The bonds stop at ${q.endAge}; the annuity keeps paying after, which is what it is for.`));
       if (q.withIt) {
         const b = d.base, w = q.withIt;
         const row = (label, x, y) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, x), ui.h("b", {}, y));
@@ -58,7 +58,7 @@ export function render(page, ctx) {
           row("Left at the end", money(b.endReal), money(w.endReal))),
           ui.h("p", { class: "muted small" }, "Guaranteed income covers: Social Security, pensions and annuities as a share of the first retirement year's spending. Today's dollars."));
       }
-      card.append(ui.row(ui.button("Change", () => { editing = (plan.retirement.annuities ?? []).find((y) => y.id === q.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
+      card.append(ui.row(ui.button("Edit", () => { editing = (plan.retirement.annuities ?? []).find((y) => y.id === q.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
       host.append(card);
     }
     const formHost = ui.h("div");
@@ -98,7 +98,7 @@ export function render(page, ctx) {
     host.append(ui.card("Good to know", ui.h("ul", {},
       ui.h("li", {}, "A quote here is a what-if: the plan only counts an annuity you have bought (add it as a pension)."),
       ui.h("li", {}, "Bought with savings outside retirement accounts, part of each payment is your own money back and is not taxed; inside an IRA it is all taxed. The plan taxes all of it, to be safe."),
-      ui.h("li", {}, "Each state guarantees annuities up to a limit (often $250,000 per insurer) if an insurer fails: spread larger sums.")),
+      ui.h("li", {}, "Each state guarantees annuities up to a limit (often $250,000 per insurer) if an insurer fails, so spread larger amounts across several insurers.")),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/pensions" }, "Pensions"), ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts"))));
   }
 }

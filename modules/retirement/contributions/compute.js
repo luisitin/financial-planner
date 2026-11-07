@@ -187,9 +187,9 @@ export function compute(plan, params = {}) {
         if (!hp || !hp.used) continue;
         limits.push({ kind, label: HSA_LABEL[hsa.coverage], limit: hp.limit, used: hp.used, over: hp.over, catchUp: hp.catchUp, year: L.kindYear.hsa });
         if (hp.over > 0) warnings.push(hp.eligible && hp.medicareMonths > 0
-          ? `${p.name}: ${hp.medicareMonths >= 12 ? "on Medicare all year" : `on Medicare from ${MONTH_NAMES[(hp.firstMedicareMonth ?? 1) - 1]}`}, and once you are on Medicare you cannot add to an HSA. ${Math.round(hp.used).toLocaleString("en-US")} goes in, this year's limit is ${hp.limit.toLocaleString("en-US")}${hp.medicareMonths >= 12 ? "" : " (only the months before Medicare count)"}. Change it on the HSA page.`
+          ? `${p.name}: ${hp.medicareMonths >= 12 ? "on Medicare all year" : `on Medicare from ${MONTH_NAMES[(hp.firstMedicareMonth ?? 1) - 1]}`}, and once you are on Medicare you cannot add to an HSA. ${Math.round(hp.used).toLocaleString("en-US")} goes in, this year's limit is ${hp.limit.toLocaleString("en-US")}${hp.medicareMonths >= 12 ? "" : " (only the months before Medicare count)"}. Change it on the HSA and FSA page.`
           : !hp.eligible
-          ? `${p.name}: ${Math.round(hp.used).toLocaleString("en-US")} goes into an HSA, but ${hsa.coverage === "none" ? "the HSA page says there is no high-deductible health plan" : "only the person on the self-only high-deductible plan can have one"}. If the cover is different, change it on the HSA page.`
+          ? `${p.name}: ${Math.round(hp.used).toLocaleString("en-US")} goes into an HSA, but ${hsa.coverage === "none" ? "the HSA and FSA page says there is no high-deductible health plan" : "only the person on the self-only high-deductible plan can have one"}. If your coverage is different, change it on the HSA and FSA page.`
           : `${p.name}: HSA contributions of ${Math.round(hp.used).toLocaleString("en-US")} are over the ${L.kindYear.hsa} limit of ${hp.limit.toLocaleString("en-US")}${hp.catchUp ? " (with catch-up)" : ""}${hsa.shared ? ", the share of the family limit left by the other spouse's money" : ""}.`);
         continue;
       }

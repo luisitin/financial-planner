@@ -5,7 +5,7 @@ export const PHASES = [
   { n: 0,  title: "Foundation",                    blurb: "The app itself: shell, storage, PC server, the first pages." },
   { n: 1,  title: "Reach it anywhere",             blurb: "Access token, router port forward or Tailscale, start with Windows." },
   { n: 2,  title: "Your numbers",                  blurb: "People, income, expenses, goals and the assumptions behind everything." },
-  { n: 3,  title: "Transactions",                  blurb: "Import bank exports, rules, AI categorisation, real income statement." },
+  { n: 3,  title: "Transactions",                  blurb: "Import bank exports, rules, AI categorization, real income statement." },
   { n: 4,  title: "Cash flow and debt",            blurb: "Bills, a 90-day forecast, envelope budget, payoff plans." },
   { n: 5,  title: "Retirement",                    blurb: "Projections, Social Security, withdrawal strategies, Monte Carlo on the PC." },
   { n: 6,  title: "Taxes",                         blurb: "Federal estimate, brackets, withholding, Roth conversions." },

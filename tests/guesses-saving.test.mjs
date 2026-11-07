@@ -407,14 +407,14 @@ test("UX 6 (batch 3): a plan said at Get started is not 'a job left' -- the word
   assert.equal(acct(w, `setup-workplan-${ME}`).balance, 0);
   const m = matchStep(w);
   assert.ok(m && m.status === "check");
-  assert.match(m.detail, /^Jordan's job has a retirement plan \(you said so in Get started\), but nothing goes into it yet\. Check whether the employer matches, and put in at least enough to get all of it\. If there is no match, say so on Retirement contributions\./);
+  assert.match(m.detail, /^Jordan's job has a retirement plan \(you said so in Set up my plan\), but nothing goes into it yet\. Check whether the employer matches, and put in at least enough to get all of it\. If there is no match, say so on Retirement contributions\./);
   assert.doesNotMatch(m.detail, /job left/);
   assert.equal(m.ask[0].saidPlan, true);
   // a 401(k) the person typed on Net worth keeps the old words and the clause
   const o = worker(jordan());
   o.accounts.push({ id: "a-401", name: "My 401(k)", type: "401k", balance: 12000, ownerId: ME, asOf: "2026-11-01", history: [] });
   const d = matchStep(o);
-  assert.match(d.detail, /If the 401\(k\) is from a job left, or there is no match, say so on Retirement contributions\./);
+  assert.match(d.detail, /If the 401\(k\) is from a job you left, or there is no match, say so on Retirement contributions\./);
   assert.equal(d.ask[0].saidPlan, undefined);
   // the empty $0 401(k) of Get started with no plan answer on file (an older plan) counts as said too
   const e = worker(jordan());

@@ -37,12 +37,12 @@ export function render(page, ctx) {
     let editing = null;
     if (!d.bequests.length) host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "What you want to leave"),
-      ui.h("p", { class: "lede" }, "Money for the children, a grandchild's education, a cause you care about. Write down what you would like to leave and to whom, in today's money, and the plan will aim to still have it at the end."),
+      ui.h("p", { class: "lede" }, "Money for the children, a grandchild's education, a cause you care about. Write down what you would like to leave and to whom, in today's dollars, and the plan will aim to still have it at the end."),
       ui.h("p", { class: "muted small" }, "This is a planning goal, not a will: the will (or the beneficiary forms) is what actually passes it on.")));
     else {
       host.append(ui.card(null, ui.row(
         ui.stat("You want to leave", money(d.total), [d.people ? `${money(d.people)} to people` : null, d.charity ? `${money(d.charity)} to causes` : null].filter(Boolean).join(", ")),
-        ui.stat("The plan should keep", money(d.target), d.includeHome && d.home ? `in savings, after ${money(d.home)} from the home` : "in savings, in today's money"),
+        ui.stat("The plan should keep", money(d.target), d.includeHome && d.home ? `in savings, after ${money(d.home)} from the home` : "in savings, in today's dollars"),
       )));
       if (d.ready) {
         const verdict = d.meets ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.` : d.success ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.` : "As it stands the money runs out before the end of the plan, before any legacy.";
@@ -64,7 +64,7 @@ export function render(page, ctx) {
       formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), ui.form([
         { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy, or a food bank" },
         { key: "kind", label: "Who", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
-        { key: "amount", label: "Amount, in today's money", type: "money", min: 0 },
+        { key: "amount", label: "Amount, in today's dollars", type: "money", min: 0 },
         { key: "notes", label: "Notes", type: "text", placeholder: "e.g. for a first home" },
       ], editing ? { ...editing } : { kind: "person" }, (v) => {
         const clean = { to: v.to.trim(), kind: v.kind, amount: v.amount ?? 0, notes: (v.notes ?? "").trim() };
@@ -92,6 +92,6 @@ export function render(page, ctx) {
         store.update((p) => { p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.legacy = { ...(p.estate.legacy ?? { bequests: [] }), includeHome: !!v.includeHome }; });
       }, { submitLabel: "Save" })));
     }
-    host.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Give some now"))));
+    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Give some now"))));
   }
 }

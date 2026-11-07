@@ -249,6 +249,11 @@ const PLAIN = [
   [/ more each month \(Goals\)\./g, " more each month (see the Goals page)."],
   [/\bassumptions looked over in the last year/g, "the app's guesses for inflation and investment growth looked over in the last year"],
   [/\bthe score leans on\b/g, "the score needs"],
+  [/\bthe score depends on\b/g, "the score needs"],
+  [/\bPayments take (\d+)% of income before tax/g, "Debt payments take $1% of pay before tax"],
+  [/ of income before tax\b/g, " of pay before tax"],
+  [/The plan can pay for about (\S+) a month against the (\S+) it plans \((\d+)%\)\./g, "In retirement your savings could pay about $1 a month; the plan needs $2 ($3%)."],
+  [/\bare filled in and up to date\b/g, "are filled in and current"],
 ];
 export const plainWords = (text) => PLAIN.reduce((s, [re, to]) => s.replace(re, to), String(text ?? ""));
 

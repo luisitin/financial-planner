@@ -37,7 +37,7 @@ export function render(page, ctx) {
     const top = d.biggest;
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, top ? `${top.label} moves your plan the most` : "What moves your plan most"),
-      ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, everything else held. As it stands the plan can carry about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${money(round10(d.base.spendingMonthly))} it plans.`),
+      ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${money(round10(d.base.spendingMonthly))} it plans.`),
       top ? ui.h("p", {}, `${top.label}: ${top.low.label} instead of ${top.baseLabel} ${verb(top.low.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.low.affordableMonthly - d.base.affordableMonthly)))} a month${top.high.label === top.baseLabel ? "" : `; ${top.high.label} ${verb(top.high.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.high.affordableMonthly - d.base.affordableMonthly)))}`}.`) : null));
 
     const chips = ui.h("div", { class: "chips", role: "group", "aria-label": "Measure" });
@@ -51,7 +51,7 @@ export function render(page, ctx) {
       const all = rows.flatMap((r) => [val(r.low), val(r.high)]).concat(baseVal);
       const lo = Math.min(...all), hi = Math.max(...all);
       caption.textContent = metric === "spend"
-        ? `Bars: the steady spending a month (today's dollars) the plan can carry with each setting. The line is your plan as it is, ${money(round10(baseVal))}.`
+        ? `Bars: the steady spending a month (today's dollars) the plan can pay for with each setting. The line is your plan as it is, ${money(round10(baseVal))}.`
         : `Bars: what is left at the end of the plan (today's dollars) with each setting. The line is your plan as it is, ${money(round1000(baseVal))}.`;
       list.replaceChildren(...rows.map((r, i) => ui.h("li", { class: "sn-row" },
         ui.h("div", { class: "sn-head" }, ui.h("span", { class: "sn-label" }, ui.h("span", { class: "sn-rank" }, String(i + 1)), r.label), ui.h("span", { class: "sn-now" }, `now ${r.baseLabel}`)),
@@ -59,17 +59,17 @@ export function render(page, ctx) {
         bar(r, val, baseVal, lo, hi, metric === "spend" ? (n) => money(round10(n)) : (n) => short(n, cur, fmt)))));
     };
     draw();
-    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The tornado"), chips, caption, list));
+    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Which numbers matter most"), chips, caption, list));
     host.append(ui.card("Read it like this",
       ui.h("ul", {},
         ui.h("li", {}, "The longest bars are the numbers worth getting right, or worth acting on: a short bar means the plan barely cares."),
         ui.h("li", {}, "Some you choose (when to retire, how much to save, when to claim Social Security); some you only guess (returns, inflation, how long you live). Plan around the guesses with room to spare; move the choices."),
-        ui.h("li", {}, "Inflation weighs heavily because your return assumptions are before inflation: a point more inflation is a point less real growth on everything you hold."),
+        ui.h("li", {}, "Inflation weighs heavily because your return assumptions are before inflation: one percentage point more inflation means one percentage point less growth after inflation on everything you hold."),
       ), ui.row(ui.h("a", { class: "btn secondary", href: "#/system/assumptions" }, "Assumptions"), ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
-        ui.h("li", {}, `Returns, inflation and pay rises: ${Math.round(NUDGE.returns * 100)} percentage point either way. Retirement age: ${NUDGE.retireYears} years (never earlier than next year). Plan end: ${NUDGE.endYears} years. Saving: ${Math.round(NUDGE.saving * 100)}% less or more. Stocks in retirement: ${Math.round(NUDGE.mix * 100)} points. Flat tax: ${Math.round(NUDGE.tax * 100)} points.${d.ssMethod ? ` ${d.ssMethod}` : ""}`),
+        ui.h("li", {}, `Returns, inflation and pay raises: ${Math.round(NUDGE.returns * 100)} percentage point either way. Retirement age: ${NUDGE.retireYears} years (never earlier than next year). Plan end: ${NUDGE.endYears} years. Saving: ${Math.round(NUDGE.saving * 100)}% less or more. Stocks in retirement: ${Math.round(NUDGE.mix * 100)} points. Flat tax: ${Math.round(NUDGE.tax * 100)} points.${d.ssMethod ? ` ${d.ssMethod}` : ""}`),
         ui.h("li", {}, "The spending figure is the largest steady, inflation-adjusted spending that still lasts to the end of the plan (the same search as Will the money last?)."),
       ))));
   });

@@ -9,7 +9,11 @@ const SECTION_NAMES = {
   accounts: "accounts", netWorthHistory: "net-worth snapshots", transactions: "transactions", income: "income sources",
   expenses: "expenses", budgets: "budgets", debts: "debts", goals: "goals", holdings: "holdings", property: "properties", scenarios: "scenarios",
 };
-const sectionName = (k) => SECTION_NAMES[k] ?? k.replace(/([A-Z])/g, " $1").toLowerCase();
+const SECTION_ONE = {
+  accounts: "account", netWorthHistory: "net-worth snapshot", transactions: "transaction", income: "income source", expenses: "expense",
+  budgets: "budget", debts: "debt", goals: "goal", holdings: "holding", property: "property", scenarios: "scenario",
+};
+const sectionName = (k, n = 2) => (n === 1 && SECTION_ONE[k]) || (SECTION_NAMES[k] ?? k.replace(/([A-Z])/g, " $1").toLowerCase());
 
 // The shell re-renders the page after every store.update, which would wipe a "Saved."
 // notice; so the message waits here and the next render shows it once.
@@ -65,7 +69,7 @@ export function render(root, ctx) {
   // ---- your data
   const dataOut = out();
   const fileIn = ui.h("input", { type: "file", accept: "application/json", style: { display: "none" } });
-  const counts = derived.sections.filter((s) => s.count > 0).map((s) => `${s.count} ${sectionName(s.key)}`);
+  const counts = derived.sections.filter((s) => s.count > 0).map((s) => `${s.count} ${sectionName(s.key, s.count)}`);
   root.append(ui.card("Your data",
     ui.muted(counts.length ? `${derived.updatedAt ? `Last changed ${fmt.date(derived.updatedAt)} · ` : ""}${counts.join(", ")} (${derived.sizeKB} KB).` : "No accounts or entries yet."),
     ui.row(

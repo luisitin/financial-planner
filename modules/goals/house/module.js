@@ -14,7 +14,7 @@ export default {
   needs: ["income", "accounts", "debts", "goals", "assumptions", "whatIfs"],
   writes: ["whatIfs", "goals"],
   heavy: false,
-  purpose: "How much home your income supports, what it costs a month, the cash you need on the day and when you will have it.",
+  purpose: "How much home your income supports, what it costs a month, the cash you need at closing and when you will have it.",
   compute,
   render,
 };

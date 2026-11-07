@@ -35,13 +35,14 @@ export function render(page, ctx) {
     const { wrap, sheet } = reportFrame(ui, { title: `${d.year} in review` });
     host.append(wrap);
     const nw = d.netWorth, m = d.money;
+    const monthsIn = d.partial ? Number(d.today.slice(5, 7)) : 12;
     sheet.append(ui.h("h1", {}, `${d.year} in review`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}${d.partial ? "the year so far · " : ""}prepared ${longDate(d.today)}`),
       ui.h("p", { class: "rp-lead" }, [
         !nw ? "No net-worth points were saved this year: save one each month on Net worth and next year's review will show the change."
           : nw.change === null ? `Net worth is ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}. Save it each month on Net worth and the review will show the change through the year.`
           : `Net worth went from ${money(nw.first.netWorth)} on ${longDate(nw.first.date)} to ${money(nw.last.netWorth)} ${nw.last.live ? "today" : `on ${longDate(nw.last.date)}`}: ${Math.abs(nw.change) < 0.5 ? "no change" : `${nw.change >= 0 ? "up" : "down"} ${money(Math.abs(nw.change))}`}.${nw.lastSaved ? ` (The last total saved that year is from ${longDate(nw.lastSaved)}.)` : ""}`,
         m ? `${money(m.in)} came in and ${money(m.out)} went out${m.rate !== null ? `; ${fmt.pct(m.rate, 0)} of it was kept` : ""}.${cardSay(m)}${gapSay(m)}` : "",
-        `${d.reviews.count} of ${d.partial ? Number(d.today.slice(5, 7)) : 12} months were reviewed.`,
+        `${d.reviews.count} of ${monthsIn} ${monthsIn === 1 ? "month" : "months"} ${d.reviews.count === 1 ? "was" : "were"} reviewed.`,
         d.health ? `The plan's health today: ${d.health.score} out of 100 (${d.health.band.toLowerCase()}).` : "",
       ].filter(Boolean).join(" ")));
     if (nw) sheet.append(section(ui, "Net worth",

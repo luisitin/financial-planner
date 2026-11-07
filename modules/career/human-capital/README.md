@@ -9,13 +9,13 @@
 - `whatIfs.humanCapital = { [personId]: "steady" | "average" | "volatile" }` (default average).
 - The federal and payroll tax share of pay (`overview/next-best-action` `spare`); life policies naming each earner
   (`insurance.policies`, kinds term, whole, universal, life); investable savings (`balance/net-worth`); the retirement
-  projection's year-end balances in today's money.
+  projection's year-end balances in today's dollars.
 
 ## Outputs
 `{ ready, people: [{ id, name, age, retireAge, years, pay, risk, rate, realRate, value, afterTax, cover, coverShare }], total, totalAfterTax, takeHome, financial, share, path: [{ year, human, financial }], crossYear, real, raiseGain }`.
 
 ## Formulas
-- Everything in today's money: real growth g = (1 + salary growth) / (1 + inflation) − 1; real discount r likewise.
+- Everything in today's dollars: real growth g = (1 + salary growth) / (1 + inflation) − 1; real discount r likewise.
 - Discount by how steady the pay is (after Ibbotson, Milevsky and Chen, "Lifetime Financial Advice", CFA Institute
   Research Foundation, 2007: human capital is valued at a rate that reflects the job's risk): steady = the bond return,
   average = bond return + 2 points, volatile = the stock return.

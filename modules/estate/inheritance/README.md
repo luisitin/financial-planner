@@ -4,7 +4,7 @@
 **Purpose:** An inheritance you might receive, as a what-if beside the plan (never inside it): what arrives after tax and costs, what it would change if it came, and if it came half as large or ten years later.
 
 ## Inputs
-`estate.inheritance`, the retirement plan (`buildInputs`, `project`, `affordableSpending`). Writes `estate.inheritance = { items: [{ id, from, amount (today's money), year, kind: "cash"|"home"|"ira"|"roth", notes }] }`. Heavy: five plan runs, each with the affordable-spending search.
+`estate.inheritance`, the retirement plan (`buildInputs`, `project`, `affordableSpending`). Writes `estate.inheritance = { items: [{ id, from, amount (today's dollars), year, kind: "cash"|"home"|"ira"|"roth", notes }] }`. Heavy: five plan runs, each with the affordable-spending search.
 
 ## Outputs
 `compute(plan, { today })` -> `{ ready, missing, items[] (with kindLabel, net), total, net, taxRate, base, withIt, half, later, spendingMonthly, extraMonthly, endGain }`; each run `{ success, failYear, endReal, affordableMonthly }`.

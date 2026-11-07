@@ -73,9 +73,9 @@ moves with markets (How much to take out)." The saving, return and lump-sum leve
 share rule they read "$0" and "-9.2%", as before; not changed here). Test: `module.test.mjs` "recheck 2026-11-05" (percent,
 guardrails and VPW give the steady age on both the function and the lever).
 
-## Health cover (review 2026-11-02)
+## Health insurance (review 2026-11-02)
 The spending answer says what it is measured against, as Will the money last? does: "Up to about $7,440 a month on top of
-health cover, $440 more than the $7,000 the plan spends before health cover" while the projection adds its health line
+health insurance, $440 more than the $7,000 the plan spends before health insurance" while the projection adds its health line
 (`healthAdded`), and the old words when the spending figure already includes cover (`retirement.healthIncluded`).
 
 ## Fifth pass (review 2026-11-02)

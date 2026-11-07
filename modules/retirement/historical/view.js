@@ -11,16 +11,16 @@ export function render(root, ctx) {
   const host = ui.h("div");
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "If history repeated itself"),
-    ui.h("p", { class: "lede" }, "Your plan replayed through every stretch of real US history since 1928: the same years of stock and bond returns and inflation, starting in 1929, in 1966, in 2000... Each start year is one run."),
+    ui.h("p", { class: "lede" }, "Your plan replayed through every stretch of actual US history since 1928, with the stock and bond returns and inflation of those years, starting in 1929, in 1966, in 2000 and so on. Each start year is one run."),
   ));
   root.append(host);
   host.append(ui.notice("info", "Replaying history..."));
   ctx.computeRemote("retirement/historical", { today: fmt.today() }).then((d) => {
     host.innerHTML = "";
-    if (!d || !d.ready) { host.append(ui.notice("warn", ui.h("span", {}, "The projection needs a few things first: ", (d?.missing ?? []).join("; "), ". ", ui.h("a", { href: "#/retirement/projection" }, "Projection page")))); return; }
+    if (!d || !d.ready) { host.append(ui.notice("warn", ui.h("span", {}, "The projection needs a few things first: ", (d?.missing ?? []).join("; "), ". ", ui.h("a", { href: "#/retirement/projection" }, "Will the money last?")))); return; }
     host.append(ui.card(null, ui.row(
       ui.stat("Survived", fmt.pct(d.successRate, 0), `of ${d.windows} start years (${d.dataRange[0]} to ${d.dataRange[1] - d.years + 1})`),
-      ui.stat("Spending that survived every start", d.safeSpending !== null ? fmt.money(d.safeSpending, cur) : "-", `a year, today's dollars; you plan on ${fmt.money(d.spendingYearly, cur)}`),
+      ui.stat("Spending that lasted in every start year", d.safeSpending !== null ? fmt.money(d.safeSpending, cur) : "-", `a year, today's dollars; you plan on ${fmt.money(d.spendingYearly, cur)}`),
       ui.stat("Typical amount left", fmt.money(Math.max(0, d.medianEndReal), cur), "middle start year, today's dollars"),
     ), ui.h("p", { class: "small" }, { strong: "Strong: it held up through the Depression, the 1970s and 2000-2009.", fair: "Fair: most stretches were fine; the worst starts below sank it.", weak: "Weak: many stretches of real history would have run this plan dry." }[d.verdict])));
     const years = d.runs.map((r) => r.startYear);

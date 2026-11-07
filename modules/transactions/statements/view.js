@@ -22,10 +22,10 @@ export function render(root, ctx) {
   }).catch(() => { aiPill.textContent = "AI not reachable"; aiPill.className = "pill warn"; });
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Read a statement"),
-    ui.h("p", { class: "lede" }, "No file to download from your bank? Give the plan the statement itself: a PDF, or a photo or screenshot of the page with the transactions. The PC reads it and shows you the rows before anything is added."),
-    ui.h("p", { class: "muted small" }, "A PDF with real text is read on the PC directly. A scan or photo needs the AI on your PC. Nothing leaves your PC unless you chose an online AI in Settings. ", aiPill),
+    ui.h("p", { class: "lede" }, "No file to download from your bank? Give the plan the statement itself: a PDF, or a photo or screenshot of the page with the transactions. Your computer reads it and shows you the rows before anything is added."),
+    ui.h("p", { class: "muted small" }, "A PDF with real text is read on your computer directly. A scan or photo needs the AI on your computer. Nothing leaves your computer unless you chose an online AI in Settings. ", aiPill),
   ));
-  if (!store.backend || store.backend() !== "server") { root.append(ui.notice("warn", "This page needs the PC: the pill at the top should say Saved on PC. On the phone, connect to the PC in Settings first.")); }
+  if (!store.backend || store.backend() !== "server") { root.append(ui.notice("warn", "This page needs your computer: the pill at the top should say Saved on your computer. On the phone, connect to your computer in Settings first.")); }
   if (!d.accounts.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the account the statement belongs to first: ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth")))); return; }
 
   const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: a.name })), accountId, { onChange: (e) => { accountId = e.target.value; const a = d.accounts.find((x) => x.id === accountId); kind = a && isLiability(a.type) ? "card" : "bank"; kindSel.value = kind; if (result) preview(); } });
@@ -54,7 +54,7 @@ export function render(root, ctx) {
   const read = async () => {
     if (!file) return;
     readBtn.disabled = true; readBtn.textContent = "Reading… this takes a minute or two for a photo";
-    outHost.innerHTML = ""; outHost.append(ui.notice("info", `Reading ${file.name} on the PC...`));
+    outHost.innerHTML = ""; outHost.append(ui.notice("info", `Reading ${file.name} on your computer...`));
     try {
       const dataBase64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(file); });
       result = await api.readStatement({ fileName: file.name, mime: file.type, dataBase64, kind, mode: "auto" });
@@ -74,7 +74,7 @@ export function render(root, ctx) {
     outHost.append(
       ui.h("p", { class: "muted small" }, `${result.pages} page${result.pages === 1 ? "" : "s"}, ${result.rows.length} row${result.rows.length === 1 ? "" : "s"} found, ${how}.${result.period?.to ? ` Statement period ${fmt.date(result.period.from)} to ${fmt.date(result.period.to)}.` : ""}${result.closingBalance !== null && result.closingBalance !== undefined ? ` Closing balance on the statement: ${fmt.money(result.closingBalance, cur, undefined, 2)}.` : ""}${result.dropped ? ` ${result.dropped} line${result.dropped === 1 ? "" : "s"} the AI returned could not be used.` : ""}`),
       ...(result.warnings ?? []).map((w) => ui.notice("warn", w)),
-      ui.h("div", { class: "form" }, ui.field("Amounts look backwards", flip, "tick if spending shows as money in below")),
+      ui.h("div", { class: "form" }, ui.field("Amounts look backwards", flip, "check this box if spending shows as money in below")),
       ui.row(
         ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
         ui.stat("Already on file", String(dup), "skipped as duplicates"),

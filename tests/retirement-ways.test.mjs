@@ -86,7 +86,7 @@ test("guardrails: a cut comes after a fall, and the raise back stops at the plan
   near(c.rows[9].spending, 40000, 0.01, "raised back to the plan's figure");
 });
 
-test("no way leaves guaranteed income unspent: spending, health cover and tax add up to at least the year's income", () => {
+test("no way leaves guaranteed income unspent: spending, health insurance and tax add up to at least the year's income", () => {
   const I = retiree({ endYear: 2050, people: [{ name: "Example", birthYear: 1956, retireAge: 65, endAge: 94 }], balances: { cash: 10000, taxable: 50000, deferred: 400000, free: 0 },
     incomes: [pension(30000), { name: "Social Security", yearly: 20000, personIndex: 0, startAge: 72, cola: true, taxable: true }],
     rates: { inflation: 0.03, cash: 0.02, salaryGrowth: 0, taxRate: 0.15, stocksNow: 0.5, stocksRetired: 0.5 }, returns: { stocks: 0.07, bonds: 0.04 },
@@ -106,7 +106,7 @@ test("a required withdrawal above the way's own draw: the rest goes back into sa
   near(y.rmd, 10000); near(out(y), 10000); near(y.taxes, 1500); near(y.spending, 33420); near(y.balances.taxable, 5080);
 });
 
-test("a share of what is left with health cover and a one-off cost: the cover is paid from income and the draw, the one-off on top", () => {
+test("a share of what is left with health insurance and a one-time cost: the cover is paid from income and the draw, the one-time on top", () => {
   // $400,000 taxable, 5% = $20,000; $30,000 of pension; $8,000 of health cover that year and a $5,000 one-off: $25,000 comes
   // out of savings; spending = 30,000 + 20,000 - 0 tax - 8,000 = $42,000
   const r = project(retiree({ balances: { cash: 0, taxable: 400000, deferred: 0, free: 0 }, incomes: [pension(30000)], strategy: "percent", withdrawalRate: 0.05,
@@ -124,7 +124,7 @@ test("the same spending every year is unchanged: income above the need is not sp
 });
 
 // ---- Batch 5b review fixes (2026-11-06) ------------------------------------------------------------------------------------------
-test("review D1: with no guaranteed income, tax and health cover come on top of the share, as before the owner's change", () => {
+test("review D1: with no guaranteed income, tax and health insurance come on top of the share, as before the owner's change", () => {
   // $1,000,000 in a pre-tax IRA at a flat 20%, no income, 4%: the share is $40,000 to spend. The tax on what comes out is paid on
   // top: W = 40,000 + 0.2 W, so W = $50,000 and the tax is $10,000 (bc7f3ca: the same 40,000 / 50,000). It was $32,000 spent.
   const r = project(retiree({ balances: { cash: 0, taxable: 0, deferred: 1000000, free: 0 }, rates: { inflation: 0, cash: 0, salaryGrowth: 0, taxRate: 0.2, stocksNow: 0.5, stocksRetired: 0.5 }, strategy: "percent" }));

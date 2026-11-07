@@ -1,6 +1,8 @@
 // core/format.js -- display formatting only. Never do math here.
+// An amount that rounds to zero is "$0": -0 and -0.3 would otherwise print "-$0".
+const noNegativeZero = (n, digits) => (Math.abs(Number(n)) < 0.5 / 10 ** digits ? 0 : Number(n));
 export const money = (n, currency = "USD", locale = "en-US", digits = 0) =>
-  Number.isFinite(Number(n)) ? new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(Number(n)) : "-";
+  Number.isFinite(Number(n)) ? new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(noNegativeZero(n, digits)) : "-";
 // toPrecision(12) first: 0.0725 * 100 is 7.249999999999999 in floating point and would show 7.2%.
 export const pct = (x, digits = 1) => Number.isFinite(Number(x)) ? `${Number((Number(x) * 100).toPrecision(12)).toFixed(digits)}%` : "-";
 export const num = (n, digits = 0, locale = "en-US") => Number.isFinite(Number(n)) ? new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(Number(n)) : "-";

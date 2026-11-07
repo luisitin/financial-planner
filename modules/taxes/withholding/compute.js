@@ -249,9 +249,9 @@ export function step3Words(x, left, { year = null, typed = false, whose = null }
   const n = (v) => `$${Math.round(v).toLocaleString("en-US")}`;
   const form = whose ? `${whose} new W-4` : "a new W-4";
   const alt = typed ? " (credits), or the matching amount in Step 4(b) (deductions)," : "";
-  if (x.one) return `About ${n(x.january)} in Step 3 of ${form}${alt} brings take-home up and the refund down, this year and next.`;
+  if (x.one) return `About ${n(x.january)} in Step 3 of ${form}${alt} brings your take-home pay up and the refund down, this year and next.`;
   const later = x.january >= 1 ? `change Step 3 to about ${n(x.january)}` : "set Step 3 back to 0";
-  return `For the ${left} paycheck${left === 1 ? "" : "s"} left this year, about ${n(x.step3)} in Step 3 of ${form}${alt} brings take-home up and the refund down. In January${year ? ` ${Number(year) + 1}` : ""}, ${later}, or next year's paychecks would take out too little (a W-4 stays until you change it).`;
+  return `For the ${left} paycheck${left === 1 ? "" : "s"} left this year, about ${n(x.step3)} in Step 3 of ${form}${alt} brings your take-home pay up and the refund down. In January${year ? ` ${Number(year) + 1}` : ""}, ${later}, or next year's paychecks would take out too little (a W-4 stays until you change it).`;
 }
 
 /**

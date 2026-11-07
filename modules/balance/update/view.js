@@ -39,8 +39,8 @@ export function render(root, ctx) {
 
   const head = ui.h("section", { class: "card" },
     ui.h("h1", {}, "Update my balances"),
-    ui.h("p", { class: "lede" }, d.stale ? `${d.stale} of your ${d.count} balances ${d.stale === 1 ? "is" : "are"} more than a month old.` : `All ${d.count} balances are from the last month.`),
-    ui.h("p", { class: "muted small" }, "Open each account's app or statement and type today's balance. A box you leave as it is counts as still right today. Save once at the bottom."));
+    ui.h("p", { class: "lede" }, d.stale ? `${d.stale} of your ${d.count} balances ${d.stale === 1 ? "is" : "are"} more than a month old.` : (d.count === 1 ? "Your balance is from the last month." : `All ${d.count} balances are from the last month.`)),
+    ui.h("p", { class: "muted small" }, "Open each account's app or statement and type today's balance. If you leave a box as it is, the app counts that balance as still right today. Save once at the bottom."));
   if (pending) {
     const n = ui.notice(pending.kind, pending.text);
     if (pending.kind === "ok") n.append(" ", ui.h("a", { href: "#/balance/net-worth" }, "See net worth ›"));

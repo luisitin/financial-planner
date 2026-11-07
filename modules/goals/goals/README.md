@@ -26,7 +26,7 @@ Goal shape: `{ id, name, icon, target, targetDate, priority (1 must, 2 want, 3 n
 A goal used to open only its edit form, and nothing led to Education, Vehicle, House down payment, Emergency fund or
 Travel, which give their own (different) figures. `plannerFor(goal)` picks the page by icon or name (🎓 college, 🚗 car,
 🏠 house, 🛟 emergency, ✈️ trip). Each goal row has a link: "What it costs: Education ›", or, when that page's figure is 5%
-or more away from the goal's amount (`plannerDiffers`), "Education works it out at $117,813 in today's money ›". The edit
+or more away from the goal's amount (`plannerDiffers`), "Education works it out at $117,813 in today's dollars ›". The edit
 form then says both figures and offers "Use $117,810 from Education", which sets the goal's amount (today's dollars) and
 confirms it. `plannerFigure(goal, row, page, result)` turns the page's result into today's dollars: Education's
 `totalToday`; Vehicle's net (price + sales tax - trade-in, in purchase-day dollars) x target / targetThen; Emergency

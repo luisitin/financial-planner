@@ -82,7 +82,7 @@ test("R3: the Health page does not count payroll tax for a retiree, and says not
   assert.ok(/self-only limit, at [\d.]+% \(income tax\)\./.test(yt), yt.slice(0, 1400));
 });
 
-test("R4: the older notes do not say 'taxed as pay' for someone with no pay", () => {
+test("R4: the older notes do not say 'taxed as wages' for someone with no pay", () => {
   // a spouse with no pay outside the self-only plan: Mo is retired, Eve covered and working
   const p = emptyPlan();
   p.household.filingStatus = "married_joint";
@@ -93,17 +93,17 @@ test("R4: the older notes do not say 'taxed as pay' for someone with no pay", ()
   p.taxes.hsa = { coverage: "self", coveredId: "eve", contribution: 0, employer: 0, fsa: 0, fsaSpent: 0 };
   const note = compute(p, { today: T }).notes.find((n) => /not on the self-only health plan/.test(n)) ?? "";
   assert.ok(/Mo is not on the self-only health plan, so the 1,000 going into Mo's HSA is not allowed: it gets no tax break and is charged 6% a year until taken out\./.test(note), note);
-  assert.ok(!/taxed as pay/.test(note));
+  assert.ok(!/taxed as wages/.test(note));
   // with pay of their own it is still "taxed as pay"
   p.income.push({ id: "pay2", name: "Mo's pay", type: "salary", personId: "mo", amount: 40000, period: "annual", growth: 0, taxable: true });
-  assert.ok(/it is taxed as pay and is charged 6%/.test(compute(p, { today: T }).notes.find((n) => /not on the self-only health plan/.test(n)) ?? ""));
+  assert.ok(/it is taxed as wages and is charged 6%/.test(compute(p, { today: T }).notes.find((n) => /not on the self-only health plan/.test(n)) ?? ""));
   // no high-deductible plan at all, nobody paid: no break rather than "taxed as pay"
   const none = emptyPlan();
   none.household.filingStatus = "single"; none.household.people = [{ id: "a", name: "Ada", role: "self", birthDate: "1950-05-05" }];
   none.income = [{ id: "pen", name: "Pension", type: "pension", personId: "a", amount: 20000, period: "annual", growth: 0, taxable: true }];
   none.accounts = [{ id: "h", name: "HSA", type: "hsa", balance: 100, ownerId: "a" }]; none.taxes.hsa = { coverage: "none", contribution: 1000, employer: 0, fsa: 0, fsaSpent: 0 };
   const nn = compute(none, { today: T }).notes.find((n) => /no high-deductible health plan/.test(n)) ?? "";
-  assert.ok(/all of it gets no tax break and is charged 6% a year until it is taken out/.test(nn) && !/taxed as pay/.test(nn), nn);
+  assert.ok(/all of it gets no tax break and is charged 6% a year until it is taken out/.test(nn) && !/taxed as wages/.test(nn), nn);
 });
 
 test("money review M7: the Health page's HSA limit is the HSA page's, catch-up from 55 included", () => {

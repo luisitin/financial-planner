@@ -42,7 +42,7 @@ export function render(page, ctx) {
 
   for (const g of d.groups) {
     if (g.key === "estate" && !g.rows.length) {
-      root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, g.label), ui.h("p", { class: "muted" }, "No will or other estate paper is marked as signed yet. Estate documents walks you through them and keeps where each one is."),
+      root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, g.label), ui.h("p", { class: "muted" }, "No will or other estate paper is marked as signed yet. Estate documents walks you through them and keeps track of where each one is."),
         ui.row(ui.h("a", { class: "btn secondary small", href: "#/estate/documents" }, "Open Estate documents"))));
       continue;
     }
@@ -99,7 +99,7 @@ export function render(page, ctx) {
       ...(r.optional && !r.custom ? [{ key: "none", label: "We do not have this", type: "checkbox" }] : []),
     ];
     const form = ui.form(fields, { label: r.label, where: r.where, copy: r.copy, who: r.who, none: r.none }, (v) => {
-      if (!v.none && !String(v.where ?? "").trim()) { form.append(ui.notice("error", r.optional ? "Write where it is kept, or tick \"We do not have this\"." : "Write where it is kept, or tap Cancel.")); return; }
+      if (!v.none && !String(v.where ?? "").trim()) { form.append(ui.notice("error", r.optional ? "Write where it is kept, or check \"We do not have this\"." : "Write where it is kept, or tap Cancel.")); return; }
       pending = v.none ? `${r.label} marked as one you do not have.` : `Saved where your ${(r.custom ? String(v.label) : r.label).toLowerCase()}${r.personName ? ` (${r.personName})` : ""} is kept.`;
       editing = null;
       store.update((q) => { savePlace(q, r.key, v, today); });

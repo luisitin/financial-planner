@@ -75,7 +75,7 @@ const PATH_STATE = {
   month: "Most of this is our guesses (marked \"our guess\"). Type what you know, or go on: the plan uses our guesses until you do.",
   debts: "Tap Save plan to keep it, or go on: nothing is lost.",
   home: "These are typical figures. Tap Work it out to keep them, or type yours first, or go on: nothing is lost.",
-  taxes: "No pay slip at hand? Go on: we estimate it from your pay.",
+  taxes: "No pay stub at hand? Go on: we estimate it from your pay.",
 };
 const YEARS_AWAY = "This is years away, and small steps now count the most. Read the answer at the top, then go on.";
 /** Every adult under 45 (the retirement step says it is years away). */

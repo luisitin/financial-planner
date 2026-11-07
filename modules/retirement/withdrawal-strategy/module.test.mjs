@@ -124,7 +124,7 @@ test("5b (widow-1): the widow's share way takes $16,880 from savings and spends 
   assert.deepEqual(wayOptions(migrate(widowPlan()), { today: TODAY8 }).map((o) => o.value), ["fixed-real", "percent", "guardrails", "vpw"]);
 });
 
-test("5b: on every qa plan, no way plans spending, health cover and tax below the year's guaranteed income, and every way the engine runs is offered", async () => {
+test("5b: on every qa plan, no way plans spending, health insurance and tax below the year's guaranteed income, and every way the engine runs is offered", async () => {
   const plans = [];
   for (const f of ["family-plan", "retirement-plan", "tax-plan", "retired-couple-plan", "widow-plan", "sample-plan", "investments-plan", "guessed-plan", "card-gap-plan", "held-plan", "debt-plan", "retiree-cases"]) {
     const m = await import(`../../../qa/fixtures/${f}.mjs`);
@@ -223,10 +223,10 @@ test("5b page: the couple retiring at 62 with nothing coming in until 67, and th
   const fy = firstYear(migrate(bridgeCouple()), { today: TODAY8 });
   assert.ok(new RegExp(`In 2028, your first year of retirement, take about \\${fmtMoney(fy.fromSavings)} from savings\\.`).test(c.first), c.first.slice(0, 900));
   assert.ok(/Take it from Checking first, then Pat's 401\(k\) and Jo's IRA\. Amounts are in today's dollars\./.test(c.first), c.first.slice(0, 900));
-  assert.ok(new RegExp(`That pays for the \\$60,000 you plan to spend, \\${fmtMoney(fy.health)} of health cover and about \\${fmtMoney(fy.taxes)} of tax\\.`).test(c.first), c.first.slice(0, 900));
+  assert.ok(new RegExp(`That pays for the \\$60,000 you plan to spend, \\${fmtMoney(fy.health)} of health insurance and about \\${fmtMoney(fy.taxes)} of tax\\.`).test(c.first), c.first.slice(0, 900));
   const k = await page(migrate(earlyRetiree()));
   const ky = firstYear(migrate(earlyRetiree()), { today: TODAY8 });
-  assert.ok(new RegExp(`This year, take about \\${fmtMoney(ky.fromSavings)} from savings\\. That pays for the \\$39,600 you spend and \\${fmtMoney(ky.health)} of health cover\\. Take it from Checking first, then Brokerage\\.`).test(k.first), k.first.slice(0, 900));
+  assert.ok(new RegExp(`This year, take about \\${fmtMoney(ky.fromSavings)} from savings\\. That pays for the \\$39,600 you spend and \\${fmtMoney(ky.health)} of health insurance\\. Take it from Checking first, then Brokerage\\.`).test(k.first), k.first.slice(0, 900));
   // with no income, no way is "on top of your income" and the card does not say "with your income"; a way that can fall far says how far
   assert.ok(!/on top of your income|with your income/.test(k.first), k.first);
   assert.ok(/A share of what is left about \$[\d,]+ a month A set share of savings each year, so it moves with markets\. It can fall to about \$[\d,]+ a month\./.test(k.first), k.first);
@@ -254,7 +254,7 @@ test("5b page: a first year whose savings run short says how much of the year's 
   // Cy: $20,000 of savings, $42,000 of spending, $15,927 of health cover and $1,800 of tax: savings cover $20,000 of $59,727
   const { first, fold } = await page(migrate(shortSavingsRetiree()));
   assert.ok(/This year, savings have only about \$20,000 left to take, from Checking and IRA\./.test(first), first.slice(0, 900));
-  assert.ok(/That covers about \$20,000 of the \$59,727 the year needs: the \$42,000 you spend, \$15,927 of health cover and about \$1,800 of tax\./.test(first), first.slice(0, 900));
+  assert.ok(/That covers about \$20,000 of the \$59,727 the year needs: the \$42,000 you spend, \$15,927 of health insurance and about \$1,800 of tax\./.test(first), first.slice(0, 900));
   assert.ok(/savings have only about \$20,000 left\. That covers about \$20,000 of the \$59,727 the year needs\./.test(fold("How this is worked out")));
 });
 
@@ -282,7 +282,7 @@ test("5b: after 'Use this one' on a share of what is left, the projection's 'you
   assert.ok(/you plan on \$36,000\./.test(root2.textContent) && /Paid by income 140% of the first retirement year.s spending/.test(root2.textContent), root2.textContent.slice(0, 1400));
 });
 
-test("5b review D2: each way's figure is the run the plan gets once that way is saved (its own health cover before 65)", () => {
+test("5b review D2: each way's figure is the run the plan gets once that way is saved (its own health insurance before 65)", () => {
   // Pat and Jo retire at 62 with nothing coming in until 67: the help with health insurance before 65 depends on the year's
   // income, which depends on the way. Every way's first year, lowest year and end must equal Will the money last? with it saved
   for (const p of [bridgeCouple(), earlyRetiree(), widowPlan()]) {
@@ -334,7 +334,7 @@ test("5b UX review 18: Will the money last? says where to change the spending fi
   const { ui } = fakeUi();
   const root = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
   render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan, store: { update() {}, get: () => plan }, api: null, server: null });
-  assert.ok(/Spending is today's expenses; change it under Retirement settings below\./.test(root.textContent) && !/on this page/.test(root.textContent), root.textContent.slice(0, 900));
+  assert.ok(/Retirement spending is set to what you spend today; change it under Retirement settings below\./.test(root.textContent) && !/on this page/.test(root.textContent), root.textContent.slice(0, 900));
 });
 
 test("verify R2: on a way that takes more than the law requires, the answer still says the required withdrawal comes from the pre-tax account", async () => {

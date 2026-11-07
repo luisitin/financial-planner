@@ -9,7 +9,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which investments belong in which account"), ui.h("p", { class: "lede" }, "Bonds and REITs pay income taxed like wages every year, so they belong in 401(k)s and IRAs; stock index funds pay little and belong in taxable accounts. This page measures the tax you lose to the current placement once the holdings are in."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which investments belong in which account"), ui.h("p", { class: "lede" }, "Bonds and real estate funds (REITs) pay income taxed like wages every year, so they belong in 401(k)s and IRAs; stock index funds pay little and belong in taxable accounts. Once your holdings are in, this page shows how much tax you lose because of where they are held now."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },
@@ -21,8 +21,8 @@ export function render(root, ctx) {
   if (d.swaps.length) root.append(ui.card("The swaps",
     ui.h("ul", { class: "records" }, d.swaps.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${s.bucketLabel}: ${s.sellLabel} → ${s.buyLabel}`), ui.h("span", { class: "rec-value" }, money(s.amount))),
-      ui.h("div", { class: "rec-sub" }, `Sell ${money(s.amount)} of ${s.sellLabel.toLowerCase()} and buy ${s.buyLabel.toLowerCase()} for the same amount, inside ${s.accounts.join(" or ")}.${s.bucket === "taxable" ? " Selling in a taxable account can realise a gain: check the Capital gains page first." : " No tax on this trade."}`)))),
-    ui.h("p", { class: "muted small" }, "Do the taxable side with new money and dividends where you can, so no gain is realised."),
+      ui.h("div", { class: "rec-sub" }, `Sell ${money(s.amount)} of ${s.sellLabel.toLowerCase()} and buy ${s.buyLabel.toLowerCase()} for the same amount, inside ${s.accounts.join(" or ")}.${s.bucket === "taxable" ? " Selling in a taxable account can realize a gain: check the Capital gains page first." : " No tax on this trade."}`)))),
+    ui.h("p", { class: "muted small" }, "Do the taxable side with new money and dividends where you can, so no gain is realized."),
   ));
   root.append(ui.card("What sits where",
     ui.h("ul", { class: "records" }, d.buckets.filter((b) => b.value > 0).map((b) => ui.h("li", {},

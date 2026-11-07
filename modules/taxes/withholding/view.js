@@ -61,7 +61,7 @@ export function render(root, ctx) {
       : guessed
       ? `${d.year}: ${taxWords}; the paychecks take out about ${money(est.projected)} over the year${paidElse > 0 ? `, and ${money(paidElse)} is paid otherwise` : ""}.${v === "about right" ? " Within a few hundred dollars either way: nothing to change." : w4(sg)}`
       : d.verdict === "unknown"
-      ? `The plan estimates ${back ? `no federal tax for ${d.year}: about ${money(d.creditsBack)} of credits come back` : `${money(d.totalTax)} of federal tax for ${d.year}${seBit}`}. Type what one paycheck withholds and it will say whether the year's paychecks cover it, or leave you a bill or a refund.`
+      ? `The plan estimates ${back ? `no federal tax for ${d.year}: about ${money(d.creditsBack)} of credits come back` : `${money(d.totalTax)} of federal tax for ${d.year}${seBit}`}. Type what one paycheck withholds, and the page tells you whether a year of paychecks covers your tax or leaves you a bill or a refund.`
       : `${d.year}: ${taxWords}; ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
     guessed ? ui.h("p", { class: "muted small" }, `${est.from === "mixed" ? `${estNames.length === 1 ? NameOf(nm(estNames[0].name)) : `${andList(estNames.map((p) => p.name))}'s`} withholding is estimated` : "Estimated"} from pay the way payroll works it out (${estNames.map((p) => `${nameIn(nm(p.name))} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
     d.penaltyRisk && !guessed && !rets ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
@@ -106,12 +106,12 @@ export function render(root, ctx) {
   }, { submitLabel: "Save" });
   root.append(ui.h("details", { class: "card fold fold-card", open: d.withholding.hasSetup ? null : true },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What a paycheck withholds"), ui.h("span", { class: "fold-status" }, d.withholding.people.length ? d.withholding.people.map((p) => `${money(p.perPaycheck)} ${p.period}`).join(", ") : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "From the latest paystub. The amount withheld so far this year goes on the Federal estimate page (\"Federal tax withheld so far\"); without it the whole year is assumed at this rate."), form)));
+    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "From the latest paystub. Type the amount withheld so far this year on the Federal estimate page (\"Federal tax withheld so far\"); without it, the page assumes the whole year was withheld at this rate."), form)));
   root.append(ui.card("How the W-4 works now",
     ui.h("ul", { class: "records" }, [
       ["No more allowances", "Since 2020 the form asks for dollar amounts, not allowances. Step 3 credits and Step 4(b) deductions lower withholding; Step 4(c) adds a fixed extra amount per paycheck."],
-      ["Two earners", "Each job withholds as if it were the only income, which under-withholds a couple. Ticking Step 2(c) on both W-4s, or putting the extra on the higher earner's 4(c), fixes it."],
-      ["A refund is not a win", "It is money you overpaid through the year. Aiming for a small bill or a small refund keeps the cash in your own account; the safe-harbour rule means no penalty as long as the paychecks cover 90% of this year's tax or all of last year's."],
+      ["Two earners", "Each job withholds as if it were the only income, which under-withholds a couple. Checking the Step 2(c) box on both W-4s, or putting the extra on the higher earner's 4(c), fixes it."],
+      ["A refund is not a win", "It is money you overpaid through the year. Aiming for a small bill or a small refund keeps the cash in your own account; the safe-harbor rule means no penalty as long as the paychecks cover 90% of this year's tax or all of last year's."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
   ));
 }

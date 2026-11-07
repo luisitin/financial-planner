@@ -78,7 +78,7 @@ test("verify: housing at 28.5% reads 29% and on the high side, here and on How a
   const d = compute(p, { today: "2026-11-06" }), row = d.rows.find((r) => r.key === "housing");
   assert.equal(pct(row.value, 0), "29%"); assert.equal(row.grade.label, "on the high side");
   const h = bench(p, { today: "2026-11-06" }).items.find((x) => x.id === "housing");
-  assert.equal(h.verdict, "behind"); assert.match(h.sentence, / is 29% of gross income/);
+  assert.equal(h.verdict, "behind"); assert.match(h.sentence, / is 29% of income before tax/);
 });
 
 // --- verify (2026-11-06): a rent that is still our guess is not "your rent" ---------------------------------------------------------

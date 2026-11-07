@@ -78,6 +78,6 @@ export function compute(plan, params = {}) {
   });
   const missing = items.filter((x) => !x.primary.length);
   const warnings = [];
-  if (missing.length) warnings.push(`${missing.length} of ${items.length} accounts and policies have no beneficiary on file here.`);
+  if (missing.length) warnings.push(`${missing.length} of ${items.length} accounts and policies ${missing.length === 1 ? "has" : "have"} no beneficiary on file here.`);
   return { items, count: items.length, named: items.length - missing.length, missingValue: missing.reduce((s, x) => s + x.value, 0), married, warnings };
 }

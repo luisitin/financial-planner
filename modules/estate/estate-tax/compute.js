@@ -99,6 +99,6 @@ export function compute(plan, params = {}) {
   const stateExemption = Number(st.exemption) > 0 ? Number(st.exemption) : null, stateRate = Number(st.rate) > 0 ? Number(st.rate) : null;
   const state = { code, estateTax: STATE_ESTATE_TAX.includes(code), inheritanceTax: STATE_INHERITANCE_TAX.includes(code), exemption: stateExemption, rate: stateRate, tax: stateExemption !== null && stateRate !== null ? stateRate * Math.max(0, estateToday - charity - stateExemption) : null };
   const warnings = [];
-  if (couple && headroom < exclusion) warnings.push("At the first death, file an estate tax return (Form 706) even though no tax is due: it is how the unused exemption carries over to the survivor (portability). Without it, the survivor has only their own.");
+  if (couple && headroom < exclusion) warnings.push("When the first spouse dies, file an estate tax return (Form 706) even though no tax is due: it is how the unused exemption carries over to the survivor (portability). Without it, the survivor has only their own.");
   return { year, exclusion, couple, people: byPerson, estateToday, lifeCover, charity, single, pair, end, headroom, state, warnings };
 }

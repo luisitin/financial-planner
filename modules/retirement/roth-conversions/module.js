@@ -14,7 +14,7 @@ export default {
   needs: ["household", "accounts", "retirement"],
   writes: ["retirement"],
   heavy: false,
-  purpose: "Fills a bracket with Roth conversions in the years before required withdrawals and shows what that does to lifetime tax and spending.",
+  purpose: "Moves money to a Roth each year, up to the top of a tax bracket, in the years before required withdrawals, and shows what that does to lifetime tax and spending.",
   aliases: ["roth conversion", "convert to roth", "fill the bracket", "irmaa", "backdoor", "conversion ladder"],
   compute,
   render,

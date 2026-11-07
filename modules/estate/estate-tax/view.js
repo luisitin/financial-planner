@@ -29,8 +29,8 @@ export function render(page, ctx) {
   if (d.couple) {
     const s = d.pair.secondDeath;
     root.append(ui.card("For a couple: the two deaths",
-      ui.h("p", {}, "At the first death: no federal estate tax when everything goes to the spouse (the marital deduction, for a spouse who is a US citizen)."),
-      ui.h("p", {}, `At the second death: the whole estate, about ${money(s.estate)} today, against the survivor's own ${money(s.exemptionWithout)} plus what the first one did not use (portability): up to ${money(s.exemption)}. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
+      ui.h("p", {}, "When the first spouse dies: no federal estate tax when everything goes to the spouse (the marital deduction, for a spouse who is a US citizen)."),
+      ui.h("p", {}, `When the second spouse dies: the whole estate, about ${money(s.estate)} today, against the survivor's own ${money(s.exemptionWithout)} plus what the first one did not use (portability): up to ${money(s.exemption)}. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
   }
   if (d.end) root.append(ui.card(`At the end of the plan (${d.end.year})`, ui.h("p", {}, `If the plan runs as expected, it leaves about ${money(Math.round(d.end.estate / 1000) * 1000)} in today's dollars (the investments it projects, the home and other things it keeps, whole life insurance). ${d.end.tax > 0 ? `Against ${money(exemption)} of exemption that would owe about ${money(d.end.tax)}.` : `That is under the ${money(exemption)} exemption, which rises with prices.`}`)));
   if (d.people.some((p) => p.gifts > 0)) root.append(ui.card("Gifts already count", ui.h("p", {}, `Gifts over the yearly limit use the same exemption: ${d.people.map((p) => `${nameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.exemptionLeft)} left`).join(", ")}.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Gifting"))));
@@ -57,5 +57,5 @@ export function render(page, ctx) {
   root.append(stateCard);
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How the tax is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("p", { class: "muted small" }, `The tax on the estate plus lifetime taxable gifts, from the rate table (18% on the first $10,000 up to 40% over $1,000,000), less any gift tax already due on those gifts, less a credit equal to the tax on the exemption: in practice 40% of whatever is over the exemption. The table has ${RATE_SCHEDULE.length} steps (Internal Revenue Code section 2001). For a couple the page works out both orders (either of you dying first) and shows the costlier one. Values are today's; the exemption rises with prices from 2027.`)));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"), ui.h("a", { class: "btn secondary", href: "#/estate/legacy" }, "Legacy goals"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"), ui.h("a", { class: "btn secondary", href: "#/estate/legacy" }, "Legacy goals"))));
 }

@@ -14,7 +14,7 @@ export default {
   needs: ["holdings", "taxes"],
   writes: ["holdings"],
   heavy: false,
-  purpose: "The gain or loss on each lot you hold, the losses worth harvesting in taxable accounts, and the order to sell in when you need cash.",
+  purpose: "The gain or loss on each batch of shares you bought, the losses worth selling for a tax break in taxable accounts, and the order to sell in when you need cash.",
   aliases: ["tax lots", "lots", "harvest", "tax-loss harvesting", "wash sale", "cost basis", "which shares to sell"],
   seeds: "-",
   compute,

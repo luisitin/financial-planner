@@ -28,6 +28,12 @@ export const verbFor = (name, one, you) => (isYou(name) ? you : one);
 /** the object or reflexive form: "you", "yourself" (themself/himself are the page's own words for a named person) */
 export const selfOf = (name, other = "themself") => (isYou(name) ? "yourself" : other);
 
+/** the article before a figure as it is read aloud: withA("8.5%") -> "an 8.5%", withA("$3,000") -> "a $3,000", withA("$11,000") -> "an $11,000" */
+export const withA = (text) => {
+  const lead = String(text).replace(/^[^\d]*/, "").split(/[,.\s%]/)[0];
+  return (lead === "11" || lead === "18" || lead.startsWith("8")) ? `an ${text}` : `a ${text}`;
+};
+
 /** several names in a sentence, "you" first: "you and Bo", "you, your spouse and Cy", "Ana and Bo" */
 export function namesIn(names) {
   const xs = [...(names ?? [])].sort((a, b) => Number(!isYou(a)) - Number(!isYou(b))).map(nameIn);

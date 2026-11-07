@@ -1,7 +1,7 @@
 # Disability  (`insurance/disability`)
 
 **Status:** usable (phase 8)
-**Purpose:** If someone who earns could not work: what their disability cover would pay against their pay, whether the household could still pay its must-pay bills, whether the cash lasts until the money starts, and what Social Security disability might add.
+**Purpose:** If someone who earns could not work: what their disability insurance would pay against their pay, whether the household could still pay its must-pay bills, whether the cash lasts until the money starts, and what Social Security disability might add.
 
 ## Inputs
 `household` (adults, retirement ages), `income` (pay: salary, bonus, business), `expenses` (must-pay bills), `accounts` (usable cash, through Emergency fund), `retirement.socialSecurity` (the PIA), `insurance.policies` (kind `disability`). Writes four optional fields on a disability policy: `waitDays`, `untilAge`, `paidBy` ("employer" | "me"), `offset` (bool).
@@ -37,4 +37,4 @@
 - "Own occupation" versus "any occupation" definitions; cost-of-living riders.
 - Run the "never work again" stress test from here with the policy terms.
 
-Review 2026-11-06 (round 7): the card titles ("If you could not work"), "Nothing would replace your pay" and the warnings ("before you plan to retire", "All of your disability cover comes with the job") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before (core/words.js). Words only: no figure or rule changed. Test: "the first adult left unnamed ("Me"): the warnings say you and your".
+Review 2026-11-06 (round 7): the card titles ("If you could not work"), "Nothing would replace your pay" and the warnings ("before you plan to retire", "All of your disability insurance comes with the job") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before (core/words.js). Words only: no figure or rule changed. Test: "the first adult left unnamed ("Me"): the warnings say you and your".

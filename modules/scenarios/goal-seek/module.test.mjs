@@ -126,11 +126,11 @@ test("recheck 2026-11-05: the earliest age spends the plan's amount the same eve
 });
 
 // review 2026-11-02: the spending answer says it is on top of health cover, as Will the money last? does (its target)
-test("the spending lever says it is on top of health cover, and not when the spending figure already includes it", () => {
+test("the spending lever says it is on top of health insurance, and not when the spending figure already includes it", () => {
   const p = familyPlan();
-  assert.match(lever(compute(p, { today: TODAY }), "spending").sentence, /a month on top of health cover, .* the plan spends before health cover\.$/);
+  assert.match(lever(compute(p, { today: TODAY }), "spending").sentence, /a month on top of health insurance, .* the plan spends before health insurance\.$/);
   p.retirement.healthIncluded = true;
-  assert.doesNotMatch(lever(compute(p, { today: TODAY }), "spending").sentence, /health cover/);
+  assert.doesNotMatch(lever(compute(p, { today: TODAY }), "spending").sentence, /health insurance/);
 });
 
 // Review 2026-11-06 (sixth pass verify): "How it is worked out" said "Retirement: the first person's earliest age" while the lever

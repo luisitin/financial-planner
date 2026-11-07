@@ -48,13 +48,13 @@ export function render(page, ctx) {
   const kindChips = kinds.length > 1 ? ui.h("div", { class: "chips", role: "group", "aria-label": "Which dates" },
     ui.h("button", { type: "button", class: `chip${!only ? " on" : ""}`, "aria-pressed": !only ? "true" : "false", onclick: () => { only = null; rerender(); } }, `All (${all.events.length})`),
     ...kinds.map(([k, x]) => ui.h("button", { type: "button", class: `chip${only === k ? " on" : ""}`, "aria-pressed": only === k ? "true" : "false", onclick: () => { only = only === k ? null : k; rerender(); } }, `${x.label} (${all.counts[k]})`))) : null;
-  root.append(ui.h("section", { class: "card" }, ui.h("p", { class: "muted small" }, "Bills and paydays come from your bank lines that repeat. Tax, Medicare and insurance dates come from the rest of your plan."), rangeChips, kindChips));
+  root.append(ui.h("section", { class: "card" }, ui.h("p", { class: "muted small" }, "Bills and paydays come from the payments that repeat in your bank files. Tax, Medicare and insurance dates come from the rest of your plan."), rangeChips, kindChips));
 
   for (const n of all.notes) root.append(ui.notice("warn", n));
 
   // the list, by month
   if (!d.events.length) {
-    root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Nothing dated in this stretch"),
+    root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Nothing scheduled in these weeks"),
       ui.h("p", { class: "muted" }, "Import your bank files to see your bills and paydays, add your insurance renewals on Policies, or add a reminder of your own below.")));
   }
   for (const m of d.months) {
@@ -85,7 +85,7 @@ export function render(page, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name), ui.h("span", { class: "rec-value" }, r.amount !== null && r.amount !== undefined ? fmt.money(r.amount, cur) : "")),
     ui.h("div", { class: "rec-sub" }, `${REPEATS[r.repeat] ?? REPEATS.none}, ${nextOf(r) ? `${r.repeat === "none" ? "on" : "next on"} ${fmt.date(nextOf(r))}` : r.date ? `was on ${fmt.date(r.date)}` : "no date"}${r.note ? ` · ${r.note}` : ""}`),
     ui.h("div", { class: "rec-foot" }, ui.h("span", { class: "rec-actions" },
-      ui.button("Change", () => { editing = r.id; adding = false; rerender(); }, { class: "secondary small" }),
+      ui.button("Edit", () => { editing = r.id; adding = false; rerender(); }, { class: "secondary small" }),
       ui.button("Remove", () => {
         if (!ui.confirm(`Remove the reminder "${r.name}"?`)) return;
         pending = `Removed "${r.name}".`;
@@ -97,7 +97,7 @@ export function render(page, ctx) {
 
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "Where the dates come from"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", {}, "Federal tax dates move to the next working day when they fall on a weekend or a holiday. State tax dates are not here: most follow the federal ones, but check your state."),
+    ui.h("p", {}, "Federal tax dates move to the next business day when they fall on a weekend or a holiday. State tax dates are not here: most follow the federal ones, but check your state."),
     ui.h("p", {}, "Required withdrawals from 401(k)s and traditional IRAs: the first is due by April 1 of the year after you reach the starting age, then by December 31 every year."),
     ui.h("p", {}, "Marketplace open enrollment is shown only for years the app has checked, and only if you buy your own health insurance.")));
 

@@ -28,7 +28,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.householdYearly, cur)} a year from Social Security` : "Social Security"),
     ui.h("p", { class: "lede" }, d.hasData ? `In today's dollars, at the claiming ages chosen below. The projection counts it from those ages, rising with inflation.${topUpWords ? ` ${topUpWords}` : ""}${together ? ` ${together}` : ""}` : "Your benefit depends on your best 35 years of earnings and the age you claim. Paste the earnings table from your ssa.gov account, or type the monthly figure your Social Security statement shows at full retirement age."),
-    ui.h("p", { class: "muted small" }, "ssa.gov > my Social Security > Earnings Record: copy the year and earnings columns and paste them below. Nothing is sent anywhere; the sums are done on this device with the SSA's own formula."),
+    ui.h("p", { class: "muted small" }, "ssa.gov > my Social Security > Earnings Record: copy the year and earnings columns and paste them below. Nothing is sent anywhere; this device does the math with the Social Security Administration's own formula."),
   ));
   root.append(out);
   if (!d.people.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with their birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), " first."))); return; }
@@ -148,5 +148,5 @@ export function render(root, ctx) {
       })(),
     )));
   });
-  root.append(ui.h("p", { class: "muted small" }, `The formula: earnings indexed to wages in the year you turn 60, the best 35 years averaged, bend points for the year you turn 62, cost-of-living increases from 62, then reduced or raised for the claiming age.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""} Tables from the Social Security Administration via ssa.tools.`));
+  root.append(ui.h("p", { class: "muted small" }, `How it is worked out: your past earnings are raised in line with wage growth up to the year you turn 60; your best 35 years are averaged; that average goes through the benefit formula for the year you turn 62; cost-of-living raises are added from 62; and the result goes down or up with the age you claim.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""} Tables from the Social Security Administration via ssa.tools.`));
 }

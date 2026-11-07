@@ -737,3 +737,12 @@ test("review fixes: the cushion step waits on the accounts it needs; the waiting
   assert.match(f, /\.gn-root \.gn-state a \{[^}]*min-height: 44px/, "the 'Add it' link is a 44 px target");
   assert.match(f, /Math\.max\(bar\.doneCount, bar\.index \?\? 0\) \/ bar\.total/, "step N of N is a full bar");
 });
+
+test("the Guides list says '1 of 7 steps is', the noun after the total (wording sweep check, 2026-11-07)", async () => {
+  const { statusLine } = await import("./view.js");
+  assert.equal(statusLine({ minutes: 10, doneCount: 1, total: 7 }), "About 10 minutes. 1 of 7 steps is already in your plan.");
+  assert.equal(statusLine({ minutes: 10, doneCount: 2, total: 7 }), "About 10 minutes. 2 of 7 steps are already in your plan.");
+  assert.equal(statusLine({ minutes: 5, doneCount: 1, total: 1 }), "About 5 minutes. 1 of 1 step is already in your plan.");
+  assert.equal(statusLine({ minutes: 5, doneCount: 0, total: 3 }), "About 5 minutes");
+  assert.equal(statusLine({ started: true, doneCount: 2, total: 6 }), "In progress: 2 of 6 steps done");
+});

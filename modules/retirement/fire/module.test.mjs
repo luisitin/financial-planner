@@ -442,12 +442,12 @@ test("fire: a health premium on Expenses stays in the spending the FI number is 
 
 // review 2026-11-02 (fifth pass): the rule of thumb's fold, and who the answer is about when Get started says the first adult
 // does not work
-test("fifth pass: the fold says the rule leaves out health cover before Medicare, which the answer above counts", async () => {
+test("fifth pass: the fold says the rule leaves out health insurance before Medicare, which the answer above counts", async () => {
   const { ruleWords } = await import("./compute.js");
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const d = compute(familyPlan(TODAY), { today: TODAY, withIncome: false });
   assert.equal(d.healthAdded, true);
-  assert.match(ruleWords(25, d.healthAdded), /leaves out Social Security, pensions, taxes and health cover before Medicare, which the answer above counts, so it can come out sooner or later/);
+  assert.match(ruleWords(25, d.healthAdded), /leaves out Social Security, pensions, taxes and health insurance before Medicare, which the answer above counts, so it can come out sooner or later/);
   // "my spending figure already includes health cover": the rule's spending holds it, so no such words
   const q = familyPlan(TODAY); q.retirement.healthIncluded = true;
   assert.equal(compute(q, { today: TODAY, withIncome: false }).healthAdded, false);

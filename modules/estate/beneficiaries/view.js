@@ -73,7 +73,7 @@ export function render(page, ctx) {
     ul.append(li);
   }
   root.append(ui.card("Accounts and policies", ul));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/documents" }, "Documents"), ui.h("a", { class: "btn secondary", href: "#/estate/legacy" }, "Legacy goals"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/documents" }, "Estate documents"), ui.h("a", { class: "btn secondary", href: "#/estate/legacy" }, "Legacy goals"))));
 
   // the people on one account: primary and backup, each with a share; quick picks from the household
   function editor(x, close) {

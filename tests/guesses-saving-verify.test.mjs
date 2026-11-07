@@ -23,12 +23,12 @@ const row = (plan, pid) => plan.retirement.contributions.find((c) => c.id === `s
 const acct = (plan, id) => plan.accounts.find((a) => a.id === id);
 const said = (plan, answer) => S.applyMoney(plan, { people: { [ME]: { status: "work", amount: "58000", period: "annual", plan: answer } } }, T0);
 
-test("V1: a guessed balance in the plan at work (Q2's Yes) reopens grey on question 4b, and Back then Continue keeps it ours", () => {
+test("V1: a guessed balance in the plan at work (Q2's Yes) reopens gray on question 4b, and Back then Continue keeps it ours", () => {
   const j = jordan(); said(j, "yes"); q4b(j, {}, ["retire"]);
   assert.equal(acct(j, WP(ME)).balance, 27000);
   assert.ok(isGuess(j, `accounts[${WP(ME)}].balance`));
   const v = S.valuesFor(j, "have-amounts", { today: T0 });
-  assert.equal(v[`retire-${ME}`], "", "before: the box showed 26000 as typed text (spec P2: a saved guess reopens as the grey figure)");
+  assert.equal(v[`retire-${ME}`], "", "before: the box showed 26000 as typed text (spec P2: a saved guess reopens as the gray figure)");
   q4b(j, v);
   assert.ok(isGuess(j, `accounts[${WP(ME)}].balance`), "before: Continue with nothing typed made the $26,000 the person's own");
   // a figure typed in the plan at work still reopens as typed

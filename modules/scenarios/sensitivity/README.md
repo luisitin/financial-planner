@@ -12,7 +12,7 @@ Everything `retirement/projection` `buildInputs` reads. Params: `today`. Writes 
 ## The nudges (`NUDGE`), one at a time, everything else as the plan has it
 | input | low / high |
 |---|---|
-| Stock return, bond return, inflation, pay rises | 1 percentage point down / up |
+| Stock return, bond return, inflation, pay raises | 1 percentage point down / up |
 | The first person's retirement age (when not yet retired) | 2 years earlier (never before next year) / later; the plan rebuilt, so saving stops and spending starts then |
 | How long the plan runs | every adult's plan-end age 5 years shorter / longer |
 | Saving into retirement accounts | 25% less / more |

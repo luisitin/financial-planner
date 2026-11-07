@@ -33,7 +33,7 @@ holds `EVENTS` (the steps).
   a baby event's day; head of household; single or head of household after a divorce. These show ticked and cannot be
   unticked here.
 - The deadlines and rules each step states, all read 2026-10-31 (the sources are listed again in `data/events.js`):
-  - Health cover at work: at least 30 days after a marriage, birth or adoption to add someone (HIPAA special
+  - Health insurance at work: at least 30 days after a marriage, birth or adoption to add someone (HIPAA special
     enrollment; U.S. Department of Labor, *Protections for Newborns, Adopted Children, and New Parents*,
     https://www.dol.gov/node/63379).
   - Health insurance bought on the Marketplace: 60 days after a marriage, birth or adoption, a move, or losing job

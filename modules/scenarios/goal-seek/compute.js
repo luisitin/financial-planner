@@ -133,9 +133,9 @@ export function compute(plan, params = {}) {
     const m = best === null ? 0 : best / 12;
     // the projection's health line (marketplace to 65, then Medicare) is paid on top of the spending figure: said so, as Will the money last? does
     const h = healthAdded(b.health);
-    const onTop = h ? " on top of health cover" : "", before = h ? " before health cover" : "";
+    const onTop = h ? " on top of health insurance" : "", before = h ? " before health insurance" : "";
     add({ id: "spending", icon: "🛒", title: "What you can spend", value: m, current: spendingMonthly, unit: "month", status: best === null ? "cannot" : m >= spendingMonthly ? "room" : "needs",
-      sentence: best === null ? `Even spending nothing in retirement${h ? " but health cover" : ""} does not reach the goal: look at the other changes.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m / scale, "down")} a month${onTop}, ${fmt((m - spendingMonthly) / scale, "down")} more than the ${fmt(spendingMonthly / scale)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m / scale, "down")} a month${onTop}: ${fmt((spendingMonthly - m) / scale, "up")} less than the ${fmt(spendingMonthly / scale)} the plan spends${before}.`, go: ["retirement", "projection"] });
+      sentence: best === null ? `Even spending nothing in retirement${h ? " but health insurance" : ""} does not reach the goal: look at the other changes.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m / scale, "down")} a month${onTop}, ${fmt((m - spendingMonthly) / scale, "down")} more than the ${fmt(spendingMonthly / scale)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m / scale, "down")} a month${onTop}: ${fmt((spendingMonthly - m) / scale, "up")} less than the ${fmt(spendingMonthly / scale)} the plan spends${before}.`, go: ["retirement", "projection"] });
   }
 
   // 2. the earliest retirement age that reaches the goal, for the adult Financial independence asks about (review 2026-11-06,

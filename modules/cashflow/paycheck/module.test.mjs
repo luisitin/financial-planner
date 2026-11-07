@@ -143,7 +143,7 @@ test("the pay stub's federal figure wins, then the W-4 typed here, then the With
   assert.equal(a.federal.from, "estimate"); assert.equal(a.federal.period, "biweekly"); near(a.federal.onPage, 250); assert.equal(a.federal.onPageMatches, true);
 });
 
-test("the state: the State page's tax as a share of income (after its allowances), as typed, or none", () => {
+test("the state: the State tax page's tax as a share of income (after its allowances), as typed, or none", () => {
   const co = withPay((q) => { q.household.state = "CO"; });
   const d = compute(co, { today: TODAY }), a = ana(d);
   assert.ok(a.state.rate > 0 && a.state.rate < 0.044, `Colorado's 4.4% less its allowance: ${a.state.rate}`);

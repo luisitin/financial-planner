@@ -27,7 +27,7 @@ export function render(root, ctx) {
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Income statement"),
-      ui.h("p", { class: "lede" }, "What came in, what went out and what you kept, month by month, from your real transactions. It fills in as soon as a bank file is imported."),
+      ui.h("p", { class: "lede" }, "What came in, what went out and what you kept, month by month, from your real transactions. It fills in as soon as you import a bank file."),
       ui.row(ui.h("a", { class: "btn", href: "#/transactions/import" }, "Import a bank file")),
       d.planned ? ui.h("p", { class: "muted small" }, plannedLine()) : null,
     ));

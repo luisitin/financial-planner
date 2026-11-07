@@ -36,8 +36,8 @@ export function render(page, ctx) {
   root.append(ui.card(`After ${e.year} years`, ui.row(
     ui.stat(e.winner === "buy" ? "Buying ahead by" : "Renting ahead by", money(Math.abs(e.ahead)), `buyer ${money(e.buyerWealth)}, renter ${money(e.renterWealth)}`),
     ui.stat("Buying pulls ahead", d.breakevenYear ? `after ${d.breakevenYear} year${d.breakevenYear === 1 ? "" : "s"}` : "not in 40 years", d.breakevenYear ? "if you stay that long" : "renting stays cheaper"),
-  ), ui.h("p", { class: "rb-verdict" }, d.rentEven !== null ? `Over ${e.year} years the two are even at a rent of about ${money(d.rentEven)} a month: ${x.rentMonthly > d.rentEven ? "the rent is above it, so buying wins" : "the rent is below it, so renting wins"}.` : ""),
-  ui.h("p", { class: "muted small" }, "Each side's money if the home were sold that year: the home's value less selling costs and what is still owed, plus the investments; the renter's investments. Dollars of each year, not adjusted for inflation.")));
+  ), ui.h("p", { class: "rb-verdict" }, d.rentEven !== null ? `Over ${e.year} years the two come out even at a rent of about ${money(d.rentEven)} a month: ${x.rentMonthly > d.rentEven ? "your rent is higher, so buying wins" : "your rent is lower, so renting wins"}.` : ""),
+  ui.h("p", { class: "muted small" }, "What each side would have if the home were sold that year: for the buyer, the home's value minus selling costs and what is still owed, plus investments; for the renter, the investments. Dollars of each year, not adjusted for inflation.")));
 
   // both households' money, 40 years
   const long = simulate(x, 40).rows;
@@ -83,5 +83,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.rentVsBuy = Object.fromEntries(fields.map((f) => [f.key, f.type === "checkbox" ? !!v[f.key] : v[f.key] ?? null])); });
     }, { submitLabel: "Compare" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/house" }, "Saving for a home"), ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/house" }, "Saving for a home"), ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"))));
 }

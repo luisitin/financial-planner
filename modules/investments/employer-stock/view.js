@@ -3,7 +3,7 @@
 // company, the next year's vests and the tax they add against what is withheld, how to get under 10% and what it costs; the company
 // and the grants in folds.
 import { compute, LIMIT, SUPPLEMENTAL, DEFAULT_GRANT } from "./compute.js";
-import { nameOf } from "../../../core/words.js";
+import { nameOf, withA } from "../../../core/words.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -94,7 +94,7 @@ export function render(page, ctx) {
       earlier ? ui.h("p", { class: "es-d" }, `Counted on top of the ${money(earlier.earlier)} of units that already vested in ${earlier.year} (at today's price), which are wages in the same year.`) : null,
       ...(two && d.vestYears.every((y) => Math.abs(wholeFor(y.year)?.gap ?? y.gap) <= 1) ? [ui.h("p", { class: "es-d" }, "In both years the withholding about covers the federal tax they add.")] : d.vestYears.map(yearLine)),
       ...d.vestYears.filter((y) => y.estimated).map((y) => ui.h("p", { class: "es-d" }, `The IRS has not published ${y.year}'s tax tables yet, so ${y.year}'s figures use the latest ones raised for inflation.`)),
-      stateOwed > 0.5 ? ui.h("p", { class: "es-d" }, `State income tax on them comes to about ${money(stateOwed)} more; check your pay slip for how much your employer holds back for it.`) : null,
+      stateOwed > 0.5 ? ui.h("p", { class: "es-d" }, `State income tax on them comes to about ${money(stateOwed)} more; check your pay stub for how much your employer holds back for it.`) : null,
       ui.h("p", { class: "es-d" }, "Selling units the day they vest costs no more tax: their cost is the value they were taxed at.")));
   }
 
@@ -106,14 +106,14 @@ export function render(page, ctx) {
         x.fromPlans > 0 ? ui.h("li", {}, `${money(x.fromPlans)} inside your retirement plan: no tax at all; switch funds on the plan's site.`) : null,
         x.fromTaxable > 0 ? ui.h("li", {}, x.gain >= 0
           ? `${money(x.fromTaxable)} in the brokerage: about ${money(Math.max(0, x.tax))} of federal tax on its ${money(x.gain)} gain, as a gain on shares owned over a year (taxed at 0%, 15% or 20% by your income, plus 3.8% on high incomes).`
-          : `${money(x.fromTaxable)} in the brokerage, sold at a ${money(-x.gain)} loss: ${-x.tax >= 0.5 ? `it lowers this year's federal tax by about ${money(-x.tax)}` : "it does not lower this year's federal tax"}${x.carry > 0.5 ? `, and ${money(x.carry)} of the loss carries to later years` : ""}. A loss first cancels the year's gains, then comes off other income up to $3,000 a year ($1,500 each filing separately).`) : null,
+          : `${money(x.fromTaxable)} in the brokerage, sold at ${withA(money(-x.gain))} loss: ${-x.tax >= 0.5 ? `it lowers this year's federal tax by about ${money(-x.tax)}` : "it does not lower this year's federal tax"}${x.carry > 0.5 ? `, and ${money(x.carry)} of the loss carries to later years` : ""}. A loss first cancels the year's gains, then comes off other income up to $3,000 a year ($1,500 each filing separately).`) : null,
         x.stillOver ? ui.h("li", {}, "Even then it stays above the ceiling because of grants still to vest or options not yet exercised: sell new units as they vest, and plan when to exercise options.") : null),
       ui.h("p", { class: "es-d" }, "Company stock with a large gain inside a 401(k): before selling it, ask about net unrealized appreciation (NUA), which can tax that gain at the lower rate when you leave the job. Selling a little every quarter on a fixed plan avoids guessing the best day.")));
   }
 
   root.append(companyForm(false));
   root.append(grantsFold());
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Allocation"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/allocation" }, "Allocation"))));
 
   function companyForm(open) {
     const form = ui.form([

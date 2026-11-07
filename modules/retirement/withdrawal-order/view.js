@@ -10,7 +10,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which account to draw from first"), ui.h("p", { class: "lede" }, "Taxable, pre-tax or Roth first: the order changes the tax you pay over a lifetime. It needs the same things as the Projection page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which account to draw from first"), ui.h("p", { class: "lede" }, "Taxable, pre-tax or Roth first: the order changes the tax you pay over a lifetime. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   const best = d.options.find((o) => o.best), current = d.options.find((o) => o.current);
@@ -18,8 +18,8 @@ export function render(root, ctx) {
     ui.h("h1", {}, best.current ? `Your order is the best one for this plan` : `"${best.label}" works best for you`),
     ui.h("p", { class: "lede" }, best.success
       ? `${best.label}: ${money(best.endAfterTaxReal)} left at the end after the tax still owed on pre-tax money (today's dollars), with ${money(best.taxesReal)} of federal tax paid over the plan. ${d.gainVsWorst > 500 ? `The worst order leaves ${money(d.gainVsWorst)} less${d.taxSpread > 0 ? ` and pays ${money(d.taxSpread)} more tax` : ""}.` : "For this plan the order barely matters."}${current && !best.current ? ` Yours, "${current.label}", leaves ${money(current.endAfterTaxReal)}.` : ""}`
-      : `The money runs out under every order; "${best.label}" lasts longest, to ${best.failYear}. The Projection page is the place to fix that first.`),
-    ui.h("p", { class: "muted small" }, "Everyday cash always goes first. Each order is run through the federal brackets year by year, so the difference is real tax: what required withdrawals and Social Security do to it. What is left is valued after tax, because pre-tax money still owes it."),
+      : `The money runs out under every order; "${best.label}" lasts longest, to ${best.failYear}. Will the money last? is the place to fix that first.`),
+    ui.h("p", { class: "muted small" }, "Everyday cash always goes first. The page works each order through the federal tax brackets year by year, so the difference is actual tax, including the effect of required withdrawals and Social Security. What is left is counted after tax, because tax is still owed on pre-tax money."),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }

@@ -194,7 +194,7 @@ test("FSAs and commuting: capped at the limits, the typed figure kept; child car
   assert.equal(sep.elect, 7500); assert.equal(sep.limit, 3750); assert.equal(sep.separate, true);
 });
 
-test("the stock purchase plan: at most 15% off; 15% off is 17.6% on the money, taxed as pay when sold at once; the state too", () => {
+test("the stock purchase plan: at most 15% off; 15% off is 17.6% on the money, taxed as wages when sold at once; the state too", () => {
   const d = compute(withBenefits({ esppOffered: true, esppPct: 0.1 }), { today: TODAY });
   const e = d.espp;
   near(e.yearly, 10140); near(e.gain, 10140 * (1 / 0.85 - 1)); near(e.cap, ESPP.yearlyStock * 0.85); near(e.perCheck, 390);
@@ -385,10 +385,10 @@ test("care fourth pass: the household's excess is each adult's own share, the sp
   // the two pages' shares add up to the household's 500, never 500 each
   near(ana.own.taxedAsPay + bo.own.taxedAsPay, 500, 1e-9);
   const ta = (await pageText(famAcct(both))).text, tb = (await pageText(famAcct({ ...both, personId: "p-bo" }))).text;
-  assert.ok(ta.includes("$313 of the child care account is taxed as pay"), ta.match(/.{40}taxed as pay.{160}/)?.[0]);
+  assert.ok(ta.includes("$313 of the child care account is taxed as wages"), ta.match(/.{40}taxed as wages.{160}/)?.[0]);
   assert.ok(ta.includes("shared by what each puts in (Bo $188)"));
-  assert.ok(tb.includes("$188 of the child care account is taxed as pay"));
-  assert.ok(!ta.includes("$500 of it is taxed as pay") && !tb.includes("$500 of it is taxed as pay"));
+  assert.ok(tb.includes("$188 of the child care account is taxed as wages"));
+  assert.ok(!ta.includes("$500 of it is taxed as wages") && !tb.includes("$500 of it is taxed as wages"));
   // the Paycheck page says the same split
   const notes = computePaycheck(famAcct(both), { today: NOV }).notes.join(" ");
   assert.ok(notes.includes("313 of it is over") && notes.includes("188 of it is over"), notes);
@@ -532,7 +532,7 @@ test("round 8 review UX 7 / UX 8 / D2: the limit is a filled button only when th
   start.onClick();
   root = draw();
   const after = root.textContent.replace(/\s+/g, " ");
-  assert.match(after, /Added to your plan: 3% of pay, \$45 a paycheck, on the Contributions page, with \$1,170 a year from your employer\. To actually start it, sign up at 3% with human resources or your job's benefits site\./);
+  assert.match(after, /Added to your plan: 3% of pay, \$45 a paycheck, on the Retirement contributions page, with \$1,170 a year from your employer\. To actually start it, sign up at 3% with human resources or your job's benefits site\./);
   assert.match(after, /Each month now has about \$\d+ left after tax, spending and saving\./);
   // the limit takes far more than the month has: outlined, and said so
   const max = all(root).find((b) => /^Use \d+(\.\d)?%/.test(b.textContent) && !/^Use 3%/.test(b.textContent));

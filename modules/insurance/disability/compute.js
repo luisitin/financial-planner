@@ -85,7 +85,7 @@ export function compute(plan, params = {}) {
   });
   for (const e of earners) {
     for (const x of e.policies) if (x.untilAge < e.retireAge) warnings.push(`${x.name} stops paying at ${x.untilAge}, before ${nameIn(e.name)} ${verbFor(e.name, "plans", "plan")} to retire at ${e.retireAge}.`);
-    if (e.policies.length && e.policies.every((x) => x.throughWork)) warnings.push(`All of ${nameOf(e.name)} disability cover comes with the job: a new job may not offer it, and it ends if the job does.`);
+    if (e.policies.length && e.policies.every((x) => x.throughWork)) warnings.push(`All of ${nameOf(e.name)} disability insurance comes with the job: a new job may not offer it, and it ends if the job does.`);
   }
   return { earners, essentialMonthly, cashMonths, count: earners.length, warnings };
 }

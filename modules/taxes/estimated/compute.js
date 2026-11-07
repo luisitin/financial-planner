@@ -106,9 +106,9 @@ export function compute(plan, params = {}) {
   const hasIncome = !!yt.known?.hasIncome || fed.hasIncome;
   const notes = [];
   if (!hasIncome) notes.push("No income on file yet: add it on the Income page or type it on the Federal estimate page.");
-  if (withholdingFrom === "paycheck") notes.push("Withholding is estimated from your pay on the Paycheck page. Type what your pay stubs withhold on the Withholding check page for a firmer figure.");
+  if (withholdingFrom === "paycheck") notes.push("The app estimates your withholding from your pay on the Paycheck page. Type what your pay stubs withhold on the Withholding check page for a firmer figure.");
   else if (withholdingFrom === "mixed") notes.push(`Withholding for ${est.people.filter((x) => x.estimated).map((x) => x.name).join(" and ")} is estimated from pay on the Paycheck page. Type it from a pay stub on the Withholding check page for a firmer figure.`);
-  if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller safe amount, and it is certain.");
+  if (harbour.prior === null) notes.push("Type last year's total tax and income below: paying 100% of last year's tax is often the smaller amount that avoids a penalty, and you know it for sure.");
   // filing separately, each return on its own (withholding byReturn: its own tax, withholding, safe amount and $1,000 test),
   // with its own four payments: the payments typed here are divided between the returns as the couple may agree (Pub. 505),
   // box by box in the same shares (Review 2026-11-06: the household's figures said "no estimated payments needed" while Bo's

@@ -15,7 +15,7 @@ export default {
   needs: ["household", "accounts", "transactions", "recurringIgnored", "income", "taxes", "insurance", "retirement", "goals", "reminders"],
   writes: ["reminders"],
   heavy: false,
-  purpose: "Puts your bills, paydays, tax deadlines, open enrolment, required minimum distribution dates and policy renewals on one calendar.",
+  purpose: "Puts your bills, paydays, tax deadlines, open enrollment, required minimum distribution dates and policy renewals on one calendar.",
   compute,
   render,
 };

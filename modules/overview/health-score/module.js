@@ -15,7 +15,7 @@ export default {
   needs: ["household", "accounts", "income", "expenses", "debts", "goals", "retirement", "taxes", "assumptions", "insurance"],
   writes: [],
   heavy: true,
-  purpose: "Your whole plan as one score from 0 to 100: cash cushion, saving, debt, retirement, protection, goals and how complete it is, with where the missing points are.",
+  purpose: "Your whole plan as one score from 0 to 100: emergency fund, saving, debt, retirement, protection, goals and how complete it is, with where the missing points are.",
   compute,
   render,
 };

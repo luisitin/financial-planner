@@ -53,7 +53,7 @@ export function render(page, ctx) {
     const timing = d.retireYear > d.startYear ? ui.h("div", { class: "chips", role: "group", "aria-label": "When markets fall" },
       [["retire", `As you retire (${d.retireYear})`], ["now", "Now"]].map(([k, label]) => ui.h("button", { type: "button", class: `chip${d.when === k ? " on" : ""}`, "aria-pressed": d.when === k ? "true" : "false", onClick: () => { when = k; load(); } }, label))) : null;
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Markets"),
-      ui.h("p", { class: "muted small" }, d.retireYear > d.startYear ? "When a crash comes matters most in the first years of retirement, when money is coming out. Pick when it hits:" : "The real returns and inflation of those years, starting now; your plan's own assumptions before and after."),
+      ui.h("p", { class: "muted small" }, d.retireYear > d.startYear ? "When a crash comes matters most in the first years of retirement, when money is coming out. Pick when it hits:" : "The actual returns and inflation of those years, starting now; your plan's own assumptions before and after."),
       timing, ui.h("div", { class: "folds" }, markets.map((s) => fold(ui, fmt, money, d, s)))));
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Life"), ui.h("div", { class: "folds" }, life.map((s) => fold(ui, fmt, money, d, s)))));
     if (d.notes.length) host.append(ui.card("Left out", ui.h("ul", {}, d.notes.map((n) => ui.h("li", { class: "muted" }, n)))));

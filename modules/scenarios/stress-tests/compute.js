@@ -108,7 +108,7 @@ export function compute(plan, params = {}) {
     add({ id: c.id, group: "market", icon: c.icon, title: c.title, story: crisisStory(c, crisisFacts(c)) + ahead, go: ["retirement", "sequence-risk"] }, r);
   }
   const low = cloneInputs(I); low.returns.stocks -= LOWER_RETURNS; low.returns.bonds -= LOWER_RETURNS;
-  add({ id: "lower-returns", group: "market", icon: "🐢", title: `Returns ${Math.round(LOWER_RETURNS * 100)} points lower, for good`, story: `Stocks earn ${pctOne(low.returns.stocks)} and bonds ${pctOne(low.returns.bonds)} a year instead of ${pctOne(I.returns.stocks)} and ${pctOne(I.returns.bonds)}, every year of the plan. Many forecasters expect lower returns than the last century's.`, go: ["system", "assumptions"] }, run(low));
+  add({ id: "lower-returns", group: "market", icon: "🐢", title: `Returns ${Math.round(LOWER_RETURNS * 100)} percentage points lower, for good`, story: `Stocks earn ${pctOne(low.returns.stocks)} and bonds ${pctOne(low.returns.bonds)} a year instead of ${pctOne(I.returns.stocks)} and ${pctOne(I.returns.bonds)}, every year of the plan. Many forecasters expect lower returns than the last century's.`, go: ["system", "assumptions"] }, run(low));
 
   // life: who earns the most, their age, their Social Security
   const adults = I.people.map((p, i) => ({ ...p, index: i, person: (plan.household?.people ?? []).find((q) => q.id === p.id) }));
@@ -139,7 +139,7 @@ export function compute(plan, params = {}) {
       const dis = (plan.insurance?.policies ?? []).filter((x) => x.kind === "disability" && x.personId === e.id && Number(x.benefit) > 0);
       for (const d of dis) bd.inputs.incomes.push({ name: "Disability insurance", yearly: Number(d.benefit) * 12, personIndex: k, startAge: e.age + 1, endAge: 64, cola: false, taxable: true });
       const extra = [ssdi > 0 ? `Social Security disability pays about ${money(ssdi)} a month (the full-retirement-age amount)` : "with no Social Security figure in the plan, no disability benefit is counted", dis.length ? `the disability policy ${money(dis.reduce((s, d) => s + Number(d.benefit), 0))} a month to 65` : "there is no disability insurance in the plan"].join("; ");
-      add({ id: "disability", group: "life", icon: "🦽", title: `${NameIn(e.name)} can never work again`, story: `From next year: ${nameOf(e.name)} pay and retirement saving stop, ${extra}. ${e.index === 0 ? "The household's spending years start now." : "The rest of the household keeps working as planned."}`, go: ["retirement", "social-security"] }, run(bd.inputs));
+      add({ id: "disability", group: "life", icon: "🦽", title: `${NameIn(e.name)} can never work again`, story: `From next year: ${nameOf(e.name)} pay and retirement saving stop, ${extra}. ${e.index === 0 ? "The household retires now." : "The rest of the household keeps working as planned."}`, go: ["retirement", "social-security"] }, run(bd.inputs));
     }
   } else notes.push("No one has pay on the Income page before their retirement age, so the job-loss and disability shocks are left out.");
 

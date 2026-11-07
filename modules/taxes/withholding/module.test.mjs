@@ -305,7 +305,7 @@ test("Review 2026-11-06: the W-4 Step 3 figure for the paychecks left, and the w
   const d = compute(typedJo(161), { today: NOV6 });
   assert.equal(d.verdict, "refund"); near(d.totalTax, 938, 0.5);
   assert.equal(d.suggestion.takeHome, 161); assert.equal(d.suggestion.step3, 4186); assert.equal(d.suggestion.january, 3248); assert.equal(d.suggestion.one, false);
-  assert.match(d.suggestion.text, /For the 4 paychecks left this year, about \$4,186 in Step 3 of a new W-4 \(credits\), or the matching amount in Step 4\(b\) \(deductions\), brings take-home up and the refund down\./);
+  assert.match(d.suggestion.text, /For the 4 paychecks left this year, about \$4,186 in Step 3 of a new W-4 \(credits\), or the matching amount in Step 4\(b\) \(deductions\), brings your take-home pay up and the refund down\./);
   assert.match(d.suggestion.text, /In January 2027, change Step 3 to about \$3,248, or next year's paychecks would take out too little/);
   // a whole next year at January's figure still covers the tax; at the rest-of-year figure it falls 938 short
   const yearly = d.withholding.people[0].yearly;
@@ -325,12 +325,12 @@ test("Review 2026-11-06: the W-4 Step 3 figure for the paychecks left, and the w
   // on January 2 (25 paychecks left) January's figure leaves 125 of refund this year: one figure, for this year and next
   const jan = compute(typedJo(161), { today: "2026-01-02" });
   assert.equal(jan.suggestion.one, true); assert.doesNotMatch(jan.suggestion.text, /In January/);
-  assert.match(jan.suggestion.text, /About \$3,248 in Step 3 of a new W-4 \(credits\), or the matching amount in Step 4\(b\) \(deductions\), brings take-home up and the refund down, this year and next\./);
+  assert.match(jan.suggestion.text, /About \$3,248 in Step 3 of a new W-4 \(credits\), or the matching amount in Step 4\(b\) \(deductions\), brings your take-home pay up and the refund down, this year and next\./);
   // the estimate from pay (no stub typed): 161.08 a paycheck, 4,188 over the year, 3,250 over; the page now gives both figures
   const e = compute(jo(), { today: NOV6 }).estimate.suggestion;
   assert.equal(e.kind, "cut"); assert.equal(e.step3, 161 * 26); assert.equal(e.january, 3250);
   const text = await viewText(jo(), NOV6);
-  assert.ok(text.includes("For the 4 paychecks left this year, about $4,186 in Step 3 of Jo's new W-4 brings take-home up and the refund down. In January 2027, change Step 3 to about $3,250, or next year's paychecks would take out too little"), text.slice(0, 900));
+  assert.ok(text.includes("For the 4 paychecks left this year, about $4,186 in Step 3 of Jo's new W-4 brings your take-home pay up and the refund down. In January 2027, change Step 3 to about $3,250, or next year's paychecks would take out too little"), text.slice(0, 900));
 });
 
 test("Review 2026-11-06: more withheld for the paychecks left comes with the figure for January too", () => {

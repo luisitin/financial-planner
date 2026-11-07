@@ -94,7 +94,7 @@ test("withholding: paychecks left in the year, the projected total, a refund and
   assert.equal(withholding(emptyPlan(), { today: TODAY }).verdict, "unknown");
 });
 
-test("estimated payments: the safe harbour, no instalments when withholding covers it, four instalments when it does not", () => {
+test("estimated payments: the safe harbor, no installments when withholding covers it, four installments when it does not", () => {
   const h = safeHarbour(20000, 15000, 100000, "single"); assert.equal(h.required, 15000); assert.equal(h.basis, "last year");
   assert.equal(h.label, "100% of last year's tax");
   const h1 = safeHarbour(20000, 15000, 200000, "single"); near(h1.required, 16500); assert.equal(h1.label, "110% of last year's tax");   // last year's income over 150,000 (IRC 6654(d)(1)(C))

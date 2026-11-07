@@ -38,11 +38,11 @@ export function render(page, ctx) {
     if (!d.items.length) host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "An inheritance you might receive"),
       ui.h("p", { class: "lede" }, "Many people expect something from parents or relatives. It is wise not to count on it: care in later life can use most of it up, and plans change. Here you can see what it would change if it came, without putting it in your plan."),
-      ui.h("p", { class: "muted small" }, "Enter what you might receive and when, in today's money. Nothing here changes your other pages.")));
+      ui.h("p", { class: "muted small" }, "Enter what you might receive and when, in today's dollars. Nothing here changes your other pages.")));
     else if (d.ready) {
       const w = d.withIt;
       host.append(ui.card("If it comes", ui.row(
-        ui.stat("What arrives", money(d.net), d.net < d.total ? `of ${money(d.total)}, after tax and selling costs` : "in today's money"),
+        ui.stat("What arrives", money(d.net), d.net < d.total ? `of ${money(d.total)}, after tax and selling costs` : "in today's dollars"),
         ui.stat("You could spend", `${d.extraMonthly >= 0 ? "+" : ""}${money(d.extraMonthly)}`, `a month more in retirement, about ${money(w.affordableMonthly)} in all`),
       ), ui.h("p", { class: "ih-d" }, `${w.success && !d.base.success ? "With it the money lasts; without it, it does not. " : ""}The plan would end with about ${money(w.endReal)} instead of ${money(d.base.endReal)} (today's dollars).`)));
       const cases = [["Without it (your plan)", d.base], ["If it comes as expected", w], ["Half as much", d.half], [`${LATER_YEARS} years later`, d.later]];
@@ -59,8 +59,8 @@ export function render(page, ctx) {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add another", () => drawForm(true), { class: "secondary" })); return; }
       formHost.append(...[ui.h("h2", {}, editing ? "Change it" : "Add what you might receive"), ui.form([
-        { key: "from", label: "From", type: "text", placeholder: "e.g. Mum and Dad" },
-        { key: "amount", label: "About how much, in today's money", type: "money", min: 0 },
+        { key: "from", label: "From", type: "text", placeholder: "e.g. Mom and Dad" },
+        { key: "amount", label: "About how much, in today's dollars", type: "money", min: 0 },
         { key: "year", label: "About when (year)", type: "number", min: 1990, max: 2150, step: "1" },
         { key: "kind", label: "In what form", type: "select", options: Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label })) },
         { key: "notes", label: "Notes", type: "text" },
@@ -86,7 +86,7 @@ export function render(page, ctx) {
     host.append(ui.card("Good to know", ui.h("ul", {},
       ui.h("li", {}, "There is no federal inheritance tax; a few states tax some heirs (Estate tax lists them)."),
       ui.h("li", {}, "An inherited traditional IRA or 401(k) must usually be emptied within 10 years, and each withdrawal is taxed as income: spreading them out keeps the tax lower."),
-      ui.h("li", {}, "Inherited property and shares get a new cost basis at their value on the day of death, so selling soon after owes little or no gains tax.")),
+      ui.h("li", {}, "For inherited property and shares, the tax counts what you \"paid\" as their value on the day the person died, so if you sell soon after, you owe little or no tax on the gain.")),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/ltc" }, "Long-term care"), ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"))));
   }
 }

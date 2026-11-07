@@ -125,7 +125,7 @@ test("sr.balance.like-you and sr.retire.like-you: balances come from the survey'
   assert.ok(invest(b) <= 1.3 * Math.max(invest(a), 1000), `a birthday at 35 moved investments ${invest(a)} -> ${invest(b)}`);
 });
 
-test("SF-SPEND-CHILD-MONO and SF-HEALTH-AGE: a child never lowers a guessed row (but food), and health cover follows age", () => {
+test("SF-SPEND-CHILD-MONO and SF-HEALTH-AGE: a child never lowers a guessed row (but food), and health insurance follows age", () => {
   const rows = (H) => Object.fromEntries(Object.entries(H.spendRows).map(([k, r]) => [k, r.monthly ?? 0]));
   const none = rows(house({ who: "spouse", ages: [25, 25], pays: [30000, 30000] })), one = rows(house({ who: "spouse", ages: [25, 25], pays: [30000, 30000], kids: [3], taps: { childcare: "no" } }));
   for (const k of ["utilities", "groceries", "transport", "insurance", "dining", "shopping"]) assert.ok(one[k] >= 0.95 * none[k] - 10, `${k}: ${none[k]} -> ${one[k]}`);

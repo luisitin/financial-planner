@@ -35,7 +35,7 @@ test("the order for the family, the next step, and the dates the spare money rea
   // 2026-11-02, the health line (Bo alone pays marketplace cover 2050-2052 and Medicare from 2053): 235,000 -> 287,000;
   // seventh pass, 2026-11-06: Bo's Medicare now holds a supplement, the national Medigap Plan G average of $194 a month, so the need moved 287,000 -> 312,000
   assert.deepEqual(pr.people.map((x) => [x.name, x.gap, x.cover, x.until, x.depends]), [["Ana", 312000, 0, 2042, ["Bo", "Cy"]]]);
-  assert.match(pr.detail, /^If Ana died this year, Bo and Cy would be about \$312,000 short\. Term life cover on Ana until about 2042 \(Cy turns 22\) closes it\./);
+  assert.match(pr.detail, /^If Ana died this year, Bo and Cy would be about \$312,000 short\. Term life insurance on Ana until about 2042 \(Cy turns 22\) closes it\./);
   assert.equal(pr.gap, null, "an action, not a sum the spare money fills");
   assert.equal(step(d, "bills").status, "done");
   assert.equal(step(d, "match").status, "check", "Bo has a 401(k) and pay but no contribution");
@@ -71,7 +71,7 @@ test("no expensive debt, no HSA, no 401(k): those steps are done or left out", (
 test("an HSA account but no high-deductible plan this year: no HSA step (IRC 223(c)(1))", () => {
   const p = familyPlan();
   if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: p.household.people[0].id });
-  assert.ok(step(compute(p, { today: TODAY }), "hsa"), "with self-only cover the step is there");
+  assert.ok(step(compute(p, { today: TODAY }), "hsa"), "with self-only coverage the step is there");
   p.taxes.hsa = { ...p.taxes.hsa, coverage: "none" };
   assert.equal(step(compute(p, { today: TODAY }), "hsa"), undefined);
 });
@@ -81,7 +81,7 @@ test("HSA R1 (follow-up 2026-11-07): someone on Medicare is never told to fill t
   if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: p.household.people[0].id });
   // the family's first adult is under 55: the plain limit, no Medicare
   const open = step(compute(p, { today: TODAY }), "hsa");
-  assert.ok(open && open.roomYearly > 0 && /limit \$[\d,]+, self-only cover/.test(open.detail), JSON.stringify(open));
+  assert.ok(open && open.roomYearly > 0 && /limit \$[\d,]+, self-only coverage/.test(open.detail), JSON.stringify(open));
   // a widow of 74 who gets Social Security: on Medicare, so her limit is 0: never "fill"; the 4,400 typed has to come out (verify
   // 2026-11-07: the step was left out, so the Dashboard said nothing of a 6% charge the HSA page warns of), and with nothing typed no step
   const w = migrate(widowPlan());
@@ -112,7 +112,7 @@ test("money review M6: more in the HSA than the limit is never 'at the limit': i
   assert.equal(step(compute(p, { today: "2026-11-06" }), "hsa").detail, "At this year's limit.");
 });
 
-test("the match step: a 401(k) from a job left moves the question to the job now; no match leaves nothing to check; the step names who to ask", () => {
+test("the match step: a 401(k) from a job you left moves the question to the job now; no match leaves nothing to check; the step names who to ask", () => {
   const p = familyPlan("2026-11-02");
   const d0 = compute(p, { today: "2026-11-02" });
   const m0 = step(d0, "match");
@@ -163,7 +163,7 @@ test("protection: done once the cover on file reaches the need; no step for a ho
   assert.equal(compute(p, { today: TODAY }).steps.find((s) => s.id === "protect"), undefined, "Ana's $350,000 covers the $312,000");
   p.insurance.policies[0].benefit = 100000;
   const pr = compute(p, { today: TODAY }).steps.find((s) => s.id === "protect");
-  assert.equal(pr.people[0].gap, 212000); assert.match(pr.detail, /even with the \$100,000 of cover on file\. More cover on Ana/);
+  assert.equal(pr.people[0].gap, 212000); assert.match(pr.detail, /even with the \$100,000 of coverage on file\. More life insurance on Ana/);
   const single = familyPlan();
   single.household.people = single.household.people.filter((x) => x.id === "p-ana");
   single.income = single.income.filter((x) => x.personId === "p-ana");
@@ -305,7 +305,7 @@ test("one cushion verdict: the starter month in cash and costly debt paid first 
   assert.equal(cushionLater(compute(r, { today: T })), null);
 });
 
-test("paying from savings, review 2026-11-02: one-off income is not cash yet, the whole balance exactly, a saved plan does not hide it, no cushion no offer", async () => {
+test("paying from savings, review 2026-11-02: one-time income is not cash yet, the whole balance exactly, a saved plan does not hide it, no cushion no offer", async () => {
   const { compute: liquidity } = await import("../../balance/liquidity/compute.js");
   const T = "2026-11-02";
   const visaAcct = (p) => p.accounts.find((a) => a.id === "a-visa");
@@ -541,7 +541,7 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   const left = structuredClone(couple);
   const ask = step(d, "match").ask[0].accounts;
   for (const a of left.accounts) if (ask.includes(a.id)) a.formerJob = true;
-  assert.match(step(compute(left, { today: T }), "match").detail, /^Your spouse's 401\(k\) is from a job left: check whether the job now has a plan with a match\./);
+  assert.match(step(compute(left, { today: T }), "match").detail, /^Your spouse's 401\(k\) is from a job you left: check whether the job now has a plan with a match\./);
 });
 
 // C3 (spec 8.1): spending that is mostly our guesses -- the left-over figure is worked out, but it is no verdict

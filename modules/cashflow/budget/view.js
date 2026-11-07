@@ -45,7 +45,7 @@ export function render(root, ctx) {
       ? `${d.envelopes.length} envelope${d.envelopes.length === 1 ? "" : "s"}, ${fmt.money(d.totals.amount, cur)} a month. Spending against them shows once a bank file is in.`
       : d.hasBudget
       ? (d.totals.left >= 0 ? `${fmt.money(d.totals.left, cur)} left in your envelopes with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.` : `Your envelopes are ${fmt.money(-d.totals.left, cur)} over with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go.`)
-      : "Give each kind of spending an envelope: an amount for the month. The page shows what is spent so far from your transactions, what is left, and whether the pace is right."),
+      : "Give each kind of spending an envelope: an amount for the month. The page shows what you have spent so far (from your transactions), what is left, and whether you are on pace."),
     // with bank files in but no whole month in them, say why none is suggested from, not "once a bank file is in" (re-check 5)
     d.hasBudget ? null : ui.h("p", { class: "muted small" }, d.fromExpenses.length ? (d.hasData ? `Start from the amounts on your Expenses page below. Your bank files have no whole month to suggest amounts from yet${skippedNote ? `.${skippedNote}` : d.cover ? `; they cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}.` : "."}` : "Start from the amounts on your Expenses page below. Spending against each envelope shows once a bank file is in.")
       : !d.hasData ? "Import a bank file first and the page will suggest amounts from what you actually spend."

@@ -63,9 +63,9 @@ export function render(page, ctx) {
           ["Income before tax", money(c.gross)], ...(some(c.businessCosts) ? [["Business costs", off(c.businessCosts)]] : []),
           ["Federal income tax", off(c.federalTax)], ["Social Security and Medicare tax", off(c.payrollTax)], ...(some(c.stateTax) ? [["State income tax", off(c.stateTax)]] : []), ["Spending", off(c.spending)],
           ["Retirement saving", off(c.retirementSaving)], ["Saving for goals", off(c.goalSaving)], ...(some(c.debtExtra) ? [["Extra on debts (Pay off debts)", off(c.debtExtra)]] : []),
-          ...(some(c.held) ? [["Side income above what you count on, after its tax", off(c.held)]] : []), [c.monthly >= 0 ? "Spare" : "Short", money(c.monthly)],
+          ...(some(c.held) ? [["Side income above what you count on, after its tax", off(c.held)]] : []), [c.monthly >= 0 ? "Left over" : "Short", money(c.monthly)],
         ]),
-        ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is the State page's rate on this income; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
+        ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is the State tax page's rate on this income; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State tax page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
     }
 
     if (r.ready) sheet.append(section(ui, "Retirement",
@@ -79,7 +79,7 @@ export function render(page, ctx) {
       ]),
       // short: Goal seek's own answers (the Plan health score's hint), never planned less affordable, which can be all of the
       // spending and still not make it last (round 8 review, 2026-11-06)
-      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can carry about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : r.hint ?? "To last even if markets do as well as average, the plan needs more saving, a later retirement or less spending: Goal seek works out each.")));
+      ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can pay for about ${money(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : r.hint ?? "To last even if markets do as well as average, the plan needs more saving, a later retirement or less spending: Goal seek works out each.")));
 
     if (d.protection) sheet.append(section(ui, "Protection: the stress tests",
       ui.h("p", {}, `The plan survives ${d.protection.passed} of ${d.protection.total} shocks: five real market crises, lower returns, a job loss, never working again, a death, a long life and a care home.`),

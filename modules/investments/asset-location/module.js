@@ -14,7 +14,7 @@ export default {
   needs: ["accounts", "holdings", "taxes"],
   writes: [],
   heavy: false,
-  purpose: "Which investments belong in which kind of account to keep the yearly tax bill down, the drag today, and the swaps that fix it.",
+  purpose: "Which investments belong in which kind of account to keep the yearly tax bill down, the extra tax you pay today, and the swaps that fix it.",
   aliases: ["asset location", "which account", "bonds in 401k", "tax efficient", "placement", "tax drag"],
   seeds: "Bogleheads wiki",
   compute,

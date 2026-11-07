@@ -30,7 +30,7 @@ test("value added: the project's average share, or your own", () => {
   near(compute(p, { today: TODAY }).valueAdded, 1600);
 });
 
-test("the family's kitchen: four ways; no cash to spare; the line ranks first in today's money", () => {
+test("the family's kitchen: four ways; no cash to spare; the line ranks first in today's dollars", () => {
   const p = familyPlan(TODAY);
   const d = compute(p, { today: TODAY });
   assert.deepEqual(d.ways.map((w) => w.id), ["cash", "heloc", "refi", "loan"]);

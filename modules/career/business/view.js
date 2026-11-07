@@ -33,7 +33,7 @@ export function render(page, ctx) {
   const line = (label, amount, opts = {}) => ui.h("li", { class: opts.total ? "bz-tot" : null }, ui.h("span", {}, label), ui.h("span", {}, `${opts.minus ? "−" : ""}${money(amount)}`));
 
   if (!d.ready || !Object.keys(s).length) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your small business"),
-    ui.h("p", { class: "lede" }, "The year's profit after expenses, the tax it brings and what you can safely pay yourself, whether an S corporation would save tax, and the retirement plans a business owner can open."),
+    ui.h("p", { class: "lede" }, "The year's profit after expenses, the tax you owe on it and what you can safely pay yourself, whether an S corporation would save tax, and the retirement plans a business owner can open."),
     ui.h("p", { class: "muted small" }, d.ready ? "It starts from the business on the Income page. Add the revenue and the expenses below for the real profit." : "Add the business on the Income page as \"Self-employment / business\", or type the year's revenue below."),
     d.ready ? null : ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add it on Income"))));
   for (const n of d.notes ?? []) root.append(ui.notice("info", n));
@@ -58,7 +58,7 @@ export function render(page, ctx) {
       : "A loss brings no self-employment tax, and there is no other income for it to come off this year."),
     ui.h("p", { class: "bz-say" }, ui.h("b", {}, `After that the business costs you about ${money(-d.keepMonthly)} a month.`)),
     d.drawMonthly > 0 ? ui.notice("warn", `You take out ${money(d.drawMonthly)} a month as well: all of it comes from savings while the business loses money.`) : null)
-      : ui.card("The tax, run in your own name (a sole proprietor)", ui.h("ul", { class: "bz-lines" },
+      : ui.card("Your tax with the business in your own name (a sole proprietor)", ui.h("ul", { class: "bz-lines" },
         line("Self-employment tax (Social Security and Medicare)", t.se),
         line("Federal income tax", t.income),
         t.extra > 0.5 ? line("Extra Medicare tax", t.extra) : null,
@@ -169,5 +169,5 @@ export function render(page, ctx) {
       { key: "salary", label: "A reasonable salary for your work, a year", type: "money", min: 0, help: "what you would pay someone else to do the work; leave empty to use 60% of profit, an example" },
       { key: "scorpCosts", label: "Its running costs a year", type: "money", min: 0, help: `payroll service, the corporate return, state fees; leave empty to use ${money(SCORP_COSTS_EXAMPLE)}, an example` },
     ], { salary: s.salary ?? null, scorpCosts: s.scorpCosts ?? null }, (v) => { openFold = "scorp"; save("Saved.", (w) => { w.salary = v.salary; w.scorpCosts = v.scorpCosts; }); }, { submitLabel: "Compare" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/side-income" }, "Side income"), ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Quarterly payments"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/side-income" }, "Side income"), ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments"))));
 }

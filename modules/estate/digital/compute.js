@@ -11,7 +11,7 @@ export const KINDS = {
   photos: { label: "Photos and files", icon: "🖼️", tip: "Cloud photo libraries close with the account: name a legacy contact, or share an album now." },
   finance: { label: "Online banking or investing", icon: "🏦", tip: "The accounts themselves pass by beneficiary or by the will; the logins only help the family find them." },
   crypto: { label: "Crypto", icon: "🪙", key: true, tip: "Without the recovery phrase or the exchange login, crypto is lost for good. Keep the phrase on paper in a safe place someone knows about; never online." },
-  social: { label: "Social media", icon: "💬", tip: "Most networks let family memorialise or close an account; some let you name a legacy contact." },
+  social: { label: "Social media", icon: "💬", tip: "Most networks let family memorialize or close an account; some let you name a legacy contact." },
   domain: { label: "Website or domain", icon: "🌐", tip: "Domains lapse when nobody renews them." },
   other: { label: "Other", icon: "🗂️", tip: "" },
 };
@@ -44,6 +44,6 @@ export function compute(plan) {
   for (const x of items) if (x.secret) warnings.push(`${x.name || x.kindLabel}: the notes look like a password or a recovery phrase. Remove it: this plan is a file on your computer and in backups. Write where the secret is kept, never the secret.`);
   const missing = [];
   for (const kind of ["email", "manager"]) if (!items.some((x) => x.kind === kind && x.planned)) missing.push(kind);
-  if (cryptoHeld > 0 && !items.some((x) => x.kind === "crypto" && x.planned)) { missing.push("crypto"); warnings.push("You hold crypto (on Accounts) with no recovery plan here: if no one can find the recovery phrase or the exchange login, it is lost for good."); }
+  if (cryptoHeld > 0 && !items.some((x) => x.kind === "crypto" && x.planned)) { missing.push("crypto"); warnings.push("You hold crypto (on Net worth) with no recovery plan here: if no one can find the recovery phrase or the exchange login, it is lost for good."); }
   return { items, count: items.length, planned: items.filter((x) => x.planned).length, missing, cryptoHeld, warnings };
 }

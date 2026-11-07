@@ -236,7 +236,7 @@ const add = (el, ...kids) => el.append(...keep(kids));
 const swap = (el, ...kids) => el.replaceChildren(...keep(kids));
 const and = (list) => (list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
 let uid = 0;
-const LEFT_STOP = "Pick one of the two answers below, then Continue.", LEFT_CHECK = "Change the left-over amount below, then Continue.";
+const LEFT_STOP = "Pick one of the two answers below, then Continue.", LEFT_CHECK = "Change the leftover amount below, then Continue.";
 /** "1234567.5" -> "1,234,567.5" as you type (k and m kept at the end). */
 function groupDigits(raw, signed = false) {
   const neg = signed && /^\s*[-\u2212]/.test(String(raw ?? ""));   // a leading minus, only where a figure may go below zero (the left-over)
@@ -556,7 +556,7 @@ export function render(page, ctx) {
       }
       const left = n < 0 ? "that" : `a ${money(n)} left over`;
       if (res.why === "typed") swap(out, ui.h("div", {}, ui.notice("warn", `What you typed in the groups below, ${money(res.allowed + res.over)} a month, is more than ${left} allows. With that left over, your groups can add up to at most ${money(Math.max(0, res.allowed))} a month. Which is right?`),
-        ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My groups are right"), ui.h("button", { type: "button", class: "secondary", onClick: () => { onClearTyped(); recompute(); } }, "My left-over is right"))));
+        ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My groups are right"), ui.h("button", { type: "button", class: "secondary", onClick: () => { onClearTyped(); recompute(); } }, "What's left over is right"))));
       else if (res.why === "bills") swap(out, ui.h("div", {}, ui.notice("warn", `Your bills and loan payments already in your plan come to ${money(res.over)} a month more than ${left} allows. Which is right?`),
         ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My bills are right"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "See my bills ›"))));
       else if (res.why === "more-than-pay") swap(out, ui.notice("warn", res.available > 0 ? `That is more than comes in after tax and saving (about ${money(res.available)} a month). Check the amount.` : "That is more than comes in after tax and saving. Check the amount, or add what comes in first."));
@@ -594,7 +594,7 @@ export function render(page, ctx) {
     if (id === "money") { const r = reflect(plan, "money", { today }); return moneyWords(r) ?? none; }
     if (id === "ages") { const a = ad.filter((p) => p.birthDate).map((p) => `${ad.length > 1 ? `${p.name} ` : ""}${ageOn(p.birthDate, today)}`); return a.length ? `${and(a)}${ad.length > 1 ? "" : " years old"}` : none; }
     if (id === "have") { const r = reflect(plan, "have-amounts"); const ks = picks(plan, "have"); return r ? `${money(r.total)} saved and invested` : ks.length ? and(ks.map((k) => HAVE.find((h) => h.key === k)?.label ?? k)) : none; }
-    if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
+    if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt-free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
     if (id === "spend") { const r = reflect(plan, "spend"); return r ? `About ${money(r.monthly)} a month` : none; }
     if (id === "goals") { const ks = picks(plan, "goals"); return ks.length ? and(ks.map((k) => GOALS.find((g) => g.key === k)?.label ?? k)) : none; }
     return none;
@@ -754,7 +754,7 @@ export function render(page, ctx) {
             const pay = yearlyPay(plan, p.id);
             const est = by >= 1900 ? estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? a ?? 65 : x.stopAge, today }) : null;
             const fra = by >= 1900 ? fullRetirementAge(by) : null;
-            detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's money. A rough guide; your statement at ssa.gov is exact.`]);
+            detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's dollars. A rough guide; your statement at ssa.gov is exact.`]);
           } else if (s.mode === "statement") detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security at full retirement age") }), "On your statement at ssa.gov/myaccount.");
           else if (s.mode === "getting") {
             // before Medicare comes out (round 8): the letter's figure, with the Part B premium to add back to a deposit
@@ -799,7 +799,7 @@ export function render(page, ctx) {
     "have-amounts"() {
       // our guesses fill what is left blank (U.S. plans: core/estimate applies); elsewhere the boxes work as they did
       const guessing = applies(plan);
-      head("🧮", "About how much is in each?", guessing ? "Today's balance or value. Round numbers are fine. Leave a box empty and we'll use the grey figure: what's typical for someone like you." : "Today's balance or value. Round numbers are fine; you can make them exact later.");
+      head("🧮", "About how much is in each?", guessing ? "Today's balance or value. Round numbers are fine. Leave a box empty and we'll use the gray figure: what's typical for someone like you." : "Today's balance or value. Round numbers are fine; you can make them exact later.");
       const v = draft(() => valuesFor(plan, "have-amounts"));
       const shownMoney = (n) => groupDigits(String(Math.round(n)));
       const shownPct = (r) => String(Math.round(r * 1000) / 10);
@@ -990,7 +990,7 @@ export function render(page, ctx) {
     owe() {
       head("🧾", "Do you owe money on anything?", "Tap all that apply. Most people do; it helps the plan put things in the right order.");
       const v = draft(() => new Set(valuesFor(plan, "owe")));
-      const opts = [...OWE, { key: "none", icon: "🎉", label: "No, I'm debt free", wide: true }];
+      const opts = [...OWE, { key: "none", icon: "🎉", label: "No, I'm debt-free", wide: true }];
       add(card, tileGroup("Do you owe money on anything?", opts, {
         isOn: (o) => v.has(o.key),
         isHave: (o) => o.key !== "none" && oweTaken(plan, o.key),
@@ -999,7 +999,7 @@ export function render(page, ctx) {
           v.delete("none"); if (v.has(o.key)) v.delete(o.key); else v.add(o.key);
         },
       }), haveNote(OWE.flatMap((o) => existingOwe(plan, o.key)).filter((a, i, all) => all.indexOf(a) === i).map(accLine)));
-      current = { apply: (d) => applyOwePicks(d, [...v]), words: (p2) => (reflect(p2, "owe")?.kind === "debt-free" ? "Debt free: that makes everything easier." : null) };
+      current = { apply: (d) => applyOwePicks(d, [...v]), words: (p2) => (reflect(p2, "owe")?.kind === "debt-free" ? "Debt-free: that makes everything easier." : null) };
       actions();
     },
 
@@ -1091,7 +1091,7 @@ export function render(page, ctx) {
         };
         draw();
         add(card, group(`${o.icon} ${o.label}`,
-          o.key === "credit" ? fieldset("Do you pay the whole bill every month?", seg([{ value: "yes", label: "Yes, every month" }, { value: "no", label: "No, some carries over" }], x.paidInFull ? "yes" : x.owed !== "" || x.payment !== "" ? "no" : null, (val) => { x.paidInFull = val === "yes"; draw(); }, "Do you pay the whole card bill every month?")) : null,
+          o.key === "credit" ? fieldset("Do you pay the whole bill every month?", seg([{ value: "yes", label: "Yes, every month" }, { value: "no", label: "No, I carry a balance" }], x.paidInFull ? "yes" : x.owed !== "" || x.payment !== "" ? "no" : null, (val) => { x.paidInFull = val === "yes"; draw(); }, "Do you pay the whole card bill every month?")) : null,
           body));
       }
       firstGroup();
@@ -1293,7 +1293,7 @@ export function render(page, ctx) {
           const fig = args.rows[s.key] === null ? shown(s) : 0;
           const text = fig > 0 ? groupDigits(String(Math.round(fig))) : "";
           b.input.placeholder = text;
-          b.input.setAttribute("aria-label", `${b.name}${text ? `, blank uses ${split ? "your best guess shared out, about" : "our guess of about"} ${symbol}${text}` : ""}`);
+          b.input.setAttribute("aria-label", `${b.name}${text ? `, blank uses ${split ? "your best guess, divided up, about" : "our guess of about"} ${symbol}${text}` : ""}`);
         }
         const typedOf = (s) => num(v.rows[s.key]);
         const rowFig = (s) => typedOf(s) || (args.rows?.[s.key] === 0 ? 0 : shown(s));
@@ -1320,7 +1320,7 @@ export function render(page, ctx) {
         adjustEl.hidden = !(!split && typedAny && rows.some((s) => args.rows?.[s.key] === null && Math.abs((grey[s.key] ?? 0) - (baseGrey(args)[s.key] ?? 0)) >= 10));
         if (clash) adjustEl.hidden = true;
         const anyGrey = Object.values(grey).some((x) => x > 0);
-        basis.textContent = anyGrey ? (split ? `The grey figures are your ${money(sumTyped)} shared out the way a household like yours usually spends it. Type your own to change one.` : spendBasis(plan, { today })) : "";
+        basis.textContent = anyGrey ? (split ? `The gray figures are your ${money(sumTyped)} divided up the way a household like yours usually spends it. Type your own to change one.` : spendBasis(plan, { today })) : "";
         basis.hidden = !basis.textContent;
         first.hidden = !(renting && rows.some((s) => s.key === "housing") && args.rows?.housing === null && grey.housing > 0);
         // retirement: our figure follows the rows until it is typed
@@ -1330,7 +1330,7 @@ export function render(page, ctx) {
           if (laterInput) {
             laterInput.placeholder = fig ? groupDigits(String(Math.round(fig))) : "";
             laterInput.setAttribute("aria-label", `Once you stop working, about how much a month${fig ? `, blank uses our guess of about ${symbol}${groupDigits(String(Math.round(fig)))}` : ""}`);
-            if (laterSub) laterSub.textContent = later.typed ? "Your figure. Health cover is added on Will the money last?" : fig ? (loansLater > 0 ? `Our guess: about ${money(Math.round((fig - loansLater) / 10) * 10)} a month of costs, plus the ${money(loansLater)} of loan payments still running then. Health cover is added on Will the money last?` : "Our guess: everyday costs as people 65 to 74 usually spend them, plus your home costs. Health cover is added on Will the money last?") : "";
+            if (laterSub) laterSub.textContent = later.typed ? "Your figure. Health insurance is added on Will the money last?" : fig ? (loansLater > 0 ? `Our guess: about ${money(Math.round((fig - loansLater) / 10) * 10)} a month of costs, plus the ${money(loansLater)} of loan payments still running then. Health insurance is added on Will the money last?` : "Our guess: everyday costs as people 65 to 74 usually spend them, plus your home costs. Health insurance is added on Will the money last?") : "";
           }
           // (only what applies: childcare left out when there is any, the loans that run on or end by then when there are any)
           const care = rows.some((r) => r.key === "childcare") || (plan.expenses ?? []).some((x) => x.category === "childcare");
@@ -1364,7 +1364,7 @@ export function render(page, ctx) {
       const sumBox = moneyIn(v.sum, (val) => { v.sum = val; refresh(); });
       totalInput = sumBox.querySelector("input");
       const overNote = ui.h("p", { class: "su-sub su-over", hidden: true, "aria-live": "polite" }, "The groups below add up to more than this, so we use the groups. Clear a box below to use your figure.");
-      add(spendPart, field("Your best guess for a normal month", sumBox, base.loanPayments > 0 ? "Home, food, car, fun: everything except the loan and card payments we already have." : "Home, food, car, fun: everything. Leave it empty to use the grey figure: what's typical for someone like you."), basis, overNote);
+      add(spendPart, field("Your best guess for a normal month", sumBox, base.loanPayments > 0 ? "Home, food, car, fun: everything except the loan and card payments we already have." : "Home, food, car, fun: everything. Leave it empty to use the gray figure: what's typical for someone like you."), basis, overNote);
       add(card, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl, adjustEl);
       // "Split it up (optional)": the groups, the health cover question (it sits under its group) and what you'll spend once you stop working
       const fold = ui.h("details", { class: "fold su-fold" },
@@ -1474,7 +1474,7 @@ export function render(page, ctx) {
         const drawNote = () => {
           const also = [...sel].map((id) => { const o = shownGoals.filter((y) => y.key !== g.key && (v[y.key]?.funds ?? []).includes(id)); const a = choices.find((c) => c.id === id); return o.length && a ? `${a.name} is also for ${o.map((y) => goalWords({ id: `setup-goal-${y.key}`, name: v[y.key]?.name || y.label })).join(" and ")}.` : null; }).filter(Boolean);
           let have = null;
-          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your cushion now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of the bills you have to pay. Aim for ${c.months}.`; }
+          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your emergency fund now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of the bills you have to pay. Aim for ${c.months}.`; }
           swap(note, also.length ? ui.h("p", { class: "su-live" }, `${also.join(" ")} The goal due first fills first.`) : null, have ? ui.h("p", { class: "su-live" }, have) : null);
         };
         notes.push(drawNote);
@@ -1502,7 +1502,7 @@ export function render(page, ctx) {
               ? ui.h("p", { class: "su-live" }, "That's ", ui.h("b", {}, money(c.exact)), `: ${x.months} month${x.months === 1 ? "" : "s"} of the ${money(c.essential)} in bills you have to pay${loans ? " and loan payments" : ""}.`)
               : ui.h("p", { class: "su-live" }, "The bills you have to pay (question 6) set the amount."),
               c.essential > 0 ? ui.h("p", { class: "su-live" }, cushionHave(pv, c)) : null,
-              c.essential > 0 ? ui.h("div", { class: "su-meter", role: "img", "aria-label": `${Math.round(share * 100)}% of the cushion` }, ui.h("span", { style: { width: `${Math.round(share * 100)}%` } })) : null);
+              c.essential > 0 ? ui.h("div", { class: "su-meter", role: "img", "aria-label": `${Math.round(share * 100)}% of the emergency fund` }, ui.h("span", { style: { width: `${Math.round(share * 100)}%` } })) : null);
           };
           drawC();
           redrawCushion = drawC;

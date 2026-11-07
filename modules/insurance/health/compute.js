@@ -129,11 +129,11 @@ export function compute(plan, params = {}) {
     ? `Once you're on Medicare you can't add to an HSA, so an HSA plan saves no tax on what you pay out of pocket${tier === "family" ? " once everyone covered is on it" : ""}. You can still spend what is in an HSA on medical bills, tax-free.`
     : `Once you're on Medicare you can't add to an HSA. From ${MONTH_NAMES[12 - medicareMonths]} ${onIt} on Medicare, so this year only $${Math.round(hsaLimit).toLocaleString("en-US")} can go in (for the months before) and save tax on what you pay out of pocket. You can still spend what is in an HSA on medical bills, tax-free.`);
   const $ = (n) => `$${n.toLocaleString("en-US")}`;
-  const cover = `${tier === "family" ? "family" : "self-only"} cover, ${limitsYear} rules`;
+  const cover = `${tier === "family" ? "family" : "self-only"} coverage, ${limitsYear} rules`;
   const plans = (h.plans ?? []).map((p) => {
     const can = hsaEligible(p, rules), eligible = can === "yes";
     if (p.hsa && can === "unknown") warnings.push(`${p.name}: enter its out-of-pocket maximum to check that it can have an HSA (at most ${$(rules.maxOop)}, ${cover}).`);
-    else if (p.hsa && !eligible) warnings.push(`${p.name}: a plan with a ${Number(p.deductible) < rules.minDeductible ? `deductible under ${$(rules.minDeductible)}` : `most out of pocket over ${$(rules.maxOop)}`} cannot have an HSA (${cover}). Check the figures, or untick the HSA.`);
+    else if (p.hsa && !eligible) warnings.push(`${p.name}: a plan with a ${Number(p.deductible) < rules.minDeductible ? `deductible under ${$(rules.minDeductible)}` : `most out of pocket over ${$(rules.maxOop)}`} cannot have an HSA (${cover}). Check the figures, or uncheck the HSA box.`);
     const usual = yearCost(p, expected, opts), quiet = yearCost(p, QUIET, opts), bad = yearCost(p, BAD, opts);
     return { id: p.id, name: p.name, hsa: !!p.hsa, eligible, premiumsYearly: usual.premiums, quiet, usual, bad, worst: bad.total };
   });

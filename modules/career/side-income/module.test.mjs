@@ -232,7 +232,7 @@ test("a raise from a later date: count on and the months are one record for both
   setCountOn(p, compute(p, { today: T }).items[0], null);
   assert.deepEqual(lines().map((x) => "countOn" in x), [false, false]);
   assert.equal(compute(p, { today: "2027-04-15" }).items[0].counted, null);
-  assert.ok(next(p, { today: "2027-04-15" }).spare.held < 0.005, "the left-over figure counts the full amount after the start date too");
+  assert.ok(next(p, { today: "2027-04-15" }).spare.held < 0.005, "the leftover figure counts the full amount after the start date too");
   // "Count on $300 instead": both halves; after the start date the new pay says it too
   setCountOn(p, compute(p, { today: T }).items[0], 300);
   assert.deepEqual(lines().map((x) => x.countOn), [300, 300]);

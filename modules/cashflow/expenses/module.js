@@ -15,7 +15,7 @@ export default {
   // (and "Is something missing?": our guesses for the rest, or guide.spendComplete)
   writes: ["expenses", "guesses", "guide"],
   heavy: false,
-  purpose: "Your regular spending by category, split into what you must pay and what is nice to have.",
+  purpose: "Your regular spending by category, split into what you must pay and what could be cut.",
   aliases: ["spending", "bills", "what I spend", "where my money goes", "budget", "rent", "groceries", "subscriptions"],
   compute,
   render,

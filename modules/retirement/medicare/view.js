@@ -32,13 +32,13 @@ export function render(page, ctx) {
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Medicare at 65"),
-    ui.h("p", { class: "lede" }, `Medicare starts at 65 for nearly everyone. Hospital cover (Part A) is free for most people; doctors' cover (Part B) costs ${cents(d.partB)} a month in ${d.year}, and a drug plan (Part D) about ${cents(d.partD)}. With a higher income both cost more: the income surcharge, called IRMAA.`),
+    ui.h("p", { class: "lede" }, `Medicare starts at 65 for nearly everyone. Hospital insurance (Part A) is free for most people; medical insurance (Part B) costs ${cents(d.partB)} a month in ${d.year}, and a drug plan (Part D) about ${cents(d.partD)}. With a higher income both cost more: the income surcharge, called IRMAA.`),
     // past 65 the sign-up is done: a fact, not a window that closed years ago (round 4, 2026-11-02); the window, the
     // employer-cover note and the late penalty are for those who have not reached 65
     d.people.length ? ui.h("ul", {}, d.people.map((p) => ui.h("li", {}, p.age !== null && p.age >= 65
-      ? `${NameIn(p.name)}: Medicare age since ${monthName(p.signup.month)}. This page works out what it costs each year.`
+      ? `${NameIn(p.name)}: old enough for Medicare since ${monthName(p.signup.month)}. This page works out what it costs each year.`
       : `${NameIn(p.name)}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
-    d.people.some((p) => p.age === null || p.age < 65) ? ui.h("p", { class: "muted small" }, `Still working with cover from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`) : null));
+    d.people.some((p) => p.age === null || p.age < 65) ? ui.h("p", { class: "muted small" }, `Still working, with health insurance from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`) : null));
   if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the costs year by year, the plan needs: ${d.missing.join("; ")}.`))); return; }
 
   root.append(ui.card("What it costs", ui.row(
@@ -69,8 +69,8 @@ export function render(page, ctx) {
       pending = on ? `Saved: ${whose} is left out while ${w ?? "a husband or wife"} still ${w ? works : "works"}.` : `Saved: ${whose} is counted from 65.`;
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.medicare = { ...(p.retirement.medicare ?? {}) }; if (on) p.retirement.medicare.jobCoversSpouse = true; else delete p.retirement.medicare.jobCoversSpouse; });
     } });
-    root.append(ui.card("Cover through a job",
-      sy.length ? ui.h("p", {}, `In ${yrs} ${who} ${are} 65 or over while ${w} still ${works}. ${d.healthIncluded ? "Will the money last? adds no health cover now: you said your spending figure already includes it." : d.jobCoversSpouse ? `You said a plan through ${job} covers ${them}, so Will the money last? leaves ${their} Medicare out ${ys.length === 1 ? "that year" : "in those years"}.` : `Will the money last? counts ${their} Medicare ${ys.length === 1 ? "that year" : "in those years"} unless you say a plan through ${job} covers ${them}.`}`) : ui.h("p", {}, "Nobody is 65 or over while a husband or wife still works in your plan now."),
+    root.append(ui.card("Health insurance through a job",
+      sy.length ? ui.h("p", {}, `In ${yrs} ${who} ${are} 65 or over while ${w} still ${works}. ${d.healthIncluded ? "Will the money last? adds no health insurance now: you said your spending figure already includes it." : d.jobCoversSpouse ? `You said a plan through ${job} covers ${them}, so Will the money last? leaves ${their} Medicare out ${ys.length === 1 ? "that year" : "in those years"}.` : `Will the money last? counts ${their} Medicare ${ys.length === 1 ? "that year" : "in those years"} unless you say a plan through ${job} covers ${them}.`}`) : ui.h("p", {}, "Nobody is 65 or over while a husband or wife still works in your plan now."),
       ui.h("label", { style: { display: "flex", gap: "10px", alignItems: "center", minHeight: "44px", fontSize: "var(--fs-sm)" } }, box, ui.h("span", {}, sy.length ? `A plan through ${job} covers ${who}` : "A plan through a husband's or wife's job covers the one who is 65 or over")),
       ui.h("p", { class: "muted small" }, "Check with the plan first: when the employer has fewer than 20 workers, Medicare usually has to pay first.")));
   }
@@ -85,7 +85,7 @@ export function render(page, ctx) {
   const t = tiersFor(d.status);
   surcharge.append(ui.h("h3", { style: { margin: "12px 0 4px" } }, `The lines for ${d.status === "married_joint" ? "a joint return" : d.status === "married_separate" ? "married filing separately" : "a single return"} (${d.year})`),
     ui.h("ul", { class: "mc-list" }, t.map(([upTo, b, dAdd], i) => ui.h("li", { class: used.has(i) ? "on" : null }, ui.h("span", {}, i === 0 ? `Up to ${money(upTo)}` : upTo === Infinity ? `Over ${money(t[i - 1][0])}` : `${money(t[i - 1][0])} to ${money(upTo)}`, ui.h("span", { class: "mc-s" }, used.has(i) ? "your plan reaches this" : "")), ui.h("b", {}, `${cents(b)} + ${cents(dAdd)}`, ui.h("span", { class: "mc-s" }, "Part B + drug surcharge")))) ),
-    ui.h("p", { class: "muted small" }, "Income here is modified adjusted gross income: the adjusted gross income on the return plus tax-free interest. The lines rise with prices every year, except the top one ($500,000; $750,000 joint), which starts rising in 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44."));
+    ui.h("p", { class: "muted small" }, "The income Medicare uses is your total income on the tax return before deductions (line 11 of Form 1040, \"adjusted gross income\"), plus any tax-free interest. The lines rise with prices every year, except the top one ($500,000; $750,000 joint), which starts rising in 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44."));
   root.append(surcharge);
 
   // the first years, one line each
@@ -104,5 +104,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.medicare = { ...(p.retirement.medicare ?? {}), partDPremium: v.partDPremium ?? null, supplementPremium: v.supplementPremium ?? null }; });
     }, { submitLabel: "Save" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/roth-conversions" }, "Roth conversions"), ui.h("a", { class: "btn secondary", href: "#/retirement/healthcare" }, "Before 65"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/roth-conversions" }, "Roth conversions"), ui.h("a", { class: "btn secondary", href: "#/retirement/healthcare" }, "Before 65"))));
 }

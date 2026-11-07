@@ -1,7 +1,7 @@
 # Legacy goals  (`estate/legacy`)
 
 **Status:** usable (phase 8)
-**Purpose:** What you want to leave and to whom, in today's money; the amount the plan should still have at its end for it; whether it does, and what each lever would have to be if not.
+**Purpose:** What you want to leave and to whom, in today's dollars; the amount the plan should still have at its end for it; whether it does, and what each lever would have to be if not.
 
 ## Inputs
 `estate.legacy`, `accounts` (homes), the retirement plan (`buildInputs`, `project`) and Goal seek. Writes `estate.legacy = { bequests: [{ id, to, kind: "person"|"charity", amount, notes }], includeHome }`. Heavy: Goal seek solves several levers.
@@ -10,7 +10,7 @@
 `compute(plan, { today })` -> `{ bequests[], total, people, charity, home, includeHome, target, ready, missing, endReal, success, meets, gap, endYear, levers }`. `legacyTarget(plan)` -> `{ total, home, target }` is shared: it is the goal Goal seek starts from, and the charity total is a deduction on Estate tax.
 
 ## Formulas
-- Total = the sum of the bequests (today's money). Home = the property accounts' value when `includeHome` (the home passes as it is, so the savings need not hold it). Target = max(0, total - home).
+- Total = the sum of the bequests (today's dollars). Home = the property accounts' value when `includeHome` (the home passes as it is, so the savings need not hold it). Target = max(0, total - home).
 - The plan leaves `endReal` = the projection's end balance in today's dollars; meets when the plan lasts and endReal >= target; gap = target - endReal.
 - Levers: `scenarios/goal-seek` compute with `legacy` = target (the most to spend, the latest retirement, the saving, the return, the lump sum, the claiming age that still leave it).
 

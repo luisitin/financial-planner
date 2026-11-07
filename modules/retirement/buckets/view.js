@@ -61,5 +61,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.buckets = { cashYears: v.cashYears ?? null, bondYears: v.bondYears ?? null }; });
     }, { submitLabel: "Save" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/sequence-risk" }, "Order of returns"), ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-order" }, "Withdrawal order"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/sequence-risk" }, "Order of returns"), ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-order" }, "Withdrawal order"))));
 }

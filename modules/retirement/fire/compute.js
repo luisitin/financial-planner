@@ -18,7 +18,7 @@ import { drawSequences, CAREFUL_CHANCE, CAREFUL_SETTLE_PATHS } from "../monte-ca
  * existed and was taken out while nothing counted it). ruleWords(times, healthAdded) -> text
  */
 export function ruleWords(times, health = false) {
-  return `A quick rule: savings of ${times} times what you spend a year pay for life without a paycheck. It counts everything left over each month as saved and leaves out Social Security, pensions${health ? ", taxes and health cover before Medicare, which the answer above counts" : " and taxes"}, so it can come out sooner or later than the answer above. The answer above, worked out year by year from your plan, is the one to go by.`;
+  return `A quick rule: savings of ${times} times what you spend a year pay for life without a paycheck. It counts everything left over each month as saved and leaves out Social Security, pensions${health ? ", taxes and health insurance before Medicare, which the answer above counts" : " and taxes"}, so it can come out sooner or later than the answer above. The answer above, worked out year by year from your plan, is the one to go by.`;
 }
 
 /**
@@ -55,7 +55,7 @@ export function compute(plan, params = {}) {
   // the engine's spending figure leaves out a health premium on Expenses (the projection's health line pays cover from
   // retirement on, and this page has no health line): it goes back in, so the FI number is still on all of today's spending
   const spendingYearly = b.inputs ? b.inputs.spending.yearly + (b.health?.removedMonthly ?? 0) * 12 : (ex ? ex.monthly * 12 : 0);
-  if (!spendingYearly) return { ready: false, missing: ["what you spend (Expenses page, or the retirement spending figure on the Projection page)"] };
+  if (!spendingYearly) return { ready: false, missing: ["what you spend (Expenses page, or the retirement spending figure on Will the money last?)"] };
   const a = plan.assumptions ?? {}, rt = plan.retirement ?? {};
   const stocks = Number(rt.stocksNow ?? 0.7);
   const nominal = stocks * Number(a.returnStocks ?? 0.07) + (1 - stocks) * Number(a.returnBonds ?? 0.04);

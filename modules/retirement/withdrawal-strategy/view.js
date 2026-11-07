@@ -26,7 +26,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the Projection page's inputs first."), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first."), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   // the plan's end age, for wording only: a run that fails in the last year has lasted to the end
@@ -39,7 +39,7 @@ export function render(root, ctx) {
   const fy = firstYear(d.chosenHeld ? { ...plan, retirement: { ...(plan.retirement ?? {}), strategy: "fixed-real" } } : plan, { today });
   const KIND = { cash: "your cash savings", taxable: "your investment account", deferred: "your 401(k) or IRA", free: "your Roth" };
   const from = (b) => (b.accounts.length ? list(b.accounts.map(acct)) : KIND[b.bucket]);
-  const onTop = fy?.healthAdded ? " on top of health cover" : "";
+  const onTop = fy?.healthAdded ? " on top of health insurance" : "";
 
   // ---- the answer: one or two plain sentences with the real figures ----------------------------------------------------------
   const answer = (() => {
@@ -48,7 +48,7 @@ export function render(root, ctx) {
     const dollars = fy.thisYear ? "" : " Amounts are in today's dollars.";
     const src = list(fy.sources.map((x) => (x === "other income" ? "other income" : x)));
     const yourIncome = `your ${money(fy.income)} of ${src}`;
-    const spendParts = (withTax) => list([`the ${money(fy.spending)} you ${fy.thisYear ? "spend" : "plan to spend"}`, ...(fy.health >= 0.5 ? [`${money(fy.health)} of health cover`] : []), ...(fy.other >= 0.5 ? [`${money(fy.other)} of one-off costs`] : []), ...(withTax && fy.taxes >= 0.5 ? [`about ${money(fy.taxes)} of tax`] : [])]);
+    const spendParts = (withTax) => list([`the ${money(fy.spending)} you ${fy.thisYear ? "spend" : "plan to spend"}`, ...(fy.health >= 0.5 ? [`${money(fy.health)} of health insurance`] : []), ...(fy.other >= 0.5 ? [`${money(fy.other)} of one-time costs`] : []), ...(withTax && fy.taxes >= 0.5 ? [`about ${money(fy.taxes)} of tax`] : [])]);
     const out = [];
     if (fy.need < 0.5 && fy.fromSavings < 0.5) {
       out.push(`${when}, nothing needs to come out of savings.`);
@@ -203,7 +203,7 @@ export function render(root, ctx) {
     if (!f) return null;
     const G = f.income >= 0.5;
     const lead = f.year === thisYear ? "This year" : `In ${f.year}`;
-    const parts = (withTax) => list([`the ${money(f.spend)} you spend`, ...(f.health >= 0.5 ? [`${money(f.health)} of health cover`] : []), ...(f.other >= 0.5 ? [`${money(f.other)} of one-off costs`] : []), ...(withTax && f.tax >= 0.5 ? [`about ${money(f.tax)} of tax`] : [])]);
+    const parts = (withTax) => list([`the ${money(f.spend)} you spend`, ...(f.health >= 0.5 ? [`${money(f.health)} of health insurance`] : []), ...(f.other >= 0.5 ? [`${money(f.other)} of one-time costs`] : []), ...(withTax && f.tax >= 0.5 ? [`about ${money(f.tax)} of tax`] : [])]);
     if (f.short >= 0.5) return `${lead}: savings have only about ${money(f.take)} left; ${G ? `with your ${money(f.income)} of income ` : ""}that covers about ${money(f.take + f.income)} of the ${money(f.spend + f.health + f.other + f.tax)} the year needs.`;
     if (f.take < 0.5) return G ? `${lead}: nothing from savings; your ${money(f.income)} of income pays for ${parts(true)}.` : `${lead}: nothing comes out of savings.`;
     const with_ = G ? `with your ${money(f.income)} of income, ` : "";

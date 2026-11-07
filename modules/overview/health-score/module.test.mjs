@@ -182,7 +182,7 @@ test("round 8: lasting but under 115%, the hint asks Goal seek for 115% and the 
 test("round 8: the debt part grades a renter's payments on the renters' 20% line", async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const debt = compute(renterDebtPlan(), { today: "2026-11-06" }).parts.find((x) => x.id === "debt");
-  assert.match(debt.detail, /Required payments take 21% of gross income; for renters the guideline is 20% or less \(rent not counted\)\./);
+  assert.match(debt.detail, /Required payments take 21% of income before tax; for renters the guideline is 20% or less \(rent not counted\)\./);
   // $9,800 of card debt against a quarter of $39,000 (9,750): no points there; 21% over 20%: half of the third
   assert.equal(debt.points, Math.round(((0 * 2 + 0.5) / 3) * 15 * 10) / 10);
 });
@@ -193,7 +193,7 @@ test("review D3 and D7: a renter's debt part is of the required payments, graded
   // $400 extra on the Visa: the $320 required is 9.8%, within 20%: the third for payments in full; $9,800 of cards against a
   // quarter of $39,000 ($9,750): nothing there. (0 x 2 + 1) / 3 x 15 = 5 points, as before the batch
   const a = compute(renterPayingExtraPlan(), { today: "2026-11-06" }).parts.find((x) => x.id === "debt");
-  assert.match(a.detail, /Required payments take 10% of gross income; for renters the guideline is 20% or less \(rent not counted\)\./);
+  assert.match(a.detail, /Required payments take 10% of income before tax; for renters the guideline is 20% or less \(rent not counted\)\./);
   assert.equal(a.points, 5);
   // $660 / $3,250 = 20.3%, shown as 20%: full marks on the third
   const p = renterDebtPlan(); p.debts.find((d) => d.id === "setup-debt-credit").minPayment = 140;

@@ -14,7 +14,7 @@ const FIELDS = (people) => [
   { key: "amount", label: "Amount", type: "money", required: true, min: 0, help: "what arrives each time, before taxes if you know it" },
   { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS },
   { key: "growth", label: "Yearly raise", type: "percent", min: 0, max: 100, help: "type 3 for 3% a year; blank for none" },
-  { key: "startDate", label: "Starts", type: "date", help: "blank if it already has; for a raise from a later date, that date: the old amount runs until then" },
+  { key: "startDate", label: "Starts", type: "date", help: "leave blank if it has already started; for a raise from a later date, that date: the old amount runs until then" },
   { key: "endDate", label: "Ends", type: "date", help: "blank if it does not end" },
   { key: "taxable", label: "Income tax applies to it", type: "checkbox" },
 ];
@@ -41,7 +41,7 @@ export function render(root, ctx) {
     // (review 2026-11-02: the sentence called the whole figure after tax, above what the Dashboard plans with)
     const biz = d.items.filter((x) => x.active && x.type === "business" && x.period !== "once" && x.taxable !== false).reduce((t, x) => t + x.monthly, 0);
     root.append(ui.card(null, ui.row(
-      ui.stat("A month, before tax", fmt.money(d.monthly, cur), net !== null ? `${fmt.money(d.yearly, cur)} a year. About ${fmt.money(net, cur)} a month reaches the bank${biz > 0.5 ? `: pay after its tax, the ${fmt.money(biz, cur)} of business income before its tax, which is paid four times a year` : " after tax"}` : `${fmt.money(d.yearly, cur)} a year`),
+      ui.stat("A month, before tax", fmt.money(d.monthly, cur), net !== null ? `${fmt.money(d.yearly, cur)} a year. About ${fmt.money(net, cur)} a month reaches the bank${biz > 0.5 ? `: your pay after tax, plus the ${fmt.money(biz, cur)} of business income before its tax (you pay that tax four times a year)` : " after tax"}` : `${fmt.money(d.yearly, cur)} a year`),
       ui.stat("Next year", fmt.money(d.nextYear, cur), d.nextYear > d.yearly ? "after the raises you entered" : "no raises entered"),
       d.untaxedYearly ? ui.stat("Not taxed", fmt.money(d.untaxedYearly, cur), "a year") : null,
       d.oneTime ? ui.stat("One-time amounts", fmt.money(d.oneTime, cur), "not in the monthly total") : null,

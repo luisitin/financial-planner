@@ -37,7 +37,7 @@ test("the family with Ana's work policy: share of pay, after tax, the defaults, 
   assert.equal(bo.benefitMonthly, 0); near(bo.target, TARGET_SHARE * 5800); near(bo.extraNeeded, TARGET_SHARE * 5800);
   near(bo.costRange[0], COST_RANGE[0] * 5800 * 12); near(bo.costRange[1], COST_RANGE[1] * 5800 * 12);
   assert.equal(bo.wait.days, null); near(bo.wait.months, SSDI_WAIT_MONTHS);
-  assert.ok(d.warnings.some((w) => w.includes("All of Ana's disability cover comes with the job")));
+  assert.ok(d.warnings.some((w) => w.includes("All of Ana's disability insurance comes with the job")));
 });
 
 test("the wait: the cash carries what the others' pay leaves uncovered", () => {
@@ -71,7 +71,7 @@ test("the first adult left unnamed (\"Me\"): the warnings say you and your", () 
   const p = withPolicies([{ ...LTD, untilAge: 60 }]); p.household.people.find((x) => x.id === "p-ana").name = "Me";
   const d = compute(p, { today: TODAY });
   assert.ok(d.warnings.some((w) => w.includes("before you plan to retire at")), d.warnings.join(" | "));
-  assert.ok(d.warnings.some((w) => w.includes("All of your disability cover comes with the job")), d.warnings.join(" | "));
+  assert.ok(d.warnings.some((w) => w.includes("All of your disability insurance comes with the job")), d.warnings.join(" | "));
   assert.ok(!d.warnings.some((w) => /\bMe\b/.test(w)));
   // any other name reads as before
   assert.ok(compute(withPolicies([{ ...LTD, untilAge: 60 }]), { today: TODAY }).warnings.some((w) => w.includes("before Ana plans to retire at")));

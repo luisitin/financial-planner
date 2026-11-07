@@ -117,7 +117,7 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   e.insurance = { ...(e.insurance ?? {}), policies: [{ id: "t", kind: "term", personId: "p-ana", benefit: 350000, premium: 25, period: "monthly", endDate: "2027-01-15" }] };
   const [ge] = protectionGaps(e, T);
   assert.equal(ge.gap, 312000); assert.equal(ge.endsSoon.length, 1);
-  assert.equal(ge.title, "Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $312,000 short");
+  assert.equal(ge.title, "Ana's term life insurance ends 1/15/2027: Bo and Cy would then be about $312,000 short");
   const e2 = familyPlan("2026-11-02"); e2.insurance = { ...(e2.insurance ?? {}), policies: [{ ...e.insurance.policies[0], endDate: "2046-01-15" }] };
   assert.deepEqual(protectionGaps(e2, T), [], "cover that lasts past 2042 covers it");
   // a policy for "Household / everyone": not counted, and said
@@ -129,7 +129,7 @@ test("review: no cover end year in the past; cover ending soon still leaves a ga
   m.household.people.find((x) => x.id === "p-ana").name = "Me"; m.household.people.find((x) => x.id === "p-bo").name = "My spouse"; m.household.people.find((x) => x.id === "p-cy").name = "Child 1";
   const [gm] = protectionGaps(m, T);
   assert.equal(gm.title, "No life insurance on you: your spouse and Child 1 would be about $312,000 short");   // the health line: was 235,000, then 287,000 (seventh pass: the Medigap Plan G default)
-  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$312,000 short\. Term life cover on you until about 2042 \(Child 1 turns 22\) closes it\./);
+  assert.match(gm.sentence, /^If you died this year, your spouse and Child 1 would be about \$312,000 short\. Term life insurance on you until about 2042 \(Child 1 turns 22\) closes it\./);
 });
 
 test("review: one parent, the children's own answer (method child) is rounded to $1,000 and said part by part, never as a rule of thumb or as the plan", async () => {
@@ -149,7 +149,7 @@ test("review: one parent, the children's own answer (method child) is rounded to
   const [g] = protectionGaps(p, { today: "2026-11-02" });
   assert.equal(g.title, `No life insurance on Ana: Cy would need about $${ana.need.toLocaleString("en-US")}`);
   // Social Security nets only against Cy's own costs and college (it is Cy's money), so the sentence groups them
-  assert.match(g.sentence, /^If Ana died, Cy would need about \$[\d,]+,000: their costs until 18 \(\$[\d,]+00\) and college \(\$76,100\) less Social Security for Cy \(\$[\d,]+00\), plus debts \(\$20,600\) and a funeral \(\$8,300\), less the \$33,700 Ana has saved\. Term life cover on Ana until about 2042 \(Cy's college ends\) is the usual way to buy it\.$/);
+  assert.match(g.sentence, /^If Ana died, Cy would need about \$[\d,]+,000: their costs until 18 \(\$[\d,]+00\) and college \(\$76,100\) less Social Security for Cy \(\$[\d,]+00\), plus debts \(\$20,600\) and a funeral \(\$8,300\), less the \$33,700 Ana has saved\. Term life insurance on Ana until about 2042 \(Cy's college ends\) is the usual way to buy it\.$/);
   assert.doesNotMatch(g.sentence, /rule of thumb|more than the plan holds|mortgage/);
   assert.equal(g.method, "child"); assert.deepEqual(g.depends, ["Cy"]); assert.equal(g.until, 2042);
 });
@@ -374,7 +374,7 @@ test("the shortest usual term that lasts until a year", () => {
 test("single parent: the words name only the parts above zero", () => {
   const [g] = protectionGaps(singleParent(), ST);
   assert.equal(g.title, "No life insurance on Pat: Kit would need about $71,000");
-  assert.equal(g.sentence, "If Pat died, Kit would need about $71,000: their costs until 18 ($108,000) and college ($35,000) less Social Security for Kit ($69,000), plus debts ($3,000) and a funeral ($8,300), less the $15,000 Pat has saved. Term life cover on Pat until about 2038 (Kit's college ends) is the usual way to buy it.");
+  assert.equal(g.sentence, "If Pat died, Kit would need about $71,000: their costs until 18 ($108,000) and college ($35,000) less Social Security for Kit ($69,000), plus debts ($3,000) and a funeral ($8,300), less the $15,000 Pat has saved. Term life insurance on Pat until about 2038 (Kit's college ends) is the usual way to buy it.");
   // no debts, no savings, no Social Security figure: those parts are not said. No education goal: college is still the
   // Education page's $113,350 for Kit (a parent's death does not cancel college)
   const bare = singleParent();
@@ -387,8 +387,8 @@ test("single parent: the words name only the parts above zero", () => {
   const m = singleParent(); m.household.people[0].name = "Me"; m.goals = m.goals.filter((g) => g.id !== "g-deg");   // "Pat's degree" names no one now
   m.insurance.policies = [{ id: "t", kind: "term", personId: "p-pat", benefit: 50000, premium: 20, period: "monthly" }];
   const [gm] = protectionGaps(m, ST);
-  assert.equal(gm.title, "Your life cover is about $21,000 short");
-  assert.match(gm.sentence, /^If you died, Kit would need about \$71,000: .*, less the \$15,000 you have saved\. With the \$50,000 of cover on file, that is about \$21,000 short\. More term life cover on you until about 2038 \(Kit's college ends\) is the usual way to buy it\.$/);
+  assert.equal(gm.title, "Your life insurance is about $21,000 short");
+  assert.match(gm.sentence, /^If you died, Kit would need about \$71,000: .*, less the \$15,000 you have saved\. With the \$50,000 of coverage on file, that is about \$21,000 short\. More term life insurance on you until about 2038 \(Kit's college ends\) is the usual way to buy it\.$/);
   // two children: "the children's costs", "for the children"
   assert.equal(childParts({ children: ["A", "B"], costs: 1000, benefits: 500, college: 0, debts: 0, funeral: 8300, savings: 0 }, "you"), "the children's costs until 18 ($1,000) less Social Security for the children ($500), plus a funeral ($8,300)");
 });
@@ -402,7 +402,7 @@ test("the rule of thumb for one adult whose dependents are grown names only its 
   assert.equal(pat.method, "dime"); assert.equal(pat.dime.income, 0);
   const [g] = protectionGaps(p, ST);
   assert.equal(g.title, "No life insurance on Pat: Kit would need about $39,000 by a common rule of thumb");
-  assert.equal(g.sentence, "If Pat died, a common rule of thumb (debts and a funeral added up) puts what Kit would need at about $39,000. Term life cover on Pat is the usual way to buy it.");
+  assert.equal(g.sentence, "If Pat died, a common rule of thumb (debts and a funeral added up) puts what Kit would need at about $39,000. Term life insurance on Pat is the usual way to buy it.");
   assert.doesNotMatch(g.sentence, /mortgage|college|pay until/);
 });
 
@@ -685,7 +685,7 @@ test("fifth pass: shown parts always add up (the spare is the shown total less t
   assert.equal(shownChild(two).net, 436900); assert.equal(childFigure(two), 437000);
 });
 
-test("fifth pass: the need over time on the sample, by hand: today's $150,000 is the largest in today's money", () => {
+test("fifth pass: the need over time on the sample, by hand: today's $150,000 is the largest in today's dollars", () => {
   const jo = compute(sampleJo(), T5).people[0], c = jo.child;
   const at = (y) => c.needByYear.find((x) => x.year === y);
   // one year for each death at the start of the year, now to Child 1's last college year (2040-2043 on the Education page)
@@ -737,7 +737,7 @@ test("fifth pass: the need over time on twoss and twossrich, by hand: largest if
   // the words: the largest, its year, today's figure; the cover until Child 1's college ends
   const [gp] = protectionGaps(twoss(), T5);
   assert.equal(gp.title, "No life insurance on Jo: Child 1 and Child 2 would need up to about $248,000");
-  assert.match(gp.sentence, /^If Jo died in 2037, Child 1 and Child 2 would need about \$248,000, in that year's dollars, the most in any year; if Jo died today, about \$11,000: Social Security for the children covers their costs until 18 and college; that leaves debts \(\$4,000\) and a funeral \(\$8,300\), less the \$1,900 Jo has saved\. Term life cover on Jo until about 2044 \(Child 1's college ends\) is the usual way to buy it\.$/);
+  assert.match(gp.sentence, /^If Jo died in 2037, Child 1 and Child 2 would need about \$248,000, in that year's dollars, the most in any year; if Jo died today, about \$11,000: Social Security for the children covers their costs until 18 and college; that leaves debts \(\$4,000\) and a funeral \(\$8,300\), less the \$1,900 Jo has saved\. Term life insurance on Jo until about 2044 \(Child 1's college ends\) is the usual way to buy it\.$/);
 });
 
 test("fifth pass: the need over time on leftout, by hand: largest if Jo died in 2040 (Child 1 alone, as the sample then)", () => {
@@ -824,17 +824,17 @@ function pageOf(plan, today = "2026-11-02") {
 test("fifth pass, the page: the largest need with its year said once, each child's Social Security said child by child, never 'shrinks'", () => {
   const lo = pageOf(leftout());
   // sixth pass: the cover in that year's dollars ($184,000), the year list in today's money ($125,000 in 2040)
-  assert.equal(lo.h1, "Jo needs about $184,000 more life cover");
+  assert.equal(lo.h1, "Jo needs about $184,000 more life insurance");
   assert.match(lo.lede, /^That is the most the children would need, if Jo died in 2040, in that year's dollars\. Today it would be \$64,000; no life insurance is on file\./);
   const ss = lo.li.find((x) => x.startsWith("Social Security for the children"));
   assert.match(ss, /^Social Security for the children −\$372,600 /);
   assert.match(ss, /That is about \$431,700 in all, but each child's is that child's own money: it pays only that child's costs and college\. Child 1's \(about \$279,100\) covers Child 1's costs until 18; Child 1 still needs \$53,400 for college\. Child 2's \(about \$152,600\) covers Child 2, and the other \$59,100 is kept for Child 2\./);
   assert.ok(lo.li.some((x) => x.startsWith("Needed today $64,000 Added up, about $63,800,")));
-  assert.match(lo.after("For how long"), /In today's money it is largest if Jo died in 2040\. It ends when Child 1's college ends, in about 2044\. A policy pays the same dollars every year while prices rise, so it is sized to the most in that year's dollars: about \$184,000, if Jo died in 2040\. Cover for that amount that lasts until about 2044 covers every year/);
+  assert.match(lo.after("For how long"), /In today's dollars it is largest if Jo died in 2040\. It ends when Child 1's college ends, in about 2044\. A policy pays the same dollars every year while prices rise, so it is sized to the most in that year's dollars: about \$184,000, if Jo died in 2040\. Coverage for that amount that lasts until about 2044 covers every year/);
   assert.ok(lo.p.some((x) => x.startsWith("A level term policy for about $184,000 (the most Child 1 and Child 2 would need, if Jo died in 2040, in that year's dollars) that lasts until about 2044 (Child 1's college ends)")));
   // the sample: largest now, but it goes down and up again: never "shrinks"; its parts add up to the figure said
   const s = pageOf(sampleJo());
-  assert.match(s.after("For how long"), /^In today's money, the need is largest now\. It goes down and up again over the years/);
+  assert.match(s.after("For how long"), /^In today's dollars, the need is largest now\. It goes down and up again over the years/);
   assert.doesNotMatch(s.after("For how long"), /shrink/);
   const val = (label) => Number(s.li.find((x) => x.startsWith(label)).slice(label.length).match(/^ ?−?\$([\d,]+)/)[1].replace(/,/g, ""));
   assert.equal(val("Child 1's costs until 18") + val("College") - val("Social Security for Child 1") + val("Debts") + val("Funeral") - val("Savings that pass to Child 1"), 149300);
@@ -843,20 +843,20 @@ test("fifth pass, the page: the largest need with its year said once, each child
   assert.match(pageOf(twossrich()).lede, /^That is the most the children would need, if Jo died in 2037, in that year's dollars\. If Jo died today, Social Security and savings would pay for everything the children would need;/);
   // twoss: $11,000 today, down to $7,000, then up to $184,000 in 2037: not said to grow from today
   const tw = pageOf(twoss()).after("For how long");
-  assert.match(tw, /^The need goes down for a few years, then grows: .* In today's money it is largest if Jo died in 2037\./);
+  assert.match(tw, /^The need goes down for a few years, then grows: .* In today's dollars it is largest if Jo died in 2037\./);
   assert.doesNotMatch(tw, /grows for a while|shrink/);
   // leftout grows every year to 2040; the year list names the children
   assert.match(lo.after("For how long"), /^The need grows for a while:/);
-  assert.ok(lo.p.some((x) => /in today's money: the children that much older/.test(x)));
+  assert.ok(lo.p.some((x) => /in today's dollars: the children that much older/.test(x)));
   // one child: the year list names the child, not "the children"
-  assert.ok(s.p.some((x) => /in today's money: Child 1 that much older/.test(x)));
+  assert.ok(s.p.some((x) => /in today's dollars: Child 1 that much older/.test(x)));
 });
 
 test("fifth pass, the page: one college figure for a child turning 18 now; the spare that adds up; the rule of thumb in the headline and its goals", () => {
   // turning 18 this month: the Education page's $104,920, counted as $104,900, and why they differ
   const t = sampleJo(); t.household.people[1].birthDate = "2008-11-20";
   const tp = pageOf(t);
-  assert.match(tp.li.find((x) => x.startsWith("College")), /^College \$104,900 The Education page puts Child 1's college at \$104,920 in today's money\. That is about \$104,900 here, to the nearest \$100 like every part of this answer\./);
+  assert.match(tp.li.find((x) => x.startsWith("College")), /^College \$104,900 The Education page puts Child 1's college at \$104,920 in today's dollars\. That is about \$104,900 here, to the nearest \$100 like every part of this answer\./);
   assert.match(tp.after("For how long"), /^The need is largest now and gets smaller every year\. It ends when Child 1's college ends, in about 2030\./);
   // Ed and Ann: "the other $73,200" (513,400 - 440,200)
   const e = sampleJo(); e.household.people = [e.household.people[0], kidOf("k-ed", "Ed", "2021-05-05"), kidOf("k-ann", "Ann", "2021-05-05")];
@@ -865,7 +865,7 @@ test("fifth pass, the page: one college figure for a child turning 18 now; the s
   // a second adult with no birth date: the headline says the figure is a rule of thumb until the birth date is in
   const n = sampleJo(); n.household.people.push({ id: "p-sam", name: "Sam", role: "partner", birthDate: "" });
   const np = pageOf(n);
-  assert.equal(np.h1, "Jo needs about $862,000 more life cover, by a rule of thumb until Sam's birth date is in");
+  assert.equal(np.h1, "Jo needs about $862,000 more life insurance, by a rule of thumb until Sam's birth date is in");
   // the rule of thumb leaves savings out, so it is not said to shrink "as savings grow"
   assert.match(np.after("For how long"), /^The rule of thumb is largest now and gets smaller every year, as fewer years of Jo's pay are left to count\./);
   // a grown dependent's goal: left out of the rule of thumb too, and its note says so
@@ -911,17 +911,17 @@ test("sixth pass: the cover is the most of each year's need in that year's dolla
   }
   // the page: the figure with its year in the hero, the tile and How to get it; the reason said once, plainly
   const sp = pageOf(sampleJo());
-  assert.equal(sp.h1, "Jo needs about $184,000 more life cover");
+  assert.equal(sp.h1, "Jo needs about $184,000 more life insurance");
   assert.match(sp.lede, /^That is the most Child 1 would need, if Jo died in 2040, in that year's dollars\. Today it would be \$150,000;/);
-  assert.ok(sp.stats.includes("Cover needed $184,000 the most, if Jo died in 2040, in that year's dollars"));
+  assert.ok(sp.stats.includes("Coverage needed $184,000 the most, if Jo died in 2040, in that year's dollars"));
   assert.ok(sp.p.some((x) => x.startsWith("A level term policy for about $184,000 (the most Child 1 would need, if Jo died in 2040, in that year's dollars)")));
   assert.match(sp.after("For how long"), /A policy pays the same dollars every year while prices rise, so it is sized to the most in that year's dollars: about \$184,000, if Jo died in 2040\./);
   assert.equal([...sp.p, ...sp.li].join(" ").split("A policy pays the same dollars every year while prices rise").length - 1, 1);
   // the year list in today's money, the year the cover is sized to marked with its figure in that year's dollars
   assert.ok(sp.li.includes("2026 (today) $150,000"));
-  assert.ok(sp.li.includes("2040 $125,000 About $184,000 in 2040's dollars, the most of any year: the cover is sized to it."));
+  assert.ok(sp.li.includes("2040 $125,000 About $184,000 in 2040's dollars, the most of any year: the coverage is sized to it."));
   // the total line says today's figure and points to the later year; never that the need is larger later in today's money
-  assert.ok(sp.li.some((x) => x.startsWith("Needed today $150,000") && x.endsWith("The cover is sized to a later year: about $184,000 if Jo died in 2040, in that year's dollars (see For how long).")));
+  assert.ok(sp.li.some((x) => x.startsWith("Needed today $150,000") && x.endsWith("The coverage is sized to a later year: about $184,000 if Jo died in 2040, in that year's dollars (see For how long).")));
   // Next best action and Needs attention: the same figure and year
   const [gp] = protectionGaps(sampleJo(), T5);
   assert.equal(gp.title, "No life insurance on Jo: Child 1 would need up to about $184,000"); assert.equal(gp.gap, 184000);
@@ -946,20 +946,20 @@ test("sixth pass: cover on file is checked year by year in that year's dollars (
   assert.deepEqual([two.need, two.cover, two.gap, two.spare, two.raise], [248000, 200000, 48000, 0, true]);
   assert.ok(two.child.needByYear.every((x) => x.dollars <= two.cover + two.gap));
   const p200 = pageOf(withPolicy(twoss, 200000));
-  assert.equal(p200.h1, "Jo needs about $48,000 more life cover");
+  assert.equal(p200.h1, "Jo needs about $48,000 more life insurance");
   assert.ok(p200.p.includes("Short by about $48,000."));
   // (review 2026-11-06: the shortfall said in both kinds of dollars)
-  assert.ok(p200.p.includes("If Jo died in 2037, the $200,000 on file would be worth about $148,800 in today's money, against $184,000 needed then: about $35,200 short in today's money, which is the $48,000 more cover in 2037's dollars (rounded up to the next $1,000)."));
+  assert.ok(p200.p.includes("If Jo died in 2037, the $200,000 on file would be worth about $148,800 in today's dollars, against $184,000 needed then: about $35,200 short in today's dollars, which is the $48,000 more coverage in 2037's dollars (rounded up to the next $1,000)."));
   assert.doesNotMatch([...p200.p, ...p200.li].join(" "), /Your family is covered|to spare/);
   const [g200] = protectionGaps(withPolicy(twoss, 200000), T5);
-  assert.equal(g200.title, "Jo's life cover is about $48,000 short");
+  assert.equal(g200.title, "Jo's life insurance is about $48,000 short");
   // $180,000: $68,000 short (worth 133,936.90 in 2037: $50,063 short then), not "close to covered", and Needs attention says so
   const t180 = compute(withPolicy(twoss, 180000), T5).people[0];
   near(t180.child.needByYear.find((x) => x.year === 2037).short, 184000 - 180000 / priceLevel(2037), 1e-6);
   assert.deepEqual([t180.gap, t180.raise], [68000, true]);
-  assert.equal(pageOf(withPolicy(twoss, 180000)).h1, "Jo needs about $68,000 more life cover");
+  assert.equal(pageOf(withPolicy(twoss, 180000)).h1, "Jo needs about $68,000 more life insurance");
   const [g180] = protectionGaps(withPolicy(twoss, 180000), T5);
-  assert.equal(g180.title, "Jo's life cover is about $68,000 short"); assert.equal(g180.gap, 68000);
+  assert.equal(g180.title, "Jo's life insurance is about $68,000 short"); assert.equal(g180.gap, 68000);
   // enough, checked the same way: $250,000 pays every year (2037's need is $247,280.61 in that year's dollars)
   const t250 = compute(withPolicy(twoss, 250000), T5).people[0];
   assert.deepEqual([t250.gap, t250.spare, t250.raise], [0, 2000, false]); assert.ok(t250.child.needByYear.every((x) => x.short === 0));
@@ -974,22 +974,22 @@ test("sixth pass: cover that ends soon says what is needed after it ends, with i
   const jo = compute(p, T5).people[0];
   assert.deepEqual([jo.child.afterEnd.year, jo.child.afterEnd.need, jo.child.coverStays, jo.child.coveredUntilEnd, jo.gapAfterEnd, jo.raise], [2037, 248000, 0, true, 248000, true]);
   const pg = pageOf(p);
-  assert.equal(pg.h1, "Jo needs about $248,000 more life cover");
+  assert.equal(pg.h1, "Jo needs about $248,000 more life insurance");
   assert.equal(pg.lede, "Jo's $200,000 term policy ends on 6/30/2027, and Child 1 and Child 2 count on Jo until about 2044. After it ends they would need up to about $248,000, if Jo died in 2037, in that year's dollars.");
   assert.ok(pg.p.includes("Covered until 6/30/2027, when $200,000 of it ends; after that short by up to about $248,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars)."));
-  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $200,000 of cover ends, if Jo died in 2037, in that year's dollars) that lasts until about 2044")));
+  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $200,000 of coverage ends, if Jo died in 2037, in that year's dollars) that lasts until about 2044")));
   const words = [...pg.p, ...pg.li].join(" ");
   assert.doesNotMatch(words, /less the \$200,000|from then\.|would be about \$248,000 short/);
   const [gp] = protectionGaps(p, T5);
-  assert.equal(gp.title, "Jo's term life cover ends 6/30/2027: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
-  assert.equal(gp.sentence, "Jo's $200,000 term policy ends on 6/30/2027, and Child 1 and Child 2 count on Jo until about 2044. After it ends they would need up to about $248,000: the most, if Jo died in 2037, in that year's dollars. New term cover on Jo from then closes it.");
+  assert.equal(gp.title, "Jo's term life insurance ends 6/30/2027: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
+  assert.equal(gp.sentence, "Jo's $200,000 term policy ends on 6/30/2027, and Child 1 and Child 2 count on Jo until about 2044. After it ends they would need up to about $248,000: the most, if Jo died in 2037, in that year's dollars. New term life insurance on Jo from then closes it.");
   // what is needed after it ends, not the whole series' most: a child turning 18 now ($116,000 today, then $89,000 in 2027,
   // $62,000 ...) with $150,000 ending 6/30/2027: after it ends the most is 2027's $89,000
   const t = withPolicy(sampleJo, 150000, { endDate: "2027-06-30" }); t.household.people[1].birthDate = "2008-11-20";
   const tj = compute(t, T5).people[0];
   assert.deepEqual([tj.need, tj.gap, tj.child.afterEnd.year, tj.gapAfterEnd, tj.raise], [116000, 0, 2027, 89000, true]);
   const tp = pageOf(t);
-  assert.equal(tp.h1, "Jo needs about $89,000 more life cover");
+  assert.equal(tp.h1, "Jo needs about $89,000 more life insurance");
   assert.ok(tp.p.includes("Covered until 6/30/2027, when $150,000 of it ends; after that short by up to about $89,000 (the most Child 1 would need, if Jo died in 2027)."));
   assert.match(tp.lede, /and Child 1 counts on Jo until about 2030\. After it ends they would need up to about \$89,000, if Jo died in 2027\.$/);
   assert.match(protectionGaps(t, T5)[0].title, /would then need up to about \$89,000 \(if Jo died in 2027\)$/);
@@ -997,7 +997,7 @@ test("sixth pass: cover that ends soon says what is needed after it ends, with i
   const both = twoss(); both.insurance = { policies: [{ id: "a", name: "Term", kind: "term", personId: "s-jo", benefit: 200000, premium: 20, period: "monthly", endDate: "2027-06-30" }, { id: "b", name: "Term 2", kind: "term", personId: "s-jo", benefit: 50000, premium: 10, period: "monthly" }] };
   const bj = compute(both, T5).people[0];
   assert.deepEqual([bj.child.coverStays, bj.gapAfterEnd], [50000, 198000]);
-  assert.ok(pageOf(both).p.some((x) => x.startsWith("A level term policy for about $198,000 (the most Child 1 and Child 2 would need after $200,000 of cover ends, if Jo died in 2037, in that year's dollars, less the $50,000 that stays on file)")));
+  assert.ok(pageOf(both).p.some((x) => x.startsWith("A level term policy for about $198,000 (the most Child 1 and Child 2 would need after $200,000 of coverage ends, if Jo died in 2037, in that year's dollars, less the $50,000 that stays on file)")));
 });
 
 test("sixth pass: For how long reads the shape with a tolerance: a dip under 2% of the largest is not going down (three children)", () => {
@@ -1057,14 +1057,14 @@ test("review 2026-11-06: cover that ends in 2030 or 2028 never counts for the ye
   assert.deepEqual(jo.endsSoon, [{ endDate: "2030-12-31", benefit: 300000 }]);
   assert.deepEqual([c.afterEnd.year, c.afterEnd.need, c.afterEnd.cover, c.coverStays, c.coveredUntilEnd, jo.gapAfterEnd, jo.spare, jo.raise], [2037, 248000, 0, 0, true, 248000, 0, true]);
   const pg = pageOf(p);
-  assert.equal(pg.h1, "Jo needs about $248,000 more life cover");
+  assert.equal(pg.h1, "Jo needs about $248,000 more life insurance");
   assert.equal(pg.lede, "Jo's $300,000 term policy ends on 12/31/2030, and Child 1 and Child 2 count on Jo until about 2044. After it ends they would need up to about $248,000, if Jo died in 2037, in that year's dollars.");
   assert.ok(pg.p.includes("Covered until 12/31/2030, when $300,000 of it ends; after that short by up to about $248,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars)."));
-  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $300,000 of cover ends, if Jo died in 2037, in that year's dollars) that lasts until about 2044")));
+  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $300,000 of coverage ends, if Jo died in 2037, in that year's dollars) that lasts until about 2044")));
   assert.doesNotMatch(wordsOf(pg), /Your family is covered|Covered, with|to spare|would be worth|also covers the most/);
   const [gp] = protectionGaps(p, T5);
   assert.equal(gp.gap, 248000);
-  assert.equal(gp.title, "Jo's term life cover ends 12/31/2030: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
+  assert.equal(gp.title, "Jo's term life insurance ends 12/31/2030: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
   // Needs attention and Next best action raise it, with the same words
   assert.equal(alertsOf(p, T5).alerts.find((a) => a.id === "life-cover-s-jo")?.title, gp.title);
   const step = nextStepOf(p, T5).steps.find((s) => s.id === "protect");
@@ -1075,15 +1075,15 @@ test("review 2026-11-06: cover that ends in 2030 or 2028 never counts for the ye
   assert.deepEqual(qj.child.needByYear.map((y) => y.coverInForce), qj.child.needByYear.map((y) => (y.year < 2028 ? 250000 : 0)));
   assert.deepEqual([qj.endsSoon.length, qj.child.afterEnd.year, qj.child.afterEnd.need, qj.child.coveredUntilEnd, qj.gapAfterEnd, qj.spare, qj.raise], [1, 2037, 248000, true, 248000, 0, true]);
   const qp = pageOf(q);
-  assert.equal(qp.h1, "Jo needs about $248,000 more life cover");
+  assert.equal(qp.h1, "Jo needs about $248,000 more life insurance");
   assert.ok(qp.p.includes("Covered until 3/31/2028, when $250,000 of it ends; after that short by up to about $248,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars)."));
   assert.doesNotMatch(wordsOf(qp), /Your family is covered|to spare|would be worth|also covers the most/);
-  assert.equal(protectionGaps(q, T5)[0].title, "Jo's term life cover ends 3/31/2028: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
+  assert.equal(protectionGaps(q, T5)[0].title, "Jo's term life insurance ends 3/31/2028: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
   // the sample with $200,000 ending 12/31/2035: 2040's $184,000 in that year's dollars, after it ends
   const s = withPolicy(sampleJo, 200000, { endDate: "2035-12-31" });
   const sj = compute(s, T5).people[0];
   assert.deepEqual([sj.gap, sj.child.afterEnd.year, sj.gapAfterEnd, sj.raise], [0, 2040, 184000, true]);
-  assert.equal(pageOf(s).h1, "Jo needs about $184,000 more life cover");
+  assert.equal(pageOf(s).h1, "Jo needs about $184,000 more life insurance");
 });
 
 test("review 2026-11-06: the couple keeps 'ends soon' as by next year: $300,000 ending in 2031 reads as cover with no end date", () => {
@@ -1112,16 +1112,16 @@ test("review 2026-11-06: several policies ending at different times: each year c
   assert.ok(c.needByYear.every((y) => y.coverInForce + buy >= y.dollars - 0.005));
   assert.ok(c.needByYear.some((y) => y.coverInForce + buy - 1000 < y.dollars));
   const pg = pageOf(p);
-  assert.equal(pg.h1, "Jo needs about $147,000 more life cover");
+  assert.equal(pg.h1, "Jo needs about $147,000 more life insurance");
   // both policies are named with their dates, never "Covered until" the first (verification, review 2026-11-06)
   assert.ok(pg.p.includes("$100,000 of it ends on 12/31/2028 and $300,000 on 12/31/2040; after that short by up to about $147,000 (if Jo died in 2041, in that year's dollars)."));
-  assert.match(pg.lede, /^Jo's term cover ends in steps, \$100,000 on 12\/31\/2028 and \$300,000 on 12\/31\/2040, and Child 1 and Child 2 count on Jo until about 2044\./);
+  assert.match(pg.lede, /^Jo's term life insurance ends in steps, \$100,000 on 12\/31\/2028 and \$300,000 on 12\/31\/2040, and Child 1 and Child 2 count on Jo until about 2044\./);
   assert.match(pg.lede, /After it ends they would be up to about \$147,000 short, if Jo died in 2041, in that year's dollars\.$/);
   // never short (or in need) of 2037's $248,000 after it ends: the $300,000 still pays then (the tile and For how long keep
   // the level cover's size, $248,000, as a whole)
   assert.doesNotMatch(wordsOf(pg), /(short by up to|need up to|be up to) about \$248,000|the most Child 1 and Child 2 would need/);
   const [gp] = protectionGaps(p, T5);
-  assert.equal(gp.title, "Jo's term life cover ends 12/31/2028 and 12/31/2040: Child 1 and Child 2 would then be up to about $147,000 short (if Jo died in 2041)");
+  assert.equal(gp.title, "Jo's term life insurance ends 12/31/2028 and 12/31/2040: Child 1 and Child 2 would then be up to about $147,000 short (if Jo died in 2041)");
   // a later policy still on file in the year short the most: taken off as "still on file then", never as cover that stays.
   // $100,000 to 12/31/2028 and $150,000 to 12/31/2042: 2037 is 247,280.61 - 150,000 = 97,280.61 short (2043, with nothing on
   // file, 59,374), so $248,000 less the $150,000: $98,000
@@ -1129,10 +1129,10 @@ test("review 2026-11-06: several policies ending at different times: each year c
   const rj = compute(r, T5).people[0];
   assert.deepEqual([rj.child.afterEnd.year, rj.child.afterEnd.need, rj.child.afterEnd.cover, rj.child.afterEnd.most, rj.child.coverStays, rj.gapAfterEnd, rj.raise], [2037, 248000, 150000, true, 0, 98000, true]);
   const rp = pageOf(r);
-  assert.equal(rp.h1, "Jo needs about $98,000 more life cover");
+  assert.equal(rp.h1, "Jo needs about $98,000 more life insurance");
   assert.ok(rp.p.includes("Covered until 12/31/2028, when $100,000 of it ends; after that short by up to about $98,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars, less the $150,000 still on file then)."));
   assert.match(rp.lede, /After it ends they would need up to about \$248,000, if Jo died in 2037, in that year's dollars; with the \$150,000 still on file then, about \$98,000 short\.$/);
-  assert.equal(protectionGaps(r, T5)[0].title, "Jo's term life cover ends 12/31/2028: Child 1 and Child 2 would then be up to about $98,000 short (if Jo died in 2037)");
+  assert.equal(protectionGaps(r, T5)[0].title, "Jo's term life insurance ends 12/31/2028: Child 1 and Child 2 would then be up to about $98,000 short (if Jo died in 2037)");
   assert.doesNotMatch(wordsOf(rp), /that stays on file/);
   // the year short the most is not the year of the largest need, with cover still on file then: the figure is already the
   // shortfall, so the cover is said "with" it, never "less" it again. $100,000 to 12/31/2028, $300,000 to 12/31/2040 and
@@ -1141,12 +1141,12 @@ test("review 2026-11-06: several policies ending at different times: each year c
   const wj = compute(w, T5).people[0];
   assert.deepEqual([wj.gap, wj.child.afterEnd.year, wj.child.afterEnd.need, wj.child.afterEnd.cover, wj.child.afterEnd.most, wj.child.coverStays, wj.gapAfterEnd, wj.raise], [0, 2041, 147000, 20000, false, 20000, 127000, true]);
   const wp = pageOf(w);
-  assert.equal(wp.h1, "Jo needs about $127,000 more life cover");
+  assert.equal(wp.h1, "Jo needs about $127,000 more life insurance");
   assert.ok(wp.p.includes("$100,000 of it ends on 12/31/2028 and $300,000 on 12/31/2040; after that short by up to about $127,000 (if Jo died in 2041, in that year's dollars, with the $20,000 that stays on file)."));
   assert.match(wp.lede, /After it ends they would be up to about \$127,000 short, if Jo died in 2041, in that year's dollars, with the \$20,000 that stays on file against \$147,000 needed\.$/);
-  assert.ok(wp.p.some((x) => x.startsWith("A level term policy for about $127,000 (the most Child 1 and Child 2 would be short as cover on file ends, if Jo died in 2041, in that year's dollars, with the $20,000 that stays on file) that lasts until about 2044")));
+  assert.ok(wp.p.some((x) => x.startsWith("A level term policy for about $127,000 (the most Child 1 and Child 2 would be short as coverage on file ends, if Jo died in 2041, in that year's dollars, with the $20,000 that stays on file) that lasts until about 2044")));
   assert.doesNotMatch(wordsOf(wp), /less the \$20,000/);
-  assert.equal(protectionGaps(w, T5)[0].title, "Jo's term life cover ends 12/31/2028 and 12/31/2040: Child 1 and Child 2 would then be up to about $127,000 short (if Jo died in 2041)");
+  assert.equal(protectionGaps(w, T5)[0].title, "Jo's term life insurance ends 12/31/2028 and 12/31/2040: Child 1 and Child 2 would then be up to about $127,000 short (if Jo died in 2041)");
 });
 
 test("review 2026-11-06: what is spare or close to covered counts the cover still on file in each year", () => {
@@ -1157,10 +1157,10 @@ test("review 2026-11-06: what is spare or close to covered counts the cover stil
   assert.deepEqual([jo.cover, jo.gap, jo.gapAfterEnd, jo.spare, jo.raise], [550000, 0, 0, 2000, false]);
   const pg = pageOf(p);
   assert.equal(pg.h1, "Your family is covered");
-  assert.match(pg.lede, /The \$250,000 of cover still on file in 2037 also covers the most they would need, about \$248,000 if Jo died in 2037, in that year's dollars\./);
+  assert.match(pg.lede, /The \$250,000 of coverage still on file in 2037 also covers the most they would need, about \$248,000 if Jo died in 2037, in that year's dollars\./);
   assert.ok(pg.p.includes("Covered, with about $2,000 to spare."));
-  assert.ok(pg.p.includes("If Jo died in 2037, the $250,000 still on file then would be worth about $186,000 in today's money, against $184,000 needed then."));
-  assert.doesNotMatch(wordsOf(pg), /\$550,000 of cover on file also covers|\$302,000/);
+  assert.ok(pg.p.includes("If Jo died in 2037, the $250,000 still on file then would be worth about $186,000 in today's dollars, against $184,000 needed then."));
+  assert.doesNotMatch(wordsOf(pg), /\$550,000 of coverage on file also covers|\$302,000/);
   // $245,000 with no end and $50,000 ending 12/31/2030: $3,000 short after it ends, said, never "Your family is covered"
   const s = policiesOn(twoss, { benefit: 245000 }, { benefit: 50000, endDate: "2030-12-31" });
   const sj = compute(s, T5).people[0];
@@ -1176,10 +1176,10 @@ test("review 2026-11-06: the worth line says which dollars each figure is in (tw
   // dollars that is 50,100 x 1.03^10 = 67,330, rounded up to the next $1,000 with the rest of the figure: the $68,000 to buy
   const t = pageOf(withPolicy(twoss, 180000));
   assert.ok(t.p.includes("Short by about $68,000."));
-  assert.ok(t.p.includes("If Jo died in 2037, the $180,000 on file would be worth about $133,900 in today's money, against $184,000 needed then: about $50,100 short in today's money, which is the $68,000 more cover in 2037's dollars (rounded up to the next $1,000)."));
-  assert.ok(pageOf(withPolicy(twoss, 200000)).p.includes("If Jo died in 2037, the $200,000 on file would be worth about $148,800 in today's money, against $184,000 needed then: about $35,200 short in today's money, which is the $48,000 more cover in 2037's dollars (rounded up to the next $1,000)."));
+  assert.ok(t.p.includes("If Jo died in 2037, the $180,000 on file would be worth about $133,900 in today's dollars, against $184,000 needed then: about $50,100 short in today's dollars, which is the $68,000 more coverage in 2037's dollars (rounded up to the next $1,000)."));
+  assert.ok(pageOf(withPolicy(twoss, 200000)).p.includes("If Jo died in 2037, the $200,000 on file would be worth about $148,800 in today's dollars, against $184,000 needed then: about $35,200 short in today's dollars, which is the $48,000 more coverage in 2037's dollars (rounded up to the next $1,000)."));
   // enough cover: no shortfall clause
-  assert.ok(pageOf(withPolicy(twoss, 250000)).p.includes("If Jo died in 2037, the $250,000 on file would be worth about $186,000 in today's money, against $184,000 needed then."));
+  assert.ok(pageOf(withPolicy(twoss, 250000)).p.includes("If Jo died in 2037, the $250,000 on file would be worth about $186,000 in today's dollars, against $184,000 needed then."));
 });
 
 test("review 2026-11-06: no pay to replace and cover that ends: the gap once it ends is said, never \"$0 short\" or \"Your family is covered\"", () => {
@@ -1217,15 +1217,15 @@ test("verification, review 2026-11-06: cover through work beside a term policy t
   assert.ok(c.needByYear.every((y) => y.coverInForce - work(y) + jo.gapIfJobEnds >= y.dollars - 0.005));
   assert.ok(c.needByYear.some((y) => y.coverInForce - work(y) + jo.gapIfJobEnds - 1000 < y.dollars));
   const pg = pageOf(p);
-  assert.equal(pg.h1, "Jo needs about $148,000 more life cover");
-  assert.ok(pg.notices.includes("$100,000 of Jo's cover comes with the job and ends with it. Without it Child 1 and Child 2 would be short about $248,000 (if Jo died in 2037, in that year's dollars)."), pg.notices.join(" | "));
+  assert.equal(pg.h1, "Jo needs about $148,000 more life insurance");
+  assert.ok(pg.notices.includes("$100,000 of Jo's coverage comes with the job and ends with it. Without it Child 1 and Child 2 would be short about $248,000 (if Jo died in 2037, in that year's dollars)."), pg.notices.join(" | "));
   assert.doesNotMatch(pg.notices.join(" "), /\$98,000/);
   assert.ok(pg.p.some((x) => x.startsWith("A level term policy that lasts until about 2044 (Child 1's college ends): ask for a 20-year term. Buy at least $148,000 now; $248,000 keeps Child 1 and Child 2 covered even after a job change.")), pg.p.join(" | "));
   // no ending: the same figure as before (need less the cover not through work), now with its year
   const q = policiesOn(twoss, { benefit: 100000, throughWork: true }, { benefit: 150000 });
   const qj = compute(q, T5).people[0];
   assert.deepEqual([qj.gap, qj.gapIfJobEnds], [0, 98000]);
-  assert.ok(pageOf(q).notices.includes("$100,000 of Jo's cover comes with the job and ends with it. Without it Child 1 and Child 2 would be short about $98,000 (if Jo died in 2037, in that year's dollars)."));
+  assert.ok(pageOf(q).notices.includes("$100,000 of Jo's coverage comes with the job and ends with it. Without it Child 1 and Child 2 would be short about $98,000 (if Jo died in 2037, in that year's dollars)."));
 });
 
 test("verification, review 2026-11-06: several policies are each named with their dates; the same day is added up", () => {
@@ -1234,13 +1234,13 @@ test("verification, review 2026-11-06: several policies are each named with thei
   const jo = compute(p, T5).people[0];
   assert.deepEqual(jo.child.endSteps, [{ endDate: "2033-12-31", benefit: 250000, policies: 2 }]);
   const pg = pageOf(p);
-  assert.match(pg.lede, /^Jo's \$250,000 of term cover ends on 12\/31\/2033, and Child 1 and Child 2 count on Jo until about 2044\. After it ends they would need up to about \$248,000, if Jo died in 2037/);
+  assert.match(pg.lede, /^Jo's \$250,000 of term life insurance ends on 12\/31\/2033, and Child 1 and Child 2 count on Jo until about 2044\. After it ends they would need up to about \$248,000, if Jo died in 2037/);
   assert.ok(pg.p.includes("Covered until 12/31/2033, when $250,000 of it ends; after that short by up to about $248,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars)."));
-  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $250,000 of cover ends, if Jo died in 2037")));
+  assert.ok(pg.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $250,000 of coverage ends, if Jo died in 2037")));
   assert.doesNotMatch(wordsOf(pg), /\$100,000 of (it|cover) ends|\$100,000 term policy/);
   const [gp] = protectionGaps(p, T5);
-  assert.equal(gp.title, "Jo's term life cover ends 12/31/2033: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
-  assert.match(gp.sentence, /^Jo's \$250,000 of term cover ends on 12\/31\/2033, and Child 1 and Child 2 count on Jo/);
+  assert.equal(gp.title, "Jo's term life insurance ends 12/31/2033: Child 1 and Child 2 would then need up to about $248,000 (if Jo died in 2037)");
+  assert.match(gp.sentence, /^Jo's \$250,000 of term life insurance ends on 12\/31\/2033, and Child 1 and Child 2 count on Jo/);
   // $10,000 ending 12/31/2027 and $300,000 ending 12/31/2041: covered every year to 2041; 2042 is $105,000 short. The page
   // names both ends, never "Covered until 12/31/2027" or "Jo's term life cover ends 12/31/2027" alone
   const s = policiesOn(twoss, { benefit: 10000, endDate: "2027-12-31" }, { benefit: 300000, endDate: "2041-12-31" });
@@ -1249,17 +1249,17 @@ test("verification, review 2026-11-06: several policies are each named with thei
   assert.deepEqual(sj.child.endSteps.map((x) => [x.endDate, x.benefit]), [["2027-12-31", 10000], ["2041-12-31", 300000]]);
   const sp = pageOf(s);
   assert.ok(sp.p.includes("$10,000 of it ends on 12/31/2027 and $300,000 on 12/31/2041; after that short by up to about $105,000 (if Jo died in 2042, in that year's dollars)."), sp.p.join(" | "));
-  assert.match(sp.lede, /^Jo's term cover ends in steps, \$10,000 on 12\/31\/2027 and \$300,000 on 12\/31\/2041, and Child 1 and Child 2 count on Jo until about 2044\. After it ends they would be up to about \$105,000 short, if Jo died in 2042/);
+  assert.match(sp.lede, /^Jo's term life insurance ends in steps, \$10,000 on 12\/31\/2027 and \$300,000 on 12\/31\/2041, and Child 1 and Child 2 count on Jo until about 2044\. After it ends they would be up to about \$105,000 short, if Jo died in 2042/);
   assert.doesNotMatch(wordsOf(sp), /Covered until 12\/31\/2027/);
-  assert.equal(protectionGaps(s, T5)[0].title, "Jo's term life cover ends 12/31/2027 and 12/31/2041: Child 1 and Child 2 would then be up to about $105,000 short (if Jo died in 2042)");
+  assert.equal(protectionGaps(s, T5)[0].title, "Jo's term life insurance ends 12/31/2027 and 12/31/2041: Child 1 and Child 2 would then be up to about $105,000 short (if Jo died in 2042)");
   // a ladder, $150,000 to 2031 and $150,000 to 2036: what to buy is "after $300,000 of cover ends", never after $150,000
   const l = policiesOn(twoss, { benefit: 150000, endDate: "2031-12-31" }, { benefit: 150000, endDate: "2036-12-31" });
   const lp = pageOf(l);
-  assert.ok(lp.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $300,000 of cover ends, if Jo died in 2037")));
+  assert.ok(lp.p.some((x) => x.startsWith("A level term policy for about $248,000 (the most Child 1 and Child 2 would need after $300,000 of coverage ends, if Jo died in 2037")));
   assert.ok(lp.p.includes("$150,000 of it ends on 12/31/2031 and $150,000 on 12/31/2036; after that short by up to about $248,000 (the most Child 1 and Child 2 would need, if Jo died in 2037, in that year's dollars)."));
 });
 
-test("review 2026-11-06 follow-up: a couple's figure without the job leaves out term cover that ends by next year", () => {
+test("review 2026-11-06 follow-up: a couple's figure without the job leaves out term life insurance that ends by next year", () => {
   // Ana ($235,000 needed) with $100,000 through work (no end) and $200,000 ending 6/30/2027. Once that policy ends only the
   // work cover is left, so without the job nothing is on file: $235,000, never 235,000 - (300,000 - 100,000) = $35,000 (the
   // ending policy counted), which hid the notice and the job-change size under a card short $135,000 from then
@@ -1272,7 +1272,7 @@ test("review 2026-11-06 follow-up: a couple's figure without the job leaves out 
   assert.deepEqual([ana.method, ana.need, ana.cover, ana.coverWork, ana.gap, ana.gapAfterEnd, ana.gapIfJobEnds], ["plan", 235000, 300000, 100000, 0, 135000, 235000]);
   assert.deepEqual(ana.jobEnding, { benefit: 200000, endDate: "2027-06-30", policies: 1 });
   const pg = pageOf(f, T);
-  assert.ok(pg.notices.includes("$100,000 of Ana's cover comes with the job and ends with it. Without it the family would be short about $235,000 once Ana's $200,000 term policy ends on 6/30/2027."), pg.notices.join(" | "));
+  assert.ok(pg.notices.includes("$100,000 of Ana's coverage comes with the job and ends with it. Without it the family would be short about $235,000 once Ana's $200,000 term policy ends on 6/30/2027."), pg.notices.join(" | "));
   assert.ok(pg.p.some((x) => x.includes("Buy at least $135,000 now; $235,000 keeps Bo and Cy covered even after a job change.")), pg.p.join(" | "));
   assert.doesNotMatch(pg.notices.join(" "), /\$35,000/);
   // the ending policy through work itself: what is not through work all stays, so the figure is need - that ($135,000 today)
@@ -1282,7 +1282,7 @@ test("review 2026-11-06 follow-up: a couple's figure without the job leaves out 
   const n = on({ benefit: 100000, throughWork: true }, { benefit: 200000 });
   const nj = compute(n, { today: T }).people[0];
   assert.deepEqual([nj.gap, nj.gapIfJobEnds, nj.jobEnding], [0, 35000, null]);
-  assert.ok(pageOf(n, T).notices.includes("$100,000 of Ana's cover comes with the job and ends with it. Without it the family would be short about $35,000."));
+  assert.ok(pageOf(n, T).notices.includes("$100,000 of Ana's coverage comes with the job and ends with it. Without it the family would be short about $35,000."));
 });
 
 test("review 2026-11-06 follow-up: cover that exactly meets the need says so, never \"about $0 to spare\"", () => {
@@ -1320,18 +1320,18 @@ test("verification 8b, review 2026-11-06: a couple's cover that ends by next yea
   const ta = compute(two, { today: T }).people[0];
   assert.deepEqual([ta.gap, ta.gapAfterEnd, ta.endSteps], [0, 85000, [{ endDate: "2027-03-31", benefit: 50000, policies: 1 }, { endDate: "2027-12-31", benefit: 150000, policies: 1 }]]);
   const tp = pageOf(two, T);
-  assert.equal(tp.lede, "Ana's term cover ends in steps, $50,000 on 3/31/2027 and $150,000 on 12/31/2027, and Bo and Cy count on Ana until about 2042: once it has ended they would be about $85,000 short.");
+  assert.equal(tp.lede, "Ana's term life insurance ends in steps, $50,000 on 3/31/2027 and $150,000 on 12/31/2027, and Bo and Cy count on Ana until about 2042: once it has ended they would be about $85,000 short.");
   assert.ok(tp.p.includes("Covered for now: $50,000 of it ends on 3/31/2027 and $150,000 on 12/31/2027; once it has ended, short by about $85,000."), tp.p.join(" | "));
   assert.doesNotMatch(wordsOf(tp), /Covered until 3\/31\/2027|\$50,000 term policy ends/);
   const [tg] = protectionGaps(two, { today: T });
-  assert.equal(tg.title, "Ana's term life cover ends 3/31/2027 and 12/31/2027: Bo and Cy would then be about $85,000 short");
+  assert.equal(tg.title, "Ana's term life insurance ends 3/31/2027 and 12/31/2027: Bo and Cy would then be about $85,000 short");
   assert.equal(alertsOf(two, { today: T }).alerts.find((a) => a.id === "life-cover-p-ana")?.title, tg.title);
   // the job notice names the same $200,000 (follow-up wording, unchanged)
-  assert.ok(tp.notices.includes("$100,000 of Ana's cover comes with the job and ends with it. Without it the family would be short about $185,000 once Ana's $200,000 of term cover has ended (by 12/31/2027)."), tp.notices.join(" | "));
+  assert.ok(tp.notices.includes("$100,000 of Ana's coverage comes with the job and ends with it. Without it the family would be short about $185,000 once Ana's $200,000 of term life insurance has ended (by 12/31/2027)."), tp.notices.join(" | "));
   // the same day: $100,000 and $150,000 ending 6/30/2027 are $250,000 ending that day
   const sd = on({ benefit: 100000, endDate: "2027-06-30" }, { benefit: 150000, endDate: "2027-06-30" }, { benefit: 50000 });
   const dp = pageOf(sd, T);
-  assert.equal(dp.lede, "Ana's $250,000 of term cover ends on 6/30/2027, and Bo and Cy count on Ana until about 2042: without it they would be about $185,000 short.");
+  assert.equal(dp.lede, "Ana's $250,000 of term life insurance ends on 6/30/2027, and Bo and Cy count on Ana until about 2042: without it they would be about $185,000 short.");
   assert.ok(dp.p.includes("Covered until 6/30/2027, when $250,000 of it ends; short by about $185,000 from then."), dp.p.join(" | "));
   // one policy, covered today: the words are as before
   const one = pageOf(on({ benefit: 100000, throughWork: true }, { benefit: 200000, endDate: "2027-06-30" }), T);
@@ -1473,12 +1473,12 @@ test("round 8 review UX 5: short either way: the verdict is not green and the wa
   const verdicts = all(root).filter((n) => String(n.attrs?.class ?? "").startsWith("ln-verdict"));
   assert.ok(verdicts.length >= 2, "a verdict on each card");
   // (round 8 verify: Priya's death leaves Tom $28,000 short of the plan together's run-out; Tom's leaves Priya none short)
-  const none = verdicts.filter((v) => /No life cover needed for this/.test(v.textContent));
+  const none = verdicts.filter((v) => /No life insurance needed for this/.test(v.textContent));
   assert.equal(none.length, 1, "Tom's card");
   for (const v of none) assert.doesNotMatch(v.attrs.class, /\bok\b/);
   const text = root.textContent.replace(/\s+/g, " ");
   assert.doesNotMatch(text, /With or without cover/);
-  assert.match(text, /if Tom died, and so would your plan together: a death does not make it run out sooner, so life cover is not the fix/);
+  assert.match(text, /if Tom died, and so would your plan together: a death does not make it run out sooner, so life insurance is not the fix/);
 });
 
 // Round 8 verify (2026-11-06): "as many years of retirement, each from its own retirement start" was also taken as "as well".

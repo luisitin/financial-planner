@@ -219,6 +219,6 @@ export function compute(plan, params = {}) {
   options.forEach((o, i) => { o.ifStockHalves = build(i === 0 ? currentIn : offersIn[i - 1], i === 0, 0.5).overYears.net; });
   const ranked = [...options].sort((a, b) => b.overYears.net - a.overYears.net);
   ranked.forEach((o, i) => { o.rank = i + 1; o.vsCurrent = o.overYears.net - options[0].overYears.net; });
-  if (hasOptions) notes.push("Stock options at your employer are counted at their value over the strike price as they vest, as if bought and taxed as pay then; incentive options are taxed differently (Equity compensation).");
+  if (hasOptions) notes.push("Stock options at your employer are counted at their value over the strike price as they vest, as if bought and taxed as wages then; incentive options are taxed differently (Equity compensation).");
   return { ready: true, person: person ? { id: pid, name: person.name } : null, years, hasJob, options, best: ranked[0].id, runnerUp: ranked[1]?.id ?? null, forfeit: offersIn.length ? forfeit : 0, stateNow, notes };
 }

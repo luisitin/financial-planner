@@ -25,7 +25,7 @@ export function render(root, ctx) {
   if (pending) {
     const n = ui.notice("ok", pending.text ?? pending), share = pending.stocks;
     // a target that differs from the Projection's stock share: one tap makes the plan's projection use it too
-    if (share !== undefined) n.append(" ", ui.button(`Use ${pts(share)} stocks on the Projection too`, () => { pending = `The Projection now assumes ${pts(share)} stocks.`; store.update((q) => { q.retirement.stocksNow = Math.round(share * 100) / 100; }); }, { class: "secondary small" }));
+    if (share !== undefined) n.append(" ", ui.button(`Use ${pts(share)} stocks on Will the money last? too`, () => { pending = `Will the money last? now assumes ${pts(share)} stocks.`; store.update((q) => { q.retirement.stocksNow = Math.round(share * 100) / 100; }); }, { class: "secondary small" }));
     out.append(n); if (share === undefined) setTimeout(() => n.remove(), 4000); pending = null;
   }
   // no target of your own: what you hold, and a few mixes to pick in one tap; no drift is called against a default
@@ -81,7 +81,7 @@ function targetFold(ctx, d) {
   const t = d.targetSource === "own" ? d.target ?? {} : {};
   const FIELDS = [
     ...TARGET_CLASSES.map((cls) => ({ key: cls, label: ASSET_CLASSES[cls].label, type: "number", min: 0, max: 100, step: "1", help: cls === "us_stocks" ? "percent of the whole portfolio; the six add up to 100" : undefined })),
-    { key: "band", label: "Rebalance band", type: "number", min: 1, max: 25, step: "1", help: "points a class may drift before it is flagged; 5 is the usual" },
+    { key: "band", label: "Rebalance band", type: "number", min: 1, max: 25, step: "1", help: "percentage points a kind of investment may drift before it is flagged; 5 is the usual" },
   ];
   const values = { ...Object.fromEntries(TARGET_CLASSES.map((c) => [c, Math.round((t[c] ?? 0) * 100) || null])), band: Math.round((plan.investments?.band ?? 0.05) * 100) };
   const form = ui.form(FIELDS, values, (v) => {
@@ -91,5 +91,5 @@ function targetFold(ctx, d) {
   }, { submitLabel: "Save target" });
   return ui.h("details", { class: "card fold fold-card alloc-target", open: d.ready ? null : true },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Your target mix"), ui.h("span", { class: "fold-status" }, d.targetSource === "own" ? `${Math.round((t.us_stocks + t.intl_stocks + (t.real_estate ?? 0)) * 100)}% stocks` : "not chosen yet"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Percent of the whole portfolio in each; leave everything blank for no target (the page then shows what you hold without calling anything off target). Typical: 60% stocks / 40% bonds for a near retiree, 90/10 for a long horizon; a third of stocks abroad is the world's weight."), form));
+    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Percent of the whole portfolio in each; leave everything blank for no target (the page then shows what you hold without calling anything off target). Typical: 60% stocks / 40% bonds for someone near retirement, 90/10 for someone with decades to go; about a third of stocks outside the US matches the world's markets."), form));
 }

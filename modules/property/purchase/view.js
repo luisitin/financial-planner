@@ -35,7 +35,7 @@ export function render(page, ctx) {
 
   root.append(ui.card(null, ui.row(
     ui.stat(d.inputs.name || "Price", money(d.total), d.saved ? `${money(d.saved)} already set aside` : d.inputs.salesTax ? "with sales tax" : "nothing set aside yet"),
-    ui.stat("Money left each month", money(Math.max(0, d.spare)), d.spare < 0 ? `already ${money(-d.spare)} short` : "after spending and saving"),
+    ui.stat("Left over each month", money(Math.max(0, d.spare)), d.spare < 0 ? `already ${money(-d.spare)} short` : "after spending and saving"),
   )));
 
   const effect = (e, amount) => {
@@ -53,9 +53,9 @@ export function render(page, ctx) {
     f.promo && f.promo < f.months ? ui.h("div", { class: "pu-warn" }, "Many 0% offers charge all the interest from day one if anything is left when the free months end: read the terms.") : null,
     effect(d.effect.finance, f.payment)));
   ways.push(ui.h("li", {}, ui.h("div", { class: "pu-head" }, ui.h("span", {}, "Pay cash now"), ui.h("span", {}, money(d.total - d.saved))),
-    ui.h("div", { class: d.cash.fits && (!d.cash.target || d.cash.after >= d.cash.target) ? "pu-d" : "pu-warn" }, !d.cash.fits ? "There is not this much usable cash: the rest is set aside for goals or is your cushion." : d.cash.target && d.cash.after < d.cash.target ? `Leaves ${money(d.cash.after)} of usable cash, under your emergency target of ${money(d.cash.target)}.` : `Leaves ${money(d.cash.after)} of usable cash.`)));
+    ui.h("div", { class: d.cash.fits && (!d.cash.target || d.cash.after >= d.cash.target) ? "pu-d" : "pu-warn" }, !d.cash.fits ? "There is not this much usable cash: the rest is set aside for goals or is your emergency fund." : d.cash.target && d.cash.after < d.cash.target ? `Leaves ${money(d.cash.after)} of usable cash, under your emergency target of ${money(d.cash.target)}.` : `Leaves ${money(d.cash.after)} of usable cash.`)));
   root.append(ui.card("Three ways to buy it", ui.h("ul", { class: "pu-list" }, ways),
-    ui.h("p", { class: "muted small" }, "Goals give way least important first (Nice to have, then Want, then Must have), the ones due latest first.")));
+    ui.h("p", { class: "muted small" }, "Goals give up their money least important first (Nice to have, then Want, then Must have), and within each, the one due latest first.")));
 
   root.append(ui.h("details", { class: "card fold fold-card", open: s.price ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The purchase"), ui.h("span", { class: "fold-status" }, s.price ? `${name}, ${money(d.total)}` : "what and when"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
@@ -72,5 +72,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.purchase = { name: String(v.name ?? "").trim(), price: v.price, salesTax: v.salesTax ?? 0, when: v.when || "", saved: v.saved ?? 0, apr: v.apr ?? null, termMonths: v.termMonths ?? null, promoMonths: v.promoMonths ?? 0 }; });
     }, { submitLabel: "Compare" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals"), ui.h("a", { class: "btn secondary", href: "#/goals/prioritizer" }, "What to save for first"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals"), ui.h("a", { class: "btn secondary", href: "#/goals/prioritizer" }, "What to save for first"))));
 }

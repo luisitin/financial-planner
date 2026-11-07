@@ -67,6 +67,6 @@ export function render(page, ctx) {
     }
     root.append(ui.card(title, ul));
   }
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"), ui.h("a", { class: "btn secondary", href: "#/estate/digital" }, "Digital assets"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/beneficiaries" }, "Beneficiaries"), ui.h("a", { class: "btn secondary", href: "#/estate/digital" }, "Digital assets"))));
   root.append(ui.h("p", { class: "muted small" }, `What each paper is called and how it is signed differs by state. This list is a reminder, not legal advice: ${Object.keys(KINDS).length} papers most estate lawyers start from.`));
 }

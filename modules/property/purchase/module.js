@@ -14,7 +14,7 @@ export default {
   needs: ["income", "expenses", "goals", "accounts", "assumptions"],
   writes: ["whatIfs"],
   heavy: false,
-  purpose: "Any big purchase: save up by the date you want it, finance it now or pay cash, and which goals would give way.",
+  purpose: "Any big purchase: save up by the date you want it, finance it now or pay cash, and which goals would have to wait.",
   compute,
   render,
 };

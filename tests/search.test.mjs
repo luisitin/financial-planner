@@ -50,7 +50,7 @@ test("plain questions find the page that answers them, first", async () => {
     ["safety cushion", "goals/emergency-fund"], ["next move", "overview/next-best-action"], ["can we afford a house", "goals/house"],
     ["are we saving enough", "retirement/projection"], ["lose my job", "balance/liquidity"], ["will our money last", "retirement/projection"],
     ["stock from work", "career/equity"], ["left over", "cashflow/expenses"], ["update balances", "balance/update"],
-    ["how much tax", "taxes/federal"], ["debt free", "debt/payoff"], ["monthly check-in", "overview/monthly-review"],
+    ["how much tax", "taxes/federal"], ["debt-free", "debt/payoff"], ["monthly check-in", "overview/monthly-review"],
     ["buy a home", "goals/house"], ["what I owe", "balance/net-worth"],
     // round 4, 2026-11-02: a freelancer's and a retiree's questions
     ["how much should I set aside for taxes", "taxes/estimated"], ["how much to take out", "retirement/withdrawal-strategy"],

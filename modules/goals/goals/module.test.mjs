@@ -117,7 +117,7 @@ test("review: the planners' figures settle, follow the page's own choices, and o
   // Emergency fund: only the ticked goal gets an amount, the target less the other cash that counts
   const ef = familyPlan("2026-11-02"); const eg = ef.goals.find((g) => plannerFor(g)?.page === "goals/emergency-fund");
   const fe = fig(ef, eg.id, "goals/emergency-fund", emergency(ef, T));
-  assert.equal(fe.amount, null); assert.match(fe.note, /ticked as your emergency fund/); assert.equal(plannerDiffers(eg, fe), false);
+  assert.equal(fe.amount, null); assert.match(fe.note, /checked off as your emergency fund/); assert.equal(plannerDiffers(eg, fe), false);
   eg.isEmergencyFund = true;
   const r = emergency(ef, T), row = compute(ef, T).goals.find((g) => g.id === eg.id);
   const ft = fig(ef, eg.id, "goals/emergency-fund", r);

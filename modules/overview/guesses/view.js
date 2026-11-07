@@ -272,7 +272,7 @@ export function render(page, ctx) {
     if (fill.length || skipped.length) { root.append(sourcesFold()); return; }
     root.append(d.planEmpty
       ? ui.card("Nothing to look over yet",
-        ui.h("p", {}, "Answer the questions on Get started. Any box you leave empty gets a figure typical for a household like yours, and it shows up here so you can check it or type the real one."),
+        ui.h("p", {}, "Answer the questions in Set up my plan. Any box you leave empty gets a figure typical for a household like yours, and it shows up here so you can check it or type the real one."),
         ui.h("div", { class: "row" }, ui.h("a", { class: "btn", href: "#/overview/setup" }, "Get started"), ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Back to the Dashboard")))
       : ui.card("Nothing to look over",
         ui.h("p", {}, "Every figure in your plan is one you typed. If you leave a box empty later, the figure we fill in shows up here."),

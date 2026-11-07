@@ -161,7 +161,7 @@ export function compute(plan, params = {}) {
     const nextRaise = { ...keepOfRaise(nextAmount, { inputs: tax.inputs, params: tax.params, personWages, wageBase, stateRate, personId: x.personId || null }), rate: rows.length > 1 ? rows[1].pay / rows[0].pay - 1 : null, promoted: !!rows[1]?.promoted };
     const name = person?.name ?? "";
     const realGrowth = (1 + avgGrowth) / (1 + inflation) - 1;
-    if (realGrowth < -1e-9) warnings.push(`${x.name || "A salary"} rises less than prices (${(inflation * 100).toFixed(1)}% a year): in today's money it shrinks over the years.`);
+    if (realGrowth < -1e-9) warnings.push(`${x.name || "A salary"} rises less than prices (${(inflation * 100).toFixed(1)}% a year): in today's dollars it shrinks over the years.`);
     if (!person) warnings.push(`${x.name || "A salary"} is not linked to anyone on the Income page, so it is shown for ${HORIZON} years instead of to a retirement birthday.`);
     else if (!knownAge) warnings.push(`${name ? `${NameIn(name)} ${verbFor(name, "has", "have")}` : "Someone has"} no birth date on People, so ${x.name || "this pay"} is shown for ${HORIZON} years instead of to retirement${settings.levelAge ? ", and the age pay stops growing cannot be used" : ""}.`);
     return {

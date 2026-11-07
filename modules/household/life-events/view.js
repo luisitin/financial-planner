@@ -53,7 +53,7 @@ export function render(page, ctx) {
     startBox.append(ui.h("p", { class: "muted" }, def.intro), form);
   }
   if (!d.events.length) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Big changes, step by step"),
-    ui.h("p", { class: "lede" }, "Getting married, a baby, a new job, a move, an inheritance or a divorce: pick what is happening and its day. You get the steps in order, with the deadlines that matter, and the changes to your plan are made only when you tap them."),
+    ui.h("p", { class: "lede" }, "Getting married, a baby, a new job, a move, an inheritance or a divorce: pick what is happening and when. You get the steps in order, with the deadlines that matter; nothing in your plan changes until you tap it."),
     picker, startBox));
 
   // deadlines coming up across events
@@ -71,7 +71,7 @@ export function render(page, ctx) {
     det.append(ui.h("p", { class: "muted" }, e.intro), ui.field(e.dateLabel, dateForm),
       ui.h("div", {}, e.steps.map((s) => step(e, s))),
       ui.row(ui.button("Remove this event", () => {
-        if (!ui.confirm(`Remove "${e.label}" and its ticks? Changes already made to your plan stay.`)) return;
+        if (!ui.confirm(`Remove "${e.label}" and its check marks? Changes already made to your plan stay.`)) return;
         pending = { kind: "ok", text: `${e.label} removed. Changes already made to your plan stay.` };
         store.update((q) => { removeEvent(q, e.id); });
       }, { class: "secondary small" })));
@@ -81,13 +81,13 @@ export function render(page, ctx) {
 
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "Where the deadlines come from"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", {}, "Health cover at work: at least 30 days after a wedding, birth or adoption to add someone. Health insurance you buy yourself: 60 days after a wedding, birth, move or losing job cover. COBRA: at least 60 days to choose; after a divorce, tell the plan within 60 days."),
+    ui.h("p", {}, "Health insurance at work: at least 30 days after a wedding, birth or adoption to add someone. Health insurance you buy yourself: 60 days after a wedding, birth, move or losing coverage from a job. COBRA: at least 60 days to choose; after a divorce, tell the health plan within 60 days."),
     ui.h("p", {}, "Taxes: your marital status on December 31 counts for the whole year. An inherited IRA from someone other than a spouse is usually emptied by December 31 of the 10th year after the death."),
-    ui.h("p", { class: "muted small" }, "From the U.S. Department of Labor, HealthCare.gov and the IRS. Your plan's own papers can give more time, never less.")));
+    ui.h("p", { class: "muted small" }, "From the U.S. Department of Labor, HealthCare.gov and the IRS. Your health plan's own papers can give you more time, never less.")));
 
   function step(e, s) {
     const box = ui.h("input", { type: "checkbox", checked: s.done ? true : null, disabled: s.auto ? true : null, "aria-label": s.text });
-    box.addEventListener("change", () => { pending = { kind: "ok", text: box.checked ? "Ticked." : "Unticked." }; shown = e.id; store.update((q) => { setStep(q, e.id, s.key, box.checked, today); }); });
+    box.addEventListener("change", () => { pending = { kind: "ok", text: box.checked ? "Checked off." : "Unchecked." }; shown = e.id; store.update((q) => { setStep(q, e.id, s.key, box.checked, today); }); });
     const key = `${e.id}:${s.change}`;
     return ui.h("div", { class: `le-step${s.done ? " le-done" : ""}` },
       ui.h("label", {}, box),

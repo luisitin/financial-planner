@@ -117,4 +117,4 @@ export function render(page, ctx) {
   }
 }
 
-const TITLES = { income: "Pay on the Income page", withholding: "Tax withheld per paycheck (Withholding check)", contribution: "401(k) per paycheck (Contributions)", balance: "The account's balance", ssa: "Social Security at full retirement age", advisor: "The advisor's assumptions (Advisor's plan)" };
+const TITLES = { income: "Pay on the Income page", withholding: "Tax withheld per paycheck (Withholding check)", contribution: "401(k) per paycheck (Retirement contributions)", balance: "The account's balance", ssa: "Social Security at full retirement age", advisor: "The advisor's assumptions (Advisor's plan)" };

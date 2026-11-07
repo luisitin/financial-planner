@@ -29,14 +29,14 @@ each job: `{ incomeId, name, personId, personName, pay, ageNow, retireAge, retir
   under prices stays as it is). The age needs a birth date. The raise is the one typed here, else the
   Income page's (when above 0), else `assumptions.salaryGrowth`. The promotion raise starts at 8.5%, what employers
   expect to give for a one-level promotion (Mercer, March 2026 survey, reported by WorldatWork on 7 May 2026).
-- **Today's money.** real = pay ÷ (1 + inflation)^t, t = years from now. Real raise = (1 + raise) ÷ (1 + inflation) − 1.
-- **Pay still to come** (`lifetime`) = Σ pay × weight (dollars of each year) and Σ real × weight (today's money).
+- **Today's dollars.** real = pay ÷ (1 + inflation)^t, t = years from now. Real raise = (1 + raise) ÷ (1 + inflation) − 1.
+- **Pay still to come** (`lifetime`) = Σ pay × weight (dollars of each year) and Σ real × weight (today's dollars).
 - **Average growth** = (last year's pay ÷ today's pay)^(1 ÷ years between) − 1: the single raise that reaches the same
   pay, offered as the Income page's raise. Real growth = (1 + average) ÷ (1 + inflation) − 1; a real growth under 0
   is warned about. "Use it on the Income page" (`useAverage`) writes the average to that income's `growth` and pins
   this page's own raise, so the promotions are not counted again on top of the new figure.
-- **One more percent a year** = the path again at raise + 1%, its pay still to come in today's money, less the plan's.
-- **A raise won now** (5%, `RAISE_NOW`) scales every later year: pay still to come (today's money) × 5%, which is the
+- **One more percent a year** = the path again at raise + 1%, its pay still to come in today's dollars, less the plan's.
+- **A raise won now** (5%, `RAISE_NOW`) scales every later year: pay still to come (today's dollars) × 5%, which is the
   same as the whole path again at 105% of today's pay.
 - **What the next raise keeps** (`keepOfRaise`), for next year's rise along the path (pay in year 1 − pay now, so a
   promotion next year or a level-off age already reached is in it): federal = the household's `federalTax` with
@@ -67,7 +67,7 @@ each job: `{ incomeId, name, personId, personName, pay, ageNow, retireAge, retir
 - Two salaries for one person are two jobs.
 
 ## Tests
-`module.test.mjs`: the year fraction, the path (compounding, today's money), promotions, the level-off age, part years
+`module.test.mjs`: the year fraction, the path (compounding, today's dollars), promotions, the level-off age, part years
 and the pay still to come, what a raise keeps (wage base, state, none, the extra Medicare tax on Medicare wages), the
 family by hand, one more percent, a raise won now against the path, average and real growth with promotions by hand,
 the next raise along the path, an end date, pay linked to nobody, a holder at retirement age, typed settings, using the

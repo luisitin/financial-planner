@@ -83,7 +83,7 @@ test("no high-deductible plan: the limit is 0, nothing saves tax, and the page w
   near(compute(p, { today: "2026-06-01" }).hsa.limit, 4400, 0);
 });
 
-test("self-only cover: only the covered adult's catch-up, and a spouse outside the plan saves nothing (223(b)(3); Pub. 969)", () => {
+test("self-only coverage: only the covered adult's catch-up, and a spouse outside the plan saves nothing (223(b)(3); Pub. 969)", () => {
   const people = [{ id: "ana", name: "Ana", birth: "1986-02-01", pay: 90000, hsa: 2000 }, { id: "ben", name: "Ben", birth: "1968-02-01", pay: 60000 }];
   const d = compute(planOf({ status: "married_joint", cover: "self", people }), { today: "2026-06-01" });
   near(d.hsa.catchUp, 0, 0); near(d.hsa.limit, 4400, 0);   // Ben is 58 but not on Ana's plan
@@ -95,7 +95,7 @@ test("self-only cover: only the covered adult's catch-up, and a spouse outside t
   assert.ok(e.notes.some((n) => /Ana is not on the self-only health plan/.test(n)));
 });
 
-test("family cover, married: the 2026 family limit plus each catch-up from 55 (RULES.md 10.4)", () => {
+test("family coverage, married: the 2026 family limit plus each catch-up from 55 (RULES.md 10.4)", () => {
   const people = [{ id: "ana", name: "Ana", birth: "1970-02-01", pay: 90000, hsa: 3000, hsaEmployer: 1000 }, { id: "ben", name: "Ben", birth: "1974-02-01", pay: 80000, hsa: 5000, hsaEmployer: 500 }];
   const d = compute(planOf({ status: "married_joint", cover: "family", people }), { today: "2026-06-01" });
   near(d.hsa.limit, 9750, 0); near(d.hsa.total, 9500, 0); near(d.hsa.room, 250, 0); near(d.hsa.over, 0, 0);

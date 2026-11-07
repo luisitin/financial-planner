@@ -58,7 +58,7 @@
 - Until 2026-10-31 the page applied the exclusion whatever the dates, taxed every gain at 15% or 20% using 2025's single
   and joint lines for every year and status, and the 3.8% on the whole gain; the answer key found all four (below).
 - Ahead: value × (1 + growth, default 3.5%)^years; owed = the mortgage page's schedule `endBalance` for that year
-  (0 once it ends). Not in today's money.
+  (0 once it ends). Not in today's dollars.
 
 ## Edge cases
 - No property account: a hero pointing to Accounts. No mortgage: all of it is yours.

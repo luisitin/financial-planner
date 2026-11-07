@@ -13,7 +13,7 @@ export function render(root, ctx) {
   const money = (n) => fmt.money(n, cur);
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   if (!d.ready && !d.noYears) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of the retirement plan, through the real brackets. It needs the same things as the Projection page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Set up the projection"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of your retirement plan, worked out with the actual tax brackets. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   // no retirement year inside the plan (it ends first, or everyone is past its end age): say why, not "failed to render"
@@ -29,20 +29,20 @@ export function render(root, ctx) {
     ui.h("h1", {}, `About ${money(d.totals.taxes)} of federal tax over retirement`),
     // one retirement year: "1 year, 2026", with no average and no biggest year (Review 2026-11-06, verifier: "1 years from 2026
     // to 2026 ... $813 a year on average ... The biggest year is 2026", as the Tax report read before this round)
-    ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in the dollars of each year"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
-    ui.h("p", { class: "muted small" }, "Brackets and deductions inflate with the plan's inflation rate; the Social Security thresholds do not, as in the law, so more of the benefit gets taxed over time. State tax is not included."),
+    ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in each year's dollars"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
+    ui.h("p", { class: "muted small" }, "Brackets and deductions rise with the plan's inflation rate. By law the Social Security thresholds do not, so more of the benefit gets taxed over time. State tax is not included."),
   ));
   for (const n of d.notes) root.append(ui.notice("info", n));
   root.append(ui.card(null, ui.row(
     ui.stat("Over the plan", money(d.totals.taxes), d.real ? "today's dollars" : "nominal"),
     ui.stat("A year", money(d.average), "on average"),
     ui.stat("Flat setting would say", money(d.flatTaxes), `${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% on pre-tax withdrawals only`),
-    d.byBracket.length ? ui.stat("Years by bracket", d.byBracket.map((x) => `${x.years} in ${fmt.pct(x.rate, 0)}`).join(", "), "where each year ends") : null,
+    d.byBracket.length ? ui.stat("Years by bracket", d.byBracket.map((x) => `${x.years} in ${fmt.pct(x.rate, 0)}`).join(", "), "the top bracket each year reaches") : null,
   )));
   const years = d.rows.map((r) => r.year);
   root.append(ui.card("Tax each year",
     lineChart({ years, series: [{ values: d.rows.map((r) => r.taxes) }], marks: d.peak ? [{ year: d.peak.year, label: "peak" }] : [], label: "federal tax by year" }),
-    ui.h("div", { class: "form" }, ui.field("Show amounts in", ui.select([{ value: "real", label: "today's dollars" }, { value: "nominal", label: "the dollars of each year" }], state.real ? "real" : "nominal", { "aria-label": "Dollars", onChange: (e) => { state.real = e.target.value === "real"; redraw(); } }))),
+    ui.h("div", { class: "form" }, ui.field("Show amounts in", ui.select([{ value: "real", label: "today's dollars" }, { value: "nominal", label: "each year's dollars" }], state.real ? "real" : "nominal", { "aria-label": "Dollars", onChange: (e) => { state.real = e.target.value === "real"; redraw(); } }))),
   ));
   root.append(ui.card("Year by year",
     ui.h("div", { class: "only-wide" }, ui.table([

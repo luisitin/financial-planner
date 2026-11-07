@@ -139,7 +139,7 @@ test("the mortgage paid off: the payoff plan's date, and its own payment's date 
   const d = compute(familyPlan(today), { today });
   const e = (d.events ?? []).find((x) => x.kind === "mortgage");
   assert.equal(e.date.slice(0, 7), "2039-03");
-  assert.match(e.detail, /This date has the Visa card and Car loan payments moving onto it once they are paid off; on its own payment it runs to January 2046\./);
+  assert.match(e.detail, /This date has the Visa card and Car loan payments moving to the mortgage once they are paid off; with its own payment alone, it would run to January 2046\./);
 });
 
 test("someone already getting Social Security has no 'starts' event, however early it began (review 2026-11-02, round 5)", () => {

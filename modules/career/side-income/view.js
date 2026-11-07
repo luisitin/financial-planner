@@ -36,7 +36,7 @@ export function render(page, ctx) {
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Side income"),
-      ui.h("p", { class: "lede" }, "Money from gigs, freelance work or a small business comes in unevenly. This page works out the month your plan can safely count on, the cushion that smooths the rest, and how much of each payment to set aside for tax."),
+      ui.h("p", { class: "lede" }, "Money from gigs, freelance work or a small business comes in unevenly. This page works out how much a month your plan can safely count on, the cushion that smooths out the rest, and how much of each payment to set aside for tax."),
       ui.h("p", { class: "muted small" }, "First add it on the Income page as \"Self-employment / business\", with a rough monthly amount."),
       ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add it on Income"))));
     rulesCard();
@@ -44,7 +44,7 @@ export function render(page, ctx) {
   }
   const anySaved = d.items.some((it) => it.stats.n > 0);
   if (!anySaved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Side income"),
-    ui.h("p", { class: "lede" }, "Pay that changes month to month is safest to plan with at a lower, ordinary month, with a cushion for the lean ones."),
+    ui.h("p", { class: "lede" }, "When pay changes from month to month, it is safest to plan on an ordinary, lower month and keep a cushion for the lean ones."),
     ui.h("p", { class: "muted small" }, "Type what came in each of the last 12 months (your bank or the app that pays you shows it) under each side income below.")));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
@@ -65,16 +65,16 @@ export function render(page, ctx) {
         : `Your whole return needs quarterly payments to the IRS: the next is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.`),
     e.needed && (e.nextDue || e.overdue) ? ui.h("p", { class: "muted small" }, `These come from the Estimated payments page, worked on the Income page's ${money(d.items.reduce((t, it) => t + it.monthly, 0))} a month: the safe amount is ${e.harbour === "90% of this year's" || !e.harbour ? "90% of this year's tax" : e.harbour}, paid in four parts, and the rest is due in April.`) : null,
     ui.h("p", { class: "muted small" }, [
-      "Nobody holds back tax from side income, so it is paid during the year, or covered by more withholding at a job.",
-      s.onAverage ? " Worked on what came in on average over the months typed, not on the careful figure the plan counts on." : " Worked on the Income page's figure; type the months for what really comes in.",
+      "No one withholds tax from side income, so you pay it yourself during the year, or have more withheld from a paycheck at a job.",
+      s.onAverage ? " Worked on what came in on average over the months typed, not on the careful figure the plan counts on." : " Worked out from the Income page's figure; type the months for what really comes in.",
     ].join("")),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments"), ui.h("a", { class: "btn secondary", href: "#/taxes/self-employment" }, "Self-employment tax"))));
   }
   rulesCard();
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/emergency-fund" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/career/business" }, "Small business"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/emergency-fund" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/career/business" }, "Small business"))));
 
   function setCount(it, value) {
-    pending = value === null ? `${it.name}: the plan counts the full ${money(it.monthly)} a month again.` : `${it.name}: your left-over figure and forecast now count on ${money(value)} a month. The tax pages stay on ${money(it.monthly)}.`;
+    pending = value === null ? `${it.name}: the plan counts the full ${money(it.monthly)} a month again.` : `${it.name}: your leftover figure and forecast now count on ${money(value)} a month. The tax pages stay on ${money(it.monthly)}.`;
     // on both halves of a raise from a later date (the chain), so the figure set here holds after the start date too (round 5)
     store.update((p) => { setCountOn(p, it, value); });
   }
@@ -82,7 +82,7 @@ export function render(page, ctx) {
   // from this page once the months ran out while it kept lowering the left-over figure (review 2026-11-02)
   function countedSay(it) {
     const better = it.enough && it.countOn > 0 && Math.abs(it.counted - it.countOn) >= 1 && it.countOn < it.monthly - 0.5;
-    return [ui.h("p", { class: "si-say" }, `Your plan counts on ${money(it.counted)} a month from this for spending and saving (the left-over figure and the forecast). The tax pages (Estimated payments, the April bill) still use the Income page's ${money(it.monthly)} a month; what comes in above ${money(it.counted)} is a bonus to save.`),
+    return [ui.h("p", { class: "si-say" }, `Your plan counts on ${money(it.counted)} a month from this for spending and saving (the leftover figure and the forecast). The tax pages (Estimated payments, the April bill) still use the Income page's ${money(it.monthly)} a month; what comes in above ${money(it.counted)} is a bonus to save.`),
       ui.row(better ? ui.button(`Count on ${money(it.countOn)} instead`, () => setCount(it, Math.round(it.countOn)), { class: "secondary" }) : null,
         ui.button(`Count the full ${money(it.monthly)} again`, () => setCount(it, null), { class: "secondary" }))];
   }
@@ -91,7 +91,7 @@ export function render(page, ctx) {
     const card = ui.card(it.name);
     if (it.enough) {
       card.append(ui.row(
-        ui.stat("Count on", money(it.countOn), `a month: reached in ${s.reached} of the ${s.n} months typed`),
+        ui.stat("Count on", money(it.countOn), `a month: reached in ${s.reached} of the ${s.n} ${s.n === 1 ? "month" : "months"} typed`),
         ui.stat("Average", money(s.average), `a month; from ${money(s.low)} to ${money(s.high)}`),
       ));
       card.append(bars(it));
@@ -99,7 +99,7 @@ export function render(page, ctx) {
       // the Income page's amount. It used to overwrite that amount, so every tax page dropped and the quarterly payment shrank
       // to a third (round 4, 2026-11-02)
       if (it.counted !== null) card.append(...countedSay(it));
-      else if (it.gap > 0.5 && it.countOn > 0) card.append(ui.h("p", { class: "si-say" }, `The Income page counts ${money(it.monthly)} a month, but less than that came in during ${it.below} of the ${s.n} months. Planning your spending with ${money(it.countOn)} keeps the lean months from catching you out; the rest is a bonus to save. The tax pages stay on ${money(it.monthly)}.`),
+      else if (it.gap > 0.5 && it.countOn > 0) card.append(ui.h("p", { class: "si-say" }, `The Income page counts ${money(it.monthly)} a month, but less than that came in during ${it.below} of the ${s.n} ${s.n === 1 ? "month" : "months"}. Planning your spending with ${money(it.countOn)} keeps the lean months from catching you out; the rest is a bonus to save. The tax pages stay on ${money(it.monthly)}.`),
         ui.row(ui.button(`Count on ${money(it.countOn)} a month`, () => setCount(it, Math.round(it.countOn)))));
       else if (it.countOn <= 0) card.append(ui.h("p", { class: "si-say" }, `More than 1 month in 4 brought nothing, so there is no amount the plan can safely count on every month: keep it out of the monthly budget and save what comes.`));
       else card.append(ui.h("p", { class: "si-say" }, `The Income page's ${money(it.monthly)} a month is a careful figure: at least that much came in during ${s.n - it.below} of the ${s.n} months.`));
@@ -127,7 +127,7 @@ export function render(page, ctx) {
       it.typedMonths.map((v) => ui.h("span", { class: v === null ? "none" : v < it.countOn ? "low" : null, style: { height: `${v === null ? 0 : Math.max(2, (v / top) * 100)}%` } })),
       ui.h("div", { class: "si-line", style: { bottom: `${(it.countOn / top) * 100}%` } }));
     return ui.h("div", {}, box, ui.h("div", { class: "si-ticks" }, d.months.map((m) => ui.h("span", {}, monthName(m, "short")))),
-      ui.h("div", { class: "si-key" }, ui.h("i", {}), `the ${money(it.countOn)} to count on; grey months fell short of it`));
+      ui.h("div", { class: "si-key" }, ui.h("i", {}), `the ${money(it.countOn)} to count on; gray months fell short of it`));
   }
   function rulesCard() {
     const r = d.rules;

@@ -100,7 +100,7 @@ export function render(root, ctx) {
       removing = null;
       store.update((p) => { removePerson(p, person.id, { keep }); });
     };
-    const amount = (i) => i.amount === null ? null : i.every === "a month" ? `${fmt.money(i.amount, cur)} a month` : i.every === "one time" ? `${fmt.money(i.amount, cur)} one time` : i.every === "owed" ? `${fmt.money(i.amount, cur)} owed` : i.every === "cover" ? `${fmt.money(i.amount, cur)} cover` : fmt.money(i.amount, cur);
+    const amount = (i) => i.amount === null ? null : i.every === "a month" ? `${fmt.money(i.amount, cur)} a month` : i.every === "one time" ? `${fmt.money(i.amount, cur)} one time` : i.every === "owed" ? `${fmt.money(i.amount, cur)} owed` : i.every === "cover" ? `${fmt.money(i.amount, cur)} of coverage` : fmt.money(i.amount, cur);
     const kids = t.dependents ? (plan.household?.people ?? []).filter((x) => x.id !== person.id && x.role === "dependent").map((x) => x.name) : [];
     return ui.h("div", { class: "remove-person", style: { marginTop: "20px" } },
       ui.h("h2", {}, `Remove ${whom} from the plan?`),

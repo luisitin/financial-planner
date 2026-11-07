@@ -22,15 +22,15 @@ export function render(root, ctx) {
   ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false }).then((d) => {
     host.innerHTML = "";
     if (!d || !d.ready) {
-      const missing = (d?.missing ?? ["see the Projection page"]).join("; ");
-      host.append(ui.notice("warn", ui.h("span", {}, `The projection needs a few things first: ${missing}. `, ui.h("a", { href: "#/retirement/projection" }, "Projection page"))));
+      const missing = (d?.missing ?? ["see Will the money last?"]).join("; ");
+      host.append(ui.notice("warn", ui.h("span", {}, `The projection needs a few things first: ${missing}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     const verdict = { strong: d.successRate >= 1 ? "Strong: the money lasted in every pretend future." : "Strong: the money lasted in nearly every pretend future.", fair: "Fair: it lasted in most pretend futures, but not all. A little less spending or a little more saving moves this a lot.", weak: "Weak: it ran out in many pretend futures. Look at spending, the retirement age and Social Security timing." }[d.verdict];
     host.append(ui.card(null, ui.row(
       ui.stat("Chance the money lasts", fmt.pct(d.successRate, 0), `${d.paths.toLocaleString("en-US")} pretend futures, to ${d.endYear}`),
       ui.stat("Typical amount left", fmt.money(d.medianEndReal, cur), `at ${d.endYear}, today's dollars (the middle pretend future)`),
-      d.failAges ? ui.stat("When it ran out", `age ${Math.round(d.failAges.p50)}`, `in the ${d.failAges.count} ${d.failAges.count === 1 ? "pretend future" : "pretend futures"} that failed; one in ten of those by ${Math.round(d.failAges.p10)}`) : ui.stat("Ran out", "never", "in any pretend future"),
+      d.failAges ? ui.stat("When it ran out", `age ${Math.round(d.failAges.p50)}`, `in the ${d.failAges.count} ${d.failAges.count === 1 ? "pretend future" : "pretend futures"} where the money ran out; in one in ten of those, it ran out by ${Math.round(d.failAges.p10)}`) : ui.stat("Ran out", "never", "in any pretend future"),
     ), ui.h("p", { class: "small" }, verdict)));
     const years = d.bands.map((b) => b.year);
     host.append(ui.card("The range of outcomes, in today's dollars",

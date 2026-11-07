@@ -30,13 +30,13 @@ export function render(page, ctx) {
     ui.h("h1", {}, "Saving for a home"),
     ui.h("p", { class: "lede" }, d.fromGoal
       ? `Your "${d.goal.name}" goal of ${fmt.money(d.goalTarget, cur)} buys a home of about ${money(x.price)}: ${pct(x.downShare)} down, closing costs and ${x.reserveMonths} months of payments kept in reserve. Change the figures below to try another home.`
-      : "How much home your income supports, what a home would cost a month, the cash you need on the day, and when you will have it. The figures below are an example: put in the home you have in mind.")));
+      : "How much home your income supports, what a home would cost a month, the cash you need at closing, and when you will have it. The figures below are an example: put in the home you have in mind.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   if (d.maxPrice !== null) root.append(ui.card("What your income supports", ui.row(
     ui.stat("Up to about", money(d.maxPrice), `with ${pct(x.downShare)} down at ${(x.rate * 100).toFixed(2)}%`),
-    ui.stat("This home a month", money(d.monthly), `${pct(d.frontShare)} of gross income; ${pct(FRONT)} is the usual most`),
-  ), ui.h("p", { class: "muted small" }, `Lenders like housing under ${pct(FRONT)} of gross income (${money(d.maxFront)} a month for you) and all debt payments under ${pct(BACK)} (${money(d.maxBack)} left after your other loans and cards). The ${d.rule === "front" ? "first" : "second"} is the tighter one for you. "Supports" is not "comfortable": check the budget on Expenses.`)));
+    ui.stat("This home a month", money(d.monthly), `${pct(d.frontShare)} of income before tax; ${pct(FRONT)} is the usual limit`),
+  ), ui.h("p", { class: "muted small" }, `Lenders like housing under ${pct(FRONT)} of income before tax (${money(d.maxFront)} a month for you) and all debt payments under ${pct(BACK)} (${money(d.maxBack)} left after your other loans and cards). The ${d.rule === "front" ? "first" : "second"} is the tighter one for you. "Supports" is not "comfortable": check the budget on Expenses.`)));
   else root.append(ui.card(null, ui.h("p", { class: "muted" }, "Add your pay on the Income page to see what it supports."), ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Income"))));
 
   root.append(ui.card(`A ${money(x.price)} home`, ui.h("ul", { class: "hs-list" },
@@ -44,11 +44,11 @@ export function render(page, ctx) {
     ui.h("li", {}, ui.h("span", {}, "Property tax and insurance"), ui.h("b", {}, money(d.parts.taxInsurance))),
     d.parts.hoa ? ui.h("li", {}, ui.h("span", {}, "HOA"), ui.h("b", {}, money(d.parts.hoa))) : null,
     ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "A month")), ui.h("b", {}, money(d.monthly)))),
-    ui.h("h3", { style: { margin: "14px 0 4px" } }, "Cash on the day"),
+    ui.h("h3", { style: { margin: "14px 0 4px" } }, "Cash needed at closing"),
     ui.h("ul", { class: "hs-list" },
       ui.h("li", {}, ui.h("span", {}, `Down payment (${pct(x.downShare)})`), ui.h("b", {}, money(d.cash.down))),
       ui.h("li", {}, ui.h("span", {}, `Closing costs (about ${pct(x.closingShare)})`), ui.h("b", {}, money(d.cash.closing))),
-      ui.h("li", {}, ui.h("span", {}, `Reserves (${x.reserveMonths} months of the payment)`), ui.h("b", {}, money(d.cash.reserves))),
+      ui.h("li", {}, ui.h("span", {}, `Cash left over after buying (${x.reserveMonths} months of the payment)`), ui.h("b", {}, money(d.cash.reserves))),
       ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "Cash needed")), ui.h("b", {}, money(d.cash.total))))));
 
   // when
@@ -101,5 +101,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.house = Object.fromEntries(fields.map((f) => [f.key, f.type === "date" ? v[f.key] || "" : v[f.key] ?? null])); });
     }, { submitLabel: "Work it out" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/property/rent-vs-buy" }, "Rent or buy?"), ui.h("a", { class: "btn secondary", href: "#/debt/ratios" }, "Debt ratios"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/property/rent-vs-buy" }, "Rent or buy?"), ui.h("a", { class: "btn secondary", href: "#/debt/ratios" }, "What lenders see"))));
 }

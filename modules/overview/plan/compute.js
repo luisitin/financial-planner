@@ -109,7 +109,7 @@ const ROW = {
     const gaps = S.gaps();
     // before the cover step is passed, a clean result rests on what we assumed: grey and "not checked yet", never a green verdict
     if (!gaps || !gaps.length) return S.passed("protect") ? { value: null, line: "If an earner died, your family would be all right.", status: "ok", figure: 0 }
-      : { value: null, line: "Not checked yet: the cover step looks at this with you.", status: "calm", figure: 0 };
+      : { value: null, line: "Not checked yet: the life insurance step looks at this with you.", status: "calm", figure: 0 };
     const rough = gaps.some((g) => g.rough);
     const amt = (g) => S.money(g.rough ? twoFigures(g.gap) : g.gap);
     const parts = gaps.map((g, i) => (i === 0 ? `${cap(sayName(g.name))} would need about ${amt(g)} more life insurance` : `${sayName(g.name)} about ${amt(g)}`));

@@ -39,7 +39,7 @@ export function compute(plan, params = {}) {
   const byBracket = [...byBracketMap.entries()].sort((a, b) => a[0] - b[0]).map(([rate, years]) => ({ rate, years }));
   const flatTaxes = flat.rows.filter((x) => x.retired).reduce((s, x) => s + (real ? x.taxes / x.priceLevel : x.taxes), 0);
   const notes = [...b.notes];
-  if ((plan.retirement?.taxMode ?? "flat") !== "brackets") notes.push(`The projection pages still use the flat ${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% setting, which comes to ${Math.round(flatTaxes).toLocaleString("en-US")} over the same years; switch the Projection page to the federal brackets to use these figures.`);
+  if ((plan.retirement?.taxMode ?? "flat") !== "brackets") notes.push(`The projection pages still use the flat ${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% setting, which comes to $${Math.round(flatTaxes).toLocaleString("en-US")} over the same years; switch Will the money last? to the federal brackets to use these figures.`);
   return { ready: true, missing: [], rows, totals, average: rows.length ? totals.taxes / rows.length : 0, peak: peak ? { year: peak.year, taxes: peak.taxes, why: peakWhy } : null, byBracket, flatTaxes, bracketsOn: (plan.retirement?.taxMode ?? "flat") === "brackets", notes, people: b.people, filingStatus: tax.filingStatus, zeroYears: rows.filter((x) => x.taxes < 1).length, real, retireYear: b.inputs.retireYear, success: r.success, failYear: r.failYear,
     noYears: rows.length ? null : noYearsWhy(b.people, b.inputs.startYear ?? (params.today ? Number(String(params.today).slice(0, 4)) : null)) };
 }

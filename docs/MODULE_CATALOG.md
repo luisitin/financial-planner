@@ -32,7 +32,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `household/life-events` | Life events | usable | 10 | Guides you through marriage, a baby, a job change, a move, an inheritance or divorce and proposes the plan changes each brings. | - |
 | `household/documents` | Document vault index | usable | 10 | Keeps track of where your will, insurance policies, deeds and tax returns are kept (the locations, not the files themselves). | - |
 | `household/contacts` | Contacts | usable | 10 | Lists your advisor, accountant, attorney and insurers, plus the last four digits of each account number. | - |
-| `household/calendar` | Money calendar | usable | 10 | Puts your bills, paydays, tax deadlines, open enrolment, required minimum distribution dates and policy renewals on one calendar. | - |
+| `household/calendar` | Money calendar | usable | 10 | Puts your bills, paydays, tax deadlines, open enrollment, required minimum distribution dates and policy renewals on one calendar. | - |
 
 ## balance
 | key | title | status | phase | purpose | seeds |
@@ -50,7 +50,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `cashflow/income` | Income | usable | 2 | Every source of money coming in, on a monthly footing whatever the pay schedule. | - |
-| `cashflow/expenses` | Expenses | usable | 2 | Your regular spending by category, split into what you must pay and what is nice to have. | - |
+| `cashflow/expenses` | Expenses | usable | 2 | Your regular spending by category, split into what you must pay and what could be cut. | - |
 | `cashflow/income-statement` | Income statement | usable | 3 | What came in, what went out and what you kept, month by month, from your real transactions. | Firefly reports |
 | `cashflow/budget` | Budget | usable | 4 | An envelope for each kind of spending: what is spent so far this month, what is left, and whether the pace is right. | Actual loot-core |
 | `cashflow/budget-percent` | Budget (50/30/20) | usable | 4 | Splits what you take home after tax into needs, wants and savings, against the 50/30/20 rule or your own split. | - |
@@ -68,7 +68,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `transactions/ledger` | Ledger | usable | 3 | Every transaction in one list you can filter, search and correct. | Tabulator, Actual |
 | `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV); columns are worked out, duplicates skipped, rules applied. | Papa Parse, banking.js, Actual importers |
 | `transactions/rules` | Rules | usable | 3 | The rules that file transactions for you: when the description contains this, give it that category. | Actual rules |
-| `transactions/categorize` | Categorise | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
+| `transactions/categorize` | Categorize | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
 | `transactions/statements` | Statement reader | usable | 3 | No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check. | pdf.js |
 | `transactions/reconcile` | Check a statement | usable | 3 | Compares a statement's ending balance with your transactions and helps you find what explains any gap. | - |
 | `transactions/transfers` | Transfers | usable | 3 | Link money moved between your own accounts so it is not counted as spending or income. | Actual |
@@ -97,7 +97,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `goals/vehicle` | Vehicle | usable | 4 | Your next car paid in cash or financed: the saving a month for cash, the loan for the rest, and the 20/4/10 rule. | - |
 | `goals/travel` | Travel and events | usable | 4 | Trips, a wedding and other big days priced from their parts, with what to put aside each month to pay in cash. | - |
 | `goals/charitable` | Giving | usable | 4 | What your giving saves in tax and really costs, and how to give the same for less: bunching, shares that have grown, gifts from an IRA. | IRC 170(p), 408(d)(8) |
-| `goals/prioritizer` | Goal prioritiser | usable | 4 | The money left each month shared across your goals by priority and date: which arrive on time and how late the rest would be. | - |
+| `goals/prioritizer` | Goal prioritizer | usable | 4 | The money left each month shared across your goals by priority and date: which arrive on time and how late the rest would be. | - |
 
 ## retirement
 | key | title | status | phase | purpose | seeds |
@@ -158,18 +158,18 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `insurance/policies` | Policies | usable | 8 | Every policy on one list: what it pays, what it costs a year, whom it covers, when it ends or renews, and what deserves a second look. | - |
-| `insurance/life-needs` | Life insurance needs | usable | 8 | How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the cover you have. | SSA survivors, family maximum, earnings test |
+| `insurance/life-needs` | Life insurance needs | usable | 8 | How much life insurance each of you needs, from your own plan and by the two usual rules of thumb, against the coverage you have. | SSA survivors, family maximum, earnings test |
 | `insurance/term-vs-permanent` | Term vs permanent | usable | 8 | Whole life against buying term and investing the difference, with the illustration's own numbers: which is ahead, and the return that decides it. | - |
 | `insurance/cash-value` | Cash-value model | usable | 8 | A whole or universal life policy you own, as an investment: what it has really earned, what cashing in leaves after tax, and whether to keep it. | IRC 72(e) |
-| `insurance/disability` | Disability | usable | 8 | If you could not work: what your cover would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
+| `insurance/disability` | Disability | usable | 8 | If you could not work: what your disability insurance would pay against your pay, whether the bills would still get paid, and whether your cash lasts until the money starts. | IRS Pub 525, SSA 05-10029 |
 | `insurance/health` | Health plan compare | usable | 8 | The health plans you can choose from, on what each really costs a year: premiums plus your share of the bills, less HSA money and tax savings, in a quiet, usual and bad year. | Rev. Proc. 2025-19 |
 | `insurance/ltc` | Long-term care | usable | 8 | The odds you will need care in later life, what it costs, and whether your plan could pay for it or a policy would help. | CareScout 2024 medians, ACL odds |
-| `insurance/property` | Auto, home, umbrella | usable | 8 | Whether your home, car and umbrella cover is enough for what you own: the cost to rebuild, the liability limits against your net worth, and the deductibles against your cash. | 11 USC 522(n), III umbrella costs |
+| `insurance/property` | Auto, home, umbrella | usable | 8 | Whether your home, car and umbrella insurance is enough for what you own: the cost to rebuild, the liability limits against your net worth, and the deductibles against your cash. | 11 USC 522(n), III umbrella costs |
 
 ## estate
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `estate/documents` | Documents checklist | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
+| `estate/documents` | Estate documents | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
 | `estate/beneficiaries` | Beneficiary audit | usable | 8 | Who is named on every retirement account, life policy and payable-on-death account, and what to fix: no one named, no backup, a child named directly. | ERISA spousal rule |
 | `estate/legacy` | Legacy goals | usable | 8 | What you want to leave and to whom, the amount your plan should keep for it, and what would get it there. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | usable | 8 | Whether your estate could owe federal or state estate tax, at each death for a couple and at the end of the plan, and how much of the exemption is left. | IRC 2001, 2010, 2056 |
@@ -195,7 +195,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `career/side-income` | Side income | usable | 10 | Models irregular income from gigs, freelance work and a small business so your plan can count on it sensibly. | - |
 | `career/business` | Small business | usable | 10 | Tracks your small business's profit and loss, what you pay yourself and your self-employed retirement plans. | taxes/self-employment |
 | `career/offer-compare` | Job offer compare | usable | 10 | Compares job offers on total compensation, including benefits and equity, not just salary. | - |
-| `career/benefits` | Benefits elections | usable | 10 | Helps you choose at open enrollment: your 401k percentage, health savings account, employer stock plan and insurance picks. | - |
+| `career/benefits` | Work benefits | usable | 10 | Helps you choose at open enrollment: your 401(k) percentage, health savings account, employer stock plan and insurance picks. | - |
 | `career/human-capital` | Human capital | usable | 10 | What all the pay you are still going to earn is worth today, against your savings over the years, and what it means for insurance and investing. | - |
 
 ## scenarios
@@ -222,7 +222,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 |---|---|---|---|---|---|
 | `ai/assistant` | Ask the plan | usable | 0 | Lets you chat with an AI assistant that has a summary of your plan in front of it. | Maybe assistant |
 | `ai/explain` | Explain a page | usable | 10 | Pick a page and the AI helper explains its numbers in plain words, with people's names hidden before anything is sent (a button on every page: proposed for the shell). | - |
-| `ai/categorizer` | Categoriser | usable | 3 | Categorises transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed. | - |
+| `ai/categorizer` | Categorizer | usable | 3 | Categorizes transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed. | - |
 | `ai/reader` | Document reader | usable | 8 | Paste a pay stub, a statement, a Social Security statement or an advisor's plan: the figures it holds and what each would change, accepted one by one. | pdf.js |
 | `ai/critic` | Plan critic | usable | 10 | Asks the AI to list the gaps and risks it sees in your plan, each linked to the page where you can fix it. | - |
 | `ai/glossary` | Glossary | usable | 10 | Explains every money word used in the app in plain words, with an example and the pages that use it, and lets you search for any of them. | - |

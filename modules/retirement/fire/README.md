@@ -62,7 +62,7 @@ Why the rule and the projection differ: the rule counts everything left over eac
 $104,134 a year in all, $85,264 of it left over beyond the $18,870 going into retirement accounts) and leaves out Social
 Security, pensions and taxes; the projection adds only the retirement contributions and counts the rest year by year. So it can come out earlier or later than the rule (the
 sample family: the rule says 51, the projection 58, chiefly because the rule invests all that is left over). Neither counts
-the goals being saved for, nor health cover before Medicare (not in the projection yet: the fold no longer lists it). The
+the goals being saved for, nor health insurance before Medicare (not in the projection yet: the fold no longer lists it). The
 fold says so in one line, and names its figure "invested, not counting cash in the bank" (the hero's is "savings and investments together", at retirement).
 `withIncome` costs up to about 40 projection runs, so the Timeline (which reads only the number) asks for `withIncome: false`.
 
@@ -216,17 +216,17 @@ the age on file matches, for the sample couple and the retired couple. Each fail
   stops work at 65, so it starts spending savings only in 2054. Who works, and until what age, is on the People page." At 55
   or over the old words stay. Tests: the two "review 2026-11-06" Elena tests.
 
-## Health cover (review 2026-11-02)
+## Health insurance (review 2026-11-02)
 The spending figure is `spending.yearly + health.removedMonthly x 12`: Will the money last? takes a health premium out of today's
 expenses (its health line pays cover from retirement on, marketplace then Medicare), and this page has no health line, so
 the premium goes back in and the FI number is still 25 x all of today's spending (with "Health insurance" $600 a month on
 the family's Expenses: $77,116 and $1,927,900, as before the health line; the patch alone gave $69,916 and $1,747,900).
 
 ## Fifth pass (review 2026-11-02)
-- The fold says again that the rule of thumb leaves out health cover before Medicare, which the answer above counts (the
+- The fold says again that the rule of thumb leaves out health insurance before Medicare, which the answer above counts (the
   projection's health line): "It counts everything left over each month as saved and leaves out Social Security, pensions, taxes
-  and health cover before Medicare, which the answer above counts, ..." (`ruleWords`; `healthAdded` on compute's result). With
-  "My spending figure already includes health cover" ticked the words are as before.
+  and health insurance before Medicare, which the answer above counts, ..." (`ruleWords`; `healthAdded` on compute's result). With
+  "My spending figure already includes health insurance" ticked the words are as before.
 - Who the answer is about: never an adult Get started says is retired or not working now (they no longer hold the household at
   work; the projection's retirement starts when the last working adult stops). Ana "not working now" with Bo working: the
   answer is about Bo.
@@ -236,7 +236,7 @@ the family's Expenses: $77,116 and $1,927,900, as before the health line; the pa
 ## Review 2026-11-06 (sixth pass: one work rule with the health line and Goal seek)
 - **Who still works** is the projection's one work rule (`workRule` through `workingNow`), the health line's and Goal seek's,
   with this page's exact-age test kept. The recheck's rule above holds with three changes, each where the two rules disagreed
-  (projection README, "Review 2026-11-06 (health cover, sixth pass)"): a contribution counts when it goes to a plan at work
+  (projection README, "Review 2026-11-06 (health insurance, sixth pass)"): a contribution counts when it goes to a plan at work
   (a 401(k), or one with a match) or nobody else has pay (a spousal IRA does not make Lee work while Sam does); "retired" or
   "Not working now" in Get started wins over pay and saving; and with nothing on Income or Contributions only the first adult
   is presumed at work, no longer everyone under their age.
@@ -260,7 +260,7 @@ the family's Expenses: $77,116 and $1,927,900, as before the health line; the pa
   as Will the money last? now starts this year too.
 - The 9-in-10 age is searched with steady spending in the plan as well (`carefulAgeSteps`), so the health line is priced on the
   same withdrawals as each age (as Goal seek's `earliestRetireAge`).
-- The condo 401B couple: with health cover in the spending figure (the box ticked) $94,147 and $845,656 as before; with the
+- The condo 401B couple: with health insurance in the spending figure (the box ticked) $94,147 and $845,656 as before; with the
   health line (Medicare for both, $180,579) it lasts and carries $88,504, $558,091 left; Dee still 63, now.
 Tests (`module.test.mjs`, "review 2026-11-06"): defect 2 with and without the answer, Lee "not working"; one adult and one age
 with Goal seek (Pat and Tom, Sam past his age); a partner with saving alone; `plannedStop.by` and its words. Each failed

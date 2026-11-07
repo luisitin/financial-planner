@@ -17,7 +17,7 @@ export function startSteps(plan) {
     { id: "expenses", title: "What goes out", why: "Bills and spending; a bank file can fill it for you.", done: has("expenses") || has("transactions"), go: ["cashflow", "expenses"] },
     { id: "debts", title: "Each debt's rate and payment", why: "So payoff dates and interest are real.", done: debts.length === 0 || debts.every((a) => debtDetail.has(a.id)), go: ["debt", "payoff"] },
     { id: "goals", title: "What you are saving for", why: "An emergency fund, a home, college, a trip.", done: has("goals"), go: ["goals", "goals"] },
-    { id: "retirement", title: "Retirement saving", why: "What goes into the 401(k) and IRA, so the projection can grow it.", done: (plan.retirement?.contributions ?? []).length > 0, go: ["retirement", "contributions"] },
+    { id: "retirement", title: "Retirement saving", why: "What goes into the 401(k) and IRA, so Will the money last? can grow it.", done: (plan.retirement?.contributions ?? []).length > 0, go: ["retirement", "contributions"] },
   ];
 }
 
@@ -47,9 +47,9 @@ export const FAQ = [
   { q: "How are the numbers worked out?", a: "By formulas written into each page, from published tax tables, Social Security's rules and the figures you type. Each page's notes say which formula and where it comes from." },
   { q: "What does the AI helper do?", a: "It reads, sorts and explains: it can put bank lines into categories, pull figures out of a statement, or answer a question about your plan. It never changes a number on its own: nothing it suggests reaches your plan until you press apply. It runs on your own computer unless you set it up otherwise." },
   { q: "Can I try something without changing my plan?", a: "Yes: open the app with ?sandbox=1 at the end of the address. An orange Sandbox badge shows at the top; that pretend plan lives only in this browser. For a single what-if, the What-if scenarios pages copy your plan and change one thing." },
-  { q: "When are my changes saved?", a: "When you press Save, Add or a similar button, or tick a box. Each page says so in a green line at the top. Typing alone does not save." },
-  { q: "Why does a balance differ from my bank's?", a: "The plan uses the balance you typed and the date you typed it. Update it on Accounts, or import a bank file on Transactions." },
-  { q: "What does \"in today's money\" mean?", a: "A future amount with rising prices taken out, so it buys what that amount would buy today. $100 in 20 years at 3% inflation is about $55 in today's money." },
+  { q: "When are my changes saved?", a: "When you press Save, Add or a similar button, or check a box. Each page says so in a green line at the top. Typing alone does not save." },
+  { q: "Why does a balance differ from my bank's?", a: "The plan uses the balance you typed and the date you typed it. Update it on Net worth, or import a bank file on Transactions." },
+  { q: "What does \"in today's dollars\" mean?", a: "A future amount with rising prices taken out, so it buys what that amount would buy today. $100 in 20 years at 3% inflation is about $55 in today's dollars." },
   { q: "How do I keep a copy of my plan?", a: "System > Settings has a \"Download a copy\" button: the whole plan as one file, which the same page can restore. Keep it somewhere safe; it holds your whole financial picture." },
   { q: "Some pages say \"Coming soon\"", a: "They are planned and not built yet. Each says what it will do; you can leave a note on it saying what you want from it." },
 ];

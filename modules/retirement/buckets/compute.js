@@ -44,7 +44,7 @@ export function compute(plan, params = {}) {
   const impliedStocks = total > 0 ? stocks / total : 0;
   const warnings = [];
   const short = savings < cash + bonds;
-  if (short) warnings.push(`At retirement the savings (about ${Math.round(savings).toLocaleString("en-US")}) would not fill the cash and bond buckets: fewer years in each, or a later retirement.`);
+  if (short) warnings.push(`At retirement the savings (about $${Math.round(savings).toLocaleString("en-US")}) would not fill the cash and bond buckets: fewer years in each, or a later retirement.`);
   if (!draws.length) warnings.push("The plan has no retirement years.");
   return { ready: true, missing: [], retireYear: firstYear, savings, cashYears, bondYears, draws: draws.slice(0, cashYears + bondYears + 2), buckets, impliedStocks, planStocks, short, bondRealRate, warnings };
 }

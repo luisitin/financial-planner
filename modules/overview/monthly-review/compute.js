@@ -90,7 +90,7 @@ export function compute(plan, params = {}) {
   // fresh = typed in the last three weeks: a balance from the 1st no longer counts as this month's by the 30th
   const stale = accounts.filter((a) => !a.asOf || daysBetween(a.asOf, today) > FRESH_DAYS);
   add({ id: "balances", title: "Update the balances", status: !accounts.length ? "todo" : stale.length ? "todo" : "done",
-    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are more than three weeks old: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? ` and ${stale.length - 4} more` : ""}.` : `All ${accounts.length} balances are from the last three weeks.`, go: ["balance", stale.length ? "update" : "net-worth"] });
+    detail: !accounts.length ? "No accounts yet: add them on Net worth." : stale.length ? `${stale.length} of ${accounts.length} are more than three weeks old: ${stale.slice(0, 4).map((a) => a.name).join(", ")}${stale.length > 4 ? ` and ${stale.length - 4} more` : ""}.` : (accounts.length === 1 ? "Your balance is from the last three weeks." : `All ${accounts.length} balances are from the last three weeks.`), go: ["balance", stale.length ? "update" : "net-worth"] });
 
   // 2. the month's net worth point (monthPoint): the newest saved after the 10th of the month through the 10th of the next
   // (a review in early November saves October's close in November), compared with the month before's close
@@ -177,7 +177,7 @@ export function compute(plan, params = {}) {
   // turn on Next best action comes later is waiting, named apart, not behind (review 2026-11-02)
   const gb = goalsBehind(gl, { nba: nb, today });
   const behind = [...gb.behind, ...gb.pastDue];
-  const waits = gb.queued.length ? ` ${gb.queued.length === 1 ? `${gb.queued[0].name} starts` : `${gb.queued.length} start`} in ${monthLabel(gb.turn.slice(0, 7))}, its turn on Next best action.` : "";
+  const waits = gb.queued.length ? ` ${gb.queued.length === 1 ? `${gb.queued[0].name} starts` : `${gb.queued.length} start`} in ${monthLabel(gb.turn.slice(0, 7))}, when its turn comes on Next best action.` : "";
   // goals, what needs attention and the next step are things to look at, not chores: a goal can be behind for a year and the
   // month is still reviewed, so they never hold the count back ("info"); their words say how they stand
   add({ id: "goals", title: "Check the goals", status: "info", state: !gl.goals.length ? null : behind.length ? "todo" : "done",

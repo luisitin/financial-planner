@@ -37,7 +37,7 @@ export function render(page, ctx) {
   if (!d.count) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "If you could not work"),
-      ui.h("p", { class: "lede" }, `An illness or injury that stops you working is more likely than dying young: ${ODDS_TEXT} of today's 20-year-olds will be disabled before retirement age. This page checks what your cover would pay and whether the bills would still get paid.`),
+      ui.h("p", { class: "lede" }, `An illness or injury that keeps you from working is more likely than dying young: ${ODDS_TEXT} of today's 20-year-olds will be disabled before retirement age. This page checks what your disability insurance would pay and whether the bills would still get paid.`),
       ui.h("p", { class: "muted small" }, "It needs pay on the Income page for someone who has not retired yet."),
       ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your pay"))));
     return;
@@ -49,8 +49,8 @@ export function render(page, ctx) {
   for (const e of d.earners) {
     const card = ui.card(`If ${nameIn(e.name)} could not work`);
     card.append(ui.row(
-      ui.stat("Cover would pay", `${money(e.benefitMonthly)}`, e.policies.length ? `a month, ${pct(e.share)} of pay; ${money(e.afterTaxMonthly)} after tax` : "no disability cover on file"),
-      ui.stat("Pay now", money(e.grossMonthly), `a month before tax; about ${money(e.takeHomeMonthly)} take-home`),
+      ui.stat("Coverage would pay", `${money(e.benefitMonthly)}`, e.policies.length ? `a month, ${pct(e.share)} of pay; ${money(e.afterTaxMonthly)} after tax` : "no disability insurance on file"),
+      ui.stat("Pay now", money(e.grossMonthly), `a month before tax; about ${money(e.takeHomeMonthly)} take-home pay`),
     ));
     const good = e.share >= TARGET_SHARE - 0.005;
     card.append(ui.h("p", { class: `di-verdict ${good ? "ok" : e.policies.length ? "warn" : "bad"}` }, good ? `Covers ${pct(e.share)} of pay: at or above the ${pct(TARGET_SHARE)} most planners aim for.` : e.policies.length ? `Covers ${pct(e.share)} of pay; most planners aim for ${pct(TARGET_SHARE)}. About ${money(e.extraNeeded)} a month more would get there.` : `Nothing would replace ${nameOf(e.name)} pay. Most planners aim for ${pct(TARGET_SHARE)} of it: about ${money(e.target)} a month.`));
@@ -60,17 +60,17 @@ export function render(page, ctx) {
     const h = e.household;
     if (h.essentialMonthly > 0) {
       const others = h.othersMonthly > 0 ? `the rest of the household's take-home pay (about ${money(h.othersMonthly)})` : "";
-      const from = [others, e.policies.length ? `the cover (${money(e.afterTaxMonthly)} after tax)` : ""].filter(Boolean).join(" and ");
+      const from = [others, e.policies.length ? `the insurance (${money(e.afterTaxMonthly)} after tax)` : ""].filter(Boolean).join(" and ");
       check(h.shortMonthly <= 0, h.shortMonthly <= 0 ? "The must-pay bills would still be paid" : `The must-pay bills would be ${money(h.shortMonthly)} a month short`, `Must-pay bills are about ${money(h.essentialMonthly)} a month${from ? `; ${from} would cover ${pct(h.coveredShare)} of them` : "; nothing else would come in"}.${h.shortMonthly > 0 ? " Savings would have to fill the gap." : ""}`);
     }
     if (e.wait.covered !== null) {
-      const waitText = e.wait.days === null ? `Social Security disability, if approved, starts after ${SSDI_WAIT_MONTHS} full months` : `the cover starts paying after ${e.wait.days} days (about ${Math.round(e.wait.months * 10) / 10} months)`;
-      const detail = e.wait.shortMonthly <= 0 ? "the rest of the household's pay covers the must-pay bills meanwhile." : `meanwhile the must-pay bills are ${money(e.wait.shortMonthly)} a month more than the rest of the household earns, about ${money(e.wait.needed)} in all; usable cash is ${money(e.wait.cash)}${e.wait.covered ? "." : `, enough for about ${Math.round(e.wait.lastsMonths * 10) / 10} months.`}`;
+      const waitText = e.wait.days === null ? `Social Security disability, if approved, starts after ${SSDI_WAIT_MONTHS} full months` : `the insurance starts paying after ${e.wait.days} days (about ${Math.round(e.wait.months * 10) / 10} months)`;
+      const detail = e.wait.shortMonthly <= 0 ? "the rest of the household's pay covers the must-pay bills meanwhile." : `until then, the bills you must pay are ${money(e.wait.shortMonthly)} a month more than the rest of the household earns, about ${money(e.wait.needed)} in all. Your usable cash is ${money(e.wait.cash)}${e.wait.covered ? "." : `, enough for about ${Math.round(e.wait.lastsMonths * 10) / 10} months.`}`;
       check(e.wait.covered, e.wait.covered ? "The household gets through the wait" : "Your cash would run out before the money starts", `${waitText[0].toUpperCase()}${waitText.slice(1)}; ${detail}`);
     }
-    if (e.ssdiMonthly > 0) check(null, `Social Security disability: about ${money(e.ssdiMonthly)} a month, if approved`, `It starts after ${SSDI_WAIT_MONTHS} full months off work and only for a condition expected to last a year or more; many first applications are turned down. ${e.policies.some((x) => x.offset) ? `Once it pays, the work plan pays less by the same amount, so together they come to about ${money(e.withSsdiMonthly)} after tax.` : `With the cover, about ${money(e.withSsdiMonthly)} a month after tax.`}`);
+    if (e.ssdiMonthly > 0) check(null, `Social Security disability: about ${money(e.ssdiMonthly)} a month, if approved`, `It starts after ${SSDI_WAIT_MONTHS} full months off work and only for a condition expected to last a year or more; many first applications are turned down. ${e.policies.some((x) => x.offset) ? `Once it pays, the work plan pays less by the same amount, so together they come to about ${money(e.withSsdiMonthly)} after tax.` : `With the insurance, about ${money(e.withSsdiMonthly)} a month after tax.`}`);
     else check(null, "Social Security disability", "Add Social Security figures on the Social Security page to see what it might pay.");
-    if (e.extraNeeded > 0) check(null, "Closing the gap", `An individual policy for about ${money(e.extraNeeded)} a month usually costs ${money(e.costRange[0])} to ${money(e.costRange[1])} a year. Ask first whether work offers extra cover you can buy: it is usually cheaper. Bought with your own money, its benefit is tax-free.`);
+    if (e.extraNeeded > 0) check(null, "Closing the gap", `An individual policy that pays about ${money(e.extraNeeded)} a month usually costs ${money(e.costRange[0])} to ${money(e.costRange[1])} a year. Ask first whether work offers extra coverage you can buy: it is usually cheaper. If you buy the policy with your own money, its benefit is tax-free.`);
     card.append(checks);
 
     // the terms of each policy, which the Policies form does not ask
@@ -87,5 +87,5 @@ export function render(page, ctx) {
     } else card.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Add a disability policy")));
     root.append(card);
   }
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"), ui.h("a", { class: "btn secondary", href: "#/scenarios/stress-tests" }, "Stress tests"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"), ui.h("a", { class: "btn secondary", href: "#/scenarios/stress-tests" }, "Stress tests"))));
 }

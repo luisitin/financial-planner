@@ -638,7 +638,7 @@ test("January 1 to 15: last year's 4th quarter, due January 15, stays in the for
   p.taxes = { ...(p.taxes ?? {}), estimated: { paid: [3000, 3000, 3000, 0], typedAt: "2026-10-01" } };
   const last = estimated({ ...p, taxes: { ...p.taxes, year: 2026 } }, { today: "2027-01-05" });
   const ev = taxEvents(compute(p, { today: "2027-01-05" }));
-  assert.deepEqual(ev.map((x) => [x.date, x.name]), [["2027-01-05", "Estimated tax for 2026 past due (Quarterly payments)"], ["2027-01-15", "Estimated tax, 4th quarter of 2026 (Quarterly payments)"]]);
+  assert.deepEqual(ev.map((x) => [x.date, x.name]), [["2027-01-05", "Estimated tax for 2026 past due (Estimated payments)"], ["2027-01-15", "Estimated tax, 4th quarter of 2026 (Estimated payments)"]]);
   assert.ok(Math.abs(-ev[0].amount - last.behind) < 0.02);
   assert.ok(Math.abs(-ev[0].amount - ev[1].amount - (last.remaining)) < 0.02, "together: what 2026 still needs");
   // after its due date it is the April bill, not a quarter; the year set on the Federal estimate is that year alone

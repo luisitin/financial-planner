@@ -95,7 +95,7 @@ test("D6: a removed partner's pay kept as the household's is never a self-employ
   }
 });
 
-test("D7: a grey amount kept while 'How often' changes stays the same money", () => {
+test("D7: a gray amount kept while 'How often' changes stays the same money", () => {
   const j = worker(jordan()); q4b(j, {}, ["retire"]);
   const r = row(j, ME), start = contributionFormStart(j, r);
   const v = fillBlankFromGuess({ amount: "", employerMatch: null, period: "biweekly" }, start);

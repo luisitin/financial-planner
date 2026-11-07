@@ -50,7 +50,7 @@ export function compute(plan) {
   const missing = [];
   if (!(s.deathBenefit > 0)) missing.push("the death benefit");
   if (!(s.wholePremium > 0)) missing.push("the whole-life premium a year");
-  if (!(s.termPremium > 0)) missing.push("a term premium a year for the same cover");
+  if (!(s.termPremium > 0)) missing.push("a term premium a year for the same coverage");
   if (!(s.cashValue > 0)) missing.push(`the illustration's cash value after ${s.termYears} years`);
   if (missing.length) return { ready: false, missing, scenario: s };
   const difference = s.wholePremium - s.termPremium;

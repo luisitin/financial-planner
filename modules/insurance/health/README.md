@@ -45,6 +45,6 @@ The line under the plans' totals names the limit and the rate only when money ca
 self-only limit, at 12% (income tax)" ("plus payroll tax" only when the payroll part is over 0: the result's `payrollRate`); on Medicare all year (limit 0) it says
 "No HSA tax savings are counted: once you're on Medicare you can't add to an HSA. Money already in the account can still pay for care, tax-free."
 
-Money review M7 (2026-11-07): `hsaLimit` is the HSA page's own limit (`taxView(...).hsa.picture`): the covered adult's limit on self-only cover, the household's on family cover,
+Money review M7 (2026-11-07): `hsaLimit` is the HSA page's own limit (`taxView(...).hsa.picture`): the covered adult's limit on self-only coverage, the household's on family coverage,
 catch-up from 55 and the months before Medicare included. It read $4,400 where the HSA page said $5,400 (66, working), "only $2,200 can go in" for $2,700 (turning 65 in July) and
 $8,750 for $9,750 (couple). Test: `tests/hsa-medicare-d.test.mjs`.

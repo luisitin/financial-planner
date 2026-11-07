@@ -287,13 +287,13 @@ function yearLines(plan, e, today, to, prior) {
   const out = [];
   let counted = 0;
   if (behind > 0.5) {
-    out.push({ date: today, name: e.paidTyped ? `Estimated tax${of} past due (Quarterly payments)` : `Estimated tax${of} due so far, if not paid yet (Quarterly payments)`, amount: -behind, source: "planned", tax: true, past: true });
+    out.push({ date: today, name: e.paidTyped ? `Estimated tax${of} past due (Estimated payments)` : `Estimated tax${of} due so far, if not paid yet (Estimated payments)`, amount: -behind, source: "planned", tax: true, past: true });
     counted = behind;
   }
   for (const q of e.quarters ?? []) {
     if (!(String(q.due) >= today && String(q.due) <= to)) continue;
     const owe = Math.max(0, Math.min(remaining, q.cumulative - paid) - counted);
-    if (owe > 0.5) { out.push({ date: q.due, name: `Estimated tax, ${q.label}${prior ? ` of ${e.year}` : ""} (Quarterly payments)`, amount: -owe, source: "planned", tax: true }); counted += owe; }
+    if (owe > 0.5) { out.push({ date: q.due, name: `Estimated tax, ${q.label}${prior ? ` of ${e.year}` : ""} (Estimated payments)`, amount: -owe, source: "planned", tax: true }); counted += owe; }
   }
   return out;
 }
@@ -385,7 +385,7 @@ function debtPlanLine(plan, today) {
 
 function debtLines(plan, today, exp) {
   const specific = (r) => [...new Set(normalizePayee(`${r.name ?? ""} ${r.institution ?? ""}`).split(" ").filter((w) => w.length > 2 && !DEBT_WORDS.has(w)))];
-  const line = (r) => ({ id: `debt-${r.id}`, name: `${r.name || r.typeLabel} payment`, period: "monthly", kind: "expense", signed: -r.payment, fromDebts: true, words: specific(r), ...(r.payoffDate ? { endDate: r.payoffDate } : {}) });
+  const line = (r) => ({ id: `debt-${r.id}`, name: `${(r.name || r.typeLabel).replace(/^Credit cards$/i, "Credit card")} payment`, period: "monthly", kind: "expense", signed: -r.payment, fromDebts: true, words: specific(r), ...(r.payoffDate ? { endDate: r.payoffDate } : {}) });
   const all = computeLiabilities(plan, { today }).rows.filter((r) => r.payment > 0);
   const total = (list) => list.reduce((t, r) => t + r.payment, 0);
   // the debts the Expenses page found no expense for (its `fromDebts`), each on its own line

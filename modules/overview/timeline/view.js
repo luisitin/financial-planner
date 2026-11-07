@@ -58,8 +58,8 @@ export function render(page, ctx) {
     ui.h("h1", {}, `Your next ${years} years`),
     ui.h("p", { class: "lede" }, `From today to ${h.endYear}, when the plan ends: ${d.counts.all} moments that change your money, in order. Tap one to open the page that works it out.`),
     ui.row(
-      statBox(h.retireIn > 0 ? "Retirement" : "Retired", h.retireIn > 0 ? String(h.retireYear) : "Now", h.retireIn > 0 ? `in ${h.retireIn} year${h.retireIn === 1 ? "" : "s"}` : "the plan is in its spending years"),
-      statBox("Debt-free", h.debtFreeYear ? String(h.debtFreeYear) : "Now", h.debtFreeYear ? "the last loan or card paid off" : "nothing owed with a payment plan"),
+      statBox(h.retireIn > 0 ? "Retirement" : "Retired", h.retireIn > 0 ? String(h.retireYear) : "Now", h.retireIn > 0 ? `in ${h.retireIn} year${h.retireIn === 1 ? "" : "s"}` : "the plan is in retirement"),
+      statBox("Debt-free", h.debtFreeYear ? String(h.debtFreeYear) : "Now", h.debtFreeYear ? "the last loan or card paid off" : "no debts left that need payments"),
       h.shortYear ? statBox("Savings run out", String(h.shortYear), "before the plan ends", "bad")
         : h.lastsTo ? statBox("The money lasts", String(h.lastsTo), "to the end of the plan", "good")
         : statBox("Will it last?", "Not yet known", h.needsSS ? `needs ${h.needs ?? "Social Security and birth dates"}` : "add accounts and spending"),

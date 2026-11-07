@@ -102,9 +102,9 @@ export function render(root, ctx) {
       // the bank files show more going out than Expenses lists: the figure is from Expenses, so it is amber and says so
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
       else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
-      if (st.runway === null) rows.push({ dot: "", k: "Safety cushion", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
-      else if (st.runwayWaits) rows.push({ dot: "", k: "Safety cushion", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsWords(st.runway)}`, href: "#/balance/liquidity" });
-      else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Safety cushion", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsWords(st.runway), href: "#/balance/liquidity" });
+      if (st.runway === null) rows.push({ dot: "", k: "Emergency fund", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
+      else if (st.runwayWaits) rows.push({ dot: "", k: "Emergency fund", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsWords(st.runway)}`, href: "#/balance/liquidity" });
+      else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Emergency fund", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsWords(st.runway), href: "#/balance/liquidity" });
       if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing ?? "Social Security and birth dates"}`, v: "Add ›", open: true, href: back("ages") });
       else if (st.retireSavingsUnknown) rows.push({ dot: "", k: "Retirement", s: "Add your retirement savings to see", v: "Not known yet", open: true, href: back("have-amounts") });
       else if (st.retireGuessed) rows.push({ dot: "", k: "Retirement", s: retireGuessAsk(st).dash, v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", href: "#/retirement/projection" });
@@ -121,7 +121,7 @@ export function render(root, ctx) {
       if (guessCard) {
         const waitWords = gc.first === "missing" ? `Depends on your spending: your list may be missing about ${money(Math.round(gc.missing.rest / 10) * 10)} a month` : fillSpend ? "Depends on your spending: not counted yet" : "Depends on what you owe: not all counted yet";
         for (const r of rows) {
-          if (r.k === "Left over each month" || (r.k === "Safety cushion" && r.open && fillSpend)) Object.assign(r, { dot: "", s: r.k === "Left over each month" ? waitWords : "Needs your spending", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
+          if (r.k === "Left over each month" || (r.k === "Emergency fund" && r.open && fillSpend)) Object.assign(r, { dot: "", s: r.k === "Left over each month" ? waitWords : "Needs your spending", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
           else if (r.k === "Retirement" && !r.open) Object.assign(r, { dot: "", s: "Depends on the figures below", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
         }
       }

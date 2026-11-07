@@ -14,7 +14,7 @@ export default {
   needs: ["household", "income", "taxes"],
   writes: ["taxes"],
   heavy: false,
-  purpose: "This year's federal income tax from what the plan knows and what you type: the bill or refund, your effective and marginal rates.",
+  purpose: "This year's federal income tax from what the plan knows and what you type: the bill or refund, your overall tax rate and the rate on your next dollar.",
   aliases: ["tax", "taxes", "1040", "refund", "owe", "effective rate", "marginal rate", "standard deduction", "itemized", "withheld"],
   seeds: "UsTaxes, PolicyEngine",
   compute,

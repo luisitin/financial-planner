@@ -30,13 +30,13 @@
 
 ## In the plan's verdict (2026-11-02)
 `retirement/projection` `buildInputs` adds each year's `totalYearly` (Part B, the drug plan, any supplement and the
-surcharge, for everyone 65 or over) to the plan as a "Health cover" engine line, on top of the spending figure, in the years
+surcharge, for everyone 65 or over) to the plan as a "Health insurance" engine line, on top of the spending figure, in the years
 nobody in the household still works (review fix 2026-11-02, one rule whoever is listed first: while anyone works, a plan
 through that job covers the household, as on Healthcare before 65, so those years are not added there and the projection
 says which; this page still counts every year from 65, so its lifetime is the projection's Medicare plus those years). Fourth
 pass (2026-11-02): a year nobody works is added before the household's retirement year too, and who works is the
 projection's `workRule` (a salary, bonus or business line on Income, or "work" in Get started; rent or dividends are not a job).
-Left out when `retirement.healthIncluded` is true ("My spending figure already includes health cover"). When the spending
+Left out when `retirement.healthIncluded` is true ("My spending figure already includes health insurance"). When the spending
 is carried from today's bills and one of them already pays for Medicare (its name says Medicare, Medigap, Part B or Part D;
 or Get started's "Insurance and health" row, for those who have stopped work), that line stays in the spending and pays the
 Medicare of the adults 65 or over now; everyone else's is added, per person (each year's `totalYearly` x those left /
@@ -88,8 +88,8 @@ This page's figures do not move for any fixture (none holds tax-exempt interest)
   ..."; both failed on the base.
 - Verify of the seventh pass (2026-11-06): `spouseYears` leaves out someone whose Medicare a line on Expenses already pays (the
   projection's `expensesCarried`: Will the money last? keeps that line, so the tick changed nothing while its notice said
-  "Pat's Medicare is left out"), and `healthIncluded` (the plan's "my spending figure already includes health cover") hides the
-  "Cover through a job" card, or says "Will the money last? adds no health cover now" while the tick is on: the card said that
+  "Pat's Medicare is left out"), and `healthIncluded` (the plan's "my spending figure already includes health insurance") hides the
+  "Cover through a job" card, or says "Will the money last? adds no health insurance now" while the tick is on: the card said that
   page counted the Medicare it does not add. Test: "verify 2026-11-06: no tick question for someone whose Medicare a line on
   Expenses pays ..." (failed on the seventh pass's patch).
 

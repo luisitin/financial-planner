@@ -32,8 +32,8 @@ export function render(page, ctx) {
   const each = d.couple ? `each of you can give ${money(d.annualExclusion)} to as many people as you like (${money(d.annualExclusion * 2)} together)` : `you can give ${money(d.annualExclusion)} to as many people as you like`;
   root.append(ui.h("section", { class: d.count ? "card" : "card accent hero" },
     d.count ? null : ui.h("h1", {}, "Giving while you are alive"),
-    ui.h("p", { class: d.count ? "" : "lede" }, `In ${d.year} ${each}, with no tax and no paperwork. Above that a gift tax return (Form 709) is filed, but no tax is due: the extra only uses part of the ${money(d.lifetimeExclusion)} lifetime exemption. School tuition and medical bills paid straight to the school or the hospital do not count at all.`),
-    ui.h("p", { class: "muted small" }, `A 529 college plan can take ${SUPERFUND_YEARS} years of gifts at once: up to ${money(d.superfund.perGiver)} from one giver${d.couple ? `, ${money(d.superfund.couple)} from a couple` : ""}, per child, counted a fifth a year.`)));
+    ui.h("p", { class: d.count ? "" : "lede" }, `In ${d.year} ${each}, with no tax and no paperwork. Above that you file a gift tax return (Form 709), but you owe no tax: the extra only uses up part of your ${money(d.lifetimeExclusion)} lifetime exemption. School tuition and medical bills paid straight to the school or the hospital do not count at all.`),
+    ui.h("p", { class: "muted small" }, `A 529 college plan can take ${SUPERFUND_YEARS} years of gifts at once: up to ${money(d.superfund.perGiver)} from one giver${d.couple ? `, ${money(d.superfund.couple)} from a couple` : ""}, per child, counted as one-fifth each year.`)));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
@@ -94,5 +94,5 @@ export function render(page, ctx) {
   };
   drawForm();
   root.append(ui.card(null, out, formHost));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/goals/education" }, "College"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/goals/education" }, "College"))));
 }

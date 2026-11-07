@@ -240,7 +240,7 @@ export function compute(plan, params = {}) {
   const notes = [], warnings = [];
   const money = (n) => Math.round(n).toLocaleString("en-US");
   if (!people.length) notes.push("Add the adults on the People page; limits are per person.");
-  if (!c.items.length) notes.push("Nothing on the Contributions page yet, so every limit shows its full room.");
+  if (!c.items.length) notes.push("Nothing on the Retirement contributions page yet, so every limit shows its full room.");
   // the unnamed first adult reads "Your 8,000 is going ...", the partner Get started named "Your spouse's 8,000"; a typed name
   // keeps "Ana: 8,000 is going ..." (Review 2026-11-06 round 7)
   const whose = (name) => (nameIn(name) !== String(name ?? "") ? NameOf(name) : `${name}:`);

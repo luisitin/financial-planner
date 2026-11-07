@@ -4,7 +4,7 @@ import { render } from "./view.js";
 export default {
   id: "benefits",
   group: "career",
-  title: "Benefits elections",
+  title: "Work benefits",
   icon: "💼",
   order: 60,
   version: 1,
@@ -14,7 +14,7 @@ export default {
   needs: ["income", "household", "accounts", "retirement", "taxes", "whatIfs"],
   writes: ["whatIfs", "retirement", "taxes"],
   heavy: false,
-  purpose: "Helps you choose at open enrollment: your 401k percentage, health savings account, employer stock plan and insurance picks.",
+  purpose: "Helps you choose at open enrollment: your 401(k) percentage, health savings account, employer stock plan and insurance picks.",
   aliases: ["open enrollment", "open enrolment", "401k percent", "employer match", "FSA", "dependent care", "ESPP", "commuter benefits"],
   compute,
   render,

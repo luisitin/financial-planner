@@ -137,7 +137,7 @@ export function compute(plan, params = {}) {
     const health = pick(s.health);
     const pretax = [
       { key: "k401", label: "401(k), before tax", amount: per(k401), from: k401 > 0 ? "plan" : null },
-      { key: "health", label: "Health, dental and vision cover", ...health },
+      { key: "health", label: "Health, dental and vision insurance", ...health },
       { key: "hsa", label: "Health savings account (HSA)", ...hsa },
       { key: "fsa", label: "Health spending account (FSA)", ...fsa },
       { key: "dcfsa", label: "Child care spending account", ...dcfsa },
@@ -215,9 +215,9 @@ export function compute(plan, params = {}) {
   for (const x of out.filter((y) => y.paychecksFrom === "assumed")) notes.push(`${NameOf(x.name)} pay is entered as a ${x.period === "annual" ? "yearly" : x.period === "quarterly" ? "quarterly" : "single"} figure on Income, so ${DEFAULT_PAYCHECKS} paychecks a year are assumed: set how often ${nameIn(x.name)} ${verbFor(x.name, "is", "are")} paid under "${w4Title(x.name)}".`);
   const both = out.filter((x) => x.federal.from === "estimate" && x.federal.w4.status === "married_joint" && !x.federal.w4.step2);
   if (both.length > 1) notes.push(both.every((x) => x.federal.w4.typed)
-    ? "You both have \"Married filing jointly\" on the W-4 without the box in Step 2 ticked: each paycheck is withheld as if it were the household's only pay, which usually leaves too little withheld. The Withholding check page checks the year."
-    : "These paychecks assume both W-4s say \"Married filing jointly\" with the box in Step 2 empty. If so, each is withheld as if it were the household's only pay, which usually leaves too little withheld: the Withholding check page checks the year. Set each W-4 in its fold below.");
-  if (benefitsLater) notes.push(`The Benefits elections page is choosing next year's benefits, so this year's paycheck leaves them out: type this year's amounts in each person's fold.`);
+    ? "You both have \"Married filing jointly\" on the W-4 without the box in Step 2 checked: each paycheck is withheld as if it were the household's only pay, which usually leaves too little withheld. The Withholding check page checks the year."
+    : "These paychecks assume both W-4s say \"Married filing jointly\" with the box in Step 2 empty. If so, each employer withholds as if that job were the household's only pay, which usually leaves too little withheld for the year: the Withholding check page checks it. Set each W-4 in its section below.");
+  if (benefitsLater) notes.push(`The Benefits elections page is choosing next year's benefits, so this year's paycheck leaves them out: type this year's amounts in each person's section.`);
   // the child care account comes out of every paycheck, but only care it pays back is yours again
   for (const x of out) {
     const a = acctOf(x.id);
@@ -238,7 +238,7 @@ export function compute(plan, params = {}) {
       : `${NameOf(x.name)} paychecks leave all of the child care account out of tax, but ${n(a.taxedAsPay)} of it is over what can stay out of income, so it is taxed when you file (the Federal estimate counts it).`) : null;
     if (lostWords || taxedWords) notes.push([lostWords, taxedWords].filter(Boolean).join(" "));
   }
-  if (out.some((x) => x.state.from === "none")) notes.push("Your state's income tax is not counted: set it on the State page under Taxes, or type the figure from your pay stub.");
+  if (out.some((x) => x.state.from === "none")) notes.push("Your state's income tax is not counted: set it on the State tax page under Taxes, or type the figure from your pay stub.");
   return { ready: true, year, people: out, notes, stateMethod: st.method ?? null, w4Default };
 }
 

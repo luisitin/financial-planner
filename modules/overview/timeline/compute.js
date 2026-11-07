@@ -125,7 +125,7 @@ export function compute(plan, params = {}) {
     const name = p.name, Who = NameIn(name), Whose = NameOf(name);
     const by = yearOf(p.birthDate);
     if (!p.retired) {
-      const gap = p.retirementAge < 65 ? ` Health cover from work ends: until Medicare at 65 that means a marketplace plan or a former employer's (${65 - p.retirementAge} ${65 - p.retirementAge === 1 ? "year" : "years"}).` : "";
+      const gap = p.retirementAge < 65 ? ` Health insurance from work ends: until Medicare at 65 that means a marketplace plan or a former employer's (${65 - p.retirementAge} ${65 - p.retirementAge === 1 ? "year" : "years"}).` : "";
       add({ id: `retire-${p.id}`, kind: "retire", date: p.retirementDate, personId: p.id, title: `${Who} ${verbFor(name, "retires", "retire")}`, detail: `At ${p.retirementAge}. The paychecks stop; savings, Social Security and any pension take over.${gap}`, go: ["household", "people"] });
     }
     const working = (age) => !p.retired && age < p.retirementAge;
@@ -189,7 +189,7 @@ export function compute(plan, params = {}) {
       const isMortgage = typeOf(d.id) === "mortgage";
       // finished sooner than its own payment would (the Debts page's date): say both, and why
       const two = rolledEnds[d.id];
-      const both = two ? ` This date has the ${listWords(two.from)} payment${two.from.length > 1 ? "s" : ""} moving onto it once ${two.from.length > 1 ? "they are" : "it is"} paid off; on its own payment it runs to ${monthWords(two.own)}.` : "";
+      const both = two ? ` This date has the ${listWords(two.from)} payment${two.from.length > 1 ? "s" : ""} moving to the mortgage once ${two.from.length > 1 ? "they are" : "it is"} paid off; with its own payment alone, it would run to ${monthWords(two.own)}.` : "";
       add({ id: `debt-${d.id}`, kind: isMortgage ? "mortgage" : "debt", date: d.endDate, title: `${d.name} paid off`, detail: isMortgage ? `The house is yours. That frees the monthly payment for everything else.${d.interest ? ` Interest from here on: about ${money(d.interest)}.` : ""}${both}` : `${d.interest ? `About ${money(d.interest)} of interest from here on. ` : ""}Its payment then rolls onto the next debt.`, tone: "ok", go: ["debt", isMortgage ? "mortgage" : "payoff"] });
     }
     if (pay.chosen.debts.length > 1 && pay.chosen.endDate) add({ id: "debtfree", kind: "debtfree", date: pay.chosen.endDate, title: "Debt-free", detail: `Every loan and card is paid off, ${money(pay.chosen.totalInterest)} of interest in all from today.`, tone: "ok", go: ["debt", "payoff"] });

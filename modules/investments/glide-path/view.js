@@ -13,8 +13,8 @@ export function render(root, ctx) {
     ui.h("h1", {}, d.verdict === "on path" ? "Your stock share is on the path" : d.verdict === "unknown" ? "How much in stocks, at each age" : `You hold ${d.verdict}`),
     ui.h("p", { class: "lede" }, d.actual !== null
       ? `${pts(d.actual)} of your holdings are stocks; ${d.ruleLabel.toLowerCase()} says ${pts(d.suggested)}${d.ageNow !== null ? ` at ${d.ageNow}` : ""}${d.person ? ` (${d.person})` : ""}. ${Math.abs(d.gap) <= 0.05 ? "Within five points: fine." : d.gap > 0 ? `That is ${Math.round(d.gap * 100)} points more stock than the path; a bad year would bite harder than the plan assumes.` : `That is ${Math.round(-d.gap * 100)} points less stock than the path; growth will lag what the plan assumes.`} The path glides to ${pts(d.rows[d.rows.length - 1]?.[d.key])} by ${d.endAge}.`
-      : `A glide path is the stock share falling as the money gets closer to being spent: ${pts(d.stocksNow)} now and ${pts(d.stocksRetired)} in retirement on the Projection page, ${pts(d.rows[0]?.age110)} by the 110-minus-age rule${d.ageNow !== null ? ` at ${d.ageNow}` : ""}. Add holdings to see where you stand.`),
-    ui.h("p", { class: "muted small" }, "Stocks: US, international and real-estate funds, plus the stock part of balanced and target-date funds. The Projection page's path is what the retirement pages assume; the other two are for comparison."),
+      : `A glide path is the share of your money in stocks going down as the time to spend it gets closer: ${pts(d.stocksNow)} now and ${pts(d.stocksRetired)} in retirement on Will the money last?, ${pts(d.rows[0]?.age110)} by the 110-minus-age rule${d.ageNow !== null ? ` at ${d.ageNow}` : ""}. Add holdings to see where you stand.`),
+    ui.h("p", { class: "muted small" }, "Stocks: US, international and real-estate funds, plus the stock part of balanced and target-date funds. The retirement pages use the path set on Will the money last?; the other two are only for comparison."),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -37,5 +37,5 @@ export function render(root, ctx) {
   const sel = ui.select(Object.entries(RULES).map(([value, r]) => ({ value, label: r.label })), d.rule, { "aria-label": "Rule", onChange: (e) => { pending = "Saved."; store.update((p) => { p.investments.glide = e.target.value; }); } });
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Which path to measure against"), ui.h("span", { class: "fold-status" }, d.ruleLabel), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Path", sel, RULES[d.rule].note)), ui.h("p", { class: "muted small" }, "The plan's own path is set on the Projection page (stock share now and in retirement). The rules of thumb are only for comparison; the retirement pages always use the plan's."))));
+    ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Path", sel, RULES[d.rule].note)), ui.h("p", { class: "muted small" }, "The plan's own path is set on Will the money last? (stock share now and in retirement). The rules of thumb are only for comparison; the retirement pages always use the plan's."))));
 }

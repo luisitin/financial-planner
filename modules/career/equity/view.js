@@ -39,7 +39,7 @@ export function render(page, ctx) {
   const formError = (form, text) => { form.querySelector(".notice.error")?.remove(); form.prepend(ui.notice("error", text)); form.scrollIntoView({ block: "start" }); };
 
   if (!d.ready) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Stock from work"),
-    ui.h("p", { class: "lede" }, "Units and options from your employer, and shares bought through its purchase plan: when they vest, the tax each brings and how much to set aside, when to exercise options, and when selling costs less tax."),
+    ui.h("p", { class: "lede" }, "Units and options from your employer, and shares bought through its purchase plan: when they vest, the tax on each and how much to set aside, when to exercise options, and when selling costs less tax."),
     ui.h("p", { class: "muted small" }, "Start with the company's share price below, then add each grant from your stock plan's website.")));
   for (const n of d.notes ?? []) root.append(ui.notice("info", n));
   if (d.ready && d.needsPrice) root.append(ui.notice("warn", "Type today's share price under \"The company\" below to see what your grants and shares are worth and the tax they bring."));
@@ -52,7 +52,7 @@ export function render(page, ctx) {
       root.append(ui.card(`${d.symbol || "Your company"} at ${price2(d.price)}`, ui.row(
         ui.stat("Yours now", money(d.stake.owned), "shares listed on Holdings and vested options' value"),
         ui.stat("Still to vest", money(d.stake.unvested), "if you stay"),
-      ), d.stake.share !== null ? ui.h("p", { class: "eq-say" }, `${pct(d.stake.share)} of everything you have invested rides on the company${d.person ? ` that pays ${nameIn(d.person.name)}` : ""}${ok ? ": within the usual 10% for one company." : "; up to 10% is the usual most for one company."}`) : null,
+      ), d.stake.share !== null ? ui.h("p", { class: "eq-say" }, `${pct(d.stake.share)} of everything you have invested rides on the company${d.person ? ` that pays ${nameIn(d.person.name)}` : ""}${ok ? ": within the usual 10% for one company." : "; up to 10% is the usual limit for one company."}`) : null,
       d.stake.vestedUnits > 0 ? ui.h("p", { class: "muted small" }, "Units that have vested count here once you add their shares on Holdings (or sell them).") : null,
       ui.row(ui.h("a", { class: ok ? "btn secondary" : "btn", href: "#/investments/employer-stock" }, ok ? "Employer stock" : "How to bring it down"))));
     }
@@ -110,7 +110,7 @@ export function render(page, ctx) {
         if (o.iso && o.iso.shares > 0) {
           const s = o.iso;
           card.append(ui.h("p", {}, s.amtAll > 0.5 ? `All ${n0(s.shares)} incentive options would add about ${money(s.amtAll)} of the alternative minimum tax; most of that comes back as a credit in later years.` : `All ${n0(s.shares)} incentive options add none of it this year.`),
-            ui.h("p", {}, `If you buy them today, keep the shares past ${shortDate(s.holdUntil)} (more than a year after buying and two after the grant) and the whole gain is taxed at the lower long-term rates. Sold sooner, the ${money(s.spread)} is taxed as pay: about ${money(s.sameYearTax.total)}.`));
+            ui.h("p", {}, `If you buy them today, keep the shares past ${shortDate(s.holdUntil)} (more than a year after buying and two after the grant) and the whole gain is taxed at the lower long-term rates. Sold sooner, the ${money(s.spread)} is taxed as wages: about ${money(s.sameYearTax.total)}.`));
         }
         if (o.nso) card.append(ui.h("p", { class: "eq-say" }, `${o.type === "iso" ? `${n0(o.nsoShares)} of them are over the ${money(ISO_LIMIT)}-a-year rule and count as nonqualified: buying` : "Buying all of them"} now makes ${money(o.nso.value)} of pay: about ${money(o.nso.owed)} in tax, ${money(o.nso.withheld)} of it held back.`));
         card.append(ui.h("p", { class: "muted small" }, o.type === "iso"
@@ -124,7 +124,7 @@ export function render(page, ctx) {
     if (d.espp.length) root.append(ui.card("Shares from the purchase plan", ui.h("ul", { class: "records" }, d.espp.map((e) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${n0(e.shares)} shares bought ${shortDate(e.purchaseDate)}`), ui.h("span", { class: "rec-value" }, money(e.now.proceeds))),
       ui.h("div", { class: "rec-sub" }, `Worth ${money(e.now.proceeds)} today. ${e.now.qualifying ? `A qualifying sale now: about ${money(e.taxNow.total)} in tax.` : `Sold now: about ${money(e.taxNow.total)} in tax. From ${shortDate(e.now.qualifiesOn)}: about ${money(e.taxAtQualifying.total)}${e.wait > 0.5 ? `, ${money(e.wait)} less if the price holds` : ""}.`}`),
-      ui.h("div", { class: "rec-foot" }, ui.button("Change", () => { editing = e.id; drawLots(); lotsFold.open = true; lotsFold.scrollIntoView({ block: "start" }); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm("Remove these shares?")) return; saveEq("Shares removed.", (q) => { q.espp = (q.espp ?? []).filter((x) => x.id !== e.id); }); }, { class: "secondary small" }))))),
+      ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = e.id; drawLots(); lotsFold.open = true; lotsFold.scrollIntoView({ block: "start" }); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm("Remove these shares?")) return; saveEq("Shares removed.", (q) => { q.espp = (q.espp ?? []).filter((x) => x.id !== e.id); }); }, { class: "secondary small" }))))),
       ui.h("p", { class: "muted small" }, "Waiting for a qualifying sale (more than two years after the offering began, and more than one after buying) taxes less of the gain as pay, but leaves the money on one company for longer.")));
   }
 
@@ -150,10 +150,10 @@ export function render(page, ctx) {
     { key: "name", label: "Name", type: "text", placeholder: "e.g. 2026 new-hire grant" },
     { key: "shares", label: "Units or options granted", type: "number", min: 1, step: "1", required: true },
     { key: "strike", label: "Options: the price you pay per share", type: "money", min: 0 },
-    { key: "granted", label: "Grant date", type: "date", required: true, help: "the two years for a qualifying sale run from here" },
-    { key: "vestStart", label: "Vesting starts", type: "date", help: "empty: the grant date" },
+    { key: "granted", label: "Grant date", type: "date", required: true, help: "the two years you must hold for a lower-tax (\"qualifying\") sale count from this date" },
+    { key: "vestStart", label: "Vesting starts", type: "date", help: "If blank: the grant date" },
     { key: "vestMonths", label: "Vests over (months)", type: "number", min: 1, max: 120, step: "1" },
-    { key: "cliffMonths", label: "First part vests after (months)", type: "number", min: 0, max: 60, step: "1", help: "the cliff; 0 for none" },
+    { key: "cliffMonths", label: "First part vests after (months)", type: "number", min: 0, max: 60, step: "1", help: "months before the first shares vest (the \"cliff\"); 0 if none" },
     { key: "every", label: "Then every (months)", type: "number", min: 1, max: 12, step: "1" },
   ];
   const grantForm = (g) => {
@@ -177,7 +177,7 @@ export function render(page, ctx) {
   const drawGrants = () => grantBody.replaceChildren(...[grants.length ? ui.h("ul", { class: "records" }, grants.map((g) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, g.name || KIND.find((k) => k.value === kindOf(g)).label), ui.h("span", { class: "rec-value" }, n0(g.shares))),
     ui.h("div", { class: "rec-sub" }, `${kindOf(g) === "rsu" ? "Units" : `${kindOf(g) === "iso" ? "Incentive" : "Nonqualified"} options at ${price2(g.strike ?? 0)}`}, vesting from ${g.vestStart ? shortDate(g.vestStart) : "?"} over ${g.vestMonths ?? DEFAULT_GRANT.vestMonths} months`),
-    editing === g.id ? grantForm(g) : ui.h("div", { class: "rec-foot" }, ui.button("Change", () => { editing = g.id; drawGrants(); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm(`Remove ${g.name || "this grant"}?`)) return; saveEq("Grant removed.", (q) => { q.grants = (q.grants ?? []).filter((x) => x.id !== g.id); }); }, { class: "secondary small" }))))) : null, addGrant()].filter(Boolean));
+    editing === g.id ? grantForm(g) : ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = g.id; drawGrants(); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm(`Remove ${g.name || "this grant"}?`)) return; saveEq("Grant removed.", (q) => { q.grants = (q.grants ?? []).filter((x) => x.id !== g.id); }); }, { class: "secondary small" }))))) : null, addGrant()].filter(Boolean));
   drawGrants();
   root.append(ui.h("details", { class: "card fold fold-card", open: !grants.length || openFold === "grants" || null }, ui.h("summary", {}, ui.h("h2", {}, "Grants"), ui.h("span", { class: "fold-status" }, grants.length ? `${grants.length} grant${grants.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")), grantBody));
 
@@ -212,5 +212,5 @@ export function render(page, ctx) {
   const lotsFold = ui.h("details", { class: "card fold fold-card", open: openFold === "espp" || null }, ui.h("summary", {}, ui.h("h2", {}, "Purchase-plan shares"), ui.h("span", { class: "fold-status" }, lots.length ? `${lots.length} purchase${lots.length === 1 ? "" : "s"}` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("p", { class: "muted small" }, "Each purchase is on the plan's statement (Form 3922 after the year ends)."), lotBody);
   root.append(lotsFold);
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Benefits"), ui.h("a", { class: "btn secondary", href: "#/taxes/capital-gains" }, "Capital gains"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Work benefits"), ui.h("a", { class: "btn secondary", href: "#/taxes/capital-gains" }, "Capital gains"))));
 }

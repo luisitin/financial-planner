@@ -37,14 +37,14 @@ export function render(page, ctx) {
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your pay ahead"),
-      ui.h("p", { class: "lede" }, "How your pay could grow with raises and promotions until you retire, shown in today's money, so you can see what rising prices take away and what a raise really keeps."),
+      ui.h("p", { class: "lede" }, "How your pay could grow with raises and promotions until you retire, shown in today's dollars, so you can see what rising prices take away and how much of a raise you really keep."),
       ui.h("p", { class: "muted small" }, "First add your pay on the Income page as \"Pay from a job\", with its yearly raise."),
       ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your pay on Income"))));
     return;
   }
 
   if (!saved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your pay ahead"),
-    ui.h("p", { class: "lede" }, "Each job's pay from now until retirement, in today's money: the raise against rising prices, what the next raise keeps after tax, and what your career still brings in."),
+    ui.h("p", { class: "lede" }, "Each job's pay from now until retirement, in today's dollars: the raise against rising prices, how much of your next raise you keep after tax, and what your career still brings in."),
     ui.h("p", { class: "muted small" }, "It starts from the raise on the Income page. Add promotions, or the age your pay stops growing, under each job.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
@@ -52,8 +52,8 @@ export function render(page, ctx) {
   const multi = d.jobs.length > 1;
   root.append(ui.card(multi ? "Your pay, together" : "Your pay", ui.row(
     ui.stat("Pay a year now", money(d.total.pay), `before tax; ${multi ? `${d.jobs.length} jobs` : d.jobs[0].name}`),
-    ui.stat("Still to come before retiring", big(d.total.lifetimeReal), `before tax, in today's money; ${big(d.total.lifetimeNominal)} in the dollars of each year`),
-  ), ui.h("p", { class: "muted small" }, `Today's money means dollars that buy what a dollar buys now, with prices rising ${pct(d.inflation)} a year (the Assumptions page).`)));
+    ui.stat("Still to come before retiring", big(d.total.lifetimeReal), `before tax, in today's dollars; ${big(d.total.lifetimeNominal)} in each year's dollars`),
+  ), ui.h("p", { class: "muted small" }, `Today's dollars means dollars that buy what a dollar buys now, with prices rising ${pct(d.inflation)} a year (the Assumptions page).`)));
 
   // the chart, in today's money
   const years = [...new Set(d.jobs.flatMap((j) => j.rows.map((r) => r.year)))].sort((a, b) => a - b);
@@ -61,9 +61,9 @@ export function render(page, ctx) {
     const dashOf = (i) => (i === 0 ? null : i === 1 ? "6 4" : "2 3");
     const series = d.jobs.map((j, i) => ({ values: years.map((y) => j.rows.find((r) => r.year === y)?.real ?? NaN), color: COLORS[i % COLORS.length], dash: dashOf(i), width: 2 }));
     const twoJobs = (j) => d.jobs.filter((x) => x.personId === j.personId).length > 1;
-    root.append(ui.card("In today's money, year by year",
+    root.append(ui.card("In today's dollars, year by year",
       multi ? ui.h("div", { class: "sl-key" }, d.jobs.map((j, i) => ui.h("span", {}, ui.h("i", { class: i > 0 ? "dash" : null, style: { borderColor: COLORS[i % COLORS.length] } }), j.personName && !twoJobs(j) ? j.personName : j.name))) : null,
-      lineChart({ years, series, height: 180, label: "Pay a year in today's money, by year" }),
+      lineChart({ years, series, height: 180, label: "Pay a year in today's dollars, by year" }),
       ui.h("p", { class: "muted small" }, "A flat line means the raises only keep up with prices; a rising line is a real gain.")));
   }
 
@@ -75,7 +75,7 @@ export function render(page, ctx) {
   if (src.length) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "What raises usually are"), ui.h("span", { class: "fold-status" }, b.budget?.short ?? ""), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("ul", { class: "records" }, src.map((x) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.title), ui.h("span", { class: "rec-value" }, x.short)), ui.h("div", { class: "rec-sub" }, x.text), ui.h("div", { class: "sl-src" }, x.source))))));
 
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/offer-compare" }, "Compare a job offer"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Income"), ui.h("a", { class: "btn secondary", href: "#/system/assumptions" }, "Assumptions"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/offer-compare" }, "Compare a job offer"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Income"), ui.h("a", { class: "btn secondary", href: "#/system/assumptions" }, "Assumptions"))));
 
   function jobCard(j) {
     const s = j.settings;
@@ -86,7 +86,7 @@ export function render(page, ctx) {
     const endLabel = j.knownAge ? `When ${who} ${is("retires", "retire")} (${j.retireYear})` : `In ${j.atEnd.year}`;
     card.append(ui.row(
       ui.stat("Now", money(j.pay), "a year"),
-      ui.stat(endLabel, money(j.atEnd.real), `in today's money; about ${money(j.atEnd.pay)} in ${j.atEnd.year} dollars`),
+      ui.stat(endLabel, money(j.atEnd.real), `in today's dollars; about ${money(j.atEnd.pay)} in ${j.atEnd.year} dollars`),
     ));
     const real = j.realGrowth;
     const levelOn = s.levelAge !== null && j.knownAge;
@@ -96,7 +96,7 @@ export function render(page, ctx) {
       ? `${raiseText}: the pay only keeps up with prices, so it buys about the same all the way.`
       : real > 0 ? `${raiseText}: about ${pct(real)} a year more than prices, so the pay buys more over time.`
         : `${raiseText}: ${pct(-real)} a year less than prices, so the pay buys less every year.`));
-    card.append(ui.h("p", { class: "muted small" }, [j.raiseFrom === "typed" ? "The raise is the one you set below." : j.raiseFrom === "income" ? "The raise is the one on the Income page." : "No raise on the Income page, so the Assumptions page's pay rise is used.",
+    card.append(ui.h("p", { class: "muted small" }, [j.raiseFrom === "typed" ? "The raise is the one you set below." : j.raiseFrom === "income" ? "The raise is the one on the Income page." : "No raise on the Income page, so the Assumptions page's pay raise is used.",
       j.endsEarly ? ` This pay ends on ${fmt.date(j.endsEarly)} (the Income page), so its years stop there.` : ""].join("")));
 
     const k = j.nextRaise;
@@ -117,7 +117,7 @@ export function render(page, ctx) {
       ui.h("li", {}, ui.h("span", {}, "All the pay still to come, before tax"), ui.h("span", {}, big(j.lifetime.real))),
       ui.h("li", {}, ui.h("span", {}, "A raise 1% bigger every year"), ui.h("span", {}, `+${big(j.extraPercent)}`)),
       ui.h("li", {}, ui.h("span", {}, `${a(pct(RAISE_NOW, 0)) === "an" ? "An" : "A"} ${pct(RAISE_NOW, 0)} raise won now`), ui.h("span", {}, `+${big(j.raiseNowWorth)}`))),
-      ui.h("p", { class: "muted small" }, "All in today's money. A raise won now is worth more than its first year, because every later raise builds on it."));
+      ui.h("p", { class: "muted small" }, "All in today's dollars. A raise won now is worth more than its first year, because every later raise builds on it."));
 
     // the Income page's raise
     const avg = Math.round(j.avgGrowth * 1000) / 1000;
@@ -131,15 +131,15 @@ export function render(page, ctx) {
     // a few years ahead
     const marks = j.rows.filter((r, i) => i > 0 && (i % 5 === 0 || i === j.rows.length - 1));
     if (marks.length) card.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Years ahead"), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("ul", { class: "records" }, marks.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year}${r.age !== null ? ` (age ${r.age})` : ""}`), ui.h("span", { class: "rec-value" }, money(r.real))), ui.h("div", { class: "rec-sub" }, `in today's money; ${money(r.pay)} in ${r.year} dollars`))))));
+      ui.h("ul", { class: "records" }, marks.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year}${r.age !== null ? ` (age ${r.age})` : ""}`), ui.h("span", { class: "rec-value" }, money(r.real))), ui.h("div", { class: "rec-sub" }, `in today's dollars; ${money(r.pay)} in ${r.year} dollars`))))));
 
     // its settings
     const values = { raise: plan.whatIfs?.salary?.[j.key]?.raise ?? null, promoEvery: s.promoEvery || null, promoBump: s.promoBump, levelAge: s.levelAge };
     const fields = [
-      { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: j.incomeGrowth > 0 ? `empty: the Income page's (${pct(j.incomeGrowth)})` : `empty: the Assumptions page's pay rise (${pct(plan.assumptions?.salaryGrowth ?? 0.03)})` },
+      { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: j.incomeGrowth > 0 ? `empty: the Income page's (${pct(j.incomeGrowth)})` : `empty: the Assumptions page's pay raise (${pct(plan.assumptions?.salaryGrowth ?? 0.03)})` },
       { key: "promoEvery", label: "A promotion every ... years", type: "number", min: 0, max: 20, step: "1", help: "empty or 0: no promotions" },
       { key: "promoBump", label: "Raise that comes with a promotion", type: "percent", min: 0, max: 100, help: `about ${pct(DEFAULTS.promoBump)} is usual for a one-level promotion (Mercer, 2026); use what your employer gives` },
-      { key: "levelAge", label: "Pay stops gaining on prices at age", type: "number", min: 18, max: 80, step: "1", help: j.knownAge ? "empty: raises run until retirement; from this age pay only keeps up with prices" : "needs a birth date on People" },
+      { key: "levelAge", label: "Pay stops rising faster than prices at age", type: "number", min: 18, max: 80, step: "1", help: j.knownAge ? "empty: raises run until retirement; from this age pay only keeps up with prices" : "needs a birth date on People" },
     ];
     card.append(ui.h("details", { class: "fold", open: openJob === j.incomeId || null }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Raises and promotions"), ui.h("span", { class: "fold-status" }, s.promoEvery ? `${pct(s.raise)}, promotions` : pct(s.raise)), ui.h("span", { class: "fold-chev" }, "›")),
       ui.form(fields, values, (v) => {

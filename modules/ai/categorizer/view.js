@@ -83,7 +83,7 @@ async function ask(ctx) {
       kind: "warn",
       text: st === "off" ? "The AI helper is turned off. Turn it on in Settings, then come back."
         : st === "no models" ? "The AI helper is running but has no model downloaded yet. Settings shows how to add one."
-        : "The AI helper on your PC does not answer. Check that it is running, then try again.",
+        : "The AI helper on your computer does not answer. Check that it is running, then try again.",
       links: [["Open Settings", "#/system/settings"], ["File them by hand", "#/transactions/categorize"]],
     };
     rerender();
@@ -137,7 +137,7 @@ function filedText(q, res) {
   if (added > 0) parts.push(`${added === 1 ? "A rule files" : `${added} rules file`} future imports the same way.`);
   for (const c of res.rulesChanged) parts.push(`Your rule for "${c.contains}" now files as ${nameOf(q, c.to)} (it was ${nameOf(q, c.from)}).`);
   if (res.rulesKept) parts.push(res.rulesKept === 1 ? "A rule you already had files that payee another way; it was left as it is." : `${res.rulesKept} rules you already had file those payees another way; they were left as they are.`);
-  if (res.rulesSkipped) parts.push("No rule was saved for payments through a service like PayPal or Square, because future imports cannot tell those shops apart.");
+  if (res.rulesSkipped) parts.push("No rule was saved for payments through a service like PayPal or Square, because future imports cannot tell those businesses apart.");
   return parts.join(" ");
 }
 
@@ -154,7 +154,7 @@ export function render(page, ctx) {
 
   if (!d.total) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Sort many transactions at once"),
-      ui.h("p", { class: "lede" }, "Once your bank's transactions are in the app, the AI helper on your PC can suggest a category for every payee at once and say how sure it is. You check the list and file them in a few taps."),
+      ui.h("p", { class: "lede" }, "Once your bank's transactions are in the app, the AI helper on your computer can suggest a category for every payee at once and say how sure it is. You check the list and file them in a few taps."),
       ui.row(ui.h("a", { class: "btn", href: "#/transactions/import" }, "Import a bank file"))));
     return;
   }

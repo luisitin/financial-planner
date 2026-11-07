@@ -24,8 +24,8 @@ export const LEVERS = [
   { key: "returnBonds", label: "Bond return a year", type: "percent", get: (p) => p.assumptions?.returnBonds ?? 0.04, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), returnBonds: v }; } },
   { key: "inflation", label: "Inflation a year", type: "percent", get: (p) => p.assumptions?.inflation ?? 0.03, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), inflation: v }; } },
   { key: "fee", label: "Advisor or fund fees a year", type: "percent", input: true, get: () => 0, apply: (I, v) => { I.returns = { ...I.returns, stocks: I.returns.stocks - v, bonds: I.returns.bonds - v }; } },
-  { key: "lumpSum", label: "A one-off sum (+ in, − out)", type: "money", input: true, signed: true, get: () => 0, apply: (I, v, ch) => { I.events.push({ year: Number(ch.lumpYear) || I.startYear, amount: -v, label: "one-off" }); } },
-  { key: "lumpYear", label: "Year of the one-off", type: "number", input: true, min: 1990, max: 2150, get: () => null, apply: () => {} },
+  { key: "lumpSum", label: "A one-time sum (+ in, − out)", type: "money", input: true, signed: true, get: () => 0, apply: (I, v, ch) => { I.events.push({ year: Number(ch.lumpYear) || I.startYear, amount: -v, label: "one-time" }); } },
+  { key: "lumpYear", label: "Year of the one-time sum", type: "number", input: true, min: 1990, max: 2150, get: () => null, apply: () => {} },
 ];
 function person(p, id) { return (p.household?.people ?? []).find((x) => x.id === id); }
 

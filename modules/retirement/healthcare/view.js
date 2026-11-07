@@ -28,7 +28,7 @@ export function render(page, ctx) {
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Before Medicare"),
-    ui.h("p", { class: "lede" }, "Retire before 65 and you need health cover until Medicare starts. Most people buy it on the marketplace (healthcare.gov or the state's site), where a tax credit lowers the premium based on your income. Your income in retirement is partly your choice: which accounts you draw from."),
+    ui.h("p", { class: "lede" }, "Retire before 65 and you need health insurance until Medicare starts. Most people buy it on the marketplace (healthcare.gov or the state's site), where a tax credit lowers the premium based on your income. Your income in retirement is partly your choice: which accounts you draw from."),
     d.cliffIncome ? ui.h("p", { class: "muted small" }, `Under the law as it stands, a household of ${d.size} with income over ${money(d.cliffIncome)} (four times the poverty line) gets no credit at all: a dollar over can cost thousands.`) : null));
   // married filing separately: no credit (seventh pass), said first, with the one exception and the law
   if (d.separate) root.append(ui.notice("warn", "You file separate returns. A married couple filing separately gets no marketplace tax credit, so the full premium is counted here. Only someone living apart from a spouse who abused or abandoned them can still get it; the instructions for IRS Form 8962 say how. (Federal tax law: 26 U.S.C. 36B(c)(1)(C).)"));
@@ -43,8 +43,8 @@ export function render(page, ctx) {
     const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
     const onMedicare = why.filter((w) => w.why === "medicare").map((w) => w.name);
     const said = onMedicare.length && onMedicare.length === why.length
-      ? `${NamesIn(onMedicare)} ${onMedicare.length > 1 || isYou(onMedicare[0]) ? "are" : "is"} 65 or over, so Medicare is the cover: no one in your plan needs the marketplace.`
-      : `In your plan no one needs marketplace cover: ${list(why.map((w) => {
+      ? `${NamesIn(onMedicare)} ${onMedicare.length > 1 || isYou(onMedicare[0]) ? "are" : "is"} 65 or over, so Medicare is the health insurance: no one in your plan needs the marketplace.`
+      : `In your plan no one needs marketplace coverage: ${list(why.map((w) => {
         const n = nameIn(w.name), is = verbFor(w.name, "is", "are"), works = verbFor(w.name, "works", "work");
         return w.why === "medicare" ? `${n} ${is} 65 or over (Medicare)`
           : w.why === "job" ? (w.endsBefore65 ? `${n} ${works} to the end of the plan` : `${n} ${works} until ${Math.max(65, w.retireAge)}`)
@@ -58,7 +58,7 @@ export function render(page, ctx) {
   }
 
   root.append(ui.card(null, ui.row(
-    ui.stat("Cover until 65 costs", money(d.total), `${d.years.length} year${d.years.length === 1 ? "" : "s"}, ${d.separate ? "no credit on separate returns" : `after ${money(d.totalCredit)} of credits`}`),
+    ui.stat("Coverage until 65 costs", money(d.total), `${d.years.length} year${d.years.length === 1 ? "" : "s"}, ${d.separate ? "no credit on separate returns" : `after ${money(d.totalCredit)} of credits`}`),
     d.separate ? null : ui.stat("Years over the cliff", String(d.cliffYears), d.cliffYears ? "no credit those years" : "income stays under it"),
   )));
   if (d.cliffYears) {
@@ -84,6 +84,6 @@ export function render(page, ctx) {
         store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.aca = { benchmarkMonthly: v.benchmarkMonthly ?? null, rules: v.rules }; });
       }, { submitLabel: "Save" }),
       ui.h("p", { class: "muted small" }, "The larger credits of 2021 to 2025 (no cliff, at most 8.5% of income) ended with 2025. Congress may bring them back; switch the rules above to see the difference.")));
-    root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-order" }, "Withdrawal order"), ui.h("a", { class: "btn secondary", href: "#/retirement/medicare" }, "Medicare at 65"))));
+    root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-order" }, "Withdrawal order"), ui.h("a", { class: "btn secondary", href: "#/retirement/medicare" }, "Medicare at 65"))));
   }
 }

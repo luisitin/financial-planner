@@ -105,7 +105,7 @@ export function compute(plan, params = {}) {
     let lineInterest = h.interest * lineShare, linePv = h.pvInterest * lineShare;
     const lost = owed > 0 ? deductibleShare(owed, limit) - lineShare : 0;
     if (lost > 1e-12) { const mi = schedule(owed, mortgage.rate ?? 0, mortgage.payment, discount, x.helocYears * 12); lineInterest -= mi.interest * lost; linePv -= mi.pvInterest * lost; }
-    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, deductibleShare: lineShare, taxSaved: ded(lineInterest), today: h.pv - cost - ded(linePv), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually floats`, risk: "The home secures it.", fits: home.borrowable >= cost });
+    ways.push({ id: "heloc", label: "Home-equity line", monthly: h.payment, interest: h.interest, fees: 0, deductible: true, deductibleShare: lineShare, taxSaved: ded(lineInterest), today: h.pv - cost - ded(linePv), note: `${(x.helocRate * 100).toFixed(2).replace(/\.?0+$/, "")}% repaid over ${x.helocYears} years; the rate usually changes over time`, risk: "Your home backs this loan.", fits: home.borrowable >= cost });
     if (mortgage && mortgage.payment > 0) {
       // a cash-out refinance: the old mortgage and the project in one new loan; compare against keeping the old mortgage and paying cash
       const fees = (mortgage.owed + cost) * x.refiCosts, principal = mortgage.owed + cost + fees;
@@ -120,7 +120,7 @@ export function compute(plan, params = {}) {
     }
   }
   const pl = loanCost(cost, x.loanRate, x.loanYears, discount);
-  ways.push({ id: "loan", label: "Personal loan", monthly: pl.payment, interest: pl.interest, fees: 0, deductible: false, taxSaved: 0, today: pl.pv - cost, note: `${(x.loanRate * 100).toFixed(1).replace(/\.0$/, "")}% over ${x.loanYears} years; nothing secured`, risk: null, fits: true });
+  ways.push({ id: "loan", label: "Personal loan", monthly: pl.payment, interest: pl.interest, fees: 0, deductible: false, taxSaved: 0, today: pl.pv - cost, note: `${(x.loanRate * 100).toFixed(1).replace(/\.0$/, "")}% over ${x.loanYears} years; not backed by your home`, risk: null, fits: true });
   for (const w of ways) w.cost = w.interest + w.fees - w.taxSaved;
   // ranked in today's money: a payment years from now costs less than one now, since the money could earn the plan's return meanwhile
   const best = ways.filter((w) => w.fits).reduce((a, w) => (w.today < a.today - 1 ? w : a), ways.find((w) => w.fits) ?? ways[0]);

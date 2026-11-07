@@ -69,7 +69,7 @@ export function render(root, ctx) {
     // the cushion grows from the money left over each month, kept in savings rather than spent
     const where = into ? (into.type === "savings" ? `in ${into.name}` : `in ${into.name} and leave it unspent`) : "in a savings account no goal uses";
     const when = !spare ? ` Once the month leaves money over, keep it ${where}.`
-      : spare >= move.gap ? ` This month's left-over covers it (${fmt.money(spare, cur)} after tax, bills and saving): keep ${fmt.money(move.gap, cur)} of it ${where}.`
+      : spare >= move.gap ? ` This month's leftover covers it (${fmt.money(spare, cur)} after tax, bills and saving): keep ${fmt.money(move.gap, cur)} of it ${where}.`
       : ` Keep the ${fmt.money(spare, cur)} left over each month (after tax, bills and saving) ${where}${move.doneDate ? `, and you are there by about ${monthYear(move.doneDate)}` : ""}.`;
     const boxes = cash.map((a) => ({ a, m: ui.moneyBox({ name: a.id, value: Number(a.balance) || 0, label: `${a.name}: balance` }) }));
     for (const b of boxes) b.m.input.setAttribute("enterkeyhint", "done");
@@ -91,8 +91,8 @@ export function render(root, ctx) {
         ? `${billMoney(move.gap)} more in cash you can use gets you to one month of the bills you have to pay (${billMoney(essential)}${d.waits ? ", by our guesses of them" : ""}).${when}`
         : `${billMoney(move.gap)} more in cash you can use gets you to ${d.targetMonths} months of the bills you have to pay (${billMoney(d.target)}${d.waits ? ", by our guesses of them" : ""}).${when}`),
       efGoal ? ui.h("div", { class: "notice info", style: { marginTop: "10px" } },
-        ui.h("p", { style: { margin: 0 } }, `Your "${efGoal.name}" goal saves in ${(efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean).join(" and ")}, so that money counts as set aside for the goal, not as your cushion. If that goal is your cushion, count it:`),
-        ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Count "${efGoal.name}" as my cushion`, () => {
+        ui.h("p", { style: { margin: 0 } }, `Your "${efGoal.name}" goal saves in ${(efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean).join(" and ")}, so that money counts as set aside for the goal, not as your emergency fund. If that goal is your emergency fund, count it:`),
+        ui.h("div", { style: { marginTop: "8px" } }, ui.button("Count this goal as my emergency fund", () => {
           pending = { step: move.id, text: `Done: the "${efGoal.name}" goal's money now counts as your emergency fund.` };
           store.update((p) => { const g = (p.goals ?? []).find((y) => y.id === efGoal.id); if (g) g.isEmergencyFund = true; });
         }, { class: "secondary" }))) : null,
@@ -114,7 +114,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: "var(--muted)" } })),
       ui.h("p", { class: "small" }, `Most of the bills you have to pay are our guesses for now, so how many months your cash covers isn't known yet. Type your real bills and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Type your bills on Expenses \u203a")),
-      d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of the cushion.`) : null,
+      d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of your emergency fund.`) : null,
       targetNote(),
     ));
   } else if (d.target) {
@@ -130,7 +130,7 @@ export function render(root, ctx) {
       later ? null : ui.h("p", { class: "small" },
         d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of the bills you have to pay; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
         : `Your usable cash covers ${months(d.runwayMonths)} of the ${d.targetMonths} months the plan aims for. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
-      d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of the cushion. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue && !d.tax.paidTyped ? `No payments typed yet: type what you paid (if none, ${fmt.money(d.tax.overdue.amount, cur)} is past due)` : d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
+      d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of your emergency fund. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue && !d.tax.paidTyped ? `No payments typed yet: type what you paid (if none, ${fmt.money(d.tax.overdue.amount, cur)} is past due)` : d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
       targetNote(),
     ));
   }
@@ -154,7 +154,7 @@ export function render(root, ctx) {
         ui.h("span", { class: "st" }, fmt.money(a.balance, cur))))),
     ));
   }
-  root.append(ui.h("p", { class: "muted small" }, "Balances come from the accounts on ", ui.h("a", { href: "#/balance/net-worth", class: "lq-link" }, "What you own"), "."), ui.row(ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update my balances")));
+  root.append(ui.h("p", { class: "muted small" }, "Balances come from the accounts on ", ui.h("a", { href: "#/balance/net-worth", class: "lq-link" }, "Net worth"), "."), ui.row(ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update my balances")));
   // scoped style for the fund headline row and the move's balance boxes
   root.append(ui.h("style", {}, ".fund-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; } .fund-head .pill { margin-top: 6px; } .lq-links { display: flex; flex-direction: column; } .lq-link { display: inline-flex; align-items: center; min-height: 44px; } .lq-row { display: block; margin-top: 8px; } .lq-name { display: block; font-weight: 600; margin-bottom: 4px; }"));
 }

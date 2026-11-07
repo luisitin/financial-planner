@@ -119,7 +119,7 @@ test("the fact sheet: stand-ins and birthday-aware ages, the health score's part
   assert.equal(s.lines[0], "Household: Adult 1 (age 36), Adult 2 (age 37), Child 1 (age 6); files taxes as married filing jointly; lives in TX.", "Bo turns 38 on 2 November");
   const all = s.lines.join("\n");
   assert.match(all, /Plan health score: \d+ of 100/);
-  for (const t of ["Cash cushion (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (credit card 1).", "Emergency fund, Replace Adult 2's car, Child 1's college need more each month",
+  for (const t of ["Emergency fund (a problem)", "Saving each month", "Next step (do now)", "Debt (fine): $6,400 of debt at 10% or more (credit card 1).", "Emergency fund, Replace Adult 2's car, Child 1's college need more each month",
     // round 8 item 3: the goals step comes right after the card now, so the trip waits a month's turn instead of being behind
     "Japan trip: saving for it starts in November 2026, when its turn comes on Next best action.",
     "Will and other legal papers: 0 of 11 done. Missing for each adult: Will, Financial power of attorney, Health care power of attorney, Living will and Medical records release (HIPAA). Missing for the household: Guardian for the children.",
@@ -179,7 +179,7 @@ test("names that are everyday words or single letters do not rewrite the app's o
   const ret = familyPlan(TODAY); ret.accounts.find((x) => x.id === "a-401").name = "Retirement";
   assert.match(text(ret), /^Retirement on track \(/m);
   const cash = familyPlan(TODAY); cash.accounts.find((x) => x.id === "a-chk").name = "Cash";
-  assert.match(text(cash), /^Cash cushion \(/m);
+  assert.match(text(cash), /^Emergency fund \(/m);
   const debt = familyPlan(TODAY); debt.accounts.find((x) => x.id === "a-chk").name = "Debt";
   assert.match(text(debt), /^Debt \(fine\): /m);
 });
@@ -256,7 +256,7 @@ test("the pages the AI may name: built ones the facts point to, never this page"
 });
 
 test("the question holds the facts and the page list, and asks for JSON points tied to a page", () => {
-  const q = buildPrompt(["Household: Adult 1 (age 40).", "Cash cushion (a problem): 0.9 months."], [{ key: "balance/liquidity", title: "Liquidity", purpose: "How long your cash lasts." }]);
+  const q = buildPrompt(["Household: Adult 1 (age 40).", "Emergency fund (a problem): 0.9 months."], [{ key: "balance/liquidity", title: "Liquidity", purpose: "How long your cash lasts." }]);
   assert.match(q.system, /JSON only/); assert.match(q.system, new RegExp(`at most ${MAX_POINTS}`)); assert.match(q.system, /never invent numbers/); assert.match(q.system, /Adult 1, Adult 2, Child 1/);
   assert.match(q.user, /- Household: Adult 1 \(age 40\)\./); assert.match(q.user, /balance\/liquidity: Liquidity, How long your cash lasts\./);
 });

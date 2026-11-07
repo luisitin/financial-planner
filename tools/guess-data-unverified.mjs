@@ -50,7 +50,7 @@ export const UNVERIFIED = [
   row("home.json", "Income-percentile cut-offs needed to place a household's pay", [], [], "the income domain's derived table"),
   // insurance-health.json
   row("insurance-health.json", "Median face amount of individual life insurance per insured adult", [], [], "LIMRA is never bundled"),
-  row("insurance-health.json", "Share of adults with individual (non-workplace) life cover", [], [], "LIMRA is never bundled"),
+  row("insurance-health.json", "Share of adults with individual (non-workplace) life insurance", [], [], "LIMRA is never bundled"),
   row("insurance-health.json", "LIMRA 2026 ownership for Millennials and by race/ethnicity", [], [], "LIMRA is never bundled"),
   row("insurance-health.json", "Need-gap head count (92M vs 98M)", [], [], "LIMRA is never bundled"),
   row("insurance-health.json", "2027 Medicare Part B premium, deductible, Part A deductible and 2027 IRMAA", [], [], "not published; the 2026 figures are bundled"),

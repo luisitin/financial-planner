@@ -27,7 +27,7 @@ export function render(root, ctx) {
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Mortgage"),
-      ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast would do."),
+      ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast (a lump sum after which the lender lowers your payment) would do."),
       ui.row(ui.h("a", { class: "btn", href: d.mortgage ? "#/balance/liabilities" : "#/balance/net-worth" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
     return;
   }

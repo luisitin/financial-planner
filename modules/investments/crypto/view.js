@@ -112,10 +112,10 @@ export function render(page, ctx) {
   root.append(ui.card("Worth knowing", ui.h("ul", {},
     ui.h("li", {}, "Every sale, swap of one coin for another, or purchase paid in crypto is a sale for tax. Exchanges send a 1099-DA: gross proceeds for sales from 2025, and what you paid for coins bought from 2026."),
     ui.h("li", {}, "Coins on an exchange are not insured like a bank account; coins in your own wallet are lost with the recovery phrase."),
-    ui.h("li", {}, "Write down where the recovery phrase is kept, so your family can find it: the Digital estate page below has a place for it."))));
+    ui.h("li", {}, "Write down where the recovery phrase is kept, so your family can find it: the Digital assets page below has a place for it."))));
 
   root.append(addForm(false));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/tax-lots" }, "Tax lots"), ui.h("a", { class: "btn secondary", href: "#/estate/digital" }, "Digital estate"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Holdings"), ui.h("a", { class: "btn secondary", href: "#/investments/tax-lots" }, "Tax lots and harvesting"), ui.h("a", { class: "btn secondary", href: "#/estate/digital" }, "Digital assets"))));
 
   // adding a coin: a holding in a crypto account (made if there is none), the account's balance kept equal to its coins
   function addForm(open) {

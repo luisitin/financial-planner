@@ -30,7 +30,7 @@ export function render(page, ctx) {
 
   if (!d.ready) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Whole life, or term and invest the rest?"),
-    ui.h("p", { class: "lede" }, "Whole life insurance costs many times what term costs for the same cover, because part of each premium builds a cash value. The usual alternative: buy term, and invest what you save each year. This page compares the two with the numbers from the whole-life illustration (the table the agent gives you)."),
+    ui.h("p", { class: "lede" }, "Whole life insurance costs many times what term costs for the same coverage, because part of each premium builds a cash value. The usual alternative: buy term, and invest what you save each year. This page compares the two with the numbers from the whole-life illustration (the table the agent gives you)."),
     ui.h("p", { class: "muted small" }, `To compare, fill in: ${d.missing.join("; ")}.`)));
   else {
     const e = d.atEnd, N = s.termYears;
@@ -46,7 +46,7 @@ export function render(page, ctx) {
     const marks = d.rows.filter((r) => r.year === 1 || r.year % 5 === 0 || r.year === N);
     root.append(ui.card("If you died along the way", ui.h("p", { class: "muted small" }, "What the family would get each way, for the years of the term."),
       ui.h("ul", { class: "tp-steps" }, marks.map((r) => ui.h("li", {}, ui.h("span", {}, `Year ${r.year}`), ui.h("span", { class: "tp-v" }, `${money(r.deathTerm)}`, ui.h("span", { class: "tp-s" }, `term and invest; whole life ${money(r.deathWhole)}`))))),
-      ui.h("p", { class: "tp-d", style: { marginTop: "10px" } }, `After year ${N} the term ends: the family would have the investments (${money(e.sideFund)}, still growing) instead of a death benefit, while whole life keeps paying ${money(s.deathBenefit)} for as long as its premiums are paid. If cover is still needed then, a new term costs much more at an older age.`)));
+      ui.h("p", { class: "tp-d", style: { marginTop: "10px" } }, `After year ${N} the term ends: the family would have the investments (${money(e.sideFund)}, still growing) instead of a death benefit, while whole life keeps paying ${money(s.deathBenefit)} for as long as its premiums are paid. If coverage is still needed then, a new term costs much more at an older age.`)));
     root.append(ui.card("What this leaves out", ui.h("ul", {},
       ui.h("li", {}, "Taxes on the way out: cash value taken above the premiums paid is taxed as income; investments pay tax on their gains when sold."),
       ui.h("li", {}, "The discipline: the comparison only holds if the difference really is invested every year."),
@@ -59,11 +59,11 @@ export function render(page, ctx) {
   const form = ui.form([
     { key: "deathBenefit", label: "Death benefit", type: "money", min: 0, help: s.fromPolicy && s.deathBenefit ? "from your whole-life policy on Policies" : "the same for both" },
     { key: "wholePremium", label: "Whole-life premium a year", type: "money", min: 0 },
-    { key: "termPremium", label: "Term premium a year for the same cover", type: "money", min: 0, help: "a quote for a level term of the length below" },
+    { key: "termPremium", label: "Term premium a year for the same coverage", type: "money", min: 0, help: "a quote for a level term of the length below" },
     { key: "termYears", label: "Length of the term (years)", type: "number", min: 1, max: 40, step: "1" },
     { key: "cashValue", label: "Illustrated cash value at the end of the term", type: "money", min: 0, help: "the non-guaranteed (projected) column of the illustration, in that year" },
     { key: "cashValueGuaranteed", label: "Guaranteed cash value then (optional)", type: "money", min: 0 },
-    { key: "taxed", label: "The difference goes into an ordinary investment account (taxed along the way)", type: "checkbox", help: "untick if it would go into a Roth or a 401(k)" },
+    { key: "taxed", label: "The difference goes into an ordinary investment account (taxed along the way)", type: "checkbox", help: "uncheck if it would go into a Roth or a 401(k)" },
     { key: "returnRate", label: "Return on the invested difference", type: "percent", help: `empty: your plan's ${pct(planReturn(plan))}${s.taxed ? `, less ${pct(TAX_DRAG)} for taxes along the way` : ""}` },
   ], { deathBenefit: s.deathBenefit || "", wholePremium: s.wholePremium || "", termPremium: c.termPremium ?? "", termYears: s.termYears, cashValue: c.cashValue ?? "", cashValueGuaranteed: c.cashValueGuaranteed ?? "", taxed: s.taxed, returnRate: c.returnRate ?? null }, (v) => {
     pending = "Comparison saved.";
@@ -71,5 +71,5 @@ export function render(page, ctx) {
   }, { submitLabel: d.ready ? "Save changes" : "Compare" });
   if (d.ready) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, `${money(s.deathBenefit)}, ${s.termYears} years`), ui.h("span", { class: "fold-chev" }, "›")), form));
   else root.append(ui.card("From the illustration", form));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/cash-value" }, "A policy you already have"), ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "How much cover"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/cash-value" }, "A policy you already have"), ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "How much coverage"))));
 }

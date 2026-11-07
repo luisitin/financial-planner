@@ -31,7 +31,7 @@ export function render(page, ctx) {
 
   if (!d.count && !d.pastDue) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which goal first?"),
-      ui.h("p", { class: "lede" }, "With more than one goal, the money left each month has to be shared. This page shares it out by what matters most and what comes first, and shows which goals arrive on time."),
+      ui.h("p", { class: "lede" }, "With more than one goal, the money left each month has to be shared. This page divides it by what matters most and what comes first, and shows which goals arrive on time."),
       ui.row(ui.h("a", { class: "btn", href: "#/goals/goals" }, "Add your goals"))));
     return;
   }
@@ -46,7 +46,7 @@ export function render(page, ctx) {
       ui.h("span", { class: "gp-body" }, ui.h("div", { class: "gp-t" }, r.name), ui.h("div", { class: "gp-d" }, `${PRIORITIES[r.priority] ?? ""}${r.needed !== null ? ` · needs ${money(r.needed)} a month` : ""} · gets ${money(r.current)} now`), ui.h("div", { class: `gp-d ${state[0]}` }, state[1])),
       ui.h("span", { class: "gp-v" }, money(r.allocated), ui.h("span", {}, "a month")));
   }));
-  root.append(ui.card("Shared out", ui.h("p", { class: "muted small" }, "Must-haves first, then wants, then nice-to-haves; the nearest date first within each. Each gets what it needs to arrive on time while the money lasts."), list,
+  root.append(ui.card("How it is divided", ui.h("p", { class: "muted small" }, "Must-haves first, then wants, then nice-to-haves; the nearest date first within each. Each gets what it needs to arrive on time while the money lasts."), list,
     ui.row(ui.button("Use these amounts", () => {
       pending = "Monthly amounts set on your goals.";
       store.update((p) => { for (const r of d.rows) { const g = (p.goals ?? []).find((y) => y.id === r.id); if (g) g.monthly = Math.round(r.allocated); } });
@@ -62,5 +62,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.prioritizer = { available: v.available ?? null }; });
     }, { submitLabel: "Save" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/next-best-action" }, "Next best action"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/next-best-action" }, "Next best action"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"))));
 }

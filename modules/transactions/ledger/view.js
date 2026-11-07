@@ -14,7 +14,7 @@ const FIELDS = (plan) => [
   { key: "payee", label: "Who or what", type: "text", required: true, placeholder: "e.g. Kroger" },
   { key: "amount", label: "Amount", type: "money", required: true, help: "money in is positive, money out is negative (-45.20)" },
   { key: "accountId", label: "Account", type: "select", options: (plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name })) },
-  { key: "category", label: "Category", type: "select", options: [{ value: "", label: "Uncategorised" }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
+  { key: "category", label: "Category", type: "select", options: [{ value: "", label: "Uncategorized" }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
   { key: "note", label: "Note", type: "text" },
   { key: "tagsText", label: "Tags", type: "text", placeholder: "comma separated, e.g. vacation, kids" },
 ];
@@ -53,19 +53,19 @@ export function render(root, ctx) {
   } else {
     const monthSel = ui.select([{ value: "", label: "All months" }, ...d.months.map((m) => ({ value: m.ym, label: `${m.label} (${m.count})` }))], state.month, { "aria-label": "Month", onChange: (e) => { state.month = e.target.value; redraw(); } });
     const acctSel = ui.select([{ value: "", label: "All accounts" }, ...d.accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.count})` }))], state.accountId, { "aria-label": "Account", onChange: (e) => { state.accountId = e.target.value; redraw(); } });
-    const catSel = ui.select([{ value: "", label: "All categories" }, { value: "none", label: `Uncategorised (${d.uncategorisedAll})` }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))], state.category, { "aria-label": "Category", onChange: (e) => { state.category = e.target.value; redraw(); } });
+    const catSel = ui.select([{ value: "", label: "All categories" }, { value: "none", label: `Uncategorized (${d.uncategorisedAll})` }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))], state.category, { "aria-label": "Category", onChange: (e) => { state.category = e.target.value; redraw(); } });
     const search = ui.h("input", { type: "search", placeholder: "Search payee or note", value: state.q, "aria-label": "Search", onInput: (e) => { state.q = e.target.value; clearTimeout(search._t); search._t = setTimeout(redraw, 250); } });
     // Totals first; the four filters fold behind one row that says what is showing
     // (design log 2026-09-15).
     root.append(ui.card(null, ui.row(
       ui.stat("Money in", fmt.money(d.in, cur), state.month ? "this month" : "all time"),
       ui.stat("Money out", fmt.money(d.out, cur), `transfers between your accounts not counted${d.cardsOut >= 1 ? `; ${fmt.money(d.cardsOut, cur)} of it went to ${d.cardsOutNames?.length === 1 ? `${theCard(d.cardsOutNames[0])}, whose file isn't in` : "cards whose files aren't in"}` : ""}`),
-      ui.stat(d.net >= 0 ? "Kept" : "Short", fmt.money(Math.abs(d.net), cur), `${d.matched} transaction${d.matched === 1 ? "" : "s"}${d.uncategorised ? `, ${d.uncategorised} uncategorised` : ""}`),
+      ui.stat(d.net >= 0 ? "Kept" : "Short", fmt.money(Math.abs(d.net), cur), `${d.matched} transaction${d.matched === 1 ? "" : "s"}${d.uncategorised ? `, ${d.uncategorised} uncategorized` : ""}`),
     )));
     const showing = [
       state.month ? (d.months.find((m) => m.ym === state.month)?.label ?? state.month) : "all months",
       state.accountId ? (d.accounts.find((a) => a.id === state.accountId)?.name ?? "one account") : "all accounts",
-      state.category === "none" ? "uncategorised" : state.category ? (categoriesOf(plan).find((c) => c.id === state.category)?.label ?? "one category") : "all categories",
+      state.category === "none" ? "uncategorized" : state.category ? (categoriesOf(plan).find((c) => c.id === state.category)?.label ?? "one category") : "all categories",
       state.q ? `“${state.q}”` : null,
     ].filter(Boolean).join(" · ");
     const filtered = !!(state.month || state.accountId || state.category || state.q);

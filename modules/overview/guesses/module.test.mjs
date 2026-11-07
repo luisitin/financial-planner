@@ -1025,7 +1025,7 @@ test("C3 7.0 take-home a: S $44,420 (federal $3,580, Texas none), J $57,813 (ref
   const none = sam(); none.income = []; assert.equal(SP.takeHome(none, T0), null);
 });
 
-test("C3 7.H spending (health cover Not sure): every row, the envelope, k, and the total from the rounded rows", () => {
+test("C3 7.H spending (health insurance Not sure): every row, the envelope, k, and the total from the rounded rows", () => {
   // proto3 (spec-tools): S raw 1,215 / 227 / 319 / 398 / 346 / 295 / 379, envelope 3,221, typed loans 420 + card 86 -> k 0.764.
   // Here the card payment is our R11-rounded $90 (C2), so k = (3,221 - 510 - 1,215) / 1,964 = 0.762 and eating out is
   // 295 x 0.762 = 224.8 -> $220 (7.H $230, which used 0.764: 225.4 -> $230); R11 wins, the total is $2,680 (7.H $2,690)
@@ -1087,7 +1087,7 @@ test("C3 monotone: a dollar of pay at a bucket edge moves a guess under 0.1%; ty
   assert.ok(n.groceries.value > 0 && n.groceries.sharperWith.some((x) => x.label === "your pay"));
 });
 
-test("C3 hurdles: Ohio's HOA left out, Arizona's asked (Not sure takes the likelier side, No); childcare always asked; health cover asked once", () => {
+test("C3 hurdles: Ohio's HOA left out, Arizona's asked (Not sure takes the likelier side, No); childcare always asked; health insurance asked once", () => {
   const j = greys(atQ6("jordan"), { childcare: 900 }).rows;
   assert.equal(j.housing.ask, undefined, "17.8% of Ohio owners: no question");
   const n = greys(atQ6("patLee")).rows;
@@ -1177,8 +1177,8 @@ test("C3 a $15,000 rent is asked about (year-as-month), a $1,500 one is not; the
 });
 
 test("C3 the basis line and E10 (a typed list far below the household's usual total)", () => {
-  assert.equal(SP.spendBasis(sam(), { today: T0 }), "The grey figures are what a household like yours usually spends: one adult renting in Texas on about $48,000 a year.");
-  assert.equal(SP.spendBasis(atQ6("jordan"), { today: T0 }), "The grey figures are what a household like yours usually spends: one parent of two paying a mortgage in Ohio on about $58,000 a year.");
+  assert.equal(SP.spendBasis(sam(), { today: T0 }), "The gray figures are what a household like yours usually spends: one adult renting in Texas on about $48,000 a year.");
+  assert.equal(SP.spendBasis(atQ6("jordan"), { today: T0 }), "The gray figures are what a household like yours usually spends: one parent of two paying a mortgage in Ohio on about $58,000 a year.");
   const p = atQ6("patLee");
   C3.applySpend(p, { mode: "rows", rows: { housing: 100, groceries: 600, utilities: 300 } });
   const low = SP.missingSpend(p, { today: T0 }, lib0(p));
@@ -1393,7 +1393,7 @@ test("C7 R12: two whole months of bank files replace the guessed rows (transfers
   assert.deepEqual(rows7(p), { housing: 90, utilities: 330, groceries: 900, transport: 120, insurance: 220, dining: 80, shopping: 290 });
   const e = estimate(p, "spend.groceries", { ...OPTS, path: spendPath7("groceries") });
   assert.deepEqual([e.why, e.sigma, e.basis, e.tables], ["your bank files, September and October", 0.15, "yours", []]);
-  assert.equal(SP.spendBasis(p, { today: T0 }), "The grey figures are what your bank files show going out on each, a month over September and October.");
+  assert.equal(SP.spendBasis(p, { today: T0 }), "The gray figures are what your bank files show going out on each, a month over September and October.");
   // the person's own months: the left-over figure does not wait on them (Expenses' share of the month that is our guesses)
   assert.equal(p.guesses[spendPath7("groceries")].s, 0.15);
   assert.equal(computeExpenses7(p, { today: T0 }).guessedMonthly, undefined, "no row is a survey guess now");
@@ -1630,7 +1630,7 @@ test("C7 fix M1c: a row the bank files show nothing for keeps our figure (not in
   assert.ok(r.insurance >= 300, `insurance and health keeps our figure: ${r.insurance}`);
   assert.equal(sOf(p, "insurance"), 0.25, "still our guess (the waiting verdict counts it)");
   assert.equal(sOf(p, "groceries"), 0.15);
-  assert.match(estimate(p, "spend.insurance", { ...OPTS, path: spendPath7("insurance") }).why, /health cover/);
+  assert.match(estimate(p, "spend.insurance", { ...OPTS, path: spendPath7("insurance") }).why, /health insurance/);
 });
 
 test("C7 fix M2: a servicer's line with no 'mortgage' in its name, beside a different payment on Debts, is the mortgage (counted once)", () => {
@@ -1739,7 +1739,7 @@ test("C7 fix M8: bank files more than a year old set no row; the words name the 
   assert.deepEqual(settle(old, OPTS).changed, []);
   const p = withBank7(ours7(), ["2026-09", "2026-10"]); settle(p, OPTS);
   assert.equal(estimate(p, "spend.groceries", { ...OPTS, path: spendPath7("groceries") }).why, "your bank files, September and October");
-  assert.equal(SP.spendBasis(p, { today: T0 }), "The grey figures are what your bank files show going out on each, a month over September and October.");
+  assert.equal(SP.spendBasis(p, { today: T0 }), "The gray figures are what your bank files show going out on each, a month over September and October.");
 });
 
 test("C7 fix M9: a row whose bank figure equals our survey figure is read from the bank all the same (not 'our guess')", () => {
@@ -1832,9 +1832,9 @@ test("C7 fix UX 2 and 4: on the Dashboard the card sits right under where you st
   assert.equal(pg.text(kids[at + 1].kids.find((k) => k?.tag === "h2")).trim(), "Fill in what you skipped", "the card comes next, above the money tiles");
   const row = (k) => pg.all(kids[at], (n) => n.tag === "a" && pg.text(n).trim().startsWith(k))[0];
   assert.equal(pg.text(row("Left over each month")).trim(), "Left over each month Depends on your spending: not counted yet See below ›");
-  assert.equal(pg.text(row("Safety cushion")).trim(), "Safety cushion Needs your spending See below ›");
+  assert.equal(pg.text(row("Emergency fund")).trim(), "Emergency fund Needs your spending See below ›");
   assert.equal(pg.text(row("Retirement")).trim(), "Retirement Depends on the figures below See below ›", "no green 'On track' while spending is not counted");
-  for (const k of ["Left over each month", "Safety cushion", "Retirement"]) {
+  for (const k of ["Left over each month", "Emergency fund", "Retirement"]) {
     const a = row(k);
     assert.equal(a.attrs.href, "#/overview/guesses", k);
     assert.doesNotMatch(pg.all(a, (n) => /db-dot/.test(n.attrs.class ?? ""))[0].attrs.class, /\b(ok|warn|bad)\b/, k);
@@ -1906,17 +1906,17 @@ test("C7 fix UX 5: the card asks question 6's open questions as chips; an answer
   const pg = await drawPage(before);
   let root = pg.draw(), c = cardTitled(pg, root, "Fill in what you skipped");
   const asks = G7.fillOffers(before, OPTS).find((x) => x.case === "spend").asks;
-  assert.deepEqual(asks.map((a) => a.key), ["health-cover", "childcare"], "a parent of two: health cover and childcare");
+  assert.deepEqual(asks.map((a) => a.key), ["health-cover", "childcare"], "a parent of two: health insurance and childcare");
   const group = (q) => pg.all(c, (n) => n.attrs.role === "radiogroup" && n.attrs["aria-label"] === q)[0];
-  assert.equal(pg.all(group("How do you get health cover?"), (n) => n.attrs.role === "radio").length, 4);
+  assert.equal(pg.all(group("How do you get health insurance?"), (n) => n.attrs.role === "radio").length, 4);
   const pub = asks[0].options.find((o) => o.value === "public").label;
-  pg.all(group("How do you get health cover?"), (n) => n.attrs.role === "radio" && pg.text(n).trim() === pub)[0].attrs.onClick();
+  pg.all(group("How do you get health insurance?"), (n) => n.attrs.role === "radio" && pg.text(n).trim() === pub)[0].attrs.onClick();
   assert.deepEqual(pg.plan(), before, "nothing is written by a chip");
   const answered = G7.fillOffers(before, { ...OPTS, taps: { "health-cover": "public" } }).find((x) => x.case === "spend");
   assert.notEqual(answered.total, 3230);
   assert.match(pg.text(c), new RegExp(`Day-to-day spending \\(not the mortgage\\) about \\$${answered.total.toLocaleString("en-US")} a month`), "the card's figure follows the answer");
   assert.equal(pg.all(c, (n) => n.attrs.role === "radio" && n.attrs["aria-checked"] === "true").map((n) => pg.text(n).trim()).join(), pub);
-  assert.ok(group("How do you get health cover?") && group("Do you pay for childcare or after-school care?"), "both questions stay, the answer picked (it can be changed until the tap)");
+  assert.ok(group("How do you get health insurance?") && group("Do you pay for childcare or after-school care?"), "both questions stay, the answer picked (it can be changed until the tap)");
   // a second answer on the same card: the first is kept with it
   const no = asks[1].options.find((o) => o.value === "no").label;
   pg.all(group("Do you pay for childcare or after-school care?"), (n) => n.attrs.role === "radio" && pg.text(n).trim() === no)[0].attrs.onClick();
@@ -2092,9 +2092,9 @@ test("C7 fix UX 11: rows read from the bank files fold on their own (no 'That's 
   const prem = HEALTH7.kff_ehbs2026_premiums.rows["worker contribution, monthly"][1];
   assert.ok(prem > 0);
   near(e.value, 180 + 40 + prem, 5, "the bank's $220 plus the worker's share of a family plan (to the nearest $10)");
-  assert.equal(e.why, "your bank files, September and October, and cover taken from pay");
+  assert.equal(e.why, "your bank files, September and October, and insurance taken from pay");
   const own = estimate(withBank7(ours7(), ["2026-09", "2026-10"]), "spend.insurance", { ...OPTS, path: spendPath7("insurance") });
-  assert.equal(own.why, "your bank files, September and October; not cover taken from pay");
+  assert.equal(own.why, "your bank files, September and October; not insurance taken from pay");
 });
 
 test("C7 verify V1: a car payment typed under 'Car, gas and transit' is the car loan's payment, counted once after the tap (it moves under Loan and card payments)", () => {

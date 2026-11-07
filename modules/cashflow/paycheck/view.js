@@ -71,7 +71,7 @@ export function render(page, ctx) {
     card.append(ui.h("p", { class: "muted small" }, year.join(" ")));
     const w4Name = W4_STATUSES[p.federal.w4.status];
     card.append(ui.h("p", { class: "muted small" }, p.federal.from === "estimate"
-      ? `The federal tax is worked the way payroll does it (IRS Publication 15-T) for a W-4 marked "${w4Name}"${p.federal.w4.step2 ? " with the two-jobs box ticked" : ""}${p.federal.w4.credits || p.federal.w4.otherIncome || p.federal.w4.deductions || p.federal.w4.extra ? " and the amounts you typed" : ", nothing else filled in"}. Type the figure from your pay stub below to make it exact.`
+      ? `The page works out the federal tax the way payroll does (IRS Publication 15-T), for a W-4 marked "${w4Name}"${p.federal.w4.step2 ? " with the two-jobs box checked" : ""}${p.federal.w4.credits || p.federal.w4.otherIncome || p.federal.w4.deductions || p.federal.w4.extra ? " and the amounts you typed" : ", nothing else filled in"}. Type the figure from your pay stub below to make it exact.`
       : p.federal.from === "withholding" ? `The federal tax is the figure on the Withholding check page; the IRS method gives ${cents(p.federal.estimate)} for a W-4 marked "${w4Name}". Set the W-4 below to use that instead.` : `The federal tax is the figure from your pay stub; the IRS method gives ${cents(p.federal.estimate)} for the W-4 below.`));
     // put this paycheck's federal tax on the Withholding check page, with the pay period that matches the paychecks counted here
     const period = p.federal.period;
@@ -89,19 +89,19 @@ export function render(page, ctx) {
       { key: "paychecks", label: "Paychecks a year", type: "select", options: [{ value: "", label: `As on Income (${p.paychecksFrom === "assumed" ? "26 assumed" : p.paychecks})` }, { value: "52", label: "52: every week" }, { value: "26", label: "26: every two weeks" }, { value: "24", label: "24: twice a month" }, { value: "12", label: "12: every month" }] },
       { key: "federal", label: "Federal income tax on your pay stub, a paycheck", type: "money", min: 0, help: "leave empty to work it out from the W-4 below" },
       { key: "w4Status", label: "W-4: filing status (Step 1c)", type: "select", options: [{ value: "", label: `As the household files (${W4_STATUSES[d.w4Default] ?? "single"})` }, ...Object.entries(W4_STATUSES).map(([value, label]) => ({ value, label }))] },
-      { key: "step2", label: "W-4: the two-jobs box in Step 2 is ticked", type: "checkbox" },
+      { key: "step2", label: "W-4: the two-jobs box in Step 2 is checked", type: "checkbox" },
       { key: "credits", label: "W-4 Step 3: credits for children and others, a year", type: "money", min: 0 },
       { key: "otherIncome", label: "W-4 Step 4(a): other income, a year", type: "money", min: 0 },
       { key: "deductions", label: "W-4 Step 4(b): deductions, a year", type: "money", min: 0 },
       { key: "extra", label: "W-4 Step 4(c): extra withheld, a paycheck", type: "money", min: 0 },
-      { key: "health", label: "Health, dental and vision cover, a paycheck", type: "money", min: 0, help: "what your pay stub takes before tax" },
+      { key: "health", label: "Health, dental and vision insurance, a paycheck", type: "money", min: 0, help: "what your pay stub takes before tax" },
       { key: "hsa", label: "Health savings account (HSA), a paycheck", type: "money", min: 0, help: "leave empty to use the HSA and FSA page, the plan's HSA saving or Benefits elections" },
       { key: "fsa", label: "Health spending account (FSA), a paycheck", type: "money", min: 0, help: "leave empty to use the HSA and FSA page or Benefits elections" },
       { key: "dcfsa", label: "Child care spending account, a paycheck", type: "money", min: 0, help: "leave empty to use Benefits elections" },
       { key: "commuter", label: "Transit and parking, a paycheck", type: "money", min: 0, help: "leave empty to use Benefits elections" },
       { key: "roth", label: "Roth 401(k), a paycheck", type: "money", min: 0, help: "taken after tax" },
-      { key: "afterTax", label: "Other deductions after tax, a paycheck", type: "money", min: 0, help: "union dues, life cover above $50,000, a loan from the 401(k)" },
-      { key: "state", label: "State income tax on your pay stub, a paycheck", type: "money", min: 0, help: p.state.from === "rate" ? `leave empty to use the State page's figure, about ${(p.state.rate * 100).toFixed(2)}% of pay` : p.state.from === "no-tax" ? "your state has no income tax" : "leave empty to use the State page under Taxes" },
+      { key: "afterTax", label: "Other deductions after tax, a paycheck", type: "money", min: 0, help: "union dues, life insurance above $50,000, a loan from the 401(k)" },
+      { key: "state", label: "State income tax on your pay stub, a paycheck", type: "money", min: 0, help: p.state.from === "rate" ? `leave empty to use the State tax page's figure, about ${(p.state.rate * 100).toFixed(2)}% of pay` : p.state.from === "no-tax" ? "your state has no income tax" : "leave empty to use the State tax page under Taxes" },
     ];
     const values = { ...s, paychecks: s.paychecks ? String(s.paychecks) : "", w4Status: W4_STATUSES[s.w4Status] ? s.w4Status : "", step2: !!s.step2 };
     const typed = Object.keys(s).some((k) => s[k] !== null && s[k] !== "" && s[k] !== false && s[k] !== undefined);
@@ -115,5 +115,5 @@ export function render(page, ctx) {
         });
       }, { submitLabel: "Save" })));
   }
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/withholding" }, "Withholding check"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Benefits elections"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Budget"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/withholding" }, "Withholding check"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Benefits elections"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Budget"))));
 }

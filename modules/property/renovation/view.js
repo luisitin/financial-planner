@@ -2,6 +2,7 @@
 // its cost, each way to pay (a month, the interest, the cost in today's money, the risk; the cheapest marked),
 // the cash cushion and the equity to borrow against; the project and the offers in folds.
 import { compute, PROJECTS, DEFAULTS } from "./compute.js";
+import { withA } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -31,25 +32,25 @@ export function render(page, ctx) {
 
   if (!s.cost) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "A home project"),
     ui.h("p", { class: "lede" }, "Some projects add more to a home's price than they cost; most add less, and the rest is the pleasure of living with them. This page weighs that, and the cheapest way to pay."),
-    ui.h("p", { class: "muted small" }, `Showing a ${money(d.cost)} ${d.project.label.toLowerCase()} until you choose your own project below.`)));
+    ui.h("p", { class: "muted small" }, `Showing ${withA(money(d.cost))} ${d.project.label.toLowerCase()} until you choose your own project below.`)));
 
   root.append(ui.card(null, ui.row(
     ui.stat("Adds to the home's value", money(d.valueAdded), `about ${pct(d.recoup)} of its ${money(d.cost)} cost`),
-    best ? ui.stat("Cheapest way to pay", best.label, best.id === "cash" ? "no interest at all" : `about ${money(best.today)} more than cash, in today's money`) : null,
+    best ? ui.stat("Cheapest way to pay", best.label, best.id === "cash" ? "no interest at all" : `about ${money(best.today)} more than cash, in today's dollars`) : null,
   ), ui.h("p", {}, d.equityChange >= 0 ? `The home should gain about ${money(d.equityChange)} more than the project costs.` : `About ${money(-d.equityChange)} of the cost is for living with it rather than for the sale price; worth it if you will enjoy it for years.`)));
 
   root.append(ui.card("Ways to pay", ui.h("ul", { class: "rv-list" }, d.ways.map((w) => ui.h("li", { class: [w.id === d.best ? "rv-best" : "", w.fits ? "" : "rv-off"].join(" ").trim() || null },
     ui.h("div", { class: "rv-head" }, ui.h("span", {}, w.label), ui.h("span", {}, w.id === "cash" ? money(d.cost) + " now" : w.id === "refi" ? `${w.monthly >= 0 ? "+" : "−"}${money(Math.abs(w.monthly))} a month` : `${money(w.monthly)} a month`)),
-    ui.h("div", { class: "rv-d" }, w.id === "cash" ? w.note : `${w.id === "refi" ? `${w.note.replace("the whole mortgage", `the whole ${money(d.mortgage.owed)} mortgage`)}. ${w.interest >= 0 ? `${money(w.interest)} more` : `${money(-w.interest)} less`} interest than keeping the mortgage as it is` : `${w.note}. ${money(w.interest)} of interest`}${w.fees ? ` and ${money(w.fees)} of costs` : ""}${w.taxSaved > 1 ? `, ${money(w.taxSaved)} back in tax` : w.taxSaved < -1 ? `, but ${money(-w.taxSaved)} less back in tax than the mortgage it replaces` : w.deductible && !d.itemizes ? " (deductible only if you itemize)" : ""}; ${w.today >= 0 ? `${money(w.today)} more` : `${money(-w.today)} less`} than cash in today's money.`),
+    ui.h("div", { class: "rv-d" }, w.id === "cash" ? w.note : `${w.id === "refi" ? `${w.note.replace("the whole mortgage", `the whole ${money(d.mortgage.owed)} mortgage`)}. ${w.interest >= 0 ? `${money(w.interest)} more` : `${money(-w.interest)} less`} interest than keeping the mortgage as it is` : `${w.note}. ${money(w.interest)} of interest`}${w.fees ? ` and ${money(w.fees)} of costs` : ""}${w.taxSaved > 1 ? `, ${money(w.taxSaved)} back in tax` : w.taxSaved < -1 ? `, but ${money(-w.taxSaved)} less back in tax than the mortgage it replaces` : w.deductible && !d.itemizes ? " (deductible only if you itemize)" : ""}; ${w.today >= 0 ? `${money(w.today)} more` : `${money(-w.today)} less`} than cash in today's dollars.`),
     w.deductible && d.itemizes && w.deductibleShare < 0.995 ? ui.h("div", { class: "rv-d" }, w.id === "refi" ? `Only part of its interest is deductible: not on the closing costs rolled in${(d.mortgage.owed + d.cost) > (d.limit ?? 750000) ? `, nor on home debt past ${money(d.limit ?? 750000)}` : ""}.` : `Only the interest on the first ${money(d.limit ?? 750000)} of home debt is deductible, so about ${pct(w.deductibleShare)} of this line's.`) : null,
     w.risk ? ui.h("div", { class: "rv-risk" }, w.risk) : null,
     !w.fits && w.id === "refi" ? ui.h("div", { class: "rv-risk" }, `A cash-out refinance is usually limited to ${pct(d.inputs.refiLtv)} of the home's value; this one would be ${pct(w.ltv)}.`) : !w.fits && w.id !== "cash" ? ui.h("div", { class: "rv-risk" }, "Not enough equity to borrow this much.") : null))),
-    ui.h("p", { class: "muted small" }, `"In today's money" counts that money paid later could earn ${(d.discount * 100).toFixed(1)}% a year meanwhile (the plan's own return), so a long cheap loan can beat a short dear one. It is after any tax the interest saves.`)));
+    ui.h("p", { class: "muted small" }, `"In today's dollars" counts that money paid later could earn ${(d.discount * 100).toFixed(1)}% a year meanwhile (the plan's own return), so a long cheap loan can beat a short dear one. That is after any tax the interest saves you.`)));
 
   const c = d.cushion;
-  root.append(ui.card("Your cushion and your equity", ui.h("ul", {},
+  root.append(ui.card("Your emergency fund and your equity", ui.h("ul", {},
     ui.h("li", {}, c.after >= 0 ? `Paying cash leaves ${money(c.after)} of usable cash${c.monthsAfter !== null ? `, about ${c.monthsAfter.toFixed(1)} months of essential spending` : ""}${c.target ? ` (your target is ${money(c.target)})` : ""}.` : `Usable cash is ${money(c.now)}: not enough to pay cash${c.target ? `, and it is meant for emergencies (target ${money(c.target)})` : ""}.`),
-    d.home ? ui.h("li", {}, `${d.home.name}: worth ${money(d.home.value)}, ${money(d.home.mortgage)} owed. Lenders usually lend up to ${pct(d.inputs.cltv)} of the value in all, so about ${money(d.home.borrowable)} could be borrowed against it.`) : ui.h("li", {}, "Add the home on Accounts (as Real estate) to see the equity you could borrow against."))));
+    d.home ? ui.h("li", {}, `${d.home.name}: worth ${money(d.home.value)}, ${money(d.home.mortgage)} owed. Lenders usually lend up to ${pct(d.inputs.cltv)} of the value in all, so about ${money(d.home.borrowable)} could be borrowed against it.`) : ui.h("li", {}, "Add the home on Net worth (as Real estate) to see the equity you could borrow against."))));
 
   root.append(ui.h("details", { class: "card fold fold-card", open: s.cost ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The project"), ui.h("span", { class: "fold-status" }, `${money(d.cost)}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
@@ -74,5 +75,5 @@ export function render(page, ctx) {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.renovation = { ...(p.whatIfs.renovation ?? {}), ...v }; });
     }, { submitLabel: "Compare" })));
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/liquidity" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/liquidity" }, "Emergency fund"), ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"))));
 }

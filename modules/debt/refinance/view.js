@@ -10,7 +10,7 @@ export function render(root, ctx) {
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Refinance"),
-      ui.h("p", { class: "lede" }, "Type a refinance offer (rate, term, closing costs) and see whether it pays: the new payment, how many months until the closing costs are paid back, and the interest both ways over the years you plan to stay. It needs your mortgage with its rate and payment first."),
+      ui.h("p", { class: "lede" }, "Type a refinance offer (rate, term, closing costs) to see whether it pays off: the new payment, how many months it takes to earn back the closing costs, and the interest with and without it over the years you plan to stay. It needs your mortgage with its rate and payment first."),
       ui.row(ui.h("a", { class: "btn", href: d.missing === "mortgage" ? "#/balance/net-worth" : "#/balance/liabilities" }, d.missing === "mortgage" ? "Add the mortgage" : "Add its rate and payment"))));
     return;
   }

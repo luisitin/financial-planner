@@ -11,7 +11,7 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Subscriptions"),
       ui.h("p", { class: "lede" }, "Streaming, phone, gym, apps: the charges that renew by themselves. This page adds up what they cost you a year so the ones you no longer use stand out."),
-      ui.h("p", { class: "muted small" }, "They are found in your transactions (same payee, same amount, every month) or typed on the Expenses page under Subscriptions."),
+      ui.h("p", { class: "muted small" }, "The page finds them in your transactions (same payee, same amount, every month) and adds any you typed on the Expenses page under Subscriptions."),
       ui.row(ui.h("a", { class: "btn", href: "#/transactions/import" }, "Import a bank file"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Type them on Expenses"))));
     return;
   }
@@ -25,6 +25,6 @@ export function render(root, ctx) {
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name, i.source === "typed" ? ui.h("span", { class: "pill" }, "typed") : null), ui.h("div", { class: "d" }, `${fmt.money(i.amount, cur, undefined, 2)} ${i.cadenceLabel}${i.next ? ` · next ${fmt.date(i.next)}` : ""}`)),
       ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600" } }, `${fmt.money(i.yearly, cur)}/yr`),
         i.source === "found" ? ui.button("Not a subscription", () => store.update((p) => { p.recurringIgnored = [...new Set([...(p.recurringIgnored ?? []), i.key])]; }), { class: "secondary small" }) : null)))),
-    ui.h("p", { class: "muted small" }, "Cancelling is done with the company, not here; once the charges stop, the item drops off this list by itself."),
+    ui.h("p", { class: "muted small" }, "You cancel with the company itself, not here; once the charges stop, the item drops off this list on its own."),
   ));
 }

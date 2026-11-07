@@ -39,7 +39,7 @@ export function render(page, ctx) {
 
   if (!d.hasAny) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Your home, your car, a lawsuit"),
-    ui.h("p", { class: "lede" }, "Home and car insurance pay for damage, but their most important part is liability: what they pay if someone is hurt and sues. This page checks the cover against what you own."),
+    ui.h("p", { class: "lede" }, "Home and car insurance pay for damage, but their most important part is liability: what they pay if someone is hurt and sues. This page checks the coverage against what you own."),
     ui.h("p", { class: "muted small" }, "Add your home or renters, car and any umbrella policies on Policies first, with the limits from the declarations page."),
     ui.row(ui.h("a", { class: "btn", href: "#/insurance/policies" }, "Add your policies"))));
   else {
@@ -49,8 +49,8 @@ export function render(page, ctx) {
     // (review 2026-11-06, money 7: "what you own outside retirement accounts" is $718,000 on the landlord plan; the figure is net worth)
     const reach = `${money(d.exposed)} a lawsuit could reach (${d.shielded > 0 ? "your net worth outside retirement accounts" : "your net worth"})`;
     root.append(ui.card(null, ui.row(
-      ui.stat("Not covered by your policies", money(d.uncovered), d.uncovered > 0.5 ? `of the ${reach}, after ${money(d.liabilityCover)} of liability cover` : `your ${money(d.liabilityCover)} of liability cover is more than the ${reach}`),
-      ui.stat("Liability cover", money(weakest), d.umbrella > 0 ? "the lower of car and home, umbrella included" : d.auto && d.homeLiability ? "the lower of car and home" : "per accident"),
+      ui.stat("Not covered by your policies", money(d.uncovered), d.uncovered > 0.5 ? `of the ${reach}, after ${money(d.liabilityCover)} of liability coverage` : `your ${money(d.liabilityCover)} of liability coverage is more than the ${reach}`),
+      ui.stat("Liability coverage", money(weakest), d.umbrella > 0 ? "the lower of car and home, umbrella included" : d.auto && d.homeLiability ? "the lower of car and home" : "per accident"),
     )));
   }
 
@@ -73,5 +73,5 @@ export function render(page, ctx) {
     }
     root.append(fold);
   }
-  root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Net worth"))));
+  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Net worth"))));
 }

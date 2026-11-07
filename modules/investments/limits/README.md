@@ -52,11 +52,11 @@ rows of 2025 and 2026 (part `deduct`): all agree. Worked (joint, both covered, 2
 
 **HSA** (`hsaPicture`, IRC 223).
 - With no high-deductible plan (`coverage: "none"`), nobody may put money in, so the limit is 0 and any money is over (223(b)(1), (c)(1)(A)).
-- With self-only cover, only the covered adult may (`coveredId`, else the adult marked "Me"). Everyone else has 0.
-- With family cover, every adult may.
+- With self-only coverage, only the covered adult may (`coveredId`, else the adult marked "Me"). Everyone else has 0.
+- With family coverage, every adult may.
 - Each adult's own money counts: their HSA rows, the amount and the employer's deposits (223(b)(4)(B); Pub. 969 "You must reduce the amount you or any other person can contribute to your HSA by the amount of any contributions made by your employer"). The HSA page's typed money goes only where it is more than the rows, on the covered adult or "Me", never on each adult.
 - Eligible adults get the self-only or family amount + their own $1,000 catch-up from 55 (223(b)(2), (b)(3)).
-- Married people with family cover share one family limit (223(b)(5)). Each spouse's limit = own catch-up + max(0, family - max(0, the other's money - the other's catch-up)) (RULES.md 5.4, example 10.4).
+- Married people with family coverage share one family limit (223(b)(5)). Each spouse's limit = own catch-up + max(0, family - max(0, the other's money - the other's catch-up)) (RULES.md 5.4, example 10.4).
 
 **Roth IRA, per person.**
 - MAGI = the Federal estimate's AGI + the traditional IRA deduction it took (219(g)(3)(A): AGI "without regard to ... the deduction allowable under this section"; applied to Roth IRAs by 408A(c)(3)(B)(i)). It is worked to the cent. When the Federal estimate's figures hold income the Income page leaves out (`known().changed`: stock pay vesting this year, this year's required withdrawal, a business at its profit, rentals after costs), MAGI is their AGI + the IRA deduction they allow + the student loan interest deduction (round 8: Mo and Lin, 210,000 + 30,000 of pay and 105,000 of stock vesting, MAGI 318,000, so a Roth IRA of 0 each; it read 213,000). Filing separately each return gets its own part of that change (its AGI with and without them).
@@ -84,7 +84,7 @@ rows of 2025 and 2026 (part `deduct`): all agree. Worked (joint, both covered, 2
 ## Edge cases
 - No contributions: every limit shows full room, with a note.
 - No adults on the People page: the Roth check shows one line, "You".
-- A spouse outside self-only cover, or anyone without a high-deductible plan, shows "None this year" with the reason and a link to the HSA page. If money goes in anyway, it shows as over.
+- A spouse outside self-only coverage, or anyone without a high-deductible plan, shows "None this year" with the reason and a link to the HSA page. If money goes in anyway, it shows as over.
 - Self-employed income (Income page "business") counts as compensation for the 401(k) catch-up cap at its full figure, before the self-employment tax deduction, so a solo 401(k) is capped only when the business earns less than the deferrals.
 - Filing separately with more or fewer than two adults: the household's MAGI is used for everyone.
 - On a 2027 date the Roth IRA range is 2026's, and the page says so.

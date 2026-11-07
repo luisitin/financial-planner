@@ -174,7 +174,7 @@ test("two incentive grants share the year's room, in grant order", () => {
   near(b.iso.amtAll, amt({ ...ti(withEquity([ISO, second])).inputs, wages: ti(withEquity([ISO, second])).inputs.wages + 0 }, ti().params, amtFor(2026), { preference: a.iso.spread + b.iso.spread }).amt - amt({ ...ti(withEquity([ISO, second])).inputs }, ti().params, amtFor(2026), { preference: a.iso.spread }).amt, 1e-6);
 });
 
-test("the $100,000 rule: options first exercisable over it in a year are nonqualified, taxed as pay", () => {
+test("the $100,000 rule: options first exercisable over it in a year are nonqualified, taxed as wages", () => {
   const split = isoSplit([{ id: "b", optionType: "iso", granted: "2022-01-01", strike: 20, schedule: [{ date: "2023-01-01", shares: 5000 }, { date: "2023-04-01", shares: 1250 }, { date: "2024-01-01", shares: 1250 }] }]);
   const v = split.byGrant.get("b");
   assert.equal(v[0].iso, 5000); assert.equal(v[1].iso, 0); assert.equal(v[1].nso, 1250); assert.equal(v[2].iso, 1250);

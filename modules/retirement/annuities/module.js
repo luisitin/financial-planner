@@ -14,7 +14,7 @@ export default {
   needs: ["household", "accounts", "income", "retirement", "assumptions", "property", "debts"],
   writes: ["retirement"],
   heavy: true,
-  purpose: "An annuity quote against your plan: the return it pays like over your likely lifetime, what bonds paying the same would cost, and what buying it does to your plan.",
+  purpose: "An annuity quote checked against your plan: the yearly return it works out to over your likely lifetime, what bonds paying the same would cost, and what buying it does to your plan.",
   compute,
   render,
 };

@@ -12,7 +12,7 @@ Shared with `scenarios/advisor-plan`: `LEVERS`, `applyChanges(plan, changes, { t
 
 ## Levers
 Plan levers (set on a deep copy, then `buildInputs`): retirement age and Social Security claiming age per adult; spending a month in retirement; extra saving a month (a contribution with no account, so into taxable savings, until the first person retires); stock share now and in retirement; stock and bond returns; inflation.
-Input levers (applied to the engine's inputs): fees a year (taken off both the stock and the bond return); a one-off sum in a year (money in > 0, out < 0; this year when no year is given).
+Input levers (applied to the engine's inputs): fees a year (taken off both the stock and the bond return); a one-time sum in a year (money in > 0, out < 0; this year when no year is given).
 
 ## Formulas
 - Each version: `project` (does it last, the money at the first retirement year and at the end, today's dollars), `affordableSpending` / 12 (the most it could spend a month and still last), and the share of `PATHS` (400) simulated markets in which it lasts (Monte Carlo `drawSequences` with seed 1, the version's own expected returns and volatility).

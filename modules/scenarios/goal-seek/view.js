@@ -117,7 +117,7 @@ export function render(page, ctx) {
  * "room to spare" right above a careful figure lower than the plan spends). */
 function carefulLine(ctx, legacy, money, moneyUp, moneyDown, planned, scale, pill) {
   const { ui } = ctx;
-  const words = (v, less = 0) => [ui.h("strong", {}, "Even in a bad run of years:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `: ${moneyUp(less)} less than the ${money(planned)} the plan spends` : ""}`];
+  const words = (v, less = 0) => [ui.h("strong", {}, "Even in a bad run of years:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `, ${moneyUp(less)} less than the ${money(planned)} the plan spends` : ""}`];
   const el = ui.h("div", { class: "gs-s", "aria-live": "polite" }, ...words("..."));
   whenCareful(ctx, el, (c) => {
     if (!c || !(c.yearly >= 1200)) { el.remove(); return; }
