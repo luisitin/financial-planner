@@ -145,7 +145,7 @@ export function compute(plan, params = {}) {
   // income for someone self-employed (415(c)(3)(B)); with neither on the Income page, the page cannot know it and shows
   // the whole catch-up
   const payKnown = ti.k401.people.some((x) => x.compensation > 0);
-  const hp = c.hsa;
+  const hp = ti.hsa.picture;   // the Federal estimate's picture: Medicare worked in (an HSA limit of 0 once on Medicare)
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const coveredName = hp.coverage === "self" ? (adults.find((p) => p.id === hp.coveredId)?.name ?? null) : null;
   const sum = (xs) => xs.reduce((s, i) => s + i.yearly, 0);

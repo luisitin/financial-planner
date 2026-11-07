@@ -7,7 +7,8 @@ import { MAXIMUM_EARNINGS } from "../../retirement/social-security/data/ssa.js";
 import { federalTax, marginalRate, careStep, paramsFor, standardDeduction, SEPARATE_FIELDS } from "../../../core/math/tax.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { perYear } from "../../../core/math/periods.js";
-import { limitsFor, catchUpFor, hsaPicture, limitKind } from "../../retirement/contributions/compute.js";
+import { limitsFor, catchUpFor, limitKind } from "../../retirement/contributions/compute.js";
+import { hsaPictureMedicare as hsaPicture } from "./hsa-medicare.js";
 // a person inside a sentence: "you" / "your" for the first adult Get started left unnamed ("Me"), "your spouse" for the
 // partner it named; a typed name as before (Review 2026-11-06 round 7). As W.*: this file has its own nameOf (an id's name)
 import * as W from "../../../core/words.js";
@@ -462,10 +463,10 @@ export function taxInputs(plan, params = {}) {
   const adjustments = adjustmentsTyped + iraDeductible + hsaContrib;
   if (iraDeductible) sources.push({ key: "ira", label: "IRA contributions", amount: -iraDeductible, from: "plan", detail: `Contributions page; assumed deductible${iraOver > 0 ? `; ${fmtInt(iraOver)} over the IRA limit is not deducted` : ""}` });
   if (iraOver > 0) notes.push(`${fmtInt(iraOver)} of traditional IRA money is over this year's limit, so it is not deducted. Take it out (with what it earned) before the filing deadline to avoid a 6% tax each year it stays.`);
-  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: `HSA page or Contributions page${hsaExcess > 0 ? `; ${fmtInt(hsaExcess)} over the limit for your cover is taxed as pay` : ""}` });
+  if (hsaContrib) sources.push({ key: "hsa", label: "HSA contributions", amount: -hsaContrib, from: "plan", detail: `HSA page or Contributions page${hsaExcess > 0 ? `; ${fmtInt(hsaExcess)} over the limit for your cover or for Medicare gets no tax break` : ""}` });
   if (hsaExcess > 0) notes.push(hsa.household.limit === 0 && hsa.coverage === "none"
     ? `${fmtInt(hsaExcess)} goes into an HSA, but the HSA page says you have no high-deductible health plan, so it is taxed as pay.`
-    : `${fmtInt(hsaExcess)} of HSA money is over the limit for your cover, so it is taxed as pay. The HSA and FSA page shows who is over.`);
+    : `${fmtInt(hsaExcess)} of HSA money is over the limit for your cover or for Medicare, so it gets no tax break (money taken from pay is taxed as pay). The HSA and FSA page shows who is over.`);
   if (adjustmentsTyped) sources.push({ key: "adjustments", label: "Other adjustments", amount: -adjustmentsTyped, from: "typed" });
   // the people: age allowances and dependents by age at the end of the tax year
   const ages65plus = adults.filter((p) => ageAtYearEnd(p) !== null && ageAtYearEnd(p) >= 65).length;

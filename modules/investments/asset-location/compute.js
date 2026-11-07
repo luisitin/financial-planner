@@ -25,7 +25,8 @@ export function compute(plan, params = {}) {
   const invested1 = (Number(ti.inputs.investmentIncome ?? ti.inputs.qualifiedIncome) || 0) + 1000;
   const base = ti.result.totalTax;
   // interest and dividends are net investment income (IRC 1411(c)(1)(A)(i)): the 3.8% is in what 1,000 more of them costs
-  const marginal = Math.max(0.10, Math.max(0, (federalTax({ ...ti.inputs, otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000, investmentIncome: invested1 }, ti.params).totalTax - base) / 1000));
+  const rawMarginal = Math.max(0, (federalTax({ ...ti.inputs, otherOrdinary: (Number(ti.inputs.otherOrdinary) || 0) + 1000, investmentIncome: invested1 }, ti.params).totalTax - base) / 1000);
+  const marginal = Math.max(0.10, rawMarginal), floored = rawMarginal < 0.10;
   const gainsRate = Math.max(0, (federalTax({ ...ti.inputs, qualifiedIncome: ti.inputs.qualifiedIncome + 1000, investmentIncome: invested1 }, ti.params).totalTax - base) / 1000);   // what the next 1,000 of qualified dividends costs you
   const buckets = Object.keys(BUCKETS).map((key) => ({ key, label: BUCKETS[key], value: 0, classes: {} }));
   const byClass = {};
@@ -72,5 +73,5 @@ export function compute(plan, params = {}) {
   const score = !h.hasData ? "none" : saving < 50 ? "good" : saving < 500 ? "fair" : "poor";
   const notes = [];
   if (buckets.filter((b) => b.value > 0).length < 2) notes.push("All the holdings sit in one kind of account, so there is nothing to place; the question only arises with both taxable and retirement accounts.");
-  return { ready: h.hasData, marginal, gainsRate, buckets, byClass, dragNow, dragIdeal, saving, ideal, now, swaps: swaps.filter((s) => s.amount >= 100), score, notes, total: h.total };
+  return { ready: h.hasData, marginal, floored, gainsRate, buckets, byClass, dragNow, dragIdeal, saving, ideal, now, swaps: swaps.filter((s) => s.amount >= 100), score, notes, total: h.total };
 }

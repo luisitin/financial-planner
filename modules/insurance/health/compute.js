@@ -8,6 +8,10 @@ import { taxView, known } from "../../taxes/federal/known.js";
 import { compute as computeFederal, addIncome } from "../../taxes/federal/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
+import { adultMedicare } from "../../taxes/federal/hsa-medicare.js";
+import { nameIn, verbFor } from "../../../core/words.js";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 /** A quiet year (a check-up, a prescription) and a bad year (a hospital stay or surgery), in the bills the plan is charged. */
 export const QUIET = 1000, BAD = 100000;
@@ -73,11 +77,20 @@ export function compute(plan, params = {}) {
   const limitsYear = hdhpYear(b.year);
   const rules = HDHP_BY_YEAR[limitsYear][tier];
   const L = limitsFor(limitsYear).kinds.hsa;
-  const hsaLimit = L ? (tier === "family" ? L.family : L.limit) : rules.hsa;
+  const hsaFull = L ? (tier === "family" ? L.family : L.limit) : rules.hsa;
+  // on Medicare (65 or older and getting Social Security) nobody can add to an HSA: the limit is 0 from the first month, so
+  // 1/12 of it for each month before (IRC 223(b)(7); Pub. 969). Self-only: the adult the plan covers (the HSA page's choice, else the adult marked "Me"); family: while any adult is not on it
+  const adults = (plan.household?.people ?? []).filter((q) => q.role !== "dependent");
+  // self-only cover: the adult the HSA page says the plan covers (b.hsa.picture), when that page is on self-only cover, else the adult marked "Me"
+  const pic = b.hsa.picture;
+  const holderPerson = (pic.coverage === "self" && pic.coveredId ? adults.find((q) => q.id === pic.coveredId) : null) ?? adults.find((q) => q.role === "self") ?? adults[0] ?? null;
+  const monthsOn = (tier === "family" ? adults : holderPerson ? [holderPerson] : []).map((q) => adultMedicare(plan, q, b.year).months);
+  const medicareMonths = monthsOn.length ? (tier === "family" ? Math.min(...monthsOn) : monthsOn[0]) : 0;
+  const hsaLimit = hsaFull * (12 - medicareMonths) / 12;
   // the marginal rate: the federal tax the year's HSA limit taken off income saves, per dollar, plus payroll tax for
   // contributions from pay. Worked over the limit, not over $1,000, since a credit that falls in steps of income (the
   // child care credit: a point per 4,000 over 150,000 joint) would make a small probe land on a step or miss it
-  const probe = hsaLimit > 0 ? hsaLimit : 1000;
+  const probe = hsaFull > 0 ? hsaFull : 1000;   // the cover's full limit, even when Medicare lowers what can go in
   const t0 = b.result.totalTax;
   // the deduction works the Federal estimate's steps again (known(): a rental loss the allowance frees, the IRA deduction's
   // limits, the student loan interest), as the HSA page does: the HSA deduction is not added back in the rental allowance's
@@ -98,12 +111,18 @@ export function compute(plan, params = {}) {
   const top = kp.reduce((a, x) => (x.pay > (a?.pay ?? 0) ? x : a), null);
   const earner = holder && holder.pay > 0 ? holder : top;
   const baseOf = maximumEarnings(limitsYear);
+  const noWages = !(earner && earner.pay > 0) && !b.wagesTyped && (plan.income ?? []).length > 0;   // a retiree or a spouse at home: HSA money saves no payroll tax
   const payroll = earner && earner.pay > 0
     ? (0.062 * Math.max(0, Math.min(earner.pay, baseOf) - Math.min(Math.max(0, earner.pay - probe), baseOf)) + 0.0145 * probe) / probe
-    : kp.some((x) => x.compensation - x.pay > 0) ? 0 : FICA;
+    : kp.some((x) => x.compensation - x.pay > 0) || noWages ? 0 : FICA;
   const taxRate = marginal + payroll;
   const opts = { hsaRoom: hsaLimit, taxRate };
   const warnings = [];
+  // all year: nothing can go in; part of the year: the months before still count, so the plan saves tax on that much (never "saves no tax")
+  const onIt = tier === "family" ? "every adult the plan covers is" : `${nameIn(holderPerson?.name)} ${verbFor(holderPerson?.name, "is", "are")}`;
+  if (medicareMonths > 0 && (h.plans ?? []).some((p) => p.hsa)) warnings.push(medicareMonths >= 12
+    ? `Once you're on Medicare you can't add to an HSA, so an HSA plan saves no tax on what you pay out of pocket${tier === "family" ? " once everyone covered is on it" : ""}. You can still spend what is in an HSA on medical bills, tax-free.`
+    : `Once you're on Medicare you can't add to an HSA. From ${MONTH_NAMES[12 - medicareMonths]} ${onIt} on Medicare, so this year only $${Math.round(hsaLimit).toLocaleString("en-US")} can go in (for the months before) and save tax on what you pay out of pocket. You can still spend what is in an HSA on medical bills, tax-free.`);
   const $ = (n) => `$${n.toLocaleString("en-US")}`;
   const cover = `${tier === "family" ? "family" : "self-only"} cover, ${limitsYear} rules`;
   const plans = (h.plans ?? []).map((p) => {
@@ -133,5 +152,5 @@ export function compute(plan, params = {}) {
       crossovers.push({ id: x.id, name: x.name, ranges });
     }
   }
-  return { tier, expected, marginal, taxRate, hsaLimit, year: limitsYear, hdhp: rules, plans, best: best?.id ?? null, crossovers, count: plans.length, warnings };
+  return { tier, expected, medicareMonths, marginal, taxRate, hsaLimit, year: limitsYear, hdhp: rules, plans, best: best?.id ?? null, crossovers, count: plans.length, warnings };
 }

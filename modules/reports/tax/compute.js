@@ -38,7 +38,7 @@ export function compute(plan, params = {}) {
   const wh = computeWithholding(plan, { today });
   const es = computeEstimated(plan, { today });
   const cg = computeGains(plan, { today });
-  const hs = computeHsa(plan, { today });
+  const hs = computeHsa(plan, { today, iraAsAssumed: false });
   const tp = computeTaxProjection(plan, { today });
   const r = k.result;
   // the whole year's federal tax (self-employment tax included) and its walk, as the Federal estimate shows them

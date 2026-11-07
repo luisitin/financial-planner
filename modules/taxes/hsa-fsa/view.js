@@ -10,7 +10,7 @@ const COVER_LABEL = { none: "no high-deductible plan", self: "self-only cover", 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today() });
+  const d = compute(plan, { today: fmt.today(), iraAsAssumed: false });
   const money = (n) => fmt.money(n, cur);
   const H = d.hsa, F = d.fsa;
   const noCover = H.coverage === "none";
@@ -18,7 +18,12 @@ export function render(root, ctx) {
   const coverText = `${COVER_LABEL[H.coverage]}${coveredName ? ` for ${nameIn(coveredName)}` : ""}`;
   const ssLimit = Number.isFinite(d.wageBase) ? `${money(d.wageBase)} in ${d.year}` : "";
   let title, lede;
-  if (H.total > 0 && noCover) {
+  // everyone the cover is for is on Medicare all year: nothing can go in, whether or not something is typed
+  const onMedicare = H.limit === 0 && H.coverage !== "none" && H.people.some((p) => p.eligible && p.medicareMonths >= 12);
+  if (onMedicare) {
+    title = "Once you're on Medicare you can't add to an HSA";
+    lede = H.total > 0 ? `The ${money(H.total)} typed for ${d.year} is too much and gets no tax break, so it saves nothing. You can still spend what is in the account on medical bills, tax-free.` : "You can still spend what is in the account on medical bills, tax-free.";
+  } else if (H.total > 0 && noCover) {
     title = "HSA money needs a high-deductible health plan";
     lede = `You said you have no high-deductible health plan, so the ${money(H.total)} going into an HSA for ${d.year} saves no tax. If you do have such a plan, change the cover under "This year's figures".`;
   } else if (H.total > 0) {
@@ -34,7 +39,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, title),
     ui.h("p", { class: "lede" }, lede),
-    noCover ? null : ui.h("p", { class: "muted small" }, `Money taken from pay also skips the 7.65% Social Security and Medicare tax, or only the 1.45% Medicare part on pay above the Social Security pay limit${ssLimit ? ` (${ssLimit})` : ""}. After 65 the money can be taken for anything, taxed like a traditional IRA.`),
+    noCover || onMedicare ? null : ui.h("p", { class: "muted small" }, `Money taken from pay also skips the 7.65% Social Security and Medicare tax, or only the 1.45% Medicare part on pay above the Social Security pay limit${ssLimit ? ` (${ssLimit})` : ""}. After 65 the money can be taken for anything, taxed like a traditional IRA.`),
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -46,7 +51,7 @@ export function render(root, ctx) {
     ui.stat("Room left", money(H.room), H.total > 0 ? `${money(H.total)} in so far` : "nothing in yet"),
     // nothing in and no balance yet: no zero tiles, the hero says what to do first
     H.total > 0 || H.balance > 0 ? ui.stat("Tax saved", money(H.savedTotal), taxSub) : null,
-    H.kept > 0 || H.balance > 0 ? ui.stat("At 65", money(H.atSixtyFive), `${H.years} years at ${fmt.pct(H.growthRate, 1)}: ${money(H.balance)} today plus ${money(H.kept)} a year`) : null,
+    H.kept > 0 || H.balance > 0 ? ui.stat("At 65", money(H.atSixtyFive), H.years > 0 ? `${H.years} years at ${fmt.pct(H.growthRate, 1)}: ${money(H.balance)} today plus ${money(H.kept)} a year` : `${money(H.balance)} in the account today`) : null,
   ),
   H.aboveWageBase.length ? ui.h("p", { class: "muted small" }, `${H.aboveWageBase.map((x, i) => (i ? nameIn(x) : NameIn(x))).join(" and ")} ${H.aboveWageBase.length > 1 || isYou(H.aboveWageBase[0]) ? "earn" : "earns"} more than the Social Security pay limit (${ssLimit}). Pay above it has no Social Security tax, so HSA money from that pay saves only the 1.45% Medicare tax, not the full 7.65%.`) : null,
   ));

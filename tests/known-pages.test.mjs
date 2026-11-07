@@ -48,7 +48,7 @@ test("the widow's Social Security and withdrawals are in the rate Tax-lot harves
   near(location(p, { today: T }).marginal, k.nextDollar);
   near(crypto(p, { today: T }).tax.marginal, k.nextDollar);
   // Health's HSA saving: the tax a year's HSA limit takes off income, per dollar, over the limit (it can cross a step)
-  near(health(p, { today: T }).taxRate - 0.0765, k.nextDollar, 0.02);
+  near(health(p, { today: T }).taxRate, k.nextDollar, 0.02);   // no wages: HSA money saves no payroll tax (round 8 follow-up F1)
 });
 
 test("the freelancer's business at its profit and its 20% deduction are in the rate: 9.6 cents, not the 22% of the rows alone", () => {
