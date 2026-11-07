@@ -159,7 +159,7 @@ function typedPretax(plan, today) {
  * else (a graduated state, or no state) the survey's own combined ratio at that income for both taxes (taxRatio2023).
  * Self-employment tax and payroll tax are outlays like any other and are not in a. -> { a, gross, federal, state, how } | null
  */
-export function takeHome(plan, today, prof = null) {
+export function takeHome(plan, today, prof = null, { sizing = false } = {}) {
   const lines = L(plan, "income").filter((x) => x && x.period !== "once" && Number(x.amount) > 0 && (!today || activeOn(x, today)));
   let wages = 0, other = 0, ss = 0, untaxed = 0;
   for (const x of lines) {
@@ -183,7 +183,10 @@ export function takeHome(plan, today, prof = null) {
   const P = paramsFor(FEDERAL, yearOf(today));
   const fs = plan?.household?.filingStatus;
   const status = P.status?.[fs] ? fs : "single";
-  const pretax = Math.min(wages, typedPretax(plan, today));
+  // sizing the guessed rows: saving more before tax lowers the tax and so raised the guessed dining and shopping, and with them the
+  // retirement spending, so more saving made the verdict worse (guess-sanity sr.verdict.monotone, 2026-11-07): the rows are
+  // sized on take-home before any typed saving
+  const pretax = sizing ? 0 : Math.min(wages, typedPretax(plan, today));
   const under17 = kids.filter((k) => k.age === null || k.age < 17).length;
   const fed = federalTax({ filingStatus: status, wages: wages - pretax, otherOrdinary: other, socialSecurity: ss, dependentsUnder17: under17, otherDependents: kids.length - under17, ages65plus: p.adults.filter((x) => ok(x.age) && x.age >= 65).length }, P);
   let state = 0, how = "none";
@@ -524,12 +527,25 @@ function buildModel(plan, today, args, force, lib) {
   }
 
   // take-home and the share model's inputs
-  const th = takeHome(plan, today, prof);
+  const th = takeHome(plan, today, prof, { sizing: true });
   const a = th && th.a > 0 ? th.a : null;
   const base = a ?? afterTax(HH, hh ?? "all");
-  const share = (row) => (a !== null ? sQ(row, a) * ratio(HH, hh, row) : shareOf(HH, hh ?? "all", row));
+  // Two corrections to "the household type's share" (guess-sanity SF-SPEND-CHILD-MONO and SF-HEALTH-AGE, 2026-11-07). The
+  // survey's household types stand in for age ("married couple only" is mostly older couples: it spends less on eating out,
+  // cars and clothes than a couple with a small child), so (1) a household with a child under 18 never gets a row smaller
+  // than the same adults without one; and (2) health cover
+  // and medicine follow the age of the oldest adult (CE 2025 by age: $4,347 a year at 25-34 and $7,317 at 55-64), not the
+  // household type.
+  const KIDS_BASE = { oneParentChildUnder18: "singlePersonAndOther", marriedCoupleWithChildrenTotal: "marriedCoupleOnly", marriedCoupleOldestChildUnder6: "marriedCoupleOnly", marriedCoupleOldestChild6to17: "marriedCoupleOnly" };
+  const ageKey = ok(prof.age) ? (prof.age < 25 ? "under25" : prof.age < 35 ? "25-34" : prof.age < 45 ? "35-44" : prof.age < 55 ? "45-54" : prof.age < 65 ? "55-64" : prof.age < 75 ? "65-74" : "75plus") : null;
+  const by = (d, c, row) => (a !== null ? sQ(row, a) * ratio(d, c, row) : shareOf(d, c ?? "all", row));
+  // (health cover is per person: the age group's share is scaled by this household's size against that age group's average)
+  const people = prof.adults.length + kids.length, perHome = ageKey ? at(profT(AGE), "persons", ageKey) : null;
+  const size = people > 0 && ok(perHome) && perHome > 0 ? people / perHome : 1;
+  const share = (row) => (ageKey && (row === "insurance" || row === "oop") ? by(AGE, ageKey, row) * size
+    : Math.max(by(HH, hh, row), KIDS_BASE[hh] ? by(HH, KIDS_BASE[hh], row) : 0));
   const flexAmount = (row, { region: useRegion = true } = {}) => share(row) * (useRegion ? ratio(REG, region, row) : 1) * base / 12;
-  const T_BASE = ["ce2025_spend_by_incomeQuintile", "ce2025_profile_by_incomeQuintile", "ce2023_aftertax_income_by_incomeQuintile", "ce2025_spend_by_householdComposition", "ce2025_profile_by_householdComposition"];
+  const T_BASE = [...(ok(prof.age) ? ["ce2025_spend_by_ageOfReferencePerson", "ce2025_profile_by_ageOfReferencePerson"] : []), "ce2025_spend_by_incomeQuintile", "ce2025_profile_by_incomeQuintile", "ce2023_aftertax_income_by_incomeQuintile", "ce2025_spend_by_householdComposition", "ce2025_profile_by_householdComposition"];
   const T_REG = region ? ["ce2025_spend_by_region", "ce2025_profile_by_region", "ce2023_aftertax_income_by_region"] : [];
   const sharpers = [...(st ? [] : [YOUR_STATE]), ...(a === null || prof.payHow === "guess" ? [YOUR_PAY] : [])];
   const who = whoWords(prof, kids), place = placeIn(st);
@@ -541,7 +557,9 @@ function buildModel(plan, today, args, force, lib) {
   // E01 housing
   if (tenure === "renter") {
     const gross = STATE_OR_US(SP.acs2025_median_gross_rent_by_state, "grossRent", st);
-    const rr = a !== null ? (interpLog(RENT_CURVE, a) * a / rentPer(Q, "all")) * rentRatio(hh) : rentPer(HH, hh ?? "all") / rentPer(HH, "all");
+    // a child never lowers the rent guess (the survey's couples with children rent for less than couples without: age, not the child)
+    const rrOf = (c) => (a !== null ? (interpLog(RENT_CURVE, a) * a / rentPer(Q, "all")) * rentRatio(c) : rentPer(HH, c ?? "all") / rentPer(HH, "all"));
+    const rr = Math.max(rrOf(hh), KIDS_BASE[hh] ? rrOf(KIDS_BASE[hh]) : 0);
     put("housing", { fixed: gross * D_SPEND.contractShare.value * rr, flex: 0, weight: "big",
       why: fit(`typical rent before utilities for ${who} ${place}${pw}`, `typical rent before utilities for ${who} ${place}`, `typical rent before utilities ${place}`),
       tables: ["acs2025_median_gross_rent_by_state", "ce2025_spend_by_housingTenure", ...T_BASE] });
@@ -613,7 +631,16 @@ function buildModel(plan, today, args, force, lib) {
         why: n65 ? "Medicare premiums with a Plan G supplement, plus medicine and visits" : "medicine and visits, typical for a household like yours",
         tables: [...(n65 ? ["cms_medicare_2026_parts_ab", "cms_medicare_part_d_parameters", "kff_medigap_average_premium_2025"] : []), ...T_BASE, ...T_REG] });
     } else {
-      put("insurance", { fixed: 0, flex: flexAmount("insurance"), weight: "big", ask: how ? null : HEALTH_ASK, why: "health cover and medicine, typical for a household like yours", tables: [...T_BASE, ...T_REG] });
+      // an adult of 65 or more pays at least Part B and the Part D base premium, whatever the age group's average says, unless the
+      // household's income is low enough for the Medicare Savings Program to pay it (Qualifying Individual limit, 2026: $1,816 a month
+      // single, $2,455 a couple; CMS, read 2026-11-07), guess-sanity pt.medicare.at-65
+      const n65 = prof.adults.filter((x) => ok(x.age) && x.age >= 65).length;
+      const d = HEALTH.cms_medicare_part_d_parameters, year = String(yearOf(today));
+      const partD = at(d, "baseBeneficiaryPremium", year) ?? at(d, "baseBeneficiaryPremium", d.cols.filter((c) => c <= year).pop() ?? d.cols[0]);
+      const floorEach = (at(HEALTH.cms_medicare_2026_parts_ab, "partB:standardMonthlyPremium", "value") ?? 0) + (partD ?? 0);
+      const qi = prof.adults.length > 1 ? 2455 : 1816;
+      const floor = n65 > 0 && (prof.income ?? 0) / 12 > qi ? n65 * floorEach : 0;
+      put("insurance", { fixed: 0, flex: Math.max(flexAmount("insurance"), Math.ceil(floor / 10) * 10), weight: "big", ask: how ? null : HEALTH_ASK, why: "health cover and medicine, typical for a household like yours", tables: [...T_BASE, ...T_REG, ...(floor ? ["cms_medicare_2026_parts_ab", "cms_medicare_part_d_parameters"] : [])] });
     }
   }
   // E06 childcare: always asked (no published share paying); Yes prices each child under 13 whose age is known

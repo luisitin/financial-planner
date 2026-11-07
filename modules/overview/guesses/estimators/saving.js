@@ -21,7 +21,7 @@
 import { T as BAL } from "../data/balances.js";
 import { T as PAY } from "../data/pay.js";
 import { T as SPEND } from "../data/spend.js";
-import { profileOf, scfR2, ageCol, ok, has, money, fit, pctWords, SCF_TABLES, YOUR_PAY, YOUR_AGE } from "./common.js";
+import { profileOf, scfR2, ageCol, ok, has, money, fit, pctWords, SCF_TABLES, CELL_TABLES, crossMedian, YOUR_PAY, YOUR_AGE } from "./common.js";
 import { LIMITS } from "../../../retirement/contributions/data/limits.js";
 import { benefitsFor } from "../../../career/benefits/data/benefits.js";
 import { interpLog, interpLinear, sigmaFromMeanMedian, logitCombine, roundGuess } from "../../../../core/math/estimate.js";
@@ -53,6 +53,14 @@ const CPS_BANDS = [["15-24", 15, 24], ["25-29", 25, 29], ["30-34", 30, 34], ["35
 const typicalPay = (age) => { const b = CPS_BANDS.find(([, lo, hi]) => age >= lo && age <= hi) ?? CPS_BANDS[0]; return rowAt(PAY[CPS], "full-time year-round", b[0]); };
 const onPayLine = (f, pay) => interpLog(VG_PAY_CENTRES.map(([c, mid]) => [mid, f(c)]), pay);
 const logitOf = (p) => Math.log(p / (1 - p));
+/**
+ * A figure published for age groups, read at one age without a step: straight lines of the log between the groups' middles
+ * (22, 30, 40, 50, 60, 70 for Vanguard's groups; the CPS five-year groups' middles for pay), flat beyond the first and last.
+ * Otherwise a birthday at 35 doubled a 401(k) guess (guess-sanity sr.saving.no-cliff, 2026-11-07).
+ */
+const VG_AGE_MID = { "age:<25": 22, "age:25-34": 30, "age:35-44": 40, "age:45-54": 50, "age:55-64": 60, "age:65+": 70 };
+const smoothVg = (age, f) => interpLinear(AGE_BANDS.map(([c]) => [VG_AGE_MID[c], Math.log(f(c))]), age);
+const smoothPay = (age) => Math.exp(interpLinear(CPS_BANDS.map(([c, lo, hi]) => [Number.isFinite(hi) ? (lo + hi) / 2 : lo + 2, Math.log(rowAt(PAY[CPS], "full-time year-round", c))]), age));
 
 // ---- who and how much pay
 /** The person a path names: setup-contrib-<id>, setup-have-retire-<id>, setup-workplan-<id>, or a record's owner/personId. */
@@ -112,13 +120,13 @@ const guessedPay = (plan, pid) => L(plan, "income").some((x) => x && typeof x.id
  */
 export function vanguardBalance({ pay = null, age = null } = {}) {
   const all = bal("all:all participants");
-  const band = bandOf(age), ageMed = band ? bal(band) : null;
+  const band = bandOf(age), ageMed = band ? Math.exp(smoothVg(age, bal)) : null;
   const rInc = ok(pay) && pay > 0 ? onPayLine((c) => bal(c), pay) / all : null;
   let value = all;
   if (rInc !== null) value *= rInc;
   if (ageMed) {
     const rAge = ageMed / all;
-    value = rInc !== null ? value * (rAge / (onPayLine((c) => bal(c), typicalPay(age)) / all)) : ageMed;
+    value = rInc !== null ? value * (rAge / (onPayLine((c) => bal(c), smoothPay(age)) / all)) : ageMed;
   }
   const at = ageMed ? band : "all:all participants";
   return { value, sigma: sigmaFromMeanMedian(bal(at, "average"), bal(at)), parts: { all, band: ageMed ? band : null, rInc } };
@@ -283,11 +291,13 @@ export const estimators = {
       const age = ageOf(plan, pid, today) ?? prof.age;
       const r = scfR2("retirementAccounts", { income: prof.income, age });
       if (!r) return null;
+      // the survey's age x income cells (data/cells.js), not the two published medians multiplied (guess-sanity sr.retire.like-you)
+      const cell = crossMedian("retire", { income: prof.income, age });
       const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
       return {
-        value: clamped(r) * shareOf(people, pid), sigma: r.sigma, measured: r.sigma !== null,
+        value: (cell ?? clamped(r)) * shareOf(people, pid), sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`typical for households your age ${on} who have one`.replace(/\s+/g, " ").trim(), "typical for households your age who have one"),
-        uses: { pay: prof.payHow, age: age !== null ? "typed" : null }, sharperWith: [...(prof.income ? [] : [YOUR_PAY]), ...(age !== null ? [] : [YOUR_AGE])].slice(0, 2), tables: SCF_TABLES,
+        uses: { pay: prof.payHow, age: age !== null ? "typed" : null }, sharperWith: [...(prof.income ? [] : [YOUR_PAY]), ...(age !== null ? [] : [YOUR_AGE])].slice(0, 2), tables: [...SCF_TABLES, ...CELL_TABLES],
       };
     },
   },
@@ -297,11 +307,13 @@ export const estimators = {
       const prof = profileOf(plan, today);
       const r = scfR2("pooledInvestmentFunds", { income: prof.income, age: prof.age });
       if (!r) return null;
+      // the survey's age x income cells (data/cells.js), not the two published medians multiplied (guess-sanity sr.balance.like-you)
+      const cell = crossMedian("invest", { income: prof.income, age: prof.age });
       const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
       return {
-        value: clamped(r), sigma: r.sigma, measured: r.sigma !== null,
+        value: cell ?? clamped(r), sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`typical for households your age ${on} who have one`.replace(/\s+/g, " ").trim(), "typical for households your age who have one"),
-        uses: { pay: prof.payHow, age: prof.age !== null ? "typed" : null }, sharperWith: [...(prof.income ? [] : [YOUR_PAY]), ...(prof.age !== null ? [] : [YOUR_AGE])].slice(0, 2), tables: SCF_TABLES,
+        uses: { pay: prof.payHow, age: prof.age !== null ? "typed" : null }, sharperWith: [...(prof.income ? [] : [YOUR_PAY]), ...(prof.age !== null ? [] : [YOUR_AGE])].slice(0, 2), tables: [...SCF_TABLES, ...CELL_TABLES],
       };
     },
   },

@@ -221,6 +221,12 @@ When a save moves guesses, the shell adds " N of our guesses moved with it." to 
 registry, and validates `modules/overview/guesses/coverage.js` (every input a layperson may not know, and how a blank
 is handled).
 
+**Believable for the household.** A guess or a default must be one a layperson believes for their own household (age,
+couple or single, children, owner or renter, pay, state, what they typed). The rules are in `qa/guess-sanity-rules.json`
+(what is checked, the line, why, the source and its date); `node qa/guess-sanity.mjs` builds a grid of households
+through Get started's own apply functions, adds the qa plans, and writes `qa/results/sweep.md`; `tests/guess-sanity.test.mjs`
+runs the hard rules in `npm test`. A new estimator or default adds its rule there.
+
 ## Ids and dates
 Every list item in the plan has `id` from `ui.uid()`. Dates are ISO `YYYY-MM-DD` strings.
 Money is a plain number in the plan's currency (`plan.meta.currency`); rates are fractions.

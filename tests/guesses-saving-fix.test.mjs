@@ -166,12 +166,12 @@ test("M8: 'Through work' then 'On my own' does not keep a guessed balance in bot
   const w = jordan();
   S.applyMoney(w, { people: { [ME]: { status: "work", amount: "58000", period: "annual", plan: "yes" } } }, T0);
   q4b(w, {}, ["retire"]);
-  assert.equal(acct(w, `setup-workplan-${ME}`).balance, 26000);
+  assert.equal(acct(w, `setup-workplan-${ME}`).balance, 27000);
   q4b(w, { [`kind-${ME}`]: "own" });
   assert.equal(acct(w, `setup-workplan-${ME}`).balance, 0, "the work plan's guess goes");
   assert.equal(isGuess(w, `accounts[setup-workplan-${ME}].balance`), false);
-  assert.equal(acct(w, `setup-have-retire-${ME}`).balance, 29000);
-  assert.equal(S.reflect(w, "have-amounts").total, 29000);
+  assert.equal(acct(w, `setup-have-retire-${ME}`).balance, 16000);
+  assert.equal(S.reflect(w, "have-amounts").total, 16000);
 });
 
 test("M9: the usual match is one figure in the step: 4% of pay when 6% goes in, said the same in the step and on the chip", () => {

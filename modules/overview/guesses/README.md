@@ -50,7 +50,7 @@ screen (a plan that skipped three debts has nine big ones; C8's measured ranking
 guesses about you); "Where our guesses come from" last: the tables behind the guesses above, then every other table on
 hand, each with our name for it, the publisher (`shownBy`), the publisher's table (`tableShown`), a plain "as of" line
 (`asOf`), the read date and "The table ›" as an outlined 44 px button (`.btn.secondary.small`); its status says
-"67 tables from 18 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
+"69 tables from 18 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
 "We fill in typical figures only for households in the U.S. that count in dollars, so none of these tables is used for
 your plan." Rates are shown and saved to a thousandth of a percent (6.125%), as Get started keeps them. Saving a debt's
 rate while its older payment still stands adds "Your payment of $1,261 a month was worked out at the old rate, so type
@@ -724,7 +724,7 @@ most 12 months old, at most $50 or a tenth of a month's money out with no kind),
 so spending guesses lean high for households under about $60,000 after tax; the envelope and the waiting verdict
 contain it.
 
-### The tables (67, from 18 publishers)
+### The tables (69, from 18 publishers)
 | table id | file | publisher | as of | dollars of | read | statistic |
 |---|---|---|---|---|---|---|
 | `ce2025_spend_by_incomeQuintile` | spend.js | U.S. Bureau of Labor Statistics, Consumer Expenditure Surveys | 2025 figures, published 2026 | 2025 | 2026-11-02 | mean |
@@ -794,6 +794,8 @@ contain it.
 | `kff_medigap_average_premium_2025` | health.js | KFF, from NAIC Medigap data (industry) | 2025 premiums, published October 2026 | 2025 | 2026-11-02 | mean |
 | `ssa_snapshot_2026_09_average_benefit` | retire.js | Social Security Administration | September 2026, published October 2026 | 2026 | 2026-11-02 | mean |
 | `ssa_retired_worker_benefit_by_age_sex_2025` | retire.js | Social Security Administration | December 2025, published 2026 | 2025 | 2026-11-02 | mean |
+| `scf2025_cross_median_if_held` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | 2025 | 2026-11-07 | median (worked out from the microdata by age x income group) |
+| `scf2025_home_value_to_income` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | ratio | 2026-11-07 | percentiles (worked out from the microdata by age group) |
 
 `STATE_REGION` (data/index.js): the U.S. Census Bureau's four regions, the ones the CE survey reports by.
 
@@ -813,6 +815,52 @@ handled (M later)"; a `later:` row whose commit is built fails. C1: 48 handled, 
 rate boxes are `guess:debt.<kind>.rate` (54 handled, 137 later). C3: Get started's insurance and shopping rows
 (`guess:spend.insurance`, `guess:spend.shopping`) and its retirement spending question
 (`guess:overview/setup:retireSpend`): 57 handled, 134 later.
+
+## Believable for the household: the sanity check (qa/guess-sanity.mjs; 2026-11-07)
+A guess has to be one a layperson believes for their own household: age, couple or single, children, owner or renter, pay,
+state and what they typed (the owner's example: a couple of 25 must not be told their mortgage has 12 years left). The rules
+live in `qa/guess-sanity-rules.json` (what is checked, the line, why, the published source and its date); the one command
+`node qa/guess-sanity.mjs` builds a grid of households through Get started's own apply functions, adds the qa plans, and
+writes `qa/results/sweep.md` with each failing rule under its owner; `tests/guess-sanity.test.mjs` runs the hard rules in
+`npm test` and `tests/guess-sanity-fixes.test.mjs` holds one test per fix. A new estimator or default adds its rule in the
+same change. What it changed in the estimators:
+- **Survey cells by age and income** (`data/cells.js`, `crossMedian`, `homeRatios` in estimators/common.js). The survey's
+  published tables give a median by income group or by age group, never both, and multiplying the two overshot at young ages
+  and at both income extremes (a 20-year-old on $40,000 was given $32,000 of investments; holders under 35 in the bottom 60%
+  by income have a median of $2,900). `account.invest.balance` and `account.ira.balance` now read the SCF 2025 cell for the
+  oldest adult's age and the household's income, on straight lines of the log between the age groups' middles (28, 40, 50,
+  60, 70, 80) so a birthday never steps it. `home.value` is held to the age group's 5th to 95th percentile of value over
+  income (not when the income is under $1,000 a year, the lowest point of the survey's income scale: a ratio to almost nothing
+  bounds nothing, and a $1 pay had held a couple's home to $13), and above a mortgage balance the person typed divided by the
+  group's 75th-percentile loan-to-value.
+- **Home insurance follows the home** (`insuranceYear`): the state's average HO-3 premium in 2025 prices, scaled by this
+  home's value against the state's typical owner-occupied home (ACS 2025), at least $350 a year. It moves the mortgage payment
+  guess's insurance part with it.
+- **Spending rows** (spend.js `buildModel`): health cover and medicine follow the oldest adult's age (CE 2025 by age) and the
+  household's size; a household with a child under 18 never gets a row (but groceries) smaller than the same adults without
+  one, because the survey's household types stand in for age; the rows are sized on take-home before typed pre-tax saving
+  (`takeHome(..., { sizing: true })`), so saving more never raises the guessed dining and the retirement figure after it.
+- **Get started** (overview/setup/compute.js): the Education goal is dated August 15 of the year the first child under 18 turns
+  18 (`educationDate`); the cushion is the Emergency fund page's own advice, 3 months with two incomes, 6 with one, 3 more for
+  pay that goes up and down (`defaultCushionMonths`; a figure typed on Assumptions or set on Emergency fund is kept, 6 included:
+  `guide.setup.cushionWrote`); a retired person of 62 or more whose Social Security is left at "Estimate it for me" (the
+  "Already retired" tick on the ages question) gets the average retired worker's benefit at their age (SSA, Annual Statistical
+  Supplement 2026, Table 5.B9, Dec 2025; `averageRetiredBenefit`), divided by the early claim factor before full age, in place
+  of $0, and Our guesses for you names that table. Still to do: someone who said retired on question 2 is asked "I already get
+  it", and a blank amount there is still $0 (`pt.ss.not-zero-when-retired`).
+- **No birthday steps** (`smoothAge` in estimators/common.js, `smoothVg` and `smoothPay` in estimators/saving.js): every figure the
+  survey, Vanguard or the Census publishes by age group (cash, vehicles, home value, the 401(k) balance, the share of pay put in,
+  the share who put in at all, the pay "people your age" have) is read on straight lines of the log between the groups' middles,
+  so turning 35 moved a 401(k) guess from $6,900 to $13,000 and cash from $1,800 to $1,300 and now moves neither by more than a
+  few percent. Check: `sr.saving.no-cliff`, `sr.saving.monotone`.
+- **Two corrections in the spending rows**: a household with a child under 18 never gets a row (rent included) smaller than the
+  same adults without one, because the survey's household types stand in for age; an adult of 65 or more with an income above the
+  Medicare Savings Program's Qualifying Individual limit ($1,816 a month single, $2,455 a couple, 2026; CMS, read 2026-11-07) is
+  never guessed under Part B plus the Part D base premium ($202.90 + $38.99 a month, 2026), rounded up to $10.
+- A home value held to its age group's range is taken to two figures on the inside of the bound (so rounding for display cannot
+  step over it).
+- The two `cells.js` tables are hand-kept, not built by tools/build-guess-data.mjs: `data/index.js` carries their read date,
+  and a rebuild of the generated files must keep that line.
 
 ## Tests (module.test.mjs)
 Data: every table has publisher, https URL, vintage and read date; every row's length equals `cols`; spot values (CE

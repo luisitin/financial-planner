@@ -25,7 +25,7 @@ const said = (plan, answer) => S.applyMoney(plan, { people: { [ME]: { status: "w
 
 test("V1: a guessed balance in the plan at work (Q2's Yes) reopens grey on question 4b, and Back then Continue keeps it ours", () => {
   const j = jordan(); said(j, "yes"); q4b(j, {}, ["retire"]);
-  assert.equal(acct(j, WP(ME)).balance, 26000);
+  assert.equal(acct(j, WP(ME)).balance, 27000);
   assert.ok(isGuess(j, `accounts[${WP(ME)}].balance`));
   const v = S.valuesFor(j, "have-amounts", { today: T0 });
   assert.equal(v[`retire-${ME}`], "", "before: the box showed 26000 as typed text (spec P2: a saved guess reopens as the grey figure)");
@@ -98,7 +98,7 @@ test("V5: Contributions' 'will the money last' line waits while the retirement f
 test("V6: a removed person's account kept as the household's keeps its guess (it does not jump to everyone's median)", () => {
   const pl = patLee(); q4b(pl, {});
   const was = acct(pl, `setup-have-retire-${PARTNER}`).balance;
-  assert.equal(was, 29000);
+  assert.equal(was, 28000);
   removePerson(pl, PARTNER, { keep: true }); settle(pl, OPTS);
   assert.equal(acct(pl, `setup-have-retire-${PARTNER}`).balance, was, "before: $44,000, everyone's median, once the person was gone");
 });

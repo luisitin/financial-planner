@@ -17,6 +17,8 @@ Thumbs.db
 # QA run output (written by qa/households/run.mjs)
 /qa/households/results/
 /qa/households/.tmp/
+# guess sanity sweep output (written by qa/guess-sanity.mjs)
+/qa/results/
 # Claude Code: this machine's own permission tweaks
 .claude/settings.local.json
 # Generated downloadable answer-key bundles; source fixtures stay tracked.

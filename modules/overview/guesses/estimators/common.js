@@ -11,6 +11,7 @@
 //   stateOf, placeName, placeOf, possessiveOf, money, fit           small helpers for the why-lines
 //   YOUR_STATE, YOUR_PAY, YOUR_AGE, WHAT_YOU_PAY                    the "Sharper if you tell us" links
 import { T as BAL } from "../data/balances.js";
+import { T as CELLS } from "../data/cells.js";
 import { STATE_NAME } from "../data/index.js";
 import { RETURNS } from "../../../retirement/historical/data/returns.js";
 import { interpLinear, sigmaFromMeanMedian } from "../../../../core/math/estimate.js";
@@ -94,8 +95,45 @@ function byIncome(item, income) {
   const y = interpLinear(pts, incomePercentile(income));
   return y === null ? null : Math.exp(y);
 }
+export const CELL_TABLES = ["scf2025_cross_median_if_held"];
+/** The age at the middle of each age group of the cross-tabulation (data/cells.js): a birthday moves the guess a little, never in a step. */
+const CELL_AGES = [28, 40, 50, 60, 70, 80];
+/** Each cross-tabulation's income groups by the percentile at their middles. */
+const CELL_GROUPS = { invest: [["0-60", 30], ["60-90", 75], ["90-100", 95]], retire: [["0-40", 20], ["40-60", 50], ["60-80", 70], ["80-90", 85], ["90-100", 95]] };
 /**
- * R2 for a balance among families who have one: the all-families median x [median at the family's income / all] x the
+ * The median among holders for a family of this age and income, from the survey's age x income cells (data/cells.js): straight
+ * lines on the log of the medians across the income groups' middles, then across the age groups' middles. An unknown
+ * income reads as the middle family (percentile 50); an unknown age -> null. kind: "invest" | "retire". -> number | null
+ */
+export function crossMedian(kind, { income = null, age = null } = {}) {
+  const t = CELLS.scf2025_cross_median_if_held, groups = CELL_GROUPS[kind];
+  if (!t || !groups || !ok(age)) return null;
+  const pct = ok(income) && income > 0 ? incomePercentile(income) : 50;
+  const perBand = CELL_AGES.map((_, i) => {
+    const pts = groups.map(([g, mid]) => [mid, t.rows[`${kind}:${g}`]?.[i]]).filter(([, v]) => ok(v) && v > 0).map(([mid, v]) => [mid, Math.log(v)]);
+    return pts.length ? interpLinear(pts, pct) : null;
+  });
+  const pts = CELL_AGES.map((a, i) => [a, perBand[i]]).filter(([, v]) => v !== null);
+  const y = pts.length ? interpLinear(pts, age) : null;
+  return y === null ? null : Math.exp(y);
+}
+/** The 5th, 50th and 95th percentile of home value over income, and the 75th of mortgage over value, for an age's group (data/cells.js). */
+export function homeRatios(age) {
+  const t = CELLS.scf2025_home_value_to_income;
+  if (!t || !ok(age)) return null;
+  // a bound, not a guess: the age group's own figure (a step is fine for a limit)
+  const i = age < 35 ? 0 : age < 45 ? 1 : age < 55 ? 2 : age < 65 ? 3 : age < 75 ? 4 : 5, at = (row) => t.rows[row][i];
+  return { p5: at("valueOverIncome:p5"), p50: at("valueOverIncome:p50"), p95: at("valueOverIncome:p95"), ltv75: at("mortgageOverValue:p75") };
+}
+export const HOME_RATIO_TABLES = ["scf2025_home_value_to_income"];
+/** A figure the survey publishes by age group, read at one age without a step: straight lines of the log between the groups' middles (28, 40, 50, 60, 70, 80). */
+const AGE_MIDS = [28, 40, 50, 60, 70, 80];
+const smoothAge = (age, f) => {
+  const pts = AGE_COLS.map(([c], i) => [AGE_MIDS[i], f(c)]).filter(([, v]) => ok(v) && v > 0).map(([m, v]) => [m, Math.log(v)]);
+  return pts.length ? Math.exp(interpLinear(pts, age)) : null;
+};
+/**
+ * R2 for a balance among families who have one (the age group read without a step: smoothAge): the all-families median x [median at the family's income / all] x the
  * age ratio left once the age group's typical income is taken out ([age median / all] / [median at the age group's
  * median family income / all]). An unknown income keeps the age group's own median (income integrated out); an unknown
  * age keeps the income ratio alone; neither gives the all-families median. The spread is the age group's (else all
@@ -105,13 +143,13 @@ export function scfR2(item, { income = null, age = null } = {}) {
   const all = cellOf(MED, item, "all:all families");
   if (!all) return null;
   const col = ageCol(age);
-  const ageMed = col ? cellOf(MED, item, col) : null;
+  const ageMed = col ? smoothAge(age, (c) => cellOf(MED, item, c)) : null;
   const inc = ok(income) && income > 0 ? income : null;
   let rInc = 1, resid = 1;
   if (inc) rInc = byIncome(item, inc) / all;
   if (ageMed) {
     const rAge = ageMed / all;
-    const typical = inc ? cellOf(BAL.scf2025_family_income, "median", col) : null;
+    const typical = inc ? smoothAge(age, (c) => cellOf(BAL.scf2025_family_income, "median", c)) : null;
     resid = typical ? rAge / (byIncome(item, typical) / all) : rAge;
   }
   const at = ageMed ? col : "all:all families";

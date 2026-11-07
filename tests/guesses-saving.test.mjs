@@ -34,30 +34,32 @@ const row = (plan, pid) => plan.retirement.contributions.find((c) => c.id === `s
 const acct = (plan, id) => plan.accounts.find((a) => a.id === id);
 
 // ---- E12: a 401(k) balance by pay and age
-test("E12 7.H: a 401(k) through work is $3,100 at 24 on $48,000, $26,000 at 41 on $58,000 and $29,000 at 59 on $40,000", () => {
+test("E12 7.H: a 401(k) through work is $3,400 at 24 on $48,000, $27,000 at 41 on $58,000 and $28,000 at 59 on $40,000", () => {
   // R2 on Vanguard (end of 2025): everyone's median $44,115 x the pay ratio x the age ratio left once the age group's typical pay is
-  // taken out. Sam (<25 group, median $2,234; full-time pay at 24 $40,950): 44,115 x (17,899.97/44,115) x 0.1712 = $3,064.9
+  // taken out. The age ratio is read on straight lines of the log between the groups' middles (22, 30, 40, 50, 60, 70; guess-sanity
+  // sr.saving.no-cliff, 2026-11-07): Sam at 24 is a little over a quarter of the way from the <25 group ($2,234) to 25-34, so
+  // $3,364.3 (the band-exact $3,064.9 before); Jordan at 41 $27,357.8; Lee at 59 $28,343.6
   const s = vanguardBalance({ pay: 48000, age: 24 });
-  near(s.value, 3064.9, 0.5, "Sam");
+  near(s.value, 3364.3, 0.5, "Sam");
   near(s.sigma, 1.535, 0.001, "spread from the group's average $7,259 over its median $2,234: sqrt(2 ln 3.25)");
-  near(vanguardBalance({ pay: 58000, age: 41 }).value, 25543.7, 0.5, "Jordan");
-  near(vanguardBalance({ pay: 40000, age: 59 }).value, 28700.7, 0.5, "Lee");
+  near(vanguardBalance({ pay: 58000, age: 41 }).value, 27357.8, 0.5, "Jordan");
+  near(vanguardBalance({ pay: 40000, age: 59 }).value, 28343.6, 0.5, "Lee");
   // the rounded figures (R11: two figures, the spread is above 0.15)
   const sam0 = sam(); S.applyHavePicks(sam0, ["retire"]);
   const e = est(sam0, "account.retire.balance", BAL(ME));
-  assert.equal(e.value, 3100);
-  assert.deepEqual([e.low, e.high], [1100, 8600], "7.H: the middle half $1,100 to $8,600");
+  assert.equal(e.value, 3400);
+  assert.deepEqual([e.low, e.high], [1200, 9500], "7.H: the middle half $1,200 to $9,500");
   assert.equal(e.why, "typical in a work plan at 24 on your pay");
   assert.ok(e.why.length <= 70);
   const jo = jordan(); S.applyHavePicks(jo, ["retire"]);
-  assert.equal(est(jo, "account.retire.balance", BAL(ME)).value, 26000);
+  assert.equal(est(jo, "account.retire.balance", BAL(ME)).value, 27000);
   const pl = patLee(); S.applyHavePicks(pl, ["retire"]);
-  assert.equal(est(pl, "account.retire.balance", BAL(PARTNER)).value, 29000);
+  assert.equal(est(pl, "account.retire.balance", BAL(PARTNER)).value, 28000);
 });
 
 test("E12: a missing pay or age falls back to the next row down, and a pay at a band edge moves the guess by almost nothing", () => {
   // no pay: the age group's own median ($2,234 at 24); no age: the pay ratio alone; neither: everyone's median ($44,115)
-  assert.equal(vanguardBalance({ age: 24 }).value, 2234);
+  near(vanguardBalance({ age: 24 }).value, 3801.5, 0.5);   // the <25 group's $2,234 and 25-34's, on the log line at 24
   near(vanguardBalance({ pay: 58000 }).value, 26089.3, 0.5, "pay alone");
   assert.equal(vanguardBalance({}).value, 44115);
   // monotone: a higher pay never lowers it
@@ -140,22 +142,22 @@ test("E14 7.H: the employer adds about $130 a month for Sam, $180 for Jordan, $2
 // ---- E15-E17, E40
 test("E15, E16, E17 and E40: an IRA, investments outside retirement, checking and savings, and a car, from the Survey of Consumer Finances", () => {
   const s = sam(); S.applyHavePicks(s, ["retire", "invest", "car"]);
-  // E15 (7.H "S had he picked On my own"): $13,000, the middle half $5,600 to $32,000
+  // E15 (7.H "S had he picked On my own"): $6,800 (SCF 2025 cell: holders under 35 on the survey's 60-80% income group; the two medians multiplied gave $13,000), the middle half $2,900 to $16,000
   const ira = est(s, "account.ira.balance", BAL(ME));
-  assert.equal(ira.value, 13000); assert.deepEqual([ira.low, ira.high], [5600, 32000]);
+  assert.equal(ira.value, 6800); assert.deepEqual([ira.low, ira.high], [2900, 16000]);
   assert.equal(ira.why, "typical for households your age on your pay who have one");
   assert.ok(est(s, "account.invest.balance", "accounts[setup-have-invest].balance").value > 0);
   // E40: the survey's vehicles for a household like this over the vehicles a household that age has: $12,000
   assert.equal(est(s, "account.car.value", "accounts[setup-have-car].balance").value, 12000);
-  // E17 (J: $2,700, shared $1,350 / $1,350 when both are picked and both blank)
+  // E17 (J: $2,800, shared $1,400 / $1,400 when both are picked and both blank)
   const j = jordan(); S.applyHavePicks(j, ["checking", "savings"]);
-  assert.equal(est(j, "account.cash", "accounts[setup-have-checking].balance").value, 1350);
-  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance").value, 1350);
+  assert.equal(est(j, "account.cash", "accounts[setup-have-checking].balance").value, 1400);
+  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance").value, 1400);
   const one = jordan(); S.applyHavePicks(one, ["checking"]);
-  assert.equal(est(one, "account.cash", "accounts[setup-have-checking].balance").value, 2700, "only one picked: it gets all of it");
+  assert.equal(est(one, "account.cash", "accounts[setup-have-checking].balance").value, 2800, "only one picked: it gets all of it");
   // one typed: the other gets what is left of the total, if that is $100 or more, else nothing
-  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance", { checking: 1000 }).value, 1700);
-  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance", { checking: 2650 }), null);
+  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance", { checking: 1000 }).value, 1800);
+  assert.equal(est(j, "account.cash", "accounts[setup-have-savings].balance", { checking: 2750 }), null);
 });
 
 test("E12s 7.H: Pat's $500,000 for both of them is split by pay: Pat $340,000, Lee $160,000", () => {
@@ -179,7 +181,7 @@ test("E12s 7.H: Pat's $500,000 for both of them is split by pay: Pat $340,000, L
   const alone = patLee();
   q4b(alone, { [`retire-${ME}`]: "500000", joint: "alone", checking: "28000", home: "450000" });
   assert.equal(acct(alone, `setup-have-retire-${ME}`).balance, 500000);
-  assert.equal(acct(alone, `setup-have-retire-${PARTNER}`).balance, 29000);
+  assert.equal(acct(alone, `setup-have-retire-${PARTNER}`).balance, 28000);
   assert.equal(alone.guide.setup.taps?.["retire-joint"], undefined);
   // the question itself is E12's ask, shown only for a couple with one box typed and the other blank
   const g = gx(patLee())("account.retire.balance", { path: BAL(PARTNER), args: S.haveArgs(patLee(), { [`retire-${ME}`]: "500000" }, T0) });
@@ -214,7 +216,7 @@ test("the gate: outside the U.S. and EUR plans get no guess from any retirement-
 test("Q4b 7.H Sam: a 401(k) left blank gets $3,100, $200 a month and $130 from the employer, all marked; typed checking and savings stay his", () => {
   const s = sam(); S.applyHavePicks(s, ["checking", "savings", "retire"]);
   q4b(s, { checking: "1,200", savings: "800", [`kind-${ME}`]: "work" });
-  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3100);
+  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3400);
   assert.deepEqual([row(s, ME).amount, row(s, ME).employerMatch, row(s, ME).period], [200, 1560, "monthly"]);
   assert.deepEqual(Object.keys(s.guesses).sort(), [BAL(ME), MATCH(ME), PUT(ME)].sort());
   assert.deepEqual([s.guesses[BAL(ME)].k, s.guesses[PUT(ME)].k, s.guesses[MATCH(ME)].k], ["account.retire.balance", "contrib.amount", "contrib.match"]);
@@ -232,9 +234,9 @@ test("Q4b 7.H Sam: a 401(k) left blank gets $3,100, $200 a month and $130 from t
 test("Q4b 7.H Jordan: $26,000, $270 and $180; the account is made even though nothing was typed; the match step is open", () => {
   const j = jordan(); S.applyHavePicks(j, ["checking", "retire", "home"]);
   q4b(j, {});
-  assert.equal(acct(j, `setup-have-retire-${ME}`).balance, 26000);
+  assert.equal(acct(j, `setup-have-retire-${ME}`).balance, 27000);
   assert.deepEqual([row(j, ME).amount, row(j, ME).employerMatch], [270, 2160]);
-  assert.equal(acct(j, "setup-have-checking").balance, 2700, "E17");
+  assert.equal(acct(j, "setup-have-checking").balance, 2800, "E17");
   assert.equal(acct(j, "setup-have-home").balance, 210000, "E18 asked here");
   // her typed "5" in the dollars box: 5% of her pay, about $240 a month (7.H)
   const g = gx(j)("contrib.amount", { path: PUT(ME), args: { retire: {}, contrib: { [ME]: null } } });
@@ -247,7 +249,7 @@ test("Q4b 7.H Jordan: $26,000, $270 and $180; the account is made even though no
 test("Q4b 7.H Pat and Lee: Lee's $29,000, $600 and $280 for Pat, $210 and $130 for Lee; Pat's $500,000 stays his typed figure", () => {
   const pl = patLee();
   q4b(pl, { [`retire-${ME}`]: "500000", checking: "28000", home: "450000" });
-  assert.equal(acct(pl, `setup-have-retire-${PARTNER}`).balance, 29000);
+  assert.equal(acct(pl, `setup-have-retire-${PARTNER}`).balance, 28000);
   assert.equal(isGuess(pl, BAL(ME)), false);
   assert.deepEqual([row(pl, ME).amount, row(pl, ME).employerMatch / 12], [600, 280]);
   assert.deepEqual([row(pl, PARTNER).amount, row(pl, PARTNER).employerMatch / 12], [210, 130]);
@@ -257,13 +259,13 @@ test("Q4b 7.H Pat and Lee: Lee's $29,000, $600 and $280 for Pat, $210 and $130 f
 test("a typed balance is the person's: the guess goes, the same figure typed counts, and clearing it brings the guess back", () => {
   const s = sam(); S.applyHavePicks(s, ["retire"]);
   q4b(s, {});
-  assert.equal(s.guesses[BAL(ME)].v, 3100);
+  assert.equal(s.guesses[BAL(ME)].v, 3400);
   q4b(s, { [`retire-${ME}`]: "3100" });
   assert.equal(s.guesses?.[BAL(ME)], undefined, "typing the same figure over the guess makes it his");
   assert.equal(S.valuesFor(s, "have-amounts", { today: T0 })[`retire-${ME}`], 3100);
   q4b(s, { [`retire-${ME}`]: "" });
   assert.equal(s.guesses[BAL(ME)].k, "account.retire.balance", "cleared: ours again");
-  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3100);
+  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3400);
 });
 
 test("the chips: 6% is a share of pay, None and No match are typed zeros, Not sure is our guess; Back reopens the chip", () => {
@@ -309,7 +311,7 @@ test("a retirement tile always makes the account; with a plan said at work the g
   assert.ok(acct(w, `setup-workplan-${ME}`), "Q2 made the plan at work");
   S.applyHavePicks(w, ["retire"]);
   q4b(w, {});
-  assert.equal(acct(w, `setup-workplan-${ME}`).balance, 26000);
+  assert.equal(acct(w, `setup-workplan-${ME}`).balance, 27000);
   assert.equal(acct(w, `setup-have-retire-${ME}`), undefined, "no second 401(k)");
   assert.equal(w.guesses[`accounts[setup-workplan-${ME}].balance`].k, "account.retire.balance");
   assert.equal(row(w, ME).accountId, `setup-workplan-${ME}`);
@@ -317,7 +319,7 @@ test("a retirement tile always makes the account; with a plan said at work the g
   const n = jordan(); n.retirement.workPlans = { [ME]: { plan: false, match: false } };
   S.applyHavePicks(n, ["retire"]);
   q4b(n, {});
-  assert.equal(acct(n, `setup-have-retire-${ME}`).balance, 26000);
+  assert.equal(acct(n, `setup-have-retire-${ME}`).balance, 27000);
   assert.equal(row(n, ME), undefined);
   // paid by their own business: no pay from an employer, so no contribution guess, but the balance is still guessed
   const b = migrate(emptyPlan());
@@ -343,7 +345,7 @@ test("Q4b 'Got it' counts what is ours: 'about $X saved and invested in all. 2 o
   q4b(s, { checking: "1200" });
   const r = S.reflect(s, "have-amounts");
   assert.equal(r.guessed, 1); assert.equal(r.of, 2);
-  assert.equal(r.total, 1200 + 3100);
+  assert.equal(r.total, 1200 + 3400);
   const t = sam(); S.applyHavePicks(t, ["checking", "savings"]);
   q4b(t, { checking: "1200", savings: "800" });
   assert.equal(S.reflect(t, "have-amounts").guessed, undefined, "all typed: nothing to count");
@@ -461,5 +463,5 @@ test("the spread of what people put in is worked from the published shares of pa
   const s = sam(); S.applyHavePicks(s, ["retire"]); q4b(s, {});
   clearGuess(s, BAL(ME));
   assert.equal(s.guesses[BAL(ME)], undefined);
-  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3100);
+  assert.equal(acct(s, `setup-have-retire-${ME}`).balance, 3400);
 });

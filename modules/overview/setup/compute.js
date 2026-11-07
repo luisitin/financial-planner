@@ -10,6 +10,7 @@ import { CATEGORIES, compute as computeExpenses, BANK_SPREAD } from "../../cashf
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
+import { suggestedMonths } from "../../goals/emergency-fund/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
@@ -179,6 +180,48 @@ export const GOALS = [
   { key: "car", icon: "🚗", label: "A car", line: "Paid in cash", name: "Next car", years: 3, match: /\b(car|vehicle|truck|suv)\b/i },
   { key: "other", icon: "🎯", label: "Something else", line: "You name it", name: "My goal", years: 2 },
 ];
+/**
+ * The Education goal's default date: the fall bill (August 15, the Education page's own) of the year the first child
+ * under 18 turns 18, never ten years out whatever the children's ages (guess-sanity SF-GOAL-EDU, 2026-11-07). A child's
+ * birth year comes from the plan (dependents). No child with a birth year, or that date already past: null / a year out.
+ * Source: the Education page's start age (goals/education DEFAULTS.startAge 18) and bill dates (BILLS).
+ */
+export function educationDate(plan, today) {
+  if (!today) return null;
+  const todayYear = Number(today.slice(0, 4));
+  const starts = (plan?.household?.people ?? []).filter((p) => p.role === "dependent" && /^\d{4}/.test(p.birthDate ?? ""))
+    .map((p) => Number(p.birthDate.slice(0, 4)) + 18).filter((y) => y >= todayYear && y <= todayYear + 18);
+  if (!starts.length) return null;
+  const d = `${Math.min(...starts)}-08-15`;
+  return d > today ? d : addYears(today, 1);
+}
+/**
+ * The months of must-pay bills the cushion aims for when the person has not chosen: the Emergency fund page's own advice
+ * (suggestedMonths: 3 with two steady incomes, 6 with one, 3 more for pay that goes up and down), so Get started never
+ * writes 6 where that page says 3 (guess-sanity sr.emergency.months-default, 2026-11-07). A chosen figure always wins.
+ */
+export function defaultCushionMonths(plan, today = null) {
+  const inc = computeIncome(plan, today ? { today } : {});
+  const payers = new Set(inc.active.filter((x) => x.type === "salary" && x.personId).map((x) => x.personId));
+  const earners = payers.size || (inc.active.some((x) => x.type === "salary") ? 1 : 0);
+  const variable = inc.active.some((x) => ["business", "bonus", "commission"].includes(x.type));
+  return suggestedMonths({ earners, variable, dependants: (plan?.household?.people ?? []).some((p) => p.role === "dependent") }).months;
+}
+/**
+ * The months the cushion aims for as Get started reads them: the plan's figure when the person chose one, else the Emergency
+ * fund page's own advice. Chosen: saved from the cushion question (`guide.setup.cushionSaid`), or any figure other than the one
+ * Get started last wrote itself (`guide.setup.cushionWrote`: a figure typed on Assumptions or set on Emergency fund is the
+ * person's, 6 included; verify 2026-11-07); before Get started has written one, any figure but the schema's starting 6. A new
+ * plan carries that starting 6 in `assumptions.emergencyMonths`, which nobody chose; reading it as a choice kept 6 for two
+ * steady incomes.
+ */
+export const SCHEMA_CUSHION_MONTHS = 6;
+export function cushionMonths(plan, today = null) {
+  const m = Number(plan?.assumptions?.emergencyMonths), s = setupOf(plan);
+  const wrote = Number(s.cushionWrote);
+  const chosen = Number.isFinite(m) && m > 0 && (s.cushionSaid === true || m !== (Number.isFinite(wrote) && wrote > 0 ? wrote : SCHEMA_CUSHION_MONTHS));
+  return chosen ? m : defaultCushionMonths(plan, today);
+}
 export const PAY_PERIODS = [
   { value: "annual", label: "A year" },
   { value: "monthly", label: "A month" },
@@ -690,8 +733,11 @@ export const yearlyPay = (plan, pid) => L(plan, "income").filter((x) => x.person
  * estimateBenefit). Monthly, in today's dollars; null without a birth year or pay.
  */
 export function estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge = 65, today }) {
-  if (!birthYear || !(pay > 0) || !today) return null;
+  if (!birthYear || !today) return null;
   const year = Number(String(today).slice(0, 4));
+  // Someone who has stopped work (62 or older) has no pay to work from: the average retired worker's benefit for their age
+  // (guess-sanity pt.ss.not-zero-when-retired, 2026-11-07), so their savings are not planned against a Social Security of $0.
+  if (!(pay > 0)) return stopAge <= year - birthYear ? averageRetiredBenefit(year - birthYear, birthYear) : null;
   const lastYear = Math.min(year - 1, LAST_AWI_YEAR);
   const base = WAGE_INDICES[LAST_AWI_YEAR];
   const record = [];
@@ -701,6 +747,21 @@ export function estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge = 65
   const est = estimateBenefit(record, { birthYear, claimAge: fra.asYears, futureEarnings: "same", stopYear: birthYear + Math.min(Math.floor(fra.asYears), Math.max(22, stopAge)) - 1, today });
   return est.eligible ? Math.round(est.pia) : 0;
 }
+/**
+ * The average monthly retired-worker benefit at an age, December 2025 (SSA, Annual Statistical Supplement 2026, Table 5.B9,
+ * read 2026-11-02; the table in guesses/data/retire.js): 62-64 $1,451, 65-69 $1,967, 70-74 $2,225, 75-79 $2,154, 80-84
+ * $2,102, 85-89 $2,018, 90 and over $1,897. Read between the middles of the bands (63, 67, 72, 77, 82, 87, 92) so a birthday
+ * never moves it more than a few dollars. Before 62 retired workers draw disability or survivor benefits, not this average:
+ * no guess (null). Under full retirement age the average is a reduced benefit, so it is divided by the claim factor at that
+ * age to give the amount at full age, which is what the Social Security page stores.
+ */
+export function averageRetiredBenefit(age, birthYear = null) {
+  if (!(age >= 62)) return null;
+  const T = RETIRED_AVG, at = (a) => { if (a <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (a <= T[i][0]) return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (a - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[T.length - 1][1]; };
+  const avg = at(age), fra = birthYear ? fullRetirementAge(birthYear).asYears : 67;
+  return Math.round(age < fra && birthYear ? avg / claimFactor(birthYear, Math.max(62, Math.min(age, fra))) : avg);
+}
+const RETIRED_AVG = [[63, 1450.74], [67, 1967.07], [72, 2225.12], [77, 2153.59], [82, 2101.73], [87, 2018.02], [92, 1897]];
 /**
  * Q3. Ages, when to stop working, and Social Security: { people: { [id]: { month, year, stopAge, retired, ss: { mode:
  * "estimate"|"statement"|"getting"|"none"|"unsure", amount, started } } }, kids: { [id]: year } }. A birth date is kept
@@ -1632,7 +1693,7 @@ export function applyGoalPicks(draft, keys) {
  * No bills yet: no amount (loan payments alone are not the bills; Emergency fund waits for expenses the same way).
  */
 export function cushion(plan, months = null, today = null) {
-  const m = Math.round(Number(months ?? plan?.assumptions?.emergencyMonths ?? 6)) || 6;
+  const m = Math.round(Number(months ?? plan?.assumptions?.emergencyMonths ?? defaultCushionMonths(plan, today))) || 6;
   const has = L(plan, "expenses").length > 0;
   // every must-pay bill on file, dated or not: the cushion goal's amount as saved since the setup began (owner question 1)
   const essentialAll = has ? computeExpenses(plan, {}).essentialMonthly ?? 0 : 0;
@@ -1829,8 +1890,10 @@ export function applyGoalDetails(draft, v, today, cushionFunds = null) {
     const id = `setup-goal-${g.key}`;
     const x = v[g.key] ?? {};
     if (g.key === "cushion") {
-      const months = Math.min(12, Math.max(1, Math.round(Number(x.months) || Number(draft.assumptions?.emergencyMonths ?? 6))));
-      if (Number(draft.assumptions?.emergencyMonths ?? 6) !== months || draft.assumptions?.emergencyMonths === undefined) draft.assumptions = { ...(draft.assumptions ?? {}), emergencyMonths: months };
+      const months = Math.min(12, Math.max(1, Math.round(Number(x.months) || cushionMonths(draft, today))));
+      if (Number(x.months) > 0 && months !== cushionMonths(draft, today) && !draft.guide.setup.cushionSaid) draft.guide.setup.cushionSaid = true;   // a figure the person chose is theirs, even when it is the starting 6
+      if (Number(draft.assumptions?.emergencyMonths) !== months || draft.assumptions?.emergencyMonths === undefined) draft.assumptions = { ...(draft.assumptions ?? {}), emergencyMonths: months };
+      if (draft.guide.setup.cushionWrote !== months) draft.guide.setup.cushionWrote = months;   // what this screen last wrote: a figure typed elsewhere later differs from it, and is kept (cushionMonths)
       const c = cushion(draft, months, today);
       // its money: what Emergency fund counts as usable today (cash, checking, savings). The list follows the accounts
       // while it is the one this setup wrote (cushionFunds); a choice made on Goals stays. The amount the same way.
@@ -1850,7 +1913,7 @@ export function applyGoalDetails(draft, v, today, cushionFunds = null) {
       continue;
     }
     const years = DATE_CHIPS.includes(Number(x.years)) ? Number(x.years) : null;
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(x.date ?? "") && !years ? x.date : today ? addYears(today, years ?? g.years) : "";
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(x.date ?? "") && !years ? x.date : today ? ((g.key === "education" && !years && educationDate(draft, today)) || addYears(today, years ?? g.years)) : "";
     const target = pos(x.target);
     const old = byId(draft.goals, id);
     const asked = { ...(target ? { target } : {}), ...(old?.targetDate === date ? {} : { targetDate: date }), ...(g.key === "other" && String(x.name ?? "").trim() ? { name: String(x.name).trim() } : {}) };
@@ -2001,7 +2064,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     const x = byId(L(plan, "goals"), `setup-goal-${g.key}`);
     // the cash accounts linked to it (question 7b's chips); none linked, nothing chosen
     const cash = g.key === "cushion" || !Array.isArray(x?.fundedBy) ? [] : x.fundedBy.filter((id) => isCash(plan, id));
-    return [g.key, { target: x?.target || "", date: x?.targetDate ?? "", years: x ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: Number(plan?.assumptions?.emergencyMonths ?? 6), ...(g.key === "cushion" ? {} : { funds: cash.length ? cash : null }) }];
+    const eduDate = !x && g.key === "education" ? educationDate(plan, today) : null;
+    return [g.key, { target: x?.target || "", date: x?.targetDate ?? eduDate ?? "", years: x || eduDate ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: cushionMonths(plan, today), ...(g.key === "cushion" ? {} : { funds: cash.length ? cash : null }) }];
   }));
   return {};
 }
@@ -2329,9 +2393,13 @@ export const estimators = {
     fn(plan, { today, path }) {
       const pid = ssPerson(path), p = people(plan).find((x) => x.id === pid);
       if (!p?.birthDate || !today || p.role === "dependent") return null;
-      const est = estimateSocialSecurity({ birthYear: Number(p.birthDate.slice(0, 4)), yearlyPay: yearlyPay(plan, pid), stopAge: p.retirementAge ?? Number(plan?.assumptions?.retirementAge ?? 65), today });
+      const pay = yearlyPay(plan, pid);
+      const est = estimateSocialSecurity({ birthYear: Number(p.birthDate.slice(0, 4)), yearlyPay: pay, stopAge: p.retirementAge ?? Number(plan?.assumptions?.retirementAge ?? 65), today });
       if (est === null) return null;
-      return { value: est, rounded: true, why: "worked out from the pay on file with Social Security's formula", uses: { pay: "typed", birth: "typed" }, sharperWith: [{ label: "your statement at ssa.gov", href: "#/retirement/social-security" }], tables: [], dataAsOf: RULES_ON, basis: "yours" };
+      const sharperWith = [{ label: "your statement at ssa.gov", href: "#/retirement/social-security" }];
+      // no pay to work from (stopped work at 62 or later): the average retired worker's benefit at their age, with its source (verify 2026-11-07)
+      if (!(pay > 0)) return { value: est, rounded: true, why: "the average Social Security of retired workers your age", uses: { birth: "typed" }, sharperWith, tables: ["ssa_retired_worker_benefit_by_age_sex_2025"], basis: "population" };
+      return { value: est, rounded: true, why: "worked out from the pay on file with Social Security's formula", uses: { pay: "typed", birth: "typed" }, sharperWith, tables: [], dataAsOf: RULES_ON, basis: "yours" };
     },
   },
   "overview/setup:retireSpend": {

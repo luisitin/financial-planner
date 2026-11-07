@@ -19,13 +19,16 @@ export function paths(plan, params = {}) {
   const a = plan.assumptions ?? {}, rt = plan.retirement ?? {};
   const people = b.people ?? [];
   const self = people[0] ?? null;
-  const ageNow = self ? year - self.birthYear : Number(a.retirementAge ?? 65) - 20;
+  // without a birth date there is no age to state (guess-sanity pt.pension.one-age, 2026-11-07): the path is drawn from 20 years
+  // before the plan's retirement age (the note says so) and `ageNow` is null, so no page says "at 45" for a stranger
+  const ageNow = self ? year - self.birthYear : null;
+  const startAge = ageNow ?? Number(a.retirementAge ?? 65) - 20;
   const retireAge = self?.retireAge ?? Number(a.retirementAge ?? 65), endAge = self?.endAge ?? Number(a.planEndAge ?? 95);
   const stocksNow = Number(rt.stocksNow ?? 0.7), stocksRetired = Number(rt.stocksRetired ?? 0.5);
-  const retireYear = year + Math.max(0, retireAge - ageNow);
+  const retireYear = year + Math.max(0, retireAge - startAge);
   const rows = [];
-  for (let age = ageNow; age <= endAge; age++) {
-    const y = year + (age - ageNow);
+  for (let age = startAge; age <= endAge; age++) {
+    const y = year + (age - startAge);
     const t = retireYear > year ? Math.min(1, Math.max(0, (y - year) / (retireYear - year))) : 1;
     const planShare = stocksNow + (stocksRetired - stocksNow) * t;
     const td = targetDateMix(retireYear, y);

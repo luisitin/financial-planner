@@ -49,11 +49,12 @@ import { T as HOME } from "./data/home.js";
 import { T as PURCHASE } from "./data/purchase.js";
 import { T as HEALTH } from "./data/health.js";
 import { T as RETIRE } from "./data/retire.js";
+import { T as CELLS } from "./data/cells.js";
 
 export const estimators = { ...payEstimators, ...homeEstimators, ...debtEstimators, ...savingEstimators, ...spendEstimators, ...goalEstimators };
 export { profileOf } from "./estimators/common.js";
 
-const FILES = { spend: SPEND, balances: BALANCES, pay: PAY, debts: DEBTS, home: HOME, purchase: PURCHASE, health: HEALTH, retire: RETIRE };
+const FILES = { spend: SPEND, balances: BALANCES, pay: PAY, debts: DEBTS, home: HOME, purchase: PURCHASE, health: HEALTH, retire: RETIRE, cells: CELLS };
 /** Every bundled table by id: its source fields plus the data file it lives in. */
 export const TABLES = Object.fromEntries(Object.entries(FILES).flatMap(([file, T]) => Object.entries(T).map(([id, t]) => [id, { ...t, file }])));
 const SOURCE_FIELDS = ["title", "publisher", "table", "url", "vintage", "readOn", "industry", "derived", "org", "shownBy", "tableShown", "asOf"];

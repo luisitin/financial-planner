@@ -43,7 +43,7 @@ const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""}
 
 // ---- data
 test("every bundled table has its source: publisher, https address, vintage and a read date not after today", () => {
-  assert.equal(Object.keys(TABLES).length, 67);
+  assert.equal(Object.keys(TABLES).length, 69);
   for (const [id, t] of Object.entries(TABLES)) {
     for (const k of ["title", "publisher", "vintage", "readOn", "stat"]) assert.ok(typeof t[k] === "string" && t[k].trim(), `${id}: ${k}`);
     assert.match(t.url, /^https:\/\//, `${id}: url`);
@@ -58,7 +58,7 @@ test("every bundled table has its source: publisher, https address, vintage and 
     if (t.by === "state") assert.deepEqual(t.cols, STATES, `${id}: the state columns`);
   }
   assert.equal(NEWEST_READ, Object.values(TABLES).map((t) => t.readOn).sort().pop());
-  assert.deepEqual(Object.keys(READ_ON).sort(), ["balances", "debts", "health", "home", "pay", "purchase", "retire", "spend"]);
+  assert.deepEqual(Object.keys(READ_ON).sort(), ["balances", "cells", "debts", "health", "home", "pay", "purchase", "retire", "spend"]);
   assert.equal(STATES.length, 52); assert.equal(STATES[0], "US");
   assert.equal(Object.keys(STATE_REGION).length, 51, "the 50 states and DC each in a Census region");
   assert.deepEqual([...new Set(Object.values(STATE_REGION))].sort(), ["midwest", "northeast", "south", "west"]);
@@ -144,7 +144,7 @@ test("every table in dollars says the year of its dollars, or where each figure'
 });
 
 // review of C1 (2026-11-06, data 7): the sources fold shows each table's publisher, its table, a plain "as of" line and the
-// read date, and counts publishers rather than calling 67 tables "sources"; no working notes from the research reach the screen
+// read date, and counts publishers rather than calling 69 tables "sources"; no working notes from the research reach the screen
 test("the sources fold's words: organisation, publisher, table and 'as of' in plain words for every table", () => {
   const NOTES = /\bsee\b|sourceRef|file source line|Flourish|Datawrapper|\.(csv|xlsx?|zip|pdf)\b|research step|newest commercial-bank survey|=|\b[A-Z]+_[A-Z_]+\b|^derived$/i;
   for (const [id, t] of Object.entries(TABLES)) {
@@ -363,10 +363,10 @@ const page = (plan) => compute(plan, { ...OPTS });
 test("the page on an empty plan and on a plan with every figure typed: nothing to look over, and why", () => {
   const e = page(migrate(emptyPlan()));
   assert.deepEqual([e.count, e.planEmpty, e.rows, e.offers], [0, true, [], { fill: [], upgrade: [] }]);
-  assert.equal(e.sources.all.length, 67, "the sources fold still lists every table on hand");
+  assert.equal(e.sources.all.length, 69, "the sources fold still lists every table on hand");
   const f = page(migrate(familyPlan(T0)));
   assert.deepEqual([f.count, f.planEmpty], [0, false]);
-  assert.deepEqual(compute(migrate(emptyPlan())).sources.all.length, 67, "without a registry passed in it uses its own");
+  assert.deepEqual(compute(migrate(emptyPlan())).sources.all.length, 69, "without a registry passed in it uses its own");
 });
 
 test("the page orders a frozen guess first, then the big ones; a ledger guess shows its estimator's words and table", () => {
@@ -517,11 +517,11 @@ test("the page on a phone: the source links are 44 px buttons, rates keep a thou
   // plumbing 2: the fold's links were inline 16 px text; .btn (core/ui/base.css) is 44 px tall
   const src = pg.all(root, (n) => /\bgs-src\b/.test(n.attrs.class ?? ""));
   const links = src.flatMap((ul) => pg.all(ul, (n) => n.tag === "a"));
-  assert.equal(links.length, 67, "one link per table");
+  assert.equal(links.length, 69, "one link per table");
   assert.ok(links.every((a) => /\bbtn\b/.test(a.attrs.class) && /\bsmall\b/.test(a.attrs.class)), "every source link is a .btn.small");
-  // data 7: "63 tables from 17 publishers", and each table's publisher, table name, as-of line and read date
+  // data 7: "69 tables from 18 publishers", and each table's publisher, table name, as-of line and read date
   const fold = pg.text(pg.all(root, (n) => n.tag === "details").pop());
-  assert.match(fold, /Where our guesses come from 67 tables from 18 publishers/);
+  assert.match(fold, /Where our guesses come from 69 tables from 18 publishers/);
   assert.match(fold, /Rate on a new 30-year fixed mortgage, latest week Freddie Mac Primary Mortgage Market Survey, weekly history The week of October 29, 2026\. Read /);
   assert.doesNotMatch(fold, /file source line|\(see |\.csv|\.xlsx|Flourish|sourceRef/);
   // plumbing 7: 6.125% is said as 6.125%, not 6.13%; plumbing 1: the payment worked out at the old rate is named
@@ -589,11 +589,11 @@ test("C2 7.H Jordan's home (E18, E23, E24): $210,000, tax $210 and insurance $10
   assert.equal(Math.round(210000 * 0.01223 / 12 / 10) * 10, 210, "7.H's $210 a month");
   assert.equal(tax.why, "Ohio homes pay about 1.2% of their value a year");
   assert.equal(tax.uses.value, "guess");
-  // E24: NAIC Ohio HO-3 $1,116 (2023) x CPI 2024-2025 1.0570 = $1,179.6 a year -> $1,200; a month 98.3 -> $100
+  // E24 (guess-sanity, 2026-11-07): NAIC Ohio HO-3 $1,116 (2023) x CPI 2024-2025 1.0570 = $1,179.6 a year for Ohio's typical
+  // owner-occupied home (ACS 2025 median value), scaled by this home's value against that one -> $970 for $210,000
   const ins = guessOf(j, "home.insurance");
-  assert.equal(ins.value, 1200);
-  assert.equal(Math.round(1116 * 1.057021924231 / 12 / 10) * 10, 100, "7.H's $100 a month");
-  assert.equal(ins.why, "the average Ohio homeowner policy, in 2025 prices");
+  assert.equal(ins.value, 970);
+  assert.equal(ins.why, "typical home insurance for a home like yours in Ohio");
 });
 
 test("C2 7.H Pat and Lee's home: typed $450,000; tax $170 and insurance $110 a month", () => {
@@ -604,10 +604,9 @@ test("C2 7.H Pat and Lee's home: typed $450,000; tax $170 and insurance $110 a m
   assert.equal(tax.value, 2000);
   assert.equal(tax.uses.value, "typed");
   assert.equal(Math.round(450000 * 0.00443 / 12 / 10) * 10, 170);
-  // E24: $1,194 (Arizona HO-3, 2023) x 1.0570 = $1,262.1 a year -> $1,250 saved (R11's $50 steps); a month from the
-  // unrounded year 105.2 -> 7.H's $110
-  assert.equal(guessOf(n, "home.insurance").value, 1250);
-  assert.equal(Math.round(1194 * 1.057021924231 / 12 / 10) * 10, 110);
+  // E24 (guess-sanity, 2026-11-07): $1,194 (Arizona HO-3, 2023) x 1.0570 = $1,262.1 a year for Arizona's typical home, scaled
+  // by this $450,000 home against it -> $1,350 saved (R11's $50 steps)
+  assert.equal(guessOf(n, "home.insurance").value, 1350);
 });
 
 test("C2 E18 with what was paid: the price grown with the state's home prices (FHFA), three figures", () => {
@@ -626,7 +625,7 @@ test("C2 E18 with what was paid: the price grown with the state's home prices (F
   assert.ok(labels(us).includes("your state"));
 });
 
-test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, the start tap, $940 if the payment is blank", () => {
+test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, the start tap, $920 if the payment is blank", () => {
   const j = jordan(), args = q5b(j, "mortgage", { payment: "1,100" });
   // Jordan (Ohio, born June 1985, 41) has no year bought typed: home.boughtYear is the usual year for an owner of 41 (2020),
   // so the rate is the mean of Freddie Mac's yearly averages over the middle half of the move-in years (2015 to 2024) eased toward
@@ -638,8 +637,8 @@ test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, t
   assert.equal(rate.value, 0.044, "the middle half of the move-in years' average, eased toward 4.6%");
   assert.equal(rate.why, "the usual rate for loans from about 2020, eased toward today's");
   assert.deepEqual(labels(rate), ["the year you bought your home"]);
-  // The payment typed: P&I = 1,100 - tax 214.0 - insurance 98.3 = 787.7; the loan began July 2020, 76 months gone, 284 left:
-  // pv(4.4%/12, 284, 787.7) = $140,0xx, declared spread 0.25 (the year is a guess) -> two figures: $140,000
+  // The payment typed: P&I = 1,100 - tax 214.0 - insurance 81.2 (scaled to the home; guess-sanity) = 804.7; the loan began July
+  // 2020, 76 months gone, 284 left: pv(4.4%/12, 284, 804.7) = $141,8xx, declared spread 0.25 (the year is a guess) -> two figures: $140,000
   const owed = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), args);
   assert.equal(owed.value, 140000);
   assert.equal(owed.sigma, 0.25);
@@ -652,12 +651,12 @@ test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, t
   const typedYear = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, bought: 2015 });
   assert.equal(typedYear.why, "worked back from your $1,100 payment and the 2015 purchase");
   assert.equal(typedYear.sigma, 0.15);
-  // the tap: pv(rate/12, 360 - months since the middle of the span, 787.7), declared spread 0.15 -> three figures. A refinance
+  // the tap: pv(rate/12, 360 - months since the middle of the span, 804.7), declared spread 0.15 -> three figures. A refinance
   // answered on the tap is the loan's real start and wins over the guess; its rate is the mean of Freddie Mac's yearly averages
   // over the span (2026-11-07 review D6; the 7.H keys at the state's 4.6% were $116,000, $138,000 and $79,600 and move):
-  //   2010 to 2019: January 2015, 142 months gone, 4.1% -> $121,000;  2020 or 2021: January 2021, 70 gone, 3.0% -> $162,000
-  //   before 2010: July 2007, 232 gone, 6.3% (2000 to 2009) -> $73,300
-  for (const [start, want, wantRate] of [["2010s", 121000, 0.041], ["2020-21", 162000, 0.03], ["pre2010", 73300, 0.063]]) {
+  //   2010 to 2019: January 2015, 142 months gone, 4.1% -> $123,556 -> $124,000;  2020 or 2021: January 2021, 70 gone, 3.0%
+  //   -> $165,851 -> $166,000;  before 2010: July 2007, 232 gone, 6.3% (2000 to 2009) -> $74,866 -> $74,900
+  for (const [start, want, wantRate] of [["2010s", 124000, 0.041], ["2020-21", 166000, 0.03], ["pre2010", 74900, 0.063]]) {
     const t = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start });
     assert.equal(t.value, want, start);
     assert.equal(t.sigma, 0.15);
@@ -675,37 +674,38 @@ test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, t
   // E21 with the payment blank: the 2020 price (today's Ohio home taken back with the FHFA index) less 10% down (NAR first-time
   // buyers), at 4.4%, paid for 76 months, combined in logs with the old prior ($111,114, spread 0.73) at weight (1/0.35^2)
   // : (1/0.73^2): $110,000. The loan is worked from the same start, so the payment is its P&I over the 284 months left:
-  // pmt(4.4%/12, 284, ~$110,000) = 631 + tax 214.0 + insurance 98.3 = ~$940 (the old answer key: $880 over 360 months)
+  // pmt(4.4%/12, 284, $110,000) = 624.0 + tax 214.0 + insurance 81.2 (scaled to the home; guess-sanity) = $919.2 -> $920
+  // (the old answer key: $880 over 360 months; $940 with the flat state insurance of $98.3)
   const none = q5b(j, "mortgage", {});
   const o2 = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), none);
   assert.equal(o2.value, 110000);
   assert.equal(o2.why, "typical in 2020 with 10% paid up front, then paid down since");
   const pay = guessOf(j, "debt.mortgage.payment", BOX.payment("mortgage"), none);
-  assert.equal(pay.value, 940);
+  assert.equal(pay.value, 920);
   assert.equal(pay.why, "a loan of about $110,000 at 4.4%, plus Ohio's usual tax and insurance");
   // a typed escrow "no" leaves tax and insurance out
   const noEscrow = structuredClone(j); noEscrow.guide.setup.taps = { escrow: "no" };
   assert.equal(guessOf(noEscrow, "debt.mortgage.payment", BOX.payment("mortgage"), none).value, 620);
 });
 
-test("C2 7.H Pat and Lee's mortgage (answer key moved 2026-11-07): 4.4% from the year bought, tap 2010s $127,000", () => {
+test("C2 7.H Pat and Lee's mortgage (answer key moved 2026-11-07): 4.4% from the year bought, tap 2010s $126,000", () => {
   const n = patLee(), args = q5b(n, "mortgage", { payment: "1,100" });
   // the older of the two is 61: the usual year is 2012; the rate is Freddie Mac's yearly averages over the middle half of the
   // move-in years (2005 to 2019) eased toward the average on loans people have (4.6%, weight 0.3 on the purchase years) -> 4.4%
   assert.equal(guessOf(n, "home.boughtYear").value, 2012);
   assert.equal(guessOf(n, "debt.mortgage.rate", BOX.rate("mortgage"), args).value, 0.044);
-  // payment typed, the home typed: P&I = 1,100 - 166.1 - 105.2 = 828.7; the loan began July 2012, 172 months gone, 188 left:
-  // pv(4.4%/12, 188, 828.7) = $110,xxx -> $110,000 (the answer key's $210,000 was the state's loan-to-value on the typed home)
+  // payment typed, the home typed: P&I = 1,100 - 166.1 - 110.7 (insurance scaled to the $450,000 home; guess-sanity) = 823.2;
+  // the loan began July 2012, 172 months gone, 188 left: pv(4.4%/12, 188, 823.2) = $111,6xx -> $110,000 (the answer key's $210,000 was the state's loan-to-value on the typed home)
   const owed = guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), args);
   assert.equal(owed.value, 110000);
   assert.equal(owed.why, "worked back from your $1,100 payment and the 2012 purchase we guess");
-  // the tap, 2010 to 2019: pv(4.1%/12, 218, 828.7) = $127,xxx -> $127,000; 2020 or 2021: 3.0% -> $171,000 (the tap's years' average rate, review D6)
-  assert.equal(guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start: "2010s" }).value, 127000);
-  assert.equal(guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start: "2020-21" }).value, 171000);
+  // the tap, 2010 to 2019: pv(4.1%/12, 218, 823.2) = $126,390 -> $126,000; 2020 or 2021: 3.0% -> $169,656 -> $170,000 (the tap's years' average rate, review D6)
+  assert.equal(guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start: "2010s" }).value, 126000);
+  assert.equal(guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start: "2020-21" }).value, 170000);
   // and never more than the home typed ($450,000): a $5,000 payment bought in 2024 would owe more than that
   const big = guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, payment: 5000, bought: 2025 });
   assert.ok(big.value <= 450000, String(big.value));
-  // a payment small enough to leave little: $700 a month -> P&I 428.7 -> pv(3.66%/12, 188, 428.7) = $61,xxx
+  // a payment small enough to leave little: $700 a month -> P&I 423.2 -> pv(4.4%/12, 188, 423.2) = $57,4xx -> $57,000
   const small = guessOf(n, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, payment: 700 });
   assert.ok(small.value < 70000 && small.value > 55000, String(small.value));
 });
@@ -781,8 +781,8 @@ test("C2 no state: national figures, and \"your state\" sharpens every state-bas
   const tax = guessOf(j, "home.propertyTax", undefined, args), ins = guessOf(j, "home.insurance");
   assert.equal(tax.why, "U.S. homes pay about 0.9% of their value a year");
   assert.deepEqual(labels(tax), ["your state"]);
-  // U.S. HO-3 $1,737 x 1.0570 = $1,836 -> $1,850
-  assert.equal(ins.value, 1850);
+  // U.S. HO-3 $1,737 x 1.0570 = $1,836 for the typical U.S. home, scaled to this $210,000 home (guess-sanity) -> $1,550
+  assert.equal(ins.value, 1550);
   assert.deepEqual(labels(ins), ["your state"]);
   const owed = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), q5b(j, "mortgage", {}));
   // (2026-11-07) worked from the year bought: the 2020 price of a typical U.S. home, 10% down, paid since
@@ -1030,11 +1030,13 @@ test("C3 7.H spending (health cover Not sure): every row, the envelope, k, and t
   // Here the card payment is our R11-rounded $90 (C2), so k = (3,221 - 510 - 1,215) / 1,964 = 0.762 and eating out is
   // 295 x 0.762 = 224.8 -> $220 (7.H $230, which used 0.764: 225.4 -> $230); R11 wins, the total is $2,680 (7.H $2,690)
   const want = {
-    sam: { rows: [1200, 170, 240, 300, 260, 220, 290], env: 3221, k: 0.762, total: 2680 },
+    // (guess-sanity 2026-11-07: health cover follows the oldest adult's age and the household's size, CE 2025 by age, not the
+    // household type: a 29-year-old on her own is $70, not $260, and the other rows take the room)
+    sam: { rows: [1200, 200, 280, 350, 70, 260, 330], env: 3221, k: 0.882, total: 2690 },
     // J: childcare typed $900; mortgage $1,100 typed on Q5b. k = (4,986 - 2,000 - 54) / 3,192 = 0.918
-    jordan: { rows: [50, 460, 550, 470, 340, 470, 660], env: 4986, k: 0.918, total: 3000, typed: { childcare: 900 } },
+    jordan: { rows: [50, 460, 540, 470, 360, 460, 650], env: 4986, k: 0.910, total: 2990, typed: { childcare: 900 } },
     // N: room 7,763 - 1,600 - 116 = 6,047 > 5,146 of flexible rows: k = 1
-    patLee: { rows: [120, 560, 780, 960, 910, 1000, 930], env: 7763, k: 1, total: 5260 },
+    patLee: { rows: [120, 560, 780, 960, 640, 1000, 930], env: 7763, k: 1, total: 4990 },
   };
   for (const [name, w] of Object.entries(want)) {
     const p = atQ6(name);
@@ -1115,10 +1117,10 @@ test("C3 hurdles: Ohio's HOA left out, Arizona's asked (Not sure takes the likel
 test("C3 E05 by how cover is had: work (KFF worker share + out of pocket), Medicare, Medicaid, Not sure", () => {
   // through work: S single $139 + out of pocket 90 x k (0.794) = 210; 7.H's $230 adds the out-of-pocket share before R10 scales
   // it, as the flexible part of the row it is; J family $623 + 120 x 0.783 = 717 -> $720 (7.H $740 before R10)
-  assert.equal(greys(atQ6("sam"), {}, { "health-cover": "work" }).rows.insurance.value, 210);
+  assert.equal(greys(atQ6("sam"), {}, { "health-cover": "work" }).rows.insurance.value, 160);
   assert.equal(greys(atQ6("jordan"), { childcare: 900 }, { "health-cover": "work" }).rows.insurance.value, 720);
   const s = atQ6("sam"), m = SP.spendModel(s, { today: T0, args: greys(s, {}, { "health-cover": "work" }).args }, lib0(s));
-  assert.deepEqual([m.rows.insurance.premium, Math.round(m.rows.insurance.flex)], [139, 90]);
+  assert.deepEqual([m.rows.insurance.premium, Math.round(m.rows.insurance.flex)], [139, 26]);
   // Medicare: a 66-year-old in Arizona: Part B 202.90 + Part D base 38.99 + Arizona's Plan G average, plus out of pocket
   const old = atQ6("sam"); old.household.people[0].birthDate = "1960-01-15"; old.household.state = "AZ";
   const om = SP.spendModel(old, { today: T0, args: greys(old, {}, { "health-cover": "public" }).args }, lib0(old));
@@ -1162,7 +1164,7 @@ test("C3 7.F retirement ratios from the survey by age, and Pat and Lee's figure 
   assert.ok(!/health/i.test(e.why) && e.why.length <= 70);
   // under 50: today's rows without childcare, plus loans then (Sam: the car loan and card are paid off by then)
   const s = atQ6("sam"), sr = C3.retireSpendFor(s, { today: T0, args: greys(s).args }, lib0(s));
-  assert.deepEqual([sr.from50, sr.value], [false, 2680]);
+  assert.deepEqual([sr.from50, sr.value], [false, 2690]);
 });
 
 test("C3 a $15,000 rent is asked about (year-as-month), a $1,500 one is not; the screen's rows cover what the guesses' rows cover", () => {
@@ -1379,7 +1381,7 @@ const rows7 = (p) => Object.fromEntries(p.expenses.filter((x) => x.id.startsWith
 
 test("C7 R12: two whole months of bank files replace the guessed rows (transfers, tax and the mortgage left out); the plan's month is the bank's", () => {
   const was = rows7(ours7());
-  assert.deepEqual(was, { housing: 120, utilities: 560, groceries: 780, transport: 960, insurance: 910, dining: 1000, shopping: 930 }, "the survey's rows");
+  assert.deepEqual(was, { housing: 120, utilities: 560, groceries: 780, transport: 960, insurance: 640, dining: 1000, shopping: 930 }, "the survey's rows");
   const p = withBank7(ours7(), ["2026-09", "2026-10"]);
   const b = SP.bankSpend(p, T0, { rows: ROWS7H });
   assert.deepEqual([b.on, b.months], [true, ["2026-10", "2026-09"]]);
@@ -1446,13 +1448,13 @@ const missing7 = (bills) => {
 };
 test("C7 11.6: 'Is something missing?' only when the spending is typed, under 0.5585 of the usual total, with under two months of bank files", () => {
   near(SP.MISSING_LINE, 0.5585, 0.0001, "exp(-2.33 x 0.25)");
-  const base = { transport: 700, insurance: 600, dining: 500, shopping: 300 };
+  const base = { transport: 700, insurance: 300, dining: 500, shopping: 300 };
   const first = G7.spendMissing(missing7(base), OPTS);
-  assert.ok(first, "2,100 + the 1,600 mortgage typed");
+  assert.ok(first, "1,800 + the 1,600 mortgage typed");
   const G = first.usual, line = G * SP.MISSING_LINE;
-  assert.equal(first.typed, 1600 + 2100);
+  assert.equal(first.typed, 1600 + 1800);
   // a dollar under the line: asked; at it (to the cent) and a dollar past it: not
-  const at = (d) => G7.spendMissing(missing7({ ...base, shopping: 300 + (line - 3700) + d }), OPTS);
+  const at = (d) => G7.spendMissing(missing7({ ...base, shopping: 300 + (line - 3400) + d }), OPTS);
   const under = at(-1);
   assert.ok(under, "a dollar under"); near(under.usual, G, 0.01, "G stays put");
   assert.equal(at(0.01), null, "at the line"); assert.equal(at(1), null, "a dollar past");
@@ -1460,7 +1462,7 @@ test("C7 11.6: 'Is something missing?' only when the spending is typed, under 0.
   assert.deepEqual(under.rows.map((r) => r.row), ["housing", "utilities", "groceries"]);
   assert.equal(under.rows.find((r) => r.row === "housing").name, "Home costs");
   // condition 1: a row of ours, or one rough total, ends it
-  const g = missing7(base); viaGuess(g, (d, gg) => C3.applySpend(d, { mode: "rows", rows: { transport: 700, insurance: 600, dining: 500, shopping: 300 } }, T0, { guess: gg }));
+  const g = missing7(base); viaGuess(g, (d, gg) => C3.applySpend(d, { mode: "rows", rows: { transport: 700, insurance: 300, dining: 500, shopping: 300 } }, T0, { guess: gg }));
   assert.ok(g.expenses.some((x) => isGuessIn(g, `expenses[${x.id}].amount`)));
   assert.equal(G7.spendMissing(g, OPTS), null, "a row is our guess");
   const rough = atQ6("patLee"); C3.applySpend(rough, { mode: "total", total: 2000 }, T0);
@@ -1475,7 +1477,7 @@ test("C7 11.6: 'Is something missing?' only when the spending is typed, under 0.
 });
 
 test("C7 11.6: 'Add our guesses for the rest' writes only those rows, as Get started writes them; the settle after moves nothing", () => {
-  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 }), before = structuredClone(p);
+  const p = missing7({ transport: 700, insurance: 300, dining: 500, shopping: 300 }), before = structuredClone(p);
   const m = G7.spendMissing(p, OPTS);
   assert.deepEqual(p, before);
   assert.equal(G7.addSpendGuesses(p, OPTS), 3);
@@ -1540,8 +1542,8 @@ test("C7 the cards on the guesses page: 'Use these guesses' and 'Not now' write 
   const card = () => titled(pg, root, "Fill in what you skipped");
   const c = card();
   assert.ok(c, "the card is drawn");
-  assert.match(pg.text(c), /Mortgage about \$110,000 owed \$940 a month at 4\.4% a year Your home: worth about \$210,000 Our guess: typical in 2020 with 10% paid up front, then paid down since\./);
-  assert.match(pg.text(c), /Day-to-day spending \(not the mortgage\) about \$3,230 a month Our guess: typical for one parent of two paying a mortgage in Ohio on about \$58,000 a year\./);
+  assert.match(pg.text(c), /Mortgage about \$110,000 owed \$920 a month at 4\.4% a year Your home: worth about \$210,000 Our guess: typical in 2020 with 10% paid up front, then paid down since\./);
+  assert.match(pg.text(c), /Day-to-day spending \(not the mortgage\) about \$3,260 a month Our guess: typical for one parent of two paying a mortgage in Ohio on about \$58,000 a year\./);
   assert.match(pg.text(c), /Nothing changes until you tap\./);
   const btn = (n, label) => pg.all(n, (x) => x.tag === "button" && pg.text(x).trim() === label)[0];
   assert.match(btn(c, "Not now").attrs.class, /secondary/);
@@ -1563,7 +1565,7 @@ test("C7 the cards on the guesses page: 'Use these guesses' and 'Not now' write 
   assert.ok(pg2.plan().accounts.some((a) => a.id === "setup-owe-mortgage"));
   assert.ok(pg2.plan().expenses.length >= 6);
   root = pg2.draw();
-  assert.equal(pg2.text(pg2.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0]).trim(), "Saved: your mortgage (about $110,000 owed) and about $3,230 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
+  assert.equal(pg2.text(pg2.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0]).trim(), "Saved: your mortgage (about $110,000 owed) and about $3,260 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
 });
 
 test("C7 R12 on the page: a row read from the bank files says where it comes from, not 'Our guess'", async () => {
@@ -1840,9 +1842,9 @@ test("C7 fix UX 2 and 4: on the Dashboard the card sits right under where you st
     assert.ok(stopped && kids[at + 1].scrolled, `${k}: one way to fill in spending: the card`);
   }
   // one name for each figure: the card's day-to-day spending leaves the mortgage out
-  assert.match(pg.text(kids[at + 1]), /Day-to-day spending \(not the mortgage\) about \$5,800 a month/);
+  assert.match(pg.text(kids[at + 1]), /Day-to-day spending \(not the mortgage\) about \$5,550 a month/);
   // the list far too short ("Is something missing?"): the left-over row waits on it the same way
-  const m = await drawDash(missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 })), r2 = m.draw();
+  const m = await drawDash(missing7({ transport: 700, insurance: 300, dining: 500, shopping: 300 })), r2 = m.draw();
   const k2 = r2.kids.filter((n) => n?.tag === "section"), a2 = k2.findIndex((n) => /\bdb-now\b/.test(n.attrs.class ?? ""));
   assert.equal(m.text(k2[a2 + 1].kids.find((k) => k?.tag === "h2")).trim(), "Is something missing?");
   const miss = G7.spendMissing(m.plan(), OPTS);
@@ -1850,7 +1852,7 @@ test("C7 fix UX 2 and 4: on the Dashboard the card sits right under where you st
 });
 
 test("C7 fix UX 2: Expenses' left-over tile waits while 'Is something missing?' applies (no green figure above the question)", async () => {
-  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  const p = missing7({ transport: 700, insurance: 300, dining: 500, shopping: 300 });
   const miss = G7.spendMissing(p, OPTS);
   const pg = await drawPage(p, EXPENSES), root = pg.draw(), t = pg.text(root);
   const tile = pg.all(root, (n) => /\bstat\b/.test(n.attrs.class ?? "") && /^Left over/.test(pg.text(n).trim()))[0];
@@ -1934,14 +1936,14 @@ test("C7 fix UX 5: the card asks question 6's open questions as chips; an answer
 
 test("C7 fix UX 6: the card says what else its tap changes, and the notice says what is counted now and where to type the real figures", async () => {
   const words = async (name) => { const pg = await drawPage(older7(name)), root = pg.draw(); return pg.text(pg.all(cardTitled(pg, root, "Fill in what you skipped"), (n) => /gs-effect/.test(n.attrs.class ?? ""))[0]).trim(); };
-  assert.equal(await words("jordan"), "This counts the $110,000 you owe on your home and your home, worth about $210,000, so what you own minus what you owe goes up by about $100,000, and about $3,230 a month of spending.");
-  assert.equal(await words("sam"), "This counts the $13,000 you owe on your car loan, so what you own minus what you owe goes down by about $13,000, and about $2,670 a month of spending.");
-  assert.deepEqual(G7.fillEffect(G7.fillOffers(older7("patLee"), OPTS)), { owed: 140000, home: 0, net: -140000, spend: 5260 });
+  assert.equal(await words("jordan"), "This counts the $110,000 you owe on your home and your home, worth about $210,000, so what you own minus what you owe goes up by about $100,000, and about $3,260 a month of spending.");
+  assert.equal(await words("sam"), "This counts the $13,000 you owe on your car loan, so what you own minus what you owe goes down by about $13,000, and about $2,680 a month of spending.");
+  assert.deepEqual(G7.fillEffect(G7.fillOffers(older7("patLee"), OPTS)), { owed: 140000, home: 0, net: -140000, spend: 4990 });
   // the notice after the tap (Sam: two debts and the spending)
   const pg = await drawPage(older7("sam")); let root = pg.draw();
   btnOf(pg, cardTitled(pg, root, "Fill in what you skipped"), "Use these guesses").attrs.onClick();
   root = pg.draw();
-  assert.equal(pg.text(noticeOf(pg, root)).trim(), "Saved: your car loan (about $13,000 owed) and about $2,670 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
+  assert.equal(pg.text(noticeOf(pg, root)).trim(), "Saved: your car loan (about $13,000 owed) and about $2,680 a month of spending are counted now. Type the real figures on Expenses and Debts when you have them.");
 });
 
 test("C7 fix UX 7: every card's tap that writes figures has an outlined Undo that puts the plan back; 'Ask me again' after 'That's everything'", async () => {
@@ -1959,7 +1961,7 @@ test("C7 fix UX 7: every card's tap that writes figures has an outlined Undo tha
   assert.equal(btnOf(pg, root, "Undo"), undefined, "one Undo, on the next render only");
   assert.ok(cardTitled(pg, root, "Fill in what you skipped"), "the card is back");
   // "Is something missing?" on Expenses: Add, then Undo
-  const miss = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  const miss = missing7({ transport: 700, insurance: 300, dining: 500, shopping: 300 });
   const ex = await drawPage(miss, EXPENSES); let er = ex.draw();
   btnOf(ex, cardTitled(ex, er, "Is something missing?"), "Add our guesses for the rest").attrs.onClick();
   er = ex.draw();
@@ -1980,7 +1982,7 @@ test("C7 fix UX 7: every card's tap that writes figures has an outlined Undo tha
   er = ex.draw();
   assert.ok(cardTitled(ex, er, "Is something missing?"), "asked again");
   // a list that has grown past the line since: no "Ask me again" (nothing left to ask)
-  const grown = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 3000 }); G7.spendIsComplete(grown, T0);
+  const grown = missing7({ transport: 700, insurance: 300, dining: 500, shopping: 3000 }); G7.spendIsComplete(grown, T0);
   assert.equal(G7.spendSaidComplete(grown, OPTS), false);
   const g2 = await drawPage(grown, EXPENSES);
   assert.doesNotMatch(g2.text(g2.draw()), /You said this list is everything/);
@@ -2002,7 +2004,7 @@ test("C7 fix UX 4: one name for each figure: after the tap the page says 'Spendi
   assert.ok(row, "the page's figure says the mortgage payment is in it");
   const nba = nextBest(pg.plan(), { today: T0 }).spare;
   assert.match(pg.text(row), new RegExp(`about ${tens(nba.guessedMonthly).replace("$", "\\$")} a month`));
-  near(nba.guessedMonthly, 3230 + debt7(pg.plan(), "setup-debt-mortgage").minPayment, 10, "the card's day-to-day spending plus the mortgage's payment");
+  near(nba.guessedMonthly, 3260 + debt7(pg.plan(), "setup-debt-mortgage").minPayment, 10, "the card's day-to-day spending plus the mortgage's payment");
 });
 
 test("C7 fix UX 8: Expenses with nothing listed offers the same guesses as the Dashboard (spending alone: 'Not sure what you spend?', 'I'll type mine')", async () => {
@@ -2028,23 +2030,23 @@ test("C7 fix UX 8: Expenses with nothing listed offers the same guesses as the D
   const q = older7("jordan"); G7.fillLater(q, T0);
   const ex = await drawPage(q, EXPENSES), er = ex.draw(), c2 = cardTitled(ex, er, "Fill in what you skipped");
   assert.ok(c2);
-  assert.match(ex.text(c2), /Mortgage about \$110,000 owed .* Day-to-day spending \(not the mortgage\) about \$3,230 a month/);
+  assert.match(ex.text(c2), /Mortgage about \$110,000 owed .* Day-to-day spending \(not the mortgage\) about \$3,260 a month/);
   btnOf(ex, c2, "Use these guesses").attrs.onClick();
   assert.ok(acct7(ex.plan(), "setup-owe-mortgage") && ex.plan().expenses.length >= 6);
 });
 
 test("C7 fix UX 9: 'Is something missing?' offers a row whose own kind is not listed, less what is listed under its others; the list's total is to the dollar and adds up", async () => {
-  const p = missing7({ transport: 700, insurance: 600, dining: 500, shopping: 300 });
+  const p = missing7({ transport: 700, insurance: 300, dining: 500, shopping: 300 });
   p.expenses.push({ id: "b-phones", name: "Phones", category: "phone", amount: 95, period: "monthly", essential: true, inflates: true, startDate: "", endDate: "" });
   const m = G7.spendMissing(p, OPTS);
   assert.ok(m, "still far below the usual total");
   const util = m.rows.find((r) => r.row === "utilities");
   assert.ok(util, "a phone bill does not stand for the power and water");
   assert.equal(util.listed, 95);
-  near(m.typed, 1600 + 2100 + 95, 0.01, "the mortgage's payment and every bill, to the cent");
+  near(m.typed, 1600 + 1800 + 95, 0.01, "the mortgage's payment and every bill, to the cent");
   near(m.withThese, m.typed + m.rest, 0.01);
   const pg = await drawPage(p, EXPENSES), c = cardTitled(pg, pg.draw(), "Is something missing?");
-  assert.match(pg.text(c), /You've listed \$3,795\./);
+  assert.match(pg.text(c), /You've listed \$3,495\./);
   assert.match(pg.text(c), new RegExp(`Utilities and phone, besides the \\$95 you listed \\$${util.value.toLocaleString("en-US")}`));
   const round = (v) => Math.round(v / 100) * 100;
   assert.match(pg.text(c), new RegExp(`With these, your list comes to about \\$${round(m.withThese).toLocaleString("en-US")}`));

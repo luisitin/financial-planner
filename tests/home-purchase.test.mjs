@@ -306,7 +306,11 @@ test("D1 both typed: nothing moves (the whole payment pays the loan, as typed); 
   assert.equal(b.row.months, Math.ceil(nper(b.rate / 12, 1900, 230000) - 1e-9));
   const pay = household({ ages: [25, 25], mortgage: { payment: "1,900" } }), y = loanOf(pay);
   assert.ok(y.row.escrow > 300, "tax and insurance");
-  assert.ok(Math.abs(y.row.months - y.monthsLeft) <= 6, `${y.row.months} vs ${y.monthsLeft}`);
+  // the balance is our guess shown to two figures: worked back over the 332 months left it is pv(6.7%/12, 332, 1,900 - 393.7) =
+  // $227,302, saved as $230,000 (1.2% more), which this early in a 30-year loan is 12 months more on the pages (344). With the
+  // whole $1,900 paying the loan they would say about 17 years (203 months). (Was 6 months: the flat state insurance put the escrow at
+  // $383.7 and the pages at 338; insurance follows the home's value since guess-sanity, integration 2026-11-07.)
+  assert.ok(Math.abs(y.row.months - y.monthsLeft) <= 12, `${y.row.months} vs ${y.monthsLeft}`);
   // "paid apart" (the tap): the whole payment pays the loan
   const apart = household({ ages: [25, 25], mortgage: { payment: "1,900" } }); apart.guide.setup.taps = { ...(apart.guide.setup.taps ?? {}), escrow: "no" };
   assert.equal(liabilities(apart, { today: T0 }).rows.find((r) => r.type === "mortgage").escrow, 0);

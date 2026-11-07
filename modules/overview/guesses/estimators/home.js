@@ -14,7 +14,7 @@
 import { T as HOME } from "../data/home.js";
 import { T as SPEND } from "../data/spend.js";
 import { STATE_NAME } from "../data/index.js";
-import { profileOf, scfR2, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
+import { profileOf, scfR2, homeRatios, HOME_RATIO_TABLES, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
 import { isGuess, guessAt } from "../../../../core/estimate/index.js";
 import { boughtGuess, yearOf, TABLE as PT } from "./purchase.js";
 import { homeOfLoan, homeEntryFor } from "./loanhome.js";
@@ -87,11 +87,32 @@ export function purchaseOf(plan, { path = null, loanId = null, args = null } = {
   return { year: date ? Number(date.slice(0, 4)) : null, date, price };
 }
 
+/** A bound taken to two figures on the inside (the guess is shown to two figures, so rounding it must not step over the bound). */
+const sig2 = (x, f) => { const p = 10 ** Math.max(0, Math.floor(Math.log10(x)) - 1); return f(x / p) * p; };
+/** The mortgage balance the person typed (Get started's box, or the account), 0 when blank or a guess. */
+function typedMortgageOwed(plan, args) {
+  if (has(args, "owed")) return ok(args.owed) && args.owed > 0 ? args.owed : 0;
+  const a = L(plan, "accounts").find((x) => x?.id === "setup-owe-mortgage");
+  const v = a ? Math.abs(Number(a.balance)) : 0;
+  return v > 0 && !isGuess(plan, `accounts[${a.id}].balance`) ? v : 0;
+}
 /** The state's median property tax over median home value (percent of value a year), the U.S. figure with no state. */
 const taxRateOf = (st) => col(HOME[PTAX], "median taxes / median value", st ?? "US");
 /** The state's average HO-3 premium a year in 2023 dollars (U.S. with no state). */
 const premiumOf = (st) => col(SPEND[HO3], "HO-3", st ?? "US");
 
+/**
+ * Home insurance a year for a home worth `value`: the state's average HO-3 premium in 2025 prices (NAIC 2023 x CPI) for the
+ * state's typical owner-occupied home (ACS 2025 median value), scaled by this home's value against that one, never under $350
+ * (a policy has a floor whatever the house). Insurers price on the cost to rebuild, so the premium follows the home's value;
+ * a flat state average gave a $64,000 home $2,150 (guess-sanity HD-HOMEINS, 2026-11-07). No value: the state average.
+ */
+export function insuranceYear(st, value) {
+  const prem = premiumOf(st);
+  if (!ok(prem)) return null;
+  const avg = prem * cpiSince(2023), typical = col(HOME[VALUE], "all owners", st ?? "US");
+  return ok(value) && value > 0 && ok(typical) && typical > 0 ? Math.max(350, avg * value / typical) : avg;
+}
 /**
  * Property tax and home insurance a month, not rounded (the payment identity in debt.mortgage.owed and
  * debt.mortgage.payment uses them as the spec's arithmetic does: 210,000 x 1.223% / 12 = 214.0 and 1,116 x 1.057 / 12 =
@@ -106,9 +127,9 @@ export function escrowMonthly(plan, { today, args = null, path = null, loanId } 
   if (loanId !== undefined) { const h = homeOfLoan(plan, loanId); entry = h?.entry ?? null; }
   else { const acct = homeAccountOf(plan, path); entry = acct ? homeEntryFor(plan, acct.id) : null; }
   const typed = (k) => { const v = Number(entry?.[k]); return entry && typeof entry.id === "string" && v > 0 && !isGuess(plan, `property[${entry.id}].${k}`) ? v / 12 : null; };
-  const rate = taxRateOf(st), prem = premiumOf(st);
+  const rate = taxRateOf(st), yearIns = insuranceYear(st, value);
   const tax = typed("propertyTax") ?? (ok(value) && ok(rate) ? value * rate / 100 / 12 : null);
-  const insurance = typed("insurance") ?? (ok(prem) ? prem * cpiSince(2023) / 12 : null);
+  const insurance = typed("insurance") ?? (ok(yearIns) ? yearIns / 12 : null);
   if (!ok(tax) || !ok(insurance)) return null;
   return { tax, insurance, total: tax + insurance, value };
 }
@@ -158,7 +179,7 @@ export const estimators = {
   },
   "home.value": {
     tier: 2, order: 1, label: "What your home would sell for", unit: "total", weight: "big", page: NET_WORTH, reads: [],
-    fn(plan, { today, path }, lib) {
+    fn(plan, { today, path, args }, lib) {
       const prof = lib.memo("profile", () => profileOf(plan, today));
       const st = prof.state;
       // what was paid and when (Home's purchase price and date), grown with the state's home prices to 2025
@@ -177,12 +198,23 @@ export const estimators = {
       if (!ok(base) || !r) return null;
       const words = prof.tenure === "ownerWithMortgage" ? " with a mortgage" : "";
       const on = prof.income ? (prof.payHow === "guess" ? ", on our pay guess" : ", on your pay") : "";
+      // owners' homes run from about 1.3 to 7 times their income at under 35 (SCF 2025, cells.js): two published medians
+      // multiplied gave a $20,000 earner a $210,000 home (10.5 times; guess-sanity HD-HOME-VALUE-INCOME). Held to the age
+      // group's 5th..95th percentile of value over income. A mortgage balance the person typed puts a floor under it: the
+      // home is worth at least the balance over the age group's 75th-percentile loan-to-value (HD-MORT-UNDERWATER).
+      // Not under $1,000 a year of income (the lowest point of the survey's income scale, incomePercentile): a ratio to almost
+      // nothing bounds nothing, and a $1 pay held a couple's home to $13 (integration with the "bought" build, 2026-11-07).
+      const lim = homeRatios(prof.age);
+      let value = base * r.parts.rInc * r.parts.resid, bound = "";
+      if (lim && prof.income >= 1000) { const hi = lim.p95 * prof.income, lo = lim.p5 * prof.income; if (value > hi) { value = sig2(hi, Math.floor); bound = "cap"; } else if (value < lo) { value = sig2(lo, Math.ceil); bound = "floor"; } }
+      const owed = typedMortgageOwed(plan, args);
+      if (lim && owed > 0 && value < owed / lim.ltv75) { value = owed / lim.ltv75; bound = "owed"; }
       return {
-        value: base * r.parts.rInc * r.parts.resid, sigma: r.sigma, measured: r.sigma !== null,
+        value, sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`typical for ${placeOf(st)} home${words}${on}`, `typical for ${placeOf(st)} home${on}`),
         uses: { state: st ? "typed" : null, pay: prof.payHow, age: prof.age !== null ? "typed" : null },
         sharperWith: [...(st ? [] : [YOUR_STATE]), ...(prof.income ? [] : [YOUR_PAY]), COST_AND_WHEN].slice(0, 2),
-        tables: [VALUE, ...SCF_TABLES],
+        tables: [VALUE, ...SCF_TABLES, ...(bound ? HOME_RATIO_TABLES : [])],
       };
     },
   },
@@ -204,15 +236,17 @@ export const estimators = {
     },
   },
   "home.insurance": {
-    tier: 2, order: 3, label: "Home insurance a year", unit: "year", weight: "small", page: HOME_PAGE, reads: [],
-    fn(plan, { today }, lib) {
+    tier: 2, order: 3, label: "Home insurance a year", unit: "year", weight: "small", page: HOME_PAGE, reads: ["home.value"],
+    fn(plan, { today, path, args }, lib) {
       const st = lib.memo("profile", () => profileOf(plan, today)).state;
-      const prem = premiumOf(st);
-      if (!ok(prem)) return null;
+      let home = homeValueFor(plan, { path, args });
+      if (!home) { const g = lib.estimate("home.value", { path: homePathOf(plan, path), args }); home = g ? { value: g.value, typed: false } : null; }
+      const yearIns = insuranceYear(st, home?.value ?? null);
+      if (!ok(yearIns)) return null;
       return {
-        value: prem * cpiSince(2023), sigma: null, measured: false,
-        why: `the average ${placeName(st)} homeowner policy, in 2025 prices`,
-        uses: { state: st ? "typed" : null }, sharperWith: st ? [] : [YOUR_STATE], tables: [HO3],
+        value: yearIns, sigma: null, measured: false,
+        why: fit(`typical home insurance for a home like yours${st ? ` in ${STATE_NAME[st]}` : ""}`, "typical home insurance for a home like yours"),
+        uses: { state: st ? "typed" : null, value: home ? (home.typed ? "typed" : "guess") : null }, sharperWith: st ? [] : [YOUR_STATE], tables: [HO3, VALUE],
       };
     },
   },
