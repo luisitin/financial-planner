@@ -2,7 +2,7 @@
 // form for the selected debt's rate and payments.
 import { compute, HIGH_RATE, DTI_LINES, rentsHome, shownShare, renterLevel } from "./compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
-import { twoDates } from "../../debt/payoff/compute.js";
+import { twoDates, compute as computePayoff } from "../../debt/payoff/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -78,6 +78,10 @@ export function render(root, ctx) {
 
   let two = {};
   try { two = twoDates(plan, { today: fmt.today() }); } catch { two = {}; }
+  // the saved order costs more interest than highest rate first? (verify 2026-11-07: an own order that is highest rate first read
+  // "Paying the highest interest rate first would save more"; Pay off debts works both, so the note says it only when it is so)
+  let dearer = false;
+  if (d.order !== "avalanche") try { const po = computePayoff(plan, { today: fmt.today() }); dearer = po?.plans?.[po.order]?.totalInterest - po?.plans?.avalanche?.totalInterest >= 0.5; } catch { dearer = false; }
   const sub = (r) => {
     if (!r.detail) return "add the rate and payment";
     // paid off: nothing is due any more, so no payment is said (it counts as $0 a month)
@@ -109,7 +113,7 @@ export function render(root, ctx) {
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.name, " ", r.expensive ? ui.h("span", { class: "pill warn" }, "expensive") : null, !r.detail ? ui.h("span", { class: "pill" }, "needs details") : null), ui.h("div", { class: "d" }, sub(r)), oursLine(r)),
       ui.h("span", { class: "st" }, ui.h("div", {}, fmt.money(r.owed, cur)), ui.h("div", { class: "muted small", style: { textAlign: "right" } }, "Edit ›")),
     ))),
-    ui.h("p", { class: "muted small" }, "Highest interest rate first: that is the order that saves the most if you pay extra. Tap a debt to enter or change its rate and payments."),
+    ui.h("p", { class: "muted small" }, d.order === "snowball" ? `Your payoff plan pays the smallest balance first.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : d.order === "custom" ? `Your payoff plan pays in the order you chose.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : "Highest interest rate first: that is the order that saves the most if you pay extra.", " Tap a debt to enter or change its rate and payments."),
     Object.keys(two).length ? ui.h("p", { class: "small" }, "On your payoff plan, each debt's payment moves onto the next one once it is paid off, so the later ones end sooner without paying more each month. ", ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     out, formHost,
   ));

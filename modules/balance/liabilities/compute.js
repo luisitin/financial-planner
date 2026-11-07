@@ -133,16 +133,25 @@ export function compute(plan, params = {}) {
   const cur = plan.meta?.currency ?? "USD";
   const warnings = [];
   // rows are highest rate first: only the first expensive debt is "first"; each later one says when (round 8 review, 2026-11-06:
-  // three notices each said "Paying it down first saves the most")
-  let before = null;
+  // three notices each said "first"). With a saved payoff order that is not highest-rate-first (smallest balance first, or the
+  // person's own order) the notices follow that saved order instead (2026-11-07): the same order the Pay off debts page pays in
+  const saved = ["snowball", "custom"].includes(plan.debtPlan?.order) ? plan.debtPlan.order : "avalanche";
+  const customOrder = Array.isArray(plan.debtPlan?.customOrder) ? plan.debtPlan.customOrder : [];
+  const rank = (r) => saved === "snowball" ? r.owed : customOrder.indexOf(r.id) >= 0 ? customOrder.indexOf(r.id) : 1e9;
+  // every debt Pay off debts pays, not only the expensive ones: a cheaper debt the saved order pays in between two cards comes between them
+  const planOrder = saved === "avalanche" ? rows.filter((r) => r.expensive) : rows.filter((r) => r.detail && r.owed > 0 && r.payment > 0).sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
   for (const r of rows) {
     if (r.neverPaysOff) warnings.push(`${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
-    if (r.expensive) { warnings.push(`${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. ${before ? `Pay it down once the ${before} is paid off.` : "Paying it down first saves the most."}`); before = r.name; }
+    if (r.expensive) {
+      const i = planOrder.indexOf(r), before = i > 0 ? planOrder[i - 1].name : null, inPlan = i >= 0;
+      const costs = `${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%.`;
+      warnings.push(`${costs} ${before ? `Pay it down once the ${before} is paid off.` : saved === "avalanche" ? "Paying it down first saves the most." : inPlan ? "Your payoff plan pays it down first." : ""}`.trim());
+    }
   }
   return {
     rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed,
     minimums: sum("minPayment"), payments, interestMonthly: sum("interestMonthly"), avgRate,
     income, dti: income ? payments / income : null, dtiRequired: income ? sum("minPayment") / income : null,
-    highest: rated[0] ?? null, warnings,
+    highest: rated[0] ?? null, warnings, order: saved,
   };
 }

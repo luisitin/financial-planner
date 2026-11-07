@@ -131,3 +131,31 @@ figures the page does not show. Test: `module.test.mjs` ("review D4"), failing b
 
 ## Path part 3, review fixes
 - The goal card opens with "Do you want money left over at the end? Most people choose Just last", not "for heirs".
+
+## Round 8 batch 4 follow-ups (2026-11-07)
+- **A need rounds up, a limit rounds down.** What you must reach (save at least, a lump sum that is short, the return it needs)
+  shows rounded UP to the shown $10 (a tenth of a percent for a return); a limit (what you can spend, room today, what claiming
+  lets you spend) rounds DOWN, and "how much less" than the plan rounds up, so doing what the words say always works. `shownValue(lever)`
+  (exported) is the number printed; each lever's `value` stays unrounded. Renter: needs $243.53 a month more, shown $250 (it was
+  $240, which left $2,028 of $2,040); $250 lasts, tested by running the engine at $250 and at $240. The Plan health score's
+  "save about $X a month more" and "spend about $Y a month less" use the same rounding (`roundUp`), as does its "about $X a month
+  more earns full marks" saving hint.
+- **Room for bad luck (115%).** A chip in the goal card asks compute for `spendingScale` 1.15 (`BAD_LUCK`, the score's full marks
+  line); one line says "Plans for spending 15% more than you expect", and while it is on, the card says the spending every figure
+  is worked for. It combines with the Leave chips.
+- **`?target=last` is read once** (the score's link): the view takes it into `legacy = 0`, scale 1, then clears it from the address
+  (`history.replaceState`); a redraw by the shell with the same route does not read it again, so a chip chosen afterwards stays. A
+  new visit to the link is a new route and starts from "Just last" again.
+- Tests: `module.test.mjs` ("F1", "F4 and F5").
+
+## Review of the follow-ups (2026-11-07)
+- Under "Room for bad luck" the engine spends 1.15 times the plan, so the most that lasts is in those larger dollars. What you can spend,
+  the claiming "can be spent" figure and the careful line are shown in the plan's terms: the spending that lasts divided by `scale`
+  (the result's `scale`), rounded down; "less than" is against the plan's own spending (spending / scale), rounded up. Planning that
+  many dollars and then spending 15% more lasts, and the cut equals the Plan health score's 115% hint. `value` and `current` stay unrounded.
+- The careful line shows the plan's own spending to the nearest $10, as before; only the cut rounds up.
+- The return lever says "just what you assume" only when the plan already meets the goal; a plan just short reads "needs".
+- Saving from nothing reads "Save about $250 a month. You save nothing toward this today."
+- Verify (2026-11-07): with "Room for bad luck" on, the hero says "With 15% more spending than you plan, the money ..." instead of
+  "As it stands the money ...", since the result is worked for the larger spending (a family whose money lasts read "As it stands the
+  money runs out in 2082"). Test "verify: with Room for bad luck on".

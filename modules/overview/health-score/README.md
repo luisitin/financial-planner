@@ -116,3 +116,7 @@ it counts a payment the borrower chooses on top. Every
 - "How the score is worked out" says the debt part plainly: "Debt: most points for no card-type debt (10% interest or more);
   the rest for payments under 36% of pay before tax, or 20% if you rent." (the thresholds are above).
 - Tests: `module.test.mjs` ("review D3 and D7", "review D5", "review D4", "review UX" x2), failing before the fix.
+
+- **Round 8 batch 4 follow-up (2026-11-07):** the hint's "save about $X a month more" and "spend about $Y a month less" round up
+  (a need or a cut that always works), as Goal seek's now do: $243.53 reads $250 (was $240, which fell short). The saving-rate
+  hint "about $X a month more" rounds up too.

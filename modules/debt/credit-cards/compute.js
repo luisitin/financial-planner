@@ -9,7 +9,7 @@ import { addMonths } from "../../../core/math/dates.js";
 /**
  * compute(plan, { today, promoMonths = 15, feePct = 0.03 }) -> {
  *   cards: [{ id, name, balance, limit, utilisation, rate, minPayment, interestMonthly, trap: { months, interest } | null,
- *             bank: bankMinimum(...) | null, transfer: { fee, interestNow, interestPromo, saves, payToClear, atPay } | null,
+ *             bank: bankMinimum(...) | null, transfer: { fee, interestNow, interestPromo, saves, payToClear, atClear: { pay, interest, saves } (the saving at payToClear: what the card's line says), atPay } | null,
  *             carried (a balance carried month to month) }],
  *   totalBalance, totalLimit, utilisation, interestMonthly, count, missing: [names without rate],
  *   transferPlan: { count, payToClear, paying, atPay: { saves, owedAfter } } | null, carried, hasData
@@ -42,13 +42,20 @@ export function compute(plan, params = {}) {
       let b = balance, interestNow = 0;
       for (let m = 0; m < promoMonths && b > 0; m++) { const i = b * rate / 12; interestNow += i; b = Math.max(0, b + i - pay); }
       const fee = balance * feePct;
+      // at the payment the page names for the 0% card (round 8 batch 4 follow-up, 2026-11-07): payToClear, or the card's minimum when
+      // that is more. `interestNow` and `saves` keep the answer key's reading (max(required, balance / months), the debt answer key's
+      // bt_interest and bt_saves); the card's line says the saving at the payment it names, so the two agree on the page
+      const payToClear = Math.round((balance * (1 + feePct)) / promoMonths * 100) / 100, payAt = Math.max(minPayment, payToClear);
+      let b3 = balance, interestAtClear = 0;
+      for (let m = 0; m < promoMonths && b3 > 0; m++) { const i = b3 * rate / 12; interestAtClear += i; b3 = Math.max(0, b3 + i - payAt); }
+      const atClear = { pay: payAt, interest: Math.round(interestAtClear * 100) / 100, saves: Math.round((interestAtClear - fee) * 100) / 100 };
       // at what is paid on the card now (round 8 review, 2026-11-06): the interest the card would charge over the promo months
       // at that payment, less the fee, and what is still owed on the 0% card when they end
       const now = Math.max(0, r.payment ?? minPayment);
       let b2 = balance, interestAtPay = 0;
       for (let m = 0; m < promoMonths && b2 > 0; m++) { const i = b2 * rate / 12; interestAtPay += i; b2 = Math.max(0, b2 + i - now); }
       const atPay = { payment: now, interest: Math.round(interestAtPay * 100) / 100, saves: Math.round((interestAtPay - fee) * 100) / 100, owedAfter: Math.round(Math.max(0, balance * (1 + feePct) - now * promoMonths) * 100) / 100 };
-      transfer = { fee: Math.round(fee * 100) / 100, interestNow: Math.round(interestNow * 100) / 100, interestPromo: 0, saves: Math.round((interestNow - fee) * 100) / 100, promoMonths, feePct, payToClear: Math.round((balance * (1 + feePct)) / promoMonths * 100) / 100, atPay };
+      transfer = { fee: Math.round(fee * 100) / 100, interestNow: Math.round(interestNow * 100) / 100, interestPromo: 0, saves: Math.round((interestNow - fee) * 100) / 100, promoMonths, feePct, payToClear, atClear, atPay };
     }
     // what is really paid (the Debts page's payment: the required amount plus any extra typed there), when it is more
     const paying = r.detail && rate !== null && balance > 0 && r.payment > minPayment + 0.5 ? { payment: r.payment, months: r.months, endDate: r.payoffDate ?? null, interest: r.totalInterest ?? null, never: !!r.neverPaysOff } : null;
@@ -60,7 +67,7 @@ export function compute(plan, params = {}) {
   const under = totalLimit > 0 ? underLines(cards, totalLimit, today) : null;
   // the cards whose transfer pays, together (round 8 review): what clearing them in the promo months takes a month, what is
   // paid on them now, and the saving and what is left at today's payments
-  const pays = cards.filter((c) => c.carried && c.transfer && c.transfer.saves > 0);
+  const pays = cards.filter((c) => c.carried && c.transfer && c.transfer.atClear.saves > 0);
   const sum = (f) => Math.round(pays.reduce((t, c) => t + f(c), 0) * 100) / 100;
   const transferPlan = pays.length ? { count: pays.length, payToClear: sum((c) => c.transfer.payToClear), paying: sum((c) => c.transfer.atPay.payment), atPay: { saves: sum((c) => c.transfer.atPay.saves), owedAfter: sum((c) => c.transfer.atPay.owedAfter) } } : null;
   return { cards, totalBalance, totalLimit, utilisation: totalLimit ? totalBalance / totalLimit : null, under, interestMonthly: cards.reduce((s, c) => s + (c.interestMonthly ?? 0), 0), count: cards.length, missing: cards.filter((c) => !c.hasDetail).map((c) => c.name), promoMonths, feePct, transferPlan, carried: cards.some((c) => c.carried), hasData: cards.length > 0 };

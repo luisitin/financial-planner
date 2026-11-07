@@ -221,3 +221,130 @@ test("part 3: plain words on the first screen: no hard word in this page's view 
   for (const w of ['each change would have to be', 'Even in a bad run of years:']) assert.ok(view.includes(w), w);
   for (const w of ['lever would', 'each lever', 'lever alone']) assert.ok(!view.includes(w), w);
 });
+
+// --- round 8 batch 4 follow-ups (2026-11-07) -------------------------------------------------------------------------------------
+test("F1: an amount you must reach rounds up to the shown $10, a limit rounds down; the unrounded value stays", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { shownValue, roundUp, roundDown } = await import("./compute.js");
+  const today = "2026-11-06";
+  const p = renterDebtPlan();
+  const d = compute(p, { today });
+  const save = lever(d, "saving");
+  // the renter needs $243.53 a month more: the page said $240 and the money still ran short ($2,028 of $2,040); $250 lasts
+  assert.ok(Math.abs(save.value - 243.53) < 0.01, String(save.value));   // unrounded, as before
+  assert.equal(shownValue(save), 250);
+  assert.match(save.sentence, /^Save about \$250 a month\. You save nothing toward this today\.$/);
+  const I = buildInputs(p, { today }).inputs;
+  const withExtra = (e) => { const c = copyInputs(I); c.contributions.push({ bucket: "taxable", yearly: e * 12, personIndex: 0, name: "extra" }); return c; };
+  assert.equal(meets(withExtra(shownValue(save))), true, "following the words works");
+  assert.equal(meets(withExtra(240)), false, "the old $240 fell short");
+  // a lump sum that is short rounds up the same way; following it works
+  const lump = lever(d, "lump");
+  assert.equal(shownValue(lump), roundUp(lump.value)); assert.ok(shownValue(lump) >= lump.value);
+  const withLump = (x) => { const c = copyInputs(I); c.events.push({ year: c.startYear, amount: -x, label: "lump sum" }); return c; };
+  assert.equal(meets(withLump(shownValue(lump))), true);
+  assert.ok(lump.sentence.includes(`About $${shownValue(lump).toLocaleString("en-US")} more in savings today`), lump.sentence);
+  // helpers: exact multiples stay, a cent over goes up; limits go down
+  assert.equal(roundUp(250), 250); assert.equal(roundUp(250.01), 260); assert.equal(roundUp(0.2), 0); assert.equal(roundDown(1239.99), 1230); assert.equal(roundDown(1240), 1240);
+  // limits on the family plan: spending and room today never show more than the edge
+  const f = compute(familyPlan(), { today: TODAY });
+  for (const id of ["spending", "lump"]) assert.ok(shownValue(lever(f, id)) <= lever(f, id).value + 1e-9, id);
+  assert.ok(shownValue(lever(f, "spending")) > lever(f, "spending").value - 10);
+  // a return you must earn rounds up to the shown tenth of a percent
+  const r = { id: "returns", unit: "rate", status: "needs", value: 0.05412 };
+  assert.equal(shownValue(r), 0.055); assert.equal(shownValue({ ...r, status: "same" }), 0.054);
+  // the Plan health score's hint says the same $250
+  const { compute: score } = await import("../../overview/health-score/compute.js");
+  assert.match(score(p, { today }).parts.find((x) => x.id === "retirement").fix, /save about \$250 a month more/);
+});
+
+// --- round 8 batch 4 follow-ups F4 and F5 (2026-11-07): ?target=last is read once; a "Room for bad luck (115%)" chip -----------------
+test("F4 and F5: the address's target is read once and cleared; the bad-luck chip asks compute for spendingScale 1.15 and survives a redraw", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { BAD_LUCK } = await import("./compute.js");
+  assert.equal(BAD_LUCK, 1.15);
+  const calls = [];
+  globalThis.history = { state: null, replaceState: (...a) => calls.push(a) };
+  globalThis.location = { pathname: "/", search: "?sandbox=1", hash: "" };
+  const p = renterDebtPlan();
+  const view = new URL("./view.js", import.meta.url);
+  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
+  const last = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "last" } };
+  const a = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: last });
+  const params = (r) => r.remote[r.remote.length - 1].params;
+  // read: just last, as planned; and the address loses ?target=last (once)
+  assert.equal(params(a).legacy, 0); assert.equal(params(a).spendingScale, undefined);
+  assert.equal(calls.length, 1); assert.equal(calls[0][2], "/?sandbox=1#/scenarios/goal-seek");
+  // the chip, with one plain line under it
+  const chip = () => a.root.querySelectorAll(".chip").find((c) => c.textContent.startsWith("Room for bad luck"));
+  assert.equal(chip().textContent, "Room for bad luck"); assert.equal(chip().getAttribute("aria-pressed"), "false");
+  assert.match(a.text(), /Plans for spending 15% more than you expect, in case markets or prices turn out worse\./);
+  chip().click(); await new Promise((r) => setTimeout(r, 0));
+  assert.equal(params(a).spendingScale, 1.15);
+  assert.equal(chip().getAttribute("aria-pressed"), "true");
+  assert.match(a.text(), /Every figure below is worked out as if you spent 15% more than the \$2,040 a month your plan has\./);
+  // the shell redraws the page with the same route (a sync): the chip stays, ?target=last is not read again, the address is left alone
+  const again = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: last });
+  assert.equal(params(again).spendingScale, 1.15); assert.equal(calls.length, 1);
+  // a new visit to the link (a new route) starts from just last, as planned, again
+  const visit = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: { ...last, query: { target: "last" } } });
+  assert.equal(params(visit).spendingScale, undefined); assert.equal(params(visit).legacy, 0); assert.equal(calls.length, 2);
+  // the amounts under it are worked for the scaled spending: the saving it needs is more
+  const one = compute(p, { today: "2026-11-06" }), more = compute(p, { today: "2026-11-06", spendingScale: BAD_LUCK });
+  assert.ok(lever(more, "saving").value > lever(one, "saving").value);
+  delete globalThis.history; delete globalThis.location;
+});
+
+// --- review of the follow-ups (2026-11-07) ------------------------------------------------------------------------------------------
+test("D2: under 'room for bad luck' what you can spend is in the plan's terms: the most to plan, each month then 15% more", async () => {
+  const { shownValue, BAD_LUCK } = await import("./compute.js");
+  const p = familyPlan(); p.retirement = { ...(p.retirement ?? {}), spendingMonthly: 7600 };
+  const one = compute(p, { today: TODAY }), more = compute(p, { today: TODAY, spendingScale: BAD_LUCK });
+  assert.equal(more.scale, 1.15); assert.equal(one.scale, 1);
+  const sp = lever(more, "spending");
+  // the unrounded value and current stay as they were (the score reads them); the page shows value / scale, rounded down
+  assert.ok(Math.abs(sp.current - more.spendingMonthly) < 1e-9);
+  const shown = shownValue(sp, more.scale);
+  assert.equal(shown, Math.floor(sp.value / 1.15 / 10 + 1e-9) * 10);
+  assert.ok(sp.sentence.includes(`$${shown.toLocaleString("en-US")} a month`), sp.sentence);
+  assert.ok(sp.sentence.includes(`the $${(Math.round(one.spendingMonthly / 10) * 10).toLocaleString("en-US")} the plan spends`), sp.sentence);
+  // following it works: plan that many dollars a month, spend 15% more, the money still lasts
+  const I = buildInputs(p, { today: TODAY }).inputs;
+  assert.equal(meets({ ...copyInputs(I), strategy: "fixed-real", spending: { yearly: shown * 12 * 1.15 } }), true);
+  assert.ok(shown * 1.15 <= sp.value + 1e-6);
+  assert.equal(shownValue(lever(one, "spending"), one.scale), shownValue(lever(one, "spending")));
+});
+
+test("D4: a plan just short of the line never reads 'just what you assume'", () => {
+  const p = familyPlan();
+  let lo = 1, hi = 1.6;
+  const meetsAt = (x) => compute(p, { today: TODAY, spendingScale: x, only: ["returns"] }).meets;
+  assert.ok(meetsAt(lo) && !meetsAt(hi));
+  for (let k = 0; k < 30; k++) { const mid = (lo + hi) / 2; if (meetsAt(mid)) lo = mid; else hi = mid; }
+  const d = compute(p, { today: TODAY, spendingScale: hi, only: ["returns"] });
+  assert.equal(d.meets, false);
+  const r = lever(d, "returns");
+  assert.notEqual(r.status, "same");
+  assert.match(r.sentence, /more than the/);
+});
+
+// --- verify of the follow-ups (2026-11-07): under "Room for bad luck" the hero never says "as it stands" ----------------------------
+test("verify: with Room for bad luck on, the hero speaks of 15% more spending, not of the plan as it stands", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  globalThis.history = { state: null, replaceState: () => {} };
+  globalThis.location = { pathname: "/", search: "?sandbox=1", hash: "" };
+  // the family planning $7,600 a month: the money lasts as planned, and runs out in 2082 at 15% more
+  const p = familyPlan(); p.retirement = { ...(p.retirement ?? {}), spendingMonthly: 7600 };
+  assert.equal(compute(p, { today: "2026-11-07", only: ["returns"] }).meets, true);
+  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
+  const route = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "last" } };   // starts from just last, chip off
+  const r = await renderPage(new URL("./view.js", import.meta.url), p, "2026-11-07", { computeRemote: live, route });
+  assert.match(r.text(), /Your plan gets there, with room/); assert.match(r.text(), /As it stands the money lasts and leaves about/);
+  r.root.querySelectorAll(".chip").find((c) => c.textContent === "Room for bad luck").click(); await new Promise((ok) => setTimeout(ok, 0));
+  assert.match(r.text(), /With 15% more spending than you plan, the money runs out in 20\d\d\./);
+  assert.ok(!/As it stands the money runs out/.test(r.text()), "the plan as it stands does not run out");
+  r.root.querySelectorAll(".chip").find((c) => c.textContent === "Room for bad luck").click(); await new Promise((ok) => setTimeout(ok, 0));
+  assert.match(r.text(), /As it stands the money lasts/);
+  delete globalThis.history; delete globalThis.location;
+});

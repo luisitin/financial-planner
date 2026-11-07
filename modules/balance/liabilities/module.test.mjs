@@ -151,3 +151,63 @@ test("verify: shownShare rounds as the pages print a percent (core/format.js pct
   // 0.285 is stored as 0.28499999999999998: x * 100 rounds to 28, but the page prints "29%"; likewise 14.5%
   for (const x of [0.145, 0.205, 0.285, 0.365, 0.435, 0.203, 0.2049, 926.25 / 3250]) assert.equal(`${Math.round(shownShare(x) * 100)}%`, pct(x, 0), String(x));
 });
+
+// --- round 8 batch 4 follow-up F2 (2026-11-07): the notices follow the saved payoff order ------------------------------------------
+test("F2: a saved smallest-first or own order is the order the notices say; highest-rate-first is as before", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const warn = (order, customOrder) => { const p = renterDebtPlan(); p.debtPlan = { ...(p.debtPlan ?? {}), order, ...(customOrder ? { customOrder } : {}) }; return compute(p, { today: "2026-11-06" }).warnings; };
+  // smallest balance first: Store card $2,000, Mastercard $3,300, Visa $4,500 (the order Pay off debts pays in)
+  assert.deepEqual(warn("snowball"), [
+    "Visa card costs about $109 a month in interest at 29%. Pay it down once the Mastercard is paid off.",
+    "Store card costs about $45 a month in interest at 27%. Your payoff plan pays it down first.",
+    "Mastercard costs about $66 a month in interest at 24%. Pay it down once the Store card is paid off.",
+  ]);
+  // the person's own order: Mastercard, Visa, Store card (a card left off the list goes last)
+  assert.deepEqual(warn("custom", ["mc", "setup-owe-credit", "store"]), [
+    "Visa card costs about $109 a month in interest at 29%. Pay it down once the Mastercard is paid off.",
+    "Store card costs about $45 a month in interest at 27%. Pay it down once the Visa card is paid off.",
+    "Mastercard costs about $66 a month in interest at 24%. Your payoff plan pays it down first.",
+  ]);
+  // only the Store card listed: it first, then every other debt Pay off debts pays, by name (Car loan, Mastercard, Visa card)
+  assert.match(warn("custom", ["store"]).find((w) => w.startsWith("Mastercard")), /once the Car loan is paid off/);
+  // highest rate first saved, or nothing saved: unchanged
+  assert.deepEqual(warn("avalanche"), warn(undefined));
+  assert.match(warn("avalanche")[0], /Paying it down first saves the most\.$/);
+});
+
+// review D3 (2026-11-07): a cheaper debt the saved order pays between two cards comes between them in the notices
+test("D3: the notice names the debt the saved order pays just before, even a cheaper one", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const p = renterDebtPlan();
+  const car = compute(p, { today: "2026-11-06" }).rows.find((r) => r.name === "Car loan");
+  assert.ok(car, "the renter has a car loan");
+  p.debtPlan = { ...(p.debtPlan ?? {}), order: "custom", customOrder: ["store", car.id, "mc", "setup-owe-credit"] };
+  const w = compute(p, { today: "2026-11-06" }).warnings;
+  assert.match(w.find((x) => x.startsWith("Mastercard")), /once the Car loan is paid off/);
+  assert.match(w.find((x) => x.startsWith("Visa")), /once the Mastercard is paid off/);
+  assert.match(w.find((x) => x.startsWith("Store")), /Your payoff plan pays it down first\.$/);
+  assert.equal(compute(p, { today: "2026-11-06" }).order, "custom");
+  assert.equal(compute(renterDebtPlan(), { today: "2026-11-06" }).order, "avalanche");
+});
+
+// verify of the follow-ups (2026-11-07): the note under the list says highest rate first saves more only when Pay off debts finds it does
+test("verify: the order note claims 'highest rate first would save more' only when it does", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: payoff } = await import("../../debt/payoff/compute.js");
+  const view = new URL("./view.js", import.meta.url);
+  const at = (debtPlan) => { const p = renterDebtPlan(); p.debtPlan = { ...(p.debtPlan ?? {}), ...debtPlan }; return p; };
+  // smallest first: $7,962.03 of interest against $7,798.80 highest rate first, so the sentence is true and said
+  const snow = at({ order: "snowball" });
+  const ps = payoff(snow, { today: "2026-11-07" });
+  assert.ok(ps.plans.snowball.totalInterest - ps.plans.avalanche.totalInterest > 100);
+  assert.match(await pageText(view, snow, "2026-11-07"), /Your payoff plan pays the smallest balance first\. Paying the highest interest rate first would save more in interest\./);
+  // an own order that is highest rate first (Visa 29%, Store 27%, Mastercard 24%, Car loan 9%): the same interest, so it is not said
+  const own = at({ order: "custom", customOrder: ["setup-owe-credit", "store", "mc", "setup-owe-car-loan"] });
+  const po = payoff(own, { today: "2026-11-07" });
+  assert.ok(Math.abs(po.plans.custom.totalInterest - po.plans.avalanche.totalInterest) < 0.5);
+  const t = await pageText(view, own, "2026-11-07");
+  assert.match(t, /Your payoff plan pays in the order you chose\. Tap a debt/); assert.ok(!/would save more in interest/.test(t), t);
+  // an own order that costs more (smallest first, as typed): said
+  assert.match(await pageText(view, at({ order: "custom", customOrder: ["store", "mc", "setup-owe-credit"] }), "2026-11-07"), /in the order you chose\. Paying the highest interest rate first would save more in interest\./);
+});

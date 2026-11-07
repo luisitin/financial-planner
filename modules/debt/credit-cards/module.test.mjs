@@ -57,7 +57,7 @@ test("round 8: paying only what the bank asks takes 16 to 19 years on the $4,500
 test("round 8: the page leads with what the bank asks, keeps the fixed payment as a second line, and points to the statement's box", async () => {
   const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
   const text = await pageText(new URL("./view.js", import.meta.url), renterCards(), "2026-11-06");
-  assert.match(text, /If you pay only the minimum, which drops as you pay down: about 16 to 19 years and \$8,900 to \$9,700 of interest/);
+  assert.match(text, /If you pay only the minimum \(it gets smaller as you owe less\): about 16 to 19 years and \$8,900 to \$9,700 of interest/);
   assert.match(text, /Keep paying \$150 even when the minimum drops: done in 4 years 7 months, \$3,610 of interest/);
   assert.match(text, /Minimum Payment Warning/);
   const p = renterCards(); p.debts[0].minPayment = 0;
@@ -73,7 +73,7 @@ test("round 8: the transfer saving says it needs approval and may not take it al
   const view = new URL("./view.js", import.meta.url);
   const text = await pageText(view, renterCards(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } });
   // each card's saving covers the promo months, and holds only if a 0% card is granted
-  assert.match(text, /saves about \$956 over 15 months if you are approved and pay \$309 a month/);
+  assert.match(text, /saves about \$931 over 15 months if you are approved and pay \$309 a month/);
   assert.match(text, /A 0% card usually needs good credit, and its limit may not take all \$9,800 you owe on cards\./);
   // 85% of the limits in use: the counselor line (CFPB: NFCC or FCAA members; one payment a month to them)
   assert.match(text, /nonprofit credit counselor/); assert.match(text, /National Foundation for Credit Counseling/);
@@ -123,16 +123,16 @@ test("review UX: one word for the bank's figure, the reason in the line, what ke
   const t = await cardsPage(renterCards(), "2026-11-06");
   // the rate is in the pill (20% or more): not again in the detail line
   assert.match(t, /Visa card 90% of limit 29\.0% minimum this month \$150 · limit \$5,000/);
-  assert.match(t, /If you pay only the minimum, which drops as you pay down: about 16 to 19 years and \$8,900 to \$9,700 of interest\./);
+  assert.match(t, /If you pay only the minimum \(it gets smaller as you owe less\): about 16 to 19 years and \$8,900 to \$9,700 of interest\./);
   // $8,933 - $3,610 = $5,323 and $9,661 - $3,610 = $6,051 less
   assert.match(t, /Keep paying \$150 even when the minimum drops: done in 4 years 7 months, \$3,610 of interest, about \$5,300 to \$6,100 less\./);
-  assert.match(t, /0% transfer: saves about \$956 over 15 months if you are approved and pay \$309 a month\./);
+  assert.match(t, /0% transfer: saves about \$931 over 15 months if you are approved and pay \$309 a month\./);
   assert.ok(!/Paying only what the bank asks|a month required/.test(t), t);
   // no minimum typed: never "$0 a month required"
   const p = renterCards(); p.debts[0].minPayment = 0;
   const t0 = await cardsPage(p, "2026-11-06");
   assert.match(t0, /minimum not entered yet \(Debts page\)/); assert.ok(!/\$0 a month required/.test(t0));
-  assert.match(t0, /If you pay only what most banks ask, which drops as you pay down: about/);
+  assert.match(t0, /If you pay only what most banks ask \(it gets smaller as you owe less\): about/);
 });
 
 test("review UX: the transfer saving says what clearing it takes when the month cannot carry it, and what it does at today's payments", async () => {
@@ -163,10 +163,87 @@ test("verify: a $30 minimum never reads as paid off sooner than keeping $30 a mo
   // the qa fixture's store card: $900 at 26.9%, $30 required. Keeping $30 level takes 51 months (4 years 3 months); what the bank
   // asks only drops, so "paying only the minimum" is 51 to 69 months, about 4 to 6 years, never "3 years"
   const t = await cardsPage(debtPlan(), "2026-09-15");
-  assert.match(t, /Store card[^]*?If you pay only the minimum, which drops as you pay down: about 4 to 6 years and \$610 to \$840 of interest\./);
+  assert.match(t, /Store card[^]*?If you pay only the minimum \(it gets smaller as you owe less\): about 4 to 6 years and \$610 to \$840 of interest\./);
   assert.ok(!/about 3 to 6 years/.test(t), t);
   // a $20 card with no minimum typed: paid in one month at either floor, said as "1 month"
   const p = renterCards(); p.accounts.find((a) => a.id === "visa").balance = 20; p.debts[0].minPayment = 0;
   const t1 = await cardsPage(p, "2026-11-06");
-  assert.match(t1, /If you pay only what most banks ask, which drops as you pay down: about 1 month and/); assert.ok(!/\b1 months\b/.test(t1), t1);
+  assert.match(t1, /If you pay only what most banks ask \(it gets smaller as you owe less\): about 1 month and/); assert.ok(!/\b1 months\b/.test(t1), t1);
+});
+
+// --- round 8 batch 4 follow-up F3 (2026-11-07): the card's transfer line is worked at the payment it names ----------------------------
+test("F3: each card's transfer saving is worked at payToClear, the payment its line names; the answer key's fields are unchanged", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const d = compute(renterDebtPlan(), { today: "2026-11-06" });
+  const byName = (n) => d.cards.find((c) => c.name === n).transfer;
+  // by hand (an independent loop, 15 months, 3% fee): Visa pays 4,500 x 1.03 / 15 = 309.00 against 29%: 1,065.83 of interest, less
+  // the 135.00 fee = 930.83; Mastercard 226.60 against 24%: 621.68 - 99 = 522.68; Store card 137.33 against 27%: 434.08 - 60 = 374.08
+  assert.equal(byName("Visa card").payToClear, 309); assert.equal(byName("Visa card").atClear.pay, 309);
+  assert.ok(Math.abs(byName("Visa card").atClear.saves - 930.83) < 0.02, byName("Visa card").atClear.saves);
+  assert.ok(Math.abs(byName("Mastercard").atClear.saves - 522.68) < 0.02); assert.ok(Math.abs(byName("Store card").atClear.saves - 374.08) < 0.02);
+  // not the old reading: $300 a month (balance / 15) saved $956.24, still the answer key's `saves`
+  assert.ok(Math.abs(byName("Visa card").saves - 956.24) < 0.01);
+  assert.ok(byName("Visa card").atClear.saves < byName("Visa card").saves);
+  // the page says the same figure
+  const t = await cardsPage(renterDebtPlan(), "2026-11-06");
+  assert.match(t, /0% transfer: saves about \$931 over 15 months if you are approved and pay \$309 a month\./);
+  assert.match(t, /saves about \$523 over 15 months if you are approved and pay \$227 a month/); assert.match(t, /saves about \$374 over 15 months if you are approved and pay \$137 a month/);
+  // a card whose minimum is more than payToClear: worked at the minimum, which the line then names
+  const p = renterCards(); p.debts.find((x) => x.accountId === "visa").minPayment = 500;
+  const v = compute(p, { today: "2026-11-06" }).cards.find((c) => c.name === "Visa card").transfer;
+  assert.equal(v.atClear.pay, 500); assert.ok(v.atClear.saves < 930);
+});
+
+// --- round 8 batch 4 follow-up F6 (2026-11-07): the page opens short ----------------------------------------------------------------
+test("F6: each card folds its other ways (keep the payment up, a 0% transfer) into one closed row; every figure is still on the page", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const view = new URL("./view.js", import.meta.url);
+  const r = await renderPage(view, renterDebtPlan(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } });
+  const more = r.root.querySelectorAll(".cc-more");
+  assert.equal(more.length, 3);
+  assert.ok(more.every((m) => m.tagName === "DETAILS" && !m.hasAttribute("open")), "closed by default: three cards, none is plainly the best move");
+  assert.ok(more.every((m) => /Pay more, or move to 0%/.test(m.textContent)));
+  // each fold holds that card's two lines; the counselor card and the offer are folded cards, nothing removed
+  assert.ok(more.every((m) => /Keep paying \$/.test(m.textContent) && /0% transfer: saves about/.test(m.textContent)));
+  const t = r.text();
+  for (const w of ["If payments are too much", "nfcc.org", "Balance transfer offer to compare", "Use these numbers", "Promotional 0% months", "Clearing all three in 15 months takes about $673 a month"]) assert.ok(t.includes(w), w);
+  assert.equal(r.root.querySelectorAll("details").filter((d) => d.hasAttribute("open")).length, 0);
+  // one carried card whose transfer pays: that card's fold is open (the transfer is the move)
+  const p = renterDebtPlan(); p.accounts = p.accounts.filter((a) => !["mc", "store"].includes(a.id)); p.debts = p.debts.filter((x) => !["mc", "store"].includes(x.accountId));
+  const one = await renderPage(view, p, "2026-11-06", { computeOf: { "overview/next-best-action": nba } });
+  const open = one.root.querySelectorAll(".cc-more");
+  assert.equal(open.length, 1); assert.ok(open[0].hasAttribute("open"));
+});
+
+// --- review of the follow-ups (2026-11-07) ------------------------------------------------------------------------------------------
+test("review UX: which card first, what the fold holds, the plain wording", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { renderPage, pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { firstCard } = await import("./view.js");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const view = new URL("./view.js", import.meta.url);
+  const t = (await renderPage(view, renterDebtPlan(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } })).text();
+  assert.match(t, /Put extra money on the Visa card first: it costs the most \(29%\)\./);
+  assert.match(t, /Pay more, or move to 0%/);
+  // another saved payoff order: the line is not said (it would say the opposite of the plan)
+  const p = renterDebtPlan(); p.debtPlan = { ...(p.debtPlan ?? {}), order: "snowball" };
+  assert.ok(!/Put extra money on/.test(await pageText(view, p, "2026-11-06")));
+  const cards = [{ name: "A", rate: 0.29, balance: 10, carried: true }, { name: "B", rate: 0.24, balance: 10, carried: true }];
+  assert.equal(firstCard(cards, undefined).name, "A"); assert.equal(firstCard(cards, "avalanche").name, "A");
+  assert.equal(firstCard(cards, "custom"), null); assert.equal(firstCard([cards[0]], undefined), null);
+  assert.equal(firstCard([cards[0], { ...cards[0], name: "C" }], undefined), null);
+  assert.equal(firstCard([{ ...cards[0], rate: 0.15 }, { ...cards[1], rate: 0.1 }], undefined), null);
+  assert.ok(!/which drops as you pay down/.test(t));
+  assert.match(t, /box called Minimum Payment Warning/);
+});
+
+// verify of the follow-ups (2026-11-07): the "which card first" line gives the rate as the card's pill does
+test("verify: 'put extra money on' names the rate to the tenth when it is not whole", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const p = renterDebtPlan(); p.debts.find((x) => x.accountId === "setup-owe-credit").rate = 0.299;
+  const t = await cardsPage(p, "2026-11-06");
+  assert.match(t, /29\.9%/); assert.match(t, /Put extra money on the Visa card first: it costs the most \(29\.9%\)\./); assert.ok(!/\(30%\)/.test(t), t);
+  assert.match(await cardsPage(renterDebtPlan(), "2026-11-06"), /it costs the most \(29%\)\./);
 });

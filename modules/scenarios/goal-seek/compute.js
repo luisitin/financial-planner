@@ -112,7 +112,10 @@ export function compute(plan, params = {}) {
   const legacy = Math.max(0, Number(params.legacy) || 0);
   const scale = Number(params.spendingScale) > 0 ? Number(params.spendingScale) : 1;
   const want = (id) => !Array.isArray(params.only) || params.only.includes(id);
-  const fmt = (n) => fmtMoney(Math.round(n / 10) * 10, plan.meta?.currency ?? "USD");
+  // Round 8 batch 4 follow-up (2026-11-07): an amount you must reach rounds UP to the shown $10, a limit rounds DOWN, so following
+  // the words always works ("save about $240" when $243.53 is needed left the money $12 short); `near` for what the plan has now.
+  const cur = plan.meta?.currency ?? "USD";
+  const fmt = (n, dir = "near") => fmtMoney(dir === "up" ? roundUp(n) : dir === "down" ? roundDown(n) : Math.round(n / 10) * 10, cur);
   const b = buildInputs(plan, { today });
   if (!b.inputs) return { ready: false, missing: b.missing, legacy };
   const I = scale !== 1 ? { ...copyInputs(b.inputs), spending: { ...b.inputs.spending, yearly: b.inputs.spending.yearly * scale } } : b.inputs;
@@ -132,7 +135,7 @@ export function compute(plan, params = {}) {
     const h = healthAdded(b.health);
     const onTop = h ? " on top of health cover" : "", before = h ? " before health cover" : "";
     add({ id: "spending", icon: "🛒", title: "What you can spend", value: m, current: spendingMonthly, unit: "month", status: best === null ? "cannot" : m >= spendingMonthly ? "room" : "needs",
-      sentence: best === null ? `Even spending nothing in retirement${h ? " but health cover" : ""} does not reach the goal: look at the other changes.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m)} a month${onTop}, ${fmt(m - spendingMonthly)} more than the ${fmt(spendingMonthly)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m)} a month${onTop}: ${fmt(spendingMonthly - m)} less than the ${fmt(spendingMonthly)} the plan spends${before}.`, go: ["retirement", "projection"] });
+      sentence: best === null ? `Even spending nothing in retirement${h ? " but health cover" : ""} does not reach the goal: look at the other changes.` : m >= spendingMonthly ? `If markets do as well as average, up to about ${fmt(m / scale, "down")} a month${onTop}, ${fmt((m - spendingMonthly) / scale, "down")} more than the ${fmt(spendingMonthly / scale)} the plan spends${before}.` : `If markets do as well as average, about ${fmt(m / scale, "down")} a month${onTop}: ${fmt((spendingMonthly - m) / scale, "up")} less than the ${fmt(spendingMonthly / scale)} the plan spends${before}.`, go: ["retirement", "projection"] });
   }
 
   // 2. the earliest retirement age that reaches the goal, for the adult Financial independence asks about (review 2026-11-06,
@@ -170,7 +173,7 @@ export function compute(plan, params = {}) {
     const withSaving = (extra) => { const c = copyInputs(I); if (extra >= 0) c.contributions.push({ bucket: main?.bucket ?? "taxable", yearly: extra * 12, personIndex: main?.personIndex ?? 0, name: "extra" }); else { const f = now > 0 ? Math.max(0, 1 + extra / now) : 1; for (const x of c.contributions) x.yearly *= f; } return c; };
     const need = smallestWhere((e) => meets(withSaving(e)), -now, Math.max(5000, now * 10), 1);
     add({ id: "saving", icon: "🐖", title: "What you need to save", value: need === null ? null : now + need, current: now, unit: "month", status: need === null ? "cannot" : need <= -0.5 ? "room" : need < 0.5 ? "same" : "needs",
-      sentence: need === null ? "No amount of saving gets there before retirement." : need <= -now + 0.5 ? `Nothing more: it gets there even if retirement saving stopped today (now ${fmt(now)} a month).` : need < -0.5 ? `About ${fmt(now + need)} a month would do: ${fmt(-need)} less than the ${fmt(now)} going in now.` : need < 0.5 ? `Exactly what goes in now, ${fmt(now)} a month.` : `About ${fmt(now + need)} a month, ${fmt(need)} more than the ${fmt(now)} going in now.`, go: ["retirement", "contributions"] });
+      sentence: need === null ? "No amount of saving gets there before retirement." : need <= -now + 0.5 ? `Nothing more: it gets there even if retirement saving stopped today (now ${fmt(now)} a month).` : need < -0.5 ? `About ${fmt(now + need, "up")} a month would do: ${fmt(-need, "down")} less than the ${fmt(now)} going in now.` : need < 0.5 ? `Exactly what goes in now, ${fmt(now)} a month.` : now < 0.5 ? `Save about ${fmt(now + need, "up")} a month. You save nothing toward this today.` : `About ${fmt(now + need, "up")} a month, ${fmt(need, "up")} more than the ${fmt(now)} going in now.`, go: ["retirement", "contributions"] });
   }
 
   // 4. the return it needs: stocks and bonds moved together
@@ -179,8 +182,8 @@ export function compute(plan, params = {}) {
     const d = smallestWhere((x) => meets(shifted(x)), -0.15, 0.2, 0.0001);
     const mix = (I.rates.stocksNow + I.rates.stocksRetired) / 2;
     const blend = (x) => mix * (I.returns.stocks + x) + (1 - mix) * (I.returns.bonds + x);
-    add({ id: "returns", icon: "📈", title: "The return it needs", value: d === null ? null : blend(d), current: blend(0), unit: "rate", status: d === null ? "cannot" : d < -0.0005 ? "room" : d < 0.0005 ? "same" : "needs",
-      sentence: d === null ? "No believable return gets there on its own." : d < -0.0005 ? `About ${pct(blend(d))} a year on your mix would do, against the ${pct(blend(0))} you assume: ${pts(-d)} of room for bad luck.` : d < 0.0005 ? `About ${pct(blend(0))} a year, just what you assume: no room for bad luck.` : `About ${pct(blend(d))} a year on your mix, ${pts(d)} more than the ${pct(blend(0))} you assume.`, go: ["system", "assumptions"] });
+    add({ id: "returns", icon: "📈", title: "The return it needs", value: d === null ? null : blend(d), current: blend(0), unit: "rate", status: d === null ? "cannot" : d < -0.0005 ? "room" : ok0 && d < 0.0005 ? "same" : "needs",
+      sentence: d === null ? "No believable return gets there on its own." : d < -0.0005 ? `About ${pctUp(blend(d))} a year on your mix would do, against the ${pct(blend(0))} you assume: ${pts(-d, "down")} of room for bad luck.` : ok0 && d < 0.0005 ? `About ${pct(blend(0))} a year, just what you assume: no room for bad luck.` : `About ${pctUp(blend(d))} a year on your mix, ${pts(d, "up")} more than the ${pct(blend(0))} you assume.`, go: ["system", "assumptions"] });
   }
 
   // 5. a lump sum today: what it is short, or what could come out today and still get there
@@ -188,10 +191,10 @@ export function compute(plan, params = {}) {
     const withLump = (x) => { const c = copyInputs(I); c.events.push({ year: c.startYear, amount: -x, label: "lump sum" }); return c; };
     if (ok0) {
       const spare = largestWhere((x) => meets(withLump(-x)), 0, Math.max(10000, Object.values(I.balances).reduce((s, v) => s + v, 0)), 50);
-      add({ id: "lump", icon: "💰", title: "Room today", value: spare ?? 0, current: 0, unit: "once", status: "room", sentence: `About ${fmt(spare ?? 0)} could come out of savings today and the plan would still get there. Not a suggestion to spend it: a measure of the cushion.`, go: ["balance", "net-worth"] });
+      add({ id: "lump", icon: "💰", title: "Room today", value: spare ?? 0, current: 0, unit: "once", status: "room", sentence: `About ${fmt(spare ?? 0, "down")} could come out of savings today and the plan would still get there. Not a suggestion to spend it: a measure of the cushion.`, go: ["balance", "net-worth"] });
     } else {
       const short = smallestWhere((x) => meets(withLump(x)), 0, 1e7, 50);
-      add({ id: "lump", icon: "💰", title: "What it is short today", value: short, current: 0, unit: "once", status: short === null ? "cannot" : "needs", sentence: short === null ? "More than ten million dollars today: look at the other changes." : `About ${fmt(short)} more in savings today would get there (an inheritance, a sale, a bonus).`, go: ["balance", "net-worth"] });
+      add({ id: "lump", icon: "💰", title: "What it is short today", value: short, current: 0, unit: "once", status: short === null ? "cannot" : "needs", sentence: short === null ? "More than ten million dollars today: look at the other changes." : `About ${fmt(short, "up")} more in savings today would get there (an inheritance, a sale, a bonus).`, go: ["balance", "net-worth"] });
     }
   }
 
@@ -228,11 +231,33 @@ export function compute(plan, params = {}) {
     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
     const isNow = (a) => a === nowAge && nowForAll;
     add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id), nowAge, nowForAll,
-      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly)} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly)} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt(best.monthly - nowAt.monthly)} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
+      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly / scale, "down")} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt((best.monthly - nowAt.monthly) / scale, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
   }
 
-  return { ready: true, missing: [], legacy, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
+  return { ready: true, missing: [], legacy, scale, meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
 }
 
+/** The "room for bad luck" target: spending 15% above the plan (the Plan health score's full marks, FULL_RETIREMENT, is the same 1.15). */
+export const BAD_LUCK = 1.15;
 const pct = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
-const pts = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)} percentage point${Math.round(x * 1000) === 10 ? "" : "s"}`;
+/** A rate you must earn, rounded UP to the shown tenth of a percent (the same rounding as the lever's `shownValue`). */
+const pctUp = (x) => `${(Math.ceil(x * 1000 - 1e-6) / 10).toFixed(1)}%`;
+const ptsN = (x, dir) => (dir === "up" ? Math.ceil(x * 1000 - 1e-6) : dir === "down" ? Math.floor(x * 1000 + 1e-6) : Math.round(x * 1000));
+const pts = (x, dir = "near") => `${(ptsN(x, dir) / 10).toFixed(1)} percentage point${ptsN(x, dir) === 10 ? "" : "s"}`;
+
+/** A need rounds up to the shown $10 (under 50 cents it is nothing), a limit rounds down. */
+export const roundUp = (n) => (n < 0.5 ? 0 : Math.ceil(n / 10 - 1e-9) * 10);
+export const roundDown = (n) => Math.floor(n / 10 + 1e-9) * 10;
+/**
+ * shownValue(lever) -> the number the page prints for a lever's answer (the lever's `value` itself stays unrounded): what you
+ * must reach rounds UP (saving, a lump sum that is short, the return it needs), a limit rounds DOWN (what you can spend, the
+ * room today), so doing what the words say always works. `scale` (the result's): what you can spend is shown in the plan's terms,
+ * the spending that lasts divided by it, so with "room for bad luck" (1.15) it is the most to plan, each month then 15% more. Ages are whole already; a "just right" return is the nearest tenth.
+ */
+export function shownValue(l, scale = 1) {
+  if (l.value === null || l.value === undefined) return l.value ?? null;
+  if (l.unit === "rate") return (l.status === "same" ? Math.round(l.value * 1000) : Math.ceil(l.value * 1000 - 1e-6)) / 1000;
+  if (l.unit === "month") return l.id === "saving" ? roundUp(l.value) : roundDown(l.value / scale);   // spending: in the plan's terms (under "room for bad luck" the engine spends `scale` times the plan)
+  if (l.unit === "once") return l.status === "needs" ? roundUp(l.value) : roundDown(l.value);
+  return l.value;
+}

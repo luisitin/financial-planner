@@ -145,14 +145,14 @@ test("round 8: short of lasting, the hint quotes Goal seek's saving for the mone
   // the plan can carry $0 against $2,040 planned: it said "about $2,350 a month less spending", (1.15 x 24,480 - 0) / 12,
   // a yearly gap in retirement spending put as a monthly cut larger than the whole planned spending
   assert.ok(!/2,350|less spending/.test(ret.fix), ret.fix);
-  // Goal seek, same plan, the money lasting (leave nothing): about $240 a month more saving; spending alone cannot do it and
+  // Goal seek, same plan, the money lasting (leave nothing): about $243.53 a month more saving (shown as $250: a need rounds up, 2026-11-07); spending alone cannot do it and
   // working to 75 does not either, so neither is offered
   const gs = goalSeek(p, { today }).levers;
   const save = gs.find((l) => l.id === "saving");
-  assert.equal(Math.round((save.value - save.current) / 10) * 10, 240);
+  assert.equal(Math.ceil((save.value - save.current) / 10) * 10, 250);
   assert.equal(gs.find((l) => l.id === "spending").status, "cannot");
   assert.equal(gs.find((l) => l.id === "retire").status, "cannot");
-  assert.match(ret.fix, /^To make the money last: save about \$240 a month more\. Goal seek shows it on "Just last"\./);
+  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Goal seek shows it on "Just last"\./);
   assert.ok(!ret.fix.includes("retire at"));
 });
 test("round 8: lasting but under 115%, the hint asks Goal seek for 115% and the spending cut is the planned spending less what it can carry / 1.15", async () => {
@@ -172,7 +172,7 @@ test("round 8: lasting but under 115%, the hint asks Goal seek for 115% and the 
   const spend = gs.levers.find((l) => l.id === "spending");
   const save = gs.levers.find((l) => l.id === "saving");
   assert.equal(Math.round((2040 - spend.value / 1.15) / 10) * 10, 140);
-  const more = Math.round((save.value - save.current) / 10) * 10;
+  const more = Math.ceil((save.value - save.current) / 10 - 1e-9) * 10;
   assert.ok(ret.fix.startsWith(`Full marks at 115% (room for bad luck): save about $${more} a month more`), ret.fix);
   assert.ok(ret.fix.endsWith("or spend about $140 a month less. Worked out as Goal seek does, for 15% more spending than you plan."), ret.fix);
   // the page's own call (no new arguments) still works every lever
@@ -204,14 +204,14 @@ test("review D5: under a spending rule that never runs out, the hint is worked o
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const p = renterDebtPlan(); p.retirement.strategy = "percent";
   const fix = compute(p, { today: "2026-11-06" }).parts.find((x) => x.id === "retirement").fix;
-  // the same $240 as on steady spending (the plan's own rule gave Goal seek's saving lever $10)
-  assert.match(fix, /^To carry the planned spending every year: save about \$240 a month more/);
+  // the same $250 as on steady spending (the plan's own rule gave Goal seek's saving lever $10)
+  assert.match(fix, /^To carry the planned spending every year: save about \$250 a month more/);
 });
 
 test("review D4: the hint names the target Goal seek must be set to, and the link opens it there", async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const ret = compute(renterDebtPlan(), { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
-  assert.match(ret.fix, /^To make the money last: save about \$240 a month more\. Goal seek shows it on "Just last"\./);
+  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Goal seek shows it on "Just last"\./);
   assert.deepEqual(ret.query, { target: "last" });
   // lasting but under 115%: Goal seek has no such target, so the hint says how it was worked out instead of pointing at the page
   const q = renterDebtPlan(); q.accounts.find((a) => a.id === "k401").balance = 100000;
@@ -230,7 +230,7 @@ test("review UX: a spending cut of more than half the planned spending is not of
   const p = renterDebtPlan(); p.accounts.find((a) => a.id === "k401").balance = 40000;
   p.household.people[0].retirementAge = 63; p.retirement.socialSecurity["setup-self"].claimAge = 70;
   const fix = compute(p, { today: "2026-11-06" }).parts.find((x) => x.id === "retirement").fix;
-  assert.match(fix, /save about \$160 a month more or retire at 68/); assert.ok(!/spend about/.test(fix), fix);
+  assert.match(fix, /save about \$170 a month more or retire at 68/); assert.ok(!/spend about/.test(fix), fix);
 });
 
 test("review UX: 'How the score is worked out' says the debt part in plain words", async () => {

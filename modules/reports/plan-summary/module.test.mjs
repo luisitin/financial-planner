@@ -60,7 +60,7 @@ test("review UX: the summary's retirement and stress-test lines never ask for mo
     { computeRemote: { "reports/plan-summary": (p, params) => compute(p, { ...params, maxPaths: 200 }) } });
   // the plan carries $0 of the $2,040 planned: "spend about $2,040 a month less" is all of it, and does not make it last
   assert.ok(!/\$2,040 a month less/.test(t), "no cut as big as the whole spending");
-  assert.match(t, /To make the money last: save about \$240 a month more/);
+  assert.match(t, /To make the money last: save about \$250 a month more/);
   assert.match(t, /even spending nothing would not make it last/);
   // the debts' own dates hold at today's payments ("on its own payment" read as "paying the minimum")
   assert.match(t, /If you keep paying today's payments, the Visa card runs to/); assert.ok(!/On its own payment/.test(t));

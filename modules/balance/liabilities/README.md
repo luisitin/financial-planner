@@ -87,3 +87,15 @@ it counts a payment the borrower chooses on top.
 - **One "first".** The expensive-debt notices (rows highest rate first) say "Paying it down first saves the most" only for the
   first; each later one "Pay it down once the Visa card is paid off" (the one before it). Three amber notices each said
   "first". Test: "only one expensive debt is 'first'", failing before the fix.
+
+- **Notices follow the saved payoff order (2026-11-07).** With a saved smallest-balance-first or own order (`debtPlan.order`,
+  `customOrder`) the expensive-debt notices are ranked as Pay off debts pays them: each says "Pay it down once the X is paid off"
+  for the expensive debt before it in that order, and the first says "Your payoff plan pays it down first of these." (not
+  "saves the most", which is only true highest-rate-first). Highest rate first, or nothing saved: as before. Test "F2".
+
+## Notices follow a saved order (review D3, 2026-11-07)
+With a saved smallest-first or own order, "Pay it down once the X is paid off" names the debt Pay off debts pays just before it, counting every
+debt it pays (a cheaper car loan or medical bill between two cards included). The note under the list says which order the plan uses.
+- Verify (2026-11-07): "Paying the highest interest rate first would save more in interest" under the list is said only when Pay off
+  debts (`debt/payoff` compute, `plans[order].totalInterest - plans.avalanche.totalInterest` of $0.50 or more) finds it does; an own
+  order that is already highest rate first costs the same and no longer reads that. Test "verify: the order note".

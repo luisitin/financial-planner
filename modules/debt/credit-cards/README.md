@@ -14,6 +14,14 @@ Plan sections read (`needs`): `accounts` (type credit), `debts` (rate, minimum p
 - Utilisation = balance / limit, per card and combined; 30% is the usual line, 10% the best.
 - Minimum-payment trap (`trap`, the answer key's reading; the page leads with `bank`, below): `minimumOnly` (`core/math/payoff.js`) with the card's required payment, or, when none is set, 2% of the balance owed at the start of each month (before that month's interest) with a 25 floor, worked again every month as Regulation Z's sample calculation does (12 CFR 1026 Appendix M1 (b)(1), (b)(3) and Appendix M2): months and interest until zero, or never when a payment is at or below the month's interest (1026.7(b)(12)(ii)). Checked against `tools/golden_debt` (`tests/golden-debt.test.mjs`).
 - Balance transfer: interest over the promo months at the card's rate when paying max(required, balance / promo months) each month, against the fee (balance x fee %); `saves` = interest - fee; `payToClear` = (balance x (1 + fee)) / promo months.
+- Balance transfer, the card's own line (`transfer.atClear`, 2026-11-07): the same loop, but at the payment the line names, `payToClear`
+  (or the card's minimum when that is more): `pay` = max(required, payToClear), `interest` = what the old card charges over the promo
+  months paying `pay` (each month: balance x rate / 12 added, `pay` taken off, to zero), `saves` = `interest` - the fee. The line says
+  "saves about `atClear.saves` ... pay `atClear.pay` a month", so it is true at the payment it names. The renter's Visa card
+  ($4,500 at 29%, 15 months, 3% fee): `payToClear` = 4,500 x 1.03 / 15 = $309.00; the old card charges $1,065.83 of interest over the
+  15 months at $309 a month; less the $135 fee, `saves` = $930.83, "about $931" (balance / 15 = $300 gave $1,091.24 and "$956", the
+  answer key's `bt_interest` and `bt_saves`, which `transfer.interestNow` and `transfer.saves` still hold). Mastercard $523 (was
+  $538), Store card $374 (was $385); checked by an independent loop.
 
 ## Tests
 `tests/debt-pages.test.mjs`, `module.test.mjs`.
@@ -70,7 +78,7 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
   months if you are approved and pay $309 a month." (the saving is the interest the card would charge over the promo months
   at that payment, less the fee). The offer card adds, once: "Each card's saving above uses these months and fee, and needs a
   card company to approve you. A 0% card usually needs good credit, and its limit may not take all $9,800 you owe on cards."
-- "If the payments are hard to keep up" when a card carries a balance (`carried`: something owed and a minimum under the
+- "If payments are too much" when a card carries a balance (`carried`: something owed and a minimum under the
   whole balance, or none typed) and either card use is over 50% of the limits (`utilisation` > 0.5) or Next best action
   leaves under $100 a month (`spare.monthly`) with less cash in the bank than is owed on the cards (Liquidity's `nowAll`,
   all cash, goal money too); both read through `ctx.computeOf`, and the thresholds are the app's: a nonprofit
@@ -122,3 +130,19 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
   cash in the bank is less than the cards owe (a household with $202,000 in the bank and a card paid in full saw it).
 - Tests: `tests/payoff.test.mjs` ("floor, the whole balance, below the interest"), `module.test.mjs` ("review D1", "review
   D2", "review UX" x2), each failing before the fix.
+
+## Round 8 batch 4 follow-ups (2026-11-07)
+- Each card's transfer line is worked at the payment it names (`transfer.atClear`, formula above); the answer key's `saves` and
+  `interestNow` are untouched. The transfer offer's total (`transferPlan`) counts the cards whose saving at that payment is above $0.
+- **Opens short** (the page was about 2,500 px at 390 wide for three cards, now about 1,390): each card's "Keep paying ..." and
+  "0% transfer ..." lines fold into one outlined "Other ways to pay it off" row, closed unless the transfer is plainly the move
+  (the only carried card whose transfer pays); the counselor card and the transfer offer (months, fee, "Use these numbers") are
+  folded cards, closed. Nothing was removed. The card's icon is hidden to give the text the width. Layout tests changed: none
+  (the text of every line is still on the page); "F6" is new.
+
+## Review of the follow-ups (2026-11-07)
+- A line under the total names the card to put extra money on (highest rate first, as Pay off debts does by default): shown only with two or
+  more cards carrying a balance, a clear highest rate of 20% or more, and no saved smallest-first or own payoff order.
+- Each card's closed fold is titled for what is inside ("Pay more, or move to 0%"); the first review title "Other ways to pay it off" was vague.
+- Verify (2026-11-07): the "Put extra money on ..." line gives the rate as the card's pill does, to the tenth when it is not whole
+  (29.9% read "(30%)" beside a "29.9%" pill). Test "verify: 'put extra money on'".

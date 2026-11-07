@@ -8,7 +8,7 @@ import { compute as computeLiabilities, rentsHome, DTI_LINES, shownShare } from 
 import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown } from "../../retirement/projection/compute.js";
 import { retirementGap } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
-import { compute as computeGoalSeek } from "../../scenarios/goal-seek/compute.js";
+import { compute as computeGoalSeek, roundUp } from "../../scenarios/goal-seek/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
@@ -68,7 +68,7 @@ export function compute(plan, params = {}) {
     // within $5 of $0 it "only just about breaks even" (fullKind), never "about $0" (round 5)
     const full = s.full ?? s.monthly + (s.held ?? 0), about = s.fullAbout ?? full, kind = s.fullKind ?? (full >= 0 ? "ahead" : "short");
     const shortWords = `About ${money(-s.monthly)} a month more goes out than comes in after tax${(s.held ?? 0) > 0.5 ? `, counting uneven pay at what you can count on (Side income); a month that brings the Income page's amount ${kind === "ahead" ? `leaves about ${money(about)}` : kind === "even" ? "only just about breaks even" : `is still about ${money(-about)} short`}` : ""}.`;
-    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, spare ${money(Math.max(0, s.monthly))} a month).` : shortWords, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(Math.max(0, SAVING_TARGET * afterTax - saved))} a month more.`, ["overview", "next-best-action"]);
+    add("saving", "Saving each month", rate / SAVING_TARGET, rate >= 0 ? `About ${Math.round(rate * 100)}% of income after tax is saved or left over (retirement ${money(s.retirementSaving)}, goals ${money(s.goalSaving)}${s.debtExtra ? `, extra on debts ${money(s.debtExtra)}` : ""}, spare ${money(Math.max(0, s.monthly))} a month).` : shortWords, `Saving ${Math.round(SAVING_TARGET * 100)}% of income after tax earns full marks: about ${money(roundUp(Math.max(0, SAVING_TARGET * afterTax - saved)))} a month more.`, ["overview", "next-best-action"]);
   }
 
   // 3. debt: expensive balances against a year's income, and the share of income that goes to payments
@@ -194,7 +194,7 @@ export function retirementWays(plan, { today, ratio, money }) {
   const lever = (id) => gs.levers.find((l) => l.id === id) ?? null;
   const ways = [];
   const save = lever("saving");
-  if (save?.status === "needs" && save.value !== null && save.value - save.current >= 5) ways.push(`save about ${money(save.value - save.current)} a month more`);
+  if (save?.status === "needs" && save.value !== null && save.value - save.current >= 5) ways.push(`save about ${money(roundUp(save.value - save.current))} a month more`);   // a need rounds up (2026-11-07: "$240" left $243.53 short)
   const ret = lever("retire");
   // one adult: "retire at 67"; with two, whose age it is
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent").length;
@@ -202,7 +202,7 @@ export function retirementWays(plan, { today, ratio, money }) {
   const spend = lever("spending");
   if (spend && spend.status !== "cannot" && spend.value !== null) {
     const planned = gs.spendingMonthly / scale, cut = planned - spend.value / scale;
-    if (cut >= 5 && cut < planned && (cut <= planned / 2 || !ways.length)) ways.push(`spend about ${money(cut)} a month less`);
+    if (cut >= 5 && cut < planned && (cut <= planned / 2 || !ways.length)) ways.push(`spend about ${money(roundUp(cut))} a month less`);   // a cut rounds up: spending that much less always works
   }
   if (!ways.length) return { text: `${lead}: no one change gets there on its own; Goal seek shows what each would take.`, query, scale };
   return { text: `${lead}: ${ways.length === 1 ? ways[0] : `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}`}. ${where(ways.length)}`, query, scale };
