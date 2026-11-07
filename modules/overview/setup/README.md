@@ -677,3 +677,14 @@ The "Skip: use our guesses" childcare reminder opens the fold. "Must-pay bills" 
 
 ## Q6 remembers the figure (path part 3 fix, 2026-11-06)
 The top box's figure is saved as `guide.setup.spendSum: { sum, typed }` (whole dollars; `typed` = the groups typed in the fold). Reopening puts `sum` back in the box, keeps the typed groups as typed and shows the rest as the share of the figure (grey). A new figure re-shares only the blank groups, so the rows always add up to it and no "Monthly spending (rough)" row appears unless nothing can be shared. The figure is read back only while the setup bills still add up to `sum`; if a bill was changed or removed on Expenses, the screen opens as for typed rows and never overwrites it. Leaving the box empty removes `spendSum` and the blank groups go back to our marked guesses. A decimal figure is rounded once, so the rows and the retirement guess agree. A decimal group typed beside the figure is rounded the same way (at least $1), so the sum always matches. While a figure is given, the line under the box says the grey figures are the figure shared out.
+
+## Year you bought it (2026-11-07, owner's request)
+Question 4 (the home's value) has an optional "Year you bought it" box; question 5 (the mortgage) says the year once it is given
+("You said you bought it in 2025", with "Change the year") and has the box itself only when there is none. Blank shows the grey guess
+(`home.boughtYear`) in the box's help in words; typed, it is the purchase date (July 1 of the year) on the Home page's entry for the home
+when there is one, else on `property[setup-home]` (`applyBought`, `boughtYearOn`, `homeEntryFor`: one entry; the Get started entry is
+removed when the box is emptied, when the home is unpicked or its account goes). `parseYear(v, thisYear)` takes the year of the plan's
+today as its upper bound (a year ahead is no answer and the box says so); there is no hidden clock. `oweArgs`
+passes `bought` (a year, or null for a blank box; a screen without the box passes nothing and the plan's year is read). A refinance answered
+on the mortgage tap still wins as the loan's start (unless it is earlier than the year typed). Formulas: overview/guesses README "When the
+home was bought".

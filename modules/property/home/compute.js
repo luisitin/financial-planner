@@ -4,6 +4,7 @@
 // that is tax-free once you have owned and lived in it two of the last five years, a short-term gain taxed like pay,
 // the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
 // years as it grows and the mortgage shrinks.
+import { homeEntryFor } from "../../overview/guesses/estimators/loanhome.js";
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
 import { todaysReturn, addIncome } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
@@ -19,6 +20,21 @@ export const DEFAULTS = { maintenance: 0.01, sellCosts: 0.06, appreciation: 0.03
 export const EXCLUSION = { single: 250000, married_joint: 500000 };
 /** Owned and lived in for 730 days or 24 full months of the five years before the sale (121(a); 26 CFR 1.121-1(c)(1): "24 full months or for 730 days (365 x 2)"). */
 export const USE = { days: 730, months: 24 };
+
+/**
+ * The purchase date to keep after the Home page's form (or the mortgage page's one box) is saved: the exact date when it was
+ * changed or agrees with the year; the middle of the year (July 1) when only the year was typed or changed; nothing
+ * ("") when both are blank. `was` is what the form opened with. Years outside 1950 to this year count as blank.
+ */
+export function purchaseDateFrom({ year = null, date = "" } = {}, was = {}, thisYear = new Date().getFullYear()) {
+  const good = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1950 && n <= thisYear ? n : null; };
+  const y = good(year), wasY = good(was.year);
+  const d = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+  const wasD = typeof was.date === "string" ? was.date : "";
+  if (d && d !== wasD) return d;                    // the exact date was typed: it wins
+  if (y !== wasY) return y ? `${y}-07-01` : "";     // the year was typed, changed or cleared
+  return d || (y ? `${y}-07-01` : "");
+}
 
 const lastDay = (y, m) => Number(isoOf(y, m + 1, 0).slice(8, 10));
 /** The date k calendar months after `iso`: a purchase on a month's last day gives the target month's last day, and a day the target month lacks falls back to its last day. */
@@ -65,7 +81,7 @@ export function compute(plan, params = {}) {
   const entries = (plan.property ?? []).filter((x) => x.kind === "home");
   const acct = homes.find((a) => entries.some((e) => e.accountId === a.id)) ?? homes.sort((a, b) => countedBalance(b) - countedBalance(a))[0] ?? null;
   if (!acct) return { ready: false };
-  const e = entries.find((x) => x.accountId === acct.id) ?? {};
+  const e = homeEntryFor(plan, acct.id) ?? {};   // the one entry for this home: the page's and Get started's share it (review D5)
   const n = (v, d) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? d : Number(v));
   const value = countedBalance(acct);
   const mort = computeMortgage(plan, { today });
@@ -81,7 +97,7 @@ export function compute(plan, params = {}) {
     .sort((a, b) => a.date.localeCompare(b.date)).filter((h, i, arr) => i === arr.length - 1 || h.date !== arr[i + 1].date);
 
   // a year of keeping it
-  const pay = m ? yearOfPayments(m.balance, m.rate ?? 0, m.payment + (m.extra || 0)) : { interest: 0, principal: 0 };
+  const pay = m ? yearOfPayments(m.balance, m.rate ?? 0, (m.toLoan ?? m.payment) + (m.extra || 0)) : { interest: 0, principal: 0 };
   const itemized = plan.taxes?.itemized ?? {};
   const lines = [
     { key: "tax", label: "Property tax", amount: n(e.propertyTax, n(itemized.propertyTax, 0)) },

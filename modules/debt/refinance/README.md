@@ -11,7 +11,10 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
 `current`, `offer` (payment, months, totalInterest), `monthlySaving`, `breakEvenMonths`, `yearsStaying`, `interestWhileStaying` (current, offer), `netWhileStaying`, `verdict`, `extraYears`, `needsOffer`, `hasData`.
 
 ## Formulas
-- New payment: `pmt(rate/12, term months, balance)`; whole-loan interest from `amortization`.
+- New payment: `pmt(rate/12, term months, balance)`; whole-loan interest from `amortization`. When the mortgage page splits tax and
+  insurance out of today's payment (`mortgage.escrow`, while the balance or payment is our guess; 2026-11-07), the same amount is
+  added to the new payment, so `monthlySaving` = today's principal and interest less the new one, and the interest while staying
+  is worked from the loan parts only (`current.toLoan`, `offer.toLoan`). A plan with its own payment and balance: escrow 0, nothing moves.
 - Break-even months = closing costs / monthly saving (null when the payment does not fall).
 - Interest while staying: month-by-month interest for the years you expect to keep the home, both loans, same start balance; net = current interest - offer interest - closing costs.
 - Verdict: worth it when the net beats half the closing costs and 500; close call when positive; not worth it otherwise.

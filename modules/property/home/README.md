@@ -82,3 +82,10 @@ flat rate with 2025's lines, and the 3.8% on the whole gain.
 ## Which return it reads (round 8, batch 1 follow-up)
 
 **(a) This household's own tax year.** The tax on selling the home is the tax it adds to this year's return. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The gain is stacked on the Federal estimate's return (`taxView()`), so a retiree's Social Security and withdrawals are in the bracket the gain starts from.
+
+## Year you bought it (2026-11-07, owner's request)
+The home's details have a "Year you bought it" box beside the exact date. Blank, it shows our guess in grey and in words ("Our guess:
+2024. Most owners your age bought in the last few years."); typed, it is saved as the purchase date, July 1 of that year, unless an exact
+date in that year is already there (`purchaseDateFrom`, pure and tested). Changing only the year replaces the date; changing the date
+wins over the year. The mortgage's years left, balance and payment follow the year on every page. Not a year, or one still ahead: a
+message and nothing saved.

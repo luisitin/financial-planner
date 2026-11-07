@@ -15,7 +15,10 @@ import { T as HOME } from "../data/home.js";
 import { T as SPEND } from "../data/spend.js";
 import { STATE_NAME } from "../data/index.js";
 import { profileOf, scfR2, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
-import { isGuess } from "../../../../core/estimate/index.js";
+import { isGuess, guessAt } from "../../../../core/estimate/index.js";
+import { boughtGuess, yearOf, TABLE as PT } from "./purchase.js";
+import { homeOfLoan, homeEntryFor } from "./loanhome.js";
+export { homeOfLoan, homeEntryFor };
 
 const VALUE = "acs2025_median_home_value_by_state_and_mortgage_status", HPI = "fhfa_hpi_at_state_annual";
 const PTAX = "acs2025_effective_property_tax_rate_by_state", HO3 = "naic2023_homeowners_premium_by_state";
@@ -35,18 +38,53 @@ function homeAccountOf(plan, path) {
   if (m?.[1] === "property") { const e = L(plan, "property").find((x) => x?.id === m[2]); return accounts.find((a) => a?.id === e?.accountId) ?? null; }
   return accounts.find((a) => a?.id === HOME_ID) ?? accounts.find((a) => a?.type === "property") ?? null;
 }
-export const homePathOf = (plan, path) => `accounts[${homeAccountOf(plan, path)?.id ?? HOME_ID}].balance`;
+/** The path of the home account a path (or, with `loanId`, a loan) is on; for a loan with no home of its own, null (not the main home's). */
+export function homePathOf(plan, path, loanId) {
+  if (loanId !== undefined) { const a = homeOfLoan(plan, loanId)?.account; return a ? `accounts[${a.id}].balance` : !loanId || loanId === "setup-owe-mortgage" ? `accounts[${HOME_ID}].balance` : null; }
+  return `accounts[${homeAccountOf(plan, path)?.id ?? HOME_ID}].balance`;
+}
 
 /**
  * The home's value as the plan or the screen holds it: args.home (Get started's box, typed: a number, or null when left
  * blank) wins; else the home account's balance. -> { value, typed } | null (no figure: the caller asks home.value).
  */
-export function homeValueFor(plan, { path = null, args = null } = {}) {
+export function homeValueFor(plan, { path = null, loanId, args = null } = {}) {
   if (has(args, "home")) return ok(args.home) && args.home > 0 ? { value: args.home, typed: true } : null;
+  if (loanId !== undefined) {
+    const h = homeOfLoan(plan, loanId);
+    if (!h) return null;
+    if (!h.account) return h.value > 0 ? { value: h.value, typed: true } : null;
+    const v = Number(h.account.balance);
+    return v > 0 ? { value: v, typed: !isGuess(plan, `accounts[${h.account.id}].balance`) } : null;
+  }
   const a = homeAccountOf(plan, path);
   const v = a ? Number(a.balance) : NaN;
   if (!(v > 0)) return null;
   return { value: v, typed: !isGuess(plan, `accounts[${a.id}].balance`) };
+}
+
+/** The property entry Get started makes for the home (its "Year you bought it" box writes the purchase date there). */
+export const SETUP_HOME_ENTRY = "setup-home";
+/**
+ * What the plan or the screen says about the purchase: { year, date, price } (null for what is not said). The screen's
+ * answer (args.bought: a year, or null for a box left blank) wins; else the purchase date and price on the Home page's entry
+ * for this home (or, for a loan a rental names, that rental's). A date in the future counts as no answer.
+ */
+export function purchaseOf(plan, { path = null, loanId = null, args = null } = {}) {
+  const props = L(plan, "property");
+  let entry;
+  if (loanId) {
+    // a loan's own home only (a rental's entry names the loan; a second loan never reads the main home's year)
+    const h = homeOfLoan(plan, loanId);
+    entry = props.find((x) => x?.loanAccountId === loanId) ?? (h?.account ? homeEntryFor(plan, h.account.id) : null);
+  } else {
+    const acct = homeAccountOf(plan, path);
+    entry = (acct ? homeEntryFor(plan, acct.id) : null) ?? props.find((x) => x?.id === SETUP_HOME_ENTRY) ?? null;
+  }
+  const date = typeof entry?.purchaseDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entry.purchaseDate) ? entry.purchaseDate : null;
+  const price = Number(entry?.purchasePrice) > 0 ? Number(entry.purchasePrice) : null;
+  if (has(args, "bought") && (!loanId || loanId === "setup-owe-mortgage")) { const y = yearOf(args.bought); return { year: y, date: y && date && date.startsWith(String(y)) ? date : null, price }; }
+  return { year: date ? Number(date.slice(0, 4)) : null, date, price };
 }
 
 /** The state's median property tax over median home value (percent of value a year), the U.S. figure with no state. */
@@ -59,13 +97,14 @@ const premiumOf = (st) => col(SPEND[HO3], "HO-3", st ?? "US");
  * debt.mortgage.payment uses them as the spec's arithmetic does: 210,000 x 1.223% / 12 = 214.0 and 1,116 x 1.057 / 12 =
  * 98.3). The home's value: typed or on file, else our guess (home.value). -> { tax, insurance, total, value } | null
  */
-export function escrowMonthly(plan, { today, args = null, path = null } = {}, lib) {
+export function escrowMonthly(plan, { today, args = null, path = null, loanId } = {}, lib) {
   const st = lib.memo("profile", () => profileOf(plan, today)).state;
-  let value = homeValueFor(plan, { path, args })?.value ?? null;
-  if (value === null) value = lib.estimate("home.value", { path: homePathOf(plan, path), args })?.value ?? null;
+  let value = homeValueFor(plan, { path, loanId, args })?.value ?? null;
+  if (value === null) { const hp = homePathOf(plan, path, loanId); if (hp) value = lib.estimate("home.value", { path: hp, args })?.value ?? null; }
   // the tax and insurance typed on Home (a year) win over the state's usual ones
-  const acct = homeAccountOf(plan, path);
-  const entry = acct ? L(plan, "property").find((x) => x?.kind === "home" && x.accountId === acct.id) : null;
+  let entry = null;
+  if (loanId !== undefined) { const h = homeOfLoan(plan, loanId); entry = h?.entry ?? null; }
+  else { const acct = homeAccountOf(plan, path); entry = acct ? homeEntryFor(plan, acct.id) : null; }
   const typed = (k) => { const v = Number(entry?.[k]); return entry && typeof entry.id === "string" && v > 0 && !isGuess(plan, `property[${entry.id}].${k}`) ? v / 12 : null; };
   const rate = taxRateOf(st), prem = premiumOf(st);
   const tax = typed("propertyTax") ?? (ok(value) && ok(rate) ? value * rate / 100 / 12 : null);
@@ -74,7 +113,49 @@ export function escrowMonthly(plan, { today, args = null, path = null } = {}, li
   return { tax, insurance, total: tax + insurance, value };
 }
 
+/** A lib that answers from the plan alone (no estimating): what the pages use to ask escrowMonthly outside a guess. */
+const PLAIN = { memo: (_k, fn) => fn(), estimate: () => null };
+/**
+ * The tax and insurance inside a mortgage's monthly payment, for the pages that turn the payment into years left (Debts,
+ * Mortgage, Pay off debts, Timeline, Your plan). The payment counts them in unless it and the balance are both the person's
+ * own (then it is read as typed, nothing moves) or the person said "paid apart" (the tap `escrow`: "no"); `debts[].escrowMonthly`
+ * (a number, optional) overrides. Never more than half the payment (the same floor the balance guess uses). A payment our
+ * older Get started guessed (only the `paymentGuessed` flag, no ledger entry) is the loan's level payment alone
+ * (typicalPayment: pmt over 30 years, no tax or insurance), so nothing comes out of it. And a guessed tax and insurance never
+ * turns a payment that pays the loan off into one that never does: when taking them out would leave no more than the
+ * month's interest (balance x rate / 12), the payment is read as the loan's alone. -> a number >= 0
+ */
+export function loanEscrow(plan, account, debt, today) {
+  const pay = Number(debt?.minPayment);
+  if (!account || account.type !== "mortgage" || !(pay > 0)) return 0;
+  if (typeof debt.escrowMonthly === "number" && debt.escrowMonthly >= 0) return Math.min(debt.escrowMonthly, pay / 2);
+  if (plan?.guide?.setup?.taps?.escrow === "no") return 0;
+  const payGuess = typeof debt.id === "string" ? guessAt(plan, `debts[${debt.id}].minPayment`) : null;
+  if (payGuess?.legacy) return 0;
+  const guessed = payGuess !== null || isGuess(plan, `accounts[${account.id}].balance`);
+  if (!guessed) return 0;
+  let esc = null;
+  try { esc = escrowMonthly(plan, { today, loanId: account.id }, PLAIN); } catch { esc = null; }
+  if (!esc) return 0;
+  const out = Math.min(esc.total, pay / 2);
+  const interest = Math.abs(Number(account.balance) || 0) * (Number(debt.rate) || 0) / 12;
+  return interest > 0 && pay > interest && pay - out <= interest ? 0 : out;
+}
+
 export const estimators = {
+  "home.boughtYear": {
+    tier: 1, order: 1, label: "The year you bought your home", unit: "year-date", weight: "big", page: HOME_PAGE, reads: [],
+    fn(plan, { today }, lib) {
+      const prof = lib.memo("profile", () => profileOf(plan, today));
+      const g = boughtGuess({ age: prof.age, today });
+      if (!g) return null;
+      const when = g.tenure < 1.5 ? "Most owners your age bought in the last year or two." : g.tenure < 5 ? "Most owners your age bought in the last few years." : g.tenure < 10 ? "Most owners your age bought in the last ten years or so." : g.tenure < 20 ? "Most owners your age bought ten to twenty years ago." : "Most owners your age have been in their home for twenty years or more.";
+      return {
+        value: g.year, sigma: null, measured: false, why: prof.age !== null ? when : "Half of all owners have lived in their home 13 years or less.",
+        uses: { age: prof.age !== null ? "typed" : null }, sharperWith: [], tables: [PT.moved, PT.owners],
+      };
+    },
+  },
   "home.value": {
     tier: 2, order: 1, label: "What your home would sell for", unit: "total", weight: "big", page: NET_WORTH, reads: [],
     fn(plan, { today, path }, lib) {

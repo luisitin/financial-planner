@@ -50,7 +50,7 @@ screen (a plan that skipped three debts has nine big ones; C8's measured ranking
 guesses about you); "Where our guesses come from" last: the tables behind the guesses above, then every other table on
 hand, each with our name for it, the publisher (`shownBy`), the publisher's table (`tableShown`), a plain "as of" line
 (`asOf`), the read date and "The table ›" as an outlined 44 px button (`.btn.secondary.small`); its status says
-"63 tables from 17 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
+"67 tables from 18 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
 "We fill in typical figures only for households in the U.S. that count in dollars, so none of these tables is used for
 your plan." Rates are shown and saved to a thousandth of a percent (6.125%), as Get started keeps them. Saving a debt's
 rate while its older payment still stands adds "Your payment of $1,261 a month was worked out at the old rate, so type
@@ -260,9 +260,11 @@ income and age): value = all-families median × `rInc` × `resid`, where
 
 | key | order, unit, weight | formula | tables | why (examples) |
 |---|---|---|---|---|
+| `home.boughtYear` | 1 (tier 1), year-date, big | `floor(today - T)`, T = the middle of the owners' move-in years for the age, cut at age 20 (README "When the home was bought") | `acs2025_year_moved_in_by_age_us`, `acs2025_owner_households_by_age_us` | "Most owners your age bought in the last few years." |
 | `home.value` (E18) | 1, total, big | Home's purchase price × FHFA all-transactions HPI (state, 2025) / HPI (state, the year bought), when the Home page has the price, a year from 1990 and a state is set; declared spread 0.15. Else the ACS 2025 median home value for owners with (or without) a mortgage, state (else U.S.), × `rInc` × `resid` on the SCF primary residence (R2), measured spread | `fhfa_hpi_at_state_annual`; `acs2025_median_home_value_by_state_and_mortgage_status` + the SCF tables | "what you paid in 2018, grown with Ohio home prices since"; "typical for an Ohio home with a mortgage, on your pay" |
 | `home.propertyTax` (E23) | 2, year, big | the home's value (typed or on file, else E18) × ACS median taxes / median value (Ohio 1.223%, U.S. 0.901%) | `acs2025_effective_property_tax_rate_by_state` | "Ohio homes pay about 1.2% of their value a year" |
 | `home.insurance` (E24) | 3, year, small | NAIC 2023 average HO-3 premium (Ohio $1,116, U.S. $1,737) × CPI 2024-2025 (1.0570) | `naic2023_homeowners_premium_by_state` | "the average Ohio homeowner policy, in 2025 prices" |
+| *The three `debt.mortgage.*` rows below are the 2026-11-02 rules. Since 2026-11-07 the rate, the balance and the payment are worked from the year the home was bought unless the payment and the balance are both typed or a refinance was tapped; see "When the home was bought" below.* | | | | |
 | `debt.mortgage.rate` (E20) | 4, rate, big | the state's average contract rate on mortgages outstanding (FHFA NMDB 2026 Q2); no state: the U.S. figure by loan count (4.4%); tap "2022 or later": the 2025 new home-purchase rate, the state's, else the U.S. one (6.3%) | `mortgage_outstanding_fhfa_by_state_2026q2`, `mortgage_outstanding_fhfa_national`, `mortgage_new_purchase_fhfa_by_state_2025`, `mortgage_new_loans_fhfa_national_2025` | "the average on Ohio mortgages people already have" (Ohio 4.6%, Arizona 4.3%) |
 | `debt.mortgage.owed` (E21) | 5, total, big | with the payment typed and the tap answered: pv(r/12, 360 − months since the middle of the span, P&I), declared spread 0.15. Else a prior: (a) a typed home × the state's average loan-to-value (FHFA; Arizona 47.6%), declared spread; (b) FHFA unpaid balance per loan in the state (U.S.: by loan count) × the SCF median-to-mean 0.767 × `rInc` × `resid` on the SCF mortgage, measured spread (sqrt(2 ln(mean / median)) of the SCF mortgage balance, all families: sqrt(2 ln(241,300/185,000)) = 0.73, read from the two cells). With a payment typed: at most pv(r/12, 360, P&I); when that bound does not bind, the why-line says the payment covers it | the FHFA state and national tables + the SCF tables | "typical in Ohio at your age and pay; your payment covers it"; "48% of your home's value, usual in Arizona; your payment covers it"; "typical for an Ohio mortgage at your age and pay" (no payment); "worked back from your $1,100 payment and when you took it out" |
 | `debt.mortgage.payment` (E22) | 6, month, big | pmt(r/12, months left, owed) + tax and insurance a month (E23 + E24 / 12, or the yearly figures typed on Home / 12), unless the escrow tap says "no". Months left come from the tap only for a balance the person typed; a guessed balance (already the typical one, midway through people's loans) is paid over 360 | as read | "a loan of about $110,000 at 4.6%, plus Ohio's usual tax and insurance" |
@@ -332,6 +334,123 @@ theirs on Yes. "Yes, the same loan" removes ours
 typed on Get started stays. "No, two loans" stores `guide.setup.twins[<our id>][<their id>] = today` and the question
 is not asked again for that pair; a loan or home of the same kind added later is asked about (a HELOC answered "No",
 then the real home loan added: asked, so it is not counted twice in silence).
+
+## When the home was bought (estimators/purchase.js, home.js, debts.js; owner's request 2026-11-07)
+The owner: a 25-year-old couple should not be told their mortgage has 12 years left. Two things made it so, found by walking a
+couple of 25 through Get started with nothing typed, with a payment only, a balance only and a home value only (BEFORE table in the
+build notes): **(1) the balance prior** (E21) is the average over all mortgages outstanding, loans people took out 15 years ago included,
+so a first-time buyer got a mid-life loan and, with a payment typed, the tap-less path paid it over 360 months from today; **(2) the
+pages counted the whole payment, tax and insurance included, against the balance** (Debts, the mortgage page, Pay off debts, Timeline
+and the rest read `debts[].minPayment` as principal and interest), which cost a loan begun in 2024 about 11 of its 27.5 years on those
+pages (review 2026-11-07, D1). Both are fixed here: (2) by **`loanEscrow`** (home.js): the tax and insurance inside a mortgage payment
+(the same figure the guess adds) are taken off before the payment is turned into months, in `balance/liabilities` (`row.escrow`,
+`months`, `payoffDate`, `totalInterest`), `core/math/payoff.js` (a debt's optional `escrow`: only the rest pays the loan and rolls on
+when it is gone), `debt/payoff`, `debt/mortgage` and so the Timeline, Dashboard, Next best action and Your plan. It applies only while
+the balance or the payment is our guess (a plan with both typed reads as typed: nothing moves), not after the escrow tap says "no",
+and never takes more than half the payment; `debts[].escrowMonthly` (a number, optional, no version bump) overrides it. Two
+guards (verify 2026-11-07): a payment our older Get started guessed (only the `paymentGuessed` flag, no ledger entry) is
+`typicalPayment`, the level payment over 30 years with no tax or insurance in it, so nothing is taken off it (the fixture
+`qa/fixtures/guessed-plan.mjs`, $185,000 at 7.24% paying $1,261, had $363 taken off and never paid off on Debts, Mortgage, Pay off
+debts, Timeline and Your plan; it keeps its 360 months), and Your plan gives such a payment no "years left (bought ...)", which it
+was never worked from; and when taking the tax and insurance off would leave no more than the month's interest (balance x rate /
+12), the payment is read as the loan's alone, so a guess never turns a payment that pays the loan off into one that never does.
+The cash pages keep the whole payment as money out. Not done here (other lanes, listed in the fix notes): retirement/projection's loan end,
+debt/consolidation, cashflow/statement, balance/projection read `minPayment` for months themselves.
+
+**Data** (`data/purchase.js`, built by `tools/extract-purchase-data.py`, read 2026-11-07; the Census move-in table and the FHFA state
+index were already bundled in `home.js`):
+| table | what it gives | source |
+|---|---|---|
+| `acs2025_year_moved_in_by_age_us` (home.js) | owners by age group (15-34, 35-64, 65+) and the span they moved in (2023 or later, 2020-22, 2010s, 2000s, 1990s, 1989 or earlier) | Census ACS 2025 1-year, B25128, https://www2.census.gov/programs-surveys/acs/summary_file/2025/table-based-SF/data/1YRData/acsdt1y2025-b25128.dat |
+| `acs2025_owner_households_by_age_us` | owner households in nine age brackets, the weights for each group's mean age (28.6, 50.3, 74.6) | Census ACS 2025 1-year, B25007, .../acsdt1y2025-b25007.dat |
+| `pmms30_annual_average_by_year` | the average 30-year fixed rate of each calendar year, 1971 to 2026 (2026 is the year so far, 44 weeks) | Freddie Mac PMMS, https://www.freddiemac.com/pmms/docs/historicalweeklydata.xlsx, the mean of each year's weekly figures (2021 2.96, 2022 5.34, 2023 6.81, 2024 6.72) |
+| `nar2025_home_buyer_profile` | median down payment 10% (first-time buyers, median age 40) and 23% (repeat buyers, median age 62) | NAR 2025 Profile of Home Buyers and Sellers, news release 2025-11-04, https://www.nar.realtor/newsroom/first-time-home-buyer-share-falls-to-historic-low-of-21-median-age-rises-to-40 (a trade group's survey; flagged as industry) |
+| `fhfa_hpi_at_state_annual` (home.js), `fhfa_hpi_national_annual` | home prices by year, the state's, else the nation's (the state table's U.S. column is empty) | FHFA all-transactions annual index, hpi_at_state.xlsx, https://www.fhfa.gov/hpi/download/annual/hpi_at_national.xlsx |
+The Census API wanted a key (Missing Key), so the published summary files above were read instead; the figures match the API's labels
+(B25128_004E owners 15-34 moved in 2023 or later: 3,357,513). NAR's table by buyer *age* is not free: the down payment is by buyer type
+(first-time or repeat), and the median ages 40 and 62 of the two types place them on the buyer's age.
+
+**`home.boughtYear`** (tier 1, order 1, unit year-date): the year an owner of this age most likely bought. For an age `a` the cap is
+`a - 20` years (nobody is taken to have bought before 20). Within an age group the owners' move-in spans are a distribution over
+years since the interviews (mid-2025: "2023 or later" is 2.5 years, "2020 to 2022" 5.5, "2010 to 2019" 15.5, "2000 to 2009" 25.5, "1990 to
+1999" 35.5, the oldest span to 55.5; straight lines inside each span; review D9). The tenure of an owner of age `a` is the middle
+of the group's distribution *cut at the cap*: `T = F^-1(0.5 F(a - 20))`, so a 25-year-old (cap 5) gets 2.24 years, not the group's 3.9.
+The tenure is blended between the two neighbouring groups' by age between their owners' mean ages (28.6, 50.3, 74.6; weights from
+B25007), so the guess has no steps (it is nondecreasing in age, tested for every age 20 to 90). No age: the middle of all owners,
+12.7 years. The year is `floor(today - T)`, never before the 20th birthday's
+year. Ages: 25 -> 2024, 30 -> 2023, 41 -> 2020, 45 -> 2019, 50 -> 2017, 55 -> 2015, 61 -> 2012, 66 -> 2009, 70 -> 2007, 85 -> 2002. A couple uses the older adult (profile.age). Words:
+"Most owners your age bought in the last few years." (T under 5), "...in the last ten years or so", "...ten to twenty years ago",
+"...have been in their home for twenty years or more". The state is not used (the state median year moved in, B25039, differs by
+under two years from the nation's for most states).
+
+**Where it is typed.** Get started's "Year you bought it" (beside the home's value on question 4; on question 5 it is said once, "You said
+you bought it in 2025", with a way to change it), the Home page's "Year you bought it" and the mortgage page's one box all write the
+home's purchase date: the Home page's entry for the home when it has one (any id; `homeEntryFor`), else `property[setup-home]`; July 1 of
+the year, an exact date already in that year staying. Nothing is stored for a guess. A year ahead is no answer (the bound is the year of
+the plan's today) and the box says so. A second home or a rental's loan reads **its own** home's entry (`homeOfLoan`: the entry that
+names the loan, else the home account when the loan is Get started's or the only mortgage), never the main home's year, value or tax
+(review D2); the mortgage page offers its year box only for a loan whose home is that clear.
+
+**The loan's start** (`startOf`): the tap "When did you take out this mortgage, or last refinance it?" (the middle of its span), unless
+it is earlier than the purchase typed (impossible: set aside); else the purchase date typed; else the middle of `home.boughtYear`.
+Months left = 360 less the months since, never under 12. **A purchase so long ago that fewer than 60 months of a 30-year loan would be
+left (typed 1995, say) is not the loan's start** (it was refinanced, or is another loan): the loan is counted like most owners this
+age, from the middle of `home.boughtYear` (`startOf` returns that start with `stale` = the year typed), and the refinance question is
+offered (the mortgage page asks it too, with four buttons that write the same tap Get started keeps; review D3). Verify 2026-11-07:
+the first fix used no start, the usual balance and a full new 30 years, and once the tax and insurance came off the payment that read
+as "paid off in 2056" for a 60-year-old who typed 1995; counted from the guessed year it reads about 18 years, as with no year typed.
+Your plan says such a loan as "loan from about 2013, our guess", never "bought 2013", and Get started's grey line under "Still owed"
+says "counted like most owners your age, from about 2013: a 1995 loan would be paid off by now" (it said "typical in 2013 with 14% paid
+up front" under "You said you bought it in 1995").
+
+**Rate.** *A year typed:* that year's average 30-year rate (Freddie Mac), as the owner asked. *A refinance tapped:* the mean of the
+yearly averages over its years (before 2010: 2000-2009, 6.3%; 2010 to 2019: 4.1%; 2020 or 2021: 3.0%); "2022 or later" keeps the state's
+new-loan rate (review D6; the 7.H tap keys at the state's 4.6% moved: $116,000 / $138,000 / $79,600 became $121,000 / $162,000 /
+$73,300 for Jordan; the owner may want them back). *A year we guess:* the mean of the yearly averages over the **middle half of the
+age's move-in years**, eased toward the average on mortgages people already have (FHFA, state or U.S.) the longer ago that is, because many
+of those owners refinanced in 2012 or 2020-21: the weight on the purchase years is 1 up to 2 years in the home and falls 0.07 a year
+after, to 0.3. A judgment, not a measured figure (it is said so); it keeps the guessed rate from jumping with age (a one-year rate swung
+from 6.8% at 30 to 3.1% at 41 and 6.4% at 70; now 6.7%, 6.3%, 4.9%, 4.4%, 4.3%, 4.5%, 4.6%, 4.8%, 5.0% at 25, 30, 35, 41, 50, 55, 61, 66,
+70; tested for no step over 0.8 points a year of age). With the payment *and* the balance both typed and no year typed: unchanged, so
+nothing moves for those plans (tested against the build before this change).
+
+**Balance (E21), neither payment nor balance typed.** `loanFrom`: the price (typed, else today's value, typed or ours, taken back with
+the FHFA index of the state, else the nation's: `value x HPI(year) / HPI(this year)`, never above today's value) less the usual down
+payment (10% to the buyer age 40 and 23% from 62, straight between; the buyer's age is the age then), at the rate of the start, paid
+for the months since: `B = L((1+i)^360 - (1+i)^k) / ((1+i)^360 - 1)`, `i = rate / 12`, `k` = months gone (at most 348).
+**Decision (combine, with the old prior).** Compared with the Survey of Consumer Finances' median mortgage among families who have one
+(`scf2025_median_value_if_held`), at the SCF median home value of each age group and the loan of the year we would guess:
+| age | year | home (SCF median) | purchase alone | SCF median mortgage | purchase / SCF | combined | combined / SCF |
+|---|---|---|---|---|---|---|---|
+| 25 | 2024 | $320,000 | $272,700 | $218,500 | 1.25 | $263,100 | 1.20 |
+| 40 | 2020 | $376,000 | $197,700 | $215,000 | 0.92 | $202,200 | 0.94 |
+| 50 | 2016 | $400,000 | $157,700 | $203,000 | 0.78 | $173,200 | 0.85 |
+| 60 | 2012 | $400,000 | $106,900 | $165,000 | 0.65 | $130,800 | 0.79 |
+| 70 | 2006 | $382,300 | $103,600 | $130,000 | 0.80 | $117,300 | 0.90 |
+| 80 | 2002 | $350,000 | $44,300 | $100,000 | 0.44 | $69,100 | 0.69 |
+The purchase says what a typical loan *begun in the guessed year* leaves; the survey says what mortgage holders of the age owe, which
+includes refinances and cash-outs the purchase cannot see (older holders owe more than their purchase left) and, for the young, cheaper
+homes than the median. Neither replaces the other, so they are combined in logs by precision (R4): the purchase's declared spread is
+`0.25 + 0.03 per year since the purchase`, at most 0.8 (a refinance can reset any older loan), the prior's is the survey's own (0.73
+for all families): at 25 the purchase carries about 83% of the weight, at 41 about 73%, at 61 about 53%. The result is never more than
+the home's value. It is a declared, not a measured, spread. The old prior stays the whole answer when there is nothing to work
+from (no date, no value).
+**With the payment typed**, the balance is worked back from its P&I over the months left since the start: `pv(i, months left, P&I)`
+(spread 0.25 for a guessed year, 0.15 for a typed year or a tap), **never above the home's value, typed or our guess** (a $4,000 payment
+on a home guessed at $280,000 owed $550,000 before: review D4). The old "at most the typical balance" bound goes: a payment is read as
+the loan's, whatever year it began. **With the balance typed** the payment is
+`pmt(i, months left, balance)` plus the usual tax and insurance, over the months left since the start (not 360).
+**The payment (E22)** is `pmt(i, months left, balance)` plus the usual tax and insurance as before, for a balance typed or ours, so
+the payment pays the balance off in exactly the months left at the rate (tested for every age 20 to 85, to the dollars the payment
+is rounded by). **It is rounded to $10 inside the estimator** (as the card minimum is), not R11's $50 above $1,000: the pages turn the
+payment, less its tax and insurance, into the years left, and near 330 months a $25 step in a $1,200 principal and interest moves the
+end by about 18 months. With $50 steps 8 of 56 households aged 25 (seven states, four pays, single and couple) read 26.5 to 26.9 years
+on a loan with 27.7 left, one 30.1, and a couple with no pay typed 26.2 in the browser; with $10 steps all 56 read 27.4 to 28.3
+(verify 2026-11-07; answer keys that moved by $10 to $20 say so).
+Tested: `tests/home-purchase.test.mjs` (the data, the tenure, the loan, the persona grid with the **pages** -- Debts, the mortgage
+page, Pay off debts and the Timeline say the loan's own months left, to the payment's rounding -- and one test for each of the review's
+findings D1 to D9), and the answer keys in `module.test.mjs`
+and `overview/setup/module.test.mjs` that moved (Jordan's and Pat and Lee's mortgage, 2026-11-07) say so in their titles.
 
 ## Spending (estimators/spend.js; spec 7.0, 7.A, R10, 7.F)
 Tier 3, one key per row of Get started's spending screen (setup's `SPEND`, whose `covers` must equal `COVERS` here; a
@@ -605,7 +724,7 @@ most 12 months old, at most $50 or a tenth of a month's money out with no kind),
 so spending guesses lean high for households under about $60,000 after tax; the envelope and the waiting verdict
 contain it.
 
-### The tables (63, from 17 publishers)
+### The tables (67, from 18 publishers)
 | table id | file | publisher | as of | dollars of | read | statistic |
 |---|---|---|---|---|---|---|
 | `ce2025_spend_by_incomeQuintile` | spend.js | U.S. Bureau of Labor Statistics, Consumer Expenditure Surveys | 2025 figures, published 2026 | 2025 | 2026-11-02 | mean |
@@ -662,6 +781,10 @@ contain it.
 | `acs2025_median_year_moved_in_by_state` | home.js | U.S. Census Bureau, American Community Survey | 2025 figures, published October 2026 | - | 2026-11-02 | median |
 | `acs2025_homeownership_by_age_us` | home.js | U.S. Census Bureau, American Community Survey | 2025 figures, published October 2026 | - | 2026-11-02 | share |
 | `fhfa_hpi_at_state_annual` | home.js | Federal Housing Finance Agency | 1990 to 2025, published March 2026 | - | 2026-11-02 | index |
+| `fhfa_hpi_national_annual` | purchase.js | Federal Housing Finance Agency | Last updated March 31, 2026 | - | 2026-11-07 | index |
+| `acs2025_owner_households_by_age_us` | purchase.js | U.S. Census Bureau, American Community Survey | 2025 figures, published October 2026 | - | 2026-11-07 | count |
+| `pmms30_annual_average_by_year` | purchase.js | Freddie Mac | weekly figures to the latest week (2026 is the year so far) | - | 2026-11-07 | average |
+| `nar2025_home_buyer_profile` | purchase.js | National Association of Realtors | July 2024 to June 2025 sales, released November 2025 | - | 2026-11-07 | median |
 | `ahs2023_routine_maintenance_spending` | home.js | U.S. Census Bureau and HUD, American Housing Survey (research-derived) | 2023 survey, the newest | 2023 | 2026-11-02 | median, mean and ratio |
 | `kff_ehbs2026_premiums` | health.js | KFF, Employer Health Benefits Survey (industry) | 2026 figures, published October 2026 | 2026 | 2026-11-02 | mean |
 | `kff_aca_benchmark_premium_40yo` | health.js | KFF State Health Facts (industry) | Plan years 2026 and 2027 | per row | 2026-11-02 | average |

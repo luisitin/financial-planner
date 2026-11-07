@@ -69,6 +69,8 @@ export function guessList(plan, { today = null, st = null } = {}) {
   for (const a of (plan?.accounts ?? []).filter((x) => x.type === "property" && typeof x.id === "string" && isGuess(plan, `accounts[${x.id}].balance`))) rows.push({ label: `${a.name}: worth about ${money(a.balance)}`, href: "#/overview/guesses" });
   for (const g of s.guessed ?? []) {
     const parts = [g.owed !== undefined ? `still owed about ${money(g.owed)}` : null, g.rate !== null ? `rate ${pctOf(g.rate)}` : null, g.payment !== null ? `${money(g.payment)} a month` : null].filter(Boolean);
+    // a mortgage says how long it has to run and from when (the year bought, typed or our guess): "about 28 years left (bought 2024, our guess)"
+    if (g.yearsLeft) parts.push(`about ${g.yearsLeft} ${g.yearsLeft === 1 ? "year" : "years"} left (${g.boughtVia === "tap" ? `loan from about ${g.bought}` : g.boughtVia === "stale" ? `loan from about ${g.bought}, our guess` : `bought ${g.bought}${g.boughtVia === "guess" ? ", our guess" : ""}`})`);
     rows.push({ label: `${g.name}: ${parts.join(", ")}`, href: "#/overview/guesses" });
   }
   for (const x of s.iraGuessed ?? []) rows.push({ label: `${ad.length > 1 ? x.name : "Your retirement"}: counted as a regular IRA. Tell us if it is the tax-free kind`, href: setupHref("have-amounts") });

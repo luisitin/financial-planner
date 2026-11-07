@@ -1,7 +1,8 @@
 // modules/property/home/view.js -- DOM only. Your home: its value and your share of it, how it has grown, what a
 // year of keeping it costs, what selling today would leave, value and equity ahead; today's value and the home's
 // details in folds.
-import { compute, DEFAULTS } from "./compute.js";
+import { compute, DEFAULTS, purchaseDateFrom } from "./compute.js";
+import { homeEntryFor } from "../../overview/guesses/estimators/loanhome.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -99,10 +100,15 @@ export function render(page, ctx) {
 
   // the home's details
   const e = d.details;
-  root.append(ui.h("details", { class: "card fold fold-card", open: e.purchasePrice ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The home's details"), ui.h("span", { class: "fold-status" }, e.purchasePrice ? "price, costs" : "what you paid"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form([
+  const wasYear = /^\d{4}/.test(e.purchaseDate ?? "") ? Number(e.purchaseDate.slice(0, 4)) : null;
+  // the year it was bought: blank shows our guess in grey and in words (home.boughtYear), typed it is the person's
+  let ourYear = null;
+  try { ourYear = ctx.guess ? ctx.guess("home.boughtYear") : null; } catch { ourYear = null; }
+  const yearHelp = wasYear ? "The year is enough. We use it to work out the mortgage's years left." : ourYear?.value ? `Our guess: ${ourYear.value}. ${ourYear.why} Blank is fine.` : "The year is enough. Blank is fine.";
+  const detailsForm = ui.form([
       { key: "purchasePrice", label: "What you paid", type: "money", min: 0 },
-      { key: "purchaseDate", label: "When you bought it", type: "date" },
+      { key: "boughtYear", label: "Year you bought it", type: "text", placeholder: ourYear?.value ? String(ourYear.value) : "", help: yearHelp },
+      { key: "purchaseDate", label: "The exact date, if you know it", type: "date" },
       { key: "improvements", label: "Improvements since (a new roof, an addition)", type: "money", min: 0, help: "they lower the taxable gain when you sell; keep the receipts" },
       { key: "propertyTax", label: "Property tax a year", type: "money", min: 0 },
       { key: "insurance", label: "Home insurance a year", type: "money", min: 0 },
@@ -111,14 +117,26 @@ export function render(page, ctx) {
       { key: "appreciation", label: "Value grows each year", type: "percent", min: -10, max: 15 },
       { key: "sellCosts", label: "Selling costs, as a share of the price", type: "percent", min: 0, max: 15 },
       s.test && !s.test.meets ? { key: "reducedReason", label: "Selling before two years because of a new job, my health or an event I could not foresee", type: "checkbox", help: "then part of the gain can still be tax-free" } : null,
-    ].filter(Boolean), { maintenance: DEFAULTS.maintenance, appreciation: DEFAULTS.appreciation, sellCosts: DEFAULTS.sellCosts, ...e, propertyTax: e.propertyTax ?? (plan.taxes?.itemized?.propertyTax || "") }, (v) => {
+    ].filter(Boolean), { maintenance: DEFAULTS.maintenance, appreciation: DEFAULTS.appreciation, sellCosts: DEFAULTS.sellCosts, ...e, boughtYear: wasYear ?? "", propertyTax: e.propertyTax ?? (plan.taxes?.itemized?.propertyTax || "") }, (v) => {
+      const { boughtYear, ...rest } = v;
+      const typedYear = String(boughtYear ?? "").trim();
+      // a year before 1950 is refused as the mortgage page and Get started refuse it, never saved as blank under "Saved." (verify 2026-11-07)
+      if (typedYear !== "" && (!/^\d{4}$/.test(typedYear) || Number(typedYear) < 1950)) { const n = ui.notice("error", "Type the year as four digits from 1950 on, like 2019, or leave it blank."); root.prepend(n); setTimeout(() => n.remove(), 6000); return false; }
+      const yr = Number(today.slice(0, 4));
+      const date = purchaseDateFrom({ year: typedYear === "" ? null : Number(typedYear), date: rest.purchaseDate }, { year: wasYear, date: e.purchaseDate ?? "" }, yr);
+      if (typedYear !== "" && Number(typedYear) > yr) { const n = ui.notice("error", `${typedYear} is still ahead. Type the year you bought it, or leave it blank.`); root.prepend(n); setTimeout(() => n.remove(), 6000); return false; }
       pending = "Saved.";
       store.update((p) => {
         p.property = p.property ?? [];
-        const i = p.property.findIndex((x) => x.kind === "home" && x.accountId === d.accountId);
-        const item = { ...(i >= 0 ? p.property[i] : { id: ui.uid(), kind: "home", accountId: d.accountId }), ...v };
+        const found = homeEntryFor(p, d.accountId), i = found ? p.property.indexOf(found) : -1;
+        const item = { ...(i >= 0 ? p.property[i] : { id: ui.uid(), kind: "home", accountId: d.accountId }), ...rest };
+        if (date) item.purchaseDate = date; else delete item.purchaseDate;
         if (i >= 0) p.property[i] = item; else p.property.push(item);
       });
-    }, { submitLabel: "Save" })));
+    }, { submitLabel: "Save" });
+  const yearBox = detailsForm.querySelector('input[name="boughtYear"]');
+  if (yearBox) { yearBox.setAttribute("inputmode", "numeric"); yearBox.setAttribute("maxlength", "4"); yearBox.setAttribute("autocomplete", "off"); }
+  root.append(ui.h("details", { class: "card fold fold-card", open: e.purchasePrice ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The home's details"), ui.h("span", { class: "fold-status" }, e.purchasePrice ? "price, costs" : wasYear ? `bought ${wasYear}` : "what you paid"), ui.h("span", { class: "fold-chev" }, "›")),
+    detailsForm));
   root.append(ui.card("Next", ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"), ui.h("a", { class: "btn secondary", href: "#/property/renovation" }, "A home project"))));
 }

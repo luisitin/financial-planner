@@ -22,9 +22,10 @@ import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
-import { isGuess, markGuess, clearGuess } from "../../../core/estimate/index.js";
+import { isGuess, guessAt, markGuess, clearGuess } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
-import { escrowMonthly } from "../guesses/estimators/home.js";
+import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow } from "../guesses/estimators/home.js";
+import { startOf as loanStartOf, recordOf } from "../guesses/estimators/debts.js";
 import { profileOf } from "../guesses/estimators/common.js";
 import { payOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
@@ -49,6 +50,13 @@ export function parseMoney(v) {
 }
 const pos = (v) => { const n = parseMoney(v); return n !== null && n > 0 ? n : null; };
 const nonneg = (v) => { const n = parseMoney(v); return n !== null && n >= 0 ? n : null; };
+/** "Year you bought it": four digits from 1950 to this year (`thisYear`, from the plan's today: no hidden clock) -> the year; blank or anything else -> null. */
+export function parseYear(v, thisYear = 2200) {
+  const t = String(v ?? "").trim();
+  if (!/^\d{4}$/.test(t)) return null;
+  const y = Number(t);
+  return y >= 1950 && y <= thisYear ? y : null;
+}
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /** The screens in order. `q` is the question number shown ("Question 3 of 7"); a follow-up screen shares its question's. */
@@ -376,6 +384,36 @@ export function markAt(draft, screen, today) {
  * the screen can say "Kept Checking: it has transactions. Remove it on Net worth." Its setup debt row, setup
  * contribution and place in setup goals go with it.
  */
+/**
+ * "Year you bought it" (Get started's home boxes): the home's purchase date, kept on the plan's home entry for the
+ * setup's home account (property[setup-home]) as July 1 of the year (an exact date already in that year stays). A blank
+ * box takes the answer back; `year === undefined` (the screen has no such box) changes nothing.
+ */
+function applyBought(draft, year) {
+  if (year === undefined) return;
+  draft.property = Array.isArray(draft.property) ? draft.property : [];
+  // the home's entry on the Home page when there is one (any id), else Get started's own: one answer, one place (review D5)
+  const found = homeEntryFor(draft, haveId("home"));
+  const i = found ? draft.property.indexOf(found) : -1;
+  if (year === null) {
+    if (i < 0) return;
+    const e = draft.property[i];
+    delete e.purchaseDate;
+    if (e.id === SETUP_HOME_ENTRY && Object.keys(e).every((k) => ["id", "kind", "accountId"].includes(k))) draft.property.splice(i, 1);
+    return;
+  }
+  const e = i >= 0 ? draft.property[i] : { id: SETUP_HOME_ENTRY, kind: "home", accountId: haveId("home") };
+  if (!(typeof e.purchaseDate === "string" && e.purchaseDate.startsWith(String(year)))) e.purchaseDate = `${year}-07-01`;
+  if (i < 0) draft.property.push(e);
+}
+/** The year on the home's entry (the Home page's, or Get started's own) for the setup's home account, else "" (the box is empty). */
+export function boughtYearOn(plan) {
+  const home = byId(L(plan, "accounts"), haveId("home"));
+  const e = home ? homeEntryFor(plan, home.id) : L(plan, "property").find((x) => x?.id === SETUP_HOME_ENTRY) ?? null;
+  const y = /^(\d{4})/.exec(String(e?.purchaseDate ?? ""));
+  return y ? Number(y[1]) : "";
+}
+const boughtOf = (v, today) => (v && Object.prototype.hasOwnProperty.call(v, "bought") ? parseYear(v.bought, Number(String(today ?? "2200").slice(0, 4))) : undefined);
 function dropAccounts(draft, ids) {
   const kept = [];
   for (const id of ids) {
@@ -384,6 +422,7 @@ function dropAccounts(draft, ids) {
     const why = referenced(draft, id);
     if (why) { kept.push({ id, name: a.name, reason: why, page: "#/balance/net-worth" }); continue; }
     draft.accounts = draft.accounts.filter((x) => x.id !== id);
+    if (id === haveId("home") && Array.isArray(draft.property)) draft.property = draft.property.filter((e) => e?.id !== SETUP_HOME_ENTRY);
     draft.debts = draft.debts.filter((d) => !(isSetupId(d.id) && d.accountId === id));
     draft.retirement.contributions = draft.retirement.contributions.filter((c) => !(isSetupId(c.id) && c.accountId === id));
     for (const g of draft.goals) if (isSetupId(g.id) && Array.isArray(g.fundedBy)) g.fundedBy = g.fundedBy.filter((x) => x !== id);
@@ -795,6 +834,7 @@ export function applyHaveAmounts(draft, v, today, { guess = null } = {}) {
       }
     }
   }
+  applyBought(draft, picks(draft, "have").includes("home") ? boughtOf(v, today) : null);   // (a home no longer picked takes its year with it)
   const kept = dropAccounts(draft, gone);
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => !c.id?.startsWith?.("setup-contrib-") || keepC.has(c.id));
   return kept;
@@ -949,6 +989,7 @@ function applyHaveGuessed(draft, v, today, guess) {
   const taps = { ...(draft.guide.setup.taps ?? {}) };
   if (j) taps["retire-joint"] = { pid: j.pid, total: j.total }; else delete taps["retire-joint"];
   if (Object.keys(taps).length) draft.guide.setup.taps = taps; else delete draft.guide.setup.taps;
+  applyBought(draft, picks(draft, "have").includes("home") ? boughtOf(v, today) : null);   // (a home no longer picked takes its year with it)
   const kept = dropAccounts(draft, gone);
   draft.retirement.contributions = draft.retirement.contributions.filter((c) => !c.id?.startsWith?.("setup-contrib-") || keepC.has(c.id));
   return kept;
@@ -1008,6 +1049,7 @@ export function applyOweAmounts(draft, v, today, { guess = null } = {}) {
     }
   }
   if ((draft.guide.setup.paidInFull ?? false) !== paidInFull) draft.guide.setup.paidInFull = paidInFull;
+  if (picks(draft, "owe").includes("mortgage") && !oweTaken(draft, "mortgage")) applyBought(draft, boughtOf(v.mortgage, today));
   return dropAccounts(draft, gone);
 }
 /** The one-tap answers Q5b may show, by debt (one at a time: the mortgage's, else the car loan's; guide.setup.taps). */
@@ -1019,7 +1061,7 @@ const TAP_VALUES = { "mortgage-start": ["pre2010", "2010s", "2020-21", "2022on",
  * grey figure on the screen is worked out from exactly what saving the screen writes (the same reading
  * applyOweAmounts makes: a payment or rate set on Liabilities that reads back the same is kept as it is).
  */
-export function oweArgs(plan, x = {}, key, { askHome = false } = {}) {
+export function oweArgs(plan, x = {}, key, { askHome = false, today = null } = {}) {
   const did = `setup-debt-${key}`, row = byId(L(plan, "debts"), did);
   const typed = parseMoney(x?.rate);
   const known = typed !== null && typed >= 0 && typed <= 100;
@@ -1033,6 +1075,8 @@ export function oweArgs(plan, x = {}, key, { askHome = false } = {}) {
   const out = { owed: nonneg(x?.owed), payment: paid === null ? null : paid > 0 && ownPay !== null && Math.round(ownPay) === Math.round(paid) ? ownPay : paid, rate };
   if (OWE_TAPS[key]) out.start = TAP_VALUES[OWE_TAPS[key]].includes(x?.start) ? x.start : null;
   if (key === "mortgage" && askHome) out.home = pos(x?.home);
+  // "Year you bought it": the screen's box (a year, or null when left blank); a screen without the box leaves it to the plan
+  if (key === "mortgage" && x && Object.prototype.hasOwnProperty.call(x, "bought")) out.bought = parseYear(x.bought, Number(String(today ?? "2200").slice(0, 4)));
   return out;
 }
 /**
@@ -1101,6 +1145,7 @@ function applyOweGuessed(draft, v, today, guess) {
     }
   }
   if ((draft.guide.setup.paidInFull ?? false) !== paidInFull) draft.guide.setup.paidInFull = paidInFull;
+  if (picks(draft, "owe").includes("mortgage") && !oweTaken(draft, "mortgage")) applyBought(draft, boughtOf(v.mortgage, today));
   return dropAccounts(draft, gone);
 }
 /** Ask the home's value with the mortgage: the plan has no home, or only the one this box made. */
@@ -1683,7 +1728,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   }
   if (screen === "have") return haveKeys(plan);
   if (screen === "have-amounts") {
-    const o = {};
+    const o = { bought: boughtYearOn(plan) };
     // a balance that is one of our guesses reopens empty: the screen shows it grey (spec P2), never as typed text
     // (no account in the retirement box's place: Q2's plan at work, when something typed is in it; $0 and our guess show blank)
     for (const h of HAVE) for (const pid of h.perAdult ? ad.map((p) => p.id) : [""]) { const a = acct(haveId(h.key, pid)), q = h.perAdult && !a ? workPlanAcct(plan, pid) : null; o[h.perAdult ? `${h.key}-${pid}` : h.key] = a && !isGuess(plan, `accounts[${a.id}].balance`) ? a.balance : q && Number(q.balance) > 0 && !isGuess(plan, `accounts[${q.id}].balance`) ? q.balance : ""; }
@@ -1722,6 +1767,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     }
     const home = acct(haveId("home"));
     o.mortgage.home = home && !g(`accounts[${home.id}].balance`) ? home.balance : "";
+    o.mortgage.bought = boughtYearOn(plan);
     return o;
   }
   if (screen === "spend") {
@@ -1884,6 +1930,30 @@ export function revealWords(step, plan, { today = null, retired = false } = {}) 
     default: return { title: step.title, detail: step.detail ?? step.why ?? null };
   }
 }
+/** A guessed mortgage's years left and the year it began, for "Your plan" (how long the loan has run: overview/guesses README "When the home was bought"). */
+function mortgageYears(plan, d, today) {
+  const a = byId(L(plan, "accounts"), d.accountId);
+  if (!today || a?.type !== "mortgage") return {};
+  // only while the balance or the payment is our guess (they were worked from when the loan began); a mortgage whose balance
+  // and payment are both typed reads as typed, whatever else is guessed (verify 2026-11-07: "about 28 years left" beside a
+  // Debts row paid off in 2039). A payment our older Get started guessed (the paymentGuessed flag alone) is a level 30-year
+  // payment from the day it was saved, not worked from the year bought: Your plan says what it said before (verify 2026-11-07)
+  const payGuess = typeof d.id === "string" ? guessAt(plan, `debts[${d.id}].minPayment`) : null;
+  const worked = isGuess(plan, `accounts[${a.id}].balance`) || (payGuess !== null && !payGuess.legacy);
+  if (!worked) return {};
+  try {
+    const s = loanStartOf(plan, recordOf(plan, "mortgage", `accounts[${a.id}].balance`), { today, prof: profileOf(plan, today) });
+    if (!s) return {};
+    // the years Debts shows (the payment less the tax and insurance in it, against the balance at the rate): one answer, also
+    // when a large typed payment pays a balance capped at the home's value off sooner than the loan's own term
+    const owed = Math.abs(Number(a.balance) || 0), pay = (Number(d.minPayment) || 0) + (Number(d.extra) || 0);
+    const toLoan = pay - loanEscrow(plan, a, d, today);
+    const n = owed > 0 && toLoan > 0 ? nper((Number(d.rate) || 0) / 12, toLoan, owed) : NaN;
+    if (!Number.isFinite(n)) return {};
+    return { yearsLeft: Math.max(1, Math.round(Math.ceil(n - 1e-9) / 12)), bought: s.year, boughtVia: s.stale ? "stale" : s.via };
+  } catch { return {}; }
+}
+
 /**
  * Where you stand, from the pages' own computes: what you own minus what you owe (Net worth; null while the plan has
  * neither), what is left each month after federal tax, spending and saving (Next best action's `spare`), how many
@@ -1971,7 +2041,7 @@ export function standing(plan, { today }) {
   // debts with a figure we filled in: the rate and payment (the flags core/estimate mirrors), and what is still owed (a
   // balance that is one of our guesses; `owed` is there only then)
   const owedGuess = (d) => { const a = byId(L(plan, "accounts"), d.accountId); return a && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) ? Math.abs(Number(a.balance) || 0) : null; };
-  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d) || owedGuess(d) !== null).map((d) => { const o = owedGuess(d); return { name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null, ...(o !== null ? { owed: o } : {}) }; });
+  const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d) || owedGuess(d) !== null).map((d) => { const o = owedGuess(d); return { name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null, ...(o !== null ? { owed: o } : {}), ...mortgageYears(plan, d, today) }; });
   // one sentence that says what matters most, never at odds with the cards under it
   const first = open[0]?.id ?? null;
   const saved = savedTotal(plan);

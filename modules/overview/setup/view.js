@@ -11,7 +11,7 @@ import {
   spendBase, loansAfterWork, allRetired, cushion, estimateSocialSecurity, yearlyPay, parseMoney, possessive, wouldChange,
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
   applyGoalPicks, applyGoalDetails, sumSplit, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
-  haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay,
+  haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
@@ -90,6 +90,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-money { position: relative; }
 .su-money > span { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-2); font-size: var(--fs-lg); pointer-events: none; }
 .su-money > input { padding-left: 32px; font-variant-numeric: tabular-nums; }
+.su-year > input { max-width: 9em; font-variant-numeric: tabular-nums; }
 .su-pct { position: relative; }
 .su-pct > span { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-2); font-size: var(--fs-lg); pointer-events: none; }
 .su-pct > input { padding-right: 34px; }
@@ -257,7 +258,7 @@ function arrows(box, btns) {
 export function render(page, ctx) {
   const { ui, fmt, store } = ctx;
   const plan = ctx.plan;
-  const today = fmt.today();
+  const today = fmt.today(), thisYear = Number(today.slice(0, 4));
   const cur = plan.meta?.currency ?? "USD";
   const money = (n) => fmt.money(Math.round(Number(n) || 0), cur);
   // an "about" figure that adds up our guesses: three significant figures ($158,900 -> $159,000), $10 under $1,000
@@ -448,6 +449,8 @@ export function render(page, ctx) {
     return ui.h("div", { class: "su-money" }, ui.h("span", { "aria-hidden": "true" }, symbol), input);
   };
   const pctIn = (value, onValue, label, placeholder) => ui.h("div", { class: "su-pct" }, ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: "next", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder, "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9.]/g, ""); onValue(e.target.value); } }), ui.h("span", { "aria-hidden": "true" }, "%"));
+  // a four-digit year ("Year you bought it"): digits only, a number keypad on a phone
+  const yearIn = (value, onValue, label) => ui.h("div", { class: "su-year" }, ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", autocomplete: "off", maxlength: "4", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder: "", "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, "").slice(0, 4); onValue(e.target.value); } }));
   const field = (label, control, sub) => ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), describe(control, sub));
   const fieldset = (label, control, sub) => ui.h("div", { class: "su-field" }, label ? ui.h("span", { class: "su-label" }, label) : null, control, describe(control, sub));
   /** One of a few, as pills (role radio), updated in place; one Tab stop, arrow keys. */
@@ -728,10 +731,11 @@ export function render(page, ctx) {
         const hintFor = (a, id) => (tapQ && !v.joint && a.retire[id] > 0 ? "Is it yours alone or both of yours? Answer just below the boxes." : "");
         for (const b of greys) {
           const blank = b.blank(args), g = blank ? guessFor(b.key(args), b.path(), args) : null;
-          const shown = g ? (b.pct ? shownPct(g.value) : shownMoney(g.value)) : "";
+          const shown = g ? (b.year ? String(g.value) : b.pct ? shownPct(g.value) : shownMoney(g.value)) : "";
           b.input.placeholder = shown;
-          b.input.setAttribute("aria-label", `${b.label}${shown ? `, blank uses our guess of about ${b.pct ? `${shown}%` : `${symbol}${shown}`}` : ""}`);
-          b.sub.textContent = shown ? [`Our guess: ${g.why}.`, b.help].filter(Boolean).join(" ") : b.help ?? "";
+          b.input.setAttribute("aria-label", `${b.label}${shown ? `, blank uses our guess of ${b.year ? shown : `about ${b.pct ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
+          b.sub.textContent = shown ? [b.year ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, b.help].filter(Boolean).join(" ") : b.help ?? "";
+          if (b.year && String(v.bought ?? "").length === 4 && parseYear(v.bought, thisYear) === null) b.sub.textContent = `We can't use ${v.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`;
           if (g?.ask && b.retire) ask = g.ask;
           if (b.retire && g && args.joint) shares[b.pid] = g.value;
           // the box typed in, while the couple's question is open: say where the answer is (the question sits below both people's boxes)
@@ -763,6 +767,11 @@ export function render(page, ctx) {
               key: () => ({ checking: "account.cash", savings: "account.cash", invest: "account.invest.balance", home: "home.value", car: "account.car.value" })[h.key],
               path: () => `accounts[${id}].balance`, blank: (a) => (cashKey ? a[h.key] === null : isBlank(v[h.key])),
               help: h.ask ? `${h.ask}${/[.!?]$/.test(h.ask) ? "" : "."}` : null, aria: label,
+            })));
+            // the year it was bought (home only): the grey guess is the usual year for an owner this age; it sharpens the mortgage
+            if (h.key === "home") add(card, group(null, greyField("🗓️ Year you bought it", yearIn(v.bought, (val) => { v.bought = val; refresh(); }, "Year you bought your home"), {
+              key: () => "home.boughtYear", path: () => null, year: true, blank: () => parseYear(v.bought, thisYear) === null,
+              help: "Optional. It helps us work out your loan.", aria: "Year you bought your home",
             })));
             continue;
           }
@@ -904,10 +913,11 @@ export function render(page, ctx) {
           owed: o.key === "credit" ? "All your cards together." : null,
           rate: guessing ? "It's on your statement." : `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`,
           home: "So what you own counts beside what you owe.",
+          bought: "Optional. It helps us work out your loan.",
         };
-        const labels = { payment: `${o.label}: paid a month`, owed: `${o.label}: still owed`, rate: `${o.label}: interest rate a year`, home: "What your home would sell for today" };
-        const keyOf = { payment: `debt.${o.key}.payment`, owed: `debt.${o.key}.owed`, rate: `debt.${o.key}.rate`, home: "home.value" };
-        const pathOf = { payment: `debts[setup-debt-${o.key}].minPayment`, owed: `accounts[setup-owe-${o.key}].balance`, rate: `debts[setup-debt-${o.key}].rate`, home: "accounts[setup-have-home].balance" };
+        const labels = { payment: `${o.label}: paid a month`, owed: `${o.label}: still owed`, rate: `${o.label}: interest rate a year`, home: "What your home would sell for today", bought: "Year you bought your home" };
+        const keyOf = { payment: `debt.${o.key}.payment`, owed: `debt.${o.key}.owed`, rate: `debt.${o.key}.rate`, home: "home.value", bought: "home.boughtYear" };
+        const pathOf = { payment: `debts[setup-debt-${o.key}].minPayment`, owed: `accounts[setup-owe-${o.key}].balance`, rate: `debts[setup-debt-${o.key}].rate`, home: "accounts[setup-have-home].balance", bought: null };
         const boxes = {};
         const box = (k, control) => { const input = control.querySelector("input"); boxes[k] = { input }; return control; };
         const sub = (k) => { const el = ui.h("span", { class: "su-sub" }); boxes[k].sub = el; return el; };
@@ -916,15 +926,16 @@ export function render(page, ctx) {
         const tapWrap = ui.h("div", { hidden: true });
         let tapBuilt = false;
         const refresh = () => {
-          const args = oweArgs(plan, x, o.key, { askHome });
+          const args = oweArgs(plan, x, o.key, { askHome, today });
           for (const k of Object.keys(boxes)) {
             const b = boxes[k], blank = args[k] === null;
             const g = guessing && blank ? ctx.guess(keyOf[k], { path: pathOf[k], args }) : null;
-            const shown = g && g.value !== null ? (k === "rate" ? shownPct(g.value) : shownMoney(g.value)) : "";
+            const shown = g && g.value !== null ? (k === "bought" ? String(g.value) : k === "rate" ? shownPct(g.value) : shownMoney(g.value)) : "";
             b.input.placeholder = shown;
-            b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, blank uses our guess of about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}` : ""}`);
+            b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, blank uses our guess of ${k === "bought" ? shown : `about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
+            if (k === "bought" && String(x.bought ?? "").length === 4 && parseYear(x.bought, thisYear) === null) { b.sub.textContent = `We can't use ${x.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`; continue; }
             // the guess, then the field's own help (spec 9.3): where to find it stays on screen while our figure shows
-            b.sub.textContent = shown ? [`Our guess: ${g.why}.`, helpOf[k]].filter(Boolean).join(" ") : helpOf[k] ?? "";
+            b.sub.textContent = shown ? [k === "bought" ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, helpOf[k]].filter(Boolean).join(" ") : helpOf[k] ?? "";
           }
           if (tapOn === o.key) {
             const g = guessing ? ctx.guess(keyOf.owed, { path: pathOf.owed, args }) : null;
@@ -938,6 +949,11 @@ export function render(page, ctx) {
           }
         };
         const moneyBox = (k, label) => moneyIn(x[k], (val) => { x[k] = val; refresh(); }, { label, placeholder: "" });
+        let yearOpen = false;
+        // the year was asked at question 4 when the home was picked there: say what is counted instead of asking again
+        const q4Asked = o.key === "mortgage" && haveKeys(plan).includes("home");
+        const q4Year = o.key === "mortgage" && parseYear(x.bought, thisYear) !== null ? parseYear(x.bought, thisYear) : null;
+        const q4Guess = q4Asked && q4Year === null ? ctx.guess("home.boughtYear", {}) : null;
         const draw = () => {
           for (const k of Object.keys(boxes)) delete boxes[k];
           tapBuilt = false;
@@ -948,6 +964,11 @@ export function render(page, ctx) {
             tapOn === o.key ? tapWrap : null,
             fieldWith("Interest rate a year", "rate", pctIn(x.rate, (val) => { x.rate = val; refresh(); }, labels.rate, "")),
             o.key === "mortgage" && askHome ? fieldWith("🏡 What would your home sell for today?", "home", moneyBox("home", labels.home)) : null,
+            // the year the home was bought: the mortgage is worked from it when the payment and balance are blank
+            // asked once: a year already given at question 4 is said, with a way to change it
+            o.key === "mortgage" ? ((q4Year || (q4Asked && q4Guess?.value)) && !yearOpen
+              ? ui.h("div", { class: "su-field" }, ui.h("p", { class: "su-sub" }, q4Year ? `You said you bought it in ${q4Year}.` : `Year you bought it: ${q4Guess.value}, our guess.`), ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { yearOpen = true; draw(); } }, "Change the year"))
+              : fieldWith("🗓️ Year you bought your home", "bought", yearIn(x.bought, (val) => { x.bought = val; refresh(); }, labels.bought))) : null,
             // the home on file, after the boxes and the tap (a 44 px button, not a bare link: thumbs)
             o.key === "mortgage" && homeAcct ? ui.h("div", { class: "su-field" },
               ui.h("p", { class: "su-sub" }, `Your home: about ${fmt.money(Math.round(Number(homeAcct.balance) || 0), cur)}, ${homeAcct.id === "setup-have-home" ? "from question 4" : "on Net worth"}.`),

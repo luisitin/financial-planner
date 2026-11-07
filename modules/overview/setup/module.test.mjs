@@ -1063,26 +1063,26 @@ test("C2 a picked debt with only a payment is kept: what is owed and the rate ar
   const old = structuredClone(j); S.applyOweAmounts(old, { mortgage: { payment: "1,100" } }, PERSONA_TODAY);
   assert.equal(acct(old, "setup-owe-mortgage"), undefined);
   oweWithGuesses(j, { mortgage: { payment: "1,100" } });
-  assert.equal(acct(j, "setup-owe-mortgage").balance, 110000, "7.H $111,000, rounded to two figures (R11)");
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 140000, "2026-11-07: worked back from the payment over the 284 months left since the 2020 purchase we guess, at 4.4% (7.H's $111,000 was the typical balance)");
   assert.equal(acct(j, "setup-have-home").balance, 210000, "the home Q5b asked about, left blank: our guess");
   const d = debtRow(j, "mortgage");
-  assert.equal(d.rate, 0.046, "Ohio's rate, not the old national 7.24%");
+  assert.equal(d.rate, 0.044, "the middle half of the move-in years' average 30-year rate eased toward today's (Jordan, 41, most likely bought in 2020), not the old national 7.24%");
   assert.equal(d.minPayment, 1100);
-  assert.equal(d.rateGuessed, 0.046, "the debt pages' older flag follows the ledger");
+  assert.equal(d.rateGuessed, 0.044, "the debt pages' older flag follows the ledger");
   assert.equal(d.paymentGuessed, undefined, "the typed payment is the person's");
   assert.equal(isGuess(j, "accounts[setup-owe-mortgage].balance"), true);
   assert.equal(isGuess(j, "debts[setup-debt-mortgage].rate"), true);
   assert.equal(isGuess(j, "debts[setup-debt-mortgage].minPayment"), false);
   assert.equal(isGuess(j, "accounts[setup-have-home].balance"), true);
   assert.equal(j.guesses["accounts[setup-owe-mortgage].balance"].k, "debt.mortgage.owed");
-  assert.equal(j.guesses["accounts[setup-owe-mortgage].balance"].d, PERSONA_TODAY);
+  assert.equal(j.guesses["accounts[setup-owe-mortgage].balance"].d, "2026-11-07", "the newest table behind it: the Census and Freddie Mac figures read 2026-11-07");
 });
 
-test("C2 the mortgage rate is the state's: Ohio 4.6%, Arizona 4.3% (the 7.24% case is only the old test's, with no guess)", () => {
+test("C2 the mortgage rate follows the year bought: Jordan 2020 4.4%, Pat and Lee 2012 4.4% (the 7.24% case is only the old test's, with no guess)", () => {
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 1100 } });
   const n = patLee(); oweWithGuesses(n, { mortgage: { payment: 1600 } });
-  assert.equal(debtRow(j, "mortgage").rate, 0.046);
-  assert.equal(debtRow(n, "mortgage").rate, 0.043);
+  assert.equal(debtRow(j, "mortgage").rate, 0.044);
+  assert.equal(debtRow(n, "mortgage").rate, 0.044);
   const old = jordan(); S.applyOweAmounts(old, { mortgage: { owed: 150000 } }, PERSONA_TODAY);
   assert.equal(debtRow(old, "mortgage").rate, 0.0724, "no guess passed: today's behaviour");
 });
@@ -1118,8 +1118,9 @@ test("C2 Skip: use our guesses keeps every picked debt, with our figures (the sk
   assert.deepEqual(got("credit"), [1800, 0.224, 50]);
   // car loan: SCF vehicle loans $14,306 -> $14,000 (a used car by its size: 11.2%); pmt(11.2%/12, 33.93, 14,000) = $483 -> $480
   assert.deepEqual(got("car-loan"), [14000, 0.112, 480]);
-  // mortgage: $110,000 at 4.6% = $563.9 + tax $214.0 + insurance $98.3 = $876 -> $880
-  assert.deepEqual(got("mortgage"), [110000, 0.046, 880]);
+  // mortgage (2026-11-07): the 2020 purchase we guess for a 41-year-old, 10% down, 76 payments made, combined with the survey's
+  // balance: $110,000 at 4.4% over the 284 months left = $631 + tax $214.0 + insurance $98.3 = $943 -> $940 (the old key: $880)
+  assert.deepEqual(got("mortgage"), [110000, 0.044, 940]);
   assert.equal(acct(p, "setup-have-home").balance, 210000);
   assert.equal(Object.keys(p.guesses).length, 10, "3 boxes x 3 debts + the home");
 });
@@ -1135,8 +1136,9 @@ test("C2 typing over a guess makes it yours: its ledger entry goes, and the gues
   assert.equal(Object.keys(p.guesses).length, n - 1);
   assert.equal(isGuess(p, "accounts[setup-owe-mortgage].balance"), false);
   assert.equal(acct(p, "setup-owe-mortgage").balance, 150000);
-  // the payment guess reads the typed balance: pmt(4.6%/12, 360, 150,000) = 769.0 + 312.3 = $1,081 -> $1,100
-  assert.equal(debtRow(p, "mortgage").minPayment, 1100);
+  // the payment guess reads the typed balance over the 284 months left of a 2020 loan: pmt(4.4%/12, 284, 150,000) = 851.0 + 312.3 =
+  // $1,163 -> $1,160 (to $10, verify 2026-11-07; the old keys: $1,150 in $50 steps, and 360 months at 4.6%, $1,100)
+  assert.equal(debtRow(p, "mortgage").minPayment, 1160);
   assert.equal(isGuess(p, "debts[setup-debt-mortgage].minPayment"), true);
   // a rate typed later on What you owe is the person's: going back through Q5b with the box blank keeps it
   debtRow(p, "mortgage").rate = 0.05125; delete p.guesses["debts[setup-debt-mortgage].rate"]; delete debtRow(p, "mortgage").rateGuessed;
@@ -1151,7 +1153,7 @@ test("C2 the start tap is saved with the answers and comes back on the screen", 
   const p = jordan();
   oweWithGuesses(p, { mortgage: { payment: 1100, start: "2010s" } });
   assert.deepEqual(p.guide.setup.taps, { "mortgage-start": "2010s" });
-  assert.equal(acct(p, "setup-owe-mortgage").balance, 116000, "worked back from the payment since January 2015");
+  assert.equal(acct(p, "setup-owe-mortgage").balance, 121000, "worked back from the payment since January 2015, at 2010-2019's 4.1% (7.H's $116,000 was at the state's 4.6%)");
   assert.equal(S.valuesFor(p, "owe-amounts").mortgage.start, "2010s");
 });
 
@@ -1173,20 +1175,21 @@ test("C2 Pat and Lee: the blank mortgage is counted on net worth, Timeline, Next
   const old = patLee(); S.applyOweAmounts(old, { mortgage: { payment: "1,600" } }, PERSONA_TODAY); S.applySpend(old, spend);
   const p = patLee(); oweWithGuesses(p, { mortgage: { payment: "1,600" } }); S.applySpend(p, spend);
   const o = { today: PERSONA_TODAY };
-  // they owe more than $100,000: $450,000 x Arizona's loan-to-value 47.6% = $214,200 -> $210,000
-  assert.equal(acct(p, "setup-owe-mortgage").balance, 210000);
+  // they owe more than $100,000: worked back from $1,600 over the 188 months left of the 2012 purchase we guess for a 61-year-old
+  // (P&I $1,328.7 less tax and insurance; at 4.4%) = $180,000 (2026-11-07; the old key: $450,000 x Arizona's LTV 47.6% = $210,000)
+  assert.equal(acct(p, "setup-owe-mortgage").balance, 180000);
   assert.ok(acct(p, "setup-owe-mortgage").balance > 100000);
-  // net worth was overstated by the whole mortgage: $978,000 -> $768,000, "partly our guesses"
+  // net worth was overstated by the whole mortgage: $978,000 -> $798,000, "partly our guesses"
   assert.equal(netWorth(old, o).netWorth, 978000);
   const nw = netWorth(p, o);
-  assert.equal(nw.netWorth, 768000);
-  assert.deepEqual([nw.guessedAssets, nw.guessedLiabilities, nw.partlyGuessed], [0, 210000, true]);
+  assert.equal(nw.netWorth, 798000);
+  assert.deepEqual([nw.guessedAssets, nw.guessedLiabilities, nw.partlyGuessed], [0, 180000, true]);
   // Timeline was "debt-free now"
   assert.equal(timeline(old, o).headline.debtFreeYear, null);
-  assert.equal(timeline(p, o).headline.debtFreeYear, 2041);
+  assert.equal(timeline(p, o).headline.debtFreeYear, 2042);   // (2026-11-07: a $180,000 loan at 4.4%, paid $1,600 a month of which tax and insurance are about $270: the rest pays it off in the 188 months left)
   // Pay off debts had nothing to pay off
   assert.deepEqual(payoff(old, o).debts, []);
-  assert.deepEqual(payoff(p, o).debts.map((d) => [d.name, d.balance, d.minPayment]), [["Mortgage", 210000, 1600]]);
+  assert.deepEqual(payoff(p, o).debts.map((d) => [d.name, d.balance, d.minPayment]), [["Mortgage", 180000, 1600]]);
   // Next best action: the $1,600 a month is spoken for (spending $5,260 -> $6,860)
   const before = nextBest(old, o).spare, after = nextBest(p, o).spare;
   assert.equal(after.spending - before.spending, 1600);
@@ -1196,10 +1199,10 @@ test("C2 Pat and Lee: the blank mortgage is counted on net worth, Timeline, Next
 test("C2 the done screen: net worth partly our guesses, the guessed debts listed, the debts answer counts them", () => {
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 1100 } });
   const st = S.standing(j, { today: PERSONA_TODAY });
-  assert.equal(st.netWorth, 100000, "home $210,000 - mortgage $110,000, both our guesses");
+  assert.equal(st.netWorth, 70000, "home $210,000 - mortgage $140,000, both our guesses");
   assert.equal(st.netWorthGuessed, true);
-  assert.deepEqual(st.guessed.find((g) => g.name === "Mortgage"), { name: "Mortgage", rate: 0.046, payment: null, owed: 110000 });
-  assert.deepEqual(S.reflect(j, "owe-amounts"), { kind: "owe", total: 110000, guessed: 1, of: 1 });
+  assert.deepEqual(st.guessed.find((g) => g.name === "Mortgage"), { name: "Mortgage", rate: 0.044, payment: null, owed: 140000, yearsLeft: 24, bought: 2020, boughtVia: "guess" });
+  assert.deepEqual(S.reflect(j, "owe-amounts"), { kind: "owe", total: 140000, guessed: 1, of: 1 });
   // Sam: the card balance typed, the car loan's ours
   const s = sam(); oweWithGuesses(s, { "car-loan": { payment: 420 }, credit: { owed: "3,000" } });
   const ss = S.standing(s, { today: PERSONA_TODAY });
@@ -1231,9 +1234,9 @@ test("C2 review: a higher mortgage payment never means less still owed (no cliff
     assert.ok(owed >= last, `${pay} a month: ${owed} after ${last}`);
     last = owed;
   }
-  // Jordan's 7.H key is unchanged: 1,100 - 312 = 788 is more than half the payment
+  // Jordan's payment key (2026-11-07): 1,100 - 312 = 788 is more than half the payment: pv(4.4%/12, 284, 787.7) = $140,0xx -> $140,000
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 1100 } });
-  assert.equal(acct(j, "setup-owe-mortgage").balance, 110000);
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 140000);
 });
 
 test("C2 review: a start tap with a blank payment never makes a steep payment on a typical balance", () => {
@@ -1241,7 +1244,12 @@ test("C2 review: a start tap with a blank payment never makes a steep payment on
   const s = sam(); S.applyOwePicks(s, ["car-loan"]); oweWithGuesses(s, { "car-loan": { start: "5+" } });
   assert.ok(debtRow(s, "car-loan").minPayment < 600, `${debtRow(s, "car-loan").minPayment}`);
   const j = jordan(); oweWithGuesses(j, { mortgage: { start: "pre2010" } });
-  assert.equal(debtRow(j, "mortgage").minPayment, 880, "the typical 110,000 over 30 years plus tax and insurance");
+  // 2026-11-07: the tap is the loan's start (July 2007, 128 months left), so the balance is worked from it too, at the 2000-2009
+  // average rate (6.3%, review D6): the balance is smaller than the typical one, never the typical one on 128 months
+  assert.equal(debtRow(j, "mortgage").rate, 0.063);
+  // pmt(6.3%/12, 128, 85,000) = 913.7 + 312.3 = $1,226 -> $1,230 (to $10, verify 2026-11-07; $1,250 in $50 steps)
+  assert.equal(debtRow(j, "mortgage").minPayment, 1230);
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 85000);
   // a balance typed with the tap still uses the months the tap leaves
   const t = jordan(); oweWithGuesses(t, { mortgage: { owed: 60000, start: "pre2010" } });
   assert.ok(debtRow(t, "mortgage").minPayment > 800);
@@ -1273,16 +1281,16 @@ test("C2 review: the home Q5b guessed stays a grey box on Q5b (never 'from quest
 
 test("C2 review: tax and insurance typed on Home move the mortgage guesses (settle)", () => {
   const j = jordan(); oweWithGuesses(j, { mortgage: { payment: 900 } });
-  assert.equal(acct(j, "setup-owe-mortgage").balance, 110000, "900 - Ohio's usual 312 = 588: pv = 114,700, so the 111,000 prior");
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 100000, "900 - Ohio's usual 312 = 588: pv(4.4%/12, 284, 588) = 103,6xx -> 100,000");
   j.property = [{ id: "h1", kind: "home", accountId: "setup-have-home", name: "Home", value: 210000, propertyTax: 3600, insurance: 1200 }];
   settle(j, GO);
-  // P&I = 900 - 300 - 100 = 500; pv(4.6%/12, 360, 500) = 97,537 -> 98,000
-  assert.equal(acct(j, "setup-owe-mortgage").balance, 98000);
+  // P&I = 900 - 300 - 100 = 500; pv(4.4%/12, 284, 500) = 88,1xx -> 88,000
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 88000);
   const k = jordan(); oweWithGuesses(k, { mortgage: {} });
   k.property = [{ id: "h1", kind: "home", accountId: "setup-have-home", name: "Home", value: 210000, propertyTax: 6000, insurance: 2400 }];
   settle(k, GO);
-  // pmt(4.6%/12, 360, 110,000) = 563.9 + 700 = 1,263.9 -> 1,250
-  assert.equal(debtRow(k, "mortgage").minPayment, 1250);
+  // pmt(4.4%/12, 284, 110,000) = 624.0 + 700 = 1,324 -> 1,320 (the mortgage payment is rounded to $10, verify 2026-11-07; $1,300 in $50 steps)
+  assert.equal(debtRow(k, "mortgage").minPayment, 1320);
 });
 
 // ---- C2 fixes after the two reviews (est/c2/c2-fix.md): each written before its fix and failing on C2 as built
@@ -1319,24 +1327,25 @@ test("C2 fix (D8): a plan from before the guesses keeps one mortgage payment whe
   const j = jordan(); S.applyOweAmounts(j, { mortgage: { payment: "1,100" } }, PERSONA_TODAY);
   S.applySpend(j, { mode: "rows", rows: { housing: 1100, groceries: 600 } });
   assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1700);
-  // back through Q5b with C2, leaving everything as it is: the mortgage is kept with our $880 payment
+  // back through Q5b with C2, leaving everything as it is: the mortgage is kept with our $940 payment (2026-11-07: $880 before the year bought)
   oweWithGuesses(j, S.valuesFor(j, "owe-amounts"));
-  assert.equal(debtRow(j, "mortgage").minPayment, 880);
+  assert.equal(debtRow(j, "mortgage").minPayment, 940);
   assert.equal(j.expenses.find((x) => x.id === "setup-x-housing").name, "Rent or mortgage");
   assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1700, "the $1,100 typed under housing is the mortgage payment, counted once");
-  // question 6 answered again, now asked as the costs besides the mortgage: $120 of them, and the $880 counts from Debts
+  // question 6 answered again, now asked as the costs besides the mortgage: $120 of them, and the $940 counts from Debts
   S.applySpend(j, { mode: "rows", rows: { housing: 120, groceries: 600 } });
   assert.equal(j.expenses.find((x) => x.id === "setup-x-housing").name, "Home costs");
-  assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1600);
+  assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1660, "$120 + $600 + the $940 payment");
 });
 
 test("C2 fix: a mortgage payment typed that fits the typical balance says so (it was read, not ignored)", () => {
   const j = jordan(); const grey = oweWithGuesses(j, { mortgage: { payment: 1450 } });
   const est = estimate(jordan(), "debt.mortgage.owed", { ...GO, path: "accounts[setup-owe-mortgage].balance", args: S.oweArgs(jordan(), { payment: 1450 }, "mortgage", { askHome: true }) });
   assert.equal(grey["accounts[setup-owe-mortgage].balance"], est.value);
-  assert.match(est.why, /your payment covers it/);
+  // (2026-11-07: a payment typed is worked back over the months left since the year bought, so it is never "covered by" a typical balance)
+  assert.match(est.why, /^worked back from your \$1,450 payment and the \d{4} purchase we guess$/);
   assert.ok(est.why.length <= 70, est.why);
-  // the payment worked back still names it: $300 is far below what the typical balance needs
+  // the payment worked back still names it
   const low = estimate(jordan(), "debt.mortgage.owed", { ...GO, path: "accounts[setup-owe-mortgage].balance", args: S.oweArgs(jordan(), { payment: 300 }, "mortgage", { askHome: true }) });
   assert.match(low.why, /worked back from your \$300 payment/);
 });

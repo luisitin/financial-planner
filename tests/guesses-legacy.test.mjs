@@ -106,13 +106,14 @@ test("C2 Better guesses are ready: the older guesses that would change, each wor
   assert.equal(JSON.stringify(p), before, "offering writes nothing");
   assert.deepEqual(offers.map((x) => [x.label, x.from, x.to]), [
     // Ohio's average on mortgages people have (FHFA) in place of a new loan's national 7.24%
-    ["Mortgage: interest rate", 0.0724, 0.046],
-    // $185,000 at 4.6% = $948.4 + Ohio's tax on the $260,000 home ($265.0) + insurance ($98.3) = $1,311.7 -> $1,300
-    ["Mortgage: payment a month", 1261, 1300],
+    ["Mortgage: interest rate", 0.0724, 0.047],
+    // $185,000 at 4.7% over the months left of a loan begun about 2021 + Ohio's tax on the $260,000 home ($265.0) + insurance ($98.3) = $1,420.2 -> $1,420 (to $10, verify 2026-11-07; $1,400 in $50 steps)
+    ["Mortgage: payment a month", 1261, 1420],
     // not offered: spending once work stops would fall $4,100 -> $2,840 only because the new $1,300 (which holds Ohio's tax
     // and insurance) is counted as all loan payment, so the $185,000 "ends" in about 2044 instead of 2056 (C2 review, UX 1).
     // The card never lowers retirement spending; the older figure stays until the person types one.
-    ["Emergency fund: safety cushion to aim for", 12000, 12100],
+    // (the cushion holds three months of the must-pay bills: the payment's $20 more, verify 2026-11-07, makes $12,400 -> $12,500)
+    ["Emergency fund: safety cushion to aim for", 12000, 12500],
   ]);
   assert.ok(!offers.some((x) => x.k === "overview/setup:retireSpend"));
   // the card rate and payment are the same figures today: not offered; nor is Social Security (worked out from pay, unchanged)
@@ -126,16 +127,16 @@ test("C2 Use the new guesses: written as guesses (ledger and older flags), and f
   const n = useNewGuesses(p, OPTS);
   assert.equal(n, 3);
   const mort = p.debts.find((x) => x.id === "setup-debt-mortgage");
-  assert.deepEqual([mort.rate, mort.rateGuessed, mort.minPayment, mort.paymentGuessed], [0.046, 0.046, 1300, 1300]);
+  assert.deepEqual([mort.rate, mort.rateGuessed, mort.minPayment, mort.paymentGuessed], [0.047, 0.047, 1420, 1420]);
   assert.deepEqual(Object.keys(p.guesses).sort(), ["debts[setup-debt-mortgage].minPayment", "debts[setup-debt-mortgage].rate", "goals[setup-goal-cushion].target"]);
   assert.equal(p.retirement.spendingMonthly, 4100, "retirement spending is not lowered by the card");
   assert.deepEqual(p.guide.guessUpgrade, { at: T, choice: "new" });
   assert.deepEqual(upgradeOffers(p, OPTS), [], "the card does not come back");
   assert.ok(compute(p, OPTS).rows.some((r) => r.label === "Mortgage: interest rate" && !r.legacy), "the same words as the older row");
   assert.deepEqual(settle(structuredClone(p), OPTS), { changed: [], dropped: [] }, "fresh as written");
-  // moving to Arizona: the rate follows (4.3%), the payment with it
+  // moving to Arizona: the rate follows the year bought and what mortgages people have in the state (2026-11-07); the payment follows the state's tax and insurance
   const { plan } = update(p, (d) => { d.household.state = "AZ"; });
-  assert.equal(plan.debts.find((x) => x.id === "setup-debt-mortgage").rate, 0.043);
+  assert.equal(plan.debts.find((x) => x.id === "setup-debt-mortgage").rate, 0.046);
   assert.notEqual(plan.debts.find((x) => x.id === "setup-debt-mortgage").minPayment, 1300);
 });
 

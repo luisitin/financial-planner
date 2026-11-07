@@ -52,3 +52,26 @@ When the payoff plan finishes the mortgage sooner (debt/payoff `twoDates`), the 
   Condo, which you rent out"); the payoff sentence says "onto this loan" when there are several; a rental's tile is "Owed
   against its value: 58% of Condo's $260,000 today" (the README keeps why the law's dates are not given).
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## How the years left were worked out (2026-11-07, owner's request)
+`compute(...).start` = `{ year, date, via: "typed" | "tap" | "guess" | "stale", monthsLeft, yearsLeft, worked, pageMonths, apart?, stale? }`: when the loan began (the
+year the home was bought as typed on Home, Get started or here; a refinance answered on Get started's tap; else the usual year for an
+owner of this age, `home.boughtYear`), and `worked`: the balance or payment on file is our guess, so the start is what they were worked
+from. `stale`: a year typed so long ago that a 30-year loan from it would be nearly paid off; the loan is then counted from our guessed
+year for the age instead (`year`, `date`), and the page asks "When did you last refinance?" (four buttons that write the tap Get started
+keeps, `setMortgageStart`). `pageMonths` is the page's own months at the payment (`base.months`): the line says those years, so it
+agrees with the top card, Debts and Your plan (verify 2026-11-07). `apart`: they are more than 36 months off the loan's own (a typed
+payment far above the usual one, the balance held at the home's value): the line then says "At $4,000 a month, the $230,000 we have for
+this loan is paid off in about 7 years. A usual 30-year loan from 2024 would have about 28 years left." and asks for what is still owed
+(or, when the balance is the person's and the payment ours, for the payment: `owedGuess`).
+The fold's label and box show the year typed for the home (also when a refinance answered is what the loan is counted from), else
+"2024, our guess".
+The page shows one plain line ("About 28 years are left on a usual 30-year loan, counted from the year we guess you bought, 2024.") and
+a fold "Change the year you bought it" (a box; blank goes back to our guess) -- only for a loan whose own home is clear (`loanHome`:
+its rental, or the home account when it is the only mortgage or Get started's), so a second loan never writes to the main home.
+Balance and payment both typed: "The years left come from the balance and payment you gave us." and no box.
+**The payment** (`mortgage.payment`) is the whole payment; `mortgage.toLoan` is what pays the loan and `mortgage.escrow` the tax and
+insurance in it (balance/liabilities `loanEscrow`, overview/guesses README): the schedule, the end date, the extra-payment, biweekly and
+recast figures and the mortgage-insurance dates all run on `toLoan`, so the page's years left are the loan's (tested against Debts,
+Pay off debts and the Timeline for every age). Source and formulas: overview/guesses README "When the home was bought". Tests:
+tests/home-purchase.test.mjs.

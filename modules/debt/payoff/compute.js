@@ -9,7 +9,7 @@ import { HIGH_RATE, MODERATE_RATE } from "../../overview/next-best-action/comput
 
 /**
  * compute(plan, { today, extra?, order? }) -> {
- *   debts: [{ id, name, type, balance, rate, minPayment, required, extraSet }] (only ones with a rate and a payment; minPayment is
+ *   debts: [{ id, name, type, balance, rate, minPayment, escrow, required, extraSet }] (only ones with a rate and a payment; minPayment is
  *   the Debts page's payment: its minimum `required` plus any `extraSet` there), missing: [names without detail],
  *   extra, extraSaved (an extra was ever saved here), order, budget, required (the minimums), alreadyExtra (extras set on the Debts page),
  *   tie (every order ends the same month at the same interest), rollover: [{ id, name, planEnd, ownEnd }] (debts that end sooner
@@ -57,7 +57,7 @@ export function compute(plan, params = {}) {
   const aimedAt = Array.isArray(params.targets) ? params.targets : Array.isArray(dp.targets) ? dp.targets : [];
   const targets = aimedAt.filter((id) => inPlan.some((r) => r.id === id));
   const targetsDone = aimedAt.length > 0 && !targets.length;   // every debt it was aimed at is paid off: the extra has stopped
-  const debts = inPlan.map((r) => ({ id: r.id, name: r.name, type: r.type, balance: r.owed, rate: r.rate, minPayment: r.payment, required: r.minPayment, extraSet: r.extra, ...(targets.includes(r.id) ? { takesExtra: true } : {}) }));
+  const debts = inPlan.map((r) => ({ id: r.id, name: r.name, type: r.type, balance: r.owed, rate: r.rate, minPayment: r.payment, escrow: r.escrow ?? 0, required: r.minPayment, extraSet: r.extra, ...(targets.includes(r.id) ? { takesExtra: true } : {}) }));
   const extra = targetsDone ? 0 : extraTyped;
   const missing = li.rows.filter((r) => r.owed > 0 && !(r.detail && r.payment > 0)).map((r) => r.name);
   const required = inPlan.reduce((t, r) => t + r.minPayment, 0), alreadyExtra = inPlan.reduce((t, r) => t + r.extra, 0);

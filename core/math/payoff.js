@@ -14,13 +14,15 @@ export const ORDERS = { avalanche: "Highest interest rate first", snowball: "Sma
  *   timeline: [{ month, balances: { [id]: balance }, paid, interest, total }]  (one row per month),
  *   neverPaysOff: [ids whose payment does not cover their interest even with the extra]
  * }
- * debts: [{ id, name, balance, rate (yearly fraction), minPayment, takesExtra? }]. Debts with balance 0 are skipped.
+ * debts: [{ id, name, balance, rate (yearly fraction), minPayment, escrow?, takesExtra? }]. Debts with balance 0 are skipped.
+ * escrow (optional, a mortgage's tax and insurance inside its payment): not paid toward the loan, so only minPayment less escrow
+ * pays interest and principal, and only that much rolls on to the next debt when the loan is gone.
  * takesExtra (2026-11-01): when any debt has it, the extra goes only to those debts, in the order, and stops once they are all
  * paid off (an extra aimed at the costly debts, as Next best action counts it); freed payments still roll on to the next debt.
  * With no debt marked, nothing changes.
  */
 export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder = [], maxMonths = 600 } = {}) {
-  const list = (debts ?? []).filter((d) => Number(d.balance) > 0).map((d) => ({ id: d.id, name: d.name ?? d.id, balance: Number(d.balance), rate: Number(d.rate) || 0, minPayment: Math.max(0, Number(d.minPayment) || 0), takesExtra: d.takesExtra === true }));
+  const list = (debts ?? []).filter((d) => Number(d.balance) > 0).map((d) => ({ id: d.id, name: d.name ?? d.id, balance: Number(d.balance), rate: Number(d.rate) || 0, minPayment: Math.max(0, (Number(d.minPayment) || 0) - Math.min(Math.max(0, Number(d.escrow) || 0), Number(d.minPayment) || 0)), takesExtra: d.takesExtra === true }));
   // aimed extra: when some debts are marked takesExtra, the extra goes to them only (in the order) and stops once they are paid off;
   // the payments of finished debts still roll on to the next debt in the order, as always
   const aimed = list.some((d) => d.takesExtra);

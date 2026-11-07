@@ -8,6 +8,7 @@ import { addMonths } from "../../../core/math/dates.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { money } from "../../../core/format.js";
 import { isGuess } from "../../../core/estimate/index.js";
+import { loanEscrow } from "../../overview/guesses/estimators/home.js";
 
 export const DEBT_ICONS = { credit: "💳", mortgage: "🏠", student_loan: "🎓", loan: "🚗", other_liability: "📄" };
 export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
@@ -107,17 +108,20 @@ export function compute(plan, params = {}) {
     const payment = minPayment + extra;
     const interestMonthly = rate !== null ? owed * rate / 12 : null;
     let months = null, totalInterest = null;
+    // the tax and insurance inside a mortgage payment are not paid toward the loan: only the rest pays it off (review D1)
+    const escrow = detail && !paidOff ? loanEscrow(plan, a, detail, today) : 0;
+    const toLoan = payment - escrow;
     if (detail && payment > 0 && owed > 0) {
-      months = nper(rate / 12, payment, owed);
+      months = nper(rate / 12, toLoan, owed);
       if (Number.isFinite(months)) {
         months = Math.ceil(months - 1e-9);
-        totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment }).totalInterest;
+        totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment: toLoan }).totalInterest;
       }
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
     const byGuesses = led && !!detail && typeof a.id === "string" && typeof detail.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) && isGuess(plan, `debts[${detail.id}].rate`);
     return {
-      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, paidOff, typedPayment, interestMonthly, months,
+      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, escrow, paidOff, typedPayment, interestMonthly, months,
       payoffDate: today && Number.isFinite(months) && months !== null ? addMonths(today, months) : null,
       totalInterest, expensive: !byGuesses && rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
       ...(byGuesses ? { byGuesses: true } : {}),
