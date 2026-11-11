@@ -1643,3 +1643,27 @@ test("batch 6: rent for a place not on Rental analysis is counted as before, at 
   const r = I.incomes.find((x) => x.name === "Rental condo");
   assert.equal(r.yearly, 18000); assert.equal(r.cola, true); assert.equal(r.afterCosts, undefined);
 });
+
+// stress test 2026-11-11 (HC-2): a careful answer worked out once for a plan is remembered, so the next visit shows the verdict
+// at once instead of the waiting words and a verdict that changes
+test("careful answers are remembered by what they were worked out from", async () => {
+  const { whenWorked, keyOf, knownAnswer } = await import("../careful.js");
+  assert.equal(keyOf({ a: 1, b: [2, 3] }), keyOf({ a: 1, b: [2, 3] }));
+  assert.notEqual(keyOf({ a: 1 }), keyOf({ a: 2 }));
+  const ctx = { store: { backend: () => "local", get: () => ({}) } };
+  const el = { isConnected: true };
+  let runs = 0;
+  const steps = () => (function* () { runs++; yield 1; return { yearly: 42000 }; })();
+  const key = keyOf(["test", Math.random()]);
+  assert.equal(knownAnswer(key), undefined);
+  const first = await new Promise((resolve) => whenWorked(ctx, el, { key, steps }, resolve));
+  assert.deepEqual(first, { yearly: 42000 });
+  assert.equal(runs, 1);
+  assert.deepEqual(knownAnswer(key), { yearly: 42000 });
+  const second = await new Promise((resolve) => whenWorked(ctx, el, { key, steps }, resolve));
+  assert.deepEqual(second, { yearly: 42000 });
+  assert.equal(runs, 1, "the second call is answered from memory, without working it out again");
+  // no key: worked out every time, as before
+  await new Promise((resolve) => whenWorked(ctx, el, { steps }, resolve));
+  assert.equal(runs, 2);
+});

@@ -267,11 +267,17 @@ test("F4 and F5: the address's target is read once and cleared; the bad-luck chi
   const calls = [];
   globalThis.history = { state: null, replaceState: (...a) => calls.push(a) };
   globalThis.location = { pathname: "/", search: "?sandbox=1", hash: "" };
-  const p = renterDebtPlan();
+  // the renter has no retirement savings on file: the page is its hero and one filled "Add what you own" (stress test 2026-11-11, F4);
+  // the chip is checked on the family, who have savings
   const view = new URL("./view.js", import.meta.url);
   const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
   const last = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "last" } };
-  const a = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: last });
+  const renter = await renderPage(view, renterDebtPlan(), "2026-11-06", { computeRemote: live, route: last });
+  assert.match(renter.text(), /Add what you own ›/); assert.equal(renter.root.querySelectorAll(".chip").length, 0);
+  calls.length = 0;
+  const p = familyPlan("2026-11-06");
+  const route = { ...last, query: { target: "last" } };
+  const a = await renderPage(view, p, "2026-11-06", { computeRemote: live, route });
   const params = (r) => r.remote[r.remote.length - 1].params;
   // read: just last, as planned; and the address loses ?target=last (once)
   assert.equal(params(a).legacy, 0); assert.equal(params(a).spendingScale, undefined);
@@ -283,9 +289,9 @@ test("F4 and F5: the address's target is read once and cleared; the bad-luck chi
   chip().click(); await new Promise((r) => setTimeout(r, 0));
   assert.equal(params(a).spendingScale, 1.15);
   assert.equal(chip().getAttribute("aria-pressed"), "true");
-  assert.match(a.text(), /Every figure below is worked out as if you spent 15% more than the \$2,040 a month your plan has\./);
+  assert.match(a.text(), /Every figure below is worked out as if you spent 15% more than the \$[\d,]+ a month your plan has\./);
   // the shell redraws the page with the same route (a sync): the chip stays, ?target=last is not read again, the address is left alone
-  const again = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: last });
+  const again = await renderPage(view, p, "2026-11-06", { computeRemote: live, route });
   assert.equal(params(again).spendingScale, 1.15); assert.equal(calls.length, 1);
   // a new visit to the link (a new route) starts from just last, as planned, again
   const visit = await renderPage(view, p, "2026-11-06", { computeRemote: live, route: { ...last, query: { target: "last" } } });
@@ -340,7 +346,8 @@ test("verify: with Room for bad luck on, the hero speaks of 15% more spending, n
   const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
   const route = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "last" } };   // starts from just last, chip off
   const r = await renderPage(new URL("./view.js", import.meta.url), p, "2026-11-07", { computeRemote: live, route });
-  assert.match(r.text(), /Your plan works, with room to spare/); assert.match(r.text(), /As it stands the money lasts and leaves about/);
+  // the headline waits for the bad-run figure (stress test 2026-11-11, W5): "Checking ..." until it is in, then the one verdict
+  assert.match(r.text(), /Your plan works, with room to spare|Checking your plan against bad years/); assert.match(r.text(), /As it stands the money lasts and leaves about/);
   r.root.querySelectorAll(".chip").find((c) => c.textContent === "Room for bad luck").click(); await new Promise((ok) => setTimeout(ok, 0));
   assert.match(r.text(), /With 15% more spending than you plan, the money runs out in 20\d\d\./);
   assert.ok(!/As it stands the money runs out/.test(r.text()), "the plan as it stands does not run out");

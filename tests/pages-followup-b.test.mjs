@@ -174,7 +174,9 @@ test("goal seek: ?target=badluck opens with Room for bad luck on; the address ke
   try {
     const live = { "scenarios/goal-seek": (plan, params) => gs(plan, params) };
     const route = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "badluck", guide: "retire", step: "3" } };
-    const a = await renderPage(URL_OF("scenarios/goal-seek"), renterDebtPlan(), "2026-11-06", { computeRemote: live, route });
+    // (with some retirement savings on file: with none the page is its hero alone, stress test 2026-11-11, F4)
+    const saved = () => { const q = renterDebtPlan(); q.accounts.find((x) => x.id === "k401").balance = 100000; return q; };
+    const a = await renderPage(URL_OF("scenarios/goal-seek"), saved(), "2026-11-06", { computeRemote: live, route });
     const last = a.remote[a.remote.length - 1].params;
     assert.equal(last.legacy, 0); assert.equal(last.spendingScale, 1.15);
     const chip = a.root.querySelectorAll(".chip").find((c) => c.textContent.startsWith("Room for bad luck"));
@@ -183,7 +185,7 @@ test("goal seek: ?target=badluck opens with Room for bad luck on; the address ke
     assert.equal(calls[0][2], "/?sandbox=1#/scenarios/goal-seek?guide=retire&step=3", "target is taken out, guide and step stay");
     // ?target=last keeps the other keys too, and does not turn the chip on
     const calls0 = calls.length;
-    const b = await renderPage(URL_OF("scenarios/goal-seek"), renterDebtPlan(), "2026-11-06", { computeRemote: live, route: { ...route, query: { target: "last", guide: "retire" } } });
+    const b = await renderPage(URL_OF("scenarios/goal-seek"), saved(), "2026-11-06", { computeRemote: live, route: { ...route, query: { target: "last", guide: "retire" } } });
     assert.equal(b.remote[b.remote.length - 1].params.spendingScale, undefined);
     assert.equal(calls[calls0][2], "/?sandbox=1#/scenarios/goal-seek?guide=retire");
   } finally { delete globalThis.history; delete globalThis.location; }
@@ -198,7 +200,7 @@ test("goal seek: ?target=badluck opens with Room for bad luck on; the address ke
 
 test("goal seek: the bad-luck line and the sentence under the chip follow the answer on screen (d.scale), not the chip's state", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../modules/scenarios/goal-seek/view.js", import.meta.url), "utf8");
-  assert.ok(/carefulLine\(ctx, d\.legacy, money, moneyUp, moneyDown, d\.spendingMonthly \/ d\.scale, d\.scale, pillEl\)/.test(src));
+  assert.ok(/carefulLine\(ctx, d\.legacy, money, moneyUp, moneyDown, d\.spendingMonthly \/ d\.scale, d\.scale, pillEl, answered\)/.test(src));
   assert.ok(/d\.scale === BAD_LUCK \? ` Every figure below/.test(src));
 });
 

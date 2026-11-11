@@ -776,3 +776,18 @@ easily understand and use the page") is not met by a way that never raises back.
 - "Retirement money today" lists only the parts that have money ("$3,700, all of it in cash"; "none on file yet"); with nothing saved for retirement and only cash, it says "no retirement savings on file; $3,700 in cash is counted". The amber "short in a bad run" pill follows the full stop with a space.
 - Review round 2: "Retirement money today" calls taxable accounts "in regular savings" (as the order words do); someone who said they are retired reads "already retired" in What goes into this.
 Review fixes (2026-11-07): the links in a sentence have no stray spaces and end the sentence ("Add what you own on the Net worth page to see."; "(on the What you save for retirement page)"). A person already past their retirement age is "Retirement has already begun (Ruth at 72)", not "starts in 2026". The note "Social Security already paid" reads "Social Security you already get (from the Income page)" (in the view; the compute string is read by the golden keys). `needItem` (core/words.js) words a missing item for the pages that have no box for it (Year by year, Roth conversions, Withdrawal order, Tax year by year, and those that use `needsWords`): "(on the Expenses page, or on the Will the money last? page)".
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **No verdict before it is known** (HC-2, R-A1, W5). While the bad-run answer can still change the headline (steady spending that
+  lasts if markets are average), the h1 reads "Checking your plan against bad years..." (grey, `aria-busy`, two lines held), then the
+  one verdict; the two lines stay held so a one-line verdict does not pull the page up. `retirement/careful.js` remembers each answer
+  for the visit (`whenWorked`'s `key`, `carefulKey`: a hash of `buildInputs().inputs`, the day and the goal), so a revisit, Back or a
+  save elsewhere on the page shows the verdict at once. The grey bars have `max-width: 100%` (x-3, A9: the page was 518 px wide).
+- **First open** (R-A5, x-5, x-3): Retirement settings stay folded; the hero has one button per missing thing, the first filled
+  ("Add people ›", "Add what you own ›", "Type what you'll spend ↓", which opens the settings at the box); the Social Security notice
+  waits until the page has its basics, so it no longer adds a second filled button.
+- **No retirement savings on file** (F4): no chart, "What goes into this" folded, one filled "Add what you own ›".
+- **The age** (A6): "Change the age ›" beside "Retirement starts in ..." goes to People; the Goal seek button reads "Could you stop
+  sooner? What would change it ›". The chart caption no longer uses page titles as nouns (R-A8).
+- Not done here (waits for wave 1, the shared shell): Save settings shutting its section and the jump after it (R-A4, x-2),
+  Back losing the place, answers off screen.

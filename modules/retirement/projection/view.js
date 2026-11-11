@@ -4,7 +4,7 @@ import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJob
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+import { whenCareful, carefulKey, knownAnswer, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
@@ -33,21 +33,42 @@ export function moneyToday(b, noSavings, money) {
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
-  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today(), showHealth: true });   // showHealth: with the box ticked, still say what cover would cost
+  // no Social Security in the plan: say so first (ss-notice.js); not while the page still needs its basics, where its filled button
+  // stood above the one thing to do first (stress test 2026-11-11, x-5: four filled buttons on the first screen)
+  if (d.ready) { const ss = ssNotice(ctx); if (ss) root.append(ss); }
   const rt = plan.retirement ?? {};
   root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; }"));
   const money = (n) => fmt.money(n, cur);
 
   if (!d.ready) {
+    // one button for each thing still missing, the first one filled; what is done has none (stress test 2026-11-11, x-3: "People"
+    // stayed the filled button after People was done, while the one thing missing was a box further down)
+    const settings = settingsCard(ctx, d);
+    const typeSpending = () => {
+      settings.open = true;
+      const box = settings.querySelector("input[name=spendingMonthly]") ?? settings.querySelector("input");
+      settings.scrollIntoView({ behavior: "smooth", block: "start" });
+      box?.focus({ preventScroll: true });
+    };
+    const steps = d.missing.map((m) => {
+      const t = String(m);
+      if (/People page/.test(t)) return { words: t.replace("a person with a birth date on the People page", "who is in the household, with birth dates (People page)"), act: ui.h("a", { href: "#/household/people" }, /^a person/.test(t) ? "Add people ›" : "Check People ›") };
+      if (/Net worth page/.test(t)) return { words: "what you own: your savings and retirement accounts", act: ui.h("a", { href: "#/balance/net-worth" }, "Add what you own ›") };
+      if (/spend in retirement/.test(t)) return { words: "what you will spend in retirement: type it under Retirement settings below, or list today's bills on the Expenses page", act: ui.h("button", { type: "button", onClick: typeSpending }, "Type what you'll spend ↓") };
+      return { words: t, act: null };
+    });
+    const acts = steps.map((x) => x.act).filter(Boolean);
+    acts.forEach((a, i) => { a.className = i ? "btn secondary" : "btn"; });
+    if (steps.some((x) => /spend in retirement/.test(x.words))) acts.push(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses ›"));
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Will the money last?"),
-      ui.h("p", { class: "lede" }, "This page runs your plan year by year to the end: what you have, what you add, what Social Security and pensions bring in, what you spend, and what is left each year. It needs a few things first:"),
-      ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, String(m).replace("your accounts on the Net worth page", "what you own (add your accounts)")))),
-      ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Accounts"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses")),
+      ui.h("p", { class: "lede" }, `This page runs your plan year by year to the end: what you have, what you add, what Social Security and pensions bring in, what you spend, and what is left each year. It needs ${steps.length === 1 ? "one more thing" : "a few things"} first:`),
+      ui.h("ul", {}, steps.map((x) => ui.h("li", {}, x.words))),
+      ui.row(...acts),
     ));
-    root.append(settingsCard(ctx, d));
+    root.append(settings);
     return;
   }
   // "(Contributions page)" and the like are links to that page, not plain text to go and find
@@ -90,18 +111,34 @@ export function render(root, ctx) {
   // the amber pill follows the full stop with a space ("lasts 7 in 10. short in a bad run"), never ".short in a bad run"
   const shareWords = (share, shareN = null) => { const f = fewer(shareN); return [`At the ${money(d.spendingYearly)} you plan, it lasts `, share, ".", f ? " " : null, f]; };
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
-  const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
+  // (careful.js's own bar, never wider than its line: stress test 2026-11-11, x-3 and A9)
+  const slot = (like) => barOf(ui, like);
   // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
   const noCare = !(d.affordable >= 1);
   const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts even in a bad run of years. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12))));
-  const careLine2 = noCare || !steady ? null : ui.h("p", { style: { color: "var(--muted)" } }, ...shareWords(slot("even in a bad run of years (93 of 100 pretend futures last)")));
+  const careLine2 = noCare || !steady ? null : ui.h("p", { style: { color: "var(--muted)" } }, ...shareWords(slot("in most pretend futures (93 of 100)")));
   const careSub = `a year${onTop}, today's dollars; ${money(d.affordable)} if markets do as well as average`;
   const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`) : ui.stat("Spending that lasts, even in a bad run of years", "...", careSub));
   // nothing saved for retirement is on file and the income alone does not carry the spending: the page cannot say the money
   // runs out, only that it does not know yet (review UX 3: a 26-year-old who never mentioned savings read "Runs out in 2065")
   const unknownYet = savingsUnknown(d);
-  const headline = ui.h("h1", {}, unknownYet ? "We don't know yet" : d.verdict === "short" ? `Runs out in ${d.shortYear}` : moving ? "Your spending moves with markets" : d.verdict === "on track" ? "The money lasts" : "It lasts, just");
+  const averageHead = unknownYet ? "We don't know yet" : d.verdict === "short" ? `Runs out in ${d.shortYear}` : moving ? "Your spending moves with markets" : d.verdict === "on track" ? "The money lasts" : "It lasts, just";
+  // the headline the bad-run answer can still change (steady spending that lasts if markets are average): under 6 in 10 it says
+  // so in the same words (UX review 7: "It lasts, just" over 47%); between 6 and 9 in 10 "The money lasts" over a line saying it
+  // fails in a third of them contradicted itself (money review UX 1): "just" is for 9 in 10 or more
+  const canTurn = !noCare && !unknownYet && steady && d.verdict !== "short";
+  const finalHead = (c) => (!canTurn || !c || !(c.yearly > 0) || !Number.isFinite(c.planned) ? averageHead
+    : c.planned < 0.6 ? `Lasts ${chanceWords(c.planned, { exact: false })}` : c.planned < 0.9 ? "It lasts in most cases, not all" : averageHead);
+  // a verdict is never shown before it is known (stress test 2026-11-11, HC-2, R-A1, W5): "The money lasts" stood for one to three
+  // seconds and then turned into "It lasts in most cases, not all". Until the bad-run answer is in, the headline says it is being
+  // checked, two lines tall (the longest verdict's height); an answer already worked out for this plan is used at once
+  const known = canTurn ? knownAnswer(carefulKey(ctx)) : null;
+  const waiting = canTurn && known === undefined;
+  const headline = waiting
+    ? ui.h("h1", { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } }, "Checking your plan against bad years...")
+    : ui.h("h1", {}, canTurn ? finalHead(known) : averageHead);
   if (!noCare) whenCareful(ctx, careLine, (c) => {
+    if (waiting) { headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
     // nothing worked out, or nothing lasts even in a bad run of years, even at $0: no careful line, the average figure named as such
     if (!c || !(c.yearly > 0)) { careLine.remove(); careLine2?.remove(); careStat.replaceChildren(ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
     careLine.style.minHeight = `${careLine.offsetHeight}px`;   // never shorter than the placeholder it replaces
@@ -111,11 +148,6 @@ export function render(root, ctx) {
     careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly))));
     if (careLine2) { careLine2.style.color = ""; careLine2.replaceChildren(...shareWords(chanceWords(c.planned), c.planned).filter((x) => x !== null)); }   // replaceChildren writes a null as the text "null"
     careStat.replaceChildren(ui.stat("Spending that lasts, even in a bad run of years", money(c.yearly), careSub));
-    // under 6 in 10 at the planned spending the headline says so, in the same words (UX review 7: "It lasts, just" over 47%)
-    if (steady && d.verdict !== "short" && Number.isFinite(c.planned) && c.planned < 0.6) headline.textContent = `Lasts ${chanceWords(c.planned, { exact: false })}`;
-    // between 6 and 9 in 10 "It lasts, just" (or "The money lasts") over a line saying it fails in a third of them contradicted itself
-    // (money review UX 1): "just" is for 9 in 10 or more
-    else if (steady && d.verdict !== "short" && Number.isFinite(c.planned) && c.planned < 0.9) headline.textContent = "It lasts in most cases, not all";
   });
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,
   // or nobody ("nobody in the plan works now")
@@ -130,18 +162,21 @@ export function render(root, ctx) {
   const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
-    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own on the ", ui.h("a", { href: "#/balance/net-worth", class: "pj-link" }, "Net worth"), " page to see.") : ui.h("p", { class: "lede" }, verdictText),
+    // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
+    // falling to $0 under "we don't know"
+    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
     unknownYet ? null : careLine,
     unknownYet ? null : careLine2,
     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
     // in the normal text colour (grey on the hero's tint was under 4.5:1), short (UX review 17, 18)
-    ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}.`),
+    // where the age is set, one tap away (stress test 2026-11-11, A6: "Can I retire at 62?" had no way to the age)
+    ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}. `, ui.h("a", { href: "#/household/people", class: "pj-link" }, alreadyRetired ? "Ages ›" : "Change the age ›")),
     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
     // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
     // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "What would change it ›"),
+    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
       noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
   ));
   // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
@@ -155,16 +190,16 @@ export function render(root, ctx) {
     ui.stat(`Left in ${d.atEnd.year}`, money(Math.max(0, d.atEnd.totalReal)), d.atEnd.totalReal > 0 ? "today's dollars" : "nothing"),
   )));
   const years = d.rows.map((r) => r.year);
-  root.append(ui.card("Money over the years, in today's dollars",
+  if (!unknownYet) root.append(ui.card("Money over the years, in today's dollars",
     lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
-    ui.h("p", { class: "muted small" }, "One line, expected returns. Chance the money lasts and If history repeated show the range around it."),
+    // (R-A8: a page title in the middle of a sentence read as a question)
+    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages, Chance the money lasts and If history repeated, show the range around it."),
   ));
   // a rental's loan payment the spending holds (round 8 batch 6 review, UX 7): said with the spending, so the line that gives
   // it back after the loan is paid off does not read as income
   const back = d.inputs.incomes.filter((x) => x.part === "loan back");
   const heldLoans = back.length ? `, which holds ${back.map((x) => `${x.rental}'s ${money(x.monthly)} a month loan payment${x.loanEnds && !x.sold ? ` until ${String(x.loanEnds).slice(0, 4)}` : ""}`).join(" and ")}` : "";
-  root.append(ui.card("What goes into this",
-    ui.h("ul", { class: "records" }, [
+  const intoList = ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
       // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
       ["People", d.people.map((p, i) => (rb.stopped && rb.id === p.id ? `${(i ? nameIn : NameIn)(p.name)}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : (thisYear - p.birthYear >= p.retireAge || plan.guide?.setup?.status?.[p.id] === "retired") ? `${(i ? nameIn : NameIn)(p.name)}: already retired (${thisYear - p.birthYear}), plan to ${p.endAge}` : `${(i ? nameIn : NameIn)(p.name)}: ${verbFor(p.name, "retires", "retire")} at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
@@ -179,8 +214,11 @@ export function render(root, ctx) {
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${orderWords(d.orderLabel)}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals start at ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from retirement accounts you pay tax on later; withdrawals ${orderWords(d.orderLabel)}; required withdrawals start at ${d.inputs.rmd.startAge}`],
     ].flatMap(([k, v]) => [ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, linked(v))),
       // health cover right under the spending it goes on top of (by its name: the "Not counted" row comes and goes above it)
-      ...(k === "Spending in retirement" ? [healthRecord(ctx, d)] : [])]).filter(Boolean)),
-  ));
+      ...(k === "Spending in retirement" ? [healthRecord(ctx, d)] : [])]).filter(Boolean));
+  // with no retirement savings on file the list is folded (F4: nine blocks of Medigap and tax rates under "we don't know yet")
+  root.append(unknownYet
+    ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What goes into this"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, intoList))
+    : ui.card("What goes into this", intoList));
   root.append(settingsCard(ctx, d));
 }
 
@@ -281,8 +319,11 @@ function settingsCard(ctx, d) {
       p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
     });
   }, { submitLabel: "Save settings" });
-  const details = ui.h("details", { class: "card fold fold-card", open: d.ready ? null : true },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Retirement settings"), ui.h("span", { class: "fold-status" }, spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : "spending = today's expenses"), ui.h("span", { class: "fold-chev" }, "›")),
+  // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
+  // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
+  const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
+  const details = ui.h("details", { class: "card fold fold-card" },
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Retirement settings"), ui.h("span", { class: "fold-status" }, spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "spending not set yet" : "spending = today's expenses"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Shared by every retirement page. Ages and how long the plan runs come from the People page; growth and inflation from Assumptions."), out, form));
   return details;
 }

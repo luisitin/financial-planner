@@ -304,3 +304,9 @@ the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N o
 "100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
 "short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
 Financial independence says "the money lasts even in a bad run of years" and, when no age reaches it, "the money lasts in about 3 of 10 pretend futures (38 of 100), which does not cover a bad run of years."
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **No age before it is known** (HC-2, R-A1, W5): the heading reads "Working out when Ana could stop work..." (two lines held) until the
+  careful age is in, then the one answer. The answer is remembered for the visit (`careful.js` `whenWorked` with a key: a hash of the
+  plan, the day and the search's own settings), so a revisit shows it at once. The line under the heading still says what average
+  years would allow; it is labelled as such.

@@ -165,3 +165,11 @@ chip on. Test: `module.test.mjs` ("review D4"), failing before the fix.
 - Review round 2: the sentence under the bad-luck chip divides by the answer's own scale (`d.scale`); "Also plan for bad luck:" labels the chip; the hero reads "Your plan works, with room to spare".
 
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **No pill or headline before the bad-run figure is in** (W5): "Checking your plan against bad years..." and a grey "checking"
+  pill, then "Your plan works if markets are average" with "tight" (the bad-run spending is under the plan's) or "Your plan works,
+  with room to spare". `tightOf` is the same test the careful line makes. A remembered answer (careful.js) shows at once.
+- **No retirement savings on file** (F4): the hero alone, with one filled "Add what you own ›"; no exact answers under "we can't say".
+- **Leave at least** (RC-4, W6): a money box (`ui.moneyBox`), any amount with or without commas; a wrong one is refused in a sentence.
+- **Each lever's button names its page** (RC-10): `GO_WORDS` ("Change the age on People", "Retirement contributions", ...).

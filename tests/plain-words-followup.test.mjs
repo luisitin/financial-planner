@@ -37,7 +37,7 @@ test("UX 5 and 6: Will the money last? says 'already retired' for a retiree and 
 
 test("UX 1: between 6 and 9 in 10 the headline does not say 'It lasts, just'; Chance the money lasts says every, not 'almost every', at 100%", () => {
   const p = src("modules/retirement/projection/view.js");
-  assert.ok(/c\.planned < 0\.9\) headline\.textContent = "It lasts in most cases, not all"/.test(p));
+  assert.ok(/c\.planned < 0\.9 \? "It lasts in most cases, not all"/.test(p));
   const m = src("modules/retirement/monte-carlo/view.js");
   assert.ok(/d\.successRate >= 1 \? "Strong: the money lasted in every pretend future\."/.test(m));
   assert.ok(/ui\.h\("h1", \{\}, "Chance the money lasts"\)/.test(m), "the heading is the menu name");

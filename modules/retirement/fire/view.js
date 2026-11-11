@@ -4,7 +4,7 @@
 // check, folded: the number, how far along you are, the years to get there at the current pace, and the coast figure.
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
 import { compute, carefulAgeSteps, ruleWords, plannedStopWords, otherEndWords } from "./compute.js";
-import { whenWorked, slot, RULE_WORDS, leftWords, chanceWords, BAD_RUN } from "../careful.js";
+import { whenWorked, keyOf, slot, RULE_WORDS, leftWords, chanceWords, BAD_RUN } from "../careful.js";
 
 const STYLE = `
 .fi-root .fi-note { margin-top: 10px; }
@@ -102,11 +102,13 @@ export function render(root, ctx) {
     lede = `The money does not last to the end of the plan${w.legacy > 0 ? ` and leave the ${money(w.legacy)} you want to leave` : ""}, even if the next years are about average and ${works(w.upTo ?? 75)}${alongside}. Will the money last? shows when it runs short and what would fix it.`;
   } else {
     pending = true;
-    head = [`${Who} could stop work at `, slot(ui, String(age))];
+    // no verdict before it is known (stress test 2026-11-11, HC-2, R-A1, W5): "Ana could stop work at [bar]" turned into "Ana would
+    // need to work until 67"; the heading now says what is being worked out, two lines tall, and the answer replaces it once
+    head = `Working out when ${who} could stop work...`;
     lede = [`Stopping at `, slot(ui, String(age)), `, the money lasts ${BAD_RUN}${leaves}${alongside}. ${avgWords()}`];
     saved = savedWords(slot(ui, round100(w.atAgeReal)), slot(ui, String(w.stopYear)));
   }
-  const h1 = ui.h("h1", {}, head);
+  const h1 = ui.h("h1", pending ? { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } } : {}, head);
   const ledeEl = ui.h("p", { class: "lede", "aria-live": "polite", style: pending ? { color: "var(--muted)" } : {} }, lede);
   const savedEl = saved ? ui.h("p", { style: { color: "var(--muted)" } }, ...saved) : null;
   // the first adult counted as stopped now while the plan still has a later age (review 2026-11-06: this page read "The money
@@ -119,6 +121,7 @@ export function render(root, ctx) {
   // (no height kept: the answer is as long as the placeholder or shorter, and a kept height left a blank gap)
   const fill = (c) => {
     ledeEl.style.color = ""; if (savedEl) savedEl.style.color = "";
+    h1.removeAttribute("aria-busy"); h1.style.color = "";   // the held two lines stay: nothing below moves when a one-line answer arrives
     if (!c) {
       // it could not be worked out: the average-market age, said plainly
       h1.replaceChildren(age > planned ? `${Who} would need to work until ${age}` : w.now ? `${Who} could stop work now` : `${Who} could stop work at ${age}`);
@@ -141,6 +144,8 @@ export function render(root, ctx) {
     savedEl?.replaceChildren(...savedWords(round100(c.atAgeReal), String(c.stopYear)));
   };
   if (pending) whenWorked(ctx, ledeEl, {
+    // the same plan worked out before on this visit: the age at once (careful.js)
+    key: keyOf(["fire", fmt.today(), ctx.store.get(), w.legacy, w.personId, age, w.upTo, w.stopNow]),
     remote: ["retirement/fire", { today: fmt.today(), careful: true }],
     pick: (out) => out?.withIncome?.careful ?? null,
     steps: () => carefulAgeSteps(ctx.store.get(), { today: fmt.today(), legacy: w.legacy, personId: w.personId, from: age, upTo: w.upTo, stopNow: w.stopNow }),

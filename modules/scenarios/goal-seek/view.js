@@ -2,7 +2,7 @@
 // much), then every lever solved for it on its own: spending, retirement age, saving, the return
 // needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
-import { whenCareful, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
+import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
 import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK } from "./compute.js";
 import { needItem } from "../../../core/words.js";
 
@@ -26,6 +26,8 @@ const STYLE = `
 .gs-root .gs-ages { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; font-size: var(--fs-xs); color: var(--muted); text-align: center; }
 .gs-root .gs-ages small { display: block; white-space: nowrap; font-size: inherit; }
 `;
+/** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). */
+const GO_WORDS = { spending: "Change spending on Will the money last?", retire: "Change the age on People", saving: "Retirement contributions", returns: "Assumptions", lump: "Net worth", claim: "Social Security" };
 const PILL = { room: ["ok", "room to spare"], same: ["", "just right"], needs: ["warn", "needs a change"], cannot: ["bad", "not on its own"] };
 
 /** 69.4166... -> "69 and 5 months"; a whole age as it is. */
@@ -68,15 +70,32 @@ export function render(page, ctx) {
     // under "Room for bad luck" the result is for 15% more spending than the plan: the hero says so, never "as it stands" (verify
     // 2026-11-07: a family whose money lasts read "As it stands the money runs out in 2082" with the chip on)
     const stands = (d.scale ?? 1) !== 1 ? `With ${Math.round((d.scale - 1) * 100)}% more spending than you plan, the money` : "As it stands the money";
+    // "Your plan works, with room to spare" over a spending card that turned "tight" a second later (stress test 2026-11-11, W5):
+    // while the bad-run figure for the spending is worked out the headline says it is being checked and the pill says "checking";
+    // below the plan's spending the headline is "Your plan works if markets are average" (an answer already worked out: at once)
+    const spendLever = d.levers.find((l) => l.id === "spending" && l.status !== "cannot");
+    const turns = d.meets && !d.noSavings && !!spendLever;
+    const known = turns ? knownAnswer(carefulKey(ctx, { legacy: d.legacy })) : null;
+    const meetsHead = (tight) => (tight ? "Your plan works if markets are average" : "Your plan works, with room to spare");
+    const heroH1 = !turns ? ui.h("h1", {}, d.meets ? meetsHead(false) : "What it would take")
+      : known === undefined ? ui.h("h1", { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } }, "Checking your plan against bad years...")
+      : ui.h("h1", {}, meetsHead(tightOf(known, d)));
+    const answered = (c) => { if (!turns) return; heroH1.textContent = meetsHead(tightOf(c, d)); heroH1.removeAttribute("aria-busy"); heroH1.style.color = ""; };   // the held two lines stay (nothing below moves)
     host.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, d.meets ? "Your plan works, with room to spare" : "What it would take"),
+      heroH1,
       // no retirement savings on file: never "the money runs out in 2065" (the Will the money last? page says "we don't know yet")
-      d.noSavings ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first. ", ui.h("a", { href: "#/balance/net-worth" }, "What you own ›")) : ui.h("p", { class: "lede" }, d.meets
+      d.noSavings ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later.") : ui.h("p", { class: "lede" }, d.meets
         ? `${stands} lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
-        : d.success ? `${stands} lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `${stands} runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`)));
+        : d.success ? `${stands} lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `${stands} runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`),
+      d.noSavings ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null));
+    // no retirement savings on file: no exact answers under "we can't say" (stress test 2026-11-11, F4: "$60,930 short" one line
+    // below it); the hero is the page until there is a forecast to improve
+    if (d.noSavings) return;
 
     // the goal
-    const box = ui.input({ type: "number", inputmode: "decimal", min: "0", step: "1000", value: legacy || "", placeholder: "0", "aria-label": "Leave at least" });
+    // any amount, with or without commas (stress test 2026-11-11, RC-4, W6: whole thousands only, refused in the browser's own words)
+    const { box: boxWrap, input: box } = ui.moneyBox({ name: "legacy", value: legacy || null, min: 0, placeholder: "0", label: "Leave at least" });
+    const boxSaid = ui.h("div");
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The goal"),
       ui.h("p", { class: "muted small" }, "Do you want money left over at the end? Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, [0, 250000, 500000, 1000000].map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
@@ -84,7 +103,12 @@ export function render(page, ctx) {
       ui.h("p", { class: "small", style: { margin: "12px 0 4px" } }, "Also plan for bad luck:"),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; load(); } }, "Room for bad luck")),
       ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
-      ui.h("form", { class: "gs-goal", onSubmit: (e) => { e.preventDefault(); legacy = Math.max(0, Number(box.value) || 0); load(); } }, ui.field("Or leave at least", box), ui.h("button", { type: "submit", class: "secondary" }, "Use this"))));
+      ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
+        e.preventDefault();
+        const v = ui.moneyValue(box);
+        if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
+        legacy = Math.max(0, v ?? 0); load();
+      } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid));
 
     // the levers
     // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
@@ -97,14 +121,17 @@ export function render(page, ctx) {
         ...(d.strategy && d.strategy !== "fixed-real" ? [` What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
       ui.h("div", { class: "grid" }, d.levers.map((l) => {
         const [tone, label] = PILL[l.status];
+        // "room to spare" can still turn "tight" once the bad-run figure is in: a grey "checking" until it is
+        const checking = l.id === "spending" && turns && tone === "ok" && known === undefined;
         let pillEl = null;
         return ui.h("div", { class: "card flat gs-lever", style: { margin: "0" } },
-          ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), pillEl = ui.h("span", { class: `pill ${tone}` }, label)),
+          ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), pillEl = checking ? ui.h("span", { class: "pill", "data-was": label }, "checking") : ui.h("span", { class: `pill ${known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "warn" : tone}` }, known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "tight" : label)),
           l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
-          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl) : null,
+          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl, answered) : null,
           ui.h("div", { class: "gs-s" }, l.sentence),
           l.id === "claim" && l.results?.length ? claimBars(ui, l, moneyDown, d.scale) : null,
-          ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, "Open the page")));
+          // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
+          ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
       }))));
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
@@ -121,11 +148,21 @@ export function render(page, ctx) {
  * paint with Monte Carlo's careful figure for the same goal (careful.js); gone when nothing lasts in 9 of 10 markets. Below the
  * plan's own spending it says by how much, and a green "room to spare" over it turns amber (review 2026-11-05: the pill read
  * "room to spare" right above a careful figure lower than the plan spends). */
-function carefulLine(ctx, legacy, money, moneyUp, moneyDown, planned, scale, pill) {
+/** Whether the bad-run spending `c` (careful.js) is under what the plan spends: the same test carefulLine's "less" makes. */
+function tightOf(c, d) {
+  if (!c || !(c.yearly >= 1200)) return false;
+  const scale = d.scale ?? 1, planned = d.spendingMonthly / scale;
+  return planned - monthlyOf(c.yearly) / scale >= 5;
+}
+
+function carefulLine(ctx, legacy, money, moneyUp, moneyDown, planned, scale, pill, answered = () => {}) {
   const { ui } = ctx;
   const words = (v, less = 0) => [ui.h("strong", {}, "Even in a bad run of years:"), ` about ${v} a month${legacy ? `, leaving ${money(legacy)}` : ""}${less > 0 ? `, ${moneyUp(less)} less than the ${money(planned)} the plan spends` : ""}`];
   const el = ui.h("div", { class: "gs-s", "aria-live": "polite" }, ...words("..."));
   whenCareful(ctx, el, (c) => {
+    answered(c);
+    // a pill that waited ("checking") goes back to what it was before it can turn
+    if (pill?.dataset.was) { pill.className = "pill ok"; pill.textContent = pill.dataset.was; delete pill.dataset.was; }
     if (!c || !(c.yearly >= 1200)) { el.remove(); return; }
     const m = monthlyOf(c.yearly) / scale;   // in the plan's terms, as the answer above (room for bad luck: the most to plan)
     const less = planned - m >= 5 ? planned - m : 0;   // a limit rounds down, how much less than the plan rounds up

@@ -143,7 +143,8 @@ test("UX 1: Plan summary says 'not known yet' when retirement savings were not e
 
 test("UX 2, 3: Will the money last? links read as part of the sentence; a past retirement is in the past; 'already paid' is explained", async () => {
   const p = src("modules/retirement/projection/view.js");
-  assert.ok(p.includes('Add what you own on the ", ui.h("a"') && p.includes('" page to see."') && p.includes(".pj-link { display: inline; padding: 14px 0;"));
+  // with no savings on file the way on is one filled "Add what you own ›" button now (stress test 2026-11-11, F4)
+  assert.ok(p.includes('"Add what you own ›"') && p.includes(".pj-link { display: inline; padding: 14px 0;"));
   assert.ok(p.includes('["(on the ", ui.h("a"') && p.includes('" page)"'));
   const t = await text("retirement/projection", retiredCouplePlan());
   assert.ok(/Retirement has already begun \(Ruth at 72\)/.test(t) && !/Social Security already paid/.test(t), t.slice(0, 500));
