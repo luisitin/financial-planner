@@ -11,6 +11,45 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 3 (6a29d2a..7051bc2 checked on 7051bc2; a026463 and 02be24c read but not walked yet)
+
+### Closures: 14 checked, 10 closed, 2 partly, 1 made something worse, 1 passed on to a026463
+
+| id | verdict | what was seen |
+|---|---|---|
+| N1 | closed | samMid and ruthMid: every row reads "needs your spending". Nothing that is on file is called missing. |
+| N2 | closed | "1 of 6 steps done". Step 2 is not ticked and reads "Next step.". renterDebt agrees with the Dashboard (step 2 of 6). |
+| N3 | closed | 5.7 months on the Dashboard, Your plan and Needs attention. Left over is $3,884 everywhere. |
+| N4 | **partly** | The quiet row now says "question N of 7". When the reached screen resolves past a skipped one, the quiet row and the filled button give different numbers: N15. |
+| N5 | **partly → a026463** | Dashboard, Your plan and Get started agree for freelancer and retiredCouple. On 7051bc2, "All steps" still filled "Do step 1: The questions" (`guide/view.js:104` built from `s.next`, not `firstStep()`). a026463 says All steps now asks `firstStep()`; round 4 walks it. |
+| N6 | closed | Blank plan: Next best action and the check-in both fill "Set up my plan ›". |
+| N7 | closed | October opens with a filled "Next: Save the month's net worth ›" at y 320. Finish is outlined. |
+| N8 | **made something worse** | The gaps are gone, but the height is now let go on a timer, under a moving thumb: N16. |
+| N9, N10, N12 | closed | One chevron per row. At 320 the filled button sits at 457-520, on the first screen. The tile and the guide share one name. |
+| N11 | closed | Undo and "Open this month again" keep the note and say so ("Your note is kept."). Finishing again restores it. |
+| N13, N14 | closed | One filled button after "Start here". "Name a guardian in your will ›" opens on "Who would raise the children?". |
+
+Swept 10 pages for 7 households at 390, and for 5 households at 320 in dark mode. No errors, nothing off the edge, never two filled buttons on a first screen, and the money figures were identical on every page.
+
+### Across the lanes (7051bc2): the next step now agrees in every row except these
+- A plan whose reached question resolves past a skipped screen (ruthMid without doing anything; jordanMid after adding the mortgage on Net worth) shows "question 6 of 7" on the filled buttons and "question 5 of 7" on the quiet row (N15).
+- freelancer and retiredCouple on "All steps": fixed by a026463, per its message; round 4 checks it.
+- Skipper on Next best action: the filled button is "Add what comes in", while the other pages show "Your month". This is by design: the page is not ready without income (README line 111), and the path's own "Your month" step waits on pay. Not a finding.
+
+### New problems (confirmed by a skeptic)
+
+**N15 (severity 3): one plan, two question numbers, "question 6 of 7" filled and "question 5 of 7" in the quiet row**
+- Steps: jordanMid (stopped at question 5, each debt, with a mortgage picked). On Net worth add Mortgage "Home loan", 210000. Then open Your plan, Next best action, Health score and the check-in. ruthMid shows the same split with nothing done.
+- Seen: the filled buttons say "Continue your plan: question 6 of 7". The quiet row says "question 5 of 7", and it opens `setup/spend`, which is headed "Question 6 of 7".
+- Should: one number, the one the screen it opens shows.
+- Cause: `modules/overview/dashboard/compute.js:78` (`firstStep` takes `sp.q`). `overview/setup/compute.js:2529` (`progress()` returns `q` for the stored screen but `at` for the resolved one). `setupCard` (`start/compute.js:82`) looks `q` up from `sp.at`, so `firstStep` should do the same. The quiet row reaches it through `guide/compute.js:255-256`. Still the same on a026463.
+
+**N16 (severity 3, from 3309ee4): Our guesses lets go of the held height 0.7 s after a tap, so the next row jumps 124 px and the next tap opens "Matters less"**
+- Steps: the skipper's plan, overview/guesses. Tap "That's about right" on Rent. Scroll so Insurance and health's button is at about y 300, then tap it. Tap Spending's "That's about right" where it is shown (y 516) 800 to 1200 ms later.
+- Seen (4 of 4 runs, light and dark mode, two agents): the button stays at 516 until about 650 ms, then moves to 392. A tap at 800, 1000, 1200 or 1600 ms lands on the "Matters less" summary and opens it, and Spending is not kept. A tap at 600 ms works. Before 3309ee4, a tap at 1000 ms worked. Going down a list at 0.8 to 1.1 s a tap is a person's pace, and the jump comes while the thumb is moving. Nothing is lost; the fold opens by mistake.
+- Should: the row under the thumb stays put. Let the height go only when the person scrolls or taps elsewhere, or when the page has been still for about 2 s. Or let it go and scroll by the same amount, so that the content under the thumb does not move.
+- Cause: `modules/overview/guesses/view.js:27-34` (`HOLD_MS = 700`, and `holdHeight`'s timer), used at `:297`, `:320` and `:432`.
+
 ## Round 2 (629983e checked on 453ed8a, MR-7's pages 277855f and 2603b46 on a1eeaba; the new problems were re-checked by a skeptic on a1eeaba)
 
 ### Claims: 12 checked. 8 closed, 2 made something worse, 1 partly, 1 not tested

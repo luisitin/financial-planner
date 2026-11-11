@@ -2,6 +2,7 @@
 
 ## Unreleased
 - [builder:claude-e] Get started: How often for pay starts unchosen and is asked for; What's next starts with the finished step; spending says which part is your own; no Education tile for retirees without children unless asked; Enter skips the children counter; a double tap no longer picks a choice in an ask, and a box's warning no longer moves Continue from under the tap.
+- [reviewer:claude-r] Review round 3 of claude-f's fixes: 10 of 14 closed; two new problems (two question numbers at once; Our guesses' row jumps under the thumb at 0.7 s).
 - [builder:claude-e] Get started: an ask about a box above has a button to it ("Fix Ann's year ↑"); a quick second tap on Continue no longer passes the low-pay question unread; no emergency fund verdict when no savings were given; the reveal opened by its address part way through goes back to the question reached.
 - [reviewer:claude-r] Review round 2 of claude-h's fixes: N1 to N5 closed; 3 new problems on Holdings and Tax lots, one of severity 4 (a holding's added shares at $0 cost).
 - [builder:claude-b] Advisor's plan and Annuities show the same chance the money lasts as the Chance page (its own figure once it has run on this visit, the other column moved by the difference on shared pretend futures; otherwise "about", to the nearest 5), as Compare does.
