@@ -61,7 +61,7 @@ export function render(page, ctx) {
     const say = (x) => x.words.charAt(0).toUpperCase() + x.words.slice(1);
     const rows = [...asking, ...given];
     const oldest = (() => { const t = new Date(`${today}T12:00:00`); t.setDate(t.getDate() - 366); return t.toISOString().slice(0, 10); })();
-    const fields = rows.map((x) => ({ key: x.id, label: `A recent payday for ${x.words}`, type: "date", help: "any payday in the last year, like the last one" }));
+    const fields = rows.map((x) => ({ key: x.id, label: `A recent payday for ${x.words}`, type: "date", help: x.rhythm ? `any payday in the last year; we count it ${x.rhythm} (the Paycheck page can change that)` : "any payday in the last year, like the last one" }));
     const form = ui.form(fields, Object.fromEntries(given.map((x) => [x.id, x.payday])), (v) => {
       const typed = rows.filter((x) => v[x.id]);
       if (!typed.length) { form.querySelector('input[type="date"]')?.focus(); return false; }
@@ -73,7 +73,7 @@ export function render(page, ctx) {
       if (old) return refuse(old, "Type a payday from the last year, like the last one you had.");
       const changed = typed.filter((x) => v[x.id] !== x.payday);
       if (!changed.length) { pending = "Nothing changed."; rerender(); return false; }
-      pending = changed.length === 1 ? `${say(changed[0])}: paydays now follow ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
+      pending = changed.length === 1 ? `${say(changed[0])}: paydays added, counted from ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
       store.update((p) => { for (const x of changed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
     }, { submitLabel: asking.length ? "Show my paydays" : "Save" });
     for (const inp of form.querySelectorAll('input[type="date"]')) { inp.max = today; inp.min = oldest; }

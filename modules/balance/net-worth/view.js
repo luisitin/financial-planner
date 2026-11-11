@@ -241,11 +241,12 @@ export function render(root, ctx) {
   if (histSaid) { histOut.append(histSaid); setTimeout(() => histSaid.remove(), 4000); }
   const overTime = empty ? null : ui.card("Over time",
     ui.h("p", { class: "muted small" }, "Save today's totals now and then (monthly is plenty). Each save becomes a point on your history; saving twice in one day just updates that day."),
+    // one filled button on the screen: while the green line offers its filled way on, this one is outlined (review N3)
     ui.row(ui.button("Save today's totals", () => { pending = { card: "history", text: "Today's totals saved." }; store.update((p) => {
       p.netWorthHistory = (p.netWorthHistory ?? []).filter((h) => h.date !== fmt.today());
       p.netWorthHistory.push({ date: fmt.today(), assets: d.assets, liabilities: d.liabilities, netWorth: d.netWorth });
       for (const a of p.accounts ?? []) { a.history = (a.history ?? []).filter((h) => h.date !== fmt.today()); a.history.push({ date: fmt.today(), balance: Number(a.balance) || 0 }); }   // per-account points feed investments/performance
-    }); })),
+    }); }, shownNote?.querySelector("a.btn:not(.secondary)") ? { class: "secondary" } : {})),
     histOut,
     d.history.length === 0 ? null : snapshots([...d.history].reverse()),
   );

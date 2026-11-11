@@ -83,7 +83,7 @@ test("paydays from the Income page when the bank lines show none, and your own r
   saveReminder(p, { id: "r2", name: "Property tax", date: "2026-12-01", repeat: "none", amount: "1800" });
   const d = compute(p, { today: "2026-10-31", range: "quarter" });
   assert.deepEqual(d.events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-06", "2026-11-20", "2026-12-04", "2026-12-18", "2027-01-01", "2027-01-15", "2027-01-29"]);
-  assert.deepEqual(d.needPayday, [{ id: "i2", name: "Side pay", words: '"Side pay"' }]);
+  assert.deepEqual(d.needPayday, [{ id: "i2", name: "Side pay", words: '"Side pay"', rhythm: null }]);
   assert.deepEqual(d.events.filter((e) => e.kind === "mine").map((e) => [e.date, e.title, e.amount]), [["2026-11-10", "Open enrollment at work", null], ["2026-12-01", "Property tax", 1800]]);
   assert.deepEqual(d.months.map((m) => m.month), ["2026-11", "2026-12", "2027-01"]);
   assert.equal(removeReminder(p, "r2"), true); assert.equal(removeReminder(p, "r2"), false);
@@ -136,4 +136,23 @@ test("F9: paydays count from a recent payday asked on this page, not from the da
   // a start date later than the payday: no payday before the income starts
   p.income[0].startDate = "2026-11-10";
   assert.deepEqual(compute(p, { today: "2026-10-31", range: "month" }).events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-20"]);
+});
+
+test("review N1, N2: a yearly salary is paid in paychecks (every two weeks unless Paycheck says), never the year on one day; an ended income is not asked", () => {
+  const p = emptyPlan();
+  p.income = [
+    { id: "s", name: "Sam's pay", type: "salary", amount: 48000, period: "annual", payday: "2026-11-06" },
+    { id: "o", name: "Old pay", type: "salary", amount: 100, period: "monthly", endDate: "2025-12-31" },
+  ];
+  const d = compute(p, { today: "2026-11-11", range: "month" });
+  const pay = d.events.filter((e) => e.kind === "pay");
+  assert.deepEqual(pay.map((e) => e.date), ["2026-11-20", "2026-12-04"]);
+  assert.equal(pay[0].amount, Math.round(48000 / 26 * 100) / 100);
+  assert.ok(!pay.some((e) => e.amount >= 48000));
+  assert.deepEqual(d.needPayday, []);
+  // the Paycheck page's count wins: twice a month
+  const q = emptyPlan();
+  q.income = [{ id: "s", personId: "me", name: "Pay", type: "salary", amount: 48000, period: "annual" }];
+  q.whatIfs = { paycheck: { me: { paychecks: 24 } } };
+  assert.equal(compute(q, { today: "2026-11-11", range: "month" }).needPayday[0].rhythm, "paid twice a month");
 });

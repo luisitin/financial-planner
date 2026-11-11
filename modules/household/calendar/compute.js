@@ -9,6 +9,7 @@ import { money as fmtMoney } from "../../../core/format.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { MARKETPLACE, MEDICARE_OPEN } from "./data/dates.js";
 import { NameOf, namesIn } from "../../../core/words.js";
+import { payRhythm } from "../../../core/math/periods.js";
 
 /** The kinds of date, in the order the filter chips show them. */
 export const KINDS = {
@@ -80,7 +81,7 @@ const yearly = (iso, from) => { const md = iso.slice(5); let d = `${from.slice(0
  * compute(plan, { today, range, kinds }) -> {
  *   events: [{ date, kind, title, detail, amount (signed, money in +) | null, go: [group, id] | null, source }],
  *   months: [{ month "YYYY-MM", events }], counts: { [kind]: n }, from, to, notes: [text],
- *   needPayday: [{ id, name, words }] (salaries with no date to count paydays from; the page asks for a recent payday),
+ *   needPayday: [{ id, name, words, rhythm }] (salaries with no date to count paydays from; the page asks for a recent payday),
  *   paydays: [{ id, name, words, payday }] (salaries counted from a payday typed here, so it can be changed)
  * A salary's paydays count from `income[].payday` (a payday that has passed, asked on this page), else its `startDate`; never
  * before the start date. The payday is not the start: a future "Starts" makes the income "not yet" on every page (F9).
@@ -107,11 +108,16 @@ export function compute(plan, params = {}) {
   // "My spouse's salary") is said as "your pay", "your spouse's salary"; any other name is quoted as typed
   const payWords = (n) => { const t = String(n ?? "").trim(); return !t ? "your pay" : /^My\s/.test(t) ? t.replace(/^My\s/, "your ") : `"${t}"`; };
   if (!recurring.some((r) => r.amount > 0)) {
-    for (const inc of (plan.income ?? []).filter((x) => x && ["salary", "pension", "social"].includes(x.type) && x.period !== "once")) {
+    // an income that has ended is not asked about and has no paydays (review N2)
+    for (const inc of (plan.income ?? []).filter((x) => x && ["salary", "pension", "social"].includes(x.type) && x.period !== "once" && !(isDate(x.endDate) && x.endDate < today))) {
       const anchor = isDate(inc.payday) ? inc.payday : inc.startDate;
+      // a salary typed as a year's (or a quarter's) pay is paid in paychecks: the Paycheck page's count, else every two weeks
+      // (core/math/periods.js payRhythm), each its share; never the whole year on one day (review N1: $48,000 on Nov 6, 2027)
+      const rhythm = payRhythm(inc, plan);
+      const period = rhythm ? rhythm.period : inc.period, each = rhythm ? Math.round(rhythm.perPay * 100) / 100 : Number(inc.amount) || null;
       if (isDate(inc.payday) && inc.type === "salary") paydays.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), payday: inc.payday });
-      if (!isDate(anchor)) { if (inc.type === "salary") needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name) }); continue; }
-      for (const d of periodDates(anchor, inc.period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: Number(inc.amount) || null, detail: inc.period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
+      if (!isDate(anchor)) { if (inc.type === "salary") needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), rhythm: rhythm ? rhythm.words : null }); continue; }
+      for (const d of periodDates(anchor, period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: each, detail: rhythm ? `the year's pay before tax in paychecks, ${rhythm.words} (the Paycheck page can change how often)` : period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
     }
   }
 
