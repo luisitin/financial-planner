@@ -24,13 +24,17 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export const monthLabel = (ym) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 export const prevMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; };
 /**
- * The month a review on `today` is about: last month in the first LOOK_BACK_DAYS days, else this one. With `plan`, a plan
- * that holds nothing dated before this month (made this month) is about this month: there is no last month to look back on.
+ * The month a review on `today` is about: the month just ended while it has no review (all month, not only the first
+ * LOOK_BACK_DAYS days: stress test 2026-11-11, MR-3, the check-in opened on a month that could not be finished while the one
+ * that could was left open), else this month. Without `plan`, the old rule: last month in the first LOOK_BACK_DAYS days. A
+ * plan that holds nothing dated before this month (made this month) is about this month: there is no last month to look back on.
  */
 export const defaultMonth = (today, plan = null) => {
-  const back = Number(today.slice(8, 10)) <= LOOK_BACK_DAYS ? prevMonth(today.slice(0, 7)) : today.slice(0, 7);
-  if (plan && back < today.slice(0, 7)) { const f = firstDay(plan); if (!f || f.slice(0, 7) >= today.slice(0, 7)) return today.slice(0, 7); }
-  return back;
+  const now = today.slice(0, 7), ended = prevMonth(now);
+  if (!plan) return Number(today.slice(8, 10)) <= LOOK_BACK_DAYS ? ended : now;
+  const f = firstDay(plan);
+  if (!f || f.slice(0, 7) >= now) return now;
+  return (plan.reviews ?? []).some((r) => r.month === ended) ? now : ended;
 };
 
 const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d ?? ""));
@@ -50,17 +54,20 @@ export function firstDay(plan) {
 }
 
 /**
- * checkInDue(plan, today) -> { month, name } | null: the first LOOK_BACK_DAYS days of a month, with accounts on file, the
- * month just ended not reviewed, and the plan holding something from before this month (so a plan made today is not
- * asked about a month it never saw). The Dashboard's check-in row uses it.
+ * checkInDue(plan, today) -> { month, name, done, nextName, nextWhen } | null: the month just ended, with accounts on file and
+ * the plan holding something from before this month (so a plan made today is not asked about a month it never saw).
+ * done false: not checked in on yet, any day of the month (stress test 2026-11-11, MR-2: from the 11th the Dashboard had no
+ * way in). done true: checked in; nextName is this month (looked back on next month, nextWhen). The Dashboard's row uses it.
  */
 export function checkInDue(plan, today) {
-  if (!isDay(today) || Number(today.slice(8, 10)) > LOOK_BACK_DAYS || !(plan.accounts ?? []).length) return null;
-  const ended = prevMonth(today.slice(0, 7));
-  if ((plan.reviews ?? []).some((r) => r.month === ended)) return null;
+  if (!isDay(today) || !(plan.accounts ?? []).length) return null;
+  const now = today.slice(0, 7), ended = prevMonth(now);
   const f = firstDay(plan);
-  if (!f || f.slice(0, 7) >= today.slice(0, 7)) return null;
-  return { month: ended, name: MONTHS[Number(ended.slice(5, 7)) - 1] };
+  if (!f || f.slice(0, 7) >= now) return null;
+  const done = (plan.reviews ?? []).some((r) => r.month === ended);
+  const nm = (ym) => MONTHS[Number(ym.slice(5, 7)) - 1];
+  const after = now.slice(5, 7) === "12" ? `${Number(now.slice(0, 4)) + 1}-01` : `${now.slice(0, 4)}-${String(Number(now.slice(5, 7)) + 1).padStart(2, "0")}`;
+  return { month: ended, name: nm(ended), done, nextName: nm(now), nextWhen: nm(after) };
 }
 
 /**

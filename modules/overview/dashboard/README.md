@@ -32,8 +32,37 @@ people, income, spending and goals those steps ask for). Without the setup page 
 - "Needs attention: N things" counts what needs a look; housekeeping chores are left out (overview/alerts `total`).
 - Once Set up my plan is finished, the folded steps line reads "Set up your plan: 5 of 6 done" while a step is open; "all 6 steps done ✓" only when every step is. It read "done ✓" with a step still open.
 
+## One next step, one count (stress test 2026-11-11, claude-f)
+The owner's words: "easy to know next step". The page has exactly one filled button, chosen by `homeNext()` in compute.js
+(tested for every kind of household), so the Dashboard, Get started and Your plan name the same next thing with the same count:
+
+| household | the one filled button | count shown |
+|---|---|---|
+| nothing answered | "Set up my plan" in the hero, on the first screen; the six basics listed with no row marked next | none |
+| part way through the questions (with or without an account) | "Continue your plan: question 3 of 7" (the welcome screen counts as question 1) | the question only |
+| questions done, no account ticked | "Continue your plan: Your month" in the hero, "See your plan so far" under it; tile "Change an answer" | "step 2 of 4" in the sentence |
+| a plan in use, path under way | "Continue your plan: <step>" | "Your plan: step N of M" |
+| a plan built by hand, the questions never opened | "Continue your plan: Set your first goal" (the path's first step is done by the five basics) | none; the basics list stays open |
+| path complete | "Your next move: <move>", else "See your plan" | none |
+| the questions turned off on this device | "Do step N: ..." under the six basics (design log 2026-09-15, round 1) | the basics' |
+
+While a filled button above already says the next thing, the six basics never add a second next thing or a second count with
+the word "step": they fold to "What's in your plan: N of 6 basics" (the folded form of 2026-09-15 pass 2), and the guesses
+cards draw their first button outlined (`quiet`). The where-you-stand sentence is setup's `standing().headline`, trimmed by
+`calmHeadline()`: no "the moves below" (nothing below is a list of moves) and, while the path is under way, no "X is next"
+beside a button that continues the path. Words only; no figure changes. Rows: "Left over each month" says only what is
+missing (pay, spending); "Retirement" says "Needs what you spend each month" when Social Security and the ages are known and
+only the spending is missing, and the retirement-savings row opens "What do you have?" (where the tick is), not the amounts
+screen. Months of cash use `monthsNear()` (core/words.js): 2.8 of 3 is "2.8 months", never "3 months" beside "Aim for 3".
+On a phone under 360 px each row's explanation goes under its figure, so the filled button is at the first screen's edge.
+
+The check-in row (`checkInDue`) shows all month while the month just ended is not checked in on, and opens that month
+(`?month=`); once checked in it says "October check-in done ✓ · Next: early December, to look back at November" (not while
+the balances row is due). The six basics' fold no longer carrying its own filled button is a consequence of the 2026-11-06
+rule (one filled button continues the path), not a new decision; noted for the design log on the workboard.
+
 ## The month's check-in (2026-11-02, round 3 of the owner's experience list)
-From the 1st to the 10th of a month, while the month just ended has no entry in `plan.reviews`, the "where you stand"
+(Since 2026-11-11: all month, see "One next step, one count" above.) While the month just ended has no entry in `plan.reviews`, the "where you stand"
 card has one row "Your October check-in · Start ›" opening the Monthly review. Its first step is the balances, so the
 row takes the stale-balances row's place instead of adding a second one; the owner's three What-to-do-now cards stay.
 

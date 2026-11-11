@@ -163,7 +163,16 @@ test("setupCard is done for a plan built page by page: the Dashboard's first fiv
 });
 
 test("review fix: the Dashboard of a plan with only questions answered or skipped links to Your plan, and says both times", () => {
+  // (the link sits under the hero's one filled button since the stress test of 2026-11-11)
   const dash = fs.readFileSync(new URL("../dashboard/view.js", import.meta.url), "utf8");
-  assert.match(dash, /setupOn && pathStarted \? ui\.h\("a", \{ href: pathStarted\.planHref/);
+  assert.match(dash, /setupOn && pathStarted && nx\?\.kind !== "plan" \? ui\.h\("a", \{ class: "db-all", href: pathStarted\.planHref/);
   assert.match(dash, /about five minutes for those, about 20 for your whole plan/);
+});
+
+test("setupCard: started and left on the welcome screen counts as question 1, so no page says Let's go while another says Continue", async () => {
+  const { setupCard } = await import("./compute.js");
+  const p = migrate({ meta: { currency: "USD" } });
+  p.guide = { setup: { startedAt: "2026-11-10", at: "welcome" } };
+  const c = setupCard(p, { today: "2026-11-11" });
+  assert.equal(c.state, "started"); assert.equal(c.q, 1); assert.equal(c.href, "#/overview/setup/you");
 });

@@ -13,6 +13,7 @@ import { compute as computeContributions } from "../../retirement/contributions/
 import { savingVerdict, householdRetired } from "../../retirement/projection/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { money as fmtMoney, monthsText, monthsWords } from "../../../core/format.js";
+import { monthsNear } from "../../../core/words.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { MEDIAN_NET_WORTH_BY_AGE, MEDIAN_NET_WORTH_ALL, SCF_YEAR, SAVINGS_MULTIPLE_BY_AGE } from "./data/scf.js";
 
@@ -105,7 +106,7 @@ export function compute(plan, params = {}) {
   if (liq.runwayMonths !== null) {
     const m = liq.runwayMonths, aim = Number(liq.targetMonths) > 0 ? Number(liq.targetMonths) : RULES.cashMax;
     add({ id: "cash", title: "Emergency fund", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
-      sentence: `Usable cash covers ${monthsWords(m)} of the bills you have to pay; your plan aims for ${monthsText(aim)} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
+      sentence: `Usable cash covers ${monthsNear(m, aim)} of the bills you have to pay; your plan aims for ${monthsText(aim)} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
   }
 
   // 5. housing and 6. all debt payments, against gross income. One rule on these rows (round 8 review, 2026-11-06): over the

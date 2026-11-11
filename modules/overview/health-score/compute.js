@@ -15,6 +15,7 @@ import { compute as computeNext, monthWords } from "../next-best-action/compute.
 import { goalsBehind } from "../alerts/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { money as fmtMoney, monthsWords } from "../../../core/format.js";
+import { monthsNear } from "../../../core/words.js";
 import { needItem } from "../../../core/words.js";
 // "a, b and c": what the retirement plan still needs, in the words every page uses (core/words.js needItem; wording follow-up l001)
 const andList = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -57,7 +58,7 @@ export function compute(plan, params = {}) {
   // 1. the cash cushion: months of the bills you have to pay in usable cash against the plan's target
   const liq = computeLiquidity(plan, { today });
   if (liq.runwayMonths === null) add("cushion", "Emergency fund", null, "No bills you have to pay yet, so the emergency fund cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
-  else add("cushion", "Emergency fund", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${monthsWords(liq.runwayMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
+  else add("cushion", "Emergency fund", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${monthsNear(liq.runwayMonths, liq.targetMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
 
   // 2. saving: retirement, goals and what is left over, as a share of income after tax
   const nb = computeNext(plan, { today });

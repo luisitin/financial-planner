@@ -18,7 +18,7 @@ test("an old plan gains an empty reviews list on load", () => {
 });
 
 test("the family in October: fresh balances, no net worth point this month, no bank files (optional), goals behind", () => {
-  const d = compute(familyPlan(), { today: "2026-10-30" });
+  const d = compute(familyPlan(), { today: "2026-10-30", month: "2026-10" });
   assert.equal(d.month, "2026-10"); assert.equal(d.label, "October 2026");
   assert.equal(step(d, "balances").status, "done");
   assert.equal(step(d, "net-worth").status, "todo");
@@ -46,10 +46,10 @@ test("marking reviewed: one entry a month, replaced not doubled, and the streak 
   markReviewed(p, "2026-10", "2026-10-31", "again");
   assert.deepEqual(p.reviews.map((r) => r.month), ["2026-08", "2026-09", "2026-10"]);
   assert.equal(p.reviews[2].note, "again"); assert.equal(p.reviews[2].at, "2026-10-31");
-  const d = compute(p, { today: "2026-10-31" });
+  const d = compute(p, { today: "2026-10-31", month: "2026-10" });
   assert.equal(d.reviewed.note, "again"); assert.equal(d.streak, 3); assert.equal(d.history[0].month, "2026-10");
   p.reviews = p.reviews.filter((r) => r.month !== "2026-09");
-  assert.equal(compute(p, { today: "2026-10-31" }).streak, 1, "a gap breaks the streak");
+  assert.equal(compute(p, { today: "2026-10-31", month: "2026-10" }).streak, 1, "a gap breaks the streak");
 });
 
 test("balances from the 1st are not fresh on the 1st of the next month; the saved point's date is in words", () => {
@@ -126,8 +126,9 @@ test("the month still running is not marked reviewed: it ends first, and is fini
   assert.equal(now.ended, false); assert.equal(now.finishIn, "December");
   const last = compute(familyPlan("2026-11-02"), { today: "2026-11-02", month: "2026-10" });
   assert.equal(last.ended, true, "October is over on November 2");
-  const late = compute(familyPlan("2026-11-30"), { today: "2026-11-30" });
+  const late = compute(familyPlan("2026-11-30"), { today: "2026-11-30", month: "2026-11" });
   assert.equal(late.month, "2026-11"); assert.equal(late.ended, false, "still running on its last day");
+  assert.equal(compute(familyPlan("2026-11-30"), { today: "2026-11-30" }).month, "2026-10", "opened with no month: October, never checked in on, is the one to close (MR-3)");
   assert.equal(compute(familyPlan("2026-12-01"), { today: "2026-12-01" }).finishIn, "December", "November, opened on Dec 1, is finished in December");
 });
 
@@ -143,20 +144,27 @@ test("firstDay: the earliest dated thing in the plan, not when the app was first
   p.netWorthHistory = [{ date: "2026-01-01", assets: 1, liabilities: 0, netWorth: 1 }];
   assert.equal(firstDay(p), "2026-01-01");
 });
-test("checkInDue: early in the month, last month not reviewed, and only for a plan that existed then", () => {
+test("checkInDue: the month just ended, any day of the month, and only for a plan that existed then (stress test MR-2)", () => {
   const made = emptyPlan();
   made.accounts = [{ id: "a", name: "Checking", type: "checking", balance: 100, asOf: "2026-11-02", history: [] }];
   assert.equal(checkInDue(made, "2026-11-02"), null, "made today: no October check-in");
   assert.equal(defaultMonth("2026-11-02", made), "2026-11", "Monthly review opens on this month for it");
-  assert.deepEqual(checkInDue(made, "2026-12-03"), { month: "2026-11", name: "November" }, "its first check-in is in December");
+  assert.deepEqual(checkInDue(made, "2026-12-03"), { month: "2026-11", name: "November", done: false, nextName: "December", nextWhen: "January" }, "its first check-in is in December");
   const fam = familyPlan("2026-10-30");
-  assert.deepEqual(checkInDue(fam, "2026-11-02"), { month: "2026-10", name: "October" });
-  assert.equal(defaultMonth("2026-11-02", fam), "2026-10");
-  assert.equal(checkInDue(fam, "2026-11-11"), null, "after the tenth");
+  for (const day of ["2026-11-01", "2026-11-02", "2026-11-11", "2026-11-30"]) {
+    assert.equal(checkInDue(fam, day).done, false, day);
+    assert.equal(checkInDue(fam, day).month, "2026-10", day);
+    assert.equal(defaultMonth(day, fam), "2026-10", `${day}: opens on the month to close`);
+  }
   fam.reviews = [{ month: "2026-10", at: "2026-11-01" }];
-  assert.equal(checkInDue(fam, "2026-11-02"), null, "already reviewed");
+  assert.deepEqual(checkInDue(fam, "2026-11-11"), { month: "2026-10", name: "October", done: true, nextName: "November", nextWhen: "December" }, "done: says when the next one is");
+  assert.equal(defaultMonth("2026-11-11", fam), "2026-11", "October closed: this month");
+  assert.equal(checkInDue(fam, "2026-12-31").name, "November", "the last day of a month");
+  assert.equal(checkInDue(fam, "2026-12-31").done, false);
+  assert.equal(checkInDue({ ...fam, reviews: [{ month: "2026-11" }] }, "2027-01-05").nextWhen, "February", "across the year");
   assert.equal(checkInDue(emptyPlan(), "2026-11-02"), null, "no accounts");
   assert.equal(defaultMonth("2026-11-02"), "2026-10", "without a plan the old rule stands");
+  assert.equal(defaultMonth("2026-11-11"), "2026-11");
 });
 
 // ---- the bank files are in only when every account covers the month and no card's own file is missing (2026-11-02)

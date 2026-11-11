@@ -84,7 +84,9 @@ let cardTaps = {};   // the card's own answers to question 6's taps, until its t
  * fold), what the tap changes, then "Use these guesses" (filled) and "Not now" (outlined). compact: the Dashboard's (no rows
  * fold). only: one case alone. onMine: Expenses' card, whose outlined button is "I'll type mine" (it writes nothing: the form).
  */
-export function fillCard(ctx, items0, { reg, today, say, compact = false, only = null, ignoreLater = false, onMine = null, title = null }) {
+// `quiet`: the page already has its one filled button (the Dashboard's "Continue your plan"), so the card's first button is
+// outlined (stress test 2026-11-11: two filled buttons on one screen)
+export function fillCard(ctx, items0, { reg, today, say, compact = false, only = null, ignoreLater = false, onMine = null, title = null, quiet = false }) {
   const { ui, fmt, store } = ctx;
   const cur = ctx.plan?.meta?.currency ?? "USD";
   const m = (v) => fmt.money(Math.round(v), cur);
@@ -130,7 +132,7 @@ export function fillCard(ctx, items0, { reg, today, say, compact = false, only =
           const taps = cardTaps; cardTaps = {};
           say("ok", `Saved: ${filledWords(fmt, cur, items)} ${items.length > 1 ? "are" : "is"} counted now. Type the real figures${onMine ? " in the list below" : " on Expenses and Debts"} when you have them.`, undoOf(ctx.plan));
           store.update((draft) => { useFillGuesses(draft, { ...opts, taps, ...(only ? { only } : {}), ...(ignoreLater ? { ignoreLater } : {}) }); });
-        }),
+        }, quiet ? { class: "secondary" } : undefined),
         onMine
           ? ui.button("I'll type mine", () => { onMine(); }, { class: "secondary" })
           : ui.button("Not now", () => { cardTaps = {}; say("ok", "Nothing was changed. We'll ask again in a month; Our guesses for you keeps them until then."); store.update((draft) => { fillLater(draft, today); }); }, { class: "secondary" }))].filter((x) => x !== null && x !== undefined && x !== false));
@@ -145,7 +147,7 @@ export function fillCard(ctx, items0, { reg, today, say, compact = false, only =
  * them, then "Add our guesses for the rest" (filled) and "That's everything" (outlined, guide.spendComplete). here: the page it
  * is on ("expenses": the list is below it).
  */
-export function missingCard(ctx, x, { reg, today, say, here = null }) {
+export function missingCard(ctx, x, { reg, today, say, here = null, quiet = false }) {
   const { ui, fmt, store } = ctx;
   const cur = ctx.plan?.meta?.currency ?? "USD";
   const round = (v) => Math.round(v / (v >= 1000 ? 100 : 10)) * (v >= 1000 ? 100 : 10);
@@ -162,14 +164,14 @@ export function missingCard(ctx, x, { reg, today, say, here = null }) {
         ui.h("li", { class: "gs-sum" }, ui.h("span", {}, "With these, your list comes to"), ui.h("span", {}, `about ${fmt.money(round(x.withThese ?? x.typed + x.rest), cur)}`))))),
     ui.h("p", { class: "gs-note" }, "Nothing changes until you tap. Each one goes on your list of bills, and you can change it any time."),
     ui.h("div", { class: "row" },
-      ui.button("Add our guesses for the rest", () => { say("ok", `Added our guesses for what wasn't listed: about ${monthWords(fmt, cur, x.rest)}. Change any of them ${where} when you know the real figure.`, undoOf(ctx.plan)); store.update((draft) => { addSpendGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
+      ui.button("Add our guesses for the rest", () => { say("ok", `Added our guesses for what wasn't listed: about ${monthWords(fmt, cur, x.rest)}. Change any of them ${where} when you know the real figure.`, undoOf(ctx.plan)); store.update((draft) => { addSpendGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }, quiet ? { class: "secondary" } : undefined),
       ui.button("That's everything", () => { say("ok", `Noted: what's listed is everything. ${here === "expenses" ? "You can ask for this again just below the totals." : "You can ask for this again on Expenses."}`); store.update((draft) => { spendIsComplete(draft, today); }); }, { class: "secondary" })));
 }
 /** A change of under 2% in an amount is not listed (it is still written with the rest): it would only be noise. */
 export const smallChange = (x) => x.kind === "money" && Number(x.from) > 0 && Math.abs(x.to - x.from) / Number(x.from) < 0.02;
 /** "Better guesses are ready" on the Dashboard (spec 11.5): the first change or two with why, the same two buttons as Our guesses
  *  for you, and a link to the rest there. */
-export function upgradeCard(ctx, up, { reg, today, say }) {
+export function upgradeCard(ctx, up, { reg, today, say, quiet: calm = false }) {
   const { ui, fmt, store } = ctx;
   const cur = ctx.plan?.meta?.currency ?? "USD";
   const words = (x, v) => (x.kind === "percent" ? `${Number((v * 100).toFixed(3))}%` : x.kind === "money" ? `${fmt.money(v, cur)}${x.unit === "month" ? " a month" : x.unit === "year" ? " a year" : ""}` : String(v));
@@ -186,7 +188,7 @@ export function upgradeCard(ctx, up, { reg, today, say }) {
     // (its own line, 44 px tall: a link inside the sentence is a 16 px target on a phone)
     ui.h("a", { class: "gs-link", href: "#/overview/guesses", style: { marginBottom: "8px" } }, "See all on Our guesses for you ›"),
     ui.h("div", { class: "row" },
-      ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`, undoOf(ctx.plan)); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
+      ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`, undoOf(ctx.plan)); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }, calm ? { class: "secondary" } : undefined),
       ui.button("Keep the old ones", () => { say("ok", "Kept: your older figures stay as they are. We won't ask again."); store.update((draft) => { keepOldGuesses(draft, today); }); }, { class: "secondary" })));
 }
 

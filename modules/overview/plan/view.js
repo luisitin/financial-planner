@@ -76,9 +76,11 @@ export function render(root, ctx) {
     headBtn = true;
   } else if (h.state === "going") {
     put(head, title("Your plan so far"),
-      ui.h("p", { class: "pl-lede" }, `You've done ${h.doneCount} of ${h.total} steps. Everything below is worked out already; the next steps go through it with you.`),
-      ui.h("div", { class: "pl-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(h.total), "aria-valuenow": String(h.doneCount), "aria-label": "Steps done" },
-        ui.h("span", { style: { width: `${h.total ? Math.max(4, Math.round(100 * h.doneCount / h.total)) : 4}%` } })),
+      // the same count as the Dashboard and Get started: the step you are on, not how many count as done by your figures
+      // (stress test 2026-11-11: "step 2 of 7" there and "done 3 of 7" here; j-first-retiree/x-3)
+      ui.h("p", { class: "pl-lede" }, `${h.step ? `You're on step ${h.step} of ${h.total}.` : `${h.total} steps.`} Everything below is worked out already; the next steps go through it with you.`),
+      ui.h("div", { class: "pl-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(h.total), "aria-valuenow": String(Math.max(0, (h.step ?? 1) - 1)), "aria-label": "Steps behind you" },
+        ui.h("span", { style: { width: `${h.total ? Math.max(4, Math.round(100 * Math.max(0, (h.step ?? 1) - 1) / h.total)) : 4}%` } })),
       h.inShort ? ui.h("p", { class: "pl-short" }, h.inShort) : null,
       h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
     headBtn = !!h.next;
@@ -153,13 +155,15 @@ export function render(root, ctx) {
         ui.h("a", { class: "btn secondary", href: "#/system/assumptions" }, "Change them ›")))));
 
   // ---- keep it up to date
-  const due = d.checkIn.due;
+  // due: the month just ended, not checked in on yet (any day of the month); done: checked in (stress test MR-2)
+  const due = d.checkIn.due && !d.checkIn.due.done ? d.checkIn.due : null, doneIn = d.checkIn.due?.done ? d.checkIn.due : null;
   const complete = h.state === "complete";
-  const checkBtn = due ? ui.h("a", { class: `btn ${complete && !h.gaps ? "pl-go" : "secondary"}`, href: "#/overview/monthly-review" }, `Start the ${due.name} check-in`) : null;
+  const checkBtn = due ? ui.h("a", { class: `btn ${complete && !h.gaps ? "pl-go" : "secondary"}`, href: `#/overview/monthly-review?month=${due.month}` }, `Start the ${due.name} check-in`) : null;
   const filledSoFar = headBtn || (checkBtn && complete && !h.gaps);
   wrap.append(ui.h("section", { class: "card", "aria-labelledby": "pl-u" },
     ui.h("h2", { id: "pl-u" }, "Keep it up to date"),
-    due ? [ui.h("p", { class: "pl-help" }, `Your ${due.name} check-in is ready. About ten minutes.`), checkBtn]
+    due ? [ui.h("p", { class: "pl-help" }, `Your ${due.name} check-in is ready: a look back at where the money went, about ten minutes.`), checkBtn]
+      : doneIn ? ui.h("p", { class: "pl-help" }, `Your ${doneIn.name} check-in is done. The next one is in early ${doneIn.nextWhen}, to look back at ${doneIn.nextName}.`)
       : ui.h("p", { class: "pl-help" }, d.checkIn.nextName ? `Once a month, a ten-minute check-in brings your balances and spending up to date. Your first one is in early ${d.checkIn.nextName}; the Dashboard says when.` : "Once a month, a ten-minute check-in brings your balances and spending up to date. The Dashboard says when."),
     usable(ctx, "reports/plan-summary") ? ui.h("a", { class: "pl-link", href: "#/reports/plan-summary" }, "A copy to print or save ›") : null,
     usable(ctx, "overview/timeline") ? ui.h("a", { class: "pl-link", href: "#/overview/timeline" }, "Your life ahead, in dates ›") : null));

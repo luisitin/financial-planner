@@ -80,6 +80,9 @@ export function setupCard(plan, { off = [], today = null } = {}) {
     const at = SETUP_SCREENS.find((x) => x.id === sp.at);
     return { state: "started", href: `#/overview/setup/${sp.at}`, q: at?.q ?? sp.q ?? 1, total: QUESTIONS, share: sp.share, next: NEXT_LABEL[sp.at] ?? null };
   }
+  // started and left on the welcome screen (Let's go tapped, no answer yet): the path counts as started, so every page says
+  // "question 1 of 7" rather than one page "Continue" and another "Let's go" (stress test 2026-11-11, review of the next-step table)
+  if (sp.started) return { state: "started", href: "#/overview/setup/you", q: 1, total: QUESTIONS, share: 0, next: NEXT_LABEL.you };
   return { state: "new", href: "#/overview/setup/you", total: QUESTIONS };
 }
 const NEXT_LABEL = { you: "who the plan is for", money: "what comes in", ages: "your ages", have: "what you have", "have-amounts": "how much is in each", owe: "what you owe", "owe-amounts": "each debt", spend: "a typical month", goals: "what you're working toward", "goal-details": "how much, and by when", done: "where you stand" };

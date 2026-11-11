@@ -3,6 +3,8 @@
 // ("your pay", "you join Medicare", "If you die first"), never "Me's pay", "Me joins" or "If Me dies". Any other name is
 // used as typed. A name standing alone as a label (a list of people, a picker) may stay "Me".
 
+import { monthsWords } from "./format.js";
+
 const PARTNER = /^My (spouse|partner|husband|wife)$/;
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -71,3 +73,17 @@ export function needsWords(lead, items) {
   const list = xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}, and ${xs[xs.length - 1]}`;
   return `${lead} ${n} things: ${list}.`;
 }
+
+/**
+ * monthsNear(months, target) -> the months of bills cash covers, as the pages say it ("6 months", "0.9 months"), with one
+ * decimal when the months are short of the target but would round up to it: 2.8 of 3 is "2.8 months", never "3 months" beside
+ * "Aim for 3" and "$914 to go" (stress test 2026-11-11, j-first-family/x-2). At or over the target, or far from it, the usual words.
+ */
+export const monthsNear = (months, target) => {
+  const m = Number(months), t = Number(target);
+  if (Number.isFinite(m) && Number.isFinite(t) && m < t && m < 100 && Math.round(m) >= t) {
+    const one = Math.floor(m * 10) / 10;   // down, never up to the target: 2.96 is "2.9 months"
+    return `${one} months`;
+  }
+  return monthsWords(m);
+};

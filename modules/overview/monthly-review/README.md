@@ -9,6 +9,12 @@
 ## Outputs
 `{ ready, missing, month, label, choices, steps[], done, todo, reviewed, history, streak }`; each step `{ id, title, status: done|todo|info|skip, detail, go }`. `markReviewed(draft, month, today, note)` adds or replaces the month's entry (one per month, kept in month order).
 
+## Which month it opens on (stress test 2026-11-11, MR-2 and MR-3)
+`defaultMonth(today, plan)`: the month just ended while it has no review and the plan holds something dated before this month,
+any day of the month (it used to switch to the current month on the 11th, leaving a month that could be closed open, and the
+Dashboard had no way in for 20 days of every month); else this month. `checkInDue(plan, today)` follows the same rule and says
+`done` once the month is checked in, with the month after it (`nextName`) and when that one is done (`nextWhen`).
+
 ## The steps
 1. Update the balances: done when every account's balance was typed in the last `FRESH_DAYS` (20) days. (Until 2026-11-01 a balance dated anywhere in the reviewed month counted, so the October review on Nov 1 ticked balances from Oct 1 as done.) Opens Update my balances while any is older. The saved net-worth point's date is shown in words.
 2. Save the month's net worth: done when `netWorthHistory` has a point after the `LOOK_BACK_DAYS`-th (10th) of the month through the 10th of the next month (`monthPoint`), the newest one; the change is against the newest point saved on or before the 10th of the month. So October's review on Nov 2 counts a point saved that day ("$306,074 saved on 11/2/2026: up $10,965 since 10/2/2026"), and a point from Oct 2 alone (October's own start, which was September's review) leaves it to do. (Until 2026-11-02 only a point dated inside the month counted, so a review in early November could never tick October, and the change was against the month's own start; a first fix that day still let October 1-10 count, so the start-of-month point ticked the step and compared with nothing.)

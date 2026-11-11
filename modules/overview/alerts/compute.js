@@ -20,6 +20,7 @@ import { daysBetween, monthsBetween } from "../../../core/math/dates.js";
 import { pmtToReach, fv } from "../../../core/math/finance.js";
 import { nameOf, NameOf, NameIn, verbFor } from "../../../core/words.js";
 import { money as fmtMoney, date as fmtDate, monthsWords } from "../../../core/format.js";
+import { monthsNear } from "../../../core/words.js";
 import { rentalsOf, valueAccountOf, twinAccount, candidateAccounts } from "../../property/rental/running.js";
 
 export const LEVELS = { bad: { label: "fix", order: 0 }, warn: { label: "check", order: 1 }, info: { label: "to do", order: 2 } };
@@ -194,7 +195,7 @@ export function compute(plan, params = {}) {
   const wholeMonths = (m) => { const v = m < 2 ? Math.round(m * 10) / 10 : Math.round(m); return `${v} month${v === 1 ? "" : "s"}`; };
   if (liq.waits && (liq.status === "bad" || liq.status === "warn")) add("emergency-guessed", "info", "Emergency fund: by our guesses", `By our guesses of the bills you have to pay, usable cash covers about ${liq.runwayMonths === null ? "0 months" : wholeMonths(liq.runwayMonths)}; the plan aims for ${liq.targetMonths}. Type your real bills to know for sure.`, ["cashflow", "expenses"]);
   else if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of the bills you have to pay: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"]);
-  else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${monthsWords(liq.runwayMonths ?? 0)} of the bills you have to pay; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
+  else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${monthsNear(liq.runwayMonths ?? 0, liq.targetMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of the bills you have to pay.`, ["balance", "liquidity"]);
   // a debt the saved debt plan already pays off (Next best action's step under way) is in hand: no alert for its rate
   const inHand = new Set(nba?.ready && nba.steps.some((x) => x.status === "underway") ? nba.debtPlan?.ids ?? [] : []);
