@@ -249,3 +249,6 @@ Money review of the follow-up (2026-11-07):
 
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - First screen (2026-11-07): one sentence says what a Roth conversion is, one says what a rate means ("Each rate is a ceiling: each year the plan converts only as much as stays taxed at that rate or lower. At the 22% rate, none of it reaches 24%."); Medicare's extra charge has its own sentence with the figure and the rate it is about (the rate the year-by-year list shows: the plan's own while conversions are on, else the best way, else 22%), when the years shown pass it ("Medicare also charges extra on its monthly premiums, from 65, when your income two years earlier passes about $109,000 (in today's dollars). Converting at the 22% rate in 2026 to 2030 would pass it. The figures below count that charge."); "that bracket" became "the room under that rate"; the list of other ways is "Other choices: each ends with less than not converting". Under "How this is worked out" IRMAA is spelled out (income-related monthly adjustment amount). The math is unchanged.
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- The folded year list's rows read "$21,005 to convert"; "Income before" is mentioned only beside the wide table (RB4).

@@ -41,11 +41,12 @@ export function render(root, ctx) {
       { key: "taxes", label: "Tax", align: "right", render: (r) => money(r.out.taxes) },
       { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall ? "bad" : "" }, money(r.end.total)) },
     ], rows), tailRow ? ui.h("p", { class: "bad small", style: { margin: "10px 0 0" } }, `${tailRow.first} to ${tailRow.last}: nothing left; about ${money(tailRow.short)} short every year.`) : null),
+    ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, "Left: every retirement account together at the end of that year. Money comes out of cash first, then taxable, then pre-tax (with tax), then tax-free."),
     ui.h("ul", { class: "records only-narrow" }, rows.map((r) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall ? "bad" : ""}` }, money(r.end.total))),
+      // the bold figure says what it is (stress test 2026-11-11, RB4: "$450,880" with its meaning 3,000 px below)
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall ? "bad" : ""}` }, `${money(r.end.total)} left`)),
       ui.h("div", { class: "rec-sub" }, r.retired ? `${money(r.out.spending)} spent${r.out.health > 0.5 ? ` (${money(r.out.health)} health insurance)` : ""} · ${money(r.in.income)} guaranteed income${r.in.lines.length ? ` (${r.in.lines.map((l) => l.name).join(", ")})` : ""} · ${money(taken(r))} from savings${r.rmd ? ` (${money(r.rmd)} required)` : ""} · ${money(r.out.taxes)} tax` : `${money(r.in.contributions)} added · growing`),
       r.shortfall ? ui.h("div", { class: "rec-sub bad" }, `${money(r.shortfall)} short this year`) : null)),
-      tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title bad" }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: "rec-value bad" }, money(0))), ui.h("div", { class: "rec-sub bad" }, `nothing left; about ${money(tailRow.short)} short every year`)) : null),
-    ui.h("p", { class: "muted small" }, "Left = every retirement account together at the end of that year. Money comes out of cash first, then taxable, then pre-tax (with tax), then tax-free."),
+      tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title bad" }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: "rec-value bad" }, `${money(0)} left`)), ui.h("div", { class: "rec-sub bad" }, `nothing left; about ${money(tailRow.short)} short every year`)) : null),
   ));
 }

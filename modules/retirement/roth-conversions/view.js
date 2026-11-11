@@ -209,7 +209,8 @@ export function render(root, ctx) {
       canConvert ? ui.h("ul", { class: "records" }, d.options.map((o) => ui.h("li", {},
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o))),
         ui.h("div", { class: "rec-sub" }, `Tax over the plan ${money(o.taxesReal)}; required withdrawals ${money(o.rmdReal)}${o.cliffYears.length ? `; income passes the health insurance line in ${years(o.cliffYears)}` : ""}.`)))) : null,
-      showTable ? ui.h("p", { class: "small" }, `Year by year, ${d.on ? "your plan's setting" : "the best way"}: ${shownName}. Income before is what the plan already has that year; amounts in each year's dollars.`) : null,
+      // "Income before" is a column of the wide table only; on a phone each row says it in words (RB4)
+      showTable ? ui.h("p", { class: "small" }, `Year by year, ${d.on ? "your plan's setting" : "the best way"}: ${shownName}. Amounts in each year's dollars.`, ui.h("span", { class: "only-wide" }, " Income before is what the plan already has that year.")) : null,
       showTable ? ui.h("div", { class: "only-wide" }, ui.table([
         { key: "year", label: "Year" }, { key: "ages", label: d.people.length > 1 ? "Ages" : "Age", render: (r) => r.ages.join(" / ") },
         { key: "incomeBefore", label: "Income before", align: "right", render: (r) => money(r.incomeBefore) },
@@ -219,7 +220,7 @@ export function render(root, ctx) {
         { key: "irmaa", label: "Medicare", render: (r) => (r.irmaa ? "extra charge" : "") },
       ], d.table)) : null,
       showTable ? ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(r.conversion))),
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, `${money(r.conversion)} to convert`)),
         ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
       showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
       showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,

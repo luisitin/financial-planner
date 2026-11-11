@@ -103,7 +103,7 @@ export function render(root, ctx) {
   const matchStep = nba?.ready ? nba.steps.find((s) => s.id === "match" && s.status !== "done") ?? null : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
-    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. Will the money last? adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
+    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
     // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
     // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
     !accounts.length ? ui.h("p", { class: "muted small" }, startable ? "No retirement account yet: one tap below adds your 401(k) to the plan. An IRA, Roth or HSA goes on the " : "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), startable ? "." : " (401(k), IRA, Roth, HSA, brokerage).") : null,
@@ -120,7 +120,8 @@ export function render(root, ctx) {
     // what is still missing, named (birth dates or Social Security), not always "Social Security"; a verdict on our guesses waits
     const said = verdictWords(st);
     if (!share && !said) return null;
-    return ui.h("p", { class: "small" }, `${share}${said} `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›"));
+    // one 44 px button, not a 16 px link inside the sentence (stress test 2026-11-11, R-A8, FF8)
+    return [ui.h("p", { class: "small" }, `${share}${said}`), ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "See if the money lasts ›"))];
   }
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   const out = ui.h("div");

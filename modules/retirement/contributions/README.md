@@ -131,3 +131,7 @@ called at run time, so the cycle is harmless.
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - **F4.** "Type my own amount" (and tapping a row) opens a guessed amount or match grey: an empty box, the guess as its placeholder, "leave it empty to keep it". A blank box keeps the guess as the person's figure. `applyContributionEdit` ends both guesses on any save, equal to the guess or not (spec S2).
 - **F5.** The row shows "(5% of pay)" for a share chosen in Get started (`pctOfPay`).
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- "The plan adds these every year..." (not a page title as a noun) and one 44 px button "See if the money lasts ›" in place of a
+  16 px link (R-A8, FF8).
