@@ -265,6 +265,17 @@ function continueFor(plan, { page, off, today }) {
  * "review" and "compact" also carry that continue row as `cont`, for their bottom. Only the address switches a guide on
  * for a render; plan.guide.active decides which one "compact" follows.
  */
+/**
+ * The path step card's sentence (stress test 2026-11-11): it starts with the step's name, the words the Next button that led
+ * here used ("Next: Your month ›" opens Expenses; j-first-family/F9, j-first-renter/F9), and while the page waits for
+ * something it says so in place of the instruction (j-first-freelancer/F5), the way the card at the bottom does.
+ */
+export function pathAsk(step) {
+  const name = step?.name ?? step?.short ?? "";
+  const ask = step?.waiting ? `This step needs ${step.waiting.what} first: add it, or go on and come back to it.` : String(step?.ask ?? "");
+  return name ? `${name}. ${ask}` : ask;
+}
+
 export function barFor(plan, { page, query = {}, off = [], today = null } = {}) {
   if (!page || OWN_PAGES.includes(page) || SELF_LED.includes(page) || page === "overview/dashboard") return null;
   const cont = () => continueFor(plan, { page, off, today });
@@ -297,7 +308,7 @@ export function barFor(plan, { page, query = {}, off = [], today = null } = {}) 
           const back = !prev ? { href: status.guideHref, label: "All steps", index: null }
             : prev.key === "answers" ? { href: plan?.guide?.setup?.finishedAt ? "#/overview/setup/done" : status.guideHref, label: prev.name ?? prev.short, index: prev.index }
               : { href: prev.href, label: prev.name ?? prev.short, index: prev.index };
-          return { ...bar, path: true, prev: lite(prev), next: lite(status.next), after: nextAfter(plan, step.key, { off, today }), back, changed: ps.changed, waiting: step.waiting ?? null, name: step.name ?? step.short, ownAction: step.ownAction ?? null, hasLeft: ps.parts.some((x) => !x.done && x.key !== step.key) };
+          return { ...bar, step: { ...step, ask: pathAsk(step) }, path: true, prev: lite(prev), next: lite(status.next), after: nextAfter(plan, step.key, { off, today }), back, changed: ps.changed, waiting: step.waiting ?? null, name: step.name ?? step.short, ownAction: step.ownAction ?? null, hasLeft: ps.parts.some((x) => !x.done && x.key !== step.key) };
         }
         const nb = neighbours(status, step);
         const out = { ...bar, prev: lite(nb.prev), next: lite(nb.next), wrapped: nb.wrapped };

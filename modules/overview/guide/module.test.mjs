@@ -756,3 +756,51 @@ test("the month step waits on the pay, never on the spending its own page takes 
   p.income = [{ id: "i", type: "salary", amount: 5000, period: "monthly" }];
   assert.equal(pathSummary(p, { today: "2026-11-11" }).parts.find((x) => x.key === "month").waiting, null);
 });
+
+// ---- the path's step card says the step's name and only what the page shows (stress test 2026-11-11: j-first-family/F9,
+// j-first-renter/F9, j-first-freelancer/F5, j-first-renter/F4)
+import { pathAsk, targetsOf } from "./compute.js";
+import { monthAsk } from "./journeys.js";
+import { markGuess } from "../../../core/estimate/ledger.js";
+import { emptyPlan as emptyForAsk } from "../../../core/schema/migrate.js";
+
+test("pathAsk: the card starts with the name the Next button used; a waiting step says what it needs instead", () => {
+  assert.equal(pathAsk({ name: "Your month", ask: "Read what is left each month at the top." }), "Your month. Read what is left each month at the top.");
+  assert.equal(pathAsk({ name: "Your retirement", ask: "Read the answer at the top.", waiting: { what: "your Social Security", href: "#/x" } }),
+    "Your retirement. This step needs your Social Security first: add it, or go on and come back to it.");
+  assert.equal(pathAsk({ short: "See your month", ask: "X." }), "See your month. X.");
+});
+
+test("the Your month step asks for what Expenses shows: the empty form, bills with our guesses, typed bills; no pay is a wait", () => {
+  const D = "2026-11-11";
+  const p = emptyForAsk();
+  p.household.people.push({ id: "s", role: "self", name: "Sam", birthDate: "1996-03-01" });
+  p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 900 });
+  const card = (q) => barFor(q, { page: "cashflow/expenses", query: { guide: PATH_ID }, today: D });
+  // no pay: the card says it waits for the pay, never "read what is left at the top"
+  assert.equal(card(p).waiting.what, "your pay");
+  assert.match(card(p).step.ask, /^Your month\. This step needs your pay first/);
+  p.income.push({ id: "i", type: "salary", amount: 3000, period: "monthly" });
+  assert.equal(card(p).waiting, null);
+  assert.match(card(p).step.ask, /^Your month\. Type each bill or spending you know, then tap Add expense/);
+  p.expenses.push({ id: "e1", name: "Groceries", category: "groceries", amount: 400, period: "monthly", essential: true });
+  assert.equal(monthAsk(p, { today: D }), "Read what is left each month at the top. To change a bill, open See or change each bill.");
+  markGuess(p, "expenses[e1].amount", { key: "spend.groceries", value: 400, unit: "month", sigma: null, dataAsOf: D }, D);
+  assert.match(monthAsk(p, { today: D }), /Some bills are our guesses: open See or change each bill/);
+  assert.ok(targetsOf(monthAsk(p, { today: D })).includes("See or change each bill"), "Show me where finds the fold");
+});
+
+test("the Your retirement step over a forecast that cannot answer yet says so, and names the page's own button", () => {
+  const D = "2026-11-11";
+  const p = emptyForAsk();
+  p.household.people.push({ id: "s", role: "self", name: "Sam", birthDate: "2002-03-01" });
+  p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 900 });
+  p.income.push({ id: "i", type: "salary", amount: 3000, period: "monthly" });
+  p.expenses.push({ id: "e1", name: "Rent", category: "housing", amount: 1200, period: "monthly", essential: true });
+  p.guide = { ...(p.guide ?? {}), journeys: { [PATH_ID]: { none: {} } } };
+  p.retirement = { ...(p.retirement ?? {}), socialSecurity: { s: { monthlyAtFRA: 1400 } } };
+  const b = barFor(p, { page: "retirement/projection", query: { guide: PATH_ID }, today: D });
+  assert.equal(b.waiting, null, JSON.stringify(b.waiting));
+  assert.match(b.step.ask, /^Your retirement\. Your retirement savings are not in the plan yet/);
+  assert.ok(targetsOf(b.step.ask).includes("Add what you own"));
+});

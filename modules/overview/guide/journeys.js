@@ -157,9 +157,18 @@ export const pathVariant = (p, { today = null, off = [] } = {}) => {
   if (!ap) return null;
   const steps = {};
   for (const s of PATH_STEPS) if (!ap[s.key] || off.includes(s.page)) steps[s.key] = null;
-  if (householdRetired(p, { today })) {
-    steps.month = steps.month === null ? null : { title: "See what comes in and goes out", ask: "Read what comes from your savings each month at the top; rows marked our guess are figures we filled in, so tap a row to type yours, or leave them." };
+  const retired = householdRetired(p, { today });
+  if (retired) {
+    steps.month = steps.month === null ? null : { title: "See what comes in and goes out" };
     if (steps["fix-retire"] !== null) steps["fix-retire"] = { ask: "Each card is one change that would make the money last, like spending a little less." };
+  }
+  // the step card says only what the page shows (stress test 2026-11-11, j-first-freelancer/F5): no "rows marked our guess"
+  // over a page with no rows, no "read the answer at the top" over a forecast that cannot answer yet
+  if (steps.month !== null) steps.month = { ...(steps.month ?? {}), ask: monthAsk(p, { today, retired }) };
+  if (steps.retire !== null && !retired && retirementKnown(p, today)) {
+    let unknown = false;
+    try { unknown = savingsUnknown(projection(p, { today })); } catch { unknown = false; }
+    if (unknown) steps.retire = { ask: "Your retirement savings are not in the plan yet, so this page cannot say whether the money lasts. Tap Add what you own, or go on and come back." };
   }
   return { steps };
 };
@@ -168,7 +177,17 @@ const retireWaits = (p) => { try { const g = retirementGap(p); return g ? { what
 
 /** What "Your month" waits for: the pay (what is left each month needs it; the page itself takes the spending), never blocking
  * (stress test 2026-11-11, j-first-freelancer/F5: the step said "read what is left each month at the top" over a page with no pay). */
-const monthWaits = (p) => (L(p, "income").length ? null : { what: "your pay", href: "#/cashflow/income" });
+// (a household already retired lives on its savings: no pay is not something the page waits for)
+const monthWaits = (p, { today = null } = {}) => (L(p, "income").length || householdRetired(p, { today }) ? null : { what: "your pay", href: "#/cashflow/income" });
+/** What the "Your month" step asks, from what Expenses shows: the empty form, the bills with our guesses, or typed bills. */
+export function monthAsk(p, { today = null, retired = false } = {}) {
+  const read = retired ? "Read what comes from your savings each month at the top." : "Read what is left each month at the top.";
+  if (!L(p, "expenses").length) return "Type each bill or spending you know, then tap Add expense; or go on, and the plan uses our guesses until you do.";
+  let guessed = 0;
+  try { guessed = Number(expenses(p, { today }).guessedShare) || 0; } catch { guessed = 0; }
+  return guessed > 0 ? `${read} Some bills are our guesses: open See or change each bill, then type yours or leave them.`
+    : `${read} To change a bill, open See or change each bill.`;
+}
 
 /** What "Emergency fund" waits for: any account at all (the page has nothing to show without one), never blocking. */
 const cushionWaits = (p) => ((p?.accounts ?? []).length ? null : { what: "your accounts and spending", href: "#/balance/net-worth" });

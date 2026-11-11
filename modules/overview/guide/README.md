@@ -221,6 +221,18 @@ one guide whose steps come and go with the household (`pathVariant` in journeys.
 
 ## Stress test 2026-11-11 (claude-f)
 The guide page's one filled "Do step N" sits in the head card under the progress bar (OP-7, A2: below the list it was off the
-first screen on five guides). The path's "Your month" step `waits` for the pay when the plan has none (F5); drawing a step's
-waiting sentence in place of its `ask` on the step card is frame.js (wave 1). "What would help" (fix-retire) is left out while
-the projection cannot say whether the money lasts for want of retirement savings (`savingsUnknown`, j-first-renter/F4).
+first screen on five guides). The path's "Your month" step `waits` for the pay when the plan has none (F5), except for a
+household already retired. "What would help" (fix-retire) is left out while the projection cannot say whether the money lasts
+for want of retirement savings (`savingsUnknown`, j-first-renter/F4).
+
+The path step card's sentence (`barFor` returns `step.ask` as `pathAsk(step)`; frame.js draws it unchanged):
+- it starts with the step's `name`, the words the Next button that led there used ("Your month. ..."), since the page's own
+  title differs ("Expenses", "Will the money last?"; j-first-family/F9, j-first-renter/F9). Putting the name in the bar's head
+  instead is frame.js (wave 1); this needs no shell change;
+- a step that `waits` says "This step needs <what> first: add it, or go on and come back to it." in place of its instruction,
+  the words the bottom card uses (F5);
+- "Your month" asks for what Expenses shows (`monthAsk`): no bills, "Type each bill ... tap Add expense"; bills with our
+  guesses, "open See or change each bill"; typed bills, "To change a bill, open See or change each bill". It no longer says
+  "rows marked our guess" over a page whose rows are folded;
+- "Your retirement" over a forecast that cannot answer for want of savings says so and names the page's button, "Add what
+  you own" (`pathVariant`).
