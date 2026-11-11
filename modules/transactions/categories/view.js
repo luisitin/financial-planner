@@ -10,6 +10,9 @@ const FIELDS = (editing) => [
   { key: "essential", label: "Counts as a must-pay bill", type: "checkbox", help: "for the emergency-fund target; spending only" },
 ];
 
+// the confirmation shown on the next render, where the form was (the shell re-renders after store.update; stress test T4)
+let pending = null;
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -28,12 +31,18 @@ export function render(root, ctx) {
   let showForm = false;
   const drawForm = () => {
     formHost.innerHTML = "";
-    if (!showForm && !editing) { formHost.append(ui.button("+ Add a category", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
+    if (!showForm && !editing) {
+      if (pending) { formHost.append(ui.notice("ok", pending)); pending = null; }
+      formHost.append(ui.button("+ Add a category", () => { showForm = true; drawForm(); }, { class: "secondary" }));
+      return;
+    }
     const values = editing ? { ...editing } : { icon: "📦", kind: "expense", essential: false };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit ${editing.label}` : "Add a category"),
       ui.form(FIELDS(editing), values, (v) => {
         const label = v.label.trim(); if (!label) return;
+        pending = !editing ? `${label} added.` : label !== editing.label ? `${editing.label} is now ${label}.` : `${label} saved.`;
+        showForm = false;
         store.update((p) => {
           p.categories = p.categories ?? [];
           if (editing) {
@@ -49,10 +58,12 @@ export function render(root, ctx) {
       }, { submitLabel: editing ? "Save changes" : "Add category", resetAfter: !editing, onCancel: () => { editing = null; showForm = false; drawForm(); } }),
       editing ? ui.h("p", { style: { marginTop: "12px" } },
         editing.hidden
-          ? ui.button("Show it again", () => { const id = editing.id; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
+          ? ui.button("Show it again", () => { const id = editing.id; pending = `${editing.label} is back in the list.`; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
           : ui.button(editing.builtIn ? `Hide ${editing.label}` : `Remove ${editing.label}`, () => {
             if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorized. Continue?`)) return;
-            const id = editing.id, builtIn = editing.builtIn; editing = null;
+            const id = editing.id, builtIn = editing.builtIn;
+            pending = builtIn ? `${editing.label} hidden. Show it again under Hidden.` : `${editing.label} removed.`;
+            editing = null;
             store.update((p) => {
               p.categories = p.categories ?? [];
               for (const t of p.transactions ?? []) if (t.category === id) t.category = "";

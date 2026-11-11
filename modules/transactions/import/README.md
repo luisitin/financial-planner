@@ -89,3 +89,13 @@ No accounts: the page asks for one first. Unreadable rows are counted and listed
 - OFX/QFX (vendor/banking.js as the parser), JSON exports.
 - Balance check: the file's running balance against the account's balance.
 - Bank connections (SimpleFIN) through the server: `transactions/connect`.
+
+## Stress test fixes (2026-11-11, claude-d)
+- After a file is read (or pasted text used) "3. Check and import" comes to the top of the screen, and the Import button sits
+  right under the counts, before the sample rows. The same file can be chosen again.
+- "Use the pasted text" with an empty box says "Paste the file's text in the box first." at the box and leaves a chosen file alone.
+- `looksLikeBankFile(parsed)` (compute.js): a line with a date in one cell and an amount in another, in either date order.
+  Text that has none ("hello world") gets one plain error, no column pickers and no tiles of 0; "already on file" is said only
+  when lines were read and all matched. Column names nobody recognises still reach the pickers.
+- With no account yet: a card with a filled "Add the account" button instead of a 19 px link.
+- "Added 10 transactions from x.csv. Now give them a category." on Categorize (its exported `say`), and Undo of an import says what it removed.

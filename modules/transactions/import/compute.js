@@ -38,6 +38,21 @@ export function parseBankCsv(text) {
 }
 
 /**
+ * looksLikeBankFile(parsed) -> boolean. Text with at least one line that has a date in one cell and an amount in another
+ * (either date order) could be a bank file, even when its column names are not recognised (then the person picks the
+ * columns). Anything else ("hello world", a sentence, an empty paste) is said to be no bank file instead of being answered
+ * with column pickers and tiles of 0 (stress test T6, 2026-11-11).
+ */
+export function looksLikeBankFile(parsed) {
+  for (const r of (parsed?.rows ?? []).slice(0, 50)) {
+    const cells = (r ?? []).map((c) => String(c ?? "").trim()).filter(Boolean);
+    const dateAt = cells.findIndex((c) => parseDate(c, "MDY") !== null || parseDate(c, "DMY") !== null);
+    if (dateAt >= 0 && cells.some((c, i) => i !== dateAt && /\d/.test(c) && parseAmount(c) !== null && parseDate(c) === null)) return true;
+  }
+  return false;
+}
+
+/**
  * detectMapping(headers, rows) -> { date, payee, amount, debit, credit, type, dateOrder }
  * Column indexes (or null). `amount` is a single signed column; `debit`/`credit` are the
  * two-column style; `type` is a DEBIT/CREDIT column that gives the sign to a positive amount.

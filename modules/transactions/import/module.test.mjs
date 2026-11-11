@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { detectMapping, parseDate, parseAmount, rowsToTransactions, dedupe, prepareImport, guessDateOrder, compute } from "./compute.js";
+import { detectMapping, parseDate, parseAmount, rowsToTransactions, dedupe, prepareImport, guessDateOrder, compute, looksLikeBankFile, parseBankCsv } from "./compute.js";
 import { parseCsv } from "../../../core/csv.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -197,4 +197,12 @@ test("pages 9 (re-check 4): plan3's checking file 7/30 to 8/3 with every line al
   // covers 7/30 to 8/3, so it shows nothing happened on 7/31 to 8/2, ..." (view: fillsOnly drops the "only partly in it" line)
   assert.equal(r.add.length, 0); assert.equal(r.skip.length, rows.length); assert.equal(r.gap, null);
   assert.deepEqual([r.fileFrom, r.fileTo, r.fills], ["2026-07-30", "2026-08-03", [{ from: "2026-07-31", to: "2026-08-02", days: 3 }]]);
+});
+
+test("looksLikeBankFile: a date and an amount on one line is a bank file; words, a lone header or nothing are not (stress test T6)", () => {
+  assert.equal(looksLikeBankFile(parseBankCsv(CHASE)), true);
+  for (const f of ["european-bank.csv", "amex-card.csv", "wellsfargo-checking.csv"]) assert.equal(looksLikeBankFile(parseBankCsv(fs.readFileSync(path.join(ROOT, "qa/fixtures", f), "utf8"))), true, f);
+  // column names nobody recognises still count: the person picks the columns
+  assert.equal(looksLikeBankFile(parseBankCsv("When,Who,How much\n09/02/2026,Kroger,-86.40\n")), true);
+  for (const t of ["", "hello world", "not a csv\nhello world\n", "I paid the plumber\nlast week\n", "a,b\n1,2\n"]) assert.equal(looksLikeBankFile(parseBankCsv(t)), false, JSON.stringify(t));
 });

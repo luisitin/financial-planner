@@ -1,7 +1,8 @@
 // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 // the text), check the columns and the preview, import. Past imports can be undone.
-import { compute, prepareImport, importRecord } from "./compute.js";
+import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
+import { say as sayOnCategorize } from "../categorize/view.js";
 
 let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
 
@@ -23,7 +24,13 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}.`),
   ));
   if (pending) { root.append(ui.notice(...pending)); pending = null; }
-  if (!d.accounts.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the account first (the checking account or card the file belongs to): ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth")))); return; }
+  // no account yet: the first step is a full-size button, not a 19 px link named after a page (stress test CF-1, T2)
+  if (!d.accounts.length) {
+    root.append(ui.card("First, add the account this file comes from",
+      ui.h("p", {}, "Your checking account or card: the app needs to know which account the transactions belong to. Then come back here with the file."),
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add the account"))));
+    return;
+  }
 
   // ---- step 1: account + file
   const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
@@ -34,11 +41,18 @@ export function render(root, ctx) {
     const f = file.files?.[0]; if (!f) return;
     fileName = f.name; chosen.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
     const reader = new FileReader();
-    reader.onload = () => { text = String(reader.result ?? ""); mapping = null; prepare(); };
+    reader.onload = () => { text = String(reader.result ?? ""); mapping = null; pasteMsg.replaceChildren(); prepare(); bringUp(); };
     reader.readAsText(f);
+    file.value = "";   // the same file can be chosen again (a browser fires no change for the file already in the box)
   });
   const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the CSV text here (the header line and the rows)", "aria-label": "Pasted CSV" });
-  const pasteBtn = ui.button("Use the pasted text", () => { text = paste.value; fileName = "pasted text"; mapping = null; prepare(); }, { class: "secondary" });
+  const pasteMsg = ui.h("div");
+  // an empty box says so at the box and leaves a chosen file alone (stress test T1, T6)
+  const pasteBtn = ui.button("Use the pasted text", () => {
+    if (!paste.value.trim()) { pasteMsg.replaceChildren(ui.notice("warn", "Paste the file's text in the box first.")); paste.focus(); return; }
+    pasteMsg.replaceChildren();
+    text = paste.value; fileName = "pasted text"; chosen.textContent = "No file chosen yet"; mapping = null; prepare(); bringUp();
+  }, { class: "secondary" });
   // opened for days an account's files miss (the Monthly review's "Bring in the Chase checking file", ?need=from..to): the
   // days the file must cover, and whether the usual "last 90 days" reaches them (re-check 4, 2026-11-02)
   const need = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(ctx.route?.query?.need ?? "");
@@ -52,10 +66,12 @@ export function render(root, ctx) {
   root.append(ui.card("1. Which account is the file from?", needNote, ui.h("div", { class: "form" }, ui.field("Account", acctSel))));
   root.append(ui.card("2. The file",
     ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
-    ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), ui.row(pasteBtn)));
+    ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), pasteMsg, ui.row(pasteBtn)));
 
   // ---- step 3: mapping + preview
   const previewCard = ui.card("3. Check and import");
+  // a file read (or text used): its result comes to the top of the screen, with the Import button on that first screen
+  const bringUp = () => requestAnimationFrame(() => previewCard.scrollIntoView({ behavior: "smooth", block: "start" }));
   const previewHost = ui.h("div");
   previewCard.append(previewHost);
   const colOptions = (headers, allowNone) => [...(allowNone ? [{ value: "", label: "(none)" }] : []), ...headers.map((h, i) => ({ value: String(i), label: h }))];
@@ -71,6 +87,11 @@ export function render(root, ctx) {
     if (wasName && !picked && was !== accountId) { accountId = was; acctSel.value = was; mapping = null; return prepare(); }
     mapping = prep.mapping;
     const H = prep.parsed.headers;
+    // text that is not a bank file: one plain line, no column pickers and no tiles of 0 (stress test T6, 2026-11-11)
+    if (!prep.add.length && !prep.skip.length && !looksLikeBankFile(prep.parsed)) {
+      previewHost.append(ui.notice("error", "That does not look like a bank file: no dates or amounts were found. A bank file has one line per transaction. Download it again from your bank (Activity > Download > CSV), or paste the whole file with its first line."));
+      return;
+    }
     const acctName = d.accounts.find((a) => a.id === accountId)?.name ?? "this account";
     if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
     else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
@@ -99,6 +120,25 @@ export function render(root, ctx) {
       )),
     );
     const ok = prep.add.length, dup = prep.skip.length, bad = prep.bad.length, needCat = prep.add.filter((t) => !t.category).length;
+    const importBtn = ok ? ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
+      const importId = ui.uid();
+      const acct = accountId, m = mapping, key = prep.headerKey, name = fileName, when = new Date().toISOString(), flipUsed = prep.flipSign;
+      let added = 0;
+      store.update((p) => {
+        p.transactions = p.transactions ?? [];
+        const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId });
+        for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
+        added = fresh.add.length;
+        p.imports = p.imports ?? [];
+        p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
+        p.importProfiles = p.importProfiles ?? {};
+        p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
+        for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
+      });
+      // said on the page it lands on (stress test T4)
+      sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : name}.${needCat ? " Now give them a category." : ""}`);
+      ctx.go("transactions", "categorize");
+    })) : null;
     previewHost.append(ui.row(
       ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
       ui.stat("Already on file", String(dup), "skipped as duplicates"),
@@ -112,33 +152,21 @@ export function render(root, ctx) {
     const cut = [startCut, endCut].filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
     // nothing new but it spans days the account's files missed: one plain message below, never "only partly in it" (re-check 4)
     const fillsOnly = !ok && !bad && !!prep.fileFrom && (prep.fills ?? []).length > 0;
-    if (prep.fileFrom && !fillsOnly) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`));
+    const covers = prep.fileFrom && !fillsOnly ? ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `This file covers ${fmt.date(prep.fileFrom)} to ${fmt.date(prep.fileTo)}.${cut.length ? ` ${cut.join(" and ")} ${cut.length > 1 ? "are" : "is"} only partly in it; the spending and budget pages say so.` : ""}`) : null;
     // a file in another currency (its Currency column): the amounts come in as they are, not converted, so say it before
     // importing. Its import record keeps the currency, and our guesses use no U.S. figures for the plan then (core/estimate
     // applies; guesses spec 4.8)
     if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
     // days between this account's last lines and this file: said before importing, with the usual payments that fall in them
     if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
+    // the Import button right under the counts, before the sample rows (stress test T1, 2026-11-11)
+    if (importBtn) { importBtn.style.marginTop = "12px"; previewHost.append(importBtn); }
+    if (covers) previewHost.append(covers);
     if (ok) previewHost.append(
       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
-        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2))))),
-      ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
-        const importId = ui.uid();
-        const acct = accountId, m = mapping, key = prep.headerKey, name = fileName, when = new Date().toISOString(), flipUsed = prep.flipSign;
-        store.update((p) => {
-          p.transactions = p.transactions ?? [];
-          const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId });
-          for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
-          p.imports = p.imports ?? [];
-          p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
-          p.importProfiles = p.importProfiles ?? {};
-          p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
-          for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
-        });
-        ctx.go("transactions", "categorize");
-      })),
+        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2)))))
     );
     // nothing new, but the file spans days the account's files were missing: nothing happened then, so record the file and
     // those days count as checked (a gap with no lines in it could never be closed otherwise, 2026-11-02)
@@ -156,7 +184,7 @@ export function render(root, ctx) {
           pending = ["ok", `${acctName}: ${f.map(span).join(" and ")} counted as checked. Undo it under Past imports.`];
         })));
     }
-    else if (!bad) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
+    else if (!bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
   };
   prepare();
   root.append(previewCard);
@@ -172,6 +200,7 @@ export function render(root, ctx) {
           : ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, im.fileName || "file"), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · ${im.added} added, ${im.skipped} skipped${im.bad ? `, ${im.bad} unreadable` : ""}`)),
         ui.h("span", { class: "st" }, ui.button("Undo", () => {
           if (!ui.confirm(im.added ? `Remove the ${im.added} transactions from ${im.fileName || "this import"}?` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
+          pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.` : "Those days are no longer counted as checked."];
           store.update((p) => { p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
         }, { class: "secondary small" }))))),
     ));

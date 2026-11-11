@@ -10,6 +10,8 @@ import { aiHealth } from "../../ai/health.js";
 let aiSuggestions = {};   // normalized payee -> { category, confidence }; kept across re-renders in this session
 
 let pending = null;   // confirmation kept across the shell re-render
+/** A line for the next draw of this page, from a page that sends the person here ("Added 10 transactions from x.csv."). */
+export const say = (text) => { pending = text; };
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan, ai } = ctx;

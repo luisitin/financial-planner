@@ -3,6 +3,7 @@
 import { compute } from "./compute.js";
 
 const dismissed = new Set();   // pairs the person said are not duplicates (this session)
+let pending = null;   // the confirmation shown on the next render (stress test T4, x-duplicates)
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -14,6 +15,8 @@ export function render(root, ctx) {
     ui.h("h1", {}, pairs.length ? `${pairs.length} likely duplicate${pairs.length === 1 ? "" : "s"}` : "No duplicates"),
     ui.h("p", { class: "lede" }, pairs.length ? "Same account, same amount, same description, within a day. Usually a pending line that posted again. Remove the copy or keep both." : d.total ? "Exact repeats are already refused when you import; nothing near-identical was found either." : "Nothing on file yet. Import a bank file first."),
   ));
+  // said under the heading, also when the list is now empty ("No duplicates" alone read as if nothing had been there)
+  if (pending) { root.append(ui.notice("ok", pending)); pending = null; }
   if (!pairs.length) return;
   const line = (t) => `${fmt.date(t.date)} · ${t.payee}${t.rawPayee && t.rawPayee !== t.payee ? ` (bank wrote: ${t.rawPayee})` : ""}${t.category ? ` · ${t.category}` : ""}`;
   root.append(ui.card(null, ui.h("ul", { class: "page-list" }, pairs.map((p) => ui.h("li", { style: { alignItems: "flex-start", flexWrap: "wrap" } },
@@ -24,8 +27,8 @@ export function render(root, ctx) {
       ui.h("div", { class: "d" }, `copy: ${line(p.drop)}`),
       ui.h("div", { class: "muted small" }, p.why)),
     ui.h("span", { class: "st", style: { display: "flex", gap: "8px", flex: "1 1 100%", marginTop: "6px" } },
-      ui.button("Remove the copy", () => store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => t.id !== p.drop.id); }), { class: "small" }),
-      ui.button("Keep both", () => { dismissed.add(p.keep.id + "|" + p.drop.id); root.innerHTML = ""; render(root, ctx); }, { class: "secondary small" })),
+      ui.button("Remove the copy", () => { pending = `Removed the copy: ${p.drop.payee}, ${fmt.date(p.drop.date)}, ${fmt.money(Math.abs(Number(p.drop.amount)), cur, undefined, 2)}. The one from ${fmt.date(p.keep.date)} stays.`; store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => t.id !== p.drop.id); }); }, { class: "small" }),
+      ui.button("Keep both", () => { dismissed.add(p.keep.id + "|" + p.drop.id); pending = `Kept both ${p.keep.payee} lines.`; root.innerHTML = ""; render(root, ctx); }, { class: "secondary small" })),
   )))));
-  if (pairs.length > 1) root.append(ui.card(null, ui.row(ui.button(`Remove all ${pairs.length} copies`, () => { if (ui.confirm(`Remove ${pairs.length} duplicate transactions?`)) { const ids = new Set(pairs.map((p) => p.drop.id)); store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => !ids.has(t.id)); }); } }, { class: "danger" }))));
+  if (pairs.length > 1) root.append(ui.card(null, ui.row(ui.button(`Remove all ${pairs.length} copies`, () => { if (ui.confirm(`Remove ${pairs.length} duplicate transactions?`)) { const ids = new Set(pairs.map((p) => p.drop.id)); pending = `Removed ${pairs.length} copies.`; store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => !ids.has(t.id)); }); } }, { class: "danger" }))));
 }

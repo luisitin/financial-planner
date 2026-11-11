@@ -2,6 +2,8 @@
 // (and "Link all"), then the transfers already linked with "Unlink".
 import { compute } from "./compute.js";
 
+let pending = null;   // the confirmation shown on the next render (stress test T4)
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -12,13 +14,15 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, "When you move money between your own accounts it appears twice: out of one, into the other. Linking the two sides keeps the transfer out of income and spending."),
     d.total ? ui.h("p", { class: "muted small" }, `${d.count} transfer${d.count === 1 ? "" : "s"} linked, ${d.suggested} likely pair${d.suggested === 1 ? "" : "s"} waiting.`) : ui.h("p", { class: "muted small" }, "Nothing to link until transactions from two accounts are on file."),
   ));
+  if (pending) { root.append(ui.notice("ok", pending)); pending = null; }
 
-  const link = (pairs) => store.update((p) => {
+  const says = (pr) => `${fmt.money(Math.abs(Number(pr.out.amount)), cur, undefined, 2)} from ${pr.out.accountName} to ${pr.in.accountName}`;
+  const link = (pairs) => { pending = pairs.length === 1 ? `Linked: ${says(pairs[0])}. It no longer counts as income or spending.` : `Linked ${pairs.length} transfers. They no longer count as income or spending.`; store.update((p) => {
     for (const pr of pairs) {
       const id = ui.uid();
       for (const t of p.transactions ?? []) if (t.id === pr.out.id || t.id === pr.in.id) { t.transferId = id; t.category = "transfer"; }
     }
-  });
+  }); };
   const row = (pr, action) => ui.h("li", { style: { alignItems: "flex-start" } },
     ui.h("span", { class: "ic" }, "🔁"),
     ui.h("span", { class: "body" },
@@ -32,7 +36,7 @@ export function render(root, ctx) {
     d.pairs.length > 1 ? ui.row(ui.button(`Link all ${d.pairs.length}`, () => { if (ui.confirm(`Link all ${d.pairs.length} pairs as transfers?`)) link(d.pairs); }, { class: "secondary" })) : null,
   ));
   if (d.linked.length) root.append(ui.card("Linked transfers",
-    ui.h("ul", { class: "page-list" }, d.linked.map((pr) => row(pr, ui.button("Unlink", () => store.update((p) => { for (const t of p.transactions ?? []) if (t.transferId === pr.transferId) { delete t.transferId; if (t.category === "transfer") t.category = ""; } }), { class: "secondary small" })))),
+    ui.h("ul", { class: "page-list" }, d.linked.map((pr) => row(pr, ui.button("Unlink", () => { pending = `Unlinked: ${says(pr)}. Both lines count again; give them a category on the Ledger.`; store.update((p) => { for (const t of p.transactions ?? []) if (t.transferId === pr.transferId) { delete t.transferId; if (t.category === "transfer") t.category = ""; } }); }, { class: "secondary small" })))),
   ));
   if (d.total && !d.pairs.length && !d.linked.length) root.append(ui.card(null, ui.muted("No transfers found. If one is missing, open the transaction in the Ledger and set its category to \"Transfer between my accounts\".")));
 }

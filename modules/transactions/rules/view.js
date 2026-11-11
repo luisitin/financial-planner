@@ -5,7 +5,8 @@ import { categoriesOf } from "../categories/compute.js";
 
 const FIELDS = (plan) => [
   { key: "contains", label: "When the bank description contains", type: "text", required: true, placeholder: "e.g. netflix" },
-  { key: "category", label: "Give it the category", type: "select", options: categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` })) },
+  // starts on "Pick a category...": a rule added without touching it filed under the first category (stress test T5)
+  { key: "category", label: "Give it the category", type: "select", required: true, options: [{ value: "", label: "Pick a category..." }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
   { key: "payee", label: "And show the payee as", type: "text", placeholder: "e.g. Netflix (blank keeps the bank's text)" },
   { key: "direction", label: "Only for", type: "select", options: [{ value: "any", label: "money in or out" }, { value: "out", label: "money going out" }, { value: "in", label: "money coming in" }] },
   { key: "accountId", label: "Only in this account", type: "select", options: [{ value: "", label: "Any account" }, ...(plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))] },
@@ -26,6 +27,7 @@ export function render(root, ctx) {
   if (d.wouldFix) root.append(ui.card(null, ui.row(
     ui.button(`File ${d.wouldFix} uncategorized transaction${d.wouldFix === 1 ? "" : "s"} now`, () => store.update((p) => {
       const r = applyRules(p.rules ?? [], p.transactions ?? []);
+      pending = `Filed ${d.wouldFix} transaction${d.wouldFix === 1 ? "" : "s"} by your rules.`;   // stress test T4
       p.transactions = r.txs;
       for (const rule of p.rules ?? []) rule.hits = (rule.hits ?? 0) + (r.hits[rule.id] ?? 0);
     })),
@@ -37,12 +39,12 @@ export function render(root, ctx) {
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!showForm && !editing) { formHost.append(ui.button("+ Add a rule", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
-    const values = editing ? { ...editing } : { direction: "any", accountId: "", category: categoriesOf(plan)[0]?.id ?? "" };
+    const values = editing ? { ...editing } : { direction: "any", accountId: "", category: "" };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? "Edit rule" : "Add a rule"),
       ui.form(FIELDS(plan), values, (v) => {
         const clean = { contains: v.contains.trim(), category: v.category, payee: (v.payee || "").trim(), direction: v.direction || "any", accountId: v.accountId || "" };
-        if (!clean.contains) return;
+        if (!clean.contains || !clean.category) return false;
         pending = editing ? "Rule saved." : "Rule added.";
         store.update((p) => {
           p.rules = p.rules ?? [];
