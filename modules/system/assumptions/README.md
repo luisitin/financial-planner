@@ -39,3 +39,7 @@ Missing keys fall back to defaults (older plans). Reset keeps the review date. P
 ## Ideas / not yet
 - Per-scenario assumptions (phase 9) instead of one global set.
 - A "what my advisor used" column filled by `ai/reader` from the advisor's plan (phase 8).
+
+## Open at one box (2026-11-11)
+`#/system/assumptions?show=<key>` (for example `emergencyMonths`) brings that box to the middle of the screen and outlines it
+for two seconds, once per arrival. The link on the Emergency fund page is not in this lane (stress test p-balance/x-2).

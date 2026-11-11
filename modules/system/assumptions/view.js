@@ -19,6 +19,9 @@ const PLAIN = {
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
+// a link that names one box (?show=emergencyMonths) brings it to the middle of the screen once per arrival; the shell redraws
+// with the same route object after a save, a new address makes a new one (stress test p-balance/x-2, 2026-11-11)
+const shown = new WeakSet();
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -64,6 +67,19 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
     ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = "Every assumption is back to its default."; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
   ));
+
+  const show = ctx.route?.query?.show;
+  if (show && ctx.route && !shown.has(ctx.route) && ASSUMPTIONS.some((x) => x.key === show)) {
+    shown.add(ctx.route);
+    root.append(ui.h("style", {}, ".as-show { outline: 3px solid var(--accent); outline-offset: 6px; border-radius: var(--radius-sm); }"));
+    requestAnimationFrame(() => {
+      const label = form.querySelector(`[name="${show}"]`)?.closest("label");
+      if (!label) return;
+      label.scrollIntoView({ block: "center" });
+      label.classList.add("as-show");
+      setTimeout(() => label.classList.remove("as-show"), 2000);
+    });
+  }
 
   root.append(ui.h("details", { class: "card fold fold-card" },
     ui.h("summary", {}, ui.h("h2", {}, "Where these numbers come from"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),

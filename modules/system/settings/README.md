@@ -24,3 +24,10 @@ whole plan after a confirm; the server keeps timestamped backups of every previo
 - Encryption at rest with a passphrase (see docs/PLAN.md "Security").
 - Theme, font size, number rounding preferences.
 - Manage devices / revoke tokens once the server supports more than one token.
+
+## Erase and restore (stress test F6, 2026-11-11)
+Erase asks with the PC sentence only when a PC holds the plan (`store.backend() === "server"`); otherwise "This is the only
+copy and it cannot be undone. Download a copy first...". After the reload Settings says "Your plan was erased from this
+device." once (sessionStorage `planner.erased`) with a "Start a new plan" button. Restore names what is replaced (the first
+three section counts) and its green notice has Undo (the plan as it was, kept for the visit). A file that is not a plan
+copy gets a plain sentence instead of the JSON parser's message.

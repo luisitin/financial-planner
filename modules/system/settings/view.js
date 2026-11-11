@@ -18,6 +18,8 @@ const sectionName = (k, n = 2) => (n === 1 && SECTION_ONE[k]) || (SECTION_NAMES[
 // The shell re-renders the page after every store.update, which would wipe a "Saved."
 // notice; so the message waits here and the next render shows it once.
 let pending = null;
+// the plan as it was before a restore, for the Undo on the green notice (this visit only; stress test F6)
+let beforeRestore = null;
 
 export function render(root, ctx) {
   const { ui, fmt, api, ai, store, features, modules, GROUPS, derived, plan, view } = ctx;
@@ -36,6 +38,12 @@ export function render(root, ctx) {
     };
     return host;
   };
+
+  // just erased (the page reloads to do it): say so once, with the way on (stress test F6, 2026-11-11)
+  let erased = null;
+  try { erased = sessionStorage.getItem("planner.erased"); sessionStorage.removeItem("planner.erased"); } catch { }
+  if (erased === "only") root.append(ui.notice("ok", [ui.h("div", {}, "Your plan was erased from this device."), ui.row(ui.h("a", { class: "btn", href: "#/overview/start" }, "Start a new plan"))]));
+  else if (erased === "pc") root.append(ui.notice("ok", "This device's copy was erased. The plan on the PC is untouched."));
 
   // ---- plan basics
   const basicsOut = out();
@@ -76,16 +84,40 @@ export function render(root, ctx) {
       ui.button("Download a copy", () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" })); a.download = `plan-${fmt.today()}.json`; a.click(); dataOut.say("ok", "A copy of your plan is downloading."); }, { class: "secondary" }),
       ui.button("Restore from a copy", () => fileIn.click(), { class: "secondary" }),
       // through the store: in the sandbox only the pretend plan goes, and the waiting mark goes with the copy it names
-      ui.button("Erase the copy on this device", () => { const waiting = store.syncState().pending; if (ui.confirm(waiting ? "Erase the plan stored in this browser? Your latest changes have not reached the PC yet, so they would be lost. The copy on the PC is untouched." : "Erase the plan stored in this browser? The copy on the PC is untouched.")) { store.eraseDevice(); location.reload(); } }, { class: "danger" }),
+      ui.button("Erase the copy on this device", () => {
+        // the PC sentence only when a PC holds the plan; otherwise this is the only copy (stress test F6, design log 2026-11-06)
+        const waiting = store.syncState().pending, onPc = store.backend() === "server";
+        const ask = onPc
+          ? (waiting ? "Erase the plan stored on this device? Your latest changes have not reached the PC yet, so they would be lost. The copy on the PC is untouched." : "Erase the plan stored on this device? The copy on the PC is untouched.")
+          : store.sandbox() ? "Erase the pretend plan on this device? Your real plan is not touched."
+          : "Erase your plan from this device? This is the only copy and it cannot be undone. Download a copy first if you may want it back.";
+        if (!ui.confirm(ask)) return;
+        try { sessionStorage.setItem("planner.erased", onPc ? "pc" : "only"); } catch { }
+        store.eraseDevice(); location.reload();
+      }, { class: "danger" }),
     ),
     fileIn, dataOut,
     ui.h("p", { class: "small muted", style: { marginTop: "10px" } }, "A copy is a plain file you can keep anywhere. Restoring replaces what is here with the file."),
   ));
-  if (pending?.card === "data") { dataOut.say(pending.kind, pending.text); pending = null; }
+  if (pending?.card === "data") {
+    if (pending.undo && beforeRestore) {
+      // the restore stays until the person leaves; Undo puts the plan back as it was
+      const was = beforeRestore;
+      dataOut.replaceChildren(ui.notice("ok", [ui.h("div", {}, pending.text), ui.row(ui.button("Undo", () => { beforeRestore = null; pending = { card: "data", kind: "ok", text: "Your plan is back as it was before the restore." }; store.replace(was); }, { class: "secondary" }))]));
+    } else dataOut.say(pending.kind, pending.text);
+    pending = null;
+  }
   fileIn.addEventListener("change", async () => {
     const f = fileIn.files?.[0]; if (!f) return;
-    try { const p = JSON.parse(await f.text()); if (!("schemaVersion" in p)) throw new Error("that file is not a plan copy"); if (ui.confirm(`Replace the current plan with ${f.name}?`)) { pending = { card: "data", kind: "ok", text: `Restored from ${f.name}.` }; store.replace(p); } }
-    catch (e) { dataOut.say("error", `Could not restore: ${e.message}. Pick a file that was downloaded from this page.`, false); }
+    let p = null;
+    try { p = JSON.parse(await f.text()); } catch { p = null; }
+    if (!p || typeof p !== "object" || !("schemaVersion" in p)) { dataOut.say("error", "That file is not a copy made by this app. Pick a file you downloaded from this page (it is called plan- and a date, and ends in .json).", false); fileIn.value = ""; return; }
+    const now = counts.length ? ` Your plan as it is now (${counts.slice(0, 3).join(", ")}${counts.length > 3 ? ", and more" : ""}) will be replaced.` : "";
+    if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
+      beforeRestore = structuredClone(plan);
+      pending = { card: "data", kind: "ok", text: `Restored from ${f.name}.`, undo: true };
+      store.replace(p);
+    }
     fileIn.value = "";
   });
 
