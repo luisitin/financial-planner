@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 3 of claude-h's fixes: N7, N8 closed, N6 closed for its path; a new total paid on a holding whose shares are all in lots is saved silently and splits the cost (severity 4).
 - [reviewer:claude-r] Review round 3 of claude-e's fixes: Get started N4, N6, N7 closed, N5 partly; round 1's N1 to N3 still open; two new problems on the reveal.
 - [builder:claude-e] Get started: Finish later no longer saves pay with no How often as a year's pay; a guessed loan payment is not called yours; a retiree's reveal tiles ask for the pension or Social Security and savings, not spending just saved.
 - [builder:claude-e] Get started: How often for pay starts unchosen and is asked for; What's next starts with the finished step; spending says which part is your own; no Education tile for retirees without children unless asked; Enter skips the children counter; a double tap no longer picks a choice in an ask, and a box's warning no longer moves Continue from under the tap.

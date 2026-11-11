@@ -5,6 +5,26 @@ sandbox, and a second agent that had not found it tried to refute it on e05d6a4;
 stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 "held" = the family household plus VTI and ACME in Brokerage, FXAIX and BND in Ana's 401(k).
 
+## Round 3 (66c2b58 on d8b0ec2): 3 checked. N7 and N8 closed. N6 closed for the reported path; the other direction is N9
+
+| id | verdict | what was seen |
+|---|---|---|
+| N6 (added shares at $0 cost) | closed for the reported path | The message now asks for the cost. Adding the 0.3 lot for $18,000 says "What you paid in all for BTC is now $21,000 (was $3,000)". Crypto's hero, Crypto's rows, Holdings and Tax lots then all show $48,000, +$27,000 on $21,000 (checked by hand). Removing the lot puts back $3,000, and every page agrees again. A lot for shares that are already all in lots is refused in plain words. A first lot on a holding with no lots does not double-count. The opposite direction still splits the cost: N9. |
+| N7 (long decimal) | closed | "0.3 shares" everywhere. |
+| N8 (sale vs typo) | closed | Lowering the shares says "If you sold some, lower 'What you paid in all'…". With 50 shares and $4,500, the loss is −$2,000, and $3,000 of losses goes against this year, about $690 (checked by hand). |
+
+Regressions: Crypto, Holdings, Tax lots, Allocation and Rebalance on blank, a family with holdings, demo and retiredCouple, at 390, at 320 and in dark mode. All 60 cells match the build before 66c2b58, figures and filled buttons alike. No errors and nothing off the edge.
+
+### New problem (confirmed by a skeptic, through the app's own screens only)
+
+**N9 (severity 4): once every share is in two or more lots, a new "What you paid in all" is saved silently, and one card shows two totals**
+- Steps, crypto: blank plan. Add BTC with 0.5 coins at $60,000, $3,000 paid, bought 2025-06-01. Change it to 0.8. On Tax lots, add the 0.3 lot at $18,000, so the cost becomes $21,000. On Crypto, tap "Change or remove", type 25000 in "What you paid in all", and Save.
+- Seen: the message says only "BTC saved.". The hero says "+$23,000 on $25,000 paid" and the row says "+$23,000 (+92%)". On the same card, the lot line underneath lists "$3,000 paid, +$27,000 · $18,000 paid, +$0", which is $21,000 and +$27,000. Tax lots is unchanged and gives no warning.
+- Steps, stock: Net worth, add a brokerage account. On Holdings, add VTI with 300 shares and $45,000 paid. On Tax lots, add lots of 200 for $30,000 and 100 for $26,000, so the cost becomes $56,000. On Holdings, change "What you paid in all" to 40000.
+- Seen: Holdings shows "Paid $40,000, Gain +$35,000". Tax lots still adds up to $56,000, +$19,000, and its tax-loss advice follows the lots.
+- Should: one cost for the holding. When the lots cover every share, refuse a total that differs from their sum and name the place to change it, for example "Your two purchases add up to $21,000: change them on Tax lots." Alternatively, keep the box read-only and point there.
+- Cause: `modules/investments/holdings/view.js:65`. The cost follows into the lots only when there is exactly one lot (`oneLot`). `:78-79` do nothing for two or more lots, and the message at `:82` has no branch for this case. The gain comes from `costBasis` alone (`crypto/compute.js:57`, `holdings/compute.js:59-66`), while the lot lines and Tax lots read the lots. This was there before 66c2b58. N6's fix covered only adding a lot, so this is the same contradiction reached from the other side.
+
 ## Round 2 (0b95342 on f2884e4): 5 checked, 5 closed; 3 new problems, one of them severity 4
 
 | id | verdict | what was seen |
