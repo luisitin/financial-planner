@@ -105,7 +105,7 @@ function renderOne(wrap, ctx, id) {
     ui.h("div", { class: "progress", "aria-hidden": "true" }, ui.h("span", { style: { width: `${Math.max(pct ? 2 : 0, pct)}%` } })),
     // the one filled button on the first screen, right under the progress (stress test 2026-11-11, OP-7 and A2: below the whole
     // list it was off the first screen on five guides); "Do something else" stays outlined under the list
-    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: fs?.href ?? s.next.href, class: "btn", onClick: () => follow() }, fs ? `${fs.label} ›` : `Do step ${s.next.index}: ${id === PATH_ID ? s.next.name : s.next.short}`)) : null));
+    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: fs?.href ?? s.next.href, class: "btn", onClick: () => follow() }, fs ? `${fs.label} ›` : id === PATH_ID ? `Continue your plan: ${s.next.name} ›` : `Do step ${s.next.index}: ${s.next.short}`)) : null));
 
   // the steps
   const STATE_WORDS = { done: "Done.", none: "Does not apply.", later: "Skipped for now.", todo: "" };

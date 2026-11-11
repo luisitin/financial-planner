@@ -5,7 +5,7 @@
 // view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
 // something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
 import { guessCards } from "../guesses/compute.js";
-import { progress as setupProgress, QUESTIONS } from "../setup/compute.js";
+import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS } from "../setup/compute.js";
 
 export function compute(plan, params = {}) {
   const steps = [
@@ -77,7 +77,9 @@ export function firstStep(plan) {
   const sp = setupProgress(plan);
   if (sp.started && !sp.finished) {
     const mid = sp.at && sp.at !== "welcome";
-    const q = mid ? sp.q ?? 1 : 1;
+    // the number of the screen the link opens, as Get started's setupCard says it: progress() steps past a screen with
+    // nothing to ask but keeps that screen's number (attack: "question 4 of 7" here, "question 5 of 7" there, both to owe)
+    const q = mid ? SETUP_SCREENS.find((x) => x.id === sp.at)?.q ?? sp.q ?? 1 : 1;
     return { kind: "questions", q, total: QUESTIONS, label: `Continue your plan: question ${q} of ${QUESTIONS}`, href: `#/overview/setup/${mid ? sp.at : "you"}` };
   }
   if (sp.started || sp.finished) return null;

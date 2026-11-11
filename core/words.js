@@ -86,7 +86,7 @@ export const monthsNear = (months, target) => {
     const one = Math.floor(m * 10) / 10;   // down, never up to the target: 2.96 is "2.9 months"
     return `${one} months`;
   }
-  // just over the target: up, never down to it, so "a bit over the 6 you want" never follows "6 months" (attack on review N3)
-  if (Number.isFinite(m) && Number.isFinite(t) && m > t + 0.05 && m < 100 && Math.round(m) <= t) return `${Math.ceil(m * 10) / 10} months`;
+  // just over the target: to the tenth, never down to it (6.41 is "6.4 months", 6.06 "6.1 months"), so "a bit over the 6 you want" never follows "6 months" (attack on review N3)
+  if (Number.isFinite(m) && Number.isFinite(t) && m > t + 0.05 && m < 100 && Math.round(m) <= t) return `${Math.max(Math.round(m * 10), Math.round(t * 10) + 1) / 10} months`;
   return monthsWords(m);
 };

@@ -253,7 +253,8 @@ function continueFor(plan, { page, off, today }) {
   // basic when the plan was built on the pages (review 2026-11-11 N4: "question 5 of 7" above and "step 1 of 5" under it)
   if (n.key === "answers") {
     let fs = null; try { fs = firstStep(plan); } catch { fs = null; }
-    if (fs?.kind === "start") return { text: "Start your plan: a few easy questions ›", href: "#/overview/start", hidden: "", startPath: false, kind: "new" };
+    // the same words and place as the Dashboard and Your plan (attack: "Start your plan: a few easy questions" to Get started here)
+    if (fs?.kind === "start") return { text: `${fs.label} ›`, href: fs.href, hidden: "", startPath: false, kind: "new" };
     if (fs && page !== "overview/setup") return { text: `${fs.label} ›`, href: fs.href, hidden: "", startPath: fs.kind === "basics", kind: "continue" };
   }
   // this page is the next step and was reached without the guide in the address: one tap draws the bar

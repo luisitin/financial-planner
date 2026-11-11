@@ -139,3 +139,16 @@ test("monthsNear: just over the target never rounds down to it beside 'a bit ove
   assert.equal(monthsNear(6.02, 6), "6 months", "within overTarget's margin: no 'over' words, so the plain figure");
   assert.equal(monthsNear(6.6, 6), "7 months");
 });
+
+test("firstStep: the question number of the screen its link opens, as setupCard says it (attack: 4 of 7 here, 5 of 7 there)", async () => {
+  const { setupCard } = await import("../start/compute.js");
+  const { firstStep } = await import("./compute.js");
+  for (const at of ["you", "money", "ages", "have", "have-amounts", "owe", "owe-amounts", "spend", "goals", "goal-details"]) {
+    const p = emptyPlan(); p.income.push({ id: "i", type: "salary", amount: 4000 });
+    p.guide = { setup: { startedAt: "2026-11-10", at } };
+    const fs = firstStep(p), sc = setupCard(p);
+    assert.equal(fs.kind, "questions", at);
+    assert.equal(fs.q, sc.q, `${at}: the same number`);
+    assert.equal(fs.href, sc.href, `${at}: the same screen`);
+  }
+});

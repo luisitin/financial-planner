@@ -74,7 +74,7 @@ export function render(root, ctx) {
   if (h.state === "empty") {
     put(head, title("Your plan"),
       ui.h("p", { class: "pl-lede" }, "It starts with a few easy questions, then a quick look at each step. About 20 minutes in all; stop any time."),
-      filled("#/overview/setup/you", "Let's go"));
+      filled("#/overview/setup/you", "Set up my plan ›"));   // the Dashboard's words for the same tap (attack on N5)
     headBtn = true;
   } else if (h.state === "going") {
     // part way through the questions: the questions' own count, as on the Dashboard and Get started (stress test retest)
@@ -86,11 +86,11 @@ export function render(root, ctx) {
     put(head, title("Your plan so far"),
       // the same count as the Dashboard and Get started: the step you are on, not how many count as done by your figures
       // (stress test 2026-11-11: "step 2 of 7" there and "done 3 of 7" here; j-first-retiree/x-3)
-      ui.h("p", { class: "pl-lede" }, `${inQuestions ? `You're part way through the questions: question ${sc.q} of ${sc.total} is next.` : h.step ? `You're on step ${h.step} of ${h.total}.` : `${h.total} steps.`} Everything below is worked out already; the next steps go through it with you.`),
+      ui.h("p", { class: "pl-lede" }, `${inQuestions ? `You're part way through the questions: question ${sc.q} of ${sc.total} is next.` : basics?.kind === "start" ? "It starts with a few easy questions." : h.step ? `You're on step ${h.step} of ${h.total}.` : `${h.total} steps.`} Everything below is worked out already; the next steps go through it with you.`),
       ui.h("div", { class: "pl-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(h.total), "aria-valuenow": String(Math.max(0, (h.step ?? 1) - 1)), "aria-label": "Steps behind you" },
         ui.h("span", { style: { width: `${h.total ? Math.max(4, Math.round(100 * Math.max(0, (h.step ?? 1) - 1) / h.total)) : 4}%` } })),
       h.inShort ? ui.h("p", { class: "pl-short" }, h.inShort) : null,
-      inQuestions ? filled(sc.href, `Continue your plan: question ${sc.q} of ${sc.total} ›`, follow) : basics ? filled(basics.href, `${basics.label} ›`, follow) : h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
+      inQuestions ? filled(sc.href, `Continue your plan: question ${sc.q} of ${sc.total} ›`, follow) : basics ? filled(basics.href, `${basics.label} ›`, follow) : h.next ? filled(h.next.href, `Continue your plan: ${h.next.name} ›`, follow) : null);
     headBtn = !!h.next;
   } else if (!h.ready) {
     // finished the steps but some answers are still missing: no check mark and no "ready"
@@ -185,6 +185,6 @@ export function render(root, ctx) {
       : ui.h("p", {}, "Fill in the gaps above whenever you are ready; the rest of your plan is already here."),
     ui.h("a", { class: `btn${filledSoFar || h.gaps ? " secondary" : ""}`, href: "#/overview/dashboard" }, "Go to my dashboard")));
   else if (h.state === "going" && h.next) { const fs = h.next.key === "answers" ? (() => { try { return firstStep(ctx.plan); } catch { return null; } })() : null;
-    wrap.append(ui.h("section", { class: "pl-end" }, ui.h("a", { class: "btn secondary", href: fs?.href ?? h.next.href, onClick: follow }, fs ? `${fs.label} ›` : `Continue: ${h.next.name} ›`))); }
+    wrap.append(ui.h("section", { class: "pl-end" }, ui.h("a", { class: "btn secondary", href: fs?.href ?? h.next.href, onClick: follow }, fs ? `${fs.label} ›` : `Continue your plan: ${h.next.name} ›`))); }
   try { wrap.querySelector("h1")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
 }

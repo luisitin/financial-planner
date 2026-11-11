@@ -6,6 +6,10 @@ let pending = null;   // the confirmation shown on the next render
 let openKey = null;   // the row being edited, kept across the re-render that follows a save
 let heroRoute = null; // the visit that opened on the intro keeps it, so the first tick does not pull the list up under the thumb
 let tickWords = null; // a tick's confirmation: drawn at the foot of the page so nothing above the thumb moves
+// For a few hours (6a29d2a) the guardian's name was typed into Notes under "Who would raise the children?". A one-line note
+// of a few words, on a guardian with no `who`, fills the box so the name is not typed again; nothing counts as chosen until
+// Save stores it in `who` (attack on N14: an old note must never read as a chosen guardian on its own)
+const oldWho = (x) => { const n = String(x.notes ?? "").trim(); return n && !n.includes("\n") && n.length <= 40 && n.split(/\s+/).length <= 4 ? n : ""; };
 
 const STYLE = `
 .ed-root .ed-list { list-style: none; margin: 0; padding: 0; }
@@ -88,7 +92,7 @@ export function render(page, ctx) {
           { key: "updatedAt", label: "Signed or last updated", type: "date" },
           { key: "where", label: "Where the original is kept", type: "text", placeholder: "e.g. fire safe at home; the lawyer's office" },
           notesField,
-        ], { status: x.status, updatedAt: x.updatedAt, where: x.where, notes: x.notes, ...(guardian ? { who: x.who } : {}) }, (v) => {
+        ], { status: x.status, updatedAt: x.updatedAt, where: x.where, notes: x.notes, ...(guardian ? { who: x.who || oldWho(x) } : {}) }, (v) => {
           pending = `${x.label} saved.`;
           openKey = null;
           store.update((p) => {

@@ -79,7 +79,7 @@ export function render(root, ctx) {
   let fs = null; try { fs = s.state === "new" && p.next?.key === "answers" ? firstStep(ctx.plan) : null; } catch { fs = null; }
   // a plan built on the pages, the questions never opened: the first missing basic, as the Dashboard and Your plan say it,
   // never "Let's go" as if nothing were there (review 2026-11-11 N5)
-  const hero$ = p.complete ? "complete" : s.state === "started" ? "questions" : s.state === "done" || (p.started && p.next && p.next.key !== "answers") ? "path" : fs?.kind === "basics" ? "basics" : "new";
+  const hero$ = p.complete ? "complete" : s.state === "started" && (!p.next || p.next.key === "answers") ? "questions" : s.state === "done" || (p.started && p.next && p.next.key !== "answers") ? "path" : fs?.kind === "basics" ? "basics" : "new";
   const first = d.firstRun;
   const h1 = ui.h("h1", { tabindex: "-1" }, first ? "Let's build your plan" : name ? `Hi ${name}. What would you like to do?` : "What would you like to do?");
   wrap.append(h1);
@@ -114,7 +114,7 @@ export function render(root, ctx) {
       ui.h("h2", { class: "go-t", id: "go-s-t" }, "Your plan"),
       ui.h("div", { class: "go-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(p.total), "aria-valuenow": String(p.doneCount), "aria-label": "Steps done" }, ui.h("span", { style: { width: `${p.total ? Math.max(4, Math.round(100 * p.doneCount / p.total)) : 4}%` } })),
       ui.h("p", { class: "go-d" }, `Next: ${p.next.name}.`),
-      ui.h("a", { class: btnClass, href: p.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Continue: ${p.next.name} ›`),
+      ui.h("a", { class: btnClass, href: p.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Continue your plan: ${p.next.name} ›`),
       ui.h("div", {}, ui.h("a", { class: "go-more", href: p.planHref }, "See your plan so far ›")));
     else put(
       ui.h("p", { class: "go-k" }, "Your plan"),
