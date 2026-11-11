@@ -9,7 +9,7 @@ import { money as fmtMoney } from "../../../core/format.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { MARKETPLACE, MEDICARE_OPEN } from "./data/dates.js";
 import { NameOf, namesIn } from "../../../core/words.js";
-import { payRhythm } from "../../../core/math/periods.js";
+import { payRhythm, perYear } from "../../../core/math/periods.js";
 
 /** The kinds of date, in the order the filter chips show them. */
 export const KINDS = {
@@ -114,10 +114,16 @@ export function compute(plan, params = {}) {
       // a salary typed as a year's (or a quarter's) pay is paid in paychecks: the Paycheck page's count, else every two weeks
       // (core/math/periods.js payRhythm), each its share; never the whole year on one day (review N1: $48,000 on Nov 6, 2027)
       const rhythm = payRhythm(inc, plan);
-      const period = rhythm ? rhythm.period : inc.period, each = rhythm ? Math.round(rhythm.perPay * 100) / 100 : Number(inc.amount) || null;
-      if (isDate(inc.payday) && inc.type === "salary") paydays.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), payday: inc.payday });
-      if (!isDate(anchor)) { if (inc.type === "salary") needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), rhythm: rhythm ? rhythm.words : null }); continue; }
-      for (const d of periodDates(anchor, period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: each, detail: rhythm ? `the year's pay before tax in paychecks, ${rhythm.words} (the Paycheck page can change how often)` : period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
+      // a pension or Social Security typed as a year's (or quarter's) amount comes monthly (re-check: $12,000 on one day)
+      const monthly = !rhythm && ["pension", "social"].includes(inc.type) && (inc.period === "annual" || inc.period === "quarterly");
+      const period = rhythm ? rhythm.period : monthly ? "monthly" : inc.period;
+      const each = rhythm ? Math.round(rhythm.perPay * 100) / 100 : monthly ? Math.round(perYear(inc.amount, inc.period) / 12 * 100) / 100 : Number(inc.amount) || null;
+      const semi = "the 15th and the last day of the month (a guess: your employer's days may differ)";
+      if (isDate(inc.payday)) paydays.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), payday: inc.payday });
+      // twice a month falls on the 15th and the last day whatever the anchor, so it needs no payday; the rest ask for one,
+      // pension and Social Security too (re-check: Get started's monthly ones never showed)
+      if (!isDate(anchor) && period !== "semimonthly") { needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), rhythm: rhythm ? rhythm.words : null }); continue; }
+      for (const d of periodDates(isDate(anchor) ? anchor : "2000-01-01", period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: each, detail: rhythm ? `the year's pay before tax in paychecks, ${rhythm.words}${period === "semimonthly" ? `: ${semi}` : ""} (the Paycheck page can change how often)` : monthly ? "the year's amount, paid monthly" : period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
     }
   }
 
@@ -212,7 +218,7 @@ export function toIcs(events, { stamp = "20260101T000000Z", name = "Money calend
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//financial-planner//money calendar//EN", "CALSCALE:GREGORIAN", `X-WR-CALNAME:${esc(name)}`];
   events.forEach((e, i) => {
     const d = e.date.replace(/-/g, ""), next = addDays(e.date, 1).replace(/-/g, "");
-    lines.push("BEGIN:VEVENT", `UID:${d}-${i}-${e.kind}@money-calendar`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${next}`, fold(`SUMMARY:${esc(e.title)}`));
+    lines.push("BEGIN:VEVENT", `UID:${d}-${i}-${e.kind}@money-calendar`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${next}`, fold(`SUMMARY:${esc(e.amount !== null && e.amount !== undefined && Number.isFinite(Number(e.amount)) ? `${e.title} ${Number(e.amount) < 0 ? "-" : "+"}${fmtMoney(Math.abs(Number(e.amount)), "USD", "en-US", 2)}` : e.title)}`));
     if (e.detail) lines.push(fold(`DESCRIPTION:${esc(e.detail)}`));
     lines.push("END:VEVENT");
   });

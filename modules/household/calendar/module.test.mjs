@@ -154,5 +154,22 @@ test("review N1, N2: a yearly salary is paid in paychecks (every two weeks unles
   const q = emptyPlan();
   q.income = [{ id: "s", personId: "me", name: "Pay", type: "salary", amount: 48000, period: "annual" }];
   q.whatIfs = { paycheck: { me: { paychecks: 24 } } };
-  assert.equal(compute(q, { today: "2026-11-11", range: "month" }).needPayday[0].rhythm, "paid twice a month");
+  // twice a month needs no payday: the 15th and the last day, each 1/24 of the year, with the note that the days are a guess
+  const dq = compute(q, { today: "2026-11-11", range: "month" });
+  assert.deepEqual(dq.needPayday, []);
+  assert.deepEqual(dq.events.filter((e) => e.kind === "pay").map((e) => [e.date, e.amount]), [["2026-11-15", 2000], ["2026-11-30", 2000]]);
+  assert.match(dq.events.find((e) => e.kind === "pay").detail, /15th and the last day/);
+});
+
+test("re-check: a yearly pension is paid monthly; pension and Social Security are asked a payday; the calendar file carries the amount", () => {
+  const p = emptyPlan();
+  p.income = [
+    { id: "pn", name: "Pension", type: "pension", amount: 12000, period: "annual", startDate: "2026-01-05" },
+    { id: "ss", name: "Social Security", type: "social", amount: 1800, period: "monthly" },
+  ];
+  const d = compute(p, { today: "2026-11-11", range: "quarter" });
+  const pn = d.events.filter((e) => e.kind === "pay" && e.title === "Pension");
+  assert.deepEqual(pn.map((e) => [e.date, e.amount]), [["2026-12-05", 1000], ["2027-01-05", 1000], ["2027-02-05", 1000]]);
+  assert.deepEqual(d.needPayday.map((x) => x.id), ["ss"]);
+  assert.match(toIcs(pn), /SUMMARY:Pension \+\$1\\,000\.00/);
 });

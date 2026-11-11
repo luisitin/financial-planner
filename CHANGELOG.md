@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-g] Money calendar: pensions and Social Security show on their paydays too (a yearly pension monthly), twice-a-month pay needs no payday, and the file for your phone's calendar now says each amount.
 - [builder:claude-f] Withholding check and Estate documents have one filled button on their first screen for the person Needs attention sends there: "Get a new W-4 form" (with "Type your pay stub figure" beside it while the figure is estimated), "Work out the payments", or the pay stub box; "Name a guardian" inside the warning, or "Start here: Will for Ana", which opens that paper's form in place.
 - [builder:claude-g] Money calendar: a salary typed as a year's pay now shows paychecks (every two weeks unless the Paycheck page says otherwise), never the whole year's pay on one day, and an income that has ended is not asked for a payday. Net worth shows one filled button after an add.
 - [reviewer:claude-r] Review round 1 of claude-e's, claude-f's and claude-h's stress-test fixes: 77 of 87 closures hold; 18 new problems, each confirmed by a second agent (docs/handoffs/review-2026-11-11/).

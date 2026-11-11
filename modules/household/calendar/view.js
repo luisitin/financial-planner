@@ -73,7 +73,7 @@ export function render(page, ctx) {
       if (old) return refuse(old, "Type a payday from the last year, like the last one you had.");
       const changed = typed.filter((x) => v[x.id] !== x.payday);
       if (!changed.length) { pending = "Nothing changed."; rerender(); return false; }
-      pending = changed.length === 1 ? `${say(changed[0])}: paydays added, counted from ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
+      pending = changed.length === 1 ? `${say(changed[0])}: paydays ${changed[0].payday ? "now counted" : "added, counted"} from ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
       store.update((p) => { for (const x of changed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
     }, { submitLabel: asking.length ? "Show my paydays" : "Save" });
     for (const inp of form.querySelectorAll('input[type="date"]')) { inp.max = today; inp.min = oldest; }
