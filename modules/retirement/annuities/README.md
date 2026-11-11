@@ -40,3 +40,8 @@ A guaranteed income line counts in the first retirement year only when it is pai
 years (`fromYear`, `untilYear`), the engine's own test (projection `incomeIn`). A rented-out condo's loan payment that comes
 back only once the loan is paid off (from 2051 on the landlord plan) was counted from 2045, so the share read 138% against the
 projection's 123%. Tested on `qa/fixtures/round8-rental.mjs`.
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **Not ready**: the missing basics as buttons and no form (a quote added then was "added" and shown nowhere). Saved quotes wait.
+- **A quote dearer than the savings on file** (RC-9): `tooBig` (premium over cash + taxable + pre-tax + Roth on file, which is what
+  the model takes in the first year); the card says so instead of 0% and $0. Both amounts are required (RC-2).

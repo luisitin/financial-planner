@@ -36,3 +36,10 @@ Input levers (applied to the engine's inputs): fees a year (taken off both the s
 - More levers: selling the house, a part-time job, a pension, the withdrawal strategy.
 - Make a scenario the plan (with the user's click), keeping the old plan as a scenario.
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **One answer per card** (RC-8): "Chance it lasts" first, then "If markets do as well as average: lasts / runs out in 2071"
+  (it read "Does the money last? Yes" over 37%).
+- Not fixed (W7, "Your plan" 78% here, 80% on Chance the money lasts): the copies would need the same 2,000 pretend futures to be
+  compared fairly (the first 400 of a draw sit up to 4 points off the full 2,000), about four seconds on a phone with four copies. A
+  money-side change for later: a faster engine, or one draw of 2,000 for all.

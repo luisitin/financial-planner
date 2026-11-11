@@ -18,7 +18,8 @@ export const PATHS = 300;
  * compute(plan, { today, paths }) -> {
  *   ready, missing, base (the plan as it is: results), quotes: [{ id, name, personId, personName, premium, monthly, startAge, cola, joint,
  *     payoutRate, rate (the return it pays like, nominal), ladderCost (bonds paying the same to the plan's end), ladderSaving (ladder - premium),
- *     withIt: results (the plan having bought it), floorShare (guaranteed income / spending in the first retirement year, before and after) }]
+ *     withIt: results (the plan having bought it; null when tooBig), tooBig (the premium is more than `savings`, everything on file
+ *     today), floorShare (guaranteed income / spending in the first retirement year, before and after) }]
  * }
  */
 export function compute(plan, params = {}) {
@@ -64,9 +65,13 @@ export function compute(plan, params = {}) {
     const T = copyInputs(I);
     T.events.push({ year: I.startYear, amount: premium, label: "annuity premium" });
     T.incomes.push({ name: q.name || "Annuity", yearly: monthly * 12, personIndex: pi, startAge, cola, taxable: true });
-    const withIt = premium > 0 && monthly > 0 ? results(T, { paths }) : null;
+    // more than the savings on file: the plan cannot pay for it today, and its run would read 0% and $0 (stress test 2026-11-11,
+    // RC-9); said instead of the figures
+    const savings = I.balances.cash + I.balances.taxable + I.balances.deferred + I.balances.free;
+    const tooBig = premium > savings + 0.5;
+    const withIt = premium > 0 && monthly > 0 && !tooBig ? results(T, { paths }) : null;
     return { id: q.id, name: q.name || "Annuity quote", insurer: q.insurer ?? "", personId: person?.id ?? "", personName: person?.name ?? "", partnerName: joint && partner ? partner.name : null, ageNow, premium, monthly, startAge, cola, joint,
-      payoutRate: premium > 0 ? monthly * 12 / premium : null, rate, ladderCost, ladderSaving: ladderCost - premium, endAge, withIt, floorBefore: guaranteedShare(I), floorAfter: guaranteedShare(T) };
+      payoutRate: premium > 0 ? monthly * 12 / premium : null, rate, ladderCost, ladderSaving: ladderCost - premium, endAge, withIt, tooBig, savings, floorBefore: guaranteedShare(I), floorAfter: guaranteedShare(T) };
   });
   return { ready: true, missing: [], base, quotes, bondRate: bond, inflation };
 }

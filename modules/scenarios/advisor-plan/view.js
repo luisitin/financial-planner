@@ -44,8 +44,9 @@ export function render(page, ctx) {
       const row = (label, a, b) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, a), ui.h("b", {}, b));
       host.append(ui.card(d.firm ? `Your plan and ${d.firm}${/s$/i.test(d.firm) ? "'" : "'s"}` : "Your plan and the advisor's", ui.h("ul", { class: "ap-figs" },
         ui.h("li", {}, ui.h("span", {}), ui.h("span", { class: "ap-h" }, "Yours"), ui.h("span", { class: "ap-h" }, "Advisor's")),
-        row("Does the money last?", y.success ? "Yes" : `to ${y.failYear}`, t.success ? "Yes" : `to ${t.failYear}`),
+        // the chance first, the straight-line run named as what it is (stress test 2026-11-11, RC-8: "Yes" over "37%")
         row("Chance it lasts", pct(y.chance), pct(t.chance)),
+        row("If markets do as well as average", y.success ? "lasts" : `runs out in ${y.failYear}`, t.success ? "lasts" : `runs out in ${t.failYear}`),
         row("Could spend a month", money(y.affordableMonthly), money(t.affordableMonthly)),
         row("Plans to spend a month", money(y.spendingMonthly), money(t.spendingMonthly)),
         row("Left at the end", money(y.endReal), money(t.endReal))),
@@ -74,14 +75,23 @@ export function render(page, ctx) {
       fields.push({ key: k, label: a ? `${a.name}: ${lv.label.charAt(0).toLowerCase() + lv.label.slice(1)}` : lv.label, type: lv.type, min: lv.min ?? 0, max: lv.max, step: lv.type === "number" ? "1" : undefined, help: lv.key === "extraSavingMonthly" ? "what they recommend saving beyond what you save now" : now !== null && now !== undefined && now !== 0 ? `yours: ${lv.type === "percent" ? `${Math.round(now * 1000) / 10}%` : lv.type === "money" ? money(now) : now}` : undefined });
     }
     fields.push({ key: "fee", label: "Their fee a year", type: "percent", min: 0, max: 5, help: "the advisory fee, plus the funds' own costs if they say" }, { key: "quotedChance", label: "Chance of success they quote", type: "percent", min: 0, max: 100 }, { key: "notes", label: "Their recommendations", type: "textarea", rows: 3 });
+    const said = ui.h("div");   // a refusal, under the form's button
     const values = { firm: A.firm ?? "", date: A.date ?? "", fee: A.fee ?? null, quotedChance: A.quotedChance ?? null, notes: A.notes ?? "", ...(A.changes ?? {}) };
     const form = ui.form(fields, values, (v) => {
       const changes = {};
       for (const f of fields) if (!["firm", "date", "fee", "quotedChance", "notes"].includes(f.key) && v[f.key] !== null && v[f.key] !== undefined && v[f.key] !== "") changes[f.key] = v[f.key];
-      pending = "Advisor's plan saved.";
+      // nothing from their report typed: nothing to compare, said at the button (stress test 2026-11-11, RC-1: "saved", and nothing compared)
+      const nothing = !Object.keys(changes).length && !(v.fee > 0) && (v.quotedChance === null || v.quotedChance === undefined);
+      if (nothing && !d.entered) {
+        said.replaceChildren(ui.notice("error", "Type at least one figure from their report (a return, the spending, a retirement age or their fee), then tap Compare."));
+        ctx.announce?.("Type at least one figure from their report, then tap Compare.");
+        return;
+      }
+      said.replaceChildren();
+      pending = nothing ? "Their figures are cleared: the page is empty again." : d.entered ? "Advisor's plan saved." : "Compared: their plan is below, next to yours.";
       store.update((p) => { p.advisor = { firm: (v.firm ?? "").trim(), date: v.date || "", fee: v.fee ?? null, quotedChance: v.quotedChance ?? null, notes: v.notes ?? "", changes }; });
     }, { submitLabel: d.entered ? "Save changes" : "Compare" });
-    if (!d.entered) return ui.card("From their report", ui.h("p", { class: "muted small" }, "Fill in only what their report states; anything empty stays as your plan has it."), form);
-    return ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Their assumptions"), ui.h("span", { class: "fold-status" }, d.firm || "entered"), ui.h("span", { class: "fold-chev" }, "›")), form);
+    if (!d.entered) return ui.card("From their report", ui.h("p", { class: "muted small" }, "Fill in only what their report states; anything empty stays as your plan has it."), form, said);
+    return ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Their assumptions"), ui.h("span", { class: "fold-status" }, d.firm || "entered"), ui.h("span", { class: "fold-chev" }, "›")), form, said);
   }
 }

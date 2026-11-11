@@ -39,7 +39,22 @@ export function render(page, ctx) {
       ui.h("h1", {}, "An income for life"),
       ui.h("p", { class: "lede" }, "An income annuity turns a sum of savings into a monthly payment for as long as you live, like a pension you buy. It cannot run out, but the money is gone once paid. Enter a quote and see what it would do to your plan."),
       ui.h("p", { class: "muted small" }, "Quotes come free from insurers or comparison sites: give your age, the sum and when you want the payments to start.")));
-    if (!d.ready) host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check a quote against your plan, it needs", d.missing))));
+    // the plan cannot check a quote yet: what is missing, as buttons, and no form (stress test 2026-11-11: a quote added here was
+    // "added" and then shown nowhere until the plan had its basics, so it was added twice)
+    if (!d.ready) {
+      const saved = (plan.retirement?.annuities ?? []).length;
+      const go = [];
+      for (const m of d.missing ?? []) {
+        const t = String(m);
+        if (/People page/.test(t)) go.push(["#/household/people", "People ›"]);
+        else if (/Net worth/.test(t)) go.push(["#/balance/net-worth", "Add what you own ›"]);
+        else if (/spend in retirement/.test(t)) go.push(["#/retirement/projection", "What you'll spend ›"]);
+      }
+      host.append(ui.card(null, ui.h("p", {}, needsWords("To check a quote against your plan, it needs", d.missing)),
+        saved ? ui.h("p", { class: "muted small" }, `${saved === 1 ? "Your saved quote waits" : `Your ${saved} saved quotes wait`} here until then.`) : null,
+        ui.row(...go.map(([href, words], i) => ui.h("a", { class: i ? "btn secondary" : "btn", href }, words)))));
+      return;
+    }
     for (const q of d.quotes) {
       const card = ui.card(q.name);
       card.append(ui.h("p", { class: "an-d" }, `${money(q.premium)} now for ${money(q.monthly)} a month from ${nameOf(q.personName)} ${q.startAge}${q.joint && q.partnerName ? `, for as long as ${nameIn(q.personName)} or ${nameIn(q.partnerName)} ${verbFor(q.partnerName, "lives", "live")}` : ", for life"}, ${q.cola ? "rising with prices" : "the same dollars every year"}${q.insurer ? ` (${q.insurer})` : ""}.`));
@@ -47,6 +62,7 @@ export function render(page, ctx) {
       if (q.rate !== null && Number.isFinite(q.rate)) card.append(
         ui.h("p", { class: `an-v ${ladderBetter ? "warn" : "ok"}` }, ladderBetter ? `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: less than the annuity.` : `Bonds paying the same until ${q.endAge} would cost ${money(q.ladderCost)}: the annuity is ${money(q.ladderSaving)} cheaper.`),
         ui.h("p", { class: "an-d" }, `It pays ${pct(q.payoutRate)} of the sum a year; over the lifetime ${q.joint ? "the two of you are" : `${nameIn(q.personName)} ${verbFor(q.personName, "is", "are")}`} likely to have, that is like ${withA(pct(q.rate))} return. The bonds stop at ${q.endAge}; the annuity keeps paying after, which is what it is for.`));
+      if (q.tooBig) card.append(ui.notice("warn", `This quote costs ${money(q.premium)} and your savings are about ${money(q.savings)}, so the plan cannot pay for it today. Try a smaller sum.`));
       if (q.withIt) {
         const b = d.base, w = q.withIt;
         const row = (label, x, y) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, x), ui.h("b", {}, y));
@@ -66,8 +82,9 @@ export function render(page, ctx) {
       { key: "name", label: "Quote", type: "text", required: true, placeholder: "e.g. Income at 65" },
       { key: "insurer", label: "Insurer", type: "text" },
       { key: "personId", label: "On whose life", type: "select", options: people.map((p) => ({ value: p.id, label: p.name })) },
-      { key: "premium", label: "You pay", type: "money", min: 0 },
-      { key: "monthly", label: "It pays a month", type: "money", min: 0 },
+      // both amounts are needed (stress test 2026-11-11, RC-2: a quote with a name and no amounts was saved as $0)
+      { key: "premium", label: "You pay", type: "money", min: 1, required: true },
+      { key: "monthly", label: "It pays a month", type: "money", min: 1, required: true },
       { key: "startAge", label: "From age", type: "number", min: 40, max: 90, step: "1", help: "now, or later (a deferred annuity)" },
       { key: "joint", label: "Keeps paying while either of us lives (joint life)", type: "checkbox" },
       { key: "cola", label: "Rises with prices each year", type: "checkbox" },

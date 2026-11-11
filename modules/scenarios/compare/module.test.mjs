@@ -78,3 +78,4 @@ test("review 2026-11-02: a spending figure typed in a scenario is a typed figure
   const less = applyChanges(p, { spendingMonthly: Math.round(d.current.spendingMonthly * 0.9 / 10) * 10 }, { today: TODAY });
   assert.ok(less.inputs.spending.yearly < buildInputs(p, { today: TODAY }).inputs.spending.yearly, "10% less is less");
 });
+

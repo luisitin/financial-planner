@@ -25,3 +25,7 @@
 ## Ideas / not yet
 - Read the advisor's PDF with the AI reader and fill the form (the user clicks apply).
 - Their recommended portfolio's own fund costs against an index portfolio.
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- The chance first, then "If markets do as well as average" (RC-8). Compare with nothing typed from the report is refused with a
+  sentence under the button (RC-1); emptying an entered plan clears it and says so.

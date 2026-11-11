@@ -62,7 +62,8 @@ export function render(page, ctx) {
   const fields = [
     { key: "name", label: "Pension", type: "text", required: true, placeholder: "e.g. County retirement plan" },
     { key: "personId", label: "Whose", type: "select", options: people.map((p) => ({ value: p.id, label: p.name })) },
-    { key: "monthly", label: "Monthly amount", type: "money", min: 0, help: "for your life only (nothing for a survivor), at the age it starts" },
+    // needed (stress test 2026-11-11, RC-2: a pension with a name and no amount was saved as $0)
+    { key: "monthly", label: "Monthly amount", type: "money", min: 1, required: true, help: "for your life only (nothing for a survivor), at the age it starts" },
     { key: "startAge", label: "Starts at age", type: "number", min: 40, max: 80, step: "1" },
     { key: "cola", label: "Rises with prices each year (a cost-of-living raise)", type: "checkbox" },
     { key: "endAge", label: "Stops at age (optional)", type: "number", min: 40, max: 120, step: "1", help: "leave blank for life" },

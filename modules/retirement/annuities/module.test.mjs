@@ -56,3 +56,14 @@ test("batch 6: guaranteed income keeps a line's calendar years (the condo's loan
   assert.ok(pr.inputs.incomes.some((x) => x.part === "loan back" && x.fromYear === 2051));
   near(compute(p, { today: T, paths: 0 }).quotes[0].floorBefore, pr.coverage, 1e-9);
 });
+
+// stress test 2026-11-11, RC-9: a quote dearer than all the savings on file is said, not run to 0% and $0
+test("a quote that costs more than the savings on file is marked tooBig and not run", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-11-11");
+  p.retirement = { ...(p.retirement ?? {}), annuities: [{ id: "big", name: "Q", personId: p.household.people[0].id, premium: 5e7, monthly: 1200, startAge: 65 }, { id: "ok", name: "Small", personId: p.household.people[0].id, premium: 1000, monthly: 6, startAge: 65 }] };
+  const d = compute(p, { today: "2026-11-11", paths: 20 });
+  const big = d.quotes.find((q) => q.id === "big"), ok = d.quotes.find((q) => q.id === "ok");
+  assert.equal(big.tooBig, true); assert.equal(big.withIt, null); assert.ok(big.savings > 0 && big.savings < 5e7);
+  assert.equal(ok.tooBig, false); assert.ok(ok.withIt);
+});
