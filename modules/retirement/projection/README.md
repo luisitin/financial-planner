@@ -771,3 +771,15 @@ easily understand and use the page") is not met by a way that never raises back.
   and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
 - Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved
   (`withdrawal-strategy-income-first-063`, cents), explained in `tests/golden/retirement/QUALITY.md`. Test: `tests/retirement-ways.test.mjs` "5b R3".
+
+## A typed leftover is not added to retirement savings (2026-11-07)
+When the person typed a leftover (Get started question 6 or Expenses: `guide.setup.spendLeft`, above $0) and is still working, a note says plainly:
+"You said about $1,000 a month is left over. That stays in checking and savings and is not added to your retirement savings here; only what you put
+into retirement accounts (What you save for retirement) is." Decision (no owner to ask): the owner's words were that the leftover estimate could
+calculate how much is saved each year; the year's figure is said once, as cash building up, on Get started, Your plan and the Dashboard (`spare.year`).
+Adding it to the projection's contributions as a taxable saving would move every retirement answer, and the frozen retirement key, for money that is
+not in any account yet and is free to be spent; a household that wants it counted types it as a contribution. The projection cannot read the month
+itself (Next best action imports this page, so reading it back would loop), so the note uses the figure the person typed. No number moved.
+Also (task 142, item 5): an Income rent line that **ended** and is a rental's by name (the line's name holds the rental's name, or the other way
+round) ends that rental's rent in the plan from the line's last year, when no line going today holds it (`rentalLines`); before, the ended line was
+dropped from the match and the rent went on forever. A line that names no rental is not guessed at.

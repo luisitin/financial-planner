@@ -1,7 +1,7 @@
 // modules/cashflow/budget-percent/compute.js -- PURE. The 50/30/20 rule (or the household's own split) on income after
 // tax: what goes to needs (the bills you must pay), wants (the rest of the spending) and savings (retirement, goals and
 // what is left over), each against its target share, with the largest items in each and how far each is off.
-import { compute as computeIncome, countedOn } from "../income/compute.js";
+import { compute as computeIncome, countedOn, rentAfterCostsOf } from "../income/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computePaycheck, PAYROLL } from "../paycheck/compute.js";
 import { taxInputs, withReturns } from "../../taxes/federal/compute.js";
@@ -49,7 +49,7 @@ export function targetsFor(s = {}) {
  * tax on each owner's business profit after the Self-employment page's expenses, the 0.9% extra Medicare tax on pay and
  * self-employment earnings above the line (each return's own, filing separately), and the state's share; and the child
  * care account's money that would be lost (`careLost`: no care to pay back), which never reaches the bank. -> { gross,
- * federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown, careLost, afterTax, business: { gross, expenses,
+ * federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown, careLost, rentCosts (a rental's running costs a year, not in afterTax), afterTax, business: { gross, expenses,
  * profit }, agi, otherIncomeOnFederal } (all a year)
  */
 export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) }) {
@@ -161,7 +161,13 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
   // never comes back, so it comes off the month like a tax (care fourth pass: Jo with a 5,000 account and no care had 93 a
   // month MORE spare; she has 323 less). The care it does pay back is on Expenses already.
   const careLost = ti.care?.account?.forfeited ?? 0;
-  return { year, gross, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown: rate !== null, careLost, afterTax: gross - federal - payroll - state - careLost, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal };
+  // a rental's running costs (property tax, insurance, dues, upkeep, empty months): cash out of the month that no Expenses row holds, since a
+  // rental is entered once (Rental analysis). The Income page shows each rent line after them (rentAfterCostsOf); the month takes the
+  // same, so Income, Next best action, the Dashboard, Expenses and this page say one figure (follow-up 2026-11-07). The rent stays
+  // whole in `gross` (the tax reads it); the loan payment is a Debts payment in the spending already.
+  let rentCosts = 0;
+  try { for (const r of rentAfterCostsOf(plan, { today }).values()) if (r.afterCosts !== null) rentCosts += Math.max(0, r.monthly - r.afterCosts) * 12; } catch { rentCosts = 0; }
+  return { year, gross, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown: rate !== null, careLost, rentCosts, afterTax: gross - federal - payroll - state - careLost, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal };
 }
 
 /**
@@ -238,7 +244,8 @@ export function compute(plan, params = {}) {
   // not planned with, and neither is the tax on it; the taxes stay the whole year's (review 2026-11-02)
   const H = heldAfterTax(plan, { today, inc, T });
   month.held = H.held; month.heldGross = H.gross;
-  month.afterTax = T.afterTax / 12 - month.held;
+  month.rentCosts = (T.rentCosts ?? 0) / 12;
+  month.afterTax = T.afterTax / 12 - month.held - month.rentCosts;
 
   // needs: the bills marked "I must pay this" on Expenses (and the Debts page's payments); wants: the rest; savings: what
   // goes to retirement accounts (your own money, not the employer's), to goals each month, and what is left over

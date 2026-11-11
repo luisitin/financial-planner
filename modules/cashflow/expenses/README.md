@@ -175,3 +175,14 @@ payment" $2,350 has the condo's $851 in no bill (the month is $851 short). Left 
 A folded card under the totals: two choices, "I know what's left over" and "I know what I spend" - what is left over each month (how much checking goes up before anything is moved to savings; a minus sign if it goes down) or what you spend each month in all. The other is worked out and written into Get started's spending rows (`overview/setup` `applyLeftOver` / `applyMonthTotal`; formulas, the pay-changes decision and the `guide.setup.spendLeft` note are in that README). The bills listed on this page stay as typed; the rows are what is not listed here. "In all" counts every bill and the Debts payments, so a typed total of $4,200 makes this page's per-month figure $4,200 exactly. If the bills here already add up to more than the figure leaves room for, the card says so (never a negative) and nothing is written. With a note on file the card opens and says when the spending was worked out and, when pay or bills have moved the left-over by $10 or more, what it reads now.
 
 The left-over box asks the phone for the keyboard with a minus sign (`inputmode="text"`, as Get started's box): an iPhone's number pad has none, so "-200" could not be typed (verify 2026-11-07).
+
+### Leftover follow-ups (2026-11-07)
+- Groups typed that the leftover (or the month) cannot hold are said with their amounts and names, as rows of the list below; **My spending is right** keeps
+  them, **My leftover is right** replaces them with our split (it used to point at Get started, question 6, which is where the same rows are listed
+  here). The "step" refusal now only happens beyond $2 (see Get started's README).
+- "I know what I spend" with every group typed leaves the rest as one rough "Other spending" line, **not** counted as bills you must pay; the notice says so.
+- The saved notice and the note use words for a leftover below zero ("checking going down $250 a month"), and the note adds "of which your goals take $X a month".
+- **The month counts a rental's rent after its running costs (task 142, item 4).** The leftover tile (Next best action's `spare.monthly`) takes off the
+  running costs Income shows for each rent line (`rentAfterCostsOf`: empty months, property tax, insurance, dues, upkeep): `spare.rentCosts`, a line in
+  "Each month's money". The rent stays whole in the pay (the tax reads it); the loan payment is a Debts payment in the spending already. The invented
+  landlord plan: $4,875 a month before, $3,712 after ($1,163 of costs).

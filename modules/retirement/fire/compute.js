@@ -5,6 +5,7 @@
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
+import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { buildInputs, healthAdded, workingNow, withStops, STOP_NOW_FROM_AGE } from "../projection/compute.js";
 import { realRate } from "../../../core/math/finance.js";
 import { project } from "../../../core/math/retirement.js";
@@ -37,7 +38,9 @@ export function yearsFromZero(rate, realReturn, withdrawalRate) {
 /**
  * compute(plan, { today, withdrawalRate = 0.04, withIncome = true, careful = false }) -> {
  *   ready, spendingYearly, withdrawalRate, fiNumber, invested (retirement money today), progress, gap,
- *   savingYearly (contributions + what is left over each month), savingsRate (of income), realReturn,
+ *   savingYearly (contributions + what is left over each month), savingsRate (of income) and yearsToFi: the rule's own pre-tax reckoning,
+ *   saving: { yearly (the app's year saving, spare.year.total, plus the employer's match), own, match, takeHome, rate (own / take-home pay),
+ *   yearsToFi, fiAge, fiYear, waits } | null (no month to read): what the page shows, realReturn,
  *   yearsToFi, fiAge, fiYear, coast: { number, reached }, retireAge, yearsToRetire, hasIncome,
  *   fromZero: { half, tenth } (years from nothing saved at half and a tenth of income saved, at this growth and withdrawal rate),
  *   healthAdded (the plan's answer above counts health cover on top of spending: the fold says the rule leaves it out),
@@ -67,9 +70,27 @@ export function compute(plan, params = {}) {
   const savingYearly = contrib.totalYearly + Math.max(0, leftOver - contrib.yearly);   // what is left over already includes the contributions typed as expenses? no: contributions are not expenses, so count both but never twice
   const income = inc ? inc.yearly : 0;
   const savingsRate = income > 0 ? Math.min(1, savingYearly / income) : null;
-  let yearsToFi = null, pot = invested;
-  if (pot >= fiNumber) yearsToFi = 0;
-  else if (savingYearly > 0 || realReturn > 0) { for (let y = 1; y <= 80; y++) { pot = pot * (1 + realReturn) + savingYearly; if (pot >= fiNumber) { yearsToFi = y; break; } } }
+  const yearsAt = (saving) => {
+    let pot = invested;
+    if (pot >= fiNumber) return 0;
+    if (saving > 0 || realReturn > 0) { for (let y = 1; y <= 80; y++) { pot = pot * (1 + realReturn) + saving; if (pot >= fiNumber) return y; } }
+    return null;
+  };
+  const yearsToFi = yearsAt(savingYearly);
+  // Saving a year as the app counts it (follow-up 2026-11-07): Next best action's year saving (spare.year.total: what the month builds up
+  // in checking and savings, the retirement saving out of pay, the extra on debts) plus the employer's match, which this page counts
+  // as saving and says so; the rate is on take-home pay (pay less tax), as Your health counts it. `savingYearly`/`savingsRate`/`yearsToFi`
+  // above are the 25-times rule's own pre-tax reckoning, kept for the frozen key (tests/golden/retirement/fire.csv); the page shows this.
+  // null when no month can be read (no pay or no spending yet): the page then shows the rule's figures.
+  let nba = null;
+  try { nba = today && inc && ex ? computeNext(plan, { today }) : null; } catch { nba = null; }
+  let saving = null;
+  if (nba?.ready) {
+    const m = nba.spare, own = Math.max(0, m.year.total), match = contrib.matchYearly, yearly = own + match;
+    const takeHome = Math.max(0, (m.gross - m.businessCosts - m.federalTax - m.payrollTax - m.stateTax - m.careLost - (m.rentCosts ?? 0)) * 12);
+    const yrs = yearsAt(yearly);
+    saving = { yearly, own, match, takeHome, rate: takeHome > 0 ? Math.min(1, own / takeHome) : null, yearsToFi: yrs, waits: !!m.waits };
+  }
   const primary = b.people?.[0] ?? null;
   const age = primary ? year - primary.birthYear : null;
   const retireAge = primary ? primary.retireAge : Number(a.retirementAge ?? 65);
@@ -77,7 +98,8 @@ export function compute(plan, params = {}) {
   const coastNumber = yearsToRetire !== null ? fiNumber / Math.pow(1 + realReturn, yearsToRetire) : null;
   return {
     ready: true, spendingYearly, withdrawalRate: wr, fiNumber, invested, progress: Math.min(1, invested / fiNumber), gap: Math.max(0, fiNumber - invested),
-    savingYearly, savingsRate, realReturn, yearsToFi, fiAge: yearsToFi !== null && age !== null ? age + yearsToFi : null, fiYear: yearsToFi !== null ? year + yearsToFi : null,
+    savingYearly, savingsRate, saving: saving ? { ...saving, fiAge: saving.yearsToFi !== null && age !== null ? age + saving.yearsToFi : null, fiYear: saving.yearsToFi !== null ? year + saving.yearsToFi : null } : null,
+    realReturn, yearsToFi, fiAge: yearsToFi !== null && age !== null ? age + yearsToFi : null, fiYear: yearsToFi !== null ? year + yearsToFi : null,
     coast: coastNumber !== null ? { number: coastNumber, reached: invested >= coastNumber } : null, retireAge, yearsToRetire, age, hasIncome: !!income,
     fromZero: { half: yearsFromZero(0.5, realReturn, wr), tenth: yearsFromZero(0.1, realReturn, wr) }, healthAdded: healthAdded(b.health),
     withIncome: params.withIncome === false ? null : withCareful(plan, today, params.careful === true),

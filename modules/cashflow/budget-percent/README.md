@@ -74,6 +74,12 @@ debts it was aimed at are paid off), added to `saving.debts`. It is the one read
 takes (`spare.debtExtra`), not a copy: with the invented freelancer and a $150 extra this page said "about $1,200" and
 "$770 short" while every other page said "about $1,050" and "$920 short"; now all say the latter.
 
+**One definition, said on the page (owner's decision, 2026-11-07).** 50/30/20 keeps its own convention: money paid on a debt above
+its required payment counts as **saving** here, as the rule counts it, and as spending on every other page (a $210 a month extra
+moves a household's saving by $210 here against the app's year figure). The page says it in one plain line under the card:
+"On this page, money you pay on a debt above its required payment counts as saving ... On the other pages the same money counts as
+spending". No yearly figure is stated here, so no number on this page contradicts another page.
+
 `yearTaxes` is also Next best action's tax for the month (2026-11-02), and `heldAfterTax` its careful month (review
 2026-11-02), and the saved debt plan's extra the same `savedPlan` (round 5), so the left over here (left over − short) and
 the app's left-over figure are the same number **unless** (review 2026-11-02, round 5, narrowed to what is true)

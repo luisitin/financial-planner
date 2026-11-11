@@ -304,3 +304,18 @@ the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N o
 "100 markets" are gone; "if markets do as well as average" stays: it means average returns, not a try). The amber pill "fewer than 9 in 10" is
 "short in a bad run". Decision (no owner to ask), changed after the UX review of 2026-11-07 (it found "tries" unexplained where it first appears): "pretend futures", which explains itself, over "tries" or "runs".
 Financial independence says "the money lasts even in a bad run of years" and, when no age reaches it, "the money lasts in about 3 of 10 pretend futures (38 of 100), which does not cover a bad run of years."
+
+## Saving a year: the app's own figure (2026-11-07)
+`compute()` now also returns `saving` ({ yearly, own, match, takeHome, rate, yearsToFi, fiAge, fiYear, waits } or null), and the page shows it.
+- **yearly** = Next best action's `spare.year.total` (what the month builds up in checking and savings, what goes into retirement accounts out of pay,
+  and the extra on debts; never below 0) **plus the employer's match** (`contributions.matchYearly`). The match is counted because this page always
+  counted it; the stat's line says "plus $X from your employer".
+- **rate** = own / take-home pay, take-home = pay less business costs, federal, payroll and state tax, the child care account's loss and a rental's
+  running costs. It used to be the Contributions page's total plus *pre-tax* income less spending, over pre-tax income, which counted tax as saved: a
+  couple who said $1,000 a month is left over saw $66,336 a year here against $24,481 on every other page; with this change a typed $1,000 shows
+  about $12,000 (the invented personas: Jordan $16,624 -> $12,000, Pat and Lee $34,520 -> $11,997, Sam $19,248 -> $11,996).
+- **Not changed on purpose:** `savingYearly`, `savingsRate`, `yearsToFi`, `fiAge` and `fiYear` keep the 25-times rule's own pre-tax reckoning. They are
+  columns of the frozen key `tests/golden/retirement/fire.csv` (rules saving-no-double-count, savings-rate, years-*), which these edits may not touch;
+  moving them failed 245 of its rows. Anything that reads them (the guess-sanity rules `sr.saving.from-take-home` and `SF-SAVING-ONE-FIGURE`) keeps
+  its known count until that key is regenerated; then `savingYearly` can simply become `saving.yearly`.
+- Without a month to read (no pay or no spending yet) `saving` is null and the page shows the rule's own figures, as before.

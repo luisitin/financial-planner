@@ -9,6 +9,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeSocialSecurity } from "../social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { leftMarker } from "../../../core/math/leftover.js";
 import { nper } from "../../../core/math/finance.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
@@ -251,7 +252,11 @@ export function rentalLines(plan, people, retireYear, today, { inSpending = () =
     const run = runningOf(r, rentalValue(plan, r));
     // an end date on every Income rent line that is this rental's rent (selling it, say): its last year
     const mine = rows.filter((x, j) => split[j].names.includes(r.name || "Rental"));
-    const until = mine.length && mine.every((x) => x.endDate) ? Math.max(...mine.map((x) => yearOf(x.endDate))) : null;
+    // an Income rent line that is this rental's by name and has ENDED (sold, tenant gone) ends its rent too, when no line going today
+    // holds it: the rent stopped in that line's last year (follow-up 2026-11-07: the ended line was dropped from `rows` and the rent went on forever)
+    const lc = (t) => String(t ?? "").trim().toLowerCase(), rn = lc(r.name || "Rental");
+    const endedMine = mine.length ? [] : (plan.income ?? []).filter((x) => x.type === "rental" && x.period !== "once" && perYear(x.amount, x.period) > 0 && x.endDate && String(x.endDate) < String(today) && rn.length > 0 && lc(x.name).length > 0 && (lc(x.name).includes(rn) || rn.includes(lc(x.name))));
+    const until = mine.length && mine.every((x) => x.endDate) ? Math.max(...mine.map((x) => yearOf(x.endDate))) : endedMine.length ? Math.max(...endedMine.map((x) => yearOf(x.endDate))) : null;
     const base = { personId: who.id, startAge: retireYear - who.birthYear, type: "rental", source: "rental", afterCosts: true, rental: name };
     const sold = until !== null ? { untilYear: until } : {};
     if (until === null || until >= retireYear) {
@@ -933,6 +938,11 @@ export function buildInputs(plan, params = {}) {
     health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
   if (!contributions.length && retireYear > year) notes.push("No retirement contributions are entered (What you save for retirement), so nothing is added until retirement.");
+  // a leftover the person TYPED (Get started question 6 or Expenses): said plainly that this plan does not add it to retirement savings
+  // (follow-up 2026-11-07; README "A typed leftover"). It is cash in checking and savings, free to be spent, and counting it would
+  // move every retirement answer for a figure that is not saved anywhere yet; only the contributions typed on What you save for retirement are.
+  const typedLeft = leftMarker(plan);
+  if (typedLeft && typedLeft.left > 0 && retireYear > year) notes.push(`You said about $${Math.round(typedLeft.left).toLocaleString("en-US")} a month is left over. That stays in checking and savings and is not added to your retirement savings here; only what you put into retirement accounts (What you save for retirement) is.`);
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");

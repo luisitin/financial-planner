@@ -31,8 +31,8 @@ import { profileOf } from "../guesses/estimators/common.js";
 import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
-import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords } from "../../../core/math/leftover.js";
-export { leftMarker, leftOverOf, yearSaving, yearSavingWords };
+import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords, leftWords, leftFromWords } from "../../../core/math/leftover.js";
+export { leftMarker, leftOverOf, yearSaving, yearSavingWords, leftWords, leftFromWords };
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -1431,6 +1431,31 @@ export function sumSplit(rows, args, sum, guessOf) {
   return { rows: out, rest: 0, typed, left };
 }
 /**
+ * The split of a best-guess figure as the rows already stand (follow-up 2026-11-07), or null. Only when the same figure and the same
+ * groups typed were saved before (guide.setup.spendSum), none of the rows is our guess or on another schedule, the groups typed are
+ * their rows' amounts, and the rows add up to the figure: then the rows are the person's split and passing through again changes none.
+ * -> sumSplit's answer ({ rows, rest, typed, left }) or null.
+ */
+function keptSplit(draft, args, figure) {
+  const ss = setupOf(draft).spendSum;
+  if (!figure || !ss || Number(ss.sum) !== figure || !Array.isArray(ss.typed)) return null;
+  const rows = spendRows(draft), mine = L(draft, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
+  if (!mine.length || mine.some((x) => x.period !== "monthly" || isGuess(draft, `expenses[${x.id}].amount`))) return null;
+  const typedKeys = rows.filter((row) => args.rows[row.key] > 0).map((row) => row.key);
+  if (JSON.stringify(typedKeys) !== JSON.stringify(ss.typed)) return null;
+  let typed = 0, blank = 0;
+  const out = {};
+  for (const row of rows) {
+    const x = byId(mine, `setup-x-${row.key}`), amt = x ? Math.round(Number(x.amount) || 0) : 0;
+    if (args.rows[row.key] > 0) { if (amt !== args.rows[row.key]) return null; typed += amt; }
+    else if (args.rows[row.key] === null && x) { out[row.key] = amt; blank += amt; }
+    else if (x) return null;   // a group typed as 0 that still has a row
+  }
+  const rough = Math.round(Number(byId(mine, "setup-x-total")?.amount) || 0);
+  if (typed + blank + rough !== figure) return null;
+  return { rows: out, rest: rough, typed, left: figure - typed };
+}
+/**
  * Q6 with our guesses (the view passes ctx.guess; spec 10, 7.A): a row typed is the person's (any guess on it goes); a 0
  * typed is their 0 (no row, remembered in guide.setup.spendZero so it is never guessed); a box left blank gets our guess,
  * written through markGuess. "One rough total" typed is written as before; left blank, the rows are written as guesses.
@@ -1460,7 +1485,9 @@ function applySpendGuessed(draft, v, today, guess) {
     figure = mode === "rows" && pos(v.sum) ? Math.max(1, Math.round(pos(v.sum))) : null;
     // (and a decimal group typed beside it is rounded once too, so the rows add up to the figure exactly)
     if (figure) for (const k of Object.keys(args.rows)) if (args.rows[k] > 0) args.rows[k] = Math.max(1, Math.round(args.rows[k]));
-    split = sumSplit(spendRows(draft), args, figure, (row) => ask(`spend.${row.key}`, `expenses[setup-x-${row.key}].amount`));
+    // (follow-up 2026-11-07: the same figure and the same groups typed, passed through again after the pay moved, keep the rows as they
+    // stand. Our split follows the pay, so sharing the figure out again moved rent and food by a few dollars each while the total held)
+    split = keptSplit(draft, args, figure) ?? sumSplit(spendRows(draft), args, figure, (row) => ask(`spend.${row.key}`, `expenses[setup-x-${row.key}].amount`));
     for (const row of spendRows(draft)) {
       const id = `setup-x-${row.key}`, path = `expenses[${id}].amount`, typed = args.rows[row.key];
       if (typed === 0) { zero.push(row.key); continue; }
@@ -1476,8 +1503,17 @@ function applySpendGuessed(draft, v, today, guess) {
       if (own && own.name === row.label) own.name = "Home costs";
       if (e && typed === null) markGuess(draft, path, e, today); else clearGuess(draft, path);
     }
-    // nothing of ours to share the rest by (no row has a guess): the rest is one rough row, as "One rough total" writes it
-    if (split?.rest > 0) { keep.add("setup-x-total"); put(draft.expenses, "setup-x-total", { amount: split.rest }, { name: "Monthly spending (rough)", category: "other", essential: true, ...line }); clearGuess(draft, "expenses[setup-x-total].amount"); }
+    // nothing of ours to share the rest by (no row has a guess): the rest is one rough row, as "One rough total" writes it. When every group
+    // is typed there is no group left to share it over: it is other spending nobody listed, so it is NOT a bill you must pay
+    // (it would raise the emergency fund target and sit under "the rest has to come from a must-pay"; follow-up 2026-11-07)
+    if (split?.rest > 0) {
+      const everyGroupTyped = spendRows(draft).every((row) => args.rows[row.key] !== null);
+      keep.add("setup-x-total");
+      put(draft.expenses, "setup-x-total", { amount: split.rest }, { name: everyGroupTyped ? "Other spending (rough)" : "Monthly spending (rough)", category: "other", essential: !everyGroupTyped, ...line });
+      const rough = byId(draft.expenses, "setup-x-total");
+      if (rough && everyGroupTyped) { rough.name = "Other spending (rough)"; rough.essential = false; }
+      clearGuess(draft, "expenses[setup-x-total].amount");
+    }
   }
   draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
   // the figure given in the top box is remembered (guide.setup.spendSum) with the groups typed beside it, so reopening can put it back
@@ -1535,7 +1571,9 @@ const typedTotal = (plan, v) => { const a = spendArgs(plan, { ...v, mode: "rows"
  *      | "typed" (the groups typed already add up to more than the figure leaves room for)
  *      | "bills" (the other bills on Expenses and the loan payments already do)
  *      | "more-than-pay" (the left-over is more than comes in after tax and saving: `available` a month)
- *      | "step" (no whole-dollar spending lands within a dollar of it), over (by how much, a month), allowed (the most they may add up to), available }
+ *      | "step" (no whole-dollar spending lands within $2 of it), over (by how much, a month), allowed (the most they may add up to), available }
+ * `about` is true when the nearest figure that can be reached reads a little off the one asked for (a plan that steps; within $2):
+ * `left` is what it then reads, and the screens say "about".
  */
 export function solveSpend(plan, v, want, { today, guess = null } = {}) {
   const left = want?.left !== undefined;
@@ -1585,13 +1623,17 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
       if (r) seen.set(w, r);
     }
     for (const r of seen.values()) if (score(r) < score(best) || (score(r) === score(best) && r.w < best.w)) best = r;
-    if (!(score(best) <= 1 + 1e-9)) return { ok: false, why: "step", over: 0, allowed: 0 };
+    // (follow-up 2026-11-07: a plan that steps, a child care credit that moves with the bills, has no whole-dollar spending that lands within a
+    // dollar of some figures. The nearest within $2 is taken and said as "about" (`about: true`, `left` is what it reads) instead of refusing)
+    if (!(score(best) <= APPROX + 1e-9)) return { ok: false, why: "step", over: 0, allowed: 0 };
   }
   const others = best.exp.monthly - best.rows;
   // nothing at all to spend on (no bills, no loan payments, and the left-over is all of what comes in): not a month of any household
   if (best.w === 0 && others < 0.5) return { ok: false, why: "more-than-pay", over: 0, allowed: 0, available: left ? Math.round(best.m + best.exp.monthly) : null };
-  return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others };
+  return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others, about: left && Math.abs(best.m - target) > 0.5 + 1e-9 };
 }
+/** The most (dollars a month) the left-over a plan that steps reads may be off the one typed; beyond it the answer is refused. */
+const APPROX = 2;
 /** Question 6's answers as the plan holds them now, for applyLeftOver / applyMonthTotal called from another page (Expenses): typed groups stay, our figures follow. */
 export function spendAnswers(plan) {
   const v = valuesFor(plan, "spend");
@@ -1639,7 +1681,9 @@ function readsAlready(plan, v, left, today) {
   try { n = computeNext(plan, { today }); } catch { return false; }
   if (!n?.ready) return false;
   const m = leftOverOf(n.spare);
-  return left === 0 ? m >= -1e-9 && m <= 1 : Math.abs(m - left) <= 0.5 + 1e-9;
+  // (an answer that was "about" (a plan that steps) is kept as it reads, within the $2 it was taken at)
+  const note = leftMarker(plan), tol = note && Number(note.left) === left ? APPROX : 0.5;
+  return left === 0 ? m >= -1e-9 && m <= 1 : Math.abs(m - left) <= tol + 1e-9;
 }
 /**
  * The left-over as the plan reads it now (before goal saving, core/math/leftover.js leftOverOf), whole dollars, or null when it

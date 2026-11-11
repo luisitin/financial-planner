@@ -50,6 +50,21 @@ export function yearSaving(spare) {
 }
 
 /**
+ * A leftover said in plain words, never as a minus sign (follow-up 2026-11-07: "-$250 left over" read as a bill). `money(n)`
+ * formats a whole-dollar amount. Above zero: "$1,000 left over a month"; below: "checking going down $250 a month"; zero: "nothing left over".
+ *   leftWords(1000, money) -> "$1,000 left over a month"     leftWords(-250, money) -> "checking going down $250 a month"
+ * `from` is the same figure after "from" ("from the $1,000 you said is left over each month" / "from your checking going down $250 a month").
+ */
+export function leftWords(n, money) {
+  const v = Math.round(Number(n) || 0);
+  return v > 0 ? `${money(v)} left over a month` : v < 0 ? `checking going down ${money(-v)} a month` : "nothing left over a month";
+}
+export function leftFromWords(n, money) {
+  const v = Math.round(Number(n) || 0);
+  return v > 0 ? `the ${money(v)} you said is left over each month` : v < 0 ? `your checking going down ${money(-v)} a month` : "your checking staying level each month";
+}
+
+/**
  * The year's saving in plain words: "About $12,000 a year builds up in checking and savings, and $6,000 more goes into
  * retirement." `money(n)` formats a whole-dollar amount. Rounded to $100 (to $10 under $1,000): it is a month's figure x 12.
  * With goals the money also goes there ("checking, savings and your goals": a goal may sit in a college or investment account);

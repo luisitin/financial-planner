@@ -2558,7 +2558,7 @@ test("one answer everywhere: the reveal, Your plan, the Dashboard and Your healt
 
 test("the question's screen: two ways to answer, a minus sign allowed, a clear stop when the answer cannot be saved", () => {
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
-  for (const t of ["I know roughly what I spend", "I know what's left over", "How much does your checking go up in a normal month, before you move any to savings?", "Not sure", "My bills are right", "My left-over is right", "Type a minus sign if it usually goes down", "current?.block?.()", "lw.flush()"]) assert.ok(view.includes(t), t);
+  for (const t of ["I know roughly what I spend", "I know what's left over", "How much does your checking go up in a normal month, before you move any to savings?", "Not sure", "My bills are right", "My leftover is right", "Type a minus sign if it usually goes down", "current?.block?.()", "lw.flush()"]) assert.ok(view.includes(t), t);
   const ex = fs.readFileSync(fileURLToPath(new URL("../../cashflow/expenses/view.js", import.meta.url)), "utf8");
   for (const t of ["Set your month in one number", "I know what's left over", "I know what I spend", "Save my month", "applyLeftOver", "applyMonthTotal"]) assert.ok(ex.includes(t), t);
 });
@@ -2706,7 +2706,7 @@ test("D3 and UX 1: Continue works the answer out then and there, and a left-over
   assert.equal((view.match(/lw\.flush\(\); return lw\.conflict\(\)/g) ?? []).length, 2, "both screens solve before they judge");
   assert.equal((view.match(/lw\?\.touch\(\)/g) ?? []).length, 2, "a group typed after the left-over asks again");
   assert.ok(!/applyLeftOver\([^)]*\)\.ok\) return;\s*\n?\s*applySpend/.test(view), "no silent fall back to guesses");
-  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the left-over amount below, then Continue."));
+  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the leftover amount below, then Continue."));
 });
 
 test("one answer: the Statements page no longer says net worth grows when more goes out than comes in", async () => {

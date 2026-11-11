@@ -391,3 +391,9 @@ Contributions already say. With nothing typed there is still no step. Test: "HSA
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - **F2.** When the step names the common match ("50% of what you put in up to 6% of pay") the raise sentence leaves out "(plans usually add about 4% of pay)": one usual match per step. Alone, the sentence keeps it.
 - **F3.** "By our guess, Sam puts money in and gets a match." when the amount and the match are both our guesses; typed, the fact stands.
+
+### A rental's running costs come off the month (2026-11-07, task 142 item 4)
+`spare.rentCosts` (a month) = for each rent line going today, the line's rent less its rent after running costs (Income's `rentAfterCostsOf`), taken
+from budget-percent's `yearTaxes(...).rentCosts`. `spare.monthly` subtracts it and `monthLines` has a line "Rental running costs (Rental analysis)", so pay
+less the lines is still the leftover. Budget (50/30/20) subtracts the same from its after-tax month, so the two pages' leftover agree. The invented
+landlord plan (qa/fixtures/round8-rental.mjs): $4,875.38 a month before, $3,712.04 after.

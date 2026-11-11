@@ -726,3 +726,28 @@ Decisions the owner asked builders to make without stopping. No source is lifted
 - **F10.** After "No" to the plan at work: a guessed balance in `setup-workplan-<id>` is dropped with its guesses (question 4 guesses it again where it belongs); a balance the person typed stays and the account is renamed "<name>'s retirement savings" (id unchanged, so Yes later finds it).
 - **B4.** The done screen's figures used to count up from $0 over 0.8 s; a look mid-way read $380 and -$10,085 where the next screens say $384 and -$10,200. The animation is gone (it also raced a screen reader); the figures are shown at once. The tile is named "Emergency fund"; at or over the months aimed for it says "17.9 months ... well over the 6 you want" and "Covered".
 - **B8.** `retireKindsFor(plan, id)`: a person who said retired or not working is asked "Where is it held? In a company plan / In my own IRA" with no "put in a month", no match, and the Roth question folded behind "Is it a Roth IRA?".
+
+## Leftover follow-ups (2026-11-07; tests `tests/followups-leftover2.test.mjs`)
+Decisions (no owner to ask; each one is the plainer or safer choice):
+- **A leftover can come out a few dollars off (`about`).** Some plans step (the child care credit moves with the bills), so no whole-dollar spending
+  reads some figures to the dollar. `solveSpend` now takes the nearest within **$2** (`APPROX`) and returns `about: true` with `left`, what it reads;
+  the screens say "The closest we can get is a leftover of about $2,926 a month, because your tax credits move in steps." Beyond $2 it still
+  refuses ("step", nothing written). The note keeps what the person said; passing through again with the same figure changes nothing (`readsAlready`
+  allows the $2 for a note that matches). Before, 47 of 399 figures read $0.50 to $0.98 off silently and two (2,994 and 3,109) were refused.
+- **Typed groups the leftover cannot hold (Expenses).** The groups typed on Get started are bills listed on Expenses, so the page names them with the
+  amounts and does not send anyone to Get started; "My spending is right" keeps them, "My leftover is right" replaces them with our split of what the
+  leftover leaves room for (`rows: {}`). Get started has had both buttons since the first build.
+- **Every group typed, then a month total (Expenses "I know what I spend") or a leftover.** The rest goes into one rough row, `setup-x-total`, named
+  "Other spending (rough)" and **not must-pay** (`essential: false`): with every group typed there is no group to put it in, and as a must-pay it
+  raised the emergency fund target and was listed under "the rest has to come from a must-pay". With some groups blank the rest is still shared over
+  our groups (nothing changed there), and with blanks but no guesses (a household outside the U.S. path) it stays the must-pay "Monthly spending
+  (rough)". The Expenses notice says it plainly.
+- **Below zero in words.** Never "-$250 left over": "checking going down $250 a month" (`leftWords`, `leftFromWords` in `core/math/leftover.js`).
+- **Goals.** The Expenses note and the reveal add "of which your goals take $X a month" (the leftover is before goal saving; the tile beside it is after).
+- **No income at all** (an early retiree): the leftover way says "Nothing is coming in yet, so a leftover cannot be worked out. Add what comes in first
+  (question 2: pay, a pension, Social Security or other income), or choose 'I know roughly what I spend'", never "Add your pay first". Nothing is
+  written, so "checking goes down $3,000 a month" can never be read as spending of $3,000.
+- **Question 6 passed again after the pay changed keeps the split (`keptSplit`).** The best-guess figure and the groups typed beside it, saved before
+  (`guide.setup.spendSum`) and unchanged, keep every row as it stands (our split follows the pay, so sharing it out again moved rent and food by a few
+  dollars each while the total held). A different figure or a different group typed still shares out afresh. No new field.
+- No external figures were introduced (all app arithmetic); `docs/DATA_MODEL.md` needs no change (no new field).

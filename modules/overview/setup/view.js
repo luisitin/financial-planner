@@ -12,7 +12,7 @@ import {
   markAt, applyYou, applyMoney, applyAges, applyHavePicks, applyHaveAmounts, applyOwePicks, applyOweAmounts, applySpend,
   applyGoalPicks, applyGoalDetails, sumSplit, progress, standing, payLineNow, oweArgs, haveId, spendArgs, spendBasis, housingWords,
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
-  applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered,
+  applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
@@ -236,7 +236,7 @@ const add = (el, ...kids) => el.append(...keep(kids));
 const swap = (el, ...kids) => el.replaceChildren(...keep(kids));
 const and = (list) => (list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
 let uid = 0;
-const LEFT_STOP = "Pick one of the two answers below, then Continue.", LEFT_CHECK = "Change the left-over amount below, then Continue.";
+const LEFT_STOP = "Pick one of the two answers below, then Continue.", LEFT_CHECK = "Change the leftover amount below, then Continue.";
 /** "1234567.5" -> "1,234,567.5" as you type (k and m kept at the end). */
 function groupDigits(raw, signed = false) {
   const neg = signed && /^\s*[-\u2212]/.test(String(raw ?? ""));   // a leading minus, only where a figure may go below zero (the left-over)
@@ -536,7 +536,7 @@ export function render(page, ctx) {
     const say = (txt) => ui.h("p", { class: "su-sub" }, txt);
     const draw = () => {
       const n = parseMoney(v.left);
-      if (!hasPay) { swap(out, say("Add your pay first (question 2), then we can work this out.")); return; }
+      if (!hasPay) { swap(out, say("Nothing is coming in yet, so a leftover cannot be worked out. Add what comes in first (question 2: pay, a pension, Social Security or other income), or choose \"I know roughly what I spend\" above.")); return; }
       if (n === null) {
         const g = greyFor();
         swap(out, say(answered ? "Not sure? Leave it empty and we keep the spending you already gave."
@@ -548,19 +548,21 @@ export function render(page, ctx) {
       if (!res) { swap(out, say("Working it out…")); return; }
       if (res.ok) {
         const goals = Number(res.spare?.goalSaving) || 0, yearly = res.spare ? yearSavingWords(res.spare, money) : "";
-        const goalLine = goals >= 1 ? ` Of the ${money(n)}, your goals take ${money(goals)} a month, so ${n - goals >= 0 ? `${money(n - goals)} is left` : `${money(goals - n)} comes from savings`} after them.` : "";
+        const goalLine = goals >= 1 ? (n < 0 ? ` Your goals take ${money(goals)} a month on top of that, so ${money(goals - n)} comes from savings.` : ` Of the ${money(n)}, your goals take ${money(goals)} a month, so ${n - goals >= 0 ? `${money(n - goals)} is left` : `${money(goals - n)} comes from savings`} after them.`) : "";
+        // a plan that steps (the child care credit moves with the bills): the nearest figure within $2, said as "about"
+        const aboutLine = res.about ? ` The closest we can get is a leftover of about ${money(res.left)} a month${res.left < 0 ? " (checking going down)" : ""}, because your tax credits move in steps.` : "";
         swap(out, ui.h("div", {},
-          moved ? say(`Your pay or bills have changed since you said ${money(moved.from)}. It now reads ${money(moved.to)}. Continue keeps your spending as it is.`) : null,
-          say(`That means you spend about ${money(res.month)} a month in all${res.others > 0.5 ? `, loan payments and bills already in your plan included` : ""}.${goalLine} ${yearly}`)));
+          moved ? say(`Your pay or bills have changed since you said ${moved.from < 0 ? `your checking was going down ${money(-moved.from)} a month` : money(moved.from)}. It now reads ${moved.to < 0 ? `checking going down ${money(-moved.to)} a month` : money(moved.to)}. Continue keeps your spending as it is.`) : null,
+          say(`That means you spend about ${money(res.month)} a month in all${res.others > 0.5 ? `, loan payments and bills already in your plan included` : ""}.${aboutLine}${goalLine} ${yearly}`)));
         return;
       }
       const left = n < 0 ? "that" : `a ${money(n)} left over`;
       if (res.why === "typed") swap(out, ui.h("div", {}, ui.notice("warn", `What you typed in the groups below, ${money(res.allowed + res.over)} a month, is more than ${left} allows. With that left over, your groups can add up to at most ${money(Math.max(0, res.allowed))} a month. Which is right?`),
-        ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My groups are right"), ui.h("button", { type: "button", class: "secondary", onClick: () => { onClearTyped(); recompute(); } }, "My left-over is right"))));
+        ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My groups are right"), ui.h("button", { type: "button", class: "secondary", onClick: () => { onClearTyped(); recompute(); } }, "My leftover is right"))));
       else if (res.why === "bills") swap(out, ui.h("div", {}, ui.notice("warn", `Your bills and loan payments already in your plan come to ${money(res.over)} a month more than ${left} allows. Which is right?`),
         ui.h("div", { class: "su-pair" }, ui.h("button", { type: "button", class: "secondary", onClick: onKeepSpend }, "My bills are right"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "See my bills ›"))));
       else if (res.why === "more-than-pay") swap(out, ui.notice("warn", res.available > 0 ? `That is more than comes in after tax and saving (about ${money(res.available)} a month). Check the amount.` : "That is more than comes in after tax and saving. Check the amount, or add what comes in first."));
-      else if (res.why === "step") swap(out, ui.notice("warn", "We could not match that exact amount. Try a figure a few dollars higher or lower."));
+      else if (res.why === "step") swap(out, ui.notice("warn", "We could not match that amount, even to within a couple of dollars. Try a figure a few dollars higher or lower."));
       else swap(out, ui.notice("warn", "We need your pay and bills first to work this out."));
     };
     const label = "How much does your checking go up in a normal month, before you move any to savings?";
@@ -1134,7 +1136,7 @@ export function render(page, ctx) {
         if (sums.must) sums.must.textContent = money(rowsSum("must") + base.loanPayments);
         if (sums.else) sums.else.textContent = money(rowsSum("else"));
         const leftRes = v.way === "left" ? lw.result() : null;
-        if (leftRes?.ok) { totalEl.textContent = money(leftRes.month); partsEl.textContent = `worked out from the ${money(parseMoney(v.left))} you said is left over`; }
+        if (leftRes?.ok) { totalEl.textContent = money(leftRes.month); partsEl.textContent = `worked out from ${leftFromWords(parseMoney(v.left), money)}${leftRes.about ? ` (the closest we can get: about ${money(leftRes.left)})` : ""}`; }
         totalEl.parentElement.hidden = partsEl.hidden = !!leftRes && !leftRes.ok;   // (two answers at odds: no total until one is chosen)
         if (laterInput && !later.typed) {
           const core = base.existingCore + (v.mode === "total" ? num(v.total) : rows.filter((s) => s.key !== "childcare").reduce((t, s) => t + num(v.rows[s.key]), 0)) + loansLater;
@@ -1194,7 +1196,7 @@ export function render(page, ctx) {
           applySpend(d, { ...v, retireMonthly: later.value, retireAuto: !later.typed });
         },
         block: () => { if (!leftTyped()) return null; lw.flush(); return lw.conflict() ? (lw.result()?.why === "typed" || lw.result()?.why === "bills" ? LEFT_STOP : LEFT_CHECK) : null; },
-        words: (p2) => { const r = reflect(p2, "spend"), note = leftTyped() ? leftMarker(p2) : null; if (r && note) return `Got it: with ${money(note.left)} left over each month, you spend about ${money(r.monthly)} a month.`; return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; },
+        words: (p2) => { const r = reflect(p2, "spend"), note = leftTyped() ? leftMarker(p2) : null; if (r && note) return `Got it: ${note.left < 0 ? `with your checking going down ${money(-note.left)} a month` : `with ${money(note.left)} left over each month`}, you spend about ${money(r.monthly)} a month.`; return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; },
       };
       actions();
     },
@@ -1309,7 +1311,7 @@ export function render(page, ctx) {
         partsEl.textContent = ours > 0 || split || base.loanPayments > 0 || base.existing > 0
           ? [own > 0 ? `${money(own)} ${split ? "your best guess" : "you typed"}` : null, ours > 0 ? `${money(ours)} our guesses` : null, base.existing > 0 ? `${money(base.existing)} already in your plan` : null, base.loanPayments > 0 ? `${money(base.loanPayments)} loan payments` : null].filter(Boolean).join(" + ") : "";
         // the left-over said: the month in all is what that leaves room for
-        if (leftOk) { totalEl.textContent = money(leftRes.month); partsEl.textContent = `worked out from the ${money(parseMoney(v.left))} you said is left over`; }
+        if (leftOk) { totalEl.textContent = money(leftRes.month); partsEl.textContent = `worked out from ${leftFromWords(parseMoney(v.left), money)}${leftRes.about ? ` (the closest we can get: about ${money(leftRes.left)})` : ""}`; }
         const clash = !!leftRes && !leftRes.ok;   // two answers at odds: no total (and no talk of changed guesses) until one is chosen
         totalEl.parentElement.hidden = partsEl.hidden = clash;
         overNote.hidden = !(split && typedSum > sumTyped);
@@ -1392,7 +1394,7 @@ export function render(page, ctx) {
         const r = reflect(p2, "spend");
         if (!r) return null;
         const note = leftTyped() ? leftMarker(p2) : null;
-        if (note) return `Got it: with ${money(note.left)} left over each month, you spend about ${money(r.monthly)} a month.`;
+        if (note) return `Got it: ${note.left < 0 ? `with your checking going down ${money(-note.left)} a month` : `with ${money(note.left)} left over each month`}, you spend about ${money(r.monthly)} a month.`;
         // the month in all, as the screen's "In all" says it (loan and card payments from question 5 included)
         // (how many of the screen's amounts are ours, said against how many there are: "6 of the 7 amounts", "All 7 amounts")
         const ours = r.guessed === r.count ? (r.count === 1 ? "The amount is our guess" : `All ${r.count} amounts are our guesses`) : `${r.guessed} of the ${r.count} amounts ${r.guessed === 1 ? "is our guess" : "are our guesses"}`;
@@ -1561,7 +1563,7 @@ export function render(page, ctx) {
       : st.spareWaits ? fig("calm", "Left over each month", "Depends on your spending", `With our spending guesses: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} Type yours ›`, "● Our guesses for now", setupHref("spend"))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
         : st.bank ? fig("warn", "Left over each month", st.spare, `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, "Check Expenses ›", "#/cashflow/expenses")
-        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.${st.lean ? ` That is a lean month: when all your uneven pay comes in, ${st.lean.kind === "ahead" ? `about ${money(st.lean.about)} is left` : st.lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-st.lean.about)} short`}.` : ""}${st.spare >= 0 && st.yearWords ? ` ${st.yearWords}` : ""}${st.leftFrom?.spending > 0 ? ` That means about ${money(Math.round(st.leftFrom.spending / 10) * 10)} a month goes on bills and spending.` : ""}`,
+        : fig(st.spare >= 0 ? "ok" : "warn", "Left over each month", st.spare, `After ${st.stateTaxCounted ? "tax" : "federal tax"}${couple ? " (worked out as one return for now)" : ""}, bills and saving${st.debtExtra > 0 ? `, and the ${money(st.debtExtra)} a month extra on ${st.debtOn ?? "debts"}` : ""}.${st.lean ? ` That is a lean month: when all your uneven pay comes in, ${st.lean.kind === "ahead" ? `about ${money(st.lean.about)} is left` : st.lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-st.lean.about)} short`}.` : ""}${st.spare >= 0 && st.yearWords ? ` ${st.yearWords}` : ""}${st.leftFrom?.spending > 0 ? ` That means about ${money(Math.round(st.leftFrom.spending / 10) * 10)} a month goes on bills and spending.` : ""}${st.leftFrom?.left > 0 && st.leftFrom?.goals >= 1 ? ` Of the ${money(st.leftFrom.left)} you said is left over, your goals take ${money(st.leftFrom.goals)} a month.` : ""}`,
           // short only in a lean month (Side income's "count on"; review 2026-11-02, round 5)
           st.spare >= 0 ? "● Money to put to work" : st.lean?.kind === "ahead" ? "● Short in a lean month" : "● More goes out than comes in");
     // cash set aside for a goal, or this year's tax not paid yet, is not cushion: said, so the months read right (round 8)

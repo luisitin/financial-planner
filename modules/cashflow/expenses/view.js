@@ -5,7 +5,7 @@ import { compute, billsFoldOpen, CATEGORIES, closeGap, addFromBank, fromBankWord
 import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
 import { isGuess, clearGuess, applies } from "../../../core/estimate/index.js";
 import { applyLeftOver, applyMonthTotal, spendAnswers } from "../../overview/setup/compute.js";
-import { yearSavingWords } from "../../../core/math/leftover.js";
+import { yearSavingWords, leftFromWords } from "../../../core/math/leftover.js";
 import { dayWords } from "../../overview/next-best-action/compute.js";
 import { spendMissing, spendSaidComplete, spendAskAgain, spendBankNote, fillOffers } from "../../overview/guesses/compute.js";
 import { missingCard, fillCard, registryOf, sayNotice } from "../../overview/guesses/view.js";
@@ -69,13 +69,29 @@ export function render(root, ctx) {
     const guess = applies(plan) ? ctx.guess : null;
     const host = ui.h("div");
     const answers = spendAnswers(plan);
-    const run = (v, fn) => fn(structuredClone(plan), v);
-    const sayNo = (r, know, n) => {
-      const what = know === "left" ? (n < 0 ? "that" : `a ${m(n)} left over`) : `${m(n)} a month`;
-      const text = r.why === "pay" ? "Your pay and bills are needed first to work this out. Add them, then try again."
-        : r.why === "typed" ? `The figures you typed for spending groups (Get started, question 6) come to more than ${what} allows. Change one of them, or type a different amount.`
+    const sayNo = (r, know, n, ins) => {
+      const what = know === "left" ? (n < 0 ? "that" : `a ${m(n)} leftover`) : `${m(n)} a month`;
+      // the spending groups typed on Get started are rows of this very list (setup-x-...): said by name, with the amount, and settled here
+      // (follow-up 2026-11-07: this said "Get started, question 6" and gave no way to say the leftover is right)
+      if (r.why === "typed") {
+        const mine = (plan.expenses ?? []).filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-") && x.id !== "setup-x-total" && !isGuess(plan, `expenses[${x.id}].amount`));
+        const names = mine.map((x) => x.name).slice(0, 4).join(", ");
+        const pair = ui.h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" } },
+          ui.h("button", { type: "button", class: "secondary", onClick: () => host.replaceChildren() }, "My spending is right"),
+          know === "left" ? ui.h("button", { type: "button", class: "secondary", onClick: () => {
+            // the leftover wins: the groups typed give way to our split of what it leaves room for (rows: {} = none typed)
+            const again = { ...ins, rows: {} };
+            const c = structuredClone(plan), r2 = applyLeftOver(c, again, fmt.today(), { guess });
+            if (!r2.ok) { sayNo(r2, know, n, again); return; }
+            pending = `Done: ${n < 0 ? `with your checking going down ${m(-n)} a month` : `with ${m(n)} left over each month`}, you spend about ${m(r2.month)} a month. The groups you typed were replaced by our split of that.`;
+            store.update((p) => { applyLeftOver(p, again, fmt.today(), { guess }); });
+          } }, "My leftover is right") : null);
+        host.replaceChildren(ui.h("div", {}, ui.notice("warn", `The spending you typed in groups${names ? ` (${names})` : ""} comes to ${m(r.allowed + r.over)} a month, which is more than ${what} allows. With that ${know === "left" ? "leftover" : "month"}, your groups can add up to at most ${m(Math.max(0, r.allowed))} a month. They are in the list of bills below. Which is right?`), pair));
+        return;
+      }
+      const text = r.why === "pay" ? "What comes in and your bills are needed first to work this out. Add them, then try again."
         : r.why === "more-than-pay" ? (r.available > 0 ? `That is more than comes in after tax and saving (about ${m(r.available)} a month). Check the amount.` : "That is more than comes in after tax and saving. Check the amount, or add what comes in first.")
-        : r.why === "step" ? "We could not match that exact amount. Try a figure a few dollars higher or lower."
+        : r.why === "step" ? "We could not match that amount, even to within a couple of dollars. Try a figure a few dollars higher or lower."
         : `Your bills and loan payments listed on this page come to ${m(r.over)} a month more than ${what} allows. Which is right: this amount, or your bills? Check the bills below, or type a different amount.`;
       host.replaceChildren(ui.notice("error", text));
     };
@@ -90,10 +106,15 @@ export function render(root, ctx) {
       ], { amount: left && note ? note.left : null }, (v) => {
         if (v.amount === null) { host.replaceChildren(ui.notice("error", "Type an amount first, like 1,000.")); return false; }
         const ins = left ? { ...answers, left: v.amount } : { ...answers, total: v.amount };
-        const r = left ? run(ins, (c, i) => applyLeftOver(c, i, fmt.today(), { guess })) : run(ins, (c, i) => applyMonthTotal(c, i, fmt.today(), { guess }));
-        if (!r.ok) { sayNo(r, know, v.amount); return false; }
+        const c = structuredClone(plan);
+        const r = left ? applyLeftOver(c, ins, fmt.today(), { guess }) : applyMonthTotal(c, ins, fmt.today(), { guess });
+        if (!r.ok) { sayNo(r, know, v.amount, ins); return false; }
         const goals = Number(r.spare?.goalSaving) || 0;
-        pending = left ? `Done: with ${m(v.amount)} left over each month, you spend about ${m(r.month)} a month.${goals >= 1 ? ` Your goals take ${m(goals)} of the ${m(v.amount)}.` : ""} ${r.spare ? yearSavingWords(r.spare, m) : ""}`.trim() : `Done: your month is ${m(v.amount)} in all. Your bills are kept and the rest is shared over the usual groups.`;
+        // every group typed leaves the rest in one rough line that is not a bill you must pay: said plainly (follow-up 2026-11-07)
+        const rough = c.expenses.find((x) => x.id === "setup-x-total" && x.essential === false);
+        const roughWords = rough ? ` The ${m(rough.amount)} left after the groups you typed is one rough "Other spending" line, and it is not counted as bills you must pay.` : "";
+        const lead = left ? `Done: ${v.amount < 0 ? `with your checking going down ${m(-v.amount)} a month` : `with ${m(v.amount)} left over each month`}, you spend ${r.about ? "about " : ""}${m(r.month)} a month.${r.about ? ` The closest we can get is a leftover of about ${m(r.left)} a month, because your tax credits move in steps.` : ""}` : `Done: your month is ${m(v.amount)} in all. Your bills are kept${rough ? "." : " and the rest is shared over the usual groups."}`;
+        pending = `${lead}${left && goals >= 1 && v.amount >= 0 ? ` Your goals take ${m(goals)} of the ${m(v.amount)}.` : ""}${roughWords} ${left && r.spare ? yearSavingWords(r.spare, m) : ""}`.trim();
         store.update((p) => { if (left) applyLeftOver(p, ins, fmt.today(), { guess }); else applyMonthTotal(p, ins, fmt.today(), { guess }); });
       }, { submitLabel: "Save my month" }));
       // the left-over may go below zero ("-200"): a phone's number pad has no minus sign on an iPhone, so this box asks for the
@@ -106,10 +127,10 @@ export function render(root, ctx) {
     drawChoice(); drawForm();
     const moved = note ? nba.spare.leftOver - note.left : 0;
     const details = ui.h("details", { class: "fold ex-fold" },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Set your month in one number"), ui.h("span", { class: "fold-status" }, note ? `${m(note.left)} left over a month` : "left over or spending"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Set your month in one number"), ui.h("span", { class: "fold-status" }, note ? (note.left < 0 ? `checking down ${m(-note.left)} a month` : `${m(note.left)} left over a month`) : "leftover or spending"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" },
         ui.h("p", { class: "muted small" }, "Not sure of every bill? Tell us what is left over in a normal month, or what you spend in all, and we work out the other."),
-        note ? ui.h("p", { class: "small" }, `Your spending was worked out on ${dayWords(note.on)} from the ${m(note.left)} you said is left over each month.`, Math.abs(moved) >= 10 ? ` Your pay, tax, bills or saving have changed since, so the left-over now reads ${m(nba.spare.leftOver)}. The spending stays as we worked it out. If ${m(note.left)} is still right, type it again below and we will update your spending.` : "") : null,
+        note ? ui.h("p", { class: "small" }, `Your spending was worked out on ${dayWords(note.on)} from ${leftFromWords(note.left, m)}${nba.spare.goalSaving >= 1 && note.left > 0 ? `, of which your goals take ${m(nba.spare.goalSaving)} a month` : ""}.`, Math.abs(moved) >= 10 ? ` Your pay, tax, bills or saving have changed since, so the leftover now reads ${nba.spare.leftOver < 0 ? `checking going down ${m(-nba.spare.leftOver)} a month` : m(nba.spare.leftOver)}. The spending stays as we worked it out. If ${note.left < 0 ? "that" : m(note.left)} is still right, type it again below and we will update your spending.` : "") : null,
         choice, formHost, host));
     details.open = !!note;
     return details;
