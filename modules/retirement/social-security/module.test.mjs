@@ -733,8 +733,17 @@ test("review round 1 N1: the view says to write the thousands with a comma when 
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.match(src, /const grouped = read\.unread\.some\(/);
-  assert.match(src, /Write the thousands with a comma, not a space or a dot\./);
+  assert.match(src, /Write the thousands with a comma, not a space, a dot or an apostrophe\./);
   assert.match(src, /Write the thousands with a comma, like 69,000, and paste again\./);
   const re = /\d[ . ]\d{3}(?!\d)/;
   assert.ok(re.test("2024 69 000") && re.test("2024: 69.000") && !re.test("2024 69,000"));
+});
+
+test("breaker on N1: an apostrophe or a comma set apart as the thousands mark, and a minus, are listed as unread", async () => {
+  const { readRecord } = await import("./compute.js");
+  for (const l of ["2024 69'000", "2024 69’000", "2024 69 , 000", "2024 -500"]) assert.deepEqual(readRecord(l).record, [], l);
+  assert.deepEqual(readRecord("2024 69,000 69,000").record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024 69000 68000").record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024 - 69,000").record, [{ year: 2024, earnings: 69000 }], "a dash between is a separator");
+  assert.deepEqual(readRecord("2024 $69,000.00").record, [{ year: 2024, earnings: 69000 }]);
 });

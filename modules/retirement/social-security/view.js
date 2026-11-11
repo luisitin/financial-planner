@@ -79,10 +79,10 @@ export function render(root, ctx) {
       recordBox.removeAttribute("aria-invalid"); typedIn.removeAttribute("aria-invalid");
       const read = readRecord(recordBox.value, { thisYear: Number(String(fmt.today()).slice(0, 4)) });
       // a space or a dot between the thousands ("69 000", "69.000") is not read (review round 1 N1): said how to write it
-      const grouped = read.unread.some((l) => /\d[ .\u00a0]\d{3}(?!\d)/.test(l));
+      const grouped = read.unread.some((l) => /\d[ .\u00a0'\u2019]\d{3}(?!\d)|\d\s+,\s*\d/.test(l));
       if (!read.empty && !read.read) return refuse(recordBox, read.later.length
         ? `${listYears(read.later)} ${read.later.length === 1 ? "has" : "have"} not happened yet, so there is nothing to save from the earnings record. Paste the years up to this one, one on each line, like 2024 69,000.`
-        : `I could not find a year and an amount in what you pasted.${grouped ? " Write the thousands with a comma, not a space or a dot." : ""} Put one year on each line, like 2024 69,000, and tap Save again.`);
+        : `I could not find a year and an amount in what you pasted.${grouped ? " Write the thousands with a comma, not a space, a dot or an apostrophe." : ""} Put one year on each line, like 2024 69,000, and tap Save again.`);
       // a number box that holds what is not a number ("2,650" on a computer keyboard) reads as empty: refused, never "Removed"
       if (typedIn.validity?.badInput) return refuse(typedIn, "Type the monthly amount in numbers only, with no comma, like 2650.");
       const typedRaw = String(typedIn.value).trim();

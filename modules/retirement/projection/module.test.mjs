@@ -1747,5 +1747,7 @@ test("review round 1 N3: the chance line keeps room for the amber pill and holds
   assert.match(src, /careLine2\.style\.minHeight = `\$\{heightOf\(careLine2\)\}px`/);
   assert.match(src, /careLine\.style\.minHeight = `\$\{heightOf\(careLine\)\}px`/);
   assert.match(src, /const heightOf = \(el\) => el\.getBoundingClientRect\?\.\(\)\.height \?\? 0;/);
+  assert.match(src, /headline\.style\.minHeight = `\$\{heightOf\(headline\)\}px`/);
+  assert.doesNotMatch(src, /careLine\.remove\(\)/, "the lines stay in words when no bad-run figure comes back (breaker: 174 px)");
   assert.doesNotMatch(src, /\.offsetHeight/, "offsetHeight rounds and moved the page 1 px");
 });

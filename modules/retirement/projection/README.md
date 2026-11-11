@@ -799,6 +799,9 @@ Review fixes (2026-11-07): the links in a sentence have no stray spaces and end 
   its own and push the two buttons down 22 px half a second after the page opened. Both waiting lines now hold their height
   with `getBoundingClientRect` (offsetHeight rounded 67.9 up to 68 and still moved the page 1 px). Measured every 30 ms on
   family, demo, early-retire and retired-couple: no move.
+- Breaker on that fix: when no bad-run figure comes back (nothing lasts even at $0, or it could not be worked out) the two
+  lines used to be removed, pulling the page up 174 px; they now stay, in words ("Even in a bad run of years ..., the money
+  does not last to the end of the plan."), at the placeholder's height. The waiting headline holds its exact height too.
 
 ## Loans in retirement spending (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
 A loan's payment is part of retirement spending only until the loan is paid off, and as a fixed amount (a fixed-rate payment

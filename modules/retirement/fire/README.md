@@ -315,6 +315,8 @@ Financial independence says "the money lasts even in a bad run of years" and, wh
 - The waiting line keeps a bar for "(2 years past the 65 planned)" and holds its exact height once the age arrives: the
   answer was a line longer than the placeholder and pushed the buttons down 25 px. A shorter answer leaves at most a line's
   gap, which beats a page that moves under the thumb. Measured on family, demo, early-retire and retired-couple: no move.
+- Breaker on that fix: at 320 px the waiting heading takes three lines and the answer two; the heading now holds its exact
+  height as well.
 
 ## Loans that end (2026-11-11, loans lane fix round 1, money review D11)
 "Enough to live on" is the spending that goes on for good over the withdrawal rate (`core/math/retirement.js lifelongSpending`:

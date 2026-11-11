@@ -118,7 +118,10 @@ export function readRecord(text, { thisYear = null } = {}) {
     if (m && /^\s*k\b/i.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
     // a space or a dot as the thousands mark ("69 000", "69.000") is not read as $69 either: listed as unread, so a
     // green "saved" never drops the benefit to $0 (review round 1, N1)
-    if (m && /^[\s.]\d{3}(?!\d)/.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
+    // the same for an apostrophe ("69'000", Swiss style) or a comma set apart ("69 , 000"); a minus stuck to the amount
+    // ("2024 -500") is not read as +500 (breaker on N1). Two columns ("69,000 69,000") still read: a space and digits is a column
+    if (m && /^(?:[\s.]\d{3}(?!\d)|\s*['\u2019]\s*\d|\s+,\s*\d)/.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
+    if (m && /\s[-\u2212]\$?\d[\d,]*(?:\.\d{1,2})?$/.test(m[0])) { unread.push(line); continue; }
     if (m) { add(Number(m[1]), Number(m[2].replace(/,/g, ""))); continue; }
     // a year with words and no amount ("2026  Not yet recorded"): nothing to read, and nothing wrong
     if (/^(?:19|20)\d{2}\b[^\d]*$/.test(line)) continue;

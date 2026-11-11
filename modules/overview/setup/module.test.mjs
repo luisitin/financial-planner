@@ -2902,6 +2902,8 @@ test("walk 2: Finish later says once what it would leave out", () => {
   const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
   assert.ok(view.includes('onClick: finishLater }, "Finish later")'));
   assert.ok(view.includes("Or tap Finish later again to leave it out for now."));
+  // a fast double tap: the second tap within 0.8 s of the words is held, so they are always seen (breaker)
+  assert.ok(view.includes("if (words && (finishStop !== words || Date.now() - askedAt < ASK_HOLD_MS)) return;"));
 });
 
 test("claude-f: the reveal's covered emergency fund uses monthsNear, so '6 months' never sits beside 'a bit over the 6 you want'", async () => {

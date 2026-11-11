@@ -139,9 +139,16 @@ export function render(root, ctx) {
     ? ui.h("h1", { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } }, "Checking your plan against bad years...")
     : ui.h("h1", {}, canTurn ? finalHead(known) : averageHead);
   if (!noCare) whenCareful(ctx, careLine, (c) => {
-    if (waiting) { headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
+    if (waiting) { headline.style.minHeight = `${heightOf(headline)}px`; headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
     // nothing worked out, or nothing lasts even in a bad run of years, even at $0: no careful line, the average figure named as such
-    if (!c || !(c.yearly > 0)) { careLine.remove(); careLine2?.remove(); careStat.replaceChildren(ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
+    // the lines stay, in words, at the placeholder's height: removing them pulled the page up 174 px under the thumb (breaker on N3)
+    if (!c || !(c.yearly > 0)) {
+      for (const el of [careLine, careLine2]) if (el) { el.style.minHeight = `${heightOf(el)}px`; el.style.color = ""; el.removeAttribute("aria-busy"); }
+      careLine.replaceChildren(c ? `Even in a bad run of years ${BAD_RUN_NOTE}, the money does not last to the end of the plan.` : "The spending that lasts in a bad run of years could not be worked out; the figure below is if markets do as well as average.");
+      careLine2?.replaceChildren(...(c && Number.isFinite(c.planned) ? shareWords(chanceWords(c.planned), c.planned).filter((x) => x !== null) : []));
+      careStat.replaceChildren(ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`));
+      return;
+    }
     careLine.style.minHeight = `${heightOf(careLine)}px`;   // never shorter than the placeholder it replaces (exact: offsetHeight rounds 67.9 up and moved the page 1 px)
     careLine.style.color = "";
     careLine.removeAttribute("aria-busy");

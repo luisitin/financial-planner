@@ -628,5 +628,5 @@ test("review round 1 N3: the waiting line keeps room for '(2 years past the 65 p
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.match(src, /slot\(ui, "\(2 years past the 65 planned\)"\)/);
-  assert.match(src, /if \(pending\) ledeEl\.style\.minHeight = `\$\{ledeEl\.getBoundingClientRect\?\.\(\)\.height \?\? 0\}px`/);
+  assert.match(src, /if \(pending\) for \(const el of \[h1, ledeEl\]\) el\.style\.minHeight = `\$\{el\.getBoundingClientRect\?\.\(\)\.height \?\? 0\}px`/);
 });

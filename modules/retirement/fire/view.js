@@ -125,7 +125,8 @@ export function render(root, ctx) {
   // the line keeps the placeholder's exact height (offsetHeight rounds), so a shorter answer leaves at most a line's gap and
   // nothing below moves (review round 1 N3: the answer was a line longer than the placeholder and pushed the buttons 25 px)
   const fill = (c) => {
-    if (pending) ledeEl.style.minHeight = `${ledeEl.getBoundingClientRect?.().height ?? 0}px`;
+    // the heading too: at 320 px "Working out when Ana could stop work..." takes three lines, the answer two (breaker on N3)
+    if (pending) for (const el of [h1, ledeEl]) el.style.minHeight = `${el.getBoundingClientRect?.().height ?? 0}px`;
     ledeEl.style.color = ""; if (savedEl) savedEl.style.color = "";
     h1.removeAttribute("aria-busy"); h1.style.color = "";   // the held two lines stay: nothing below moves when a one-line answer arrives
     if (!c) {

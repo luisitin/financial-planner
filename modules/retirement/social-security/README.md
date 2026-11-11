@@ -238,3 +238,6 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
   $69 (which saved a green "saved" and dropped the benefit to $0): the line is listed as not read, the way "69k" already
   is. Cents still read only as one or two digits after the dot ("$69,000.00"), so ".000" is a thousands mark, not cents. The refusal (or the note under "saved" when other lines read) says
   "Write the thousands with a comma, like 69,000". A paste where no line reads saves nothing, so the record on file stays.
+- Breaker on that fix: an apostrophe ("69'000"), a comma set apart ("69 , 000") and a minus stuck to the amount
+  ("2024 -500") are listed as not read too. Two columns ("69,000 69,000", "69000 68000") and "2024 - 69,000" still read.
+  Typos such as "69 0000" are still read as 69 (a space and digits is how a second column looks); left, severity 3.

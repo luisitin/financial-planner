@@ -419,7 +419,7 @@ export function render(page, ctx) {
     const stop = current?.block?.();
     const words = stop ? `${askText(stop)} Or tap Finish later again to leave it out for now.` : null;
     if (words && finishStop !== words && Date.now() - askedAt >= ASK_HOLD_MS) { finishStop = words; askHere(typeof stop === "string" ? words : { ...stop, text: words }); return; }
-    if (words && finishStop !== words) return;
+    if (words && (finishStop !== words || Date.now() - askedAt < ASK_HOLD_MS)) return;   // a fast second tap never skips the words (breaker)
     save(toStart);
   };
   const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
