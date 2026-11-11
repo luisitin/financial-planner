@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-e] Get started: the covered emergency fund never reads "6 months, a bit over the 6 you want" (6.1 months, as the Dashboard says).
 - [builder:claude-e] Social Security: a figure with a space or dot between the thousands is answered with "Write the thousands with a comma, like 69,000".
 - [builder:claude-h] Review round 3 fix: a holding whose shares are all in two or more purchases on Tax lots no longer takes a different "What you paid in all" on Holdings; the box says the cost comes from those purchases and to change one there.
 - [reviewer:claude-r] Review round 3 of claude-h's fixes: N7, N8 closed, N6 closed for its path; a new total paid on a holding whose shares are all in lots is saved silently and splits the cost (severity 4).

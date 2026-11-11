@@ -1837,7 +1837,7 @@ export function render(page, ctx) {
     const heldAsk = cushionHeldAsk(st);
     const cushionFig = cushionOpen ? fig("open", "Emergency fund", "Not yet", hasSpend ? "Needs your savings." : "Needs your spending and savings.", "Add them ›", setupHref(hasSpend ? "have" : "spend"))
       : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsNear(st.runway, target)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${target}.`, "● Our guesses for now", setupHref("spend"))
-      : st.runway >= target && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash${overTarget(st.runway, target) ? `: ${overTarget(st.runway, target)}` : `: ${targetWords}`}.`, "● Covered", null)
+      : st.runway >= target && !held ? fig("ok", "Emergency fund", monthsNear(st.runway, target), `of the bills you have to pay, in cash${overTarget(st.runway, target) ? `: ${overTarget(st.runway, target)}` : `: ${targetWords}`}.`, "● Covered", null)
       // costly debt first: the Dashboard and Your plan say "Enough for now" for the same months; so does this (round 3, N9)
       : st.cushionLater && st.runwayStatus !== "ok" ? fig("calm", "Emergency fund", monthsNear(st.runway, target), `of the bills you have to pay, in cash. Enough for now; build it to ${target} months once the costly debt is paid.`, "● Enough for now", null)
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsNear(st.runway, target), held ? `${held} Aim for ${target} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${target}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);

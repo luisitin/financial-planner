@@ -2903,3 +2903,12 @@ test("walk 2: Finish later says once what it would leave out", () => {
   assert.ok(view.includes('onClick: finishLater }, "Finish later")'));
   assert.ok(view.includes("Or tap Finish later again to leave it out for now."));
 });
+
+test("claude-f: the reveal's covered emergency fund uses monthsNear, so '6 months' never sits beside 'a bit over the 6 you want'", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /st\.runway >= target && !held \? fig\("ok", "Emergency fund", monthsNear\(st\.runway, target\),/);
+  const { monthsNear, overTarget } = await import("../../../core/words.js");
+  assert.ok(overTarget(6.06, 6));
+  assert.notEqual(monthsNear(6.06, 6), "6 months");
+});

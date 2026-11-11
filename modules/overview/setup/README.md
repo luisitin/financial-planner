@@ -809,6 +809,9 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
 - **Finish later** with a question still unanswered on the screen (pay with no How often, a year that is not a year) says
   once what is missing, in the same words Continue uses, and "Or tap Finish later again to leave it out for now."; the
   second tap saves what is sure and leaves. The 0.8 s guard against a double tap applies to it too.
+- **Covered emergency fund** (claude-f): the tile's figure is `monthsNear`, as the Dashboard's, so 6.06 months reads
+  "6.1 months, a bit over the 6 you want", never "6 months, a bit over". The same sentence in compute.js (the questions'
+  pace line) is claude-c's file: asked for in left2.
 
 ## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
 - **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
