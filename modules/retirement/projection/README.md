@@ -1040,3 +1040,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
 bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
 pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
 Now: runs out at 69." (the spec's "66" was the builder variant's.)
+
+**Where the links land (L3).** "Type what goes in ›" and "Check the match ›" open the row on Contributions on its box
+(`workLanding`, `matchLanding` in `levers.js`); a $0 row is filled in with the change the card ran, so saving it gives the
+answer the card said (Casey: 88). The notice after the save says "Your retirement answer: now runs out at 88 (was 67)." See
+`contributions/README.md` "Landings, the match check, and the answer after a save".

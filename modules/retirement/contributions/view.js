@@ -4,10 +4,11 @@ import { compute } from "./compute.js";
 import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
 import { readAmount, amountText } from "../../../core/format.js";
 import { clearGuess, isGuess } from "../../../core/estimate/index.js";
-import { jobPayOf as payOf } from "../../overview/guesses/estimators/saving.js";
+import { jobPayOf as payOf, matchTerms } from "../../overview/guesses/estimators/saving.js";
 import { BUCKET_OF } from "../projection/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { leftWords } from "../../overview/next-best-action/compute.js";
+import { workLanding, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt } from "../levers.js";
 
 let pending = null;
 // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
@@ -15,6 +16,19 @@ let prefill = null;
 let prefillNote = null;   // a line over the form saying what it was filled in with
 /** A contribution's period for a number of paychecks a year (Work benefits' `paychecks`); anything else goes in once a year. */
 const PERIOD_FOR = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
+// the retirement answer before a save on this page, so the notice after it can say "now runs out at 76 (was 66)" (spec L3)
+let before = null;
+// a link from "What this rests on" (Will the money last?) lands once per arrival: ?add=<pid> on what goes in, ?match=<rowId> on
+// the match box; a redraw after a save keeps the same route object and is not brought back to it (as ?show= on Assumptions)
+let landedFor = null;
+/** fn() once the page has been painted (the boxes are on the page then). */
+const afterPaint = (fn) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => setTimeout(fn, 0)) : setTimeout(fn, 0));
+const pctText = (x) => `${Number((x * 100).toFixed(1))}%`;
+/** The usual match in words, from the same table as the guesses (Vanguard, How America Saves 2026; matchTerms, spec D-A4). */
+export function usualMatchWords() {
+  const t = matchTerms();
+  return `about ${pctText(t.value)} of pay when you put in ${pctText(t.needed)} (Vanguard, How America Saves 2026)`;
+}
 
 /** What the amount box holds: dollars ({ amount }), a share of pay ({ pct }, a fraction), blank (null) or neither ({ bad }). "6%" is 0.06. */
 export function readAmountOrShare(text) {
@@ -81,10 +95,16 @@ export function verdictWords(st) {
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today() });
+  const today = fmt.today();
+  const d = compute(plan, { today });
   const accounts = (plan.accounts ?? []).filter((a) => BUCKET_OF[a.type] && BUCKET_OF[a.type] !== "cash");
   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   let editing = null;
+  // a line over the edit form saying why it opened and what the card tried (a landing, or "It matches"), and boxes filled in
+  let editNote = null, fillValues = null, noteAt = null;
+  // every save on this page goes through here: the answer before it is kept for the notice after it
+  const rowsKey = (p) => JSON.stringify(p?.retirement?.contributions ?? []);
+  const update = (fn) => { try { before = { answer: answerOf(plan, { today }), rows: rowsKey(plan) }; } catch { before = null; } store.update(fn); };
   // a record saved from "6%" keeps the share beside the dollars; it is shown only while the dollars still are that share of the person's pay now
   const shareOf = (c) => {
     const pay = Number(c?.pctOfPay) > 0 && c.personId ? payOf(plan, c.personId, fmt.today()) : 0;
@@ -132,15 +152,31 @@ export function render(root, ctx) {
   }
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   const out = ui.h("div");
+  // "Your retirement answer: now runs out at 76 (was 66)." after a save that moved it, or "still ..." after one that changed what
+  // goes in and did not (spec L3); nothing when the plan has no answer yet (Social Security or birth dates missing)
+  const moved = (() => {
+    const b = before; before = null;
+    if (!b || !pending) return "";
+    let a = null;
+    try { a = answerOf(plan, { today }); } catch { a = null; }
+    const w = answerChangeWords(b.answer, a, (n) => fmt.money(n, cur), { still: rowsKey(plan) !== b.rows });
+    return w ? `Your retirement answer: ${w}.` : "";
+  })();
   if (pending && typeof pending === "object") {
     // an answer to the match question: say what the next move is now, from the Dashboard's own list
     const mv = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing?.moves?.[0] ?? null;
     const n = ui.notice("ok", pending.text);
+    if (moved) n.append(" ", moved);
     // what the month has left now, after a start that takes from take-home pay (review D2)
     if (pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
     if (mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
     out.append(n); pending = null;
-  } else if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  } else if (pending) {
+    // a plain "saved" goes after 4 seconds; one with the answer stays to be read
+    const n = ui.notice("ok", moved ? `${pending} ${moved}` : pending); out.append(n);
+    if (!moved) setTimeout(() => n.remove(), 4000);
+    pending = null;
+  }
   root.append(out);
 
   // the answers: add what goes in, no match at that job, or an old job's 401(k)
@@ -169,10 +205,10 @@ export function render(root, ctx) {
         root.append(ui.h("section", { class: "card" },
           ui.h("h2", {}, known ? `Start what goes into ${whose} 401(k) and get the whole match` : `How much goes into ${whose} 401(k)?`),
           ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
-            : `${NameOf(a.name)} job has a plan with a match. A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}: putting in ${pctOf(m.pct)} (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets all of it. Human resources can say what the real match is.`),
+            : `${NameOf(a.name)} job has a plan with a match. Most employers that match add ${usualMatchWords()}: about ${money(usualMatchAt(plan, a.personId, today, m.yearly))} a year for ${who}. Putting in ${pctOf(m.pct)} (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets all of it. Human resources can say what the real match is.`),
           costNote(),
           ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
-            ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; store.update((p) => contribute(p, acct.id, m, known)); }),
+            ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; update((p) => contribute(p, acct.id, m, known)); }),
             ui.button("Type my own amount", () => {
               prefill = { personId: a.personId, accountId: acct.id, period: periodOf(m), amount: eachOf(m) };
               prefillNote = `Filled in with ${pctOf(m.pct)} of pay, ${money(eachOf(m))} a paycheck: change it to yours${known ? "" : ", and add what the employer puts in when you know it"}.`;
@@ -182,7 +218,7 @@ export function render(root, ctx) {
         continue;
       }
     }
-    const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
+    const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
     // no 401(k) on file at all (round 8 item 1): one tap starts it -- a $0 401(k) for this person on Net worth, plus what goes
     // in when the match is known (typed on Work benefits), else the add form opened on it
     if (a.noAccount) {
@@ -193,7 +229,7 @@ export function render(root, ctx) {
       const start = () => {
         const id = ui.uid();
         pending = known ? { text: addedWords(m, true), left: true } : { text: `${NameOf(a.name)} 401(k) is added to the plan (at $0, on Net worth).` };
-        store.update((p) => {
+        update((p) => {
           p.accounts = p.accounts ?? [];
           p.accounts.push({ id, name: `${NameOf(a.name)} 401(k)`, type: "401k", balance: 0, ownerId: a.personId, asOf: fmt.today(), history: [] });
           if (known) contribute(p, id, m, true);
@@ -204,7 +240,7 @@ export function render(root, ctx) {
       root.append(ui.h("section", { class: "card" },
         ui.h("h2", {}, known ? `Start ${whose} 401(k) and get the whole match` : a.kind === "plan" ? `Start ${whose} 401(k) at work` : `Does ${whose} job have a retirement plan with a match?`),
         ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
-          : `Many employers add money when you save for retirement through work, in a 401(k) or 403(b): free money worth getting in full.${m ? ` A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}.` : ""}`),
+          : `Many employers add money when you save for retirement through work, in a 401(k) or 403(b): free money worth getting in full.${m ? ` Most that match add ${usualMatchWords()}: about ${money(usualMatchAt(plan, a.personId, today, m.yearly))} a year for ${who}.` : ""}`),
         known ? costNote() : null,
         ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
           ui.button(known ? `Start it at ${pctOf(m.pct)}` : `Yes: add ${whose} 401(k)`, start),
@@ -240,9 +276,9 @@ export function render(root, ctx) {
           ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
             ui.button(`Put in ${pctText(a.wantPct)} (${m(a.wantMonthly)} a month)`, () => {
               pending = `${NameOf(a.name)} 401(k): ${m(a.wantMonthly)} a month goes in now. The employer match should be about ${m(a.wantMatch)} a month.`;
-              store.update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
+              update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
             }),
-            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
+            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
           ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Your pay stub shows the real figures. Type them here when you have them.")));
         continue;
       }
@@ -262,17 +298,39 @@ export function render(root, ctx) {
         }),
         ui.button(`No match at ${whose} job`, () => {
           pending = { text: `Noted: no match at ${whose} job.` };
-          store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
+          update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
         }, { class: "secondary" }),
         // one button per 401(k) when there are several, so only the old one is marked (none when the job's plan was said in Get started)
         ...(a.saidPlan ? [] : a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
           const x = (plan.accounts ?? []).find((y) => y.id === id);
           return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who} left` : `That 401(k) is from a job ${who} left`, () => {
             pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who} left, so no money goes in.` };
-            store.update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
+            update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
           }, { class: "secondary" });
         })),
       ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Not sure? Your pay stub or your job's benefits site shows what goes in each paycheck and what the employer adds.")));
+  }
+  // the card for the question above, when a link should land on it
+  const askEl = ask.length ? (root.lastElementChild ?? root.children?.at?.(-1) ?? null) : null;
+  const nameFor = (pid) => people.find((p) => p.id === pid)?.name ?? "";
+  // the match check (spec L3): money of one's own goes in at work, no match is on file, and nobody was asked. One question at a
+  // time: not while a question above is showing. "That's right" saves the answer Get started and "No match" save; "It matches"
+  // opens the row on its match box
+  const check = !ask.length ? matchChecks(plan, { today })[0] ?? null : null;
+  if (check) {
+    const c = (plan.retirement?.contributions ?? []).find((x) => x.id === check.rowId);
+    const acct = (plan.accounts ?? []).find((x) => x.id === c?.accountId);
+    const whose = nameOf(check.name), who = nameIn(check.name);
+    const help = ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, `Ask human resources, or look on ${whose} job's benefits site or a pay stub for "employer match" or "company contribution". Until it is answered, the plan counts no match.`);
+    help.hidden = true;
+    root.append(ui.h("section", { class: "card" },
+      ui.h("h2", {}, "No match on file. Is that right?"),
+      ui.h("p", {}, `${acct?.name ?? `${NameOf(check.name)} 401(k)`} gets ${fmt.money(Math.round(perYear(Number(c?.amount) || 0, c?.period) / 12), cur)} a month of ${whose} own money and nothing from the employer in this plan.${check.usual > 0 ? ` Most employers that match add ${usualMatchWords()}: about ${fmt.money(check.usual, cur)} a year for ${who} at what goes in now.` : ""}`),
+      ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+        ui.button("That's right", () => { pending = { text: `Noted: no match at ${whose} job.` }; update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [check.pid]: { ...(p.retirement.workPlans?.[check.pid] ?? {}), match: false } }; }); }),
+        ui.button("It matches", () => openMatch(check.rowId, true), { class: "secondary" }),
+        ui.button("Not sure", () => { help.hidden = false; }, { class: "secondary" })),
+      help));
   }
   // what was answered, so it can be taken back
   const answered = [
@@ -282,7 +340,7 @@ export function render(root, ctx) {
   ];
   if (answered.length) root.append(ui.card(null, ...answered.map((x) => ui.h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
     ui.h("span", { class: "muted small" }, x.text),
-    ui.button("Edit", () => { pending = { text: "Answer taken back." }; store.update(x.undo); }, { class: "secondary small" })))));
+    ui.button("Edit", () => { pending = { text: "Answer taken back." }; update(x.undo); }, { class: "secondary small" })))));
 
   if (d.byPerson.some((p) => p.limits.length)) root.append(ui.card(`Against the ${d.limitsYear} limits`,
     ui.h("ul", { class: "records" }, d.byPerson.flatMap((p) => p.limits.map((l) => ui.h("li", {},
@@ -302,11 +360,15 @@ export function render(root, ctx) {
     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
     const start = editing ? contributionFormStart(plan, editing) : null;
-    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
-    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
+    // a box a landing filled in shows that figure, typed: no grey guess under it to keep
+    const filled = (k) => fillValues?.[k] !== undefined && fillValues?.[k] !== null;
+    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint && !filled("amount") ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint && !filled("employerMatch") ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
+    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount, ...(fillValues ?? {}) } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
+    const note = editing ? editNote : prefill ? prefillNote : null;
+    const noteEl = note ? ui.h("p", { class: "muted small" }, note) : null;
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),
-      !editing && prefill && prefillNote ? ui.h("p", { class: "muted small" }, prefillNote) : null,
+      noteEl,
       ui.form(fields, values, (v0) => {
         const v = start ? fillBlankFromGuess(v0, start) : v0;
         // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
@@ -333,16 +395,88 @@ export function render(root, ctx) {
         const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
         if (pctOfPay !== null) { const t = `${pending?.text ?? pending} ${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`; pending = typeof pending === "object" ? { ...pending, text: t } : t; }
-        store.update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
+        update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
         editing = null; prefill = null; prefillNote = null;
-      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; showForm = !d.hasData; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; store.update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
+      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; fillValues = null; noteAt = null; showForm = !d.hasData; drawForm(); } : null }),
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
     ));
+    // a landing's line sits right over the box it is about, so the box in the middle of a phone screen has it in view
+    const lab = noteEl && noteAt ? formHost.querySelector(`[name="${noteAt}"]`)?.closest?.("label") : null;
+    if (lab?.before) lab.before(noteEl);
   };
+  // ---- landings (spec L3): the card on Will the money last? links here, onto the box that holds the figure ----
+  const PER = { weekly: "a week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "a month", quarterly: "every three months", annual: "a year" };
+  const money0 = (n) => fmt.money(Math.round(n), cur);
+  // the box, in the middle of the screen, focused and outlined for 2 seconds; at once after a tap (a phone opens its keyboard
+  // only then), after the first paint on arrival
+  const focusBox = (key, tapped) => {
+    const go = () => {
+      const box = formHost.querySelector(`[name="${key}"]`);
+      if (!box || box.isConnected === false) return;
+      const at = box.closest?.("label") ?? box;
+      // the outline's rule, scoped to the form's card, put in only when a box is landed on
+      if (!formCard.querySelector?.("style")) formCard.append(ui.h("style", {}, ".ct-form .ct-show { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }"));
+      at.scrollIntoView?.({ block: "center", behavior: tapped ? "smooth" : "auto" });
+      box.focus?.({ preventScroll: true });
+      box.select?.();
+      at.classList?.add("ct-show");
+      setTimeout(() => at.classList?.remove("ct-show"), 2000);
+    };
+    if (tapped) go(); else afterPaint(go);
+  };
+  const setEdit = (r, note, fill = null, at = "amount") => {
+    editing = { ...r, accountName: d.items.find((x) => x.id === r.id)?.accountName ?? (plan.accounts ?? []).find((x) => x.id === r.accountId)?.name ?? "" };
+    editNote = note; fillValues = fill; noteAt = at; showForm = true;
+  };
+  // the match box: the usual match at what goes in now (the figure the card tried), and where the real one is written
+  const matchNote = (ml) => {
+    const name = nameFor(ml.pid), whose = nameOf(name), who = nameIn(name);
+    const usual = !(ml.usual > 0) ? "" : ml.typed ? `With the match typed on Work benefits, about ${money0(ml.usual)} a year comes in at what goes in now. ` : `Most employers that match add ${usualMatchWords()}: about ${money0(ml.usual)} a year for ${who} at what goes in now. `;
+    return `${usual}Type the real figure from ${whose} benefits site or a pay stub, or 0 if ${whose} job adds nothing.`;
+  };
+  function openMatch(rowId, tapped = false) {
+    const ml = matchLanding(plan, rowId, { today });
+    const r = ml && (plan.retirement?.contributions ?? []).find((x) => x.id === rowId);
+    if (!r) return false;
+    setEdit(r, matchNote(ml), null, "employerMatch");
+    if (tapped) drawForm();
+    focusBox("employerMatch", tapped);
+    return true;
+  }
+  // what goes in: a $0 row (or none) is filled in with the change the card tried, so saving it as it is gives the effect the card
+  // showed (said = done); a figure of the person's own, or our grey guess, is left as it is and the note names the change
+  function landAdd(pid) {
+    const wl = people.some((p) => p.id === pid) ? workLanding(plan, pid, { today }) : null;
+    if (!wl) return false;
+    const name = nameFor(pid), whose = nameOf(name), like = nameIn(name) === "you" ? "yours" : nameOf(name);
+    const alt = wl.alt, r = wl.rowId ? (plan.retirement?.contributions ?? []).find((x) => x.id === wl.rowId) : null;
+    const per = r?.period && PER[r.period] ? r.period : "monthly";
+    const each = (monthly) => monthly * 12 / perYear(1, per);
+    const tried = !alt ? "" : alt.kind === "usual" ? `${pctText(alt.share)} of pay (${money0(alt.monthly)} a month), the usual for pay like ${like}${alt.match > 0 ? `, and the usual match, about ${money0(alt.match)} a year` : ""}`
+      : `${alt.kind === "full" ? `${pctText(alt.share)} of pay, enough for the whole usual match` : "1% of pay more"}: ${money0(each(alt.monthly))} ${PER[per]}${r ? ` instead of ${money0(Number(r.amount) || 0)}` : ""}`;
+    const note = wl.fill ? `Filled in with the change we tried on your retirement answer: ${tried}. Change ${alt.match > 0 ? "both to" : "it to"} ${whose} own figure${alt.match > 0 ? "s" : ""} (a pay stub shows ${alt.match > 0 ? "them" : "it"})${alt.match > 0 ? `; type 0 for the match if ${whose} job adds nothing` : ""}.`
+      : `${tried ? `The change we tried on your retirement answer was ${tried}. ` : ""}Type what really goes in each time; a pay stub shows it.`;
+    if (r) { setEdit(r, note, wl.fill ? wl.values : null); return "amount"; }
+    if (wl.accountId && accounts.some((a) => a.id === wl.accountId)) { prefill = { personId: pid, accountId: wl.accountId, ...(wl.fill ? wl.values : {}) }; prefillNote = note; noteAt = "amount"; showForm = true; return "amount"; }
+    if (askEl) return askEl;   // no 401(k) on file yet: the question above starts it
+    prefill = { personId: pid }; prefillNote = `Type what goes into ${whose} plan at work each time; a pay stub shows it.`; showForm = true;
+    return "amount";
+  }
+  const q = ctx.route?.query ?? {};
+  let landOn = null;
+  if ((q.add || q.match) && ctx.route && landedFor !== ctx.route) {
+    landedFor = ctx.route;
+    landOn = q.match ? (matchLanding(plan, String(q.match), { today }) && (plan.retirement?.contributions ?? []).some((x) => x.id === String(q.match)) ? "match" : null) : landAdd(String(q.add));
+    if (landOn === "match") { const ml = matchLanding(plan, String(q.match), { today }); setEdit((plan.retirement.contributions ?? []).find((x) => x.id === String(q.match)), matchNote(ml), null, "employerMatch"); }
+  }
+  formCard.classList?.add("ct-form");
   drawForm();
+  if (landOn === "match") focusBox("employerMatch", false);
+  else if (landOn === "amount") focusBox("amount", false);
+  else if (landOn && typeof landOn === "object") afterPaint(() => { landOn.scrollIntoView?.({ block: "start" }); const h2 = landOn.querySelector?.("h2"); if (h2) { h2.setAttribute("tabindex", "-1"); h2.focus?.({ preventScroll: true }); } });
   if (d.items.length) root.append(ui.card("Contributions",
     ui.h("ul", { class: "page-list" }, d.items.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, "🏦"),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),

@@ -135,3 +135,46 @@ called at run time, so the cycle is harmless.
 ## Stress test 2026-11-11 (claude-e, wave 2)
 - "The plan adds these every year..." (not a page title as a noun) and one 44 px button "See if the money lasts ›" in place of a
   16 px link (R-A8, FF8).
+
+## Landings, the match check, and the answer after a save (2026-11-11, owner's request; spec L3)
+The card "What this rests on" on Will the money last? (`modules/retirement/levers.js`, see `projection/README.md`) links here
+onto the box that holds the figure. Tests: `module.test.mjs` "L3: ..." (real UI kit on the fake DOM), `tests/levers.test.mjs`
+"L3 ...".
+
+- **`?add=<pid>`** ("Type what goes in ›"): `workLanding(plan, pid)` picks the row. With nothing of the person's own going in (a
+  $0 row, or none on their 401(k)), the form opens on that row (or a new one into it) **filled in with the change the card ran**:
+  `usualShare` of pay a month plus the usual match at that share (`workAlt`, kind "usual"), and a line "Filled in with the change
+  we tried on your retirement answer: 6.6% of pay ($396 a month), the usual for pay like Casey's, and the usual match, about
+  $2,880 a year. Change both to Casey's own figures ...". Saving it as it is gives the card's answer (said = done; tested on
+  Casey: 67 → 88). A figure of the person's own, or our grey guess, is never typed over: the line names the change instead, in
+  the row's own period ("1% of pay more: $140 every two weeks instead of $115"). With no 401(k) on file, the question card
+  above (the one that adds it) is scrolled to instead.
+- **`?match=<rowId>`** ("Check the match ›"): the row opens on "Employer adds, a year", focused and selected, with "Most
+  employers that match add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026): about $2,040 a year for
+  Jamie at what goes in now. Type the real figure ..." (`matchLanding`: the usual match at all the person's own money at work,
+  the card's own figure; the formula typed on Work benefits instead when there is one).
+- A link lands once per arrival (the route object, as `?show=` on Assumptions): the box is brought to the middle of the
+  screen after the first paint, focused with `preventScroll`, and outlined for 2 seconds (a rule scoped to the form's card,
+  put in only then). A link to someone or a row not in the plan lands nowhere.
+- **The match check** (`matchChecks`): a row into a plan at work with money of the person's own going in, no match on it (not
+  our guess), and `retirement.workPlans[pid].match` never answered gets "No match on file. Is that right?" with **That's
+  right** (filled; saves `workPlans[pid].match = false`, the answer Get started and "No match at X's job" save, and it can
+  be taken back with Edit), **It matches** (opens the row on the match box, focused in the tap so a phone opens its
+  keyboard) and **Not sure** (where to look; "Until it is answered, the plan counts no match"). One question at a time: not
+  while a question card above is showing. A match said with `workPlans[pid].match === true` and none typed is not asked
+  here (the card's match row reads "Not counted" and links to the box).
+- **The answer after a save.** Every save on this page goes through one `update`, which keeps the retirement answer before it
+  (`answerOf`: one projection at average markets, the same as Will the money last?'s verdict). The notice after it adds
+  "Your retirement answer: now runs out at 76 (was 66)." (`answerChangeWords`: "now lasts to the end, age 95 (was: runs out
+  at 66)", "still lasts to the end, with about $41,000 more left at 95 (today's dollars)", "still runs out at 70" when what
+  goes in changed and the age did not; nothing when the save changed no contribution and the answer did not move, or when
+  the plan has no answer yet). A notice with this line stays; a plain "Contribution saved." still goes after 4 seconds.
+- **D-A4 (copied from the spec): "the usual" comes from sourced tables only.** The match cards' "common match" words now
+  read the guesses' own table, `matchTerms()` (`overview/guesses/estimators/saving.js`: Vanguard, How America Saves 2026,
+  median match value 4% of pay, earned in full at 6% put in): "Most employers that match add about 4% of pay when you put in
+  6% (Vanguard, How America Saves 2026): about $2,280 a year for Priya" (`usualMatchAt`, rounded as the guess is: whole $10 a
+  month, twelve of them; was "A common match, 50% of what you put in up to 6% of pay ... $1,740"). The 50%-up-to-6% tiers
+  (`career/benefits/compute.js:24`) are a second, older convention still used for the "Start it at 6%" amount and by Next
+  best action's own words (claude-f's file); they are not used for "the usual match" on this page or the card.
+- **D-A6 (copied): writes from the card.** The card on Will the money last? writes only the leftover answer (L4); every
+  other row links to the page that owns the figure, landing on the box, as above.

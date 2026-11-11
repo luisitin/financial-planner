@@ -274,6 +274,48 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
   assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
 });
 
+// ---- L3: where the card's links land on Contributions, the match check, the answer after a save ----
+test("L3 workLanding: filled only when nothing of one's own goes in (Casey), with the change the card ran; else the row as it is", () => {
+  const c = plans.casey();
+  const w = LV.workLanding(c, "setup-self", { today: T });
+  assert.deepEqual([w.rowId, w.fill, w.values], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly", employerMatch: 2880 }]);
+  // said = done: those boxes saved over the row are the change the card ran
+  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.values); });
+  assert.deepEqual(asSaved, byHand(c, (p) => LV.applyWorkAlt(p, "setup-self", w.alt)));
+  const j = LV.workLanding(plans.jamie(), "setup-self", { today: T });
+  assert.deepEqual([j.rowId, j.fill, j.values, j.alt.kind], ["setup-contrib-setup-self", false, null, "more"]);
+  // no plan at work: nothing to try, nothing to fill
+  const m = LV.workLanding(plans.morgan(), "setup-self", { today: T });
+  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill], [null, null, null, false]);
+});
+
+test("L3 matchLanding and matchChecks: the usual match at what goes in now; asked only when own money goes in, no match, never answered", () => {
+  const j = plans.jamie();
+  const ml = LV.matchLanding(j, "setup-contrib-setup-self", { today: T });
+  assert.deepEqual([ml.pid, ml.usual, ml.typed, ml.said], ["setup-self", 2040, false, false]);
+  assert.equal(ml.usual, LV.usualMatchAt(j, "setup-self", T, 3000));
+  assert.equal(LV.matchLanding(j, "no-such-row", { today: T }), null);
+  assert.deepEqual(LV.matchChecks(j, { today: T }), [], "Jamie said there is no match");
+  const never = plans.jamie(); delete never.retirement.workPlans["setup-self"].match;
+  assert.deepEqual(LV.matchChecks(never, { today: T }).map((x) => [x.rowId, x.pid, x.usual, x.name]), [["setup-contrib-setup-self", "setup-self", 2040, "Jamie"]]);
+  assert.deepEqual(LV.matchChecks(plans.robin(), { today: T }), [], "Robin's match is our guess: the card says so, no question");
+  assert.deepEqual(LV.matchChecks(plans.casey(), { today: T }), [], "nothing of Casey's own goes in: the work row asks, not the match");
+  const zero = plans.jamie(); delete zero.retirement.workPlans["setup-self"].match; zero.retirement.contributions[0].amount = 0;
+  assert.deepEqual(LV.matchChecks(zero, { today: T }), []);
+});
+
+test("L3 answerChangeWords: the answer after a save beside the one before it", () => {
+  const out = (age) => ({ lasts: false, age, endAge: 95, endReal: 0 }), last = (endReal) => ({ lasts: true, age: null, endAge: 95, endReal });
+  assert.equal(LV.answerChangeWords(out(66), out(76)), "now runs out at 76 (was 66)");
+  assert.equal(LV.answerChangeWords(out(70), out(70)), "still runs out at 70");
+  assert.equal(LV.answerChangeWords(out(70), out(70), undefined, { still: false }), "");
+  assert.equal(LV.answerChangeWords(out(66), last(5000)), "now lasts to the end, age 95 (was: runs out at 66)");
+  assert.equal(LV.answerChangeWords(last(5000), out(90)), "now runs out at 90 (it lasted to the end before)");
+  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "still lasts to the end, with about $41,000 more left at 95 (today's dollars)");
+  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "still lasts to the end (age 95)");
+  assert.equal(LV.answerChangeWords(null, out(70)), "");
+});
+
 test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;

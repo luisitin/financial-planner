@@ -12,6 +12,9 @@
 //   answerOf(plan, { today })           -> { lasts, age, endAge, endReal } the answer itself (one projection) or null
 //   answerWords(a, money)               -> "runs out at 70" | "lasts to the end (age 95)"
 //   workAlt(plan, pid, { today })       -> the work-saving alternative the card shows (Contributions' ?add=<pid> fills it in)
+//   workLanding / matchLanding          -> what Contributions' ?add=<pid> and ?match=<rowId> open (L3)
+//   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
+//   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
 //
 // `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
 // Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
@@ -188,6 +191,70 @@ export function applyWorkAlt(draft, pid, alt) {
     draft.accounts = [...L(draft, "accounts"), { id: accountId, name: "401(k) at work", type: "401k", balance: 0, ownerId: pid, history: [] }];
   }
   draft.retirement.contributions.push({ id: `lever-${pid}`, accountId, personId: pid, amount: alt.monthly, period: "monthly", employerMatch: alt.match });
+}
+
+// ---- where the card's links land on Contributions (L3) -------------------------------------------------------------------
+/**
+ * workLanding(plan, pid, { today }) -> what Contributions' ?add=<pid> opens: { pid, rowId (the row to edit, or null: a new row),
+ * accountId, alt (workAlt), fill (the form is filled in with the change the card tried), values (the boxes when filled) }.
+ * Filled only when nothing of the person's own goes in (the "usual" change, a $0 row or none): a figure the person typed, or one
+ * we guessed (it opens grey), is never typed over; the note names the change instead. Filled, saving the form as it is makes the
+ * same change as applyWorkAlt (said = done): that row, $X a month, the usual match a year.
+ */
+export function workLanding(plan, pid, { today } = {}) {
+  const alt = workAlt(plan, pid, { today });
+  const rs = workRows(plan, pid);
+  const byOwn = [...rs].sort((a, b) => perYear(b.c.amount, b.c.period) - perYear(a.c.amount, a.c.period));
+  const row = (alt?.rowId ? rs.find(({ c }) => c.id === alt.rowId) : byOwn[0])?.c ?? null;
+  const fill = alt?.kind === "usual";
+  return { pid, rowId: row?.id ?? null, accountId: alt?.accountId ?? row?.accountId ?? workAccount(plan, pid)?.id ?? null, alt, fill,
+    values: fill ? { amount: alt.monthly, period: "monthly", employerMatch: alt.match } : null };
+}
+/** Whose a row is: its person, or the owner of the account it goes into. */
+const rowPerson = (plan, c) => c?.personId || L(plan, "accounts").find((a) => a.id === c?.accountId)?.ownerId || null;
+/**
+ * matchLanding(plan, rowId, { today }) -> what Contributions' ?match=<rowId> and the match check say: { rowId, pid, usual (the usual
+ * match a year at what the person puts in at work now, as the card's match row tries it), typed (the formula typed on Work
+ * benefits is used instead of the usual one), said (`workPlans[pid].match`) } or null for a row that is not there.
+ */
+export function matchLanding(plan, rowId, { today } = {}) {
+  const c = L(plan?.retirement, "contributions").find((x) => x.id === rowId);
+  if (!c) return null;
+  const pid = rowPerson(plan, c);
+  const rs = pid ? workRows(plan, pid) : [];
+  const own = rs.length ? rs.reduce((t, x) => t + perYear(x.c.amount, x.c.period), 0) : perYear(c.amount, c.period);
+  return { rowId, pid, usual: pid ? usualMatchAt(plan, pid, today, own) : 0, typed: !!(pid && typedTiers(plan, pid)), said: pid ? plan.retirement?.workPlans?.[pid]?.match : undefined };
+}
+/**
+ * matchChecks(plan, { today }) -> the rows that get "No match on file. Is that right?" (spec L3): a row into a plan at work with
+ * money of the person's own going in, no match on it (not our guess), and the match never answered (`workPlans[pid].match` unset).
+ * The card's match row tags these "Not counted".
+ */
+export function matchChecks(plan, { today } = {}) {
+  const out = [];
+  for (const p of L(plan?.household, "people").filter((x) => x.role !== "dependent")) {
+    if (plan.retirement?.workPlans?.[p.id]?.match !== undefined) continue;
+    for (const { c } of workRows(plan, p.id)) {
+      if (!(perYear(c.amount, c.period) > 0) || Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id))) continue;
+      out.push({ ...matchLanding(plan, c.id, { today }), name: p.name });
+    }
+  }
+  return out;
+}
+/**
+ * The answer after a save next to the one before it (spec L3 "Now runs out at 76 (was 66)", L5): "now runs out at 76 (was 66)",
+ * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "still lasts to the
+ * end, with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
+ * nothing moved and `still` is false.
+ */
+export function answerChangeWords(before, after, money = dollars, { still = true } = {}) {
+  if (!before || !after) return "";
+  if (!after.lasts && !before.lasts) return after.age === before.age ? (still ? `still runs out at ${after.age}` : "") : `now runs out at ${after.age} (was ${before.age})`;
+  if (!after.lasts) return `now runs out at ${after.age} (it lasted to the end before)`;
+  if (!before.lasts) return `now lasts to the end, age ${after.endAge} (was: runs out at ${before.age})`;
+  const diff = after.endReal - before.endReal, r = roundMoney(Math.abs(diff));
+  if (r < 100) return still ? `still lasts to the end (age ${after.endAge})` : "";
+  return `still lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
 }
 
 // ---- tags ---------------------------------------------------------------------------------------------------------------
