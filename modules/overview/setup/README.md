@@ -760,6 +760,22 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
   A held Continue scrolls so its message and Continue are both on screen, and leaves the keyboard shut. Every ask on a screen is
   remembered (`askedOnce`): a second Continue passes the one said, and the next one behind it is still asked (a couple: one
   person's missing choice, then the other's low pay). A kept draft of the wrong shape (an older page, a damaged entry) is dropped.
+## Review round 2 (2026-11-11, claude-e; claude-r's N4-N7)
+- **N4**: an ask about a box the person cannot see (a birth year, a rate, a work choice) carries a button to it ("Fix Ann's
+  year ↑", "Fix the rate ↑", "Show me ↑") that scrolls the box into view and puts the cursor in it. The ask itself still
+  does not focus the box (the keyboard would cover the message); a tap on the button is the person's own choice.
+  The ask takes focus instead, so a screen reader reads it.
+- **N6**: a Continue within 800 ms of an ask appearing is ignored (`ASK_HOLD_MS`): the ask is put above Continue, so a slow
+  double tap landed on Continue again and passed the low-pay ask unread. A choice inside the ask and the Skip buttons are
+  read, so they go on at once. Decision: 800 ms, the reviewer's figure; long enough for a double tap, short enough that a
+  person who read the ask is not held.
+- **N5**: the reveal with nothing in the plan but spending says "A few more answers will fill this in. Each part below says
+  what it needs." instead of the emergency fund verdict worked out with no savings. The compute side (the headline itself
+  judging a runway with no cash) is claude-c's file and waits on its left2.
+- **N7**: the reveal opened by its address part way through the questions goes back to the question reached and stamps
+  nothing. `guide.setup.at` reaches "done" only once every question was passed (Continue or Skip). A plan built on its pages
+  that never started the questions still opens the reveal, as the Start card and the Dashboard link it.
+
 ## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
 - **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
   less the tax and insurance inside it), not by `nper` on the whole payment. A mortgage paid off before then leaves its tax and

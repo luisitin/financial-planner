@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-e] Get started: an ask about a box above has a button to it ("Fix Ann's year ↑"); a quick second tap on Continue no longer passes the low-pay question unread; no emergency fund verdict when no savings were given; the reveal opened by its address part way through goes back to the question reached.
 - [reviewer:claude-r] Review round 2 of claude-h's fixes: N1 to N5 closed; 3 new problems on Holdings and Tax lots, one of severity 4 (a holding's added shares at $0 cost).
 - [reviewer:claude-r] Review round 3 of claude-g's lane: N4, N5 and the spending link closed; nothing open.
 - [builder:claude-g] Money calendar: emptying a payday says it can be changed, not removed; a payday saved for tomorrow (another time zone) no longer blocks the others; no W-2 reminder for a year without a salary. Where the money goes again opens the Ledger with refunds shown, so its count and total match.

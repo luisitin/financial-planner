@@ -2840,3 +2840,22 @@ test("F8: a draft written with Sets reads back as Sets", () => {
   assert.ok(back.goals.v instanceof Set && back.goals.v.has("trip") && back.goals.v.size === 2);
   assert.deepEqual(back.money.v, { pay: "1200", period: "monthly" });
 });
+
+test("review round 2 (N4-N7): a way to the box, no slow double tap past an ask, no verdict on savings never given, no false finish", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  // N4: an ask about a box carries a button to it; a year names whose ("Fix Ann's year ↑")
+  assert.ok(view.includes('const goBox = focus ? [{ label: fix ?? "Show me ↑"'), "the ask has a button to its box");
+  assert.ok(view.includes("focus.focus({ preventScroll: true })"), "the button puts the cursor in the box");
+  assert.ok(view.includes("const fixYear = (b) => `Fix ${b.kid || ad.length > 1 ? `${b.who.name}'s` : \"your\"} year ↑`;"));
+  assert.equal((view.match(/fix: fixYear\(b\)/g) ?? []).length, 3, "every year ask has the button");
+  // N6: a Continue within ASK_HOLD_MS of an ask is the same thumb; a choice in the ask or a Skip still goes on
+  assert.match(view, /const ASK_HOLD_MS = 800;/);
+  assert.ok(view.includes("if (!opts.chosen && Date.now() - askedAt < ASK_HOLD_MS) return;"));
+  assert.ok(view.includes("askedAt = Date.now();"));
+  assert.ok(view.includes('x.period = "monthly"; warnedPay = null; forward({ chosen: true });'), "\"It is $X a month\" is read, so it goes on");
+  // N5: nothing in the plan and spending typed: no verdict on savings never given
+  assert.ok(view.includes('!any && hasSpend ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline('));
+  // N7: the reveal by address part way through goes back to the question reached; a plan never started still opens it
+  assert.ok(view.includes('if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {'));
+  assert.ok(view.includes("location.replace(`#/overview/setup/${su.at}`);"));
+});

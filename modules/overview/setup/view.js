@@ -65,6 +65,8 @@ function draftsHook() {
 let cameFrom = null;     // the screen a Continue just left: stamped on the next screen's history entry, so Back can go back
 let warnedPay = null;    // the low-pay question already asked once for these figures
 const askedOnce = new Set();  // every ask already said for these figures (cleared with warnedPay)
+let askedAt = 0;              // when the last ask appeared: a Continue sooner than ASK_HOLD_MS after it is not taken (N6)
+const ASK_HOLD_MS = 800;
 let warnedKept = null;   // the "Kept X" warnings Finish later already stopped for once
 
 const STYLE = `
@@ -387,19 +389,29 @@ export function render(page, ctx) {
   // from Continue; stress test 2026-11-11, OP-3 and F8). `ask` is the words, or { text, choices: [{ label, run }], focus }:
   // the choices are buttons in the notice (the low-pay one sets "A month" there), `focus` the box to put the cursor in
   const askHere = (ask) => {
-    const { text, choices = [], focus = null } = typeof ask === "string" ? { text: ask } : ask;
+    const { text, choices = [], focus = null, fix = null } = typeof ask === "string" ? { text: ask } : ask;
     card.querySelector(".su-ask")?.remove();
-    const el = ui.notice("warn", text); el.classList.add("su-ask"); el.setAttribute("role", "alert");
-    if (choices.length) el.append(ui.h("div", { class: "su-pair" }, choices.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: c.run }, c.label))));
+    const el = ui.notice("warn", text); el.classList.add("su-ask"); el.setAttribute("role", "alert"); el.tabIndex = -1;
+    // the box it is about can be a screen above: a button takes you there and puts the cursor in it. A tap is the person's own
+    // choice, so the keyboard opening then is fine (round 2, N4)
+    const goBox = focus ? [{ label: fix ?? "Show me ↑", run: () => { try { focus.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); focus.focus({ preventScroll: true }); } catch { /* a nicety */ } } }] : [];
+    const btns = [...goBox, ...choices];
+    if (btns.length) el.append(ui.h("div", { class: "su-pair" }, btns.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: c.run }, c.label))));
+    askedAt = Date.now();
     const row = card.querySelector(".su-actions");
     if (row) row.before(el); else card.prepend(el);
     // the message and Continue together on screen (the message alone left Continue just under the edge: breaker 2026-11-11);
     // the box it is about is not focused: on a phone the keyboard would open over the message
     try { (row ?? el).scrollIntoView({ block: "end", behavior: reduced() ? "auto" : "smooth" }); if (el.getBoundingClientRect().top < 64) el.scrollIntoView({ block: "start", behavior: "auto" }); } catch { /* a nicety */ }
-    void focus;
+    // the eye goes to the ask, not the box: on a phone the keyboard would open over the message
+    try { el.focus({ preventScroll: true }); } catch { /* a nicety */ }
   };
   const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
-  const forward = () => {
+  const forward = (opts = {}) => {
+    // a second tap on Continue right after an ask appeared is the same thumb, not "keep it": the ask is inserted above, so
+    // Continue can stay under the finger and a slow double tap passed $3,200 a year unread (round 2, N6). A choice in the ask
+    // (`chosen`) is read, so it goes on
+    if (!opts.chosen && Date.now() - askedAt < ASK_HOLD_MS) return;
     // a answer that cannot be saved as it stands (a left-over the typed bills leave no room for, a birth year that is not a
     // year): said, and Continue waits until it is changed
     const stop = current?.block?.();
@@ -796,7 +808,7 @@ export function render(page, ctx) {
           if (n > 0 && perYear(n, x.period) < 15000) {
             const said = `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""}`;
             // the answer is one tap in the notice: "It is $3,200 a month" sets A month and goes on (F8, OP-3)
-            const monthly = x.period !== "monthly" ? [{ label: `It is ${money(n)} a month`, run: () => { x.period = "monthly"; warnedPay = null; forward(); } }] : [];
+            const monthly = x.period !== "monthly" ? [{ label: `It is ${money(n)} a month`, run: () => { x.period = "monthly"; warnedPay = null; forward({ chosen: true }); } }] : [];
             { out.push({ text: `${said} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`, choices: [...monthly, { label: `Yes, ${said}`, run: () => forward() }] }); }
           }
         }
@@ -903,11 +915,13 @@ export function render(page, ctx) {
       firstGroup();
       // Continue waits while a typed year cannot be used (an empty box still goes on: skipping stays allowed), and while a
       // Social Security amount is typed with no usable year, which the plan cannot count without it (R3: the amount was dropped)
+      // the ask's button to the box: "Fix Ann's year ↑" (N4)
+      const fixYear = (b) => `Fix ${b.kid || ad.length > 1 ? `${b.who.name}'s` : "your"} year ↑`;
       const block = () => {
         for (const b of yearBoxes) {
           const bad = yearWords(b.get(), { born: !b.kid });
-          if (bad) return { text: `${b.kid ? `${b.who.name}: ` : ad.length > 1 ? `${b.who.name}: ` : ""}${bad}`, focus: b.input };
-          if (b.ss?.() && !String(b.get() ?? "").trim()) return { text: `${ad.length > 1 ? `${b.who.name}: t` : "T"}ype the year ${ad.length > 1 ? "they were" : "you were"} born with four digits, like 1953. We need it to count the Social Security.`, focus: b.input };
+          if (bad) return { text: `${b.kid ? `${b.who.name}: ` : ad.length > 1 ? `${b.who.name}: ` : ""}${bad}`, focus: b.input, fix: fixYear(b) };
+          if (b.ss?.() && !String(b.get() ?? "").trim()) return { text: `${ad.length > 1 ? `${b.who.name}: t` : "T"}ype the year ${ad.length > 1 ? "they were" : "you were"} born with four digits, like 1953. We need it to count the Social Security.`, focus: b.input, fix: fixYear(b) };
         }
         return null;
       };
@@ -915,7 +929,7 @@ export function render(page, ctx) {
       const check = (seen = new Set()) => { const out = [];
         for (const b of yearBoxes) {
           const y = Number(b.get());
-          if (!b.kid && y >= 1900 && year - y > 105) { out.push({ text: `That would make ${ad.length > 1 ? b.who.name : "you"} ${year - y}. Check the year, or tap Continue again to keep it.`, focus: b.input }); }
+          if (!b.kid && y >= 1900 && year - y > 105) { out.push({ text: `That would make ${ad.length > 1 ? b.who.name : "you"} ${year - y}. Check the year, or tap Continue again to keep it.`, focus: b.input, fix: fixYear(b) }); }
         }
         return out.find((a) => !seen.has(a.text)) ?? null;
       };
@@ -1125,7 +1139,7 @@ export function render(page, ctx) {
       // a slip in the dollars box ("5" meant as 5% of pay), or a year we cannot use, holds Continue once, as the spending screen does
       const check = () => { for (const t of card.querySelectorAll("[data-words]")) if (t.dataset.words) return t.dataset.words; return null; };
       current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words, check };
-      actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: () => { current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words }; forward(); } } : {});
+      actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: () => { current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words }; forward({ chosen: true }); } } : {});
     },
 
     owe() {
@@ -1276,7 +1290,7 @@ export function render(page, ctx) {
           const r = Number(String(v[o.key]?.rate ?? "").trim());
           if (String(v[o.key]?.rate ?? "").trim() && r > 40 && !(o.key === "credit" && v[o.key]?.paidInFull)) {
             const near = Math.round(r) / 10;
-            return { text: `${r}% a year on ${o.key === "credit" ? "your cards" : o.key === "student" ? "your student loans" : `the ${o.name.toLowerCase()}`}? ${r < 1000 ? `Did you mean ${near}%? ` : ""}Continue keeps what you typed.`, focus: card.querySelector(`[aria-label^="${o.label}: interest rate"]`) };
+            return { text: `${r}% a year on ${o.key === "credit" ? "your cards" : o.key === "student" ? "your student loans" : `the ${o.name.toLowerCase()}`}? ${r < 1000 ? `Did you mean ${near}%? ` : ""}Continue keeps what you typed.`, focus: card.querySelector(`[aria-label^="${o.label}: interest rate"]`), fix: "Fix the rate ↑" };
           }
         }
         return null;
@@ -1284,7 +1298,7 @@ export function render(page, ctx) {
       current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words, check };
       // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess,
       // the same save as Continue; a debt picked is never dropped
-      const skipGuessing = () => { current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words }; forward(); };
+      const skipGuessing = () => { current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words }; forward({ chosen: true }); };
       actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: skipGuessing } : {});
     },
 
@@ -1613,7 +1627,7 @@ export function render(page, ctx) {
         // a left-over typed that cannot be worked out (more than comes in, or the bills leave no room) writes nothing, so Skip
         // uses our guesses as it says, the groups typed kept; before, it moved on with no spending at all (verify 2026-11-07)
         const leftFails = leftTyped() && (lw.flush(), lw.conflict());
-        current = { apply: leftFails ? (d) => applySpend(d, { ...spendV(), sum: v.sum0 }, today, { guess: ctx.guess }) : apply, words }; forward();
+        current = { apply: leftFails ? (d) => applySpend(d, { ...spendV(), sum: v.sum0 }, today, { guess: ctx.guess }) : apply, words }; forward({ chosen: true });
       } });
     },
 
@@ -1703,7 +1717,16 @@ export function render(page, ctx) {
     },
 
     done() {
-      if (!plan.guide?.setup?.finishedAt && wouldChange(plan, (d) => atScreen(d, "done", today))) { store.update((d) => atScreen(d, "done", today)); return; }
+      // the reveal by its address (a bookmark, the phone's Forward) part way through the questions: back to the question
+      // reached, never a "finished" stamped over questions not asked. `at` only reaches "done" once every question was passed,
+      // by Continue or Skip (round 2, N7). A plan built on its pages that never started the questions still opens it (the
+      // Start card and the Dashboard link there)
+      const su = plan.guide?.setup;
+      if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {
+        location.replace(`#/overview/setup/${su.at}`);
+        return;
+      }
+      if (!su?.finishedAt && wouldChange(plan, (d) => atScreen(d, "done", today))) { store.update((d) => atScreen(d, "done", today)); return; }
       if (reveal && !reduced()) {
         reveal = false;
         add(card, ui.h("div", { class: "su-wait", role: "status" }, ui.h("div", { class: "su-dots", "aria-hidden": "true" }, ui.h("i"), ui.h("i"), ui.h("i")), ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, "Putting your plan together…")));
@@ -1724,6 +1747,7 @@ export function render(page, ctx) {
     const hasCash = (plan.accounts ?? []).some((a) => ["cash", "checking", "savings"].includes(a.type));
     const cushionOpen = st.runway === null || (!hasCash && (st.runwayWaits || !(plan.accounts ?? []).length));
     const any = st.netWorth !== null || st.spare !== null || !cushionOpen || !!st.retire;
+    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
     const target = st.runwayTarget ?? 6;
     // "the 6 you want" only when the person set the months; else the number is ours (R6)
     const targetSet = plan.assumptions?.emergencyMonths != null;
@@ -1732,7 +1756,9 @@ export function render(page, ctx) {
       ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money so far.` : "You did it. Here is your money so far.") : "You're set up. The numbers come next."),
       // the sentence as the Dashboard says it: nothing "below" here is a list of moves, and while the path goes on its Next
       // button is the next thing (claude-f's hand-over: FL-HOME F4 / D4)
-      ui.h("p", {}, calmHeadline(st.headline, { underWay: !ps.complete }))));
+      // with nothing in the plan yet, no verdict on savings never given ("Your emergency fund is thin." with no accounts: round 2,
+      // N5); spending typed and nothing else is "a few more answers"
+      ui.h("p", {}, !any && hasSpend ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline(st.headline, { underWay: !ps.complete }))));
     const fig = (cls, label, value, sub, status, href) => {
       const s = ui.stat(label, typeof value === "number" ? money(value) : value, sub);
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
@@ -1744,7 +1770,6 @@ export function render(page, ctx) {
       : st.netWorth >= 0 ? fig("ok", "What you own, minus what you owe", st.netWorth, `You own ${money(st.assets)} and owe ${money(st.liabilities)}.`, "● A solid base")
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
-    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
     const spareOne = hasSpend !== hasPay;
     const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.") : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
