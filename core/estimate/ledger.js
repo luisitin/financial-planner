@@ -46,6 +46,17 @@ export function debtKind(plan, row) {
   const acct = L(plan, "accounts").find((a) => a.id === row?.accountId);
   return DEBT_KIND[acct?.type] ?? "loan";
 }
+/**
+ * A guess on a debt row whose loan account is gone: Net worth's Delete removes the account and keeps its `debts` row, so the
+ * row's guesses would stay listed on Our guesses and the done screen (C2 follow-up F2, 2026-11-07). A row with no accountId is
+ * not one of these (nothing to have lost). -> boolean
+ */
+export function orphanDebt(plan, path) {
+  const m = /^debts\[([^\]]+)\]\./.exec(path ?? "");
+  if (!m) return false;
+  const row = L(plan, "debts").find((d) => d?.id === m[1]);
+  return !!row?.accountId && !L(plan, "accounts").some((a) => a?.id === row.accountId);
+}
 const debtRowOf = (plan, path) => { const m = /^debts\[([^\]]+)\]\.(rate|minPayment)$/.exec(path); return m ? { row: L(plan, "debts").find((d) => d.id === m[1]), field: m[2] } : null; };
 const CUSHION = "setup-goal-cushion";
 
@@ -109,7 +120,9 @@ export const LEGACY = [
       if (!s) return false;
       const want = value !== undefined;
       if ((s.retireAuto === true) === want) return false;
-      s.retireAuto = want; return true;
+      // retireHeld (fix round 1, 2026-11-11): a figure that was Get started's own and is now the person's (typed over, or kept)
+      // still holds the loans Get started's figure held, until each is paid off (retirement/projection buildInputs)
+      s.retireAuto = want; if (want) delete s.retireHeld; else s.retireHeld = true; return true;
     },
   },
   {

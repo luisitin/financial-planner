@@ -1,6 +1,7 @@
 // modules/retirement/projection/view.js -- DOM only. The verdict, the money over time, what the
 // plan assumes, and the settings that every retirement page shares (folded, saved with a green line).
-import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure } from "./compute.js";
+import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords } from "./compute.js";
+import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
@@ -191,10 +192,16 @@ export function render(root, ctx) {
     // (R-A8: a page title in the middle of a sentence read as a question)
     ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages, Chance the money lasts and If history repeated, show the range around it."),
   ));
-  // a rental's loan payment the spending holds (round 8 batch 6 review, UX 7): said with the spending, so the line that gives
-  // it back after the loan is paid off does not read as income
-  const back = d.inputs.incomes.filter((x) => x.part === "loan back");
-  const heldLoans = back.length ? `, which holds ${back.map((x) => `${x.rental}'s ${money(x.monthly)} a month loan payment${x.loanEnds && !x.sold ? ` until ${String(x.loanEnds).slice(0, 4)}` : ""}`).join(" and ")}` : "";
+  // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
+  // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
+  // 2026-11-11: one sentence with brackets inside brackets, and a loan-only figure no other page shows). A rental's loan is said
+  // with the rental's lines under "Income counted" (incomeWords). When the payoff plan ends a loan sooner, its year is said too.
+  let planEnds = {};
+  try { planEnds = Object.fromEntries(Object.entries(twoDates(plan, { today: fmt.today() })).map(([id, x]) => [id, Number(String(x.plan).slice(0, 4))])); } catch { planEnds = {}; }
+  const loanLines = spendingLoanWords(d.inputs, money, { planEnds });
+  const typedHolds = d.spendingSource === "typed" && !d.health?.fromSetup && loanLines.length > 0;
+  const spendFrom = d.health?.fromSetup ? "the figure from Set up my plan" : d.spendingSource === "expenses" ? "today's expenses" : typedHolds ? "the figure you typed" : "";
+  const spendWords = `${money(d.spendingYearly)} a year in today's dollars${spendFrom ? `, ${spendFrom}` : ""}${spendFrom && d.health?.removedMonthly > 0 ? ` less ${money(d.health.removedMonthly)} a month of health insurance` : ""}${healthOn ? ", on top of health insurance" : d.health?.included ? ", health insurance included" : ""}${loanLines.length ? `. ${loanLines.join(" ")}` : ""}`;
   const intoList = ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
       // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
@@ -205,7 +212,7 @@ export function render(root, ctx) {
       // the lines named for the unnamed first adult say "your Social Security": a capital only at the start of the record
       ["Income counted", d.inputs.incomes.length ? incomeWords(d.inputs, money).join("; ").replace(/^your /, "Your ") : "none entered (Social Security page)"],
       ...(d.otherLeft?.length ? [["Not counted", d.otherLeft.map((x) => `${x.name}: ${money(x.yearly)} a year, ${leftWhy(x)}`).join("; ")]] : []),
-      ["Spending in retirement", `${money(d.spendingYearly)} a year in today's dollars${d.spendingSource === "expenses" || d.health?.fromSetup ? ` (${d.health?.fromSetup ? "the figure from Set up my plan" : "today's expenses"}${d.health?.removedMonthly > 0 ? `, less ${money(d.health.removedMonthly)} a month of health insurance` : ""}${heldLoans})` : ""}${healthOn ? ", on top of health insurance" : d.health?.included ? ", health insurance included" : ""}`],
+      ["Spending in retirement", spendWords],
       ["Growth and rising prices", `stocks ${fmt.pct(d.inputs.returns.stocks, 1)} a year, bonds ${fmt.pct(d.inputs.returns.bonds, 1)}, prices rising ${fmt.pct(d.inputs.rates.inflation, 1)} a year (Assumptions); ${Math.round(d.inputs.rates.stocksNow * 100)}% in stocks now, ${Math.round(d.inputs.rates.stocksRetired * 100)}% in retirement`],
       ["Taxes", d.inputs.tax?.mode === "brackets" ? `the federal brackets on each year's income, filing ${d.inputs.tax.filingStatus.replace(/_/g, " ").replace("married joint", "jointly").replace("married separate", "separately")} (Taxes pages); withdrawals ${orderWords(d.orderLabel)}${d.inputs.rothConversion ? `; Roth conversions fill the ${fmt.pct(d.inputs.rothConversion.fillRate, 0)} bracket before required withdrawals` : ""}; required withdrawals start at ${d.inputs.rmd.startAge}` : `${fmt.pct(d.inputs.rates.taxRate, 0)} on money taken from retirement accounts you pay tax on later; withdrawals ${orderWords(d.orderLabel)}; required withdrawals start at ${d.inputs.rmd.startAge}`],
     ].flatMap(([k, v]) => [ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, k)), ui.h("div", { class: "rec-sub" }, linked(v))),
@@ -321,7 +328,7 @@ function settingsCard(ctx, d) {
   const waysLeft = Object.keys(STRATEGIES).length - ways.length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
-    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, max: SPEND_MONTHLY_CEILING, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses` },
+    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, max: SPEND_MONTHLY_CEILING, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses${(d.inputs?.loans ?? []).length ? ". A loan payment in this figure still stops when the loan is paid off, whatever you type" : ""}` },
     { key: "stocksNow", label: "Share in stocks now", type: "percent", min: 0, max: 100, help: "the rest counts as bonds" },
     { key: "stocksRetired", label: "Share in stocks once retired", type: "percent", min: 0, max: 100 },
     { key: "taxMode", label: "How tax is worked out", type: "select", options: [{ value: "flat", label: "A flat rate on pre-tax withdrawals (quick)" }, { value: "brackets", label: "The federal brackets on each year's income" }], help: "the brackets use the filing status from the People page and the rules on the Taxes pages" },

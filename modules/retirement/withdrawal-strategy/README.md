@@ -305,3 +305,8 @@ the figure it could spend, so the plan's own "yours" line below is no surprise. 
 
 ## Stress test 2026-11-11 (claude-e, retirement leftovers)
 "Use this one" names the way back: the green line carries "Put it back: <the earlier way>" and stays until the next change, and it is scrolled into view when it would sit under the top bar (R4; the review found the line off screen).
+
+## Loans in the spending figure (2026-11-11, loans lane fix round 1, money review D11)
+The runs on this page spend a loan the figure holds only until its payoff, as Will the money last? does (they use the same
+engine inputs). The one figure this page prints as "spending" is the figure itself, loans included; it is not lowered for the
+years after a payoff. Left as it is: How much to take out compares runs, and each run has the payoff in it.

@@ -15,9 +15,10 @@ import { T as HOME } from "../data/home.js";
 import { T as SPEND } from "../data/spend.js";
 import { STATE_NAME } from "../data/index.js";
 import { profileOf, scfR2, homeRatios, HOME_RATIO_TABLES, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
-import { isGuess, guessAt } from "../../../../core/estimate/index.js";
+import { isGuess, guessAt, markGuess, clearGuess } from "../../../../core/estimate/index.js";
 import { boughtGuess, yearOf, TABLE as PT } from "./purchase.js";
 import { homeOfLoan, homeEntryFor } from "./loanhome.js";
+import { pmt } from "../../../../core/math/finance.js";
 export { homeOfLoan, homeEntryFor };
 
 const VALUE = "acs2025_median_home_value_by_state_and_mortgage_status", HPI = "fhfa_hpi_at_state_annual";
@@ -136,34 +137,286 @@ export function escrowMonthly(plan, { today, args = null, path = null, loanId } 
 
 /** A lib that answers from the plan alone (no estimating): what the pages use to ask escrowMonthly outside a guess. */
 const PLAIN = { memo: (_k, fn) => fn(), estimate: () => null };
+/** Get started's own mortgage (its account and its details row): the only loan the plan-wide tap `escrow` speaks for. */
+const SETUP_LOAN = "setup-owe-mortgage", SETUP_ROW = "setup-debt-mortgage";
+const isSetupLoan = (account, debt) => account?.id === SETUP_LOAN || debt?.id === SETUP_ROW;
+/**
+ * The person said this mortgage's tax and insurance are paid apart: the answer on the loan itself (`debts[].escrowSaid`), else,
+ * for Get started's own mortgage only, the tap `escrow` (fix round 1, 2026-11-11: the tap was read for every mortgage, so "No" on a
+ * cabin's loan took the tax and insurance out of the home's payment).
+ */
+const saidApart = (plan, account, debt) => debt?.escrowSaid === "no" || (debt?.escrowSaid === undefined && isSetupLoan(account, debt) && plan?.guide?.setup?.taps?.escrow === "no");
+/**
+ * The most a GUESSED tax and insurance can be inside a payment: what is left of the payment after the level payment that pays the
+ * balance off over a new 30-year loan (core/math/finance.js pmt over 360 months); 0 when the payment is under that. So a figure of
+ * ours never makes a loan run longer than 30 years (fix round 1, 2026-11-11: the only guard was "more than the month's interest",
+ * and a figure just under it stretched typed loans to 40 to 90 years, with a cliff to 0 beside it where more debt gave an earlier
+ * payoff). A figure the person typed is never cut by this. (Not the loan's own term left: a start typed on Debts can be an older
+ * loan's, debts.js loanTyped, and 30 years bounds every loan.)
+ */
+export function escrowCap(account, debt) {
+  const pay = Number(debt?.minPayment), owed = Math.abs(Number(account?.balance) || 0);
+  if (!(pay > 0)) return 0;
+  if (!(owed > 0)) return pay / 2;
+  return Math.max(0, pay - pmt((Number(debt.rate) || 0) / 12, 360, owed));
+}
 /**
  * The tax and insurance inside a mortgage's monthly payment, for the pages that turn the payment into years left (Debts,
- * Mortgage, Pay off debts, Timeline, Your plan). The payment counts them in unless it and the balance are both the person's
- * own (then it is read as typed, nothing moves) or the person said "paid apart" (the tap `escrow`: "no"); `debts[].escrowMonthly`
- * (a number, optional) overrides. Never more than half the payment (the same floor the balance guess uses). A payment our
- * older Get started guessed (only the `paymentGuessed` flag, no ledger entry) is the loan's level payment alone
- * (typicalPayment: pmt over 30 years, no tax or insurance), so nothing comes out of it. And a guessed tax and insurance never
- * turns a payment that pays the loan off into one that never does: when taking them out would leave no more than the
- * month's interest (balance x rate / 12), the payment is read as the loan's alone. -> a number >= 0
+ * Mortgage, Pay off debts, Timeline, Your plan). In order:
+ *   - `debts[].escrowMonthly` the person typed: that figure, never more than the payment (fix round 1, 2026-11-11: it was cut to
+ *     half the payment without a word; Debts says so when what is left does not cover the interest);
+ *   - `debts[].escrowMonthly` that is our guess (answered "Not sure" or "Yes" with no figure, or kept from a guessed payment): that
+ *     figure, never more than half the payment or escrowCap;
+ *   - the person said they are paid apart (saidApart): 0;
+ *   - a payment or a balance that is still our guess: the usual figure for the home (usualEscrowIn), 0 when it cannot be worked
+ *     out; a payment our older Get started guessed (only the `paymentGuessed` flag, no ledger entry) is the loan's level payment
+ *     alone (typicalPayment: pmt over 30 years, no tax or insurance), so nothing comes out of it;
+ *   - the payment and the balance both the person's own and no answer: 0 (read as typed, nothing moves).
+ * -> a number >= 0
  */
 export function loanEscrow(plan, account, debt, today) {
   const pay = Number(debt?.minPayment);
   if (!account || account.type !== "mortgage" || !(pay > 0)) return 0;
-  if (typeof debt.escrowMonthly === "number" && debt.escrowMonthly >= 0) return Math.min(debt.escrowMonthly, pay / 2);
-  if (plan?.guide?.setup?.taps?.escrow === "no") return 0;
+  if (typeof debt.escrowMonthly === "number" && debt.escrowMonthly >= 0) {
+    const ours = typeof debt.id === "string" && isGuess(plan, `debts[${debt.id}].escrowMonthly`);
+    return ours ? Math.min(debt.escrowMonthly, pay / 2, escrowCap(account, debt)) : Math.min(debt.escrowMonthly, pay);
+  }
+  if (saidApart(plan, account, debt)) return 0;
   const payGuess = typeof debt.id === "string" ? guessAt(plan, `debts[${debt.id}].minPayment`) : null;
   if (payGuess?.legacy) return 0;
   const guessed = payGuess !== null || isGuess(plan, `accounts[${account.id}].balance`);
   if (!guessed) return 0;
+  return usualEscrowIn(plan, account, debt, today, PLAIN) ?? 0;
+}
+/**
+ * The usual tax and insurance a month inside this mortgage's payment (escrowMonthly, by the home's value and state), never more
+ * than half the payment or escrowCap (what the payment can hold and still pay the loan off in 30 years). `lib`: PLAIN for the
+ * pages (the home's value on file), an estimator's own lib for the guess. -> a number >= 0 | null (no home to work it out from)
+ */
+function usualEscrowIn(plan, account, debt, today, lib) {
+  const pay = Number(debt?.minPayment);
+  if (!account || !(pay > 0)) return null;
+  let esc = null;
+  try { esc = escrowMonthly(plan, { today, loanId: account.id }, lib); } catch { esc = null; }
+  if (!esc) return null;
+  return Math.max(0, Math.min(esc.total, pay / 2, escrowCap(account, debt)));
+}
+/**
+ * What goes on after a mortgage on the home is paid off, a month: its property tax and home insurance. The figure inside the
+ * payment (loanEscrow) when there is one; else, for a payment read as all loan because nobody said (a balance and payment typed
+ * and the question never answered, or a figure of ours the payment has no room for), the usual figure for the home (escrowMonthly,
+ * at most half the payment), unless the person said they pay them apart or Expenses already holds a property tax or home
+ * insurance bill (`billed`). Only the retirement figure reads this (Get started's and Will the money last?): Debts and the payoff
+ * date never do, so a typed plan's payoff does not move (fix round 1, 2026-11-11, money review D8: a typed mortgage's whole
+ * payment left retirement spending at payoff, and with it the only property tax in 642 of the 1,400 qa plans).
+ * -> { monthly, assumed: true when it is the usual figure and not one inside the payment, topped?: true when it is the usual figure
+ *      because ours inside the payment was cut to what the payment has room for, taxOnly?: true when only the property tax is kept
+ *      because an insurance bill on Expenses may hold the home insurance (insuranceMaybeBilled) }
+ */
+export function escrowAfterLoan(plan, account, debt, today, { billed = false } = {}) {
+  const inside = loanEscrow(plan, account, debt, today);
+  const pay = Number(debt?.minPayment);
+  if (inside > 0) {
+    // a figure of ours that escrowCap cut to what the payment has room for: the home's tax and insurance do not shrink because more
+    // is owed, so after the payoff the usual figure goes on (`topped`), as it does for a payment with room for none (fix round 2,
+    // 2026-11-11: "Not sure" on $1,200 a month kept $395 for life at $150,000 owed and $126 at $200,000, so more debt gave a
+    // better verdict). Not when Expenses holds such a bill, and never for a figure the person typed.
+    const ours = typeof debt.escrowMonthly === "number" ? typeof debt.id === "string" && isGuess(plan, `debts[${debt.id}].escrowMonthly`) : true;
+    if (ours && !billed && escrowCap(account, debt) <= inside + 0.005 && !L(plan, "property").some((e) => e?.kind === "rental" && e.loanAccountId === account.id)) {
+      let esc = null;
+      try { esc = escrowMonthly(plan, { today, loanId: account.id }, PLAIN); } catch { esc = null; }
+      const taxOnly = !!esc && insuranceMaybeBilled(plan);
+      const usual = esc ? Math.min(taxOnly ? esc.tax : esc.total, pay / 2) : 0;
+      if (usual > inside + 0.005) return { monthly: usual, assumed: false, topped: true, ...(taxOnly ? { taxOnly: true } : {}) };
+    }
+    return { monthly: inside, assumed: false };
+  }
+  if (billed || !account || account.type !== "mortgage" || !(pay > 0)) return { monthly: 0, assumed: false };
+  // a rental's loan: its tax and insurance are the rental's running costs (Rental analysis), never assumed into the payment
+  if (L(plan, "property").some((e) => e?.kind === "rental" && e.loanAccountId === account.id)) return { monthly: 0, assumed: false };
+  if (saidApart(plan, account, debt) || (typeof debt.escrowMonthly === "number" && !(typeof debt.id === "string" && isGuess(plan, `debts[${debt.id}].escrowMonthly`)))) return { monthly: 0, assumed: false };
   let esc = null;
   try { esc = escrowMonthly(plan, { today, loanId: account.id }, PLAIN); } catch { esc = null; }
-  if (!esc) return 0;
-  const out = Math.min(esc.total, pay / 2);
-  const interest = Math.abs(Number(account.balance) || 0) * (Number(debt.rate) || 0) / 12;
-  return interest > 0 && pay > interest && pay - out <= interest ? 0 : out;
+  if (!esc || !(esc.total > 0)) return { monthly: 0, assumed: false };
+  // an insurance bill of the person's own on Expenses that names no other kind of cover may already hold the home's: only the
+  // property tax is kept then (`taxOnly`), and the page says the insurance was left to that bill (fix round 2, 2026-11-11)
+  if (insuranceMaybeBilled(plan)) return esc.tax > 0 ? { monthly: Math.min(esc.tax, pay / 2), assumed: true, taxOnly: true } : { monthly: 0, assumed: false };
+  return { monthly: Math.min(esc.total, pay / 2), assumed: true };
+}
+/** Expenses holds a property tax or home insurance bill of the person's own (by its name): the tax and insurance are counted there. */
+export const taxOrInsuranceBilled = (plan) => L(plan, "expenses").some((x) => typeof x?.name === "string" && /property tax|real estate tax|home ?owner'?s? insurance|home insurance|house insurance|hazard insurance/i.test(x.name) && Number(x.amount) > 0);
+
+/** Words in an insurance bill's name that say it is another kind of cover, not the home's. */
+const OTHER_COVER = /health|medical|medicare|medigap|dental|vision|drug|prescription|car\b|cars\b|auto|vehicle|truck|motor|life|term\b|renter|pet\b|umbrella|disab|long[- ]term|ltc|travel|boat|phone|device|flood|earthquake/i;
+/**
+ * Expenses holds an insurance bill of the person's own that may be the home's: in the Insurance category, not one of Get
+ * started's rows ("Insurance and health" is our guess of health, car and life cover: setup's SPEND rows), and its name names no
+ * other kind of cover (OTHER_COVER). A bill just called "Insurance" is the usual case (634 of the 1,400 qa plans have one).
+ */
+export const insuranceMaybeBilled = (plan) => L(plan, "expenses").some((x) => x?.category === "insurance" && Number(x.amount) > 0 && !(typeof x.id === "string" && x.id.startsWith("setup-x-")) && !OTHER_COVER.test(String(x.name ?? "")));
+
+// ---- the tax and insurance inside a mortgage payment, once the person's (2026-11-07, lane 1: items 2 and 3)
+/** The guess key for `debts[<id>].escrowMonthly`: the usual tax and insurance inside the payment. */
+export const ESCROW_KEY = "debt.mortgage.escrow";
+const cents = (x) => Math.round(x * 100) / 100;
+const escrowEst = (value) => ({ key: ESCROW_KEY, value: cents(value), unit: "month", sigma: null, dataAsOf: null });
+/** Write our figure for a debt's tax and insurance (the field first: a guess is only ever written into a field that is there). */
+const markEscrow = (draft, d, value, today) => { d.escrowMonthly = cents(value); markGuess(draft, `debts[${d.id}].escrowMonthly`, escrowEst(value), today); return true; };
+/** A mortgage's payment or balance is still our guess (its tax and insurance are then read live, loanEscrow). */
+const stillGuessed = (plan, account, debt) => (typeof debt?.id === "string" && isGuess(plan, `debts[${debt.id}].minPayment`)) || (!!account && isGuess(plan, `accounts[${account.id}].balance`));
+/**
+ * What each mortgage payment read with a tax and insurance of ours holds, before a save that may make the loan's figures the
+ * person's: { [debtId]: { pay, escrow } } for every mortgage with no `escrowMonthly` whose payment is read with them inside
+ * (loanEscrow > 0: the payment or the balance is our guess in the ledger, not the older flag). Fix round 1 (2026-11-11): a payment
+ * typed beside a balance of ours is held too (keeping that balance dropped the tax and insurance: 448 of 448 households moved).
+ */
+export function escrowBefore(plan, today) {
+  const out = {};
+  for (const d of L(plan, "debts")) {
+    if (typeof d?.id !== "string" || typeof d.escrowMonthly === "number") continue;
+    const a = L(plan, "accounts").find((x) => x?.id === d.accountId);
+    const esc = loanEscrow(plan, a, d, today);
+    if (!(esc > 0)) continue;
+    // a payment still ours is worked out around the home's usual figure (escrowFor), which the pages then hold to what it has room
+    // for: kept with the balance alone, it is that usual figure that is kept, so the payment rebuilt from it is the same (fix round 2)
+    let usual = null;
+    if (typeof d.id === "string" && isGuess(plan, `debts[${d.id}].minPayment`)) { try { usual = escrowMonthly(plan, { today, loanId: a.id }, PLAIN)?.total ?? null; } catch { usual = null; } }
+    out[d.id] = { pay: Number(d.minPayment), escrow: esc, ...(usual > 0 ? { usual } : {}) };
+  }
+  return out;
+}
+/**
+ * After "Keep" on Our guesses, or the same figure typed (Debts, Get started): a mortgage whose payment and balance are now both
+ * the person's, with the payment unchanged, keeps the tax and insurance that payment was read with, written to
+ * `debts[].escrowMonthly` as our guess (ESCROW_KEY), so the payoff does not jump (bought verify defect 2: a couple aged 25 went
+ * from June 2054 to August 2043 with every figure on screen unchanged). A payment typed at another figure is left to the question
+ * "Does this payment include property tax and home insurance?" (answerEscrow). A balance kept while the payment is still ours
+ * keeps it too (fix round 2, 2026-11-11: the home's value takes a typed balance as a floor, which moved the payment we show).
+ * `held`: escrowBefore of the plan before the save. Changes `draft` in place. -> true when it wrote
+ */
+export function escrowKept(draft, held, today) {
+  let wrote = false;
+  for (const [id, h] of Object.entries(held ?? {})) {
+    const d = L(draft, "debts").find((x) => x?.id === id);
+    if (!d || typeof d.escrowMonthly === "number") continue;
+    const a = L(draft, "accounts").find((x) => x?.id === d.accountId);
+    if (!a || saidApart(draft, a, d)) continue;
+    // the balance kept while the payment is still ours: the home's guessed value takes the typed balance as a floor
+    // (HD-MORT-UNDERWATER), which moved the tax and insurance and so the payment we show ($2,280 -> $2,340 for a couple of 35 in
+    // Texas). The figure the payment was read with is kept with the balance too (fix round 2, 2026-11-11, final check F-3)
+    const balKept = !isGuess(draft, `accounts[${a.id}].balance`);
+    if (stillGuessed(draft, a, d) && !balKept) continue;
+    if (Math.abs(Number(d.minPayment) - h.pay) > 0.005) continue;
+    const payOurs = typeof d.id === "string" && isGuess(draft, `debts[${d.id}].minPayment`);
+    wrote = markEscrow(draft, d, payOurs && h.usual > 0 ? h.usual : h.escrow, today) || wrote;
+  }
+  return wrote;
+}
+/**
+ * The answer to "Does this payment include property tax and home insurance?" for one mortgage (Debts' form, Get started's
+ * mortgage step): "yes" (the usual case: an escrow account; `amount` typed, else our guess of it), "no" (paid apart: 0), "unsure"
+ * (our guess of the usual, as most payments hold them: SCF 2025, 55.8% of mortgage payers), or null (no answer: nothing is written,
+ * so a balance and payment both typed stay as typed). The answer is kept on the loan (`debts[].escrowSaid`); for Get started's own
+ * mortgage it is also kept in the tap `escrow` (the housing row of the spending question counts the tax and insurance when they
+ * are paid apart), never for another mortgage (fix round 1, 2026-11-11). Changes `draft` in place.
+ * -> false (nothing done) | "no" | "typed" (the person's figure; `capped` when it was above the payment and the payment was written)
+ *    | "ours" (our figure, at most what the payment can hold: usualEscrowIn) | "ask" (the answer is kept, but no usual figure can
+ *    be worked out, as the loan has no home on file: the page asks for the figure)
+ */
+export function answerEscrow(draft, debtId, said, amount, today) {
+  if (!["yes", "no", "unsure"].includes(said)) return false;
+  const d = L(draft, "debts").find((x) => x?.id === debtId);
+  if (!d) return false;
+  const path = `debts[${debtId}].escrowMonthly`;
+  const a = L(draft, "accounts").find((x) => x?.id === d.accountId);
+  d.escrowSaid = said;
+  if (isSetupLoan(a, d)) {
+    draft.guide = draft.guide && typeof draft.guide === "object" ? draft.guide : {};
+    draft.guide.setup = draft.guide.setup && typeof draft.guide.setup === "object" ? draft.guide.setup : {};
+    draft.guide.setup.taps = { ...(draft.guide.setup.taps ?? {}), escrow: said };
+  }
+  if (said === "no") { clearGuess(draft, path); d.escrowMonthly = 0; return "no"; }
+  const pay = Number(d.minPayment);
+  if (said === "yes" && Number(amount) > 0) { clearGuess(draft, path); d.escrowMonthly = cents(pay > 0 ? Math.min(Number(amount), pay) : Number(amount)); return "typed"; }
+  // our guess of the usual tax and insurance, at most what the payment can hold (usualEscrowIn)
+  const { escrowMonthly: _drop, ...bare } = d;
+  const v = usualEscrowIn(draft, a, bare, today, PLAIN);
+  if (v !== null) { markEscrow(draft, d, v, today); return "ours"; }
+  clearGuess(draft, path); delete d.escrowMonthly;
+  return "ask";
+}
+/** The answer as a page shows it, for one mortgage: "yes" | "no" | "unsure" | null (not answered). */
+export function escrowSaid(plan, debt) {
+  if (["yes", "no", "unsure"].includes(debt?.escrowSaid)) return debt.escrowSaid;
+  const v = debt?.escrowMonthly;
+  if (typeof v !== "number") return null;
+  if (v === 0) return "no";
+  // our figure kept from a guessed payment ("Keep") with no answer: not answered
+  if (typeof debt.id === "string" && isGuess(plan, `debts[${debt.id}].escrowMonthly`)) return null;
+  return "yes";
+}
+
+/**
+ * The tax and insurance inside a mortgage's payment as two parts, for the Home page's year of costs (2026-11-07, HD-ESCROW-ONCE:
+ * it left them out when nothing was typed there): loanEscrow's figure, split as the usual tax and insurance split (escrowMonthly,
+ * which reads a tax or insurance typed on Home first). -> { tax, insurance, total } a month (tax and insurance null when there is
+ * no split to go by: one line then) | null (nothing inside the payment)
+ */
+export function escrowParts(plan, account, debt, today) {
+  const total = loanEscrow(plan, account, debt, today);
+  if (!(total > 0)) return null;
+  let e = null;
+  try { e = escrowMonthly(plan, { today, loanId: account.id }, PLAIN); } catch { e = null; }
+  if (!e || !(e.total > 0)) return { tax: null, insurance: null, total };
+  return { tax: total * e.tax / e.total, insurance: total * e.insurance / e.total, total };
+}
+
+/** The person typed something about the home a loan is on: its value, or a property tax or insurance on Home. */
+export function homeFactsTyped(plan, loanId) {
+  const hv = homeValueFor(plan, { loanId });
+  if (hv?.typed) return true;
+  const h = homeOfLoan(plan, loanId), e = h?.entry;
+  return !!e && typeof e.id === "string" && ["propertyTax", "insurance"].some((k) => Number(e[k]) > 0 && !isGuess(plan, `property[${e.id}].${k}`));
+}
+/** The usual property tax and home insurance a month for the home a loan is on (escrowMonthly on the plan's own figures): { tax, insurance, total } | null. */
+export function usualParts(plan, loanId, today) {
+  let e = null;
+  try { e = escrowMonthly(plan, { today, loanId }, PLAIN); } catch { e = null; }
+  return e && e.total > 0 ? { tax: e.tax, insurance: e.insurance, total: e.total } : null;
 }
 
 export const estimators = {
+  // the tax and insurance inside a mortgage payment that is our guess (answered "Not sure" or "Yes" with no figure, or kept from a
+  // guessed payment): the usual figure for the home's value and state, at most half the payment (usualEscrowIn)
+  [ESCROW_KEY]: {
+    tier: 2, order: 7, label: "Property tax and home insurance in your mortgage payment", unit: "month", weight: "small", page: () => "#/balance/liabilities",
+    reads: ["home.value", "home.propertyTax", "home.insurance"],
+    fn(plan, { today, path }, lib) {
+      const m = path ? /^debts\[([^\]]+)\]\./.exec(path) : null;
+      const d = m ? L(plan, "debts").find((x) => x?.id === m[1]) : null;
+      const a = d ? L(plan, "accounts").find((x) => x?.id === d.accountId) : null;
+      if (!d || !a || a.type !== "mortgage") return null;
+      const st = lib.memo("profile", () => profileOf(plan, today)).state;
+      // a figure kept from a payment the person agreed to ("Keep", or the same figure typed) with no answer is frozen: it is the
+      // one that payment was read with, and a home value typed later must not move the payoff (fix round 1, 2026-11-11: 2054 ->
+      // 2077). One answered "Not sure" or "Yes" with no figure follows the home, inside what the payment can hold.
+      const { escrowMonthly: _drop, ...bare } = d;
+      const answered = d.escrowSaid === "yes" || d.escrowSaid === "unsure";
+      // a figure kept with a balance while the payment is still ours (escrowKept, fix round 2) follows what the person types about
+      // the home (its value, tax or insurance), as the payment we show did; only our own guessed home value is held still
+      const follows = !answered && isGuess(plan, `debts[${d.id}].minPayment`) && homeFactsTyped(plan, a.id);
+      let fresh = answered ? usualEscrowIn(plan, a, bare, today, lib) : null;
+      // (not held to what today's payment has room for: that payment is ours and is worked out around this figure)
+      if (follows) { try { fresh = escrowMonthly(plan, { today, loanId: a.id }, lib)?.total ?? null; } catch { fresh = null; } }
+      const value = cents(fresh ?? (typeof d.escrowMonthly === "number" ? d.escrowMonthly : 0));
+      return {
+        // to the cent (not R11's rounding): the pages take exactly this out of the payment, and a kept payment's figure must not move
+        value, rounded: true, sigma: null, measured: false,
+        why: fit(`the usual property tax and home insurance for a home like yours${st ? ` in ${STATE_NAME[st]}` : ""}`, "the usual property tax and home insurance for a home like yours"),
+        uses: { state: st ? "typed" : null }, sharperWith: [], tables: [PTAX, HO3, VALUE],
+      };
+    },
+  },
   "home.boughtYear": {
     tier: 1, order: 1, label: "The year you bought your home", unit: "year-date", weight: "big", page: HOME_PAGE, reads: [],
     fn(plan, { today }, lib) {

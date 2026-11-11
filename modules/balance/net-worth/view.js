@@ -2,6 +2,7 @@
 import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
+import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
 import { guessTwins } from "../../overview/guesses/compute.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
@@ -125,6 +126,9 @@ export function render(root, ctx) {
         if (!was && isLiability(v.type)) links.push({ ...rateLink, filled: !backLink });
       }
       pending = { card: "form", links, text: !was ? `${v.name} added.` : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
+      // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
+      // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
+      const held = escrowBefore(plan, fmt.today());
       store.update((p) => {
         if (was) {
           const i = p.accounts.findIndex((a) => a.id === was.id);
@@ -139,6 +143,7 @@ export function render(root, ctx) {
             if (moved) markTyped(p, old.id, fmt.today());
             // saved from the form, even unchanged, the balance is the person's: it is no longer our guess (spec S2)
             clearGuess(p, `accounts[${old.id}].balance`);
+            escrowKept(p, held, fmt.today());
           }
         }
         else p.accounts.push({ id, ...v, history: [] });

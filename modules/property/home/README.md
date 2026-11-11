@@ -93,3 +93,20 @@ message and nothing saved.
 ## Links that open the form they promise (2026-11-11, claude-g)
 Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.
 - "Ahead" no longer speaks of a mortgage paid off when nothing is owed (2026-11-11).
+
+## The tax and insurance inside the mortgage payment, once (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- Before: a guessed mortgage payment held the usual property tax and home insurance (Debts takes them out of it), and this page
+  listed property tax and insurance at $0 beside it (guess sanity HD-ESCROW-ONCE failed on 9 households of 18).
+- Now the year of costs reads them from the payment when nothing is typed here: `escrowParts(plan, account, debt, today)`
+  (overview/guesses estimators/home.js) splits Debts' figure (`loanEscrow`) as the usual tax and insurance split, and the lines
+  read "Property tax, in your mortgage payment" and "Home insurance, in your mortgage payment" (x 12). A figure typed here is the
+  one shown. With no split to go by, one line: "Property tax and home insurance, in your mortgage payment". The page notes that
+  they come out of the payment and are counted once.
+- "We use it to work out the mortgage's years left" under the year bought shows only when it is used (`yearUsed`: the
+  mortgage's start comes from the year typed and that year worked out the guessed balance or payment).
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`)
+After "No, I pay them myself" with nothing typed on this page, the year of costs listed no property tax and no home insurance:
+the one answer that hid them. It now lists the usual ones for the home as "Property tax, paid by you (our guess)" and "Home
+insurance, paid by you (our guess)" (`usualParts`: estimators/home.js `escrowMonthly`), and says where to type the real ones. A
+figure typed here wins, as before. A tax and insurance typed for the loan is listed whole (it was cut to half the payment).

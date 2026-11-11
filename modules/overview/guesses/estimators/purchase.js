@@ -15,7 +15,7 @@ import { T as PURCHASE } from "../data/purchase.js";
 import { monthsBetween } from "../../../../core/math/dates.js";
 import { pmt } from "../../../../core/math/finance.js";
 
-const TERM = 360;
+const TERM30 = 360;
 const ok = (x) => typeof x === "number" && Number.isFinite(x);
 export const TABLE = { moved: "acs2025_year_moved_in_by_age_us", owners: "acs2025_owner_households_by_age_us", rate: "pmms30_annual_average_by_year", buyers: "nar2025_home_buyer_profile", hpi: "fhfa_hpi_at_state_annual", hpiUS: "fhfa_hpi_national_annual", newLoans: "mortgage_new_loans_fhfa_national_2025" };
 /** The youngest age a home is assumed to be bought at when the person has not said (the owner's rule: about 20). */
@@ -161,11 +161,12 @@ export function priceThen(valueNow, state, year, today) {
 }
 
 /**
- * The loan a purchase on `startDate` leaves today (spec: the standard 30-year loan). `price` is what was paid (typed), else
+ * The loan a purchase on `startDate` leaves today (spec: the standard 30-year loan; `term`, months, when the loan's own is typed). `price` is what was paid (typed), else
  * `valueNow` is taken back to the start with the price index. -> { balance, rate, pi (principal and interest a month),
  * monthsLeft, gone, price, loan, down (share), yearsOld } | null
  */
-export function loanFrom({ startDate, today, valueNow = null, price = null, state = null, age = null, rate: rateOver = null } = {}) {
+export function loanFrom({ startDate, today, valueNow = null, price = null, state = null, age = null, rate: rateOver = null, term: termOver = null } = {}) {
+  const TERM = ok(termOver) && termOver >= 12 ? Math.round(termOver) : TERM30;   // the loan's own term when typed on Debts (2026-11-07)
   if (!startDate || !today) return null;
   const year = Number(startDate.slice(0, 4));
   const paid = ok(price) && price > 0 ? price : ok(valueNow) && valueNow > 0 ? priceThen(valueNow, state, year, today) : null;

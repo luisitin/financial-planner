@@ -45,6 +45,12 @@ export const STRATEGIES = {
  *   contributions: [{ bucket, yearly, personIndex, untilAge? }],  // today's dollars, grow with salaryGrowth until that person retires
  *   incomes: [{ name, yearly, personIndex, startAge, endAge?, cola: bool, taxable: bool }], // pensions, Social Security, part-time; today's dollars unless cola=false
  *   spending: { yearly },                            // today's dollars, in retirement (fixed-real base)
+ *   loans: [{ yearly, inBase, untilYear?, lastMonths? }] | undefined   // loan payments the spending figure holds (2026-11-07): `inBase`
+ *                                                   // (today's dollars) leaves the figure, and `yearly` is spent instead as a FIXED amount (never
+ *                                                   // raised for prices: a loan's payment does not rise) in each retired year up to `untilYear`, the
+ *                                                   // payoff year for `lastMonths` of 12; none after it (no untilYear: to the end). Fixed-real and
+ *                                                   // guardrails spend it on top of the rest (never trimmed); a share of savings (percent, vpw)
+ *                                                   // sets the year's spending whatever it holds
  *   retireYear,                                     // first year of retirement for the household (spending starts)
  *   rates: { inflation, cash, salaryGrowth, taxRate, stocksNow, stocksRetired },
  *   returns: { stocks, bonds } (expected, used when no sequence is given),
@@ -94,7 +100,10 @@ export function project(inputs, options = {}) {
   const gainShare = tax.gainShare ?? 0.5, dividendYield = tax.dividendYield ?? 0.02;
   const order = ["cash", ...(Array.isArray(I.withdrawalOrder) ? I.withdrawalOrder.filter((b) => b !== "cash" && b in buckets) : ["taxable", "deferred", "free"])];
   for (const b of ["taxable", "deferred", "free"]) if (!order.includes(b)) order.push(b);
-  let baseSpend = I.spending?.yearly ?? 0;                // fixed-real base, in the year's dollars
+  const loans = Array.isArray(I.loans) ? I.loans.filter((l) => l && typeof l === "object") : [];   // (an entry that is not an object is ignored: fix round 1, 2026-11-11)
+  // the figure less the loan payments it holds (they are spent as fixed amounts until each payoff, `loanIn`)
+  let baseSpend = Math.max(0, (I.spending?.yearly ?? 0) - loans.reduce((t, l) => t + (Number(l.inBase) || 0), 0));   // fixed-real base, in the year's dollars
+  const loanIn = (year) => loans.reduce((t, l) => (l.untilYear !== undefined && l.untilYear !== null && year > l.untilYear ? t : t + (Number(l.yearly) || 0) * (l.untilYear === year && l.lastMonths ? Math.min(12, l.lastMonths) / 12 : 1)), 0);
   let guardSpend = null, lastReal = null;
   const strategy = STRATEGIES[I.strategy] ? I.strategy : "fixed-real";
   const wr = I.withdrawalRate ?? 0.04;
@@ -143,6 +152,7 @@ export function project(inputs, options = {}) {
     // 3. spending in retirement (nominal), by strategy. The same spending every year sets spending; the other ways set the
     // year's withdrawal (draw) or, for guardrails, a spending target (floor) whose withdrawal is worked out with the year's tax below
     let spending = 0, draw = 0, floor = 0;
+    const loanNow = retired && loans.length ? loanIn(year) : 0;
     const drawMode = retired && strategy !== "fixed-real";
     const total = buckets.cash + buckets.taxable + buckets.deferred + buckets.free;
     if (retired) {
@@ -160,6 +170,7 @@ export function project(inputs, options = {}) {
     // what-if hooks: a spending change from a year on (fixed-real and guardrails), one-off money out of or into savings
     const factor = (I.spendingChanges ?? []).reduce((f, s) => (year >= s.fromYear ? f * s.factor : f), 1);
     if (factor !== 1 && strategy === "fixed-real") spending *= factor;
+    if (loanNow && strategy === "fixed-real") spending += loanNow;
     // an event marked `spending` (health cover) is part of the year's spending: guaranteed income pays it first, like the rest
     let eventOut = 0, eventSpending = 0;
     for (const e of eventsIn.get(year) ?? []) { const amt = (Number(e.amount) || 0) * priceLevel; if (amt >= 0) { eventOut += amt; if (e.spending) eventSpending += amt; } else buckets.taxable += -amt; }
@@ -220,7 +231,7 @@ export function project(inputs, options = {}) {
       if (guardSpend === null) guardSpend = baseSpend * priceLevel;
       else {
         const keep = { b: { ...buckets }, w: { ...withdrawn }, netOut, taxes, shortfall, taxInfo };
-        floor = guardSpend * factor;
+        floor = guardSpend * factor + loanNow;
         settle();
         const trial = Math.max(0, wantTotal() - other);
         Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
@@ -229,7 +240,7 @@ export function project(inputs, options = {}) {
         // savings empty or tiny the raise would be paid by money that is not there, then trimmed, then raised again)
         const raisedFits = () => {
           if (trial > 0) return true;
-          floor = Math.min(guardSpend * 1.1, baseSpend * priceLevel) * factor; settle();
+          floor = Math.min(guardSpend * 1.1, baseSpend * priceLevel) * factor + loanNow; settle();
           const need = Math.max(0, wantTotal() - other);
           Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
           return need <= 0 || (total > 0 && need / total <= wr * 1.2);
@@ -243,7 +254,7 @@ export function project(inputs, options = {}) {
         // never past the plan's own figure at this year's prices: a cut of a tenth in a year prices fall by more than that would be one
         guardSpend = Math.min(guardSpend, baseSpend * priceLevel);
       }
-      floor = guardSpend * factor;
+      floor = guardSpend * factor + loanNow;
     }
     settle();
     if (drawMode) taxSpend = taxes;
@@ -312,9 +323,28 @@ export function project(inputs, options = {}) {
   return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order };
 }
 
+/**
+ * lifelongSpending(I) -> the yearly spending (today's dollars) that goes on for good: the figure less the loan payments in it
+ * that end (`loans` with an `untilYear`). spendingRealIn(I, year) -> the spending of one retired year in today's dollars as the
+ * fixed-real engine row has it: that, plus each loan still running that year as its fixed amount taken back to today's dollars
+ * (the payoff year for `lastMonths` of 12). For the pages that read the figure outside a run (fix round 1, 2026-11-11, money
+ * review D11: Annuities' guaranteed share and the FIRE target treated a loan as lifelong).
+ */
+const loansOf = (I) => (Array.isArray(I?.loans) ? I.loans.filter((l) => l && typeof l === "object") : []);
+const endsSome = (l) => l.untilYear !== undefined && l.untilYear !== null;
+export function lifelongSpending(I) {
+  return Math.max(0, (I?.spending?.yearly ?? 0) - loansOf(I).filter(endsSome).reduce((t, l) => t + (Number(l.inBase) || 0), 0));
+}
+export function spendingRealIn(I, year) {
+  const base = Math.max(0, (I?.spending?.yearly ?? 0) - loansOf(I).reduce((t, l) => t + (Number(l.inBase) || 0), 0));
+  const level = Math.pow(1 + (I?.rates?.inflation ?? 0), year - (I?.startYear ?? year));
+  const fixed = loansOf(I).reduce((t, l) => (endsSome(l) && year > l.untilYear ? t : t + (Number(l.yearly) || 0) * (l.untilYear === year && l.lastMonths ? Math.min(12, l.lastMonths) / 12 : 1)), 0);
+  return base + fixed / level;
+}
+
 /** A copy of `inputs` that a what-if can change without touching the original (the tax settings' functions are shared, not copied). */
 export function copyInputs(I) {
-  return { ...I, people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: (I.contributions ?? []).map((c) => ({ ...c, skipYears: c.skipYears ? [...c.skipYears] : undefined })), incomes: (I.incomes ?? []).map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, stdev: I.stdev ? { ...I.stdev } : I.stdev, rmd: I.rmd ? { ...I.rmd, owners: I.rmd.owners ? I.rmd.owners.map((o) => ({ ...o })) : undefined } : I.rmd, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])] };
+  return { ...I, ...(Array.isArray(I.loans) ? { loans: I.loans.filter((l) => l && typeof l === "object").map((l) => ({ ...l })) } : {}), people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: (I.contributions ?? []).map((c) => ({ ...c, skipYears: c.skipYears ? [...c.skipYears] : undefined })), incomes: (I.incomes ?? []).map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, stdev: I.stdev ? { ...I.stdev } : I.stdev, rmd: I.rmd ? { ...I.rmd, owners: I.rmd.owners ? I.rmd.owners.map((o) => ({ ...o })) : undefined } : I.rmd, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])] };
 }
 
 /**

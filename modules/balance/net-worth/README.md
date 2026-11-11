@@ -76,3 +76,8 @@ into view when it would sit under the top bar (320 px); "Back to Your home" (not
 carries `?back=` on to Debts.
 `?add=investment` (asked by claude-h for Holdings) opens the add form as a brokerage account; `?at=history` (the check-in's step,
 MR-5, asked by claude-f) opens the page at the Over time card, once per address.
+
+## A mortgage balance of ours saved here (2026-11-11, loans lane fix round 1)
+Saving the account form makes the balance the person's. For a mortgage whose payment was read with tax and insurance of ours
+inside it, that figure is kept on the loan (`overview/guesses estimators/home.js escrowBefore` and `escrowKept`), so the payoff
+date on Debts does not jump when a balance is confirmed.

@@ -53,7 +53,10 @@ test("batch 6: guaranteed income keeps a line's calendar years (the condo's loan
   const T = "2026-11-06";
   const p = condoOnNetWorthPlan(); p.retirement.annuities = [{ id: "q", name: "Q", personId: "setup-self", premium: 100000, monthly: 600, startAge: 65 }];
   const pr = projection(p, { today: T });
-  assert.ok(pr.inputs.incomes.some((x) => x.part === "loan back" && x.fromYear === 2051));
+  // fix round 1 (2026-11-11, money review D4 and D11): the condo's payment is no longer an income from 2051 ("loan back"); it is a
+  // loan the spending holds as a fixed amount until 2050, and the share is on the first retirement year's own spending
+  assert.ok(pr.inputs.loans.some((l) => l.rental === "Condo" && l.untilYear === 2050));
+  assert.equal(pr.inputs.incomes.some((x) => x.part === "loan back"), false);
   near(compute(p, { today: T, paths: 0 }).quotes[0].floorBefore, pr.coverage, 1e-9);
 });
 

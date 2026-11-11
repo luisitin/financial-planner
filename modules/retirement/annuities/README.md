@@ -45,3 +45,8 @@ projection's 123%. Tested on `qa/fixtures/round8-rental.mjs`.
 - **Not ready**: the missing basics as buttons and no form (a quote added then was "added" and shown nowhere). Saved quotes wait.
 - **A quote dearer than the savings on file** (RC-9): `tooBig` (premium over cash + taxable + pre-tax + Roth on file, which is what
   the model takes in the first year); the card says so instead of 0% and $0. Both amounts are required (RC-2).
+
+## Loans that end (2026-11-11, loans lane fix round 1, money review D11)
+The guaranteed share is against the first retirement year's own spending (`core/math/retirement.js spendingRealIn`): a loan the
+figure holds is in it as its fixed payment in that year's prices, as Will the money last?'s coverage has it. A rental's loan the
+spending holds is no longer an income from the year after its payoff ("loan back").

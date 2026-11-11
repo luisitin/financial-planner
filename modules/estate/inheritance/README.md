@@ -28,3 +28,8 @@
 ## Stress test 2026-11-11 (touch and input)
 
 - Add holds until an amount is typed (1 to 1,000,000,000): an empty Add was saved as $0, said "Added." and drew four result rows from it (IE-2).
+
+## Loans in the spending figure (2026-11-11, loans lane fix round 1, money review D11)
+The runs on this page spend a loan the figure holds only until its payoff, as Will the money last? does (they use the same
+engine inputs). The one figure this page prints as "spending" is the figure itself, loans included; it is not lowered for the
+years after a payoff. Left as it is: Inheritance compares runs, and each run has the payoff in it.

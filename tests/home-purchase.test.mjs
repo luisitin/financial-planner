@@ -54,6 +54,15 @@ const loanOf = (p) => {
   const start = startOf(p, rec, { today: T0, prof: profileOf(p, T0) });
   return { row, balance: Number(acct?.balance), payment: Number(debt?.minPayment), rate: Number(debt?.rate), start, monthsLeft: start ? Math.max(12, 360 - gone(start.date)) : null, home: Number(p.accounts.find((a) => a.id === "setup-have-home")?.balance) };
 };
+// loans lane 1 (2026-11-07, item 4): when our balance is above what the purchase loan would owe now (the usual balance for the age
+// blended in), the principal and interest is the purchase loan's own, never below a new 30-year loan's on the balance, and the
+// months come from nper on it (they run past the purchase loan's years). Else it pays the balance off in the months left.
+const ownPI = (p, x) => {
+  const prof = profileOf(p, T0), full = pmt(x.rate / 12, x.monthsLeft, x.balance);
+  const lf = loanFrom({ startDate: x.start.date, today: T0, valueNow: x.home, state: prof.state, age: prof.age, rate: x.rate });
+  const capped = !!lf && Number.isFinite(lf.pi) && x.balance > lf.balance + 0.5;
+  return { pi: capped ? Math.min(full, Math.max(lf.pi, pmt(x.rate / 12, 360, x.balance))) : full, capped };
+};
 const gone = (date) => (Number(T0.slice(0, 4)) - Number(date.slice(0, 4))) * 12 + (Number(T0.slice(5, 7)) - Number(date.slice(5, 7))) - (T0.slice(8, 10) < date.slice(8, 10) ? 1 : 0);
 
 // ---- the data behind it
@@ -183,7 +192,8 @@ test("a year typed wins over the guess, a refinance tapped wins over both, an im
   assert.equal(typed.start.via, "typed"); assert.equal(typed.start.year, 2019); assert.equal(typed.rate, 0.039);
   assert.equal(Math.round(typed.monthsLeft / 12), 23);
   const tapped = loanOf(household({ ...base, tap: "2020-21" }));
-  assert.equal(tapped.start.via, "tap"); assert.equal(tapped.start.date, "2021-01-01");
+  // (loans lane 1, 2026-11-07, item 5: at 25 the couple was 20 in 2021, so "2020 or 2021" is read as 2021 alone: July 2021, was January)
+  assert.equal(tapped.start.via, "tap"); assert.equal(tapped.start.date, "2021-07-01");
   // the tap is a loan's real start, a refinance: it wins over a year typed earlier ...
   const both = loanOf(household({ ...base, bought: "2015", mortgage: { bought: "2015" }, tap: "2020-21" }));
   assert.equal(both.start.via, "tap");
@@ -246,7 +256,8 @@ test("persona grid: every age 20 to 85, single and a couple, nothing typed", () 
       // dollars the payment is rounded by: $10 below $1,000, $50 above)
       const esc = escrowMonthly(p, { today: T0 }, { memo: (n, f) => f(), estimate: (k, o) => estimate(p, k, { ...OPTS, ...o }) });
       const step = x.payment < 1000 ? 10 : 50;
-      assert.ok(Math.abs(x.payment - (pmt(x.rate / 12, x.monthsLeft, x.balance) + esc.total)) <= step / 2 + 0.01, `${where}: payment ${x.payment} vs ${pmt(x.rate / 12, x.monthsLeft, x.balance) + esc.total}`);
+      const own = ownPI(p, x).pi;
+      assert.ok(Math.abs(x.payment - (own + esc.total)) <= step / 2 + 0.01, `${where}: payment ${x.payment} vs ${own + esc.total}`);
       // the rate: the middle half of the age's move-in years' average, eased toward the loans people have (Ohio 4.6%): between 4% and 7%, and never past 0.3 of it
       near(x.rate, guessedRate({ age: couple2(age, kind), today: T0, outstanding: 0.046 }), 0.0006, where);
       assert.ok(x.rate > 0.04 && x.rate < 0.07, `${where}: ${x.rate}`);
@@ -279,7 +290,7 @@ test("D1 the pages count only principal and interest against the loan: every pag
       // Debts' row: the loan's own months left, to the rounding of the payment ($50 on about $1,500 of principal and interest ~ 3%)
       // (the payment is rounded to $10 below $1,000 and $50 above, so the months are those of the loan's own principal and interest
       // plus or minus half a step)
-      const own = pmt(x.rate / 12, x.monthsLeft, x.balance), step = x.payment < 1000 ? 10 : 50;
+      const own = ownPI(p, x).pi, step = x.payment < 1000 ? 10 : 50;
       const lo = Math.ceil(nper(x.rate / 12, own + step / 2 + 0.01, x.balance) - 1e-9) - 1, hi = Math.ceil(nper(x.rate / 12, own - step / 2 - 0.01, x.balance) - 1e-9) + 1;
       assert.ok(monthsOn(x.row) >= lo && monthsOn(x.row) <= hi, `${where}: Debts shows ${monthsOn(x.row)} months, the loan has ${x.monthsLeft} (${lo} to ${hi})`);
       // the mortgage page, Pay off debts and the Timeline say the same month as Debts
@@ -355,7 +366,8 @@ test("D3 an old typed year (a loan from then would be paid off) is not the loan'
       // not the loan's start: counted like no year typed (our guess for the age), never as a new 30-year loan (verify 2026-11-07)
       assert.deepEqual([b.start.via, b.start.stale, b.start.year], ["guess", year, a.start.year], `${where}: not the loan's start`);
       assert.ok(Math.abs(b.row.months - a.row.months) <= 1, `${where}: ${b.row.months} months, as with no year typed (${a.row.months})`);
-      assert.ok(b.row.months <= 360 - 12 * (2026 - a.start.year) + 36, `${where}: not a new 30-year loan (${b.row.months} months)`);
+      // (a payment at the purchase loan's principal and interest, item 4, runs past that loan's years, never past a new 30-year loan's)
+      assert.ok(b.row.months <= 360 - 12 * (2026 - a.start.year) + 36 || (ownPI(old, b).capped && b.row.months < 360), `${where}: not a new 30-year loan (${b.row.months} months)`);
       assert.equal(mortgagePage(old, { today: T0 }).start.via, "stale", where);
       const ask = estimate(old, "debt.mortgage.owed", { ...OPTS, path: "accounts[setup-owe-mortgage].balance" }).ask;
       assert.equal(ask?.key, "mortgage-start", `${where}: the refinance question is offered`);
@@ -405,7 +417,11 @@ test("D6 a refinance tapped is worked at the average 30-year rate of its years (
   const base = { ages: [25, 25] };
   const rate = (tap) => loanOf(household({ ...base, tap })).rate;
   near(rate("2020-21"), Math.round(rateMean(2020, 2021) * 1000) / 1000, 0.0006, "2020 or 2021"); assert.equal(rate("2020-21"), 0.03);
-  assert.equal(rate("2010s"), 0.041); assert.equal(rate("pre2010"), 0.063);
+  // loans lane 1 (2026-11-07, item 5): a span is read only from the year the oldest adult was about 20, so at 25 "2010 to 2019" and
+  // "before 2010" are set aside (the rate is the one with no tap); a couple of 50 and 49 was 20 in 1996: the whole spans
+  assert.equal(rate("2010s"), loanOf(household(base)).rate); assert.equal(rate("pre2010"), loanOf(household(base)).rate);
+  const older = (tap) => loanOf(household({ ages: [50, 49], tap })).rate;
+  assert.equal(older("2010s"), 0.041); assert.equal(older("pre2010"), 0.063);
   assert.notEqual(rate("2022on"), 0.063, "a new loan's rate from the state's table");
   // the tap with both payment and balance typed moves nothing
   const bothTyped = loanOf(household({ ...base, mortgage: { payment: "1,500", owed: "200,000" }, tap: "2020-21" }));

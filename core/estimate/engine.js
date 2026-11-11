@@ -9,7 +9,7 @@
 //   mergeEstimators(registries)                     { estimators, tables, weights, problems } from [{ from, estimators, tables }]
 //   checkEstimators(estimators | [registry...])     the contract, as a list of problems (tests and tools/check.mjs)
 import { getAt, setAt } from "./paths.js";
-import { same, isEntry, LEGACY } from "./ledger.js";
+import { same, isEntry, LEGACY, orphanDebt } from "./ledger.js";
 import { roundGuess, middleHalf } from "../math/estimate.js";
 
 export const UNITS = ["month", "year", "total", "rate", "age", "year-date", "list"];
@@ -92,7 +92,8 @@ const mirror = (draft, path, value) => { for (const a of LEGACY) if (a.owns(path
  * that comes back the same from a source of another spread only refreshes the entry's s (the field is untouched); legacy
  * flags are not in the ledger and are never re-estimated; an entry that is not { k, v, ... } with v a number or a list (an
  * import or a hand edit) is dropped first, so one bad entry never stops the rest, and a ledger that is not an object at all
- * goes the same way (dropped: [{ path: "guesses", why: "bad" }]). Returns { changed: [{ path, k, from, to }], dropped: [{ path, k,
+ * goes the same way (dropped: [{ path: "guesses", why: "bad" }]); a debt row's entry whose loan account is gone goes as "gone"
+ * (orphanDebt). Returns { changed: [{ path, k, from, to }], dropped: [{ path, k,
  * why: "typed" | "gone" | "bad" }] } and leaves the same draft object, changed in place.
  */
 export function settle(draft, { estimators = {}, tables = {}, today } = {}) {
@@ -111,7 +112,7 @@ export function settle(draft, { estimators = {}, tables = {}, today } = {}) {
     for (const [path, e] of here) {
       let cur;
       try { cur = getAt(draft, path); } catch { cur = undefined; }
-      if (cur === undefined) { delete led[path]; mirror(draft, path, undefined); dropped.push({ path, k: e.k, why: "gone" }); continue; }
+      if (cur === undefined || orphanDebt(draft, path)) { delete led[path]; mirror(draft, path, undefined); dropped.push({ path, k: e.k, why: "gone" }); continue; }
       if (!same(cur, e.v, e.u)) { delete led[path]; mirror(draft, path, undefined); dropped.push({ path, k: e.k, why: "typed" }); continue; }
       if (!defOf(estimators, e.k)) continue;                                                         // S6: stays frozen, still labelled
       const est = estimate(draft, e.k, { estimators, tables, today, path, memo });

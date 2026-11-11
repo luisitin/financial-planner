@@ -792,3 +792,77 @@ Review fixes (2026-11-07): the links in a sentence have no stray spaces and end 
 - Not done here (waits for wave 1, the shared shell): Save settings shutting its section and the jump after it (R-A4, x-2),
   Back losing the place, answers off screen.
 - Review of the above: Retirement settings open after their own Save, so "Retirement settings saved." is seen; the hero says "It needs this first" (savings are said once the spending is in, as "We don't know yet").
+## Loans in retirement spending (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+A loan's payment is part of retirement spending only until the loan is paid off, and as a fixed amount (a fixed-rate payment
+does not rise with prices). Before, Get started's retirement figure carried a mortgage's whole payment for life, in today's
+dollars, and the guess sanity check failed `sr.verdict.loans-end` on 3 households of 3.
+- Payoff: the date Debts shows (balance/liabilities `loanMonths`): `n = nper(rate/12, payment - escrow, owed)` months, where
+  `escrow` is the property tax and home insurance inside a mortgage's payment (`loanEscrow`: `debts[].escrowMonthly` first, else
+  the usual figure while the payment or balance is our guess). Source: amortization arithmetic (core/math/finance.js `nper`).
+- `spendingLoans(plan, carried, { today, skip })`: for each loan payment the spending holds (`setupLoans` for Get started's
+  figure, Expenses' `debtsCounted` when spending is today's bills), `{ monthly: payment - escrow, escrow, inBase: 12 x that,
+  yearly: 12 x that, untilYear, lastMonths }`, `untilYear` = the year of today + n months and `lastMonths` = the months paid in it.
+  A loan paid off before retirement is left out (the figure never held it); a rental's loan is left to the rental's own lines,
+  which now end at Debts' payoff too (`rentalLines` reads `loanMonths`).
+- The engine (core/math/retirement.js, `inputs.loans`): the yearly spending less `sum(inBase)` is the part that rises with
+  prices; in a retired year each loan adds `yearly` (x `lastMonths/12` in its payoff year, nothing after). Only with the
+  `fixed-real` and `guardrails` strategies (guardrails: added on top of the target, never trimmed); a share-of-savings strategy
+  spends a share of savings, so no loan is added there. No `loans`: the rows are the same to the bit as before.
+- The tax and insurance inside a mortgage's payment are not a loan: they stay in spending after payoff, rising with prices
+  (overview/setup `escrowAfterPayoff`).
+- The page lists the loans it carries under "Spending in retirement": "<name>'s $X a month until <year> (a fixed amount, not
+  raised for prices; its $Y of tax and insurance goes on after)".
+- Not changed: Financial independence and Goal seek scale the whole spending figure, loans included (claude-a's / a later
+  build's to follow); a rental's "loan back" line while it runs is as before.
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`, the ones named "fix ...")
+- **A typed figure still holds the loans** (money review D1). A figure that was Get started's own and is now the person's, typed
+  over or kept, carries `guide.setup.retireHeld`. While it is at least their payments, it holds the loans Get started's figure
+  would hold now (`setupLoans`), each until its payoff. Before, every loan was spent for life once the figure was typed, so $100
+  a month less gave a worse verdict (53 of 252 households in the sanity sweep; now 1, and that one fails the older "a bill $100
+  lower" part too). A figure typed on a plan whose figure was never Get started's holds no loans, as before. Limit: a loan added
+  after the figure was typed is taken to be in it when the figure is large enough.
+- **A rental's loan** (D4): one the spending carries is now among `loans` (a fixed amount until Debts' payoff, or the year the
+  rental is sold: `rentalLines` `soldBy`), not a payment that rose with prices and came back as a rising "loan back" income. On
+  the condo fixture that was $7,695 too much in 2045 and $54,557 over 2045 to 2050. `rentalLines` still makes "loan back" when
+  called without `fixed`. The words under "Income counted" are the same ("... is free again from 2051").
+- **After a typed mortgage is paid off** (D8; estimators/home.js `escrowAfterLoan`). A mortgage on the home whose payment is read
+  as all loan because the question was never answered left retirement spending with no property tax or home insurance at all
+  after its payoff (642 of the 1,400 qa plans). Now the usual tax and insurance for the home, at most half the payment, stay in
+  the spending (`assumed` on the loan), unless the person said they pay them apart or Expenses has a property tax or home
+  insurance bill by name. Debts and the payoff date are not touched. Get started's figure counts the same amount for a mortgage
+  paid off before work stops (`setupLoanParts` `afterEscrow`, setup's `escrowAfterPayoff`). Decision: the owner would otherwise
+  be asked whether to assume them; we assume, say so on the page, and point to Debts for the answer.
+- **The year work stops** (D10; `workStopYear`, `runsPastWork`). A loan is in Get started's figure when its payoff falls in a year
+  after the one work stops. One that ends in that year is not, and `buildInputs` adds it with `inBase: 0` and `onTop`, so its
+  last months are paid on top of the figure. Before, the gate was whole years of age from today: a loan ending eight months after
+  work stopped was dropped, one a month longer was in for the whole payment.
+- **In words** (`spendingLoanWords`): one sentence for each loan, with the whole payment the other pages show, the part that pays
+  the loan, the year it stops "at the payment you make today", and the tax and insurance that carry on; the payoff plan's
+  earlier year when there is one (`debt/payoff twoDates`).
+- **Other pages** (D11): `core/math/retirement.js` `lifelongSpending` (the figure less the loan parts that end) and
+  `spendingRealIn` (one year's spending in today's dollars, as the engine row). Annuities' guaranteed share and the FIRE target use
+  them; How much to take out, What matters most and Inheritance still show the figure itself (noted in their READMEs).
+- **The engine** ignores a `loans` entry that is not an object (it threw on `null`).
+
+## Fix round 2 on the loans lane (2026-11-11, claude-c; tests in `tests/loans-escrow.test.mjs` named "fix2 ...")
+- **"Not sure" with less room in the payment** (estimators/home.js `escrowAfterLoan`, `topped`). Our figure for the tax and
+  insurance inside a typed payment is held to what the payment has room for (`escrowCap`), so it shrinks as more is owed. That
+  shrunken figure was all that stayed after the payoff, so more owed gave a better verdict or a lower retirement figure in 26
+  of 1,120 steps (couple aged 40 in Texas, $1,200 at 5%, "Not sure": $395 kept for life at $150,000 owed, $126 at $200,000). Now,
+  when our figure was cut by `escrowCap`, the usual figure for the home (`escrowMonthly`, at most half the payment) is what stays
+  after the payoff (`topped`), as for a plan that never answered. The part that ends at the payoff is the payment less that
+  figure, a fixed amount; Debts and its payoff date are untouched. The page says "our guess of the usual amount for a home like
+  yours, which is more than this payment has room for".
+- **An "Insurance" bill on Expenses** (`insuranceMaybeBilled`, `taxOnly`). 634 of the 1,400 qa plans keep the usual tax and
+  insurance after payoff and all of them have a bill named just "Insurance" (H-0148: $1,050 a month), which may hold the home's
+  insurance already. Decision: a bill in the Insurance category, not one of Get started's own rows, whose name names no other kind
+  of cover (health, car, life, renters, dental and so on: `OTHER_COVER`) is taken to hold it, so only the usual property tax is
+  kept after payoff, and the page says "Home insurance is not added: the insurance bill on your Expenses may already hold it."
+  A bill named for home insurance or property tax keeps nothing extra, as before. H-0826 (a $1,400-a-quarter "Insurance" bill):
+  tight, carries $59,633 (was $56,970), $70,095 with health in the figure (was $67,433).
+- **A mortgage bill more than 10% off the payment** (cashflow/expenses `debtsCounted`, which only this page reads). With one
+  mortgage and a bill for it ($466.15 a week in qa H-0329), $100 a week less on that bill put it outside the 10% match, so the
+  bill stopped being the loan's and was spent for life: short at 70 instead of 71. Now, with one mortgage, its bill is that
+  loan's at the bill's amount (at most the payment) and ends at the payoff. Two mortgages and one bill for less than both are
+  still not read (which loan it is cannot be told).

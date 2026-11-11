@@ -7,7 +7,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
 import { buildInputs, healthAdded, workingNow, withStops, STOP_NOW_FROM_AGE } from "../projection/compute.js";
 import { realRate } from "../../../core/math/finance.js";
-import { project } from "../../../core/math/retirement.js";
+import { project, lifelongSpending } from "../../../core/math/retirement.js";
 import { earliestRetireAge } from "../../scenarios/goal-seek/compute.js";
 import { legacyTarget } from "../../estate/legacy/compute.js";
 import { drawSequences, CAREFUL_CHANCE, CAREFUL_SETTLE_PATHS } from "../monte-carlo/compute.js";
@@ -54,14 +54,20 @@ export function compute(plan, params = {}) {
   const ex = (plan.expenses ?? []).length ? computeExpenses(plan, { today }) : null;
   // the engine's spending figure leaves out a health premium on Expenses (the projection's health line pays cover from
   // retirement on, and this page has no health line): it goes back in, so the FI number is still on all of today's spending
-  const spendingYearly = b.inputs ? b.inputs.spending.yearly + (b.health?.removedMonthly ?? 0) * 12 : (ex ? ex.monthly * 12 : 0);
+  // (and a loan payment the figure holds only until its payoff is not spending for good: the target is the spending that goes on
+  // for good over the withdrawal rate, plus what is still owed on those loans (enough to pay them off), `loansEnding`: fix round 1,
+  // 2026-11-11, money review D11; a $621 a month loan part ending in 2050 with $110,000 owed counted as $186,000 of the target)
+  const ending = b.inputs ? (b.inputs.loans ?? []).filter((l) => l && l.untilYear !== undefined && l.untilYear !== null) : [];
+  const owedOn = (id) => Math.abs(Number((plan.accounts ?? []).find((a) => a.id === id)?.balance) || 0);
+  const loansEnding = ending.length ? { yearly: ending.reduce((t, l) => t + l.yearly, 0), untilYear: Math.max(...ending.map((l) => l.untilYear)), owed: ending.reduce((t, l) => t + owedOn(l.accountId), 0) } : null;
+  const spendingYearly = b.inputs ? lifelongSpending(b.inputs) + (b.health?.removedMonthly ?? 0) * 12 : (ex ? ex.monthly * 12 : 0);
   if (!spendingYearly) return { ready: false, missing: ["what you spend (Expenses page, or the retirement spending figure on the Will the money last? page)"] };
   const a = plan.assumptions ?? {}, rt = plan.retirement ?? {};
   const stocks = Number(rt.stocksNow ?? 0.7);
   const nominal = stocks * Number(a.returnStocks ?? 0.07) + (1 - stocks) * Number(a.returnBonds ?? 0.04);
   const realReturn = realRate(nominal, Number(a.inflation ?? 0.03));
   const invested = b.inputs ? b.inputs.balances.taxable + b.inputs.balances.deferred + b.inputs.balances.free : 0;
-  const fiNumber = spendingYearly / wr;
+  const fiNumber = spendingYearly / wr + (loansEnding?.owed ?? 0);
   const contrib = computeContributions(plan, { today });
   const leftOver = ex && inc ? Math.max(0, (inc.monthly - ex.monthly) * 12) : 0;
   const savingYearly = contrib.totalYearly + Math.max(0, leftOver - contrib.yearly);   // what is left over already includes the contributions typed as expenses? no: contributions are not expenses, so count both but never twice
@@ -76,7 +82,7 @@ export function compute(plan, params = {}) {
   const yearsToRetire = age !== null ? Math.max(0, retireAge - age) : null;
   const coastNumber = yearsToRetire !== null ? fiNumber / Math.pow(1 + realReturn, yearsToRetire) : null;
   return {
-    ready: true, spendingYearly, withdrawalRate: wr, fiNumber, invested, progress: Math.min(1, invested / fiNumber), gap: Math.max(0, fiNumber - invested),
+    ready: true, spendingYearly, loansEnding, withdrawalRate: wr, fiNumber, invested, progress: Math.min(1, invested / fiNumber), gap: Math.max(0, fiNumber - invested),
     savingYearly, savingsRate, realReturn, yearsToFi, fiAge: yearsToFi !== null && age !== null ? age + yearsToFi : null, fiYear: yearsToFi !== null ? year + yearsToFi : null,
     coast: coastNumber !== null ? { number: coastNumber, reached: invested >= coastNumber } : null, retireAge, yearsToRetire, age, hasIncome: !!income,
     fromZero: { half: yearsFromZero(0.5, realReturn, wr), tenth: yearsFromZero(0.1, realReturn, wr) }, healthAdded: healthAdded(b.health),

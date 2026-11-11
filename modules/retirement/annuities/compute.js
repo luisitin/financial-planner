@@ -5,7 +5,7 @@
 // life is worth); and what buying it does to your plan: the chance the money lasts, what you could
 // spend, what is left at the end.
 import { buildInputs, incomeIn } from "../projection/compute.js";
-import { copyInputs } from "../../../core/math/retirement.js";
+import { copyInputs, spendingRealIn } from "../../../core/math/retirement.js";
 import { results } from "../../scenarios/compare/compute.js";
 import { survival } from "../longevity/compute.js";
 import { impliedRate } from "../pensions/compute.js";
@@ -40,7 +40,8 @@ export function compute(plan, params = {}) {
     // that comes back only after the loan is paid off was counted from the start)
     const g = (inputs.incomes ?? []).reduce((s, x) => s + (incomeIn(inputs, x, yr) ? x.yearly * (x.cola === false ? Math.pow(1 + inputs.rates.inflation, -(yr - inputs.startYear)) : 1) : 0), 0);   // a fixed-dollar payment, in today's dollars
     // against that year's spending and its health cover (the projection's "Guaranteed income" share counts both, 2026-11-02)
-    const spent = inputs.spending.yearly + (inputs.events ?? []).filter((e) => e.spending && e.year === yr && e.amount > 0).reduce((s, e) => s + e.amount, 0);
+    // (that year's own spending: a loan the figure holds is in it as its fixed payment, until its payoff: fix round 1, 2026-11-11)
+    const spent = spendingRealIn(inputs, yr) + (inputs.events ?? []).filter((e) => e.spending && e.year === yr && e.amount > 0).reduce((s, e) => s + e.amount, 0);
     return spent > 0 ? g / spent : null;
   };
   const quotes = raw.map((q) => {

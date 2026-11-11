@@ -256,6 +256,26 @@
    "file": "home-debt"
   },
   {
+   "id": "HD-ESCROW-GUESS",
+   "domain": "escrow",
+   "kind": "bounds",
+   "strength": "hard",
+   "owner": "loans lane 1 (2026-11-07)",
+   "appliesTo": "guessed",
+   "pages": [
+    "balance/liabilities",
+    "debt/mortgage",
+    "property/home",
+    "overview/guesses"
+   ],
+   "check": "When debts[<mortgage>].escrowMonthly is our guess (estimator debt.mortgage.escrow: a guessed payment kept, or the escrow question answered Not sure / Yes with no figure): 0 < escrow <= payment / 2; payment - escrow > the month's interest (owed x rate / 12); the loan is paid off within 360 months at payment - escrow (a guessed figure never stretches a loan past 30 years: fix round 1, 2026-11-11); escrow <= (the guessed property tax a year + the guessed home insurance a year) / 12; and escrow x 12 / home value within the sum of HD-PROPTAX's and HD-HOMEINS's bands (0.32%..4.11% a year; only the top of the band when the payment's room cut the figure below the usual one).",
+   "threshold": "at most half the payment; leaves more than the interest; at most the usual tax and insurance (+$1); 0.32%..4.11% of the home's value a year",
+   "why": "The tax and insurance inside the payment come out of it before the loan is paid: too large a figure makes the loan look like it never ends, too small one makes the payoff too early. A guessed figure is the usual tax and insurance for the home's value and state, never more than half the payment.",
+   "source": "SCF 2025 microdata X810 (whether the payment includes tax and insurance: 56.0% yes) https://www.federalreserve.gov/econres/files/scf2025s.zip; sizes as HD-PROPTAX (Census ACS 2025 1-year B25103/B25077, AHS 2023 PUF PROTAXAMT) and HD-HOMEINS (AHS 2023 PUF INSURAMT)",
+   "sourceDate": "SCF 2025 released 2026-10-09; ACS 2025 files posted 2026-10-29; AHS 2023 PUF dated 2025-01-22; all computed 2026-11-07",
+   "file": "home-debt"
+  },
+  {
    "id": "HD-PROPTAX",
    "domain": "escrow",
    "kind": "plausibility",
@@ -893,6 +913,7 @@
    "source": "Internal consistency (no population figure needed); retirement engine core/math/retirement.js project()",
    "sourceDate": "n/a",
    "checked": "2026-11-07",
+   "knownCauses": "Loans lane fix round 2 (2026-11-11, claude-c): 2 of 1,636 checks fail in the standard sweep, both '-$100 a month on a bill', neither a loan's: g252 (also on the base, renter, no loan) and g1392, where cutting one of Get started's guessed spending rows makes it typed and the other guessed rows are worked out again a little higher (Groceries $510 -> $540, Car $450 -> $480 ...), so the retirement figure rises $20 and the run-out age moves from 94 to 92. Fixed in that round: H-0329 (one mortgage whose bill was more than 10% off its payment was spent for life: cashflow/expenses debtsCounted) and g2244 (no longer fails).",
    "file": "saving-retire"
   },
   {
@@ -912,7 +933,7 @@
    "domain": "money-lasts",
    "strength": "hard",
    "owner": "bought (the mortgage's balance, payment and years left feed payoff(d)); carrying a loan after payoff is retirement/projection's and overview/setup's, not the bought build's",
-   "check": "For each debt d with a payment counted in retirement spending (overview/setup loansRunningThen / setupLoans, or Expenses' debtsCounted when spending is today's bills): payoff(d) = today + nper(rate/12, payment, owed) months (the same date as balance/liabilities, HD-PAYOFF-ONE-DATE). ASSERT in retirement/projection rows: the payment is part of spending only in years < payoff year, and as a fixed nominal amount (rows[y].spending/priceLevel falls by payment*12/priceLevel(y) after payoff); ASSERT no guessed loan is counted past the plan end.",
+   "check": "For each debt d with a payment counted in retirement spending (overview/setup loansRunningThen / setupLoans, or Expenses' debtsCounted when spending is today's bills): payoff(d) = the payoff balance/liabilities shows: today + nper(rate/12, payment less the tax and insurance inside a mortgage's payment, owed) months (HD-PAYOFF-ONE-DATE). ASSERT in retirement/projection rows: the payment is part of spending only in years < payoff year, and as a fixed nominal amount (rows[y].spending/priceLevel falls by payment*12/priceLevel(y) after payoff); ASSERT no guessed loan is counted past the plan end.",
    "threshold": "a loan's payment leaves retirement spending in its payoff year; nominal, not inflated",
    "why": "A fixed-rate loan payment stops when the loan is paid and does not rise with inflation. Counting it in retirement spending for life, in today's dollars, adds money the household will never spend: for a 58-year-old couple it is $16,200 a year carried 23 years past payoff.",
    "source": "Internal consistency with the app's own payoff date (core/math/finance.js nper; balance/liabilities payoff); Freddie Mac PMMS 30-year fixed-rate loans have a level payment, https://www.freddiemac.com/pmms",

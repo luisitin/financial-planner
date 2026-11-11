@@ -115,3 +115,38 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
   costly notice names it ("the Car loan first, then Mastercard, ..."; `costly.before`). "Secured by" reads "What it is borrowed
   against".
 - One costly debt also gets the filled "See my payoff plan" in its notice (Needs attention opens this page; MR-7's other half).
+
+## Tax and insurance in a mortgage payment, asked once (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- `loanMonths(plan, account, debt, today)` -> `{ months, toLoan, escrow }`: the one payoff every page uses (Debts, Will the money
+  last?, Get started's retirement figure, a rental's lines): `months = ceil(nper(rate/12, payment + extra - escrow, owed))`,
+  `escrow = loanEscrow(...)`. Source: amortization arithmetic.
+- The mortgage's details ask "Does this payment include property tax and home insurance?": "Yes, the lender pays them from it
+  (the usual)" / "No, I pay them myself" / "Not sure", with "Of that, tax and insurance a month (if you know it)". Yes and a
+  figure writes `debts[].escrowMonthly` = that figure; No writes 0; Yes with no figure, or Not sure, writes the usual figure for
+  the home (overview/guesses `debt.mortgage.escrow`), marked as our guess. SCF 2025 (X810; recomputed 2026-11-11 as 55.8%, see overview/guesses' README "Fix round 1"): 56.0% of mortgage payers' payment
+  includes both, so "Not sure" means included. Not asked for a rental's loan. A plan that typed both figures and never answers
+  does not move (a typed payment with no answer is the loan's alone, as before).
+- Saving a guessed payment unchanged (or "Keep" on Our guesses) keeps the tax and insurance it held (`escrowKept`): before, the
+  couple aged 25's payoff moved from June 2054 to June 2043 when their guessed payment was kept.
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`)
+- A row says the split where the payoff is printed: "$380 of the payment is property tax and home insurance; the other $1,070
+  pays the loan" ("(our guess)" when the figure is ours: `escrowOurs`). The whole payment used to stand beside a payoff worked from
+  the rest of it.
+- The question's first answer is "Yes" (the long label was cut off at 390 px). The amount box shows only under Yes. The notice
+  after a save says what was written: a figure above the payment cut to the payment, our guess of the usual amount, or that none
+  could be worked out and the figure should be typed.
+- A typed tax and insurance is used as typed, up to the payment (it was cut to half). When what is left does not cover the
+  interest, the warning names that figure: "after the $1,000 of property tax and home insurance in the payment, what is left does
+  not cover the interest".
+- The answer on one mortgage no longer changes another (`debts[].escrowSaid`; the plan-wide tap is Get started's own mortgage's).
+
+## Fix round 2 on the loans lane (2026-11-11, claude-c; tests in `tests/loans-escrow.test.mjs` named "fix2 ...")
+- **A typed tax and insurance that leaves barely more than the interest** now gets a warning: "<name>: after the $X of property tax
+  and home insurance in the payment, what is left only just covers the interest, so the loan would take about N years to pay
+  off. Check that figure on this page, or raise the payment." It is shown for a mortgage whose figure the person gave and whose
+  months left are over 480 (`LONGEST_LOAN`: 40 years, the longest term lenders write and the longest an FHA loan modification can
+  stretch to, 24 CFR part 203 as amended at 88 FR 14252, March 8, 2023, "Increased Forty-Year Term for Loan Modifications", https://www.federalregister.gov/documents/2023/03/08/2023-04284/increased-forty-year-term-for-loan-modifications, read
+  2026-11-11). Examples: $230,000 at 6.7%, $1,700, "Yes, $400": 792 months (66 years); $200,000 at 5%, $1,200, "Yes, $337": 811
+  months. A figure of ours never needs it (it is held to 30 years, `escrowCap`). The months are not changed: the figure is the
+  person's.

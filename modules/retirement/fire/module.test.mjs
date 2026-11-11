@@ -436,8 +436,14 @@ test("fire: a health premium on Expenses stays in the spending the FI number is 
   p.expenses.push({ id: "hi", name: "Health insurance", category: "health", amount: 600, period: "monthly", essential: true, inflates: true });
   const d = compute(p, { today: "2026-11-02" });
   assert.ok(Math.abs(d.spendingYearly - (before.spendingYearly + 7200)) < 0.01, `${d.spendingYearly} vs ${before.spendingYearly} + 7,200`);
-  assert.ok(Math.abs(d.spendingYearly - 77116) < 1, String(d.spendingYearly));   // the reviewer's figure: 69,916 + 7,200 (was 69,916 with the patch)
-  assert.ok(Math.abs(d.fiNumber - d.spendingYearly / d.withdrawalRate) < 0.01);
+  // fix round 1 (2026-11-11, money review D11): the spending that goes on for good is today's bills without the loan payments that
+  // end (the mortgage, the Visa and the car loan: $33,480 a year, the last paid off by 2046; they are spent only until each
+  // payoff): 77,116 - 33,480 = 43,636 (the reviewer's 77,116, 69,916 + 7,200, is the whole of today's bills). What is still owed on
+  // those loans is added to the target instead, so the loans are counted once, at what it takes to pay them off
+  assert.ok(Math.abs(d.spendingYearly - 43636) < 1, String(d.spendingYearly));
+  assert.ok(Math.abs(d.spendingYearly + d.loansEnding.yearly - 77116) < 1, String(d.loansEnding.yearly));
+  assert.ok(d.loansEnding.owed > 0);
+  assert.ok(Math.abs(d.fiNumber - (d.spendingYearly / d.withdrawalRate + d.loansEnding.owed)) < 0.01);
 });
 
 // review 2026-11-02 (fifth pass): the rule of thumb's fold, and who the answer is about when Get started says the first adult

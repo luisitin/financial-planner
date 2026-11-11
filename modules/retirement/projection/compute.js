@@ -11,7 +11,8 @@ import { compute as computeSocialSecurity } from "../social-security/compute.js"
 import { perYear } from "../../../core/math/periods.js";
 import { nper } from "../../../core/math/finance.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
-import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
+import { escrowAfterLoan, taxOrInsuranceBilled } from "../../overview/guesses/estimators/home.js";
 // a rental's rent after its running costs, its loan, and which Income rent lines are its rent (a leaf: no page graph)
 import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
@@ -227,7 +228,9 @@ export function otherIncome(plan, people, retireYear, today, works = null) {
  *   the interest never ends it) or the place is sold, whichever is first (`ends`):
  *   - "loan": a payment the retirement spending does not carry (`inSpending(loan)` is 0: a figure you typed, or a loan typed only
  *     on Rental analysis) comes off, payment x 12 a year (negative, a fixed amount as the payment is, untaxed), until `ends`;
- *   - "loan back": a payment the spending carries (`inSpending(loan)`: the monthly amount it carries, Get started's figure the
+ *   - "loan back" (only without `fixed`; Will the money last? passes `fixed` and spends a carried payment as a fixed amount until
+ *     the loan ends, spendingLoans: fix round 1, 2026-11-11, the payment rose with prices while the loan ran and came back as a
+ *     rising income): a payment the spending carries (`inSpending(loan)`: the monthly amount it carries, Get started's figure the
  *     loan's minimum, setupLoans, or what today's bills on Expenses count for it, expenses debtsCounted) stays in that spending
  *     every year, rising with it, so that amount x 12 comes back from the year after `ends` (rising with inflation as the
  *     spending does; untaxed: it is spending no longer needed, not income);
@@ -239,7 +242,7 @@ export function otherIncome(plan, people, retireYear, today, works = null) {
  *   taxable, type: "rental", source: "rental", afterCosts: true, rental (its name), part, monthly? (a loan line's payment a month),
  *   loanEnds? ("YYYY-MM": its last payment), sold? (the year it is sold, when that ends the loan) }]
  */
-export function rentalLines(plan, people, retireYear, today, { inSpending = () => 0 } = {}) {
+export function rentalLines(plan, people, retireYear, today, { inSpending = () => 0, fixed = false, soldBy = null } = {}) {
   const list = rentalsOf(plan);
   if (!list.length || !people.length) return [];
   const who = people[0], li = computeLiabilities(plan, { today });
@@ -260,16 +263,22 @@ export function rentalLines(plan, people, retireYear, today, { inSpending = () =
     }
     const loan = loanOf(r, li.rows);
     if (!loan || !(loan.balance > 0) || !(loan.payment > 0)) return;
-    const months = nper((Number(loan.rate) || 0) / 12, loan.payment, loan.balance);
+    // a loan on Debts ends when Debts says (its payment less the tax and insurance in it, loanMonths: 2026-11-07, the whole payment
+    // ended it sooner than Debts did); one typed only on Rental analysis at its payment
+    const row = loan.inDebts && loan.accountId ? li.rows.find((x) => x.id === loan.accountId) : null;
+    const months = row && row.months !== null ? row.months : nper((Number(loan.rate) || 0) / 12, loan.payment, loan.balance);
     const endDate = Number.isFinite(months) && today ? addMonths(today, Math.ceil(months - 1e-9)) : null;
     const lastYear = endDate ? yearOf(endDate) : Infinity;
     const ends = Math.min(lastYear, until ?? Infinity);
     const carried = Math.max(0, Number(inSpending(loan)) || 0);
     const said = { monthly: loan.payment, ...(endDate ? { loanEnds: String(endDate).slice(0, 7) } : {}), ...(until !== null && until < lastYear ? { sold: until } : {}) };
     const bound = Number.isFinite(ends) ? { untilYear: ends } : {};
+    // `fixed` (Will the money last?, fix round 1, 2026-11-11, money review D4): the caller spends a carried payment as a fixed
+    // amount until the loan ends (spendingLoans, with `soldBy`: the year a sale ends it sooner), so nothing is given back here
+    if (soldBy && loan.accountId && until !== null && until < lastYear) soldBy.set(loan.accountId, until);
     if (carried > 0.005) {
       const from = Math.max(retireYear, ends + 1);
-      if (Number.isFinite(from)) out.push({ ...base, ...said, monthly: carried, name: `${name}'s loan payment, back once the loan is paid off`, yearly: carried * 12, cola: true, taxable: false, fromYear: from, part: "loan back" });
+      if (!fixed && Number.isFinite(from)) out.push({ ...base, ...said, monthly: carried, name: `${name}'s loan payment, back once the loan is paid off`, yearly: carried * 12, cola: true, taxable: false, fromYear: from, part: "loan back" });
       const rest = loan.payment - carried;
       if (rest > 0.5 && ends >= retireYear) out.push({ ...base, ...said, ...bound, monthly: rest, name: `${name}'s loan payments not in your spending`, yearly: -rest * 12, cola: false, taxable: false, part: "loan rest" });
     } else if (ends >= retireYear) {
@@ -337,30 +346,98 @@ export function setupFigure(plan, today = null) {
   const cat = (k) => ex?.byCategory.find((c) => c.category === k)?.monthly ?? 0;
   const core = (ex?.monthly ?? 0) - cat("debt") - cat("childcare");
   const rows = L("expenses").filter((x) => isSetup(x.id) && x.category !== "childcare").reduce((t, x) => t + perYear(x.amount, x.period) / 12, 0);
-  const loans = setupLoans(plan, today).reduce((t, d) => t + d.pay, 0);
-  return Math.round((core + rows + loans) / 10) * 10;
+  const parts = setupLoanParts(plan, today);
+  const loans = parts.running.reduce((t, d) => t + d.pay, 0);
+  return Math.round((core + rows + loans + parts.afterEscrow) / 10) * 10;
 }
 
 /**
- * setupLoans(plan, today) -> [{ accountId, pay }]: the loans Get started's starting figure carries into retirement (setupFigure):
- * each Debts row still being paid when the first adult to stop work stops (months to payoff at its payment, `nper`, past the
- * months until then), none when a bill on Expenses is a loan payment, or without birth dates. Will the money last? reads it to
- * tell whether a rental's loan payment is already in the spending (round 8 batch 6).
+ * setupLoans(plan, today) -> [{ accountId, pay, toLoan, escrow, months }]: the loans Get started's starting figure carries into
+ * retirement (setupFigure): each Debts row still being paid when the first adult to stop work stops (its payoff as Debts shows
+ * it: liabilities loanMonths, the payment less the tax and insurance inside a mortgage's, past the months until then), none when
+ * a bill on Expenses is a loan payment, or without birth dates. `toLoan` is the part that pays the loan (it ends at the payoff,
+ * buildInputs `loans`), `escrow` the tax and insurance in it (they go on). Will the money last? reads it to tell whether a
+ * rental's loan payment is already in the spending (round 8 batch 6).
  */
-export function setupLoans(plan, today = null) {
-  const L = (k) => (Array.isArray(plan?.[k]) ? plan[k] : []);
+export const setupLoans = (plan, today = null) => setupLoanParts(plan, today).running;
+/**
+ * workStopYear(plan, today) -> the year the first adult to stop work stops: the earliest birth year + retirement age among the
+ * adults with a birth date whom Get started does not call retired, never before this year; null without one. The gate for "still
+ * being paid when work stops" (fix round 1, 2026-11-11, money review D10): a loan whose payoff falls in a LATER year is in the
+ * figure (it is still being paid in the first full year after work stops), and one that ends in that year is not, but Will the
+ * money last? still pays its last months that year on top of the figure (buildInputs `loans` with inBase 0). It was whole years
+ * of age from today, all or nothing: a loan ending eight months after work stopped was left out altogether, one a month longer
+ * was in for its whole payment. The figure still steps at the turn of a year; the money counted no longer does.
+ */
+export function workStopYear(plan, today = null) {
+  if (!today) return null;
   const planAge = Number(plan?.assumptions?.retirementAge ?? 65), status = plan?.guide?.setup?.status ?? {};
   const people = Array.isArray(plan?.household?.people) ? plan.household.people : [];
-  const left = today ? people.filter((p) => p.role !== "dependent" && p.birthDate && status[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
-  const until = left.length ? Math.min(...left) : null;
-  const out = [];
-  if (until !== null && !L("expenses").some((x) => x.category === "debt")) {
+  const years = people.filter((p) => p && p.role !== "dependent" && p.birthDate && status[p.id] !== "retired").map((p) => Number(String(p.birthDate).slice(0, 4)) + Number(p.retirementAge ?? planAge)).filter(Number.isFinite);
+  return years.length ? Math.max(Number(String(today).slice(0, 4)), Math.min(...years)) : null;
+}
+/** A loan with `months` to its payoff (Debts' own, loanMonths) is still being paid the year after work stops (`stopYear`), or never ends. */
+export const runsPastWork = (months, stopYear, today) => !Number.isFinite(months) || Number(String(addMonths(today, months)).slice(0, 4)) > stopYear;
+/** The loans a rental on Rental analysis names: their tax and insurance are the rental's running costs, never assumed into a payment. */
+const rentalLoanIdsOf = (plan) => new Map(rentalsOf(plan).filter((r) => r.loanAccountId).map((r) => [r.loanAccountId, String(r.name || "Rental").trim()]));
+/** setupLoans' list, and `afterEscrow`: the tax and insurance a month that go on after mortgages paid off before work stops (setup's escrowAfterPayoff; home.js escrowAfterLoan). */
+function setupLoanParts(plan, today = null) {
+  const L = (k) => (Array.isArray(plan?.[k]) ? plan[k] : []);
+  const stopYear = workStopYear(plan, today);
+  const running = [], ended = [];
+  let afterEscrow = 0;
+  if (stopYear !== null && !L("expenses").some((x) => x.category === "debt")) {
+    const billed = taxOrInsuranceBilled(plan), rental = rentalLoanIdsOf(plan);
     for (const d of L("debts")) {
-      const owed = Math.abs(Number(L("accounts").find((a) => a.id === d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
+      const acct = L("accounts").find((a) => a.id === d.accountId);
+      const owed = Math.abs(Number(acct?.balance) || 0), pay = Number(d.minPayment) || 0;
       if (!(owed > 0) || !(pay > 0)) continue;
-      const months = nper((Number(d.rate) || 0) / 12, pay, owed);
-      if (!Number.isFinite(months) || months > until) out.push({ accountId: d.accountId, pay });
+      const lm = loanMonths(plan, acct, d, today);
+      if (runsPastWork(lm.months, stopYear, today)) { running.push({ accountId: d.accountId, pay, toLoan: Math.max(0, pay - lm.escrow), escrow: lm.escrow, months: lm.months }); continue; }
+      const stays = rental.has(d.accountId) ? lm.escrow : escrowAfterLoan(plan, acct, d, today, { billed }).monthly;
+      afterEscrow += stays;
+      // paid off by the end of the year work stops: not in the figure; `ended` lets the engine pay what is left of it in its
+      // retired years, on top of the figure (the tax and insurance that go on are in the figure already)
+      if (lm.months > 0) ended.push({ accountId: d.accountId, pay, toLoan: Math.max(0, pay - stays), months: lm.months });
     }
+  }
+  return { running, afterEscrow, ended };
+}
+/**
+ * spendingLoans(plan, carried, { today, retireYear, skip }) -> the engine's `loans` (core/math/retirement.js project): each loan
+ * whose payment the retirement spending carries (`carried`: [{ accountId, monthly }], the monthly amount the figure holds for it),
+ * as a fixed amount until Debts' payoff (2026-11-07, sr.verdict.loans-end: the figure carried a mortgage paid off in 2037 for
+ * life, rising with prices). The part that pays the loan, the amount held less the tax and insurance inside a mortgage's payment,
+ * leaves the spending (`inBase`, today's dollars) and comes back as `yearly` (a fixed amount, not raised for prices) in the years
+ * up to the payoff, the payoff year for the months paid in it (`lastMonths`); the tax and insurance stay in the spending and rise
+ * with prices. A loan that never pays off at its payment runs to the plan's end. `skip`: loans to leave out; `endBy`: Map of
+ * accountId -> the year a rental's sale ends its loan sooner (rentalLines `soldBy`). A typed mortgage on the home whose payment is
+ * read as all loan because the question was never answered keeps the usual tax and insurance in the spending (`assumed`).
+ * -> [{ accountId, name, monthly, inBase, yearly, untilYear?, lastMonths?, ends? ("YYYY-MM"), escrow, assumed?, rental? (the rental's name), sold? }]
+ * (buildInputs adds, with `onTop` and inBase 0, a loan Get started's figure leaves out because it ends in the year work stops)
+ */
+export function spendingLoans(plan, carried, { today = null, skip = new Set(), endBy = null } = {}) {
+  const out = [];
+  if (!today) return out;
+  const billed = taxOrInsuranceBilled(plan), rental = rentalLoanIdsOf(plan);
+  for (const c of carried ?? []) {
+    if (!c?.accountId || skip.has(c.accountId)) continue;
+    const acct = (plan.accounts ?? []).find((a) => a.id === c.accountId), d = (plan.debts ?? []).find((x) => x.accountId === c.accountId);
+    if (!acct || !d) continue;
+    const lm = loanMonths(plan, acct, d, today);
+    if (lm.months === null || lm.months === 0) continue;
+    // what goes on after the payoff: the tax and insurance inside the payment, or (a typed mortgage on the home that never said)
+    // the usual ones, `assumed` (home.js escrowAfterLoan; fix round 1, 2026-11-11, money review D8). Debts' payoff is not touched.
+    const after = rental.has(c.accountId) ? { monthly: lm.escrow, assumed: false } : escrowAfterLoan(plan, acct, d, today, { billed });
+    const stays = Math.min(after.monthly, Number(c.monthly) || 0);
+    const toLoan = Math.max(0, (Number(c.monthly) || 0) - stays);
+    if (!(toLoan > 0.005)) continue;
+    const ends = Number.isFinite(lm.months) ? String(addMonths(today, lm.months)).slice(0, 7) : null;
+    let bound = ends ? { untilYear: Number(ends.slice(0, 4)), lastMonths: Number(ends.slice(5, 7)), ends } : {};
+    // a rental sold before its loan is paid off: the payments stop with the sale (the whole of that year)
+    const sold = endBy?.get?.(c.accountId);
+    if (Number.isFinite(sold) && (!ends || sold < bound.untilYear)) bound = { untilYear: sold, lastMonths: 12, ...(ends ? { ends } : {}), sold };
+    out.push({ accountId: c.accountId, name: acct.name || "Loan", type: acct.type, monthly: toLoan, escrow: stays, ...(after.assumed ? { assumed: true } : {}), ...(after.topped ? { topped: true } : {}), ...(after.taxOnly ? { taxOnly: true } : {}), ...(rental.has(c.accountId) ? { rental: rental.get(c.accountId) } : {}), inBase: toLoan * 12, yearly: toLoan * 12, ...bound });
   }
   return out;
 }
@@ -904,15 +981,33 @@ export function buildInputs(plan, params = {}) {
   // (review 2026-11-06, money 1 and 2: only a loan the spending holds, at what it holds: Get started's figure carries a loan's
   // minimum, Expenses what its bills count for it, expenses debtsCounted, and no mortgage a housing bill stands for unless the
   // bills hold them all)
-  const carriedLoans = fromSetup ? new Map(setupLoans(plan, today).map((d) => [d.accountId, d.pay]))
+  // a figure the person typed over Get started's own, or kept (`guide.setup.retireHeld`), still holds the loans that figure held:
+  // they end at their payoff all the same, while the figure is at least their payments (fix round 1, 2026-11-11, money review
+  // D1: every loan was spent for life once the figure was typed, so $100 a month less gave a worse verdict in 53 of 252 households)
+  const heldLoans = typed && !fromSetup && plan.guide?.setup?.retireHeld === true ? setupLoans(plan, today) : [];
+  const held = heldLoans.length && heldLoans.reduce((t, d) => t + d.pay, 0) <= baseMonthly + 0.005 ? heldLoans : null;
+  const carriedLoans = fromSetup || held ? new Map((held ?? setupLoans(plan, today)).map((d) => [d.accountId, d.pay]))
     : spendingSource === "expenses" ? new Map((ex?.debtsCounted ?? []).map((d) => [d.id, d.monthly])) : null;
   const inSpending = (loan) => (loan?.inDebts && loan.accountId ? carriedLoans?.get(loan.accountId) ?? 0 : 0);
-  for (const x of rentalLines(plan, people, retireYear, today ?? `${year}-01-01`, { inSpending })) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  const soldBy = new Map();
+  const rentalOwn = rentalLines(plan, people, retireYear, today ?? `${year}-01-01`, { inSpending, fixed: !!today, soldBy });
+  for (const x of rentalOwn) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  // every loan the spending carries, a rental's too (fix round 1, 2026-11-11, money review D4): its payment stays in it only until
+  // Debts' payoff (or the rental's sale), as a fixed amount (spendingLoans)
+  const loans = carriedLoans ? spendingLoans(plan, [...carriedLoans].map(([accountId, monthly]) => ({ accountId, monthly })), { today, endBy: soldBy }) : [];
+  // Get started's figure leaves out a loan paid off by the end of the year work stops; the months of it paid in the retired years
+  // are spent on top of the figure (inBase 0), so a loan ending in November of that year is not dropped (money review D10)
+  if ((fromSetup || held) && today) for (const e of setupLoanParts(plan, today).ended) {
+    const ends = String(addMonths(today, e.months)).slice(0, 7), y = Number(ends.slice(0, 4));
+    if (y < retireYear || !(e.toLoan > 0.005) || loans.some((l) => l.accountId === e.accountId)) continue;
+    const acct = (plan.accounts ?? []).find((a) => a.id === e.accountId);
+    loans.push({ accountId: e.accountId, name: acct?.name || "Loan", type: acct?.type, monthly: e.toLoan, escrow: 0, inBase: 0, yearly: e.toLoan * 12, untilYear: y, lastMonths: Number(ends.slice(5, 7)), ends, onTop: true });
+  }
   const spendingYearly = (baseMonthly - removedMonthly) * 12;
   const endYear = Math.max(...people.map((p) => p.birthYear + p.endAge));
   const inputs = {
     startYear: year, endYear, people, balances, contributions, incomes,
-    spending: { yearly: spendingYearly }, retireYear,
+    spending: { yearly: spendingYearly }, retireYear, ...(loans.length ? { loans } : {}),
     rates: { inflation: Number(a.inflation ?? 0.03), cash: Number(a.returnCash ?? 0.02), salaryGrowth: Number(a.salaryGrowth ?? 0.03), taxRate: Number(rt.taxRate ?? 0.15), stocksNow: Number(rt.stocksNow ?? 0.7), stocksRetired: Number(rt.stocksRetired ?? 0.5) },
     returns: { stocks: Number(a.returnStocks ?? 0.07), bonds: Number(a.returnBonds ?? 0.04) },
     stdev: { stocks: Number(a.stdevStocks ?? 0.15), bonds: Number(a.stdevBonds ?? 0.05) },
@@ -1029,7 +1124,13 @@ export function creditWords(b) {
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const monthWords = (ym) => `${MONTH_NAMES[Number(String(ym).slice(5, 7)) - 1] ?? ""} ${String(ym).slice(0, 4)}`.trim();
 export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`) {
-  return (I?.incomes ?? []).map((x) => {
+  // a rental's loan the spending holds (I.loans, spendingLoans): said with the rental's other lines, in the words the "loan back"
+  // line had (fix round 1, 2026-11-11: it is no longer an income that rises with prices; the payment simply ends)
+  const held = (I?.loans ?? []).filter((l) => l && l.rental && Number.isFinite(l.untilYear)).map((l) => {
+    const from = Math.max(I.retireYear ?? -Infinity, l.untilYear + 1);
+    return `${l.sold ? `${l.rental} is sold in ${l.sold}` : `${l.rental}'s loan ends in ${monthWords(l.ends)}`}: the ${money(l.monthly)} a month for it in your spending is free again from ${from <= I.startYear ? "now" : from} (${money(l.yearly)} a year)`;
+  });
+  return [...(I?.incomes ?? []).map((x) => {
     const who = I.people[x.personIndex ?? 0] ?? I.people[0];
     // calendar bounds (a rental's lines, round 8 batch 6) move the first and last year said
     const start = Math.max(who.birthYear + x.startAge, x.fromYear ?? -Infinity);
@@ -1047,7 +1148,38 @@ export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("
       if (x.part === "loan back") return `${x.sold ? `${x.rental} is sold in ${x.sold}` : `${x.rental}'s loan ends in ${monthWords(x.loanEnds)}`}: the ${money(x.monthly)} a month for it in your spending is free again from ${start <= I.startYear ? "now" : start} (${money(x.yearly)} a year)`;
     }
     return `${x.name}${x.type === "rental" && !x.afterCosts ? " (before its costs)" : ""}: ${money(x.yearly)} a year from ${from}${ends}`;
+  }), ...held];
+}
+
+/**
+ * spendingLoanWords(I, money, { planEnds }) -> [sentence]: each loan the retirement spending holds (I.loans, spendingLoans), in
+ * plain sentences for "Spending in retirement" (fix round 1, 2026-11-11, layperson L-7: it was one sentence with brackets inside
+ * brackets and a loan-only figure no other page shows). Each says the whole payment Debts shows, the part that pays the loan and
+ * the year it stops at the payment made today (Debts' own date; `planEnds`: { [accountId]: year } when the payoff plan ends it
+ * sooner, money review M-14), and what carries on: the tax and insurance inside the payment, or (`assumed`) the usual ones kept
+ * for a mortgage that never said, with where to say. A loan the figure leaves out because it ends in the year work stops is said
+ * as paid on top (`onTop`). A rental's loan is said with the rental's lines (incomeWords). Loans paid off before retirement starts
+ * are one closing sentence.
+ */
+export function spendingLoanWords(I, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`, { planEnds = {} } = {}) {
+  const loans = (I?.loans ?? []).filter((l) => l && typeof l === "object" && !l.rental);
+  const running = loans.filter((l) => !(l.untilYear < I.retireYear)), gone = loans.filter((l) => l.untilYear < I.retireYear);
+  const out = running.map((l) => {
+    const whole = l.monthly + (l.assumed ? 0 : l.escrow), split = l.escrow > 0.5;
+    const sooner = Number.isFinite(planEnds?.[l.accountId]) && Number.isFinite(l.untilYear) && planEnds[l.accountId] < l.untilYear ? ` Your payoff plan ends it sooner, in ${planEnds[l.accountId]} (Pay off debts).` : "";
+    const stops = Number.isFinite(l.untilYear) ? `stops in ${l.untilYear} at the payment you make today` : "runs for the whole plan, as the payment does not pay it off";
+    if (l.onTop) return `On top of it come the last payments on ${l.name}, ${money(l.monthly)} a month until ${monthWords(l.ends)}.`;
+    // what the kept amount is for, and (`taxOnly`) why home insurance is not in it
+    const kept = l.taxOnly ? "property tax" : "property tax and home insurance";
+    const left = l.taxOnly ? " Home insurance is not added: the insurance bill on your Expenses may already hold it." : "";
+    if (l.topped) return `It includes ${l.name}'s ${money(whole)} a month: ${money(l.monthly)} of it ${stops} and does not rise with prices. We keep the other ${money(l.escrow)} for ${kept} after that: our guess of the usual amount for a home like yours, which is more than this payment has room for.${left}${sooner}`;
+    if (l.assumed) return `It includes ${l.name}'s ${money(l.monthly + l.escrow)} a month: ${money(l.monthly)} of it ${stops} and does not rise with prices. We keep the other ${money(l.escrow)} for ${kept} after that: our guess of the usual amount, as your Expenses hold no ${l.taxOnly ? "property tax bill" : "such bill"}.${left} Say on Debts whether your payment includes them.${sooner}`;
+    if (split) return `It includes ${l.name}'s ${money(whole)} a month: ${money(l.monthly)} pays the loan and ${stops} (it does not rise with prices); the ${money(l.escrow)} of property tax and home insurance carries on.${sooner}`;
+    return `It includes ${l.name}'s ${money(whole)} a month, which ${stops} (it does not rise with prices).${sooner}`;
   });
+  const before = gone.reduce((t, l) => t + l.monthly, 0);
+  if (before > 0.5) out.push(`Loan payments of ${money(before)} a month that end before then are left out.`);
+  return out;
 }
 
 /**
@@ -1148,11 +1280,13 @@ export function spouseWords(j, list = (xs) => (xs.length < 2 ? xs.join("") : `${
  * lowers spending. -> nothing (changes the draft)
  */
 export function saveSpendingFigure(draft, typed, shown) {
+  // (fix round 1, 2026-11-11: a figure typed over Get started's own still holds the loans that figure held, `retireHeld`)
   const v = typed === "" || typed === undefined ? null : typed;
   draft.retirement = draft.retirement ?? {};
   const auto = draft.guide?.setup?.retireAuto === true;
   if (auto && v !== null && shown !== null && shown !== undefined && Math.abs(Number(v) - Number(shown)) < 0.005) return;
-  if (auto) draft.guide.setup.retireAuto = false;
+  if (auto) { draft.guide.setup.retireAuto = false; if (v !== null) draft.guide.setup.retireHeld = true; }
+  if (v === null && draft.guide?.setup?.retireHeld) delete draft.guide.setup.retireHeld;
   draft.retirement.spendingMonthly = v;
   // typed here, it is the household's own figure even when it equals our guess: it stops being ours (spec S2; C3 review D8)
   clearGuess(draft, "retirement.spendingMonthly");

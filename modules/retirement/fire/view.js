@@ -33,9 +33,11 @@ export function render(root, ctx) {
 
   // the 25-times rule's own words (plain: no "withdrawal rate", "real growth" or "coast"), the page's hero when the plan gives
   // no answer, else inside the fold
-  const ruleLede = `Spending ${money(d.spendingYearly)} a year needs about ${money(d.fiNumber)} to live on for good, taking out ${fmt.pct(d.withdrawalRate, 0)} a year. You have ${money(d.invested)} invested, not counting cash in the bank: ${fmt.pct(d.progress, 0)} of the way.${d.yearsToFi !== null && d.yearsToFi > 0 ? ` At ${money(d.savingYearly)} a year of saving and growth of ${fmt.pct(d.realReturn, 1)} a year above inflation, you get there around ${d.fiYear}${d.fiAge ? ` (age ${d.fiAge})` : ""}.` : ""}`;
+  // (a loan payment in the spending that ends is not spending for good: left out of the target and said so; fix round 1, 2026-11-11)
+  const loanNote = d.loansEnding ? ` That is your spending without the ${money(d.loansEnding.yearly)} a year of loan payments that end by ${d.loansEnding.untilYear}, plus the ${money(d.loansEnding.owed)} still owed on those loans.` : "";
+  const ruleLede = `Spending ${money(d.spendingYearly)} a year needs about ${money(d.fiNumber)} to live on for good, taking out ${fmt.pct(d.withdrawalRate, 0)} a year.${loanNote} You have ${money(d.invested)} invested, not counting cash in the bank: ${fmt.pct(d.progress, 0)} of the way.${d.yearsToFi !== null && d.yearsToFi > 0 ? ` At ${money(d.savingYearly)} a year of saving and growth of ${fmt.pct(d.realReturn, 1)} a year above inflation, you get there around ${d.fiYear}${d.fiAge ? ` (age ${d.fiAge})` : ""}.` : ""}`;
   const statRow = () => ui.row(
-    ui.stat("Enough to live on", money(d.fiNumber), `${times} times yearly spending`),
+    ui.stat("Enough to live on", money(d.fiNumber), d.loansEnding ? `${times} times yearly spending, plus the loans still owed` : `${times} times yearly spending`),
     ui.stat("Still to go", money(d.gap), "in today's dollars"),
     ui.stat("Saving a year", money(d.savingYearly), d.savingsRate !== null ? `${fmt.pct(d.savingsRate, 0)} of income: what goes into retirement accounts plus what is left over` : "what goes into retirement accounts plus what is left over"),
     d.coast ? ui.stat("Enough to stop saving", money(d.coast.number), d.coast.reached ? `you have it: with no more saving, growth alone gets there by ${d.retireAge}` : `with this much today, growth alone gets there by ${d.retireAge}`) : null,

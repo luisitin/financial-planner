@@ -155,8 +155,14 @@ export function compute(plan, params = {}) {
   // of them (within 10%): a bill for one of two mortgages drops both from Debts, and which one it is cannot be told
   const filedMortgages = mortgageFiled ? sum(active.filter(isMortgageBill), "monthly") : 0;
   const mortgagesInBill = mortgageFiled && Math.abs(filedMortgages - mortgagePay) <= mortgagePay * 0.1;
+  // one mortgage and a bill for it that is more than 10% off its payment (an amount out of date, or the person's own cut): that bill is
+  // still that loan's, at the bill's amount (at most the payment), so the retirement plan ends it at the payoff; it was spent for
+  // life, and $100 a week less on the bill ran out a year sooner (loans lane fix round 2, 2026-11-11, qa H-0329)
+  const mortgageRows = (debts?.rows ?? []).filter((r) => r.type === "mortgage" && (Number(r.payment) || 0) > 0);
+  const oneMortgageBill = mortgageFiled && !mortgagesInBill && mortgageRows.length === 1 ? Math.min(filedMortgages, Number(mortgageRows[0].payment)) : 0;
   const debtsCounted = [
-    ...(debts?.rows ?? []).filter((r) => mortgagesInBill && r.type === "mortgage" && (Number(r.payment) || 0) > 0).map((r) => ({ id: r.id, monthly: Number(r.payment) })),
+    ...mortgageRows.filter(() => mortgagesInBill).map((r) => ({ id: r.id, monthly: Number(r.payment) })),
+    ...(oneMortgageBill > 0.005 ? [{ id: mortgageRows[0].id, monthly: oneMortgageBill }] : []),
     ...rows.map((r) => ({ id: r.id, monthly: m.matched.get(r.id)?.monthly ?? r.payment })),
   ];
   // what is filed but matches no debt (one line for all of them, or an amount out of date) covers the unmatched debts up to its amount

@@ -22,10 +22,10 @@ import { DERIVED as D_DEBTS } from "../data/debts.js";
 import { DERIVED as D_BAL } from "../data/balances.js";
 import { STATE_NAME } from "../data/index.js";
 import { profileOf, scfR2, stateOf, placeOf, placeName, possessiveOf, pctWords, money, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY, YOUR_AGE, WHAT_YOU_PAY } from "./common.js";
-import { escrowMonthly, homeValueFor, homePathOf, purchaseOf } from "./home.js";
-import { boughtGuess, loanFrom, midYear, rateInYear, rateMean, guessedRate, TABLE as PT } from "./purchase.js";
+import { escrowMonthly, homeValueFor, homePathOf, purchaseOf, homeFactsTyped } from "./home.js";
+import { boughtGuess, loanFrom, midYear, rateInYear, rateMean, guessedRate, TABLE as PT, YOUNGEST } from "./purchase.js";
 import { isGuess } from "../../../../core/estimate/index.js";
-import { pv, pmt } from "../../../../core/math/finance.js";
+import { pv, pmt, nper } from "../../../../core/math/finance.js";
 import { sigmaFromMeanMedian, combineLog, roundGuess } from "../../../../core/math/estimate.js";
 import { monthsBetween } from "../../../../core/math/dates.js";
 
@@ -90,6 +90,25 @@ function owedFor(plan, kind, rec, args, lib, known) {
   const est = lib.estimate(`debt.${kind}.owed`, { path: rec.owedPath, args });
   return est && ok(est.value) ? { value: est.value, typed: false, est } : null;
 }
+/**
+ * The tax and insurance to take out of a mortgage payment (or put into a guessed one): the figure the person gave for this loan
+ * (`debts[].escrowMonthly` typed, 0 when paid apart; or the screen's answer, args.escrow), else the usual one for the home
+ * (escrowMonthly), none when the person said they are paid apart (on the loan, or the escrow tap for Get started's own). -> { total, typed? } | null
+ */
+function escrowFor(plan, rec, { today, args, loanId }, lib) {
+  if (has(args, "escrow") && ok(args.escrow)) return args.escrow > 0 ? { total: args.escrow, typed: true } : null;
+  const v = rec?.row?.escrowMonthly;
+  if (typeof v === "number" && v >= 0 && !isGuess(plan, `debts[${rec.row.id}].escrowMonthly`)) return v > 0 ? { total: v, typed: true } : null;
+  // a figure of ours already on the loan (kept with its payment, or answered "Not sure"): the one the pages take out of that payment
+  // (not when it was kept with the balance while the payment is still ours and the person has since typed about the home: the
+  // payment follows the home's usual figure then, fix round 2, 2026-11-11)
+  const follows = typeof rec?.row?.id === "string" && isGuess(plan, `debts[${rec.row.id}].minPayment`) && homeFactsTyped(plan, loanId ?? loanIdOf(rec));
+  if (typeof v === "number" && v > 0 && !has(args, "payment") && !follows) return { total: v };
+  // paid apart: the answer on the loan itself, else (Get started's own mortgage only) the tap; never another loan's answer (fix round 1, 2026-11-11)
+  const said = rec?.row?.escrowSaid;
+  if (said === "no" || (said === undefined && (loanId ?? loanIdOf(rec)) === "setup-owe-mortgage" && tapOf(plan, null, "escrow") === "no")) return null;
+  return escrowMonthly(plan, { today, args, loanId }, lib);
+}
 /** Tables behind a figure this one is worked out from (a guessed rate or balance), for the sources fold. */
 const from = (...parts) => parts.flatMap((p) => p?.est?.tables ?? []);
 const uniq = (xs) => [...new Set(xs)];
@@ -117,16 +136,31 @@ function perLoanOf(st) {
   const upb = cell(US_NOW, "Unpaid principal balance ($ billions)", "by loan count"), n = cell(US_NOW, "Active first-lien mortgages (thousands)", "by loan count");
   return ok(upb) && ok(n) && n > 0 ? { value: upb * 1e9 / (n * 1e3), table: US_NOW } : null;
 }
-/** Months of a 30-year loan still to pay, from the middle of the start span to today (null without a tap or a date). */
-function monthsLeftOf(start, today) {
-  const mid = MORTGAGE_START[start];
-  if (!mid || !today) return null;
-  return monthsLeftFrom(mid, today);
-}
-/** Months of a 30-year loan still to pay from a start date (12 at the least: the last year is shown, never "paid off"). */
-function monthsLeftFrom(date, today) {
+/** Months of a loan (30 years unless its own term is typed on Debts) still to pay from a start date (12 at the least: the last year is shown, never "paid off"). */
+function monthsLeftFrom(date, today, term = MORTGAGE_TERM) {
   const gone = date && today ? monthsBetween(date, today) : null;
-  return gone === null ? null : Math.max(12, MORTGAGE_TERM - gone);
+  return gone === null ? null : Math.max(12, (term ?? MORTGAGE_TERM) - gone);
+}
+/**
+ * The years a "when did you take it out" tap stands for, from the year the oldest adult was about 20 (YOUNGEST, the owner's rule)
+ * on (2026-11-07, bought verify D3 and low items: "2010 to 2019" put a 25-year-old couple's loan in 2015, when they were 13):
+ * { from, to, date (the middle of what is left of the span; the span's own date when none of it is cut) } | null (all of it before
+ * about 20, or no such tap). No age: the whole span.
+ */
+export function tapSpan(tap, { today, age = null } = {}) {
+  if (!MORTGAGE_START[tap] || !today) return null;
+  const thisYear = Number(today.slice(0, 4));
+  const [lo, hi] = tap === "2022on" ? [2022, thisYear] : TAP_YEARS[tap];
+  const y20 = ok(age) ? thisYear - Math.floor(age) + YOUNGEST : null;
+  if (y20 === null || y20 <= lo) return { from: lo, to: hi, date: MORTGAGE_START[tap] };
+  if (y20 > hi) return null;
+  const mid = (y20 + hi + 1) / 2, y = Math.floor(mid), m = Math.floor((mid - y) * 12) + 1;
+  const date = `${y}-${String(m).padStart(2, "0")}-01`;
+  return { from: y20, to: hi, date: date > today ? `${today.slice(0, 7)}-01` : date };
+}
+/** The "when did you take out this mortgage" question with only the spans the oldest adult was about 20 or older in (and Not sure). */
+export function mortgageAsk({ today, age = null } = {}) {
+  return { ...MORTGAGE_ASK, options: MORTGAGE_ASK.options.filter((o) => o.value === "unsure" || !today || tapSpan(o.value, { today, age }) !== null) };
 }
 const WHEN_BOUGHT = { label: "the year you bought your home", href: "#/property/home" };
 /** Years on a tenure in words: "the last few years" and so on, for the why-lines and the question's help. */
@@ -148,34 +182,127 @@ function typedStart(plan, rec, { today, args }) {
   return date ? { date, year: Number(date.slice(0, 4)), price: typed.price } : null;
 }
 /**
- * When the loan began, in the order of what we know: a refinance (or the loan's own start) answered on the tap, else the year
- * the home was bought as typed (Home's purchase date, or Get started's "Year you bought it"), else our guess for an owner
- * of this age (home.boughtYear). A tap earlier than the typed purchase is impossible and is set aside. A typed purchase so long
+ * The loan's own start date and term as typed on Debts ("Started", "Loan length in months"), when they can be its start:
+ * { date, term, year, stale } | null. Fix round 1 (2026-11-11, money review D3: a start of 2000 typed beside a $150,000 balance gave
+ * a $4,840 payment over the 38 months left): a start before the oldest adult was about 20 (YOUNGEST) is not theirs and is set
+ * aside (null); `stale`: fewer than STALE_LEFT months of its term are left AND the balance the person typed is more than that
+ * loan could still owe (the share of a level loan still owed with those months left, at the year's average rate or the rate
+ * typed, times the home's value on file; no home on file: any typed balance), so the loan was refinanced since and the date is
+ * not this loan's start. A start long ago with no balance typed is believed: the balance we guess is that loan's own.
+ */
+function loanTyped(plan, rec, { today, args = null, prof = null } = {}) {
+  const d = rec?.row;
+  const date = typeof d?.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.startDate) && d.startDate <= today ? d.startDate : null;
+  if (!date) return null;
+  const term = Number(d?.termMonths) >= 12 && Number(d.termMonths) <= 480 ? Math.round(Number(d.termMonths)) : null;
+  const year = Number(date.slice(0, 4)), age = (prof ?? profileOf(plan, today)).age;
+  if (ok(age) && year < Number(today.slice(0, 4)) - Math.floor(age) + YOUNGEST) return null;
+  const left = (term ?? MORTGAGE_TERM) - (monthsBetween(date, today) ?? 0);
+  let stale = false;
+  if (left < STALE_LEFT) {
+    const known = knownOf(plan, rec, args);
+    if (known.owed !== null) {
+      const r = (known.rate ?? rateInYear(year) ?? 0) / 12, n = Math.max(12, left), all = term ?? MORTGAGE_TERM;
+      const share = r > 0 ? pv(r, n, 1) / pv(r, all, 1) : n / all;
+      const home = homeValueFor(plan, { loanId: loanIdOf(rec), args })?.value ?? null;
+      stale = home === null || known.owed > share * home;
+    }
+  }
+  return { date, term, year, stale };
+}
+/**
+ * When the loan began, in the order of what we know: the loan's own start date typed on Debts (with its term when typed there,
+ * 2026-11-07, bought verify defect 5: they were never read; unless it is before the adult was about 20 or `stale`, loanTyped), else
+ * a refinance (or the loan's own start) answered on the tap (only
+ * the part of its span from when the oldest adult was about 20: tapSpan), else the year the home was bought as typed (Home's
+ * purchase date, or Get started's "Year you bought it"), else our guess for an owner of this age (home.boughtYear). A tap earlier
+ * than the typed purchase is impossible and is set aside, as is a tap whose whole span is before about 20. A typed purchase so long
  * ago that a 30-year loan from it would be nearly paid off is not the loan's start (it was refinanced, or is another loan): the
  * loan is counted from our guess for the age, with `stale` = the year typed, and the refinance question is the way to sharpen it
- * (review D3; verify 2026-11-07: not a full new 30 years).
- * -> { date, year, via: "tap" | "typed" | "guess", tenure?, stale? } | null (no today, or no start known)
+ * (review D3; verify 2026-11-07: not a full new 30 years). A stale start typed on Debts is counted the same way.
+ * -> { date, year, via: "loan" | "tap" | "typed" | "guess", term? (months, typed on Debts), from?, to? (a tap's years), tenure?, stale? } | null
  */
 export function startOf(plan, rec, { today, args = null, prof = null } = {}) {
   if (!today) return null;
+  const pr = prof ?? profileOf(plan, today);
+  const own = loanTyped(plan, rec, { today, args, prof: pr });
+  if (own && !own.stale) return { date: own.date, year: own.year, via: "loan", ...(own.term ? { term: own.term } : {}) };
   const tap = tapOf(plan, args, "mortgage-start");
   const typed = typedStart(plan, rec, { today, args });
-  if (MORTGAGE_START[tap] && !(typed && MORTGAGE_START[tap] < typed.date)) return { date: MORTGAGE_START[tap], year: Number(MORTGAGE_START[tap].slice(0, 4)), via: "tap" };
+  const span = tapSpan(tap, { today, age: pr.age });
+  if (span && !(typed && span.date < typed.date)) return { date: span.date, year: Number(span.date.slice(0, 4)), via: "tap", from: span.from, to: span.to };
   if (typed && !longAgo(typed.date, today)) return { ...typed, via: "typed" };
   // a year typed so long ago that a 30-year loan from it would be paid off: the loan was refinanced (or is another one), so it is
   // counted like most owners this age, from our guessed year (`stale` keeps the year typed), not as a new 30-year loan (verify
   // 2026-11-07: a 60-year-old who typed 1995 was told the mortgage runs to 2056)
-  const stale = typed ? typed.year : null;
-  const pr = prof ?? profileOf(plan, today);
+  const stale = typed ? typed.year : own ? own.year : null;
   const g = boughtGuess({ age: pr.age, today });
   const date = g ? midYear(g.year, today) : null;
   return date && !longAgo(date, today) ? { date, year: g.year, via: "guess", tenure: g.tenure, ...(stale ? { stale } : {}) } : null;
 }
-/** The year typed for the home when it is too long ago to be the loan's start and no refinance was answered, else null (the page asks "when did you last refinance?"). */
+/** The year typed for the home (or the loan's start typed on Debts) when it is too long ago to be the loan's start and no refinance was answered, else null (the page asks "when did you last refinance?"). */
 export function staleYear(plan, rec, { today, args = null } = {}) {
-  if (!today || MORTGAGE_START[tapOf(plan, args, "mortgage-start")]) return null;
+  if (!today) return null;
+  const prof = profileOf(plan, today);
+  const own = loanTyped(plan, rec, { today, args, prof });
+  if ((own && !own.stale) || tapSpan(tapOf(plan, args, "mortgage-start"), { today, age: prof.age })) return null;
   const typed = typedStart(plan, rec, { today, args });
-  return typed && longAgo(typed.date, today) ? typed.year : null;
+  return typed && longAgo(typed.date, today) ? typed.year : own ? own.year : null;
+}
+/**
+ * The usual years left on a mortgage by the owner's age: the weighted median, by ten-year age group, of the years left on the
+ * first mortgage on the main home (the year it was taken out or last refinanced, plus its length, less 2025) among families
+ * who owe on one, placed at each group's mean age (Survey of Consumer Finances 2025, full public data set, variables X14, X802,
+ * X806, X805 > 0, weight X42001, all five implicates; computed 2026-11-11, README "Fix round 2"). Under 35: 27 years; 35-44: 25;
+ * 45-54: 24; 55-64: 23; 65-74: 19; 75 and over: 17. Most loans are far younger than the home (the median loan of an owner of
+ * 55 to 64 is five years old), so the years left fall slowly with age.
+ */
+export const YEARS_LEFT_BY_AGE = [[30.0, 27], [39.5, 25], [49.6, 24], [59.5, 23], [69.2, 19], [80.3, 17]];
+/** The usual months left on a mortgage at an age: YEARS_LEFT_BY_AGE joined by straight lines, flat past its ends. No age: null. */
+export function usualMonthsLeft(age) {
+  if (!ok(age)) return null;
+  const T = YEARS_LEFT_BY_AGE;
+  if (age <= T[0][0]) return T[0][1] * 12;
+  for (let i = 1; i < T.length; i++) if (age <= T[i][0]) return Math.round(12 * (T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (age - T[i - 1][0]) / (T[i][0] - T[i - 1][0])));
+  return T[T.length - 1][1] * 12;
+}
+const CLOCK_UNKNOWN = { guess: true, typed: true };   // the year the home was bought (ours, or typed): a refinance since is not seen
+/**
+ * The loan's level payment (principal and interest) for a balance, in three steps that join up (so more owed never pays less):
+ *   - up to what the purchase's loan still owes: what pays the balance off over the months left;
+ *   - above that, up to the balance we show with nothing typed (`shown`): that loan's own principal and interest, never more than
+ *     the loan needs (the months then follow from it, nper; at least a new 30-year loan's payment): a balance blended up toward
+ *     the survey's figure means a refinance or a cash-out restarted the clock (bought verify defect 3, 1.08x to 1.43x for owners
+ *     61 to 80, 2026-11-07);
+ *   - above the balance we show: what pays it off over the months that balance and its payment imply (nper), so a larger balance
+ *     the person types is paid over the years we take a loan like theirs to have left, not over a new 30 years, and a typed
+ *     balance that is no more than the purchase loan's is paid as it always was.
+ * Fix round 1 (2026-11-11, money review D2): one rule whether the balance is ours or the person's, so "Keep" on the balance never
+ * moves the payment (the cap applied only while the balance was ours: the widow's $1,540 became $1,730); and none of it for a loan
+ * whose own start is known: typed on Debts, or answered on the tap "When did you take out this mortgage, or last refinance it?"
+ * (its term sets the months, review D3; the tap had the cap on the lane's build, which gave a loan said to be from before 2010
+ * seventeen more years).
+ */
+function loanPI(r, owed, { left, start, bought, shown = null, age = null }) {
+  const pi = pmt(r, left, owed);
+  if (!start || !CLOCK_UNKNOWN[start.via] || !bought || !ok(bought.pi) || !(owed > bought.balance + 0.5)) return pi;
+  // the most months the middle step can make: the purchase loan's own months left, or the usual years left on a mortgage at the
+  // owner's age when that is longer (usualMonthsLeft), never a new 30 years; the principal and interest is raised toward the
+  // level payment to hold it (fix round 2, 2026-11-11: the floor was a new 30-year loan's payment at every age, so a couple of 61
+  // and 59 was shown a guessed loan ending at 91)
+  const most = Math.min(MORTGAGE_TERM, Math.max(left, usualMonthsLeft(age) ?? MORTGAGE_TERM));
+  const capped = (x) => Math.min(pmt(r, left, x), Math.max(bought.pi, pmt(r, most, x)));
+  if (!ok(shown) || owed <= shown + 0.5) return capped(owed);
+  if (!(shown > bought.balance + 0.5)) return pi;
+  const n = nper(r, capped(shown), shown);
+  return Number.isFinite(n) && n > 0 ? Math.min(pi, pmt(r, n, owed)) : pi;
+}
+/** The balance we would show with no balance and no payment typed, as the screen rounds it (the middle step of loanPI ends there). */
+function shownOwed(plan, { today, path, args }, lib) {
+  const g = estimators["debt.mortgage.owed"].fn(plan, { today, path, args: { ...(args ?? {}), owed: null, payment: null } }, lib);
+  if (!g || !ok(g.value) || !(g.value > 0)) return null;
+  const sg = typeof g.sigma === "number" && Number.isFinite(g.sigma) ? g.sigma : null;
+  return { est: g, value: roundGuess(g.value, "total", sg, !!g.measured && sg !== null) };
 }
 
 // ---- car loans
@@ -195,7 +322,20 @@ function carClassOf(plan, rec, args, prof) {
 }
 /** Months gone on a car loan by the tap car-loan-start (the middle of each span); "5+": about half a year left. */
 const CAR_GONE = { 0: 6, "1-2": 24, "3-4": 48 };
-const carMonthsLeft = (start, term) => (start === "5+" ? 6 : CAR_GONE[start] !== undefined ? Math.max(6, term - CAR_GONE[start]) : null);
+/** The fewest years ago each car-loan span reaches: a span is only offered or used when the oldest adult was about 20 by then. */
+const CAR_SOONEST = { 0: 0, "1-2": 1, "3-4": 3, "5+": 5 };
+const carTapOk = (start, age) => CAR_SOONEST[start] === undefined || !ok(age) || age - CAR_SOONEST[start] >= YOUNGEST;
+/** Months still to pay; the months gone never reach back before the oldest adult was about 20 (2026-11-07). */
+const carMonthsLeft = (start, term, age = null) => {
+  if (!carTapOk(start, age)) return null;
+  if (start === "5+") return 6;
+  if (CAR_GONE[start] === undefined) return null;
+  const gone = ok(age) ? Math.min(CAR_GONE[start], Math.max(6, (age - YOUNGEST) * 12)) : CAR_GONE[start];
+  return Math.max(6, term - gone);
+};
+const carAsk = (age) => ({ ...CAR_ASK, options: CAR_ASK.options.filter((o) => carTapOk(o.value, age)) });
+/** The "when did you take it out" question for a debt kind ("mortgage" or "car-loan"), with only the spans the oldest adult was about 20 or older in. */
+export const startAsk = (kind, plan, today) => { const age = profileOf(plan, today).age; return kind === "mortgage" ? mortgageAsk({ today, age }) : kind === "car-loan" ? carAsk(age) : null; };
 const CAR_ASK = {
   key: "car-loan-start", kind: "voi", question: "When did you get this car loan?",
   options: [{ value: "0", label: "This year" }, { value: "1-2", label: "1 or 2 years ago" }, { value: "3-4", label: "3 or 4 years ago" }, { value: "5+", label: "5 or more years ago" }, { value: "unsure", label: "Not sure" }],
@@ -247,14 +387,14 @@ function loanOf(plan, { start, rate, today, args, path, prof, home, lib, loanId 
   const hp = homePathOf(plan, path, loanId);
   const valueNow = home ?? (hp ? lib.estimate("home.value", { path: hp, args })?.value ?? null : null);
   const price = start.via === "typed" ? start.price ?? null : null;
-  const loan = loanFrom({ startDate: start.date, today, valueNow, price, state: prof.state, age: prof.age, rate });
+  const loan = loanFrom({ startDate: start.date, today, valueNow, price, state: prof.state, age: prof.age, rate, term: start.term });
   if (!loan) return null;
   const down = Math.round(loan.down * 100);
   // a year typed too long ago to be this loan's start (`stale`): say the loan is counted from our year, never "typical in 2013" under "you bought in 1995" (verify 2026-11-07)
   const sourceWords = start.stale
     ? fit(`counted like most owners your age, from about ${start.year}: a ${start.stale} loan would be paid off by now`, `counted from about ${start.year}, like most owners your age`)
     : fit(`typical in ${start.year} with ${down}% paid up front, then paid down since`, `a ${start.year} home, ${down}% paid up front`);
-  return { balance: loan.balance, yearsOld: loan.yearsOld, valueNow, sourceWords, tables: [prof.state ? PT.hpi : PT.hpiUS, PT.buyers] };
+  return { balance: loan.balance, pi: loan.pi, yearsOld: loan.yearsOld, valueNow, sourceWords, tables: [prof.state ? PT.hpi : PT.hpiUS, PT.buyers] };
 }
 
 export const estimators = {
@@ -273,12 +413,17 @@ export const estimators = {
         // a year typed: that year's average rate (the owner's rule); a refinance answered on the tap: the average over its years (a
         // loan taken out 2022 or later is read below from the state's new-loan rate); a year we guess: the rate for the age's
         // move-in years eased toward what loans people already have charge (purchase.js guessedRate)
-        if (start?.via === "typed") {
+        // (both typed: nothing about that loan moves, a purchase date typed on Home included; bought verify, defect 4)
+        if (start?.via === "typed" && !both) {
           return { value: rateInYear(start.year), sigma: null, measured: false, why: `the average 30-year mortgage rate in ${start.year}`, uses: { year: "typed" }, sharperWith: [], tables: [PT.rate] };
         }
+        if (start?.via === "loan" && !both) {
+          return { value: rateInYear(start.year), sigma: null, measured: false, why: `the average 30-year mortgage rate in ${start.year}, when your loan started`, uses: { "loan-start": "typed" }, sharperWith: [], tables: [PT.rate] };
+        }
         if (start?.via === "tap" && !both && TAP_YEARS[tapOf(plan, args, "mortgage-start")]) {
-          const [y0, y1] = TAP_YEARS[tapOf(plan, args, "mortgage-start")];
-          return { value: rateMean(y0, y1), sigma: null, measured: false, why: `the average 30-year rate from ${y0} to ${y1}`, uses: { "mortgage-start": "typed" }, sharperWith: [], tables: [PT.rate] };
+          // the span's years from when the oldest adult was about 20 (tapSpan)
+          const y0 = start.from, y1 = start.to;
+          return { value: rateMean(y0, y1), sigma: null, measured: false, why: y0 === y1 ? `the average 30-year rate in ${y0}` : `the average 30-year rate from ${y0} to ${y1}`, uses: { "mortgage-start": "typed" }, sharperWith: [], tables: [PT.rate] };
         }
         if (start?.via === "guess" && !both) {
           const st0 = stateOf(plan);
@@ -286,7 +431,7 @@ export const estimators = {
           return { value: guessedRate({ age: prof.age, today, outstanding: ok(out) ? out : null }), sigma: null, measured: false, why: `the usual rate for loans from about ${start.year}, eased toward today's`, uses: { year: "guess" }, sharperWith: start.stale ? [WHEN_TAKEN] : [WHEN_BOUGHT], tables: uniq([PT.rate, PT.moved, PT.owners, st0 ? STATE_NOW : US_NOW]) };
         }
       }
-      const recent = tapOf(plan, args, "mortgage-start") === "2022on";
+      const recent = tapOf(plan, args, "mortgage-start") === "2022on" && (!lib || !!tapSpan("2022on", { today, age: lib.memo("profile", () => profileOf(plan, today)).age }));
       if (recent && st && ok(cell(STATE_NEW, RATE, st))) {
         return { value: cell(STATE_NEW, RATE, st) / 100, sigma: null, measured: false, why: `the average on new home loans in ${STATE_NAME[st]} lately`, uses: { state: "typed", "mortgage-start": "typed" }, sharperWith: [], tables: [STATE_NEW] };
       }
@@ -313,19 +458,22 @@ export const estimators = {
       const tables = [...from(rate)];
       // the payment identity: principal and interest = the payment less the usual tax and insurance (unless the escrow tap
       // says they are paid apart; Not sure counts them in); B_max = what that pays off over 30 years
-      let pi = null;
+      let pi = null, escTotal = 0;
       if (known.payment !== null) {
-        const esc = tapOf(plan, null, "escrow") === "no" ? null : escrowMonthly(plan, { today, args, loanId }, lib);
+        const esc = escrowFor(plan, rec, { today, args, loanId }, lib);
         // never less than half the payment: a payment near the usual tax and insurance may well not include them, so the
         // figure falls smoothly to half the payment instead of to almost nothing (and a higher payment never owes less)
-        pi = Math.max(known.payment - (esc?.total ?? 0), known.payment / 2);
-        if (esc) tables.push(PTAX, HO3);
+        // (a figure the person typed is taken as typed, up to the payment: fix round 1, 2026-11-11, it was floored at half too)
+        pi = esc?.typed ? known.payment - esc.total : Math.max(known.payment - (esc?.total ?? 0), known.payment / 2);
+        if (!(pi > 0)) pi = null;
+        if (esc && !esc.typed) tables.push(PTAX, HO3);
+        escTotal = esc?.total ?? 0;
       }
       // the refinance question is asked once a payment is typed, and when a year typed is too long ago to be the loan's start
-      const ask = known.payment !== null || staleYear(plan, rec, { today, args }) !== null ? MORTGAGE_ASK : null;
-      // when the loan began: a tap, the year typed, else the usual year for an owner of this age (home.boughtYear)
+      const ask = known.payment !== null || staleYear(plan, rec, { today, args }) !== null ? mortgageAsk({ today, age: prof.age }) : null;
+      // when the loan began: its start typed on Debts, a tap, the year typed, else the usual year for an owner of this age (home.boughtYear)
       const start = startOf(plan, rec, { today, args, prof });
-      const left = start ? monthsLeftFrom(start.date, today) : null;
+      const left = start ? monthsLeftFrom(start.date, today, start.term) : null;
       const atRate = rate.typed ? "your rate" : st ? `${possessiveOf(st)} usual rate` : "the usual rate";
       const hv = homeValueFor(plan, { args, loanId });
       const home = hv?.typed ? hv.value : null;
@@ -336,9 +484,25 @@ export const estimators = {
         // but a loan larger than its home is no loan: review D4)
         let cap = home;
         if (cap === null) { const hp = homePathOf(plan, path, loanId); cap = hv?.value ?? (hp ? lib.estimate("home.value", { path: hp, args })?.value ?? null : null); }
-        const value = cap !== null ? Math.min(pv(rate.value / 12, left, pi), cap) : pv(rate.value / 12, left, pi);
-        const when = start.stale ? `a loan from about ${start.year}, our guess` : guessed ? `the ${start.year} purchase we guess` : start.via === "typed" ? `the ${start.year} purchase` : "when you took it out";
-        return { value, sigma: guessed ? 0.25 : 0.15, measured: false, why: fit(`worked back from your ${money(known.payment)} payment and ${when}`, "worked back from your payment and when you took it out"), uses: { payment: "typed", [start.via === "tap" ? "mortgage-start" : "year"]: start.via === "guess" ? "guess" : "typed", rate: rate.typed ? "typed" : "guess" }, sharperWith: start.stale ? [WHEN_TAKEN] : guessed ? [WHEN_BOUGHT] : [], tables: uniq([...tables, ...startTables]), ask };
+        // the months left: the loan's own when its start is typed on Debts; else the months the balance and payment we would
+        // show with no payment typed imply (the same as `left` unless that balance is above the purchase loan's: loanPI). And the
+        // payment we would show for that balance, typed back, is that balance: "Keep" on the payment never moves it (fix round 1,
+        // 2026-11-11, money review D2: it took the widow's $100,000 to $84,000 and a 60-year-old couple's $140,000 to $100,000)
+        let months = left;
+        if (start.via !== "loan") {
+          const g = shownOwed(plan, { today, path, args }, lib);
+          if (g) {
+            const shown = g.value;
+            const bought = loanOf(plan, { start, rate: rate.value, today, args, path, prof, home, lib, loanId });
+            const pi0 = loanPI(rate.value / 12, shown, { left, start, bought, shown, age: prof.age });
+            if (Math.abs(known.payment - Math.round((pi0 + escTotal) / 10) * 10) < 0.005) return { ...g.est, ask };
+            const n = CLOCK_UNKNOWN[start.via] ? nper(rate.value / 12, pi0, shown) : NaN;
+            if (Number.isFinite(n) && n > 0) months = n;
+          }
+        }
+        const value = cap !== null ? Math.min(pv(rate.value / 12, months, pi), cap) : pv(rate.value / 12, months, pi);
+        const when = start.stale ? `a loan from about ${start.year}, our guess` : guessed ? `the ${start.year} purchase we guess` : start.via === "typed" ? `the ${start.year} purchase` : start.via === "loan" ? `the loan's ${start.year} start` : "when you took it out";
+        return { value, sigma: guessed ? 0.25 : 0.15, measured: false, why: fit(`worked back from your ${money(known.payment)} payment and ${when}`, "worked back from your payment and when you took it out"), uses: { payment: "typed", [start.via === "tap" ? "mortgage-start" : start.via === "loan" ? "loan-start" : "year"]: start.via === "guess" ? "guess" : "typed", rate: rate.typed ? "typed" : "guess" }, sharperWith: start.stale ? [WHEN_TAKEN] : guessed ? [WHEN_BOUGHT] : [], tables: uniq([...tables, ...startTables]), ask };
       }
       // priors: (a) a home value typed x the state's average loan-to-value on mortgages people have; (b) FHFA balance per
       // loan in the state x the survey's median-to-mean x its income ratio and income-adjusted age ratio (R2)
@@ -357,12 +521,14 @@ export const estimators = {
       // was bought": the prior alone cannot tell a 25-year-old's loan from a 60-year-old's)
       const bought = start && pi === null ? loanOf(plan, { start, rate: rate.value, today, args, path, prof, home, lib, loanId }) : null;
       if (bought) {
-        const both = combineLog({ value: bought.balance, sigma: purchaseSigma(bought.yearsOld) }, { value: prior.value, sigma: prior.sigma });
+        // a loan whose own start (and length) is typed on Debts is that loan: its own balance, not blended toward what families
+        // like this owe (fix round 1, 2026-11-11: blended, a 1999 loan with 26 months left needed a payment four times the usual)
+        const both = start.via === "loan" ? { value: bought.balance, sigma: purchaseSigma(0) } : combineLog({ value: bought.balance, sigma: purchaseSigma(bought.yearsOld) }, { value: prior.value, sigma: prior.sigma });
         const value = home !== null ? Math.min(both.value, home) : Math.min(both.value, bought.valueNow ?? Infinity);
         const w = bought.sourceWords;
         return {
           value, sigma: both.sigma, measured: false, why: fit(w, `worked from ${start.via === "tap" ? "when you took it out" : `a ${start.year} purchase`}`, "worked from when the home was bought"),
-          uses: { [start.via === "tap" ? "mortgage-start" : "year"]: start.via === "guess" ? "guess" : "typed", home: home !== null ? "typed" : null, state: st ? "typed" : null, age: prof.age !== null ? "typed" : null },
+          uses: { [start.via === "tap" ? "mortgage-start" : start.via === "loan" ? "loan-start" : "year"]: start.via === "guess" ? "guess" : "typed", home: home !== null ? "typed" : null, state: st ? "typed" : null, age: prof.age !== null ? "typed" : null },
           sharperWith: [guessed && !start.stale ? WHEN_BOUGHT : WHAT_YOU_PAY, ...(st ? [] : [YOUR_STATE])].slice(0, 2),
           tables: uniq([...prior.tables, ...tables, ...bought.tables, ...startTables]), ask,
         };
@@ -396,19 +562,29 @@ export const estimators = {
       // is typed or ours: the balance we guess is worked from the same start, so the two agree. With no start at all, a
       // full term (a balance that is the population's typical one already sits midway through its loans).
       const start = startOf(plan, rec, { today, args, prof });
-      const left = (start ? monthsLeftFrom(start.date, today) : null) ?? MORTGAGE_TERM;
-      const esc = tapOf(plan, null, "escrow") === "no" ? null : escrowMonthly(plan, { today, args, loanId: loanIdOf(rec) }, lib);
+      const left = (start ? monthsLeftFrom(start.date, today, start.term) : null) ?? MORTGAGE_TERM;
+      const esc = escrowFor(plan, rec, { today, args, loanId: loanIdOf(rec) }, lib);
+      // principal and interest: what pays the balance off over the months left; but a balance of ours above what the purchase's loan
+      // still owes (blended up toward the survey's figure: a refinance or a cash-out restarted the clock) is paid at that loan's own
+      // principal and interest, never more than the loan needs (the months then follow from it, nper; at most a new 30-year loan's
+      // payment is needed): bought verify defect 3, 1.08x to 1.43x for owners 61 to 80 (2026-11-07)
+      // (loanPI; the same rule whether the balance is ours or the person's, and none of it for a start typed on Debts)
+      const hv = start && CLOCK_UNKNOWN[start.via] ? homeValueFor(plan, { args, loanId: loanIdOf(rec) }) : null;
+      const bought = start && CLOCK_UNKNOWN[start.via] ? loanOf(plan, { start, rate: rate.value, today, args, path, prof, home: hv?.typed ? hv.value : null, lib, loanId: loanIdOf(rec) }) : null;
+      // (the balance we show with nothing typed: the person's own balance above it is paid over the months that one implies)
+      const shown = !bought ? null : owed.typed ? shownOwed(plan, { today, path: rec.owedPath, args }, lib)?.value ?? null : owed.value;
+      const pi = loanPI(rate.value / 12, owed.value, { left, start, bought, shown, age: prof.age });
       const guessed = start?.via === "guess";
-      const tables = uniq([...from(rate, owed), ...(esc ? [PTAX, HO3] : []), ...(guessed ? [PT.moved, PT.owners] : [])]);
-      const plus = esc ? `, plus ${st ? `${possessiveOf(st)} usual` : "the usual"} tax and insurance` : "";
+      const tables = uniq([...from(rate, owed), ...(esc && !esc.typed ? [PTAX, HO3] : []), ...(guessed ? [PT.moved, PT.owners] : [])]);
+      const plus = esc ? (esc.typed ? ", plus the tax and insurance you gave" : `, plus ${st ? `${possessiveOf(st)} usual` : "the usual"} tax and insurance`) : "";
       return {
         // to $10 inside the estimator (as the card minimum is), not R11's $50 above $1,000: the pages turn this payment, less its tax
         // and insurance, into the years left, and a $50 step moved a 25-year-old's 28 years to 26 or to 30 (verify 2026-11-07)
-        value: Math.round((pmt(rate.value / 12, left, owed.value) + (esc?.total ?? 0)) / 10) * 10, rounded: true, sigma: null, measured: false,
+        value: Math.round((pi + (esc?.total ?? 0)) / 10) * 10, rounded: true, sigma: null, measured: false,
         why: fit(`a loan of about ${money(owed.value)} at ${pctWords(rate.value)}${plus}`, `a loan of about ${money(owed.value)} at ${pctWords(rate.value)}, plus the usual tax and insurance`, `a loan of about ${money(owed.value)} at ${pctWords(rate.value)}`),
-        uses: { owed: owed.typed ? "typed" : "guess", rate: rate.typed ? "typed" : "guess", ...(start ? { [start.via === "tap" ? "mortgage-start" : "year"]: guessed ? "guess" : "typed" } : {}) },
+        uses: { owed: owed.typed ? "typed" : "guess", rate: rate.typed ? "typed" : "guess", ...(start ? { [start.via === "tap" ? "mortgage-start" : start.via === "loan" ? "loan-start" : "year"]: guessed ? "guess" : "typed" } : {}) },
         // the start answered sharpens nothing more here; the payment itself does (what you pay a month)
-        sharperWith: start?.via === "tap" || start?.via === "typed" ? (owed.typed ? [] : [WHAT_YOU_PAY]) : guessed && !start.stale ? [WHEN_BOUGHT] : [WHEN_TAKEN], tables, basis: tables.length ? "population" : "yours",
+        sharperWith: start?.via === "tap" || start?.via === "typed" || start?.via === "loan" ? (owed.typed ? [] : [WHAT_YOU_PAY]) : guessed && !start.stale ? [WHEN_BOUGHT] : [WHEN_TAKEN], tables, basis: tables.length ? "population" : "yours",
       };
     },
   },
@@ -438,10 +614,10 @@ export const estimators = {
       if (!rate) return null;
       const cls = carClassOf(plan, rec, args, prof), term = carCell("Average loan term (months)", cls);
       const r = rate.value / 12, p = known.payment;
-      const start = tapOf(plan, args, "car-loan-start"), left = carMonthsLeft(start, term);
+      const start = tapOf(plan, args, "car-loan-start"), left = carMonthsLeft(start, term, prof.age);
       const tables = uniq([EXPERIAN, ...from(rate)]);
       if (left !== null) {
-        return { value: pv(r, left, p), sigma: 0.25, measured: false, why: fit(`worked back from your ${money(p)} payment and when you got the loan`, "worked back from your payment and when you got the loan"), uses: { payment: "typed", "car-loan-start": "typed" }, sharperWith: [], tables, ask: CAR_ASK };
+        return { value: pv(r, left, p), sigma: 0.25, measured: false, why: fit(`worked back from your ${money(p)} payment and when you got the loan`, "worked back from your payment and when you got the loan"), uses: { payment: "typed", "car-loan-start": "typed" }, sharperWith: [], tables, ask: carAsk(prof.age) };
       }
       // halfway through a usual loan, its spread from a quarter to three quarters of the way (the middle half), combined
       // with what families like this owe (R4)
@@ -452,7 +628,7 @@ export const estimators = {
         value: both.value, sigma: both.sigma, measured: false,
         why: fit(`worked back from your ${money(p)} payment, about halfway through a usual loan`, `worked back from your ${money(p)} payment, halfway through a usual loan`, "worked back from your payment, halfway through a usual loan"),
         uses: { payment: "typed", rate: rate.typed ? "typed" : "guess" }, sharperWith: [WHEN_CAR], tables: uniq([...tables, ...(prior ? SCF_TABLES : [])]),
-        ...(both.sigma > 0.5 ? { ask: CAR_ASK } : {}),
+        ...(both.sigma > 0.5 ? { ask: carAsk(prof.age) } : {}),
       };
     },
   },
@@ -464,7 +640,7 @@ export const estimators = {
       const rate = rateFor(plan, "car-loan", rec, args, lib, known), owed = owedFor(plan, "car-loan", rec, args, lib, known);
       if (!rate || !owed) return null;
       const term = carCell("Average loan term (months)", carClassOf(plan, rec, args, prof));
-      const left = (owed.typed ? carMonthsLeft(tapOf(plan, args, "car-loan-start"), term) : null) ?? term / 2;
+      const left = (owed.typed ? carMonthsLeft(tapOf(plan, args, "car-loan-start"), term, prof.age) : null) ?? term / 2;
       return {
         value: pmt(rate.value / 12, left, owed.value), sigma: null, measured: false,
         why: fit(`what pays off ${money(owed.value)} at ${pctWords(rate.value)} in about ${Math.round(left)} months`, `what pays off what you owe in about ${Math.round(left)} months`),

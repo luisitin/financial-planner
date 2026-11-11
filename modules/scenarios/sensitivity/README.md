@@ -60,3 +60,8 @@ still choose.
 - Review 2026-11-06 (round 7): the retirement row's label, the claiming row's note and `ssMethodNote` say you/your for the unnamed first adult and "your spouse" for Get started's partner ("When you retire", "your spouse only: you already get it", "Social Security: you and your spouse claiming ..."), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
 The sentence above the bars says the month planned to the dollar ("against the $7,000 it plans"); what the plan can pay for stays at $10.
+
+## Loans in the spending figure (2026-11-11, loans lane fix round 1, money review D11)
+The runs on this page spend a loan the figure holds only until its payoff, as Will the money last? does (they use the same
+engine inputs). The one figure this page prints as "spending" is the figure itself, loans included; it is not lowered for the
+years after a payoff. Left as it is: What matters most compares runs, and each run has the payoff in it.

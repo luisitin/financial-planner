@@ -760,3 +760,33 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
   A held Continue scrolls so its message and Continue are both on screen, and leaves the keyboard shut. Every ask on a screen is
   remembered (`askedOnce`): a second Continue passes the one said, and the next one behind it is still asked (a couple: one
   person's missing choice, then the other's low pay). A kept draft of the wrong shape (an older page, a damaged entry) is dropped.
+## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
+- **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
+  less the tax and insurance inside it), not by `nper` on the whole payment. A mortgage paid off before then leaves its tax and
+  insurance in the figure (`escrowAfterPayoff`); one still running carries its whole payment, which Will the money last? ends at
+  the payoff (retirement/projection README "Loans in retirement spending").
+- **Question 5b, the mortgage**: under "Paid a month", once a payment is typed: "Does this payment include property tax and home
+  insurance?" Yes / No, I pay them myself / Not sure, with "Of that, tax and insurance a month" under Yes (blank: the usual
+  figure, as our guess). It writes `debts[setup-debt-mortgage].escrowMonthly` (overview/guesses README) and the grey balance
+  follows it. Unanswered, a typed payment is read as before.
+- **Same figures typed**: typing the balance and payment our guess showed keeps the guessed rate and the tax and insurance.
+- **The year box** (questions 4b and 5b): two or three digits, once the box is left, get the same words as 2027: "We can't use
+  20. Type the year as four digits between 1950 and 2026, like 2019, or leave it blank." Continue waits once for it.
+- **The refinance tap** stays on screen while it has an answer, even when our guess no longer asks it (C2 follow-up F6).
+- **A re-added details row** (C2 follow-up F3): `setupRow` finds Get started's row by its account when "Clear these details" on
+  Debts and adding them again gave it a new id; Q5b shows its figures as typed and writes to it (`adoptRows`), no second row.
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`, the ones named "fix ...")
+- **From age 50** the retirement figure adds `escrowAfterPayoff` for a mortgage paid off before work stops, as under 50: the
+  figure the person gave for the loan. It added the usual amount whatever was answered, so "Yes, $600" and "Yes, $200" gave one
+  figure, about $250 a month too low for the first.
+- **The year work stops**: a loan is in the figure when it is still being paid the year after work stops (retirement/projection
+  `workStopYear`, `runsPastWork`); Will the money last? pays the last months of one that ends in that year on top.
+- **A typed mortgage that never said** whether its payment includes tax and insurance: the usual ones stay in the figure once it
+  is paid off (`escrowAfterLoan`), unless Expenses has such a bill. See retirement/projection's README.
+- **A figure typed in the retirement box** still holds the loans the grey figure held (`guide.setup.retireHeld`); the line under
+  the box says so.
+- **A guessed debt deleted on Net worth** is not brought back by saving question 5b again (C2 follow-up F5). Decision: question 5b
+  records the kinds it has saved (`guide.setup.oweSaved`); a kind listed there whose account is gone no longer counts as picked
+  (`picks`), and "Fill in what you skipped" does not offer it. Ticking it again on question 5 asks it afresh.
+- **Same figures typed**: the rate is kept also when only one of the two figures was ours and the other was already the person's.

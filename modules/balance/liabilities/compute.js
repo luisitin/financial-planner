@@ -9,6 +9,8 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { money } from "../../../core/format.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { loanEscrow } from "../../overview/guesses/estimators/home.js";
+/** The longest a home loan runs, in months: 40 years (the longest term lenders write; a 40-year term is also what an FHA loan modification can stretch to: 24 CFR part 203, as amended at 88 FR 14252, March 8, 2023, "Increased Forty-Year Term for Loan Modifications"; read 2026-11-11). A typed mortgage read as running longer gets a warning. */
+const LONGEST_LOAN = 480;
 
 export const DEBT_ICONS = { credit: "💳", mortgage: "🏠", student_loan: "🎓", loan: "🚗", other_liability: "📄" };
 export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
@@ -72,8 +74,28 @@ export function rentsHome(plan, rows) {
 }
 
 /**
+ * loanMonths(plan, account, debt, today) -> { months, toLoan, escrow }: what Debts shows for a loan, the one payoff every page
+ * uses (a loan's payment ends when the loan is paid off, everywhere: the retirement figure and Will the money last? read it too,
+ * 2026-11-07). The payment (required plus any extra) less the tax and insurance inside a mortgage's payment (loanEscrow), turned
+ * into months with nper (core/math/finance.js), rounded up: Infinity when it never pays off, 0 when nothing is owed, null without
+ * a payment.
+ */
+export function loanMonths(plan, account, debt, today = null) {
+  const owed = Math.abs(Number(account?.balance) || 0);
+  if (!debt) return { months: null, toLoan: 0, escrow: 0 };
+  if (owed === 0) return { months: 0, toLoan: 0, escrow: 0 };
+  const payment = (Number(debt.minPayment) || 0) + (Number(debt.extra) || 0);
+  const escrow = loanEscrow(plan, account, debt, today);
+  const toLoan = payment - escrow;
+  if (!(payment > 0)) return { months: null, toLoan, escrow };
+  const n = nper((Number(debt.rate) || 0) / 12, toLoan, owed);
+  return { months: Number.isFinite(n) ? Math.ceil(n - 1e-9) : Infinity, toLoan, escrow };
+}
+
+/**
  * compute(plan, { today }) -> {
  *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment (0 once paid off),
+ *            escrow (the tax and insurance inside a mortgage's payment, loanEscrow), escrowOurs (that figure is our guess),
  *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
  *            interestMonthly, months (to payoff at `payment`; null without a payment; Infinity if it never pays off),
  *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
@@ -109,20 +131,22 @@ export function compute(plan, params = {}) {
     const payment = minPayment + extra;
     const interestMonthly = rate !== null ? owed * rate / 12 : null;
     let months = null, totalInterest = null;
-    // the tax and insurance inside a mortgage payment are not paid toward the loan: only the rest pays it off (review D1)
-    const escrow = detail && !paidOff ? loanEscrow(plan, a, detail, today) : 0;
+    // the tax and insurance inside a mortgage payment are not paid toward the loan: only the rest pays it off (review D1); the
+    // months are loanMonths', which the retirement figure and Will the money last? use too
+    const lm = detail && !paidOff ? loanMonths(plan, a, detail, today) : null;
+    const escrow = lm ? lm.escrow : 0;
     const toLoan = payment - escrow;
+    // whose figure the tax and insurance are: ours (a guess on the row, or read live into a payment or balance of ours) unless the
+    // person typed them (fix round 1, 2026-11-11: the pages say "of which $380 is property tax and home insurance", marked when ours)
+    const escrowOurs = escrow > 0 && !(typeof detail?.escrowMonthly === "number" && !(typeof detail.id === "string" && isGuess(plan, `debts[${detail.id}].escrowMonthly`)));
     if (detail && payment > 0 && owed > 0) {
-      months = nper(rate / 12, toLoan, owed);
-      if (Number.isFinite(months)) {
-        months = Math.ceil(months - 1e-9);
-        totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment: toLoan }).totalInterest;
-      }
+      months = lm.months;
+      if (Number.isFinite(months)) totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment: toLoan }).totalInterest;
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
     const byGuesses = led && !!detail && typeof a.id === "string" && typeof detail.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) && isGuess(plan, `debts[${detail.id}].rate`);
     return {
-      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, escrow, paidOff, typedPayment, interestMonthly, months,
+      ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, escrow, escrowOurs, paidOff, typedPayment, interestMonthly, months,
       payoffDate: today && Number.isFinite(months) && months !== null ? addMonths(today, months) : null,
       totalInterest, expensive: !byGuesses && rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
       ...(byGuesses ? { byGuesses: true } : {}),
@@ -146,7 +170,12 @@ export function compute(plan, params = {}) {
   // every debt Pay off debts pays, not only the expensive ones: a cheaper debt the saved order pays in between two cards comes between them
   const planOrder = saved === "avalanche" ? rows.filter((r) => r.expensive) : rows.filter((r) => r.detail && r.owed > 0 && r.payment > 0).sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
   for (const r of rows) {
-    if (r.neverPaysOff) warnings.push(`${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
+    // (a mortgage whose payment holds tax and insurance: what is left after them is what must cover the interest; fix round 1, 2026-11-11)
+    if (r.neverPaysOff && r.escrow > 0.5) warnings.push(`${r.name}: after the ${money(r.escrow, cur)} of property tax and home insurance in the payment, what is left does not cover the interest, so the loan never pays off. Check that figure on this page, or raise the payment.`);
+    // (a figure the person typed that leaves barely more than the interest: the loan would run past 40 years, which no home loan
+    // does; ours is held to what the payment has room for, home.js escrowCap. Fix round 2, 2026-11-11: 792 months with no word)
+    else if (r.type === "mortgage" && r.escrow > 0.5 && !r.escrowOurs && Number.isFinite(r.months) && r.months > LONGEST_LOAN) warnings.push(`${r.name}: after the ${money(r.escrow, cur)} of property tax and home insurance in the payment, what is left only just covers the interest, so the loan would take about ${Math.round(r.months / 12)} years to pay off. Check that figure on this page, or raise the payment.`);
+    else if (r.neverPaysOff) warnings.push(`${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
     if (r.expensive) {
       const i = planOrder.indexOf(r), before = i > 0 ? planOrder[i - 1].name : null, inPlan = i >= 0;
       const costs = `${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%.`;

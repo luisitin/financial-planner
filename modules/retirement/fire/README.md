@@ -310,3 +310,9 @@ Financial independence says "the money lasts even in a bad run of years" and, wh
   careful age is in, then the one answer. The answer is remembered for the visit (`careful.js` `whenWorked` with a key: a hash of the
   plan, the day and the search's own settings), so a revisit shows it at once. The line under the heading still says what average
   years would allow; it is labelled as such.
+
+## Loans that end (2026-11-11, loans lane fix round 1, money review D11)
+"Enough to live on" is the spending that goes on for good over the withdrawal rate (`core/math/retirement.js lifelongSpending`:
+the figure less the loan payments in it that end), plus what is still owed on those loans (`loansEnding.owed`, enough to pay
+them off). It was 25 times the whole figure, so a $621 a month loan part ending in 2050 with $110,000 owed counted as $186,000.
+The line under the figure says so. Decision: the loans are counted at their balance, not as a share of spending for life.

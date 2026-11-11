@@ -93,3 +93,27 @@ Words, not abbreviations: "2 years 7 months sooner", "1 year sooner", "$1,980 a 
   mortgage but no rate, "Add the rate and payment" opens its own form on Debts (DP-3).
 - Follow-ups (2026-11-11): its links to Debts carry `?back=debt/mortgage`; the extra box is empty with a grey 0 at $0; the
   mortgage-insurance hint without a home has "Add your home".
+
+## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
+- Mortgage insurance is shown only while the loan is above 80% of the home's value (`pmi.applies`): below that no mortgage
+  insurance is charged on a conventional loan, and by law it is cancelled on request at 80% of the original value and ends by
+  itself at 78% (Homeowners Protection Act of 1998, 12 U.S.C. 4901-4902, read 2026-11-07). A loan at 33% owed had shown dates
+  for an insurance it never had.
+- The refinance question offers only the spans the oldest adult was about 20 or older in (`startChoices`, overview/guesses
+  `mortgageAsk`). A start typed on Debts (`startDate`, `termMonths`) is read first ("you took it out in ...", a 15-year term
+  said as such). When the payment is ours and the loan would run more than a year past what is usual for the age (a payment at the
+  purchase loan's own principal and interest on a balance of ours above that loan's, overview/guesses README), the page says
+  owners that age have often refinanced since (`longer`), and that is not called "far off" (`apart`); a payment of ours that pays
+  off far sooner than the loan's years (a small balance typed) still is.
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`)
+- The first line says the split: "$1,450 a month, of which $380 is property tax and home insurance; the other $1,070 pays the
+  loan" ("(our guess)" when it is ours).
+- The tax and insurance are Debts' own figure (`row.escrow`); this page no longer cuts a typed figure to half the payment again.
+- "Mortgage insurance" shows only when the share printed is above 80% (`pmi.applies`: above 80% and rounding above 80), so
+  80.0003% no longer reads "you owe 80% now" under a line that says it ends at 80%. Source: Homeowners Protection Act of 1998,
+  12 U.S.C. 4901-4902, https://www.law.cornell.edu/uscode/text/12/4902 (read 2026-11-07).
+- A guessed loan that runs longer than the purchase loan's years says by how much: "At this payment about 30 years are left: 14
+  more than a 30-year loan from 2012 would have". It said "a little longer" and "counted from 2012". `longer` is also set once the
+  payment or the balance is kept or typed (the other figure is worked over the same months); never for a start typed on Debts.
+  `apart` is now only a payoff far sooner than the loan's years.

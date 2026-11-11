@@ -3,7 +3,7 @@
 // box to type the real figure (grey with ours) and "That's about right". Folded below: the ones that matter less, the
 // market assumptions, and, last, where the figures come from. The plan changes only through ctx.store.update, with
 // core/estimate's saveField (a typed figure is the person's: the guess on it is dropped) and confirmGuess.
-import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect } from "./compute.js";
+import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept } from "./compute.js";
 import { mergeEstimators, saveField, confirmGuess } from "../../../core/estimate/index.js";
 
 const STYLE = `
@@ -338,11 +338,13 @@ export function render(page, ctx) {
     const home = homeOf(r.path);
     // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
     const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(li.getBoundingClientRect?.().height || 0) });
+    // a guessed mortgage payment kept (or typed as the same figure) keeps the tax and insurance it held (escrowKept, 2026-11-07)
     const keep = () => {
       const undo = undoOf(ctx.plan);
       mark(`${r.label}: kept at ${shown(r)}`);
       say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.${onHome(home)}`, undo, home);
-      store.update((draft) => { confirmGuess(draft, r.path); });
+      const held = escrowBefore(ctx.plan, today);
+      store.update((draft) => { confirmGuess(draft, r.path); escrowKept(draft, held, today); });
     };
     if (r.kind === "list") {
       li.append(ui.h("div", { class: "gs-foot" },
@@ -388,7 +390,8 @@ export function render(page, ctx) {
       const undo = undoOf(ctx.plan);
       mark(`${r.label}: ${words}, yours now`);
       say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}${onHome(home)}`, undo, home);
-      store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); });
+      const held = escrowBefore(ctx.plan, today);
+      store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); escrowKept(draft, held, today); });
     } }, box, ui.h("button", { type: "submit", class: "secondary" }, "Save"));
     // outlined until something is typed in its box: three filled Saves beside empty boxes competed for the eye (F1)
     input.addEventListener?.("input", () => { form.querySelector?.("button[type=submit]")?.classList.toggle("secondary", !String(input.value).trim()); });

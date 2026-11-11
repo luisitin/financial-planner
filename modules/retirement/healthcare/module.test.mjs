@@ -102,7 +102,9 @@ test("fifth pass: the marketplace counts untaxed Social Security: the 68/63 coup
   const [y26, y27] = d.years;
   // was: income $15,365, no credit ("under the poverty line"), $17,324; now Ana's untaxed Social Security counts
   assert.equal(y26.underLine, false); assert.ok(y26.credit > 0); near(y26.magi, 48012, 1); near(y26.cost, 3644, 1);
-  near(y27.magi, 74460, 1); near(y27.cost, 7610, 1);
+  // 2027 (loans lane 1, 2026-11-07): the family's loan payments in today's bills are a fixed amount while they run, not raised
+  // for prices, so a little less is drawn: income $73,264 and cost $7,488 (were $74,460 and $7,610)
+  near(y27.magi, 73264, 1); near(y27.cost, 7488, 1);
   assert.equal(d.underLineYears, 0);
 });
 

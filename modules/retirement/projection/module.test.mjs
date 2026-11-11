@@ -213,11 +213,24 @@ test("recheck 2026-11-05: help from parents with no end date does not change H-0
   // with health cover in the spending figure (the box ticked) the recheck's figures; with the health line its $640 a month of
   // "Health premiums" gives way to Medicare for both from 2030 ($5,805 a year), so the plan carries more (review 2026-11-06)
   const inc = JSON.parse(JSON.stringify(p)); inc.retirement = { ...(inc.retirement ?? {}), healthIncluded: true };
-  assert.equal(figures(inc).verdict, "short"); assert.equal(figures(inc).shortYear, 2059); assert.equal(figures(inc).carries, 59612);
+  // loans lane 1 (2026-11-07): today's bills hold the "Mortgage (almost done)" $1,100 a month, which Debts pays off in July 2030,
+  // and a $150 HELOC paid off in October 2036; they were spent for life, rising with prices. Now each ends at its payoff, as a
+  // fixed amount, so the plan is on track and carries $73,878 (was short in 2059, $59,612)
+  // fix round 1 (2026-11-11, money review D8): the $1,100 is typed with its balance and the escrow question was never answered, and
+  // Expenses holds no property tax or home insurance bill, so the usual tax and insurance for the $610,000 home (at most half the
+  // payment: $550 a month) stay in the spending after the payoff instead of leaving with the loan: tight, carries $67,433
+  // (the lane's build: on track, $73,878, with no property tax anywhere after July 2030)
+  // fix round 2 (2026-11-11, final check F-6): Expenses holds a bill named just "Insurance" ($1,400 a quarter), which may already
+  // hold the home insurance, so only the usual property tax stays after the payoff (the page says the insurance was left to that
+  // bill): carries $70,095 (was $67,433 with tax and insurance kept)
+  assert.equal(figures(inc).verdict, "tight"); assert.equal(figures(inc).shortYear, null); assert.equal(figures(inc).carries, 70095);
   // seventh pass (2026-11-06): Medicare now holds a supplement (the national Medigap Plan G average, $194 a month each, $4,656 a year for the two) and Frank's
   // 2029 Medicare, with Gloria still at work, is counted (a job's plan is no longer taken to cover him): short in 2057,
   // carries $49,149; with the supplement set to $0 it is tight, $53,806
-  assert.deepEqual([figures(p).verdict, figures(p).carries, figures(p).shortYear], ["short", 49149, 2057], "was short in 2059 with no health line, tight at $53,936 with no supplement");
+  // (with the loans ending at their payoff, loans lane 1: on track, $63,416; it was short in 2057 at $49,149)
+  // (fix round 1, 2026-11-11, D8: tight, $56,970, with the usual tax and insurance kept after the payoff; the lane's build: on track, $63,416)
+  // (fix round 2, 2026-11-11, F-6: only the property tax stays, the "Insurance" bill may hold the home's: tight, $59,633)
+  assert.deepEqual([figures(p).verdict, figures(p).carries, figures(p).shortYear], ["tight", 59633, null], "was short in 2057 at $49,149 before the loans ended at their payoff");
   const b = buildInputs(p, { today: T5 });
   assert.equal(b.inputs.incomes.some((x) => x.name === "Monthly help from parents"), false);
   assert.deepEqual(b.otherLeft.map((x) => [x.name, x.yearly, x.why]), [["Monthly help from parents", 4800, "work"]]);
@@ -455,10 +468,14 @@ test("health line: a premium taken out of today's expenses goes back in while a 
   for (const y of [2050, 2051, 2052, 2053, 2054]) near(ev(y), 7200, 0.01);
   near(ev(2055), 2 * 12 * (202.9 + 38.99 + 194), 0.01);   // with the Medigap Plan G default (seventh pass)
   assert.deepEqual([b.health.jobPlan.fromYear, b.health.jobPlan.untilYear, b.health.jobPlan.worker], [2050, 2054, "Bo"]);
-  // so the years someone still works carry today's whole spending, premium included: 69,916 + 7,200 = 77,116
+  // so the years someone still works carry today's whole spending, premium included: 69,916 + 7,200 = 77,116, less (loans lane 1,
+  // 2026-11-07) the debt payments in today's bills that Debts pays off before then: the mortgage (January 2046, $23,760 a
+  // year), the Visa card (2028, $4,800) and the car loan (2030, $4,920): 77,116 - 33,480 = 43,636
   const d = compute(p, { today: H });
   const row = d.rows.find((r) => r.year === 2051);
-  near((row.spending + row.eventSpending) / row.priceLevel, (b.spendingYearly + 7200), 0.01);
+  const paidOff = (b.inputs.loans ?? []).filter((l) => l.untilYear < 2051).reduce((t, l) => t + l.inBase, 0);
+  near(paidOff, 33480, 1);
+  near((row.spending + row.eventSpending) / row.priceLevel, (b.spendingYearly - paidOff + 7200), 0.01);
   near(b.spendingYearly + 7200, 77116, 1);
 });
 
@@ -1059,7 +1076,8 @@ test("fifth pass: the health words name the person and the years for each part, 
   const say = async (p) => { const h = buildInputs(await p, { today: H }).health; return healthSummary(h.bridge, h.medicare, { money }); };
   // was: "About $210 to $1,440 a month from 2026 until 65 (marketplace; ...), then Medicare about $240 a month for Ana from 2026"
   // (seventh pass: Medicare with the Medigap Plan G default, $194 a month each: about $440 a month each, $870 for two; it read $240 and $480)
-  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $630 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $440 a month from 2028.");
+  // ($620, was $630 before loans lane 1, 2026-11-07: the paid-off loans leave the spending, so less is drawn and the credit is larger)
+  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $620 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $440 a month from 2028.");
   assert.equal(await say(at62()), "Ana and Bo: about $400 a month, 2052 (marketplace, after the credit). Ana: about $1,440 a month, 2053 and 2054 (marketplace, no credit). Bo: Medicare, about $440 a month from 2053. Ana: Medicare from 2055 (about $870 a month for the two of you).");
   const lee = await say(rentLee({ id: "rent", name: "Rental condo", type: "rental", amount: 1500, growth: 0.02 }));
   assert.ok(lee.startsWith("Lee: about $50 to $350 a month, 2033 and 2034 (marketplace, after the credit). Sam: Medicare, about $440 a month from 2033. Lee: Medicare from 2035"), lee);
@@ -1092,7 +1110,9 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   // the two plans give one answer: "Runs out in 2041 (age 83)", carries $68,896 (was "Runs out in 2054", $71,564 with the answer);
   // seventh pass: "Runs out in 2038 (age 80)", carries $66,863, Medicare holding the Medigap Plan G default ($87,080 -> $156,920)
   const fig = (d) => [d.verdict, d.shortYear, d.shortAge, Math.round(d.affordable), Math.round(d.health.total)];
-  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a), ["short", 2038, 80, 66863, 156920]);
+  // loans lane 1 (2026-11-07): today's bills hold the family's mortgage, Visa card and car loan payments ($2,790 a month), which
+  // were spent for life, rising with prices; each now ends at Debts' payoff (2046, 2028, 2030): tight, carries $81,810
+  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a), ["tight", null, null, 81810, 156920]);
   // 2026 is a year of retirement: spending, Ana's Social Security and Bo's pay ($18,000) all in it
   const row = a.rows.find((r) => r.year === 2026);
   assert.ok(row.retired && row.spending > 0);
@@ -1101,10 +1121,12 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   // Financial independence and Goal seek: one answer for both plans, about Bo (was "Bo would need to work until 74 ... 67 would
   // do" and Goal seek "at 67" with the answer, and no Goal seek lever without it)
   const fa = fire(said, { today: H }).withIncome, fb = fire(none, { today: H }).withIncome;
-  assert.deepEqual([fa.name, fa.earliestAge, fa.retired], ["Bo", null, false]); assert.deepEqual([fb.name, fb.earliestAge], [fa.name, fa.earliestAge]);
+  // (loans lane 1, 2026-11-07: with the paid-off loans out of the spending the plan holds now, so Bo's earliest age is his own,
+  // 63; it was none)
+  assert.deepEqual([fa.name, fa.earliestAge, fa.retired], ["Bo", 63, false]); assert.deepEqual([fb.name, fb.earliestAge], [fa.name, fa.earliestAge]);
   const lever = (p) => goalSeek(p, { today: H }).levers.find((l) => l.id === "retire");
   assert.equal(lever(said).title, "When Bo can retire"); assert.equal(lever(none).title, "When Bo can retire");
-  assert.equal(lever(said).value, null); assert.equal(lever(none).value, null);
+  assert.equal(lever(said).value, 63); assert.equal(lever(none).value, 63);   // (63, now: loans lane 1; it was none)
   // the fifth pass's own cases: Ana "not working now" at 36 kept Bo's 2050 (her own year is 2055); seventh pass: now, Bo's pay
   // as income (the "someone not working" test); nobody working is now
   assert.equal(buildInputs(await fifth.anaNone(), { today: H }).inputs.retireYear, 2050, "a parent at home at 36: Bo's stop (verify of the seventh pass)");
@@ -1524,14 +1546,20 @@ test("batch 6: the condo counts after its running costs from retirement (11,240 
   assert.deepEqual([run.name, run.yearly, run.cola, run.startAge], ["Condo's rent after its running costs", 11240, true, 2045 - 1980]);
   // Get started's spending figure carries the condo's 851 (it is still being paid when work stops: 4,350 + 851 = 5,200), so the
   // payment comes back once the loan is paid off: 150,000 at 4.5% and 851 a month, 289 months from November 2026
-  assert.equal(b.setupMonthly, 5200);
-  const back = rent.find((x) => x.part === "loan back");
-  assert.deepEqual([back.name, back.yearly, back.cola, back.fromYear, back.loanEnds], ["Condo's loan payment, back once the loan is paid off", 851 * 12, true, 2051, "2050-12"]);
+  // fix round 1 (2026-11-11): the figure is 5,980 (was 5,200): the home's own mortgage ($2,350 typed with its balance, the escrow
+  // question never answered, no tax or insurance bill on Expenses) is paid off in 2037, and the usual tax and insurance for the home
+  // ($777 a month) go on after it (money review D8). And the condo's 851 is no longer given back as an income that rises with prices
+  // from 2051 ("loan back"): it is a loan the spending holds as a fixed amount until December 2050 (money review D4)
+  assert.equal(b.setupMonthly, 5980);
+  assert.equal(rent.some((x) => x.part === "loan back"), false);
+  const held = b.inputs.loans.find((l) => l.rental === "Condo");
+  assert.deepEqual([held.name, held.yearly, held.inBase, held.untilYear, held.lastMonths, held.ends], ["Condo mortgage", 851 * 12, 851 * 12, 2050, 12, "2050-12"]);
   // the first retirement year: Alex's pay and the condo after its costs against the spending and health line
   const d = compute(p, { today: T });
   const row = d.rows.find((r) => r.year === 2045);
   near(row.income, 72000 * 1.03 ** 19 + 11240 * row.priceLevel, 1);
-  assert.equal(Math.round(d.coverage * 100), 123, String(d.coverage));
+  // (fix round 1, 2026-11-11: 115%, was 123%: the spending now holds the home's tax and insurance, D8)
+  assert.equal(Math.round(d.coverage * 100), 115, String(d.coverage));
   assert.ok(d.coverage < 1.27, "it was 128% with the gross rent");
   // the tile says the rent is after its costs (UX 7); a loan payment given back is not income of any kind
   assert.deepEqual(d.coverageFrom, ["a partner's pay", "rent after its running costs"]);
@@ -1556,10 +1584,12 @@ test("batch 6 review (money 4): a loan the spending does not hold comes off at i
   near(condo(2050), 11240 * 1.03 ** 24 - 10212, 1);
   near(condo(2051), 11240 * 1.03 ** 25, 1);
   // first-year coverage 135% (was 126%)
-  assert.equal(Math.round(d.coverage * 100), 135, String(d.coverage));
+  // (fix round 1, 2026-11-11, money review D8: 116%, was 135%, and the figure 5,130, was 4,350: the usual tax and insurance for the
+  // home, $777 a month, go on after its typed mortgage is paid off in 2037; the condo's lines are as they were)
+  assert.equal(Math.round(d.coverage * 100), 116, String(d.coverage));
   const { incomeWords } = await import("./compute.js");
   assert.ok(incomeWords(b.inputs).includes("Condo's loan payments, $851 a month, come off from 2045 (Sam is 65) until the loan ends in December 2050"), incomeWords(b.inputs).join("; "));
-  assert.equal(b.setupMonthly, 4350, "the loan is not among the bills");
+  assert.equal(b.setupMonthly, 5130, "the loan is not among the bills");
 });
 
 test("batch 6 review (money 1): spending from Expenses holds the condo's loan only when a bill or Debts row in it does; a mortgage bill for the home alone does not", async () => {
@@ -1577,7 +1607,11 @@ test("batch 6 review (money 1): spending from Expenses holds the condo's loan on
   // the same plan with no housing bill: Expenses counts the condo's 851 from Debts, so it comes back after the payoff
   const q = condoOnNetWorthPlan();
   q.retirement.spendingMonthly = 0; q.guide.retireAuto = false;
-  assert.deepEqual(rentalOf(buildInputs(q, { today: T })), [["rent", 11240, true, true, null, null], ["loan back", 10212, true, false, 2051, null]]);
+  // (fix round 1, 2026-11-11, money review D4: as a loan the spending holds until December 2050, a fixed amount; it was a "loan
+  // back" income of 10,212 a year from 2051 that rose with prices, while the payment itself rose with prices until then)
+  const bq = buildInputs(q, { today: T });
+  assert.deepEqual(rentalOf(bq), [["rent", 11240, true, true, null, null]]);
+  assert.deepEqual(bq.inputs.loans.filter((l) => l.rental).map((l) => [l.rental, l.yearly, l.untilYear, l.ends]), [["Condo", 10212, 2050, "2050-12"]]);
   // a typed figure holds no loan: it comes off
   const t = condoOnNetWorthPlan(); t.guide.setup.retireAuto = false;
   assert.deepEqual(rentalOf(buildInputs(t, { today: T })).map((x) => x[0]), ["rent", "loan"]);
@@ -1589,23 +1623,30 @@ test("batch 6 review (money 2 and 3): the payment that comes back is what the sp
   const p = condoOnNetWorthPlan();
   p.debts.find((d) => d.accountId === "condo-loan").extra = 300;
   const b = buildInputs(p, { today: T });
-  // Get started's figure holds the minimum, 851 (still 5,200): at 1,151 a month the loan is paid off in 2041, before
-  // retirement, so the 851 comes back from 2045 at 10,212 a year (it was 13,812: the payment with its extra)
-  assert.equal(b.setupMonthly, 5200);
-  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null], ["loan back", 10212, true, false, 2045, null]]);
+  // at 1,151 a month (the minimum 851 and the extra 300, as Debts pays it) the loan is paid off in 2041, before retirement.
+  // Loans lane 1 (2026-11-07): Get started's figure no longer holds a loan Debts pays off before work stops (it held the 851,
+  // 5,200, and the rental gave it back from 2045 as a fixed 10,212 a year, "loan back"), so the figure is 4,350 and there is
+  // nothing to give back: one figure, the same month in today's dollars, not a rising one less a fixed one
+  // (fix round 1, 2026-11-11, money review D8: 5,130 and 125%, were 4,350 and 145%: the usual tax and insurance for the home go on
+  // after its typed mortgage is paid off)
+  assert.equal(b.setupMonthly, 5130);
+  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null]]);
   const d = compute(p, { today: T });
-  assert.equal(Math.round(d.coverage * 100), 138, String(d.coverage));
+  assert.equal(Math.round(d.coverage * 100), 125, String(d.coverage));
   assert.deepEqual(d.coverageFrom, ["a partner's pay", "rent after its running costs"], "the loan given back in 2045 is not named as income");
   // on the brackets, the 2051 tax is the run's with that line out of the taxed income (it was taxed as income: 5,097 against 243)
   const q = condoOnNetWorthPlan(); q.retirement.taxMode = "brackets";
   const r = compute(q, { today: T }), I = r.inputs;
-  const row = r.rows.find((x) => x.year === 2051), lineOf = row.incomeLines.find((l) => /back once/.test(l.name));
-  assert.ok(lineOf && lineOf.amount > 20000, "the line is paid in 2051");
-  assert.equal(I.incomes.find((x) => x.part === "loan back").taxable, false);
-  // the review's figures: 2051 tax $243 untaxed, $5,097 when the line was taxed
-  const taxed = project({ ...I, incomes: I.incomes.map((x) => (x.part === "loan back" ? { ...x, taxable: true } : x)) });
+  // fix round 1 (2026-11-11, money review D4): there is no line to tax any more: the 851 a month simply leaves the spending after
+  // December 2050 (it was an income line of 21,382 in 2051, "back once the loan is paid off", untaxed). The 2051 tax is the same $243
+  const row = r.rows.find((x) => x.year === 2051);
+  assert.equal(row.incomeLines.some((l) => /back once/.test(l.name)), false);
+  assert.equal(I.incomes.some((x) => x.part === "loan back"), false);
+  near(row.spending, (r.spendingYearly - 10212) * row.priceLevel, 1, "2051: the figure less the condo's payment, at the year's prices");
   near(row.taxes, 243, 1);
-  near(taxed.rows.find((x) => x.year === 2051).taxes, 5097, 1);
+  // rentalLines alone (no engine loans to hold it) still gives the payment back, untaxed, as before
+  const alone = (await import("./compute.js")).rentalLines(q, I.people, I.retireYear, T, { inSpending: () => 851 }).find((x) => x.part === "loan back");
+  assert.deepEqual([alone.yearly, alone.taxable, alone.fromYear], [10212, false, 2051]);
 });
 
 test("batch 6 review (money 5): a rental whose running costs are more than its rent still gives its loan back, and its shortfall is paid", async () => {
@@ -1615,7 +1656,11 @@ test("batch 6 review (money 5): a rental whose running costs are more than its r
   // rent 1,100: 13,200 less 5% empty months (660) less 12,700 of costs = -160 a year
   p.property[0].rentMonthly = 1100; p.income.find((x) => x.type === "rental").amount = 1100;
   const b = buildInputs(p, { today: T });
-  assert.deepEqual(rentalOf(b), [["short", -160, true, false, null, null], ["loan back", 10212, true, false, 2051, null]]);
+  // (fix round 1, 2026-11-11, D4: the loan is one the spending holds until December 2050, not a "loan back" income from 2051)
+  assert.deepEqual(rentalOf(b), [["short", -160, true, false, null, null]]);
+  assert.deepEqual(b.inputs.loans.filter((l) => l.rental).map((l) => [l.yearly, l.untilYear]), [[10212, 2050]]);
+  const { incomeWords: words } = await import("./compute.js");
+  assert.ok(words(b.inputs).includes("Condo's loan ends in December 2050: the $851 a month for it in your spending is free again from 2051 ($10,212 a year)"), words(b.inputs).join("; "));
   const { incomeWords } = await import("./compute.js");
   assert.ok(incomeWords(b.inputs).includes("Condo costs $160 a year more to run than its rent brings in, paid from savings from 2045 (Sam is 65)"), incomeWords(b.inputs).join("; "));
 });
@@ -1625,7 +1670,12 @@ test("batch 6 review: a rental sold before its loan is paid off ends the loan wi
   const T = "2026-11-06";
   // the rent line ends in June 2047 (sold): the rent counts to 2047, and the spending's 851 is free again from 2048
   const p = condoOnNetWorthPlan(); p.income.find((x) => x.type === "rental").endDate = "2047-06-30";
-  assert.deepEqual(rentalOf(buildInputs(p, { today: T })), [["rent", 11240, true, true, null, 2047], ["loan back", 10212, true, false, 2048, null]]);
+  // (fix round 1, 2026-11-11, D4: held in the spending as a fixed amount to 2047, the year of the sale; it was a "loan back" income from 2048)
+  const bp = buildInputs(p, { today: T });
+  assert.deepEqual(rentalOf(bp), [["rent", 11240, true, true, null, 2047]]);
+  assert.deepEqual(bp.inputs.loans.filter((l) => l.rental).map((l) => [l.yearly, l.untilYear, l.lastMonths, l.sold]), [[10212, 2047, 12, 2047]]);
+  const { incomeWords: say } = await import("./compute.js");
+  assert.ok(say(bp.inputs).includes("Condo is sold in 2047: the $851 a month for it in your spending is free again from 2048 ($10,212 a year)"), say(bp.inputs).join("; "));
   // not held in the spending: the payments come off only to the sale
   const q = condoOnlyRentalPlan(); q.income.find((x) => x.type === "rental").endDate = "2047-06-30";
   const bq = buildInputs(q, { today: T });

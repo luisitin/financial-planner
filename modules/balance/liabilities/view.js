@@ -3,6 +3,7 @@
 import { compute, HIGH_RATE, DTI_LINES, rentsHome, shownShare, renterLevel } from "./compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { twoDates, compute as computePayoff } from "../../debt/payoff/compute.js";
+import { escrowBefore, escrowKept, answerEscrow, escrowSaid } from "../../overview/guesses/estimators/home.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -25,6 +26,13 @@ const FIELDS = [
   { key: "startDate", label: "Started", type: "date" },
   { key: "securedBy", label: "What it is borrowed against", type: "text", placeholder: "e.g. the house or the car", help: "leave blank if nothing" },
   { key: "creditLimit", label: "Credit limit (cards only)", type: "money", min: 0, help: "the Credit cards page shows how much of it you use" },
+];
+// a mortgage on the home you live in: is the tax and insurance in the payment? (2026-11-07: a payment typed from a statement
+// usually holds them, and only what is left pays the loan off)
+const ESCROW_FIELDS = (guess) => [
+  { key: "escrowSaid", label: "Does this payment include property tax and home insurance?", type: "select", options: [{ value: "", label: "Choose one" }, { value: "yes", label: "Yes" }, { value: "no", label: "No, I pay them myself" }, { value: "unsure", label: "Not sure" }], help: "Most mortgage payments do: the lender keeps an escrow account and pays the two bills for you. Not sure? We count the usual amount in it, as our guess." },
+  // (shown only under Yes: fix round 1, 2026-11-11; it sat under "No" with help that contradicted it, and a figure typed there was dropped)
+  { key: "escrowMonthly", label: "Of that, tax and insurance a month (if you know it)", type: "money", min: 0, placeholder: guess ? `about ${Math.round(guess)}` : "", help: "On the statement as escrow. Blank: our guess of the usual amount." },
 ];
 
 export function render(root, ctx) {
@@ -86,23 +94,46 @@ export function render(root, ctx) {
     const r = selected;
     const values = r.detail ? { ...r.detail } : {};
     const title = ui.h("h2", { tabindex: "-1", style: { marginTop: "20px" } }, `${r.name}: rate and payments`);
-    formHost.append(ui.h("div", {},
-      title,
-      ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.`),
-      ui.form(fieldsFor(r.type), values, (v) => {
+    // the escrow question: for a mortgage that is not a rental's loan (a rental's tax and insurance are its running costs)
+    const homeLoan = r.type === "mortgage" && !(plan.property ?? []).some((e) => e?.kind === "rental" && e.loanAccountId === r.id);
+    const ourEsc = r.detail && typeof r.detail.id === "string" && isGuess(plan, `debts[${r.detail.id}].escrowMonthly`);
+    if (homeLoan) { values.escrowSaid = r.detail ? escrowSaid(plan, r.detail) ?? "" : ""; values.escrowMonthly = r.detail && !ourEsc && Number(r.detail.escrowMonthly) > 0 ? r.detail.escrowMonthly : null; }
+    const shown = fieldsFor(r.type);
+    const fields = homeLoan ? [...shown.slice(0, 2), ...ESCROW_FIELDS(r.escrow > 0 ? r.escrow : null), ...shown.slice(2)] : shown;
+    const theForm = ui.form(fields, values, (v) => {
         // a box the form does not show for this kind keeps what is on file
         const keep = (k, x) => (k in v ? x : values[k] ?? (k === "startDate" || k === "securedBy" ? "" : null));
         const clean = { accountId: r.id, rate: v.rate ?? 0, minPayment: v.minPayment ?? 0, extra: v.extra ?? 0, termMonths: keep("termMonths", v.termMonths ?? null), startDate: keep("startDate", v.startDate || ""), securedBy: keep("securedBy", (v.securedBy || "").trim()), creditLimit: keep("creditLimit", v.creditLimit ?? null) };
         pending = `Saved ${r.name}.`; pendingBack = backLink;
+        // the tax and insurance a guessed payment held (kept when the same payment is saved, so the payoff does not jump)
+        const held = escrowBefore(plan, fmt.today());
         store.update((p) => {
           p.debts = p.debts ?? [];
           const i = p.debts.findIndex((x) => x.accountId === r.id);
           if (i >= 0) p.debts[i] = { ...p.debts[i], ...clean }; else p.debts.push({ id: ui.uid(), ...clean });
           // saved from the form, the rate and payment are the person's (even unchanged): no longer our guesses (spec S2)
           if (i >= 0 && typeof p.debts[i].id === "string") for (const f of ["rate", "minPayment"]) clearGuess(p, `debts[${p.debts[i].id}].${f}`);
+          const row = p.debts[i >= 0 ? i : p.debts.length - 1];
+          if (homeLoan && v.escrowSaid) {
+            // what the answer wrote, said with the save (fix round 1, 2026-11-11: a figure cut or not used went by without a word)
+            const typedAmount = v.escrowSaid === "yes" && Number(v.escrowMonthly) > 0 ? Number(v.escrowMonthly) : null;
+            const did = answerEscrow(p, row.id, v.escrowSaid, typedAmount, fmt.today());
+            const now = Number(row.escrowMonthly) || 0;
+            if (did === "typed" && typedAmount > now + 0.005) pending = `Saved ${r.name}. Tax and insurance cannot be more than the payment, so we used ${fmt.money(now, cur)}.`;
+            else if (did === "ours" && now > 0.5) pending = `Saved ${r.name}. We count about ${fmt.money(Math.round(now), cur)} of the payment as property tax and home insurance: our guess of the usual amount.`;
+            else if (did === "ours") pending = `Saved ${r.name}. This payment leaves no room for property tax and home insurance, so we count none in it. If your statement shows an amount, choose Yes and type it.`;
+            else if (did === "ask") pending = `Saved ${r.name}. We could not work out the usual property tax and home insurance for this loan: choose Yes and type the amount from your statement.`;
+          } else escrowKept(p, held, fmt.today());
         });
         selected = null;
-      }, { submitLabel: "Save", onCancel: () => { selected = null; drawForm(); } }),
+      }, { submitLabel: "Save", onCancel: () => { selected = null; drawForm(); } });
+    // the amount box shows only under "Yes" (as on Get started)
+    const saidBox = theForm.querySelector("[name=escrowSaid]"), amountBox = theForm.querySelector("[name=escrowMonthly]")?.closest("label");
+    if (saidBox && amountBox) { const show = () => { const on = saidBox.value === "yes"; amountBox.hidden = !on; amountBox.style.display = on ? "" : "none"; }; saidBox.addEventListener("change", show); show(); }   // (display too: the form's own label style shows a [hidden] label)
+    formHost.append(ui.h("div", {},
+      title,
+      ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.`),
+      theForm,
       r.detail ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Clear these details", () => { if (ui.confirm(`Clear the rate and payments for ${r.name}?`)) { const id = r.id; selected = null; pending = `Cleared ${r.name}.`; store.update((p) => { p.debts = (p.debts ?? []).filter((x) => x.accountId !== id); }); } }, { class: "secondary" })) : null,
     ));
   };
@@ -126,6 +157,9 @@ export function render(root, ctx) {
     // the payoff plan finishes it sooner (finished debts' payments move onto it): both dates, so no page seems to disagree
     else if (r.payoffDate && two[r.id]) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} ${keep}, ${monthYear(two[r.id].plan, plan.meta.locale)} on your payoff plan`);
     else if (r.payoffDate) bits.push(`paid off by ${monthYear(r.payoffDate, plan.meta.locale)} ${keep}`);
+    // a mortgage payment that holds tax and insurance: say the split where the payoff is printed (fix round 1, 2026-11-11: the whole
+    // payment stood beside a payoff worked from the rest of it, and nothing said so)
+    if (!r.paidOff && r.escrow > 0.5) bits.push(`${fmt.money(r.escrow, cur)} of the payment is property tax and home insurance${r.escrowOurs ? " (our guess)" : ""}; the other ${fmt.money(r.payment - r.escrow, cur)} pays the loan`);
     if (r.totalInterest) bits.push(`${fmt.money(r.totalInterest, cur)} interest to come`);
     if (r.securedBy) bits.push(`secured by ${r.securedBy}`);
     return bits.join(" · ");

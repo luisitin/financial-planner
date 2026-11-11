@@ -29,7 +29,7 @@ import { emptyPlan, migrate } from "../core/schema/migrate.js";
 import { ageOn, addMonths, monthsBetween } from "../core/math/dates.js";
 import { nper, pmt } from "../core/math/finance.js";
 import { takeHome, householdOf, spendModel } from "../modules/overview/guesses/estimators/spend.js";
-import { escrowMonthly } from "../modules/overview/guesses/estimators/home.js";
+import { loanEscrow, escrowBefore, escrowKept, answerEscrow } from "../modules/overview/guesses/estimators/home.js";
 import { leftMarker } from "../core/math/leftover.js";
 import { fullRetirementAge } from "../modules/retirement/social-security/compute.js";
 // skeptic pass 2026-11-07: the figures the pages show, where a rule had read an internal one (the Federal estimate shows
@@ -204,6 +204,14 @@ export function walk(o, today = TODAY) {
   p = step(p, (d) => S.applyGoalPicks(d, goals), today);
   p = step(p, (d) => S.applyGoalDetails(d, {}, today), today);
   p = step(p, (d) => S.applyGuesses(d, today), today);
+  // o.escrow (fix round 1, 2026-11-11, so the sweep has households HD-ESCROW-GUESS checks): "keep" = the guessed payment kept on Our
+  // guesses (its tax and insurance stay, escrowKept); "unsure" / "yes" = the question answered with no figure (answerEscrow)
+  if (o.escrow) p = step(p, (d) => {
+    const row = (d.debts ?? []).find((x) => x.id === "setup-debt-mortgage");
+    if (!row) return;
+    if (o.escrow === "keep") { const held = escrowBefore(d, today); E.confirmGuess(d, "debts[setup-debt-mortgage].minPayment"); escrowKept(d, held, today); }
+    else answerEscrow(d, row.id, o.escrow, null, today);
+  }, today);
   return { plan: p, preview };
 }
 
@@ -281,6 +289,16 @@ export function edgeSpecs() {
   add("e-undated-kid", { who: "spouse", ages: [70, 70], kids: [null], status: ["retired", "retired"], pays: [null, null] });
   add("e-young-mortgage", { who: "spouse", ages: [25, 25], pays: [90000, 90000], tenure: "mortgage" });
   add("e-old-mortgage", { who: "me", ages: [78], status: ["retired"], pays: [null], tenure: "mortgage" });
+  // the tax and insurance inside the payment as our guess (HD-ESCROW-GUESS): a guessed payment kept, young and old; the question
+  // answered "Not sure" or "Yes" with no figure on a typed payment, on a typed balance and payment, and on a loan the usual figure
+  // does not fit (fix round 1, 2026-11-11)
+  add("e-escrow-kept", { who: "spouse", ages: [25, 25], pays: [45000, 45000], tenure: "mortgage", escrow: "keep" });
+  add("e-escrow-kept-old", { who: "me", ages: [72], state: "FL", status: ["retired"], pays: [null], tenure: "mortgage", escrow: "keep" });
+  add("e-escrow-kept-60", { who: "spouse", ages: [60, 58], state: "TX", pays: [80000, 60000], tenure: "mortgage", escrow: "keep" });
+  add("e-escrow-unsure", { who: "spouse", ages: [45, 44], pays: [90000, 60000], tenure: "mortgage", typed: { payment: 2100 }, escrow: "unsure" });
+  add("e-escrow-unsure-both", { who: "me", ages: [40], state: "TX", pays: [90000], tenure: "mortgage", typed: { owed: 230000, payment: 1800 }, escrow: "unsure" });
+  add("e-escrow-unsure-tight", { who: "me", ages: [40], state: "TX", pays: [90000], tenure: "mortgage", typed: { owed: 230000, payment: 1700 }, escrow: "unsure" });
+  add("e-escrow-yes-blank", { who: "me", ages: [35], state: "NY", pays: [110000], tenure: "mortgage", typed: { owed: 300000, payment: 2070 }, escrow: "yes" });
   add("e-side-business", { who: "me", ages: [40], state: "CA", pays: [180000], other: { kind: "business", amount: 2000 } });
   add("e-freelancer", { who: "me", ages: [38], state: "NY", pays: [95000], by: "self" });
   add("e-no-birth-dates", { who: "me", ages: [50], noAges: true, pays: [70000] });
@@ -414,9 +432,12 @@ export class Household {
       // the tax and insurance the app takes to be inside the payment: in a guessed payment (debt.mortgage.payment adds them), and
       // in a typed payment it works a guessed balance back from (debt.mortgage.owed takes them off); never in a payment and
       // balance both typed (nothing in the app reads tax and insurance into those). The escrow tap "no" takes them out.
-      const tap = this.plan.guide?.setup?.taps?.escrow;
-      const assumed = tap !== "no" && (m.g.pay || m.g.owed);
-      const esc = assumed ? escrowMonthly(this.plan, { today: this.today }, this.lib)?.total ?? 0 : 0;
+      // A figure on the debt row (debts[].escrowMonthly: typed, answered on Debts or Get started, or kept from a guessed payment)
+      // is the one, 0 included (2026-11-07).
+      // Fix round 1 (2026-11-11, money review D9): read from the app's one reader (home.js loanEscrow), which bounds a guessed figure
+      // at half the payment and at what the payment can hold and still pay the loan off in 30 years; this file worked the usual
+      // figure out again without those bounds, so HD-ESCROW-ONCE failed on 157 households the app showed one figure for.
+      const esc = loanEscrow(this.plan, m.acct, m.d, this.today);
       const term = m.term ?? 360;
       const left = num(m.row?.months);
       const start = left !== null && Number.isFinite(left) ? addMonths(this.today, Math.round(left - term)) : null;
@@ -537,15 +558,23 @@ rule("HD-AMORT-IDENTITY", "A", (H) => {
   for (const x of H.debts) {
     if (!(x.owed > 0) || x.kind === "credit") continue;
     const esc = x.kind === "mortgage" && H.mortgage?.d === x.d ? H.mortgage.esc : 0;
-    const pi = x.pay - esc, interest = (x.owed * x.rate) / 12;
-    const n = nper(x.rate / 12, pi, x.owed);
-    const want = Number.isFinite(n) ? Math.ceil(n - 1e-9) : Infinity;
+    // (the pages pay a debt at its required payment plus any extra typed on Debts; fix round 1, 2026-11-11: the extra was left out
+    // here, so 103 qa plans with an extra "failed" on dates the pages had right)
+    // (the mortgage page's first date is at the required payment alone: its extra is the page's own "what if")
+    // (unless nothing is required: then the page pays the extra, as Debts does)
+    const extra = Number(x.d?.extra) || 0, interest = (x.owed * x.rate) / 12;
+    const monthsAt = (p) => { const n = nper(x.rate / 12, p, x.owed); return Number.isFinite(n) ? Math.ceil(n - 1e-9) : Infinity; };
+    const pi = x.pay + extra - esc;
     // (Pay off debts moves a finished debt's payment to the next one, a strategy it labels: its per-debt months are compared only when there is one debt)
     const single = H.debts.filter((y) => y.owed > 0).length === 1;
     const shown = [["balance/liabilities", num(x.row?.months)], ...(single ? [["debt/payoff", num(pay?.baseline?.debts?.find((y) => y.id === x.acct.id)?.months)]] : []), ...(x.kind === "mortgage" && mort?.mortgage?.id === x.acct.id ? [["debt/mortgage", num(mort.base?.months)]] : [])];
+    // (a loan with no required payment: the mortgage page pays what Debts shows, the extra; fix round 2, 2026-11-11, qa H-0862 with
+    // $0 required and $300 extra "failed" on the page's 193 months)
+    const pagePI = x.pay > 0 ? pi - extra : pi;
     for (const [page, m] of shown) {
       if (m === null) continue;
-      out.push(res(pi > interest && Number.isFinite(want) && Math.abs(m - want) <= 1, { debt: x.kind, owed: r0(x.owed), rate: x.rate, payment: r0(x.pay), escrowInside: r0(esc), interest: r0(interest), shownMonths: m, monthsFromPrincipalAndInterest: Number.isFinite(want) ? want : "never", page }, x.kind));
+      const want = monthsAt(page === "debt/mortgage" ? pagePI : pi);
+      out.push(res((page === "debt/mortgage" ? pagePI : pi) > interest && Number.isFinite(want) && Math.abs(m - want) <= 1, { debt: x.kind, owed: r0(x.owed), rate: x.rate, payment: r0(x.pay), escrowInside: r0(esc), interest: r0(interest), shownMonths: m, monthsFromPrincipalAndInterest: Number.isFinite(want) ? want : "never", page }, x.kind));
     }
   }
   return out;
@@ -558,6 +587,21 @@ rule("HD-ESCROW-ONCE", "A", (H) => {
   const homeTI = lines.filter((l) => /tax|insur/i.test(`${l.key} ${l.label}`)).reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const dup = (ex?.items ?? []).filter((i) => (ex.active ?? ex.items).includes(i) && /property tax|home ?owner|home insurance|homeowners/i.test(`${i.name} ${i.category}`)).reduce((s, i) => s + (Number(i.monthly) || 0), 0);
   return [res(Math.abs(M.esc * 12 - homeTI) <= 12, { escrowInPaymentYear: r0(M.esc * 12), taxAndInsuranceOnHomePage: r0(homeTI) }, "home page"), res(dup === 0, { escrowInPayment: r0(M.esc), taxOrInsuranceAlsoOnExpenses: r0(dup) }, "expenses")];
+});
+rule("HD-ESCROW-GUESS", "A", (H) => {
+  const M = H.mortgage;
+  const path = M?.d?.id ? `debts[${M.d.id}].escrowMonthly` : null;
+  if (!path || !H.guessed(path) || !(M.esc > 0)) return [];
+  const h = H.home;
+  const months = nper(M.rate / 12, M.pay - M.esc, M.owed);
+  const tax = H.est("home.propertyTax")?.value ?? null, ins = H.est("home.insurance")?.value ?? null;
+  const usual = tax !== null && ins !== null ? (tax + ins) / 12 : null;
+  const interest = (M.owed * M.rate) / 12;
+  // (fix round 1, 2026-11-11: and never a loan that runs past 30 years because of it; a figure capped by the payment can be under the
+  // share band, so the band's floor is asked only of a figure that is the usual one)
+  const capped = usual !== null && M.esc < usual - 1;
+  return [res(M.esc <= M.pay / 2 + 0.5 && M.pay - M.esc > interest && Number.isFinite(months) && Math.ceil(months - 1e-9) <= 360 && (usual === null || M.esc <= usual + 1) && (!h?.value || (capped ? M.esc * 12 / h.value <= 0.0411 : inRange(M.esc * 12 / h.value, 0.0032, 0.0411))),
+    { escrowMonthly: r0(M.esc), payment: r0(M.pay), interest: r0(interest), monthsLeft: Number.isFinite(months) ? Math.ceil(months - 1e-9) : "never", usualTaxAndInsurance: usual === null ? null : r0(usual), homeValue: h?.value ? r0(h.value) : null })];
 });
 rule("HD-PROPTAX", "A", (H) => {
   const h = H.home;
@@ -1093,7 +1137,9 @@ rule("sr.verdict.loans-end", "B", (H) => {
   const out = [];
   for (const d of loans) {
     const acct = L(H.plan, "accounts").find((a) => a.id === d.accountId), owed = Math.abs(Number(acct?.balance) || 0);
-    const n = nper((Number(d.rate) || 0) / 12, Number(d.minPayment) || 0, owed);
+    // the payoff Debts shows (the payment less the tax and insurance inside a mortgage's: HD-PAYOFF-ONE-DATE), else nper on the payment
+    const shown = H.debts.find((x) => x.acct.id === d.accountId)?.row?.months;
+    const n = typeof shown === "number" ? shown : nper((Number(d.rate) || 0) / 12, Number(d.minPayment) || 0, owed);
     if (!Number.isFinite(n)) continue;
     const payoffYear = Number(addMonths(H.today, Math.ceil(n)).slice(0, 4));
     const rows = pr.rows ?? [];

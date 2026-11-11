@@ -987,3 +987,126 @@ with a saved figure ("7 of our guesses moved with it") is core/app.js's sentence
   next row does not move under the thumb.
 - A typed figure far from our guess (`farOff`: money over three times it or under a tenth, a rate over three times it) is
   asked about once; a second Save keeps it. No "?." after a page named with a question.
+## Tax and insurance in the payment; loans by age (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- **`debt.mortgage.escrow`** (estimators/home.js, tier 2): the usual property tax and home insurance a month inside a mortgage's
+  payment, for `debts[<id>].escrowMonthly`: `min(escrowMonthly(home value, state).total, payment / 2)`, and 0 when taking it out
+  would leave no more than the month's interest (owed x rate / 12). Kept to the cent (`rounded: true`): the pages take exactly this
+  out of the payment, so a kept payment's payoff does not move. Tables, as `escrowMonthly` ("The home" above): the property tax
+  rate by state (`acs2025_effective_property_tax_rate_by_state`: Census ACS 2025 1-year, median taxes over median value), the
+  state's average HO-3 home insurance premium (`naic2023_homeowners_premium_by_state`: National Association of Insurance
+  Commissioners, 2023 figures published July 2026, read 2026-11-02, in the tables list above; taken to 2025 prices with CPI,
+  x 1.057) scaled by the home's value against the state's median (ACS 2025). By hand, Ohio, a $270,000 home:
+  270,000 x 1.223% / 12 = 275.18, plus 1,116 x 1.057 x 270,000 / 254,100 / 12 = 104.45, together $379.63. (Corrected 2026-11-11:
+  this line cited the American Housing Survey for the insurance; no AHS table is read.) Checked by guess sanity HD-ESCROW-GUESS.
+  The bounds were replaced on 2026-11-11: see "Fix round 1" below.
+- **Keep, and the same figure typed**: "Keep" on a guessed mortgage payment (or saving it unchanged on Debts or Get started)
+  made the payment the person's, and a typed payment is read as the loan's alone, so the tax and insurance it held went into
+  the loan: the couple aged 25's payoff moved from June 2054 to June 2043. Now `escrowBefore` notes what each guessed payment
+  held before the save and `escrowKept` writes it to `escrowMonthly`, marked as our guess. Get started also keeps the guessed
+  rate when the two figures typed are the ones it showed (`applyOweGuessed` keepRate), so nothing moves.
+- **The question** (Debts and Get started 5b): `answerEscrow(draft, debtId, "yes" | "no" | "unsure", amount, today)`; `escrowSaid`
+  reads it back. Get started's grey balance reads the answer (`oweArgs` `escrow`: 0 for No, the figure for Yes with one).
+- **Older owners' guessed payment** (`debt.mortgage.payment`): when our balance is above what the purchase loan would owe now (a
+  refinance or a second loan, read from the usual balance for the age), the principal and interest is capped at the larger of
+  the purchase loan's own payment and a new 30-year loan on the balance: `pi = min(pi, max(bought.pi, pmt(rate/12, 360, owed)))`.
+  Before, the payment was 1.14 to 1.43 times the purchase loan's own for owners aged 61 to 80; now 0.99 to 1.00.
+- **Year taps by age** (`tapSpan`, `mortgageAsk`, `startAsk`): a span ("2010 to 2019") is offered and read only from the year
+  the oldest adult was about 20 (`YOUNGEST`, the owner's rule for the youngest age a home is bought at, estimators/purchase.js); a span that starts earlier is cut to
+  that year, and dropped when it ends before it. The car loan's taps the same ("5 or more years ago" needs 25 or older).
+- **The loan's own start**: Debts' `startDate` and `termMonths` are read first (`startOf` via "loan") when the balance is ours.
+  A purchase date typed on the Home page no longer moves a guessed rate when the balance and the payment are both typed
+  (`start.via === "typed" && !both`): the two figures already say the loan.
+- **Orphans** (C2 follow-up F2): settle drops a debt row's entries once its loan account is gone (core/estimate `orphanDebt`).
+- **Twins** (C2 follow-up F4): `guessTwins` no longer offers a rental as the home we guessed, nor a loan named for a car as
+  "another loan" or one not named for a car as the car loan (Get started's `existingOwe` test).
+
+## Fix round 1 on the loans lane (2026-11-11, claude-c; tests `tests/loans-escrow.test.mjs`, the ones named "fix ...")
+Three reviews of the lane (money, layperson, breaker) found the points below; each has a test written first and seen to fail.
+- **One reader, three kinds of figure** (`loanEscrow`, estimators/home.js). The tax and insurance inside a mortgage payment are:
+  1. the figure the person typed, used as typed, never more than the payment (it was cut to half the payment without a word:
+     $900 typed on a $1,600 payment was read as $800; a figure above the payment is stored as the payment);
+  2. a figure of ours on the row (kept with its payment, or answered "Not sure" / "Yes" with no figure), at most half the payment
+     and at most `escrowCap`;
+  3. with no figure on the row and a payment or balance still ours: the usual figure, with the same two bounds.
+  `escrowCap(account, debt) = max(0, payment - pmt(rate / 12, 360, owed))` (core/math/finance.js `pmt`): what is left of the
+  payment after the level payment of a new 30-year loan on the balance. So a guessed figure never makes a loan run past 30 years.
+  It replaces the old guard ("more than the month's interest"), which let a figure just under it stretch typed loans to 40 to 90
+  years (40, Texas, $230,000 at 4.6%, $1,700, "Not sure": 526 months) and fell to 0 at a cliff beside it, where more debt gave an
+  earlier payoff ($190,000: 807 months; $200,000: 286). By hand, 25, Texas, $230,000 at 6.7%, $1,850: pmt = 1,484, so the figure
+  is at most 366 and the loan runs its 360 months (it was 531 and 651 months).
+- **A kept figure is frozen.** `debt.mortgage.escrow` returns the row's own figure when it was kept with its payment and never
+  answered, so a home value typed later no longer moves the payoff (the couple aged 25: 2054-06 became 2077-06). One answered
+  "Not sure" or "Yes" with no figure still follows the home, inside the two bounds.
+- **Keep on the balance beside a typed payment** (`escrowBefore`, `escrowKept`): every mortgage whose payment is read with tax and
+  insurance of ours is held, not only one whose payment is the guess; when both figures are the person's and the payment is
+  unchanged, the figure is written to the row. Get started keeps the rate too when one of the two figures was ours and typed
+  back and the other was already the person's (`applyOweGuessed` keepRate). Net worth's account form calls the same pair.
+- **One mortgage's answer is that mortgage's** (`answerEscrow`, `escrowSaid`, new field `debts[].escrowSaid`). The plan-wide tap
+  `guide.setup.taps.escrow` is written and read for Get started's own mortgage only; "No" on a cabin's loan used to take the tax
+  and insurance out of the home's payment. When no usual figure can be worked out (the loan has no home on file) the answer is
+  kept and `answerEscrow` returns "ask": Debts asks for the figure instead of showing "Choose one" again.
+- **Keep never moves the other figure** (`loanPI`, `shownOwed`, estimators/debts.js). The loan part of a guessed payment is one
+  function of the balance, whoever typed it, in three steps that join up: up to the purchase loan's balance, `pmt` over the months
+  left; above it, up to the balance we show with nothing typed, the purchase loan's own principal and interest, never under a new
+  30-year loan's (lane item 4, unchanged); above the balance we show, `pmt` over the months that balance and its payment imply
+  (`nper`). A payment typed is worked back over those same months (`pv`), and the payment we would show, typed back, gives the
+  balance we show. Before, keeping the balance moved the payment in 236 of 448 households and keeping the payment moved the balance
+  in 202 (the Florida widow: $1,540 to $1,730, or $100,000 to $84,000). Decision: a typed payment for owners whose balance we take
+  to be above the purchase loan's is now read over more months than before, so the balance worked back is larger (the couple aged
+  61 and 59 with $1,600 typed: $260,000, was $180,000). That is the cost of one rule both ways; the reviewers' own proposal
+  (`pv` over 360 months) gives the same figure here.
+- **A known start sets the months.** A start typed on Debts (`via: "loan"`) and one answered on the tap "When did you take out
+  this mortgage, or last refinance it?" (`via: "tap"`) are the loan's clock: no cap, and a balance of ours for a loan typed on
+  Debts is that loan's own balance (not blended toward what families like this owe). The lane's build capped both, so a 2015 loan
+  with 223 months left showed 274. A start on Debts before the oldest adult was about 20 is set aside. One with fewer than 60
+  months of its term left, beside a typed balance larger than that loan could still owe (the share of a level loan still owed
+  with those months left, times the home's value), is stale: the loan is counted from our guess for the age and the page asks
+  when it was last refinanced. So $150,000 typed beside a start in 2000 gives about $1,220 a month, not $4,840.
+- **After the loan** (`escrowAfterLoan`, `taxOrInsuranceBilled`): see retirement/projection's README, "Fix round 1".
+- **Decision kept from the lane, for the owner to see** (layperson L-2, breaker B-8): lane item 4 says to pay a balance above the
+  purchase loan's at that loan's own payment and take the months from `nper`. For a couple aged 61 and 59 that is about 30 years
+  (to age 91). The brief names the rule, so it stays; the mortgage page now says the number of extra years instead of "a little
+  longer". A ceiling on the months, or a lower guessed balance, would change the rule the owner set. **Superseded in fix round
+  2** (below): the final check showed only the words had changed, so the months are now bounded by data.
+- **Sources**: the escrow share, Survey of Consumer Finances 2025 public microdata, variable X810 ("Does the payment include
+  taxes or insurance?"), Federal Reserve Board, https://www.federalreserve.gov/econres/scfindex.htm, released 2026-10-09. Among
+  families with a mortgage payment, weighted, all five implicates: both 55.8%, taxes only 6.8%, insurance only 3.5%, neither
+  33.9% (recomputed from the microdata in the lane's money review, 2026-11-11; the build's 56.0% used a filter it did not
+  record). Either way most payments include them, so "Not sure" counts them in.
+
+
+## Fix round 2 on the loans lane (2026-11-11, claude-c; tests in `tests/loans-escrow.test.mjs` named "fix2 ...")
+The first final check left these open; each test was run first and seen to fail.
+- **A guessed mortgage ends about when owners of that age usually finish** (`usualMonthsLeft`, `YEARS_LEFT_BY_AGE`,
+  estimators/debts.js `loanPI`). The middle step of `loanPI` (a balance above the purchase loan's: that loan's own principal and
+  interest, months from `nper`) had a floor of a new 30-year loan's payment, so a guessed loan of a couple aged 61 and 59 ran to
+  age 91, and the first fix round carried those months into a payment typed alone ($1,600 -> $260,000 owed). Now the most months
+  that step can make are `most = min(360, max(left, usualMonthsLeft(age)))` (`left`: the purchase loan's months left), and its
+  principal and interest is `min(pmt(r, left, B), max(purchase P&I, pmt(r, most, B)))`. A payment typed alone is worked back over
+  the same bounded months (`pv`), so Keep still moves nothing.
+  `usualMonthsLeft(age)` joins these points with straight lines, flat past the ends: the weighted median years left on the first
+  mortgage on the main home (the year it was taken out or last refinanced, X802, plus its length in years, X806, less 2025) among
+  families with one (X805 > 0), by the age of the head (X14), weight X42001, all five implicates, at each group's mean age:
+  under 35 (30.0): 27 years; 35-44 (39.5): 25; 45-54 (49.6): 24; 55-64 (59.5): 23; 65-74 (69.2): 19; 75 and over (80.3): 17.
+  Source: Survey of Consumer Finances 2025, full public data set (Stata file p25i6), Federal Reserve Board,
+  https://www.federalreserve.gov/econres/scfindex.htm, computed 2026-11-11 (interquartile range at 55-64: 12 to 26 years).
+  By hand, the couple aged 61 and 59 in Arizona, nothing typed: `left` 188, `usualMonthsLeft(61)` = 12 x (23 + (19 - 23) x
+  1.5 / 9.7) = 269, so $140,000 at 4.4% is paid at about $1,120 to 2049 (age 84; was $980 to 2056, age 91). Pat and Lee with
+  $1,600 typed: $230,000 owed (base $180,000 over the purchase loan's 188 months; first fix round $260,000), debt-free 2050.
+  Decision: the reviewers offered a payoff-age ceiling of about 85 or the purchase loan's months plus an allowance; the survey's
+  own years left by age is the most likely value for the household, so it is the bound (it gives a payoff at about 83-85 at 60-65).
+  Sweep (5 states, single and couple, ages 50-85, nothing typed): over 25 years at 50-64, 0 of 120; ending after 88 at 65 and
+  over, 22 of 110 (base 10; before this round 28, and 13 of 120 over 25 years at 50-64), all owners of 75 to 85 whose own purchase loan still has 9 to
+  12 years to run; the survey's median at 75 and over is 17 years left, so no age ceiling is put on them.
+- **Keep on a guessed balance alone** (`escrowBefore`, `escrowKept`, `homeFactsTyped`, estimators/home.js; `escrowFor`,
+  estimators/debts.js). The home's guessed value takes a typed balance as a floor (HD-MORT-UNDERWATER), so keeping the balance
+  while the payment was still ours moved the tax and insurance and so the payment (couple aged 35 in Texas: $2,280 -> $2,340).
+  Now the usual figure that payment was worked out around is written to `debts[].escrowMonthly` as our guess with the balance;
+  the payment we still guess is rebuilt from it and does not move (money grid: 4 of 104 moved, now 0; breaker sweep: 17 of
+  3,584, now 0). Once the person types the home's value, tax or insurance, that figure and the payment we guess follow it again.
+  Left: the guessed home value itself still steps up on Keep (as on the base), which moves the retirement figure by $10 in 20 of
+  3,584 sweep households.
+- **Not done: a typed payment beside a home we guess** (layperson L-8). A payment typed alone can still give a balance at 95-100%
+  of the guessed home value (the balance is held to the home's value). Letting the home follow that balance needs the two guesses
+  solved together (the balance reads the home for its cap and its tax and insurance; the home would read the balance), which the
+  one-pass settle cannot hold without moving on a second settle. Left for a later round; same at base.
