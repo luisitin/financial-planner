@@ -2812,7 +2812,7 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   // R6: everyone retired reads a retiree's words
   assert.ok(view.includes('allRetired(plan) ? "Tap all that apply; it helps the plan put things in the right order."'));
   assert.ok(view.includes('label: "Making the money last", line: "For the rest of your life"'));
-  assert.ok(view.includes('GOALS.filter((g) => !(debtFree && g.key === "debt"))'), "no debt tile after debt-free");
+  assert.ok(view.includes('GOALS.filter((g) => !(debtFree && g.key === "debt")'), "no debt tile after debt-free");
   assert.ok(view.includes("enough for a big repair or a medical bill"));
   assert.ok(view.includes("`the ${target} months we suggest`"));
   // F8: drafts survive a reload of the tab, in sessionStorage only
@@ -2858,4 +2858,32 @@ test("review round 2 (N4-N7): a way to the box, no slow double tap past an ask, 
   // N7: the reveal by address part way through goes back to the question reached; a plan never started still opens it
   assert.ok(view.includes('if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {'));
   assert.ok(view.includes("location.replace(`#/overview/setup/${su.at}`);"));
+});
+
+test("older walks (claude-b's batch): How often has no default, What's next starts at 1, our guesses said apart, no Education for a retiree, Enter passes a counter", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  // (1) no pay typed: How often starts on no choice; an amount with no How often holds Continue with an ask and a way to it
+  assert.ok(view.includes('for (const x of Object.values(v0.people ?? {})) if (x && (x.amount === "" || x.amount == null)) x.period = null;'));
+  assert.ok(view.includes("often does ${money(parseMoney(x.amount))} come? Tap one under How often"));
+  assert.ok(view.includes("if (n > 0 && x.period && perYear(n, x.period) < 15000) {"), "no low-pay ask before a How often is picked");
+  assert.match(view, /current = \{ apply: \(d\) => applyMoney\(d, \{ \.\.\.v, today \}\), block, check,/);
+  // (2) the step just finished leads the list, ticked
+  assert.ok(view.includes('ui.h("ol", { class: "su-steps" }, [ui.h("li", { class: "done" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "✓"), ps.parts[0]?.name'));
+  // (3) the person's own part of the month is said apart from our guesses
+  assert.ok(view.includes("const theirs = Math.round(r.monthly - (r.rows ?? r.monthly));"));
+  assert.ok(view.includes("a month is from your own answers, like loan payments."));
+  // (4) everyone retired, no children: Education only when asked for (or picked before)
+  assert.ok(view.includes('const eduHidden = retiredAll && !dependents(plan).length && !v.has("education") && !goalTaken(plan, "education");'));
+  assert.ok(view.includes("\"+ Saving for someone's schooling\""));
+  // (5) Enter never stops on a − / + counter
+  assert.equal((view.match(/while \(nxt\?\.matches\("\.su-step"\)\) nxt = after\(nxt\);/g) ?? []).length, 2);
+});
+
+test("breaker round 2 (A, B, N5 skip-all, D): a choice under the thumb waits too, a box's line waits for the tap, guesses are not spending given", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("onClick: () => { if (c !== goBox[0] && Date.now() - askedAt < ASK_HOLD_MS) return; c.run(); }"));
+  assert.ok(view.includes("const afterTap = (fn) => setTimeout(() => { if (card.isConnected) fn(); }, 250);"));
+  assert.ok(view.includes("onBlur: () => { left = true; afterTap(showAge); }") && view.includes("onBlur: () => { gone = true; afterTap(say); }"));
+  assert.ok(view.includes("hasSpend = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));"));
+  assert.ok(view.includes(".su-ask button { -webkit-user-select: none; user-select: none; }"));
 });

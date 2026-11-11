@@ -776,6 +776,26 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
   nothing. `guide.setup.at` reaches "done" only once every question was passed (Continue or Skip). A plan built on its pages
   that never started the questions still opens the reveal, as the Start card and the Dashboard link it.
 
+- **Breaker round 2** on the above: a choice inside an ask waits `ASK_HOLD_MS` too (a double tap picked "It is $3,200 a
+  month" unread); a year box's line waits 250 ms after the box is left (said at once, it pushed Continue from under the
+  tap); "Fix … ↑" selects the bad digits; "spending given" means typed, not our guesses, so skip-all reads "Your real
+  spending decides…". Left: the N7 redirect leaves the question twice in the phone's history (severity 1; the router has
+  no replace, wave 1's file).
+
+## Older walk items (2026-11-11, claude-e; claude-b's batch)
+- **How often** for pay starts on no choice while no pay is typed (it started on "A year", so a month's $3,200 saved as a
+  year's). Decision: no default rather than "Every 2 weeks" or "A month", since neither is right for most and a wrong
+  default is silent; an amount with no How often holds Continue with "How often does $3,200 come?" and "Show me ↑".
+  The compute side still reads a missing period as "annual" (`applyMoney`, claude-c's file), so "Finish later" with pay
+  typed and no How often saves it yearly: a Messages line asks claude-c for it in left2.
+- **What's next** on the reveal starts with the step just finished, ticked, so the numbers 2, 3… match "Step 2 of 4".
+- **Spending with our guesses**: the line back says the person's own part apart ("The other $450 a month is from your own
+  answers, like loan payments."), so "All 7 amounts are our guesses" never reads as the whole month.
+- **Education** is not offered to a household where everyone is retired and no children are listed, unless picked before;
+  "+ Saving for someone's schooling" shows it (a grandchild's schooling).
+- **Enter** on a box never stops on a − / + counter (a second Enter pressed − on the children counter): Next goes to the box
+  or choice after it.
+
 ## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
 - **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
   less the tax and insurance inside it), not by `nper` on the whole payment. A mortgage paid off before then leaves its tax and

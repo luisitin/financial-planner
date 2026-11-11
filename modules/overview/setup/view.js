@@ -167,6 +167,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-left-out { margin: 4px 0 14px; font-size: var(--fs-sm); color: var(--text-2); }
 .su-left-out b { color: var(--text); }
 .su-left-out .su-pair { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.su-ask button { -webkit-user-select: none; user-select: none; }
 .su-left-out .su-pair button { min-height: 44px; }
 .su-notsure { margin: 0 0 6px; }
 .su-way-left[hidden], .su-way-spend[hidden] { display: none; }
@@ -394,9 +395,11 @@ export function render(page, ctx) {
     const el = ui.notice("warn", text); el.classList.add("su-ask"); el.setAttribute("role", "alert"); el.tabIndex = -1;
     // the box it is about can be a screen above: a button takes you there and puts the cursor in it. A tap is the person's own
     // choice, so the keyboard opening then is fine (round 2, N4)
-    const goBox = focus ? [{ label: fix ?? "Show me ↑", run: () => { try { focus.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); focus.focus({ preventScroll: true }); } catch { /* a nicety */ } } }] : [];
+    const goBox = focus ? [{ label: fix ?? "Show me ↑", run: () => { try { focus.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); focus.focus({ preventScroll: true }); if (focus.matches?.("input")) focus.select(); } catch { /* a nicety */ } } }] : [];
     const btns = [...goBox, ...choices];
-    if (btns.length) el.append(ui.h("div", { class: "su-pair" }, btns.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: c.run }, c.label))));
+    // a choice the ask has just put under the thumb is not taken in the first ASK_HOLD_MS either: a double tap on Continue
+    // picked "It is $3,200 a month" unread (breaker round 2, A)
+    if (btns.length) el.append(ui.h("div", { class: "su-pair" }, btns.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: () => { if (c !== goBox[0] && Date.now() - askedAt < ASK_HOLD_MS) return; c.run(); } }, c.label))));
     askedAt = Date.now();
     const row = card.querySelector(".su-actions");
     if (row) row.before(el); else card.prepend(el);
@@ -406,6 +409,9 @@ export function render(page, ctx) {
     // the eye goes to the ask, not the box: on a phone the keyboard would open over the message
     try { el.focus({ preventScroll: true }); } catch { /* a nicety */ }
   };
+  // a line said when a box is left waits until the tap that left it lands: said at once, it pushed Continue down under the
+  // thumb and the tap missed (breaker round 2, B)
+  const afterTap = (fn) => setTimeout(() => { if (card.isConnected) fn(); }, 250);
   const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
   const forward = (opts = {}) => {
     // a second tap on Continue right after an ask appeared is the same thumb, not "keep it": the ask is inserted above, so
@@ -486,7 +492,10 @@ export function render(page, ctx) {
     const t = e.target;
     if (!(t instanceof HTMLInputElement) || !t.classList.contains("su-in")) return;
     e.preventDefault();
-    const nxt = after(t);
+    // a − / + counter is passed over (it has a value already, and a second Enter on its − took a child away: older walks,
+    // claude-b's batch): Next goes to the box or choice after it
+    let nxt = after(t);
+    while (nxt?.matches(".su-step")) nxt = after(nxt);
     if (nxt && isBox(nxt)) { nxt.focus(); return; }
     t.blur();
     if (!nxt) return;
@@ -494,7 +503,7 @@ export function render(page, ctx) {
     const pick = nxt.querySelector("[aria-checked=true], [aria-pressed=true]") ?? nxt.querySelector("button");
     try { pick?.focus({ preventScroll: true }); } catch { /* a nicety */ }
   });
-  card.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.classList.contains("su-in")) { const nxt = after(t); t.setAttribute("enterkeyhint", nxt && isBox(nxt) ? "next" : "done"); } });
+  card.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.classList.contains("su-in")) { let nxt = after(t); while (nxt?.matches(".su-step")) nxt = after(nxt); t.setAttribute("enterkeyhint", nxt && isBox(nxt) ? "next" : "done"); } });
   for (const n of pending) { const el = ui.notice(n.kind, n.text); el.setAttribute("role", "status"); add(card, el); ctx.announce?.(n.text); }
   pending = [];
 
@@ -744,8 +753,11 @@ export function render(page, ctx) {
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
       head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Tap the one that fits you. Amounts are before tax.");
-      const v = draft(() => valuesFor(plan, "money", { today }));
-      const tileEls = {};   // person id -> their three tiles, for the "nothing picked" question
+      // How often starts on no choice while no pay is typed: "A year" left on turned a month's $3,200 into $3,200 a year, and
+      // which is commonest depends on the person; Continue asks for it once an amount is typed (older walks, claude-b's batch)
+      const v = draft(() => { const v0 = valuesFor(plan, "money", { today }); for (const x of Object.values(v0.people ?? {})) if (x && (x.amount === "" || x.amount == null)) x.period = null; return v0; });
+      const tileEls = {};
+      const oftenEls = {};  // person id -> their How often buttons, for the ask   // person id -> their three tiles, for the "nothing picked" question
       // someone paid by their own business: what they already sent the IRS this year, so no page starts from "$0 paid"
       const taxHost = ui.h("div");
       const drawTax = () => swap(taxHost, ad.some((q) => v.people[q.id]?.status === "work" && v.people[q.id]?.by === "self" && !existingPay(plan, q.id).filter((i) => i.id !== `setup-pay-${q.id}`).length)
@@ -764,7 +776,7 @@ export function render(page, ctx) {
           if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim())), own.some((i) => i.type === "salary") ? planQ() : null); return; }
           if (x.status === "work") {
             const live = ui.h("p", { class: "su-live", "aria-live": "polite" });
-            const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
+            const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 && !x.period ? "Tap how often it comes." : n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
             // who pays: an employer (a paycheck with tax held back) or their own business or freelance work (no paycheck:
             // the plan then works out self-employment tax and quarterly payments instead of a W-4)
             const by = x.by === "self" ? "self" : "employer";
@@ -774,7 +786,7 @@ export function render(page, ctx) {
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
               // a How often tapped answers the low-pay question: it goes (F8)
-              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); card.querySelector(".su-ask")?.remove(); warnedPay = null; }, named(p, "how often") ?? "How often")), live,
+              (oftenEls[p.id] = fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); card.querySelector(".su-ask")?.remove(); warnedPay = null; }, named(p, "how often") ?? "How often"))), live,
               by === "employer" ? planQ() : null);
             showMo();
             return;
@@ -805,7 +817,7 @@ export function render(page, ctx) {
           const x = v.people[p.id];
           if (x.status !== "work" || existingPay(plan, p.id).length) continue;
           const n = parseMoney(x.amount);
-          if (n > 0 && perYear(n, x.period) < 15000) {
+          if (n > 0 && x.period && perYear(n, x.period) < 15000) {
             const said = `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""}`;
             // the answer is one tap in the notice: "It is $3,200 a month" sets A month and goes on (F8, OP-3)
             const monthly = x.period !== "monthly" ? [{ label: `It is ${money(n)} a month`, run: () => { x.period = "monthly"; warnedPay = null; forward({ chosen: true }); } }] : [];
@@ -816,7 +828,16 @@ export function render(page, ctx) {
       };
       // a plan at work this Continue added, with its $0 401(k): said back once (round 8; review UX 9)
       const planWords = (p2) => { const w = workPlanAdded(p2, ad.filter((q) => v.people[q.id]?.plan === "yes" && !workPlanAcct(plan, q.id)).map((q) => q.id)); return w ? ` ${w}` : ""; };
-      current = { apply: (d) => applyMoney(d, { ...v, today }), check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
+      // pay typed with no How often: the plan cannot count it, so Continue waits for the one tap
+      const block = () => {
+        for (const p of ad) {
+          const x = v.people[p.id];
+          if (x?.status !== "work" || existingPay(plan, p.id).length || !(parseMoney(x.amount) > 0) || x.period) continue;
+          return { text: `${ad.length > 1 ? `${p.name}: how` : "How"} often does ${money(parseMoney(x.amount))} come? Tap one under How often: a year, a month, every 2 weeks, twice a month or every week.`, focus: oftenEls[p.id]?.querySelector("button") ?? null, fix: "Show me ↑" };
+        }
+        return null;
+      };
+      current = { apply: (d) => applyMoney(d, { ...v, today }), block, check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
       actions();
     },
 
@@ -856,7 +877,7 @@ export function render(page, ctx) {
         let left = false;
         const showAge = () => { const a = ageOf(x), bad = yearWords(x.year, { left, born: true }); liveAge.textContent = bad ?? (a === null ? "" : `${a} years old`); liveAge.classList.toggle("su-bad", !!bad); if (!bad) dropAsk(); };
         const monthSel = ui.h("select", { class: "su-in", "aria-label": named(p, "birth month") ?? "Birth month", onChange: (e) => { x.month = e.target.value; showAge(); drawStop(); drawSS(); } }, ui.h("option", { value: "" }, "Month"), MONTHS.map((m, i) => ui.h("option", { value: String(i + 1), selected: Number(x.month) === i + 1 }, m)));
-        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; left = false; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } }, onBlur: () => { left = true; showAge(); } });
+        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; left = false; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } }, onBlur: () => { left = true; afterTap(showAge); } });
         yearBoxes.push({ input: yearIn, get: () => x.year, who: p, ss: () => ["getting", "statement"].includes(x.ss.mode) && !x.ss.record && parseMoney(x.ss.amount) > 0 });
         const tog = retiredNow ? null : toggle("Already retired", x.retired, (on) => { x.retired = on; drawStop(); drawSS(); });
         function drawStop() {
@@ -908,7 +929,7 @@ export function render(page, ctx) {
         const line = ui.h("span", { class: "su-live su-bad", "aria-live": "polite" });
         let gone = false;
         const say = () => { const bad = yearWords(v.kids[k.id], { left: gone, born: false }); line.textContent = bad ?? ""; if (!bad) dropAsk(); };
-        const input = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; gone = false; say(); }, onBlur: () => { gone = true; say(); } });
+        const input = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; gone = false; say(); }, onBlur: () => { gone = true; afterTap(say); } });
         yearBoxes.push({ input, get: () => v.kids[k.id], who: k, kid: true });
         return ui.h("div", {}, field(k.name, input), line);
       }))));
@@ -1584,7 +1605,11 @@ export function render(page, ctx) {
         // the month in all, as the screen's "In all" says it (loan and card payments from question 5 included)
         // (how many of the screen's amounts are ours, said against how many there are: "6 of the 7 amounts", "All 7 amounts")
         const ours = r.guessed === r.count ? (r.count === 1 ? "The amount is our guess" : `All ${r.count} amounts are our guesses`) : `${r.guessed} of the ${r.count} amounts ${r.guessed === 1 ? "is our guess" : "are our guesses"}`;
-        return r.guessed ? `Got it: about ${money(about(r.monthly))} a month. ${ours} for now.` : `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.`;
+        // the month in all also holds what the person gave themselves (question 5's loan and card payments, bills typed on
+        // Expenses): said apart, so "All 7 amounts are our guesses" never reads as the whole figure being ours (older walks)
+        const theirs = Math.round(r.monthly - (r.rows ?? r.monthly));
+        const yours = theirs >= 1 ? ` The other ${money(theirs)} a month is from your own answers, like loan payments.` : "";
+        return r.guessed ? `Got it: about ${money(about(r.monthly))} a month. ${ours} for now.${yours}` : `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.`;
       };
       const spendV = () => ({ ...v, sum: v.way === "left" ? v.sum0 : v.sum, retireMonthly: later.typed ? later.value : "", retireAuto: !later.typed });
       const answered0 = spendAnswered(plan);
@@ -1636,8 +1661,15 @@ export function render(page, ctx) {
       const v = draft(() => new Set(valuesFor(plan, "goals")));
       // after "No, I'm debt-free" there is no "Paying off debt" tile; everyone retired reads a retiree's words (R6)
       const debtFree = reflect(plan, "owe")?.kind === "debt-free", retiredAll = allRetired(plan);
-      const goalTiles = GOALS.filter((g) => !(debtFree && g.key === "debt")).map((g) => retiredAll && g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : g);
-      add(card, tileGroup("What are you working toward?", goalTiles, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }),
+      // everyone retired and no children: no "Education" tile unless picked before or asked for (a grandchild's schooling is one
+      // tap away under the tiles; older walks, claude-b's batch)
+      const eduHidden = retiredAll && !dependents(plan).length && !v.has("education") && !goalTaken(plan, "education");
+      const tilesFor = (hideEdu) => GOALS.filter((g) => !(debtFree && g.key === "debt") && !(hideEdu && g.key === "education")).map((g) => retiredAll && g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : g);
+      const tilesHost = ui.h("div");
+      const drawTiles = (hideEdu) => swap(tilesHost, tileGroup("What are you working toward?", tilesFor(hideEdu), { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }));
+      drawTiles(eduHidden);
+      const eduAsk = eduHidden ? ui.h("button", { type: "button", class: "secondary small", onClick: (e) => { e.currentTarget.remove(); drawTiles(false); [...tilesHost.querySelectorAll("button")].find((b) => b.textContent.includes("Education"))?.focus(); } }, "+ Saving for someone's schooling") : null;
+      add(card, tilesHost, eduAsk,
         haveNote((plan.goals ?? []).filter((g) => !String(g.id).startsWith("setup-")).map((g) => g.name)));
       current = { apply: (d) => applyGoalPicks(d, [...v].filter((k) => !(debtFree && k === "debt"))) };
       actions();
@@ -1747,7 +1779,7 @@ export function render(page, ctx) {
     const hasCash = (plan.accounts ?? []).some((a) => ["cash", "checking", "savings"].includes(a.type));
     const cushionOpen = st.runway === null || (!hasCash && (st.runwayWaits || !(plan.accounts ?? []).length));
     const any = st.netWorth !== null || st.spare !== null || !cushionOpen || !!st.retire;
-    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
+    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));
     const target = st.runwayTarget ?? 6;
     // "the 6 you want" only when the person set the months; else the number is ours (R6)
     const targetSet = plan.assumptions?.emergencyMonths != null;
@@ -1807,7 +1839,9 @@ export function render(page, ctx) {
     else add(card, ui.h("section", { class: "su-next", "aria-labelledby": "su-next-h" },
       ui.h("h2", { class: "su-h2", id: "su-next-h" }, "What's next"),
       ui.h("p", { class: "su-help" }, `Now a quick look at each step of your plan, one page at a time: about ${minutes} more minutes. Anything you don't know, we fill in with our guesses.`),
-      ui.h("ol", { class: "su-steps" }, [...rest.map((x) => ui.h("li", { class: x.passed ? "done" : "" }, ui.h("span", { class: "n", "aria-hidden": "true" }, x.passed ? "✓" : String(rest.indexOf(x) + 2)), x.name)), ui.h("li", { class: "then" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "→"), "Then: your whole plan on one page")]),
+      // the step just finished stays on the list, ticked, so the list does not start at 2 (older walks, claude-b's batch); the
+      // numbers match the path's "Step 2 of 4"
+      ui.h("ol", { class: "su-steps" }, [ui.h("li", { class: "done" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "✓"), ps.parts[0]?.name ?? "Your answers"), ...rest.map((x) => ui.h("li", { class: x.passed ? "done" : "" }, ui.h("span", { class: "n", "aria-hidden": "true" }, x.passed ? "✓" : String(rest.indexOf(x) + 2)), x.name)), ui.h("li", { class: "then" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "→"), "Then: your whole plan on one page")]),
       ui.h("div", { class: "su-end" },
         ps.next ? ui.h("a", { class: "btn", href: ps.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Next: ${ps.next.name} ›`) : null,
         ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer"))));
