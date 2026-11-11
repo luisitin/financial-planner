@@ -55,3 +55,11 @@ The age200 endpoint used for the unbounded midpoint checks has a tail below half
 the last stored decimal, as bounded in the brief.
 
 Review 2026-11-06 (round 7): the suggestion ("(your age)"), the couple card ("At least one of you and your spouse", "Someone still here when you would be 80", "on your clock") and the saved note ("Your details saved.") say you/your for the unnamed first adult ("Me"); typed names read as before (core/words.js). Test: "Review 2026-11-06 (round 7): the couple's age is 'your age' ...".
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **Choices are used at once** (RC-5): Sex and Health save on change, with the green line; the Save button is gone.
+- **The advice as a button** (RC-6): compute's `apply` gives the "Plan to age" values that make the plan run to the suggested year.
+  One adult: their own 1 in 10 age. A couple: the year the chance that either is alive drops under 1 in 10; the adult whose age ends
+  the plan is set to their age that year, and any other adult ending later comes down to it (the other keeps theirs, so their own
+  income is not counted into an age nobody suggested). The button writes `household.people[].lifeExpectancy`, the People page's box;
+  "Change ages on People ›" beside it.

@@ -91,3 +91,18 @@ test("review 2026-11-06 (round 7): the unnamed first adult reads you and your, t
   assert.match(sc(fam, "death-p-ana").story, /^Bo goes on alone: Ana's pay and saving stop,/);
   assert.match(sc(fam, "care-home").story, /^From Ana's 85th birthday,/);
 });
+
+// stress test 2026-11-11, x-2: each shock's button names the page it opens (it said "Social Security" and opened Life insurance needs)
+test("every shock's button is named after the page it opens", async () => {
+  const { linkLabel } = await import("./view.js");
+  const d = compute(familyPlan("2026-11-11"), { today: "2026-11-11" });
+  const shocks = [...(d.shocks ?? d.scenarios ?? [])].filter((s) => s.go);
+  assert.ok(shocks.some((s) => s.id.startsWith("death-")), "the family has a death shock");
+  const modules = new Map();
+  for (const s of shocks) { const key = s.go.join("/"); modules.set(key, (await import(`../../${key}/module.js`)).default); }
+  for (const s of shocks) {
+    const title = modules.get(s.go.join("/")).title;
+    assert.equal(linkLabel(s, modules), title, s.id);
+    assert.equal(linkLabel(s), title, `${s.id} without the list of pages`);
+  }
+});

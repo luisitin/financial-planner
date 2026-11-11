@@ -29,7 +29,8 @@ export function lifeExpectancy(age, opts) {
 /**
  * compute(plan, { today }) -> {
  *   people: [{ id, name, age, sex, health, expectancy, ages: [{ age, p }] for 80..100, planTo (age with 10% chance of being alive), currentPlanEnd }],
- *   either: { ages: [{ age, p }], planTo } | null (the chance that at least one of a couple is alive), suggestion: text, hasData
+ *   either: { ages: [{ age, p }], planTo } | null (the chance that at least one of a couple is alive), suggestion: text, hasData,
+ *   apply: { year, fromYear?, ages: { personId: age }, from: { personId: age } } | null (the Plan to ages the suggestion needs)
  * }
  */
 export function compute(plan, params = {}) {
@@ -53,6 +54,28 @@ export function compute(plan, params = {}) {
     let y = 0; while (y < 300 && pEither(y) > 0.1) y++;
     either = { ages, planTo: a.age + y, planToYear: today ? Number(String(today).slice(0, 4)) + y : null, first: a.name, second: b.name };
   }
+  // what a tap would set (stress test 2026-11-11, RC-6: the page advised an age and gave no way to use it): each adult's "Plan to
+  // age" (People page, household.people[].lifeExpectancy) so the plan runs to the year the suggestion names. One adult: their own
+  // 1 in 10 age. A couple: the plan runs to the year the chance that either is alive drops under 1 in 10; the adult whose age ends
+  // the plan now is set to their age in that year.
+  const thisYear = today ? Number(String(today).slice(0, 4)) : null;
+  const birthYear = (id) => { const b = adults.find((x) => x.id === id)?.birthDate; return b ? Number(String(b).slice(0, 4)) : null; };
+  const endYear = (p) => (birthYear(p.id) === null ? null : birthYear(p.id) + p.currentPlanEnd);
+  let apply = null;
+  if (alive.length === 1) {
+    const p = alive[0];
+    if (p.planTo !== p.currentPlanEnd) apply = { year: endYear(p) === null ? null : birthYear(p.id) + p.planTo, ages: { [p.id]: p.planTo }, from: { [p.id]: p.currentPlanEnd } };
+  } else if (either && either.planToYear !== null) {
+    // only the adult whose "Plan to age" ends the plan now moves: the other keeps theirs, so their own income is not counted
+    // into an age nobody suggested (a first try set the husband to 101)
+    // (and any adult whose age ends the plan after that year comes down to it, so one tap always gives the year the button names)
+    const pair = alive.slice(0, 2).filter((p) => endYear(p) !== null);
+    const last = pair.reduce((a, b) => (endYear(b) > endYear(a) ? b : a), pair[0]);
+    const nowEnd = last ? endYear(last) : null;
+    const Y = either.planToYear;
+    const moved = pair.filter((p) => p === last ? endYear(p) !== Y : endYear(p) > Y);
+    if (last && moved.length) apply = { year: Y, fromYear: nowEnd, ages: Object.fromEntries(moved.map((p) => [p.id, Y - birthYear(p.id)])), from: Object.fromEntries(moved.map((p) => [p.id, p.currentPlanEnd])) };
+  }
   const suggestion = !alive.length ? "" : either ? `Plan for at least one of you being alive to about ${either.planTo} (${nameOf(either.first)} age): that is when the chance drops under 1 in 10.` : `Plan to about ${alive[0].planTo}: that is when the chance of still being alive drops under 1 in 10.`;
-  return { people, either, suggestion, hasData: alive.length > 0 };
+  return { people, either, suggestion, apply, hasData: alive.length > 0 };
 }

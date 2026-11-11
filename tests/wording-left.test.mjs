@@ -140,7 +140,8 @@ test("w010, p061: years in each bracket and 'until Ana would be about 97'", asyn
   const src = fs.readFileSync(path.join(ROOT, "modules/taxes/projection/view.js"), "utf8");
   assert.ok(src.includes(" in the ${fmt.pct(x.rate, 0)} bracket`"));
   const lg = await text("retirement/longevity");
-  assert.match(lg, /until Ana would be about \d+( \(\d{4}\))?\. Set "Plan to age" on the People page if you want the Will the money last\? page to use it\./);
+  // the advice is a button now, and People a button beside it (stress test 2026-11-11, RC-6)
+  assert.match(lg, /until Ana would be about \d+( \(\d{4}\))?\. Your plan runs to \d{4} now\. Plan to \d{4} instead of \d{4} Change ages on People ›/);
 });
 
 test("w035, w017, m005, m007: sentences with a clause that reads on its own", () => {

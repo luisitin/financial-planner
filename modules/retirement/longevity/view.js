@@ -25,11 +25,28 @@ export function render(root, ctx) {
       ui.row(ui.stat("Life expectancy", `${Math.round(p.expectancy)}`, "the average; half live longer"), ui.stat("1 in 10 reach", `${p.planTo}`, `the plan runs to ${p.currentPlanEnd}`)),
       ui.h("ul", { class: "records" }, p.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Reaching ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
       ui.h("div", { class: "form" }, ui.field("Sex", sexSel, "the tables differ; leave it blank for the average"), ui.field("Health", healthSel)),
-      ui.row(ui.button("Save", () => { pending = `${NameOf(p.name)} details saved.`; store.update((pl) => { pl.retirement.longevity = pl.retirement.longevity ?? {}; pl.retirement.longevity[p.id] = { sex: sexSel.value, health: healthSel.value }; }); }, { class: "secondary" })),
+      // a single adult: the advice as a button (stress test 2026-11-11, RC-6)
+      !d.either && d.apply?.ages?.[p.id] !== undefined ? ui.row(ui.button(`Plan to ${d.apply.ages[p.id]} instead of ${d.apply.from[p.id]}`, () => setAges(`Your plan now runs to ${nameOf(p.name)} age ${d.apply.ages[p.id]}${d.apply.year ? ` (${d.apply.year})` : ""}. Will the money last? uses it.`), { class: "secondary" })) : null,
     ));
+    // a choice from a list is used the moment it is made (stress test 2026-11-11, RC-5: nothing changed until a separate Save, and
+    // leaving dropped it): saved, the figures follow, and the green line says so
+    const choose = (what) => () => {
+      pending = `${NameOf(p.name)} ${what} saved: the chances above use it.`;
+      store.update((pl) => { pl.retirement = pl.retirement ?? {}; pl.retirement.longevity = pl.retirement.longevity ?? {}; pl.retirement.longevity[p.id] = { sex: sexSel.value, health: healthSel.value }; });
+    };
+    sexSel.addEventListener("change", choose("sex"));
+    healthSel.addEventListener("change", choose("health"));
   }
   if (d.either) root.append(ui.card(`At least one of ${namesIn([d.either.first, d.either.second])}`,
     ui.h("ul", { class: "records" }, d.either.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Someone still here when ${nameIn(d.either.first)} would be ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
-    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: until ${nameIn(d.either.first)} would be about ${d.either.planTo}${d.either.planToYear ? ` (${d.either.planToYear})` : ""}. Set "Plan to age" on the People page if you want the Will the money last? page to use it.`),
+    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: until ${nameIn(d.either.first)} would be about ${d.either.planTo}${d.either.planToYear ? ` (${d.either.planToYear})` : ""}.${d.apply ? ` Your plan runs to ${d.apply.fromYear} now.` : ""}`),
+    // the advice as a button; the ages themselves stay on People (stress test 2026-11-11, RC-6: "Set Plan to age on the People page" was plain text)
+    ui.row(d.apply ? ui.button(`Plan to ${d.apply.year} instead of ${d.apply.fromYear}`, () => setAges(`Your plan now runs to ${d.apply.year} (${d.people.filter((p) => d.apply.ages[p.id] !== undefined).map((p) => `${nameOf(p.name)} age ${d.apply.ages[p.id]}`).join(" and ")}: Plan to age on People). Will the money last? uses it.`), { class: "secondary" }) : null,
+      ui.h("a", { class: "btn secondary", href: "#/household/people" }, "Change ages on People ›")),
   ));
+  // write the suggested "Plan to age" for each adult it names (household.people[].lifeExpectancy, the People page's box)
+  function setAges(message) {
+    pending = message;
+    store.update((pl) => { for (const x of pl.household?.people ?? []) if (d.apply.ages[x.id] !== undefined) x.lifeExpectancy = d.apply.ages[x.id]; });
+  }
 }

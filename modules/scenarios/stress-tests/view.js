@@ -55,8 +55,8 @@ export function render(page, ctx) {
       [["retire", `As you retire (${d.retireYear})`], ["now", "Now"]].map(([k, label]) => ui.h("button", { type: "button", class: `chip${d.when === k ? " on" : ""}`, "aria-pressed": d.when === k ? "true" : "false", onClick: () => { when = k; load(); } }, label))) : null;
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Markets"),
       ui.h("p", { class: "muted small" }, d.retireYear > d.startYear ? "When a crash comes matters most in the first years of retirement, when money is coming out. Pick when it hits:" : "The actual returns and inflation of those years, starting now; your plan's own assumptions before and after."),
-      timing, ui.h("div", { class: "folds" }, markets.map((s) => fold(ui, fmt, money, d, s)))));
-    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Life"), ui.h("div", { class: "folds" }, life.map((s) => fold(ui, fmt, money, d, s)))));
+      timing, ui.h("div", { class: "folds" }, markets.map((s) => fold(ui, fmt, money, d, s, ctx.modules)))));
+    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Life"), ui.h("div", { class: "folds" }, life.map((s) => fold(ui, fmt, money, d, s, ctx.modules)))));
     if (d.notes.length) host.append(ui.card("Left out", ui.h("ul", {}, d.notes.map((n) => ui.h("li", { class: "muted" }, n)))));
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How these are worked out"), ui.h("span", { class: "fold-chev" }, "›")),
@@ -74,7 +74,7 @@ export function render(page, ctx) {
   load();
 }
 
-function fold(ui, fmt, money, d, s) {
+function fold(ui, fmt, money, d, s, modules) {
   const ageNote = s.failAge ? ` at ${s.failAge}` : "";
   const pill = s.success ? ui.h("span", { class: "st-pill ok" }, "Lasts") : ui.h("span", { class: "st-pill bad" }, `Runs out${ageNote}`);
   const room = Math.round(s.roomMonthly / 10) * 10;
@@ -94,12 +94,17 @@ function fold(ui, fmt, money, d, s) {
       ),
       lineChart({ years, series: [{ values: pad(d.base.path), color: "var(--muted)", width: 1.5, dash: "4 3" }, { values: pad(s.path), color: s.success ? "var(--accent)" : "var(--bad)" }], marks: d.retireYear > d.startYear ? [{ year: d.retireYear, label: "retire" }] : [], height: 160, label: `${s.title}: savings by year` }),
       ui.h("div", { class: "st-key" }, ui.h("span", {}, ui.h("i", { style: { borderColor: s.success ? "var(--accent)" : "var(--bad)" } }), "with this shock"), ui.h("span", {}, ui.h("i", { style: { borderColor: "var(--muted)", borderTopStyle: "dashed" } }), "your plan as it is")),
-      s.go ? ui.row(ui.h("a", { class: "btn secondary", href: `#/${s.go[0]}/${s.go[1]}` }, linkLabel(s))) : null));
+      s.go ? ui.row(ui.h("a", { class: "btn secondary", href: `#/${s.go[0]}/${s.go[1]}` }, linkLabel(s, modules))) : null));
 }
 
-function linkLabel(s) {
+/** The button names the page it opens: that page's own title (stress test 2026-11-11, x-2: "Social Security" under a death opened
+ * Life insurance needs), with the same words as a fallback when the list of pages is not at hand. */
+export function linkLabel(s, modules = null) {
+  const own = s.go ? modules?.get?.(s.go.join("/"))?.title : null;
+  if (own) return own;
   if (s.id === "job-loss") return "Emergency fund";
-  if (s.id === "disability" || s.id.startsWith("death-")) return "Social Security";
+  if (s.id.startsWith("death-")) return "Life insurance needs";
+  if (s.id === "disability") return "Social Security";
   if (s.id === "long-life") return "How long to plan for";
   if (s.id === "lower-returns") return "Assumptions";
   if (s.id === "care-home") return "Will the money last?";
