@@ -3,6 +3,9 @@
 // plan; one form to add or change a quote. Runs on the PC when connected.
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { nameIn, nameOf, verbFor, withA, needsWords } from "../../../core/words.js";
+import { chanceShown } from "../../scenarios/compare/compute.js";
+import { knownChance } from "../careful.js";
+import { PATHS } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -65,14 +68,18 @@ export function render(page, ctx) {
       if (q.tooBig) card.append(ui.notice("warn", `This quote costs ${money(q.premium)} and your savings are about ${money(q.savings)}, so the plan cannot pay for it today. Try a smaller sum.`));
       if (q.withIt) {
         const b = d.base, w = q.withIt;
+        // the chance: Chance the money lasts' own figure for the plan when it ran on this visit, "with it" moved from it by the
+        // difference on the same pretend futures; else "about", to the nearest 5 (as Compare; stress test 2026-11-11, review-w7 2)
+        const known = knownChance(ctx);
+        const bs = chanceShown(b.chance, null, known), ws = chanceShown(b.chance, w.chance, known);
         const row = (label, x, y) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, x), ui.h("b", {}, y));
         card.append(ui.h("ul", { class: "an-figs", style: { marginTop: "10px" } },
           ui.h("li", {}, ui.h("span", {}), ui.h("span", { class: "an-h" }, "Plan now"), ui.h("span", { class: "an-h" }, "With it")),
-          row("Chance the money lasts", pct(b.chance), pct(w.chance)),
+          row("Chance the money lasts", bs.text, ws.text),
           row("Could spend a month", money(b.affordableMonthly), money(w.affordableMonthly)),
           row("Guaranteed income covers", q.floorBefore === null ? "-" : pct(q.floorBefore), q.floorAfter === null ? "-" : pct(q.floorAfter)),
           row("Left at the end", money(b.endReal), money(w.endReal))),
-          ui.h("p", { class: "muted small" }, "Guaranteed income covers: Social Security, pensions and annuities as a share of the first retirement year's spending. Today's dollars."));
+          ui.h("p", { class: "muted small" }, `Guaranteed income covers: Social Security, pensions and annuities as a share of the first retirement year's spending. Today's dollars. ${bs.about || ws.about ? `Both chances are tried on the same ${PATHS} pretend futures and rounded to the nearest 5; open Chance the money lasts for your plan's exact figure, and this page then uses it.` : "The plan's chance is the one from Chance the money lasts; \"with it\" moves it by how the quote did on the same pretend futures."}`));
       }
       card.append(ui.row(ui.button("Edit", () => { editing = (plan.retirement.annuities ?? []).find((y) => y.id === q.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "secondary" })));
       host.append(card);

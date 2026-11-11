@@ -39,3 +39,23 @@ test("review 2026-11-02: the advisor's spending figure is a typed figure, so a p
   near(d.yours.spendingMonthly, 4570, 1e-6); assert.equal(d.theirs.spendingMonthly, 6000, "was 5,400");
   near(d.effects.find((e) => e.key === "spendingMonthly").roomMonthly, -(6000 - 4570), 1e-6);
 });
+
+// review-w7 2 (stress test 2026-11-11): the table showed its own 400-future chance (78%) while Chance the money lasts said 80%
+test("a quoted chance alone: the advisor's version runs on the same pretend futures as yours, so the two chances match", () => {
+  const p = withAdvisor({ firm: "Northgate", quotedChance: 0.9 });
+  const d = compute(p, { today: TODAY, paths: 60 });
+  assert.ok(d.yours.chance !== null && d.theirs.chance !== null);
+  assert.equal(d.theirs.chance, d.yours.chance, "nothing of theirs changes the plan, and the futures are shared");
+});
+
+test("the view shows the chance as Compare does: the Chance page's figure when known, else about, to the nearest 5", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /knownChance\(ctx\)/);
+  assert.match(src, /chanceShown\(y\.chance, null, known\)/);
+  assert.match(src, /chanceShown\(y\.chance, t\.chance, known\)/);
+  assert.doesNotMatch(src, /row\("Chance it lasts", pct\(/, "no raw chance of its own in the table");
+  assert.doesNotMatch(src, /over 400 pretend futures/);
+  // the quoted-chance card measures the gap from the figure shown in the table
+  assert.match(src, /d\.quotedChance - ts\.value/);
+});

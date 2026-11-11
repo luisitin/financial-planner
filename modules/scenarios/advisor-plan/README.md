@@ -14,6 +14,7 @@
 - Each assumption alone: your plan with that one change, no simulation. Its effect is the change in the room a month, (affordable - planned spending), so a spending assumption shows up too; sorted by size.
 - Fee cost = their plan without the fee less with it: at the end, and in what could be spent a month.
 - Chance gap = their quoted chance - this app's chance with their assumptions; within 5 points is called close.
+- The chance shown (stress test 2026-11-11, review-w7 2; the same rule as scenarios/compare `chanceShown`): yours and the advisor's run on the same 400 pretend futures (`results` draws them with seed 1), so their difference is fair. When Chance the money lasts has run this plan on this visit (`retirement/careful.js` `knownChance`), yours shows that page's figure and the advisor's shows it plus their difference; otherwise both read "about", to the nearest 5. The quoted-chance card measures the gap from the advisor's figure as shown, so the card and the table agree.
 
 ## Edge cases
 - Only the advisor levers are read from `changes`; a stray key is ignored.

@@ -15,6 +15,7 @@
 - Return it pays like = pensions' `impliedRate(premium, payments, paying)`: the rate at which the expected payments equal the premium.
 - Bond ladder = the payments until the plan's end age discounted at the plan's bond return (no mortality pooling, nothing after). Ladder - premium > 0: the annuity is cheaper for the plan's horizon; the annuity also pays beyond it.
 - With it: the plan's inputs with the premium out of savings this year (an `events` entry) and the payment as guaranteed income from the start age (`cola: false` keeps it fixed in dollars), through scenarios/compare `results` (does it last, the chance over simulated markets, the most it could spend a month, at the end).
+- The chance shown (stress test 2026-11-11, review-w7 2; the same rule as scenarios/compare `chanceShown`): "Plan now" and "With it" run on the same 300 pretend futures (`results` draws them with seed 1). When Chance the money lasts has run this plan on this visit (`retirement/careful.js` `knownChance`), "Plan now" shows that page's figure and "With it" shows it plus the quote's difference; otherwise both read "about", to the nearest 5.
 - Guaranteed income covers = Social Security, pensions and annuities in the first retirement year, fixed-dollar ones in today's dollars, / that year's spending.
 
 ## Edge cases

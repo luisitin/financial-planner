@@ -1,7 +1,8 @@
 // modules/scenarios/advisor-plan/view.js -- DOM only. The advisor's assumptions in one form; then their
 // plan against yours, which assumption makes the difference, what the fee costs, and their quoted chance
 // against the one this app gets with the same assumptions. Runs on the PC when connected.
-import { LEVERS } from "../compare/compute.js";
+import { LEVERS, PATHS, chanceShown } from "../compare/compute.js";
+import { knownChance } from "../../retirement/careful.js";
 import { ADVISOR_LEVERS } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 
@@ -41,21 +42,28 @@ export function render(page, ctx) {
     if (!d.ready) { host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To compare, your plan needs", d.missing)))); host.append(formCard(d)); return; }
     if (d.entered && d.theirs) {
       const y = d.yours, t = d.theirs;
+      // the chance: Chance the money lasts' own figure for your plan when it ran on this visit, the advisor's moved from it by its
+      // difference on the same pretend futures; else "about", to the nearest 5 (as Compare; stress test 2026-11-11, review-w7 2)
+      const known = knownChance(ctx);
+      const ys = chanceShown(y.chance, null, known), ts = chanceShown(y.chance, t.chance, known);
+      const about = ys.about || ts.about;
       const row = (label, a, b) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, a), ui.h("b", {}, b));
       host.append(ui.card(d.firm ? `Your plan and ${d.firm}${/s$/i.test(d.firm) ? "'" : "'s"}` : "Your plan and the advisor's", ui.h("ul", { class: "ap-figs" },
         ui.h("li", {}, ui.h("span", {}), ui.h("span", { class: "ap-h" }, "Yours"), ui.h("span", { class: "ap-h" }, "Advisor's")),
         // the chance first, the straight-line run named as what it is (stress test 2026-11-11, RC-8: "Yes" over "37%")
-        row("Chance it lasts", pct(y.chance), pct(t.chance)),
+        row("Chance it lasts", ys.text, ts.text),
         row("If markets do as well as average", y.success ? "lasts" : `runs out in ${y.failYear}`, t.success ? "lasts" : `runs out in ${t.failYear}`),
         row("Could spend a month", money(y.affordableMonthly), money(t.affordableMonthly)),
         row("Plans to spend a month", money(y.spendingMonthly), money(t.spendingMonthly)),
         row("Left at the end", money(y.endReal), money(t.endReal))),
-        ui.h("p", { class: "muted small" }, `The advisor's version: ${d.described.join("; ")}. Today's dollars; the chance is over 400 pretend futures of good and bad years.`)));
+        ui.h("p", { class: "muted small" }, `The advisor's version: ${d.described.join("; ")}. Today's dollars. ${about ? `Both are tried on the same ${PATHS} pretend futures, so the difference is fair; the chance is rounded to the nearest 5. Open Chance the money lasts for your plan's exact figure; this page then uses it.` : `Your chance is the one from Chance the money lasts; the advisor's goes up or down by how their version did against yours on the same ${PATHS} pretend futures.`}`)));
       if (d.effects.length) host.append(ui.card("What makes the difference", ui.h("p", { class: "muted small" }, "Each of their assumptions on its own, put into your plan: how much more or less room it leaves a month (what the plan could spend, less what it plans to spend)."),
         ui.h("ul", { class: "ap-eff" }, d.effects.map((e) => ui.h("li", {}, ui.h("span", {}, e.text[0].toUpperCase() + e.text.slice(1)), ui.h("span", { class: e.roomMonthly >= 0 ? "ap-up" : "ap-down" }, `${e.roomMonthly >= 0 ? "+" : "−"}${money(Math.abs(e.roomMonthly))} a month`))))));
       if (d.feeCost) host.append(ui.card("What the fee costs", ui.row(ui.stat("Over the plan", money(d.feeCost.endReal), "less left at the end, today's dollars"), ui.stat("A month", money(d.feeCost.affordableMonthly), "less you could spend in retirement")),
         ui.h("p", { class: "muted small" }, `A fee of ${Math.round(d.fee * 1000) / 10}% a year comes out every year whatever the markets do. Whether the advice is worth it is your call; this is its price.`)));
-      if (d.quotedChance !== null && d.chanceGap !== null) host.append(ui.card("Their quoted chance", ui.h("p", {}, `They quote ${pct(d.quotedChance)}; with the same assumptions this app gets ${pct(t.chance)}. ${Math.abs(d.chanceGap) < 0.05 ? "Close enough: different simulations differ by a few points." : d.chanceGap > 0 ? "Theirs is higher. Worth asking whether their figure includes the fee, inflation on spending, and taxes, and how volatile they assume markets are." : "Theirs is lower: their simulation is more cautious than this one."}`)));
+      // the gap from the figure shown above, so the card and the table never disagree
+      const gap = d.quotedChance !== null && ts.value !== null ? d.quotedChance - ts.value : null;
+      if (gap !== null) host.append(ui.card("Their quoted chance", ui.h("p", {}, `They quote ${pct(d.quotedChance)}; with the same assumptions this app gets ${ts.text}. ${Math.abs(gap) < 0.05 ? "Close enough: different simulations differ by a few points." : gap > 0 ? "Theirs is higher. Worth asking whether their figure includes the fee, inflation on spending, and taxes, and how volatile they assume markets are." : "Theirs is lower: their simulation is more cautious than this one."}`)));
     }
     host.append(formCard(d));
     host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Compare what-ifs"), ui.h("a", { class: "btn secondary", href: "#/system/assumptions" }, "Your assumptions"))));

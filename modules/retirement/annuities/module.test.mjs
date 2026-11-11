@@ -70,3 +70,13 @@ test("a quote that costs more than the savings on file is marked tooBig and not 
   assert.equal(big.tooBig, true); assert.equal(big.withIt, null); assert.ok(big.savings > 0 && big.savings < 5e7);
   assert.equal(ok.tooBig, false); assert.ok(ok.withIt);
 });
+
+// review-w7 2 (stress test 2026-11-11): "Plan now" showed its own 300-future chance, not the Chance page's
+test("the view shows the chance as Compare does: the Chance page's figure when known, else about, to the nearest 5", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /knownChance\(ctx\)/);
+  assert.match(src, /chanceShown\(b\.chance, null, known\)/);
+  assert.match(src, /chanceShown\(b\.chance, w\.chance, known\)/);
+  assert.doesNotMatch(src, /row\("Chance the money lasts", pct\(/);
+});
