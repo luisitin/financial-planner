@@ -2,6 +2,8 @@
 // year of retirement, and what it pays for), then each way of deciding as one line with what it lets you spend and one button,
 // and everything technical folded under "How this is worked out" (round 8, Batch 5b: the owner, 2026-11-06, "Just make sure a
 // layman can easily understand and use the page").
+import { needButtons } from "../needs.js";
+import { needItem } from "../../../core/words.js";
 import { compute, firstYear, DESCRIPTIONS } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
@@ -26,7 +28,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first."), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first:"), ui.h("ul", {}, (d.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   // the plan's end age, for wording only: a run that fails in the last year has lasted to the end
@@ -153,7 +155,19 @@ export function render(root, ctx) {
     answer && fy.required >= 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")) : null,
   ));
   const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  // a way chosen with one tap names the way back on its green line, which stays until the next change (stress test 2026-11-11, R4)
+  if (pending) {
+    const { text, back } = typeof pending === "string" ? { text: pending, back: null } : pending;
+    const n = ui.notice("ok", text);
+    if (back) n.append(ui.row(ui.button(`Put it back: ${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}`, () => {
+      pending = `Back to "${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}", as before.`;
+      store.update((p) => { p.retirement = { ...(p.retirement ?? {}) }; if (back.key === undefined) delete p.retirement.strategy; else p.retirement.strategy = back.key; });
+    }, { class: "secondary" })));
+    else setTimeout(() => n.remove(), 4000);
+    out.append(n); pending = null;
+    // the line and its way back are brought into view: the tapped button is a screen below them (review of R4)
+    if (back && typeof requestAnimationFrame === "function") requestAnimationFrame(() => { try { if (n.getBoundingClientRect().top < 64) n.scrollIntoView({ block: "center", behavior: "auto" }); } catch { /* a nicety */ } });
+  }
   root.append(out);
 
   // ---- the ways: one line each, what it lets you spend a month in the first year, one button --------------------------------
@@ -193,7 +207,7 @@ export function render(root, ctx) {
     ui.h("ul", { class: "records" }, shown.map((r) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name, r.key === d.chosen ? ui.h("span", { class: "pill accent" }, "yours") : null), ui.h("span", { class: "rec-value" }, perMonth(r))),
       ui.h("div", { class: "rec-sub" }, lineOf(r)),
-      !r.offer ? null : ui.h("div", { class: "rec-foot" }, ui.button("Use this one", () => { pending = useWords(r); store.update((p) => { p.retirement = { ...(p.retirement ?? {}), strategy: r.key }; }); }, { class: "secondary" })))),
+      !r.offer ? null : ui.h("div", { class: "rec-foot" }, ui.button("Use this one", () => { pending = { text: useWords(r), back: { key: plan.retirement?.strategy } }; store.update((p) => { p.retirement = { ...(p.retirement ?? {}), strategy: r.key }; }); }, { class: "secondary" })))),
     ),
   ));
 

@@ -36,7 +36,8 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, "ssa.gov > my Social Security > Earnings Record: copy the year and earnings columns and paste them below. Nothing is sent anywhere; this device does the math with the Social Security Administration's own formula."),
   ));
   root.append(out);
-  if (!d.people.length) { root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with their birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), " first."))); return; }
+  // the way on is a 44 px button, not a word inside a sentence (stress test 2026-11-11, R-A9)
+  if (!d.people.length) { root.append(ui.card(null, ui.h("p", {}, "First add the adults in your home, with their birth dates."), ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "Add the people in your home ›")))); return; }
 
   const missing = new Set(ssMissingFor(plan).map((m) => m.id));   // no figure, no record, not on Income, not "won't get it"
   // One fold per person; the first opens by default, the one just saved stays open

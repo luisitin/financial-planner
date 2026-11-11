@@ -309,3 +309,24 @@ test("HSA R1 (follow-up 2026-11-07): the Contributions page reads the Medicare-a
   const y = compute(young, { today: "2026-11-06" });
   assert.equal(y.byPerson[0].limits.find((l) => l.kind === "hsa").limit, 4400); assert.equal(y.warnings.length, 0);
 });
+
+// stress test 2026-11-11: CF-8 (each row says it opens to edit) and R-A10 (a slip of extra digits is refused, not saved)
+test("stress test: rows say Edit, and $99,999,999 a month is refused with the reason", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const url = new URL("./view.js", import.meta.url).href;
+  const plan = retirementPlan();
+  const r = await renderPage(url, plan, "2026-11-11");
+  const rows = r.root.querySelectorAll(".page-list").flatMap((l) => l.children);
+  assert.ok(rows.length >= 1 && rows.every((li) => /Edit ›/.test(li.textContent)), rows.map((li) => li.textContent).join(" | "));
+  r.root.querySelectorAll("button").find((b) => /Add another contribution/.test(b.textContent))?.click();
+  const f = r.root.querySelector("form");
+  f.reset = () => {};   // (the fake form has no reset; the page empties it after an add)
+  f.querySelector('[name="amount"]').value = "99999999";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 0, "nothing saved");
+  assert.ok(/more than anyone can put into these accounts\. Check for an extra digit/.test(r.text()), r.text().slice(-600));
+  // an ordinary amount still goes in
+  f.querySelector('[name="amount"]').value = "500";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+});

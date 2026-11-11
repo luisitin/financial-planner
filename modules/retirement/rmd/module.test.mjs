@@ -291,13 +291,13 @@ function rmdUi() {
 }
 const outside = (n) => (n && typeof n === "object" ? (n.tag === "details" ? "" : (n.kids ?? []).map(outside).join(" ")) : String(n ?? ""));
 const paragraphs = (n, out = []) => { if (n && typeof n === "object" && n.tag !== "details") { if (n.tag === "p") out.push(n.textContent.replace(/\s+/g, " ").trim()); (n.kids ?? []).forEach((k) => paragraphs(k, out)); } return out; };
-async function rmdPage(plan, today = "2026-11-06") {
+async function rmdPage(plan, today = "2026-11-06", route = { rest: [], query: {} }) {
   const { render } = await import("./view.js");
   const fmt = await import("../../../core/format.js");
   const { ui, buttons } = rmdUi();
   const root = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
   let saved = null;
-  render(root, { ui, fmt: { ...fmt, today: () => today }, plan, store: { update: (fn) => { saved = structuredClone(plan); fn(saved); } }, api: null, server: null });
+  render(root, { ui, fmt: { ...fmt, today: () => today }, plan, route, store: { update: (fn) => { saved = structuredClone(plan); fn(saved); } }, api: null, server: null });
   let fold = "";
   const walk = (n) => { if (!n || typeof n !== "object") return; if (n.tag === "details" && /How this is worked out/.test(n.textContent)) fold = n.textContent.replace(/\s+/g, " "); (n.kids ?? []).forEach(walk); };
   root.kids.forEach(walk);
@@ -336,7 +336,8 @@ test("5b page: taken, two at once, not started yet, and nothing pre-tax", async 
   // said once (batch 5b UX review 15: hero, notice and card each said "taken")
   assert.ok(/^Required withdrawals Done for 2026\./.test(t.first), t.first.slice(0, 300));
   assert.ok(/Marked as taken on November 6, 2026\./.test(t.first) && !/required withdrawal is taken|withdrawal is taken \(marked/.test(t.first), t.first.slice(0, 600));
-  assert.ok(t.buttons.some((b) => /Not yet/.test(b.textContent)));
+  // the way back is named (stress test 2026-11-11, R4)
+  assert.ok(t.buttons.some((b) => /^Undo: not taken yet$/.test(b.textContent.trim())));
   // Al and Bea: both amounts in one sentence, each card with its own figure
   const c = await rmdPage(migrate(separateCouple()));
   assert.ok(/This year, take at least \$16,260 from Al's IRA and \$16,260 from Bea's IRA by December 31: the law requires both\./.test(c.first), c.first.slice(0, 600));
@@ -363,4 +364,31 @@ test("5b page: taken, two at once, not started yet, and nothing pre-tax", async 
   const none = migrate(widowPlan()); none.accounts = none.accounts.filter((a) => a.type !== "ira");
   const n = await rmdPage(none);
   assert.ok(/^Required withdrawals The law requires no withdrawals: there is no 401\(k\) or traditional IRA on file\./.test(n.first), n.first);
+});
+
+// stress test 2026-11-11: R4 (one filled button on a step of the path), R-A9 and RB3 (the way on is a 44 px button, not a word in a sentence)
+const allNodes = (n, out = []) => { if (n && typeof n === "object") { out.push(n); (n.kids ?? []).forEach((k) => allNodes(k, out)); } return out; };
+const linksOf = (root) => root.kids.flatMap((k) => allNodes(k)).filter((n) => n.tag === "a");
+test("stress test: I've taken it is outlined on the plan's path and filled elsewhere", async () => {
+  const off = await rmdPage(migrate(widowPlan()));
+  const taken = (r) => r.buttons.find((b) => /I've taken it/.test(b.textContent));
+  assert.ok(off.buttons.length && !taken(off).attrs.class, "filled off the path");
+  const on = await rmdPage(migrate(widowPlan()), "2026-11-06", { rest: [], query: { guide: "plan", step: "rmd" } });
+  assert.equal(taken(on).attrs.class, "secondary");
+});
+test("stress test: empty and no-pre-tax states have a button, not a small link", async () => {
+  const empty = migrate(widowPlan()); empty.household.people = [];
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const { ui } = rmdUi();
+  const root = { kids: [], append(...k) { this.kids.push(...k.flat()); } };
+  render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: empty, route: { rest: [], query: {} }, store: { update() {} } });
+  const a = linksOf(root);
+  assert.ok(a.some((x) => x.attrs.class === "btn" && x.attrs.href === "#/household/people" && /Add the people in your home/.test(x.textContent)), JSON.stringify(a.map((x) => [x.attrs, x.textContent])));
+  assert.ok(a.every((x) => /\bbtn\b/.test(x.attrs.class ?? "")), "no inline link left");
+  const none = migrate(widowPlan()); none.accounts = none.accounts.filter((x) => !/ira|401k|403b|457|tsp/i.test(x.type));
+  const root2 = { kids: [], append(...k) { this.kids.push(...k.flat()); } };
+  render(root2, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: none, route: { rest: [], query: {} }, store: { update() {} } });
+  const b = linksOf(root2);
+  assert.ok(b.some((x) => x.attrs.class === "btn secondary" && x.attrs.href === "#/balance/net-worth" && /Add it on Net worth/.test(x.textContent)), JSON.stringify(b.map((x) => [x.attrs, x.textContent])));
 });

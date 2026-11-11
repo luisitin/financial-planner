@@ -39,3 +39,6 @@ balances and failure timing. Some fixtures separate cash reserves from the
 investment portfolio to check that bill returns travel with historical years.
 All household figures and dates are invented; no production code or return file
 is used to calculate expected outputs.
+
+## Stress test 2026-11-11 (claude-e, retirement leftovers)
+The not-ready page has one button per missing answer (`../needs.js`) (R-A9).

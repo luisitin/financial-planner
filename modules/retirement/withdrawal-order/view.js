@@ -1,5 +1,6 @@
 // modules/retirement/withdrawal-order/view.js -- DOM only. Which order wins for this plan and
 // by how much, the four orders side by side, and one tap to make an order the plan's.
+import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute } from "./compute.js";
 
@@ -11,7 +12,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which account to draw from first"), ui.h("p", { class: "lede" }, "Taxable, pre-tax or Roth first: the order changes the tax you pay over a lifetime. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Which account to draw from first"), ui.h("p", { class: "lede" }, "Taxable, pre-tax or Roth first: the order changes the tax you pay over a lifetime. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   const best = d.options.find((o) => o.best), current = d.options.find((o) => o.current);

@@ -161,7 +161,7 @@ export function compute(plan, params = {}) {
   return {
     people, schedule, hasDeferred: deferredNow > 0, deferredNow, deferredAccounts: deferredAccounts.map((a) => ({ name: a.name, type: ACCOUNT_TYPES[a.type]?.label ?? a.type, balance: Number(a.balance) || 0 })),
     totalRmdReal: schedule.reduce((s, r) => s + r.rmdReal, 0), totalTaxReal: schedule.reduce((s, r) => s + r.taxes / (r.rmd / r.rmdReal || 1), 0), totalExtraTaxReal: schedule.reduce((s, r) => s + (r.extraTaxReal ?? 0), 0), taxRate: pr.ready ? pr.inputs.rates.taxRate : Number(plan.retirement?.taxRate ?? 0.15),
-    ready: pr.ready, table: Object.entries(UNIFORM_LIFETIME).filter(([a]) => Number(a) <= 100).map(([age, factor]) => ({ age: Number(age), factor })),
+    ready: pr.ready, missing: pr.ready ? [] : pr.missing ?? [], table: Object.entries(UNIFORM_LIFETIME).filter(([a]) => Number(a) <= 100).map(([age, factor]) => ({ age: Number(age), factor })),
   };
 }
 

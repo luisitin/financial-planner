@@ -1667,3 +1667,25 @@ test("careful answers are remembered by what they were worked out from", async (
   await new Promise((resolve) => whenWorked(ctx, el, { steps }, resolve));
   assert.equal(runs, 2);
 });
+
+// stress test 2026-11-11: R-A10 (a slip of extra digits refused at the spending box) and RB2 (another page's "Type what you'll
+// spend ›" opens the settings here at the box, once per visit)
+test("stress test: the spending box refuses $99,999,999,999 a month, and ?type=spending opens the settings at it", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const url = new URL("./view.js", import.meta.url).href;
+  const route = { rest: [], query: { type: "spending" } };
+  const r = await renderPage(url, blank(), "2026-11-11", { route });
+  await new Promise((res) => setTimeout(res, 5));
+  const fold = r.root.querySelectorAll("details").find((x) => /Retirement settings/.test(x.textContent));
+  assert.equal(fold.open, true, "opened at the box");
+  const box = fold.querySelector('[name="spendingMonthly"]');
+  box.value = "99999999999"; box.dispatch("input");
+  assert.ok(/or less/.test(box.validity), box.validity);
+  box.value = "6000"; box.dispatch("input");
+  assert.equal(box.validity, "");
+  // the same visit redrawn (after a save elsewhere on the page): not opened again
+  const again = await renderPage(url, blank(), "2026-11-11", { route });
+  await new Promise((res) => setTimeout(res, 5));
+  assert.notEqual(again.root.querySelectorAll("details").find((x) => /Retirement settings/.test(x.textContent)).open, true);
+});

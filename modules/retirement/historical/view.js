@@ -1,6 +1,7 @@
 // modules/retirement/historical/view.js -- DOM only. The plan replayed from every start year in
 // history: how many stretches it survived, which would have sunk it, and the spending that
 // survived them all.
+import { needButtons } from "../needs.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { needsWords } from "../../../core/words.js";
@@ -18,7 +19,7 @@ export function render(root, ctx) {
   host.append(ui.notice("info", "Replaying history..."));
   ctx.computeRemote("retirement/historical", { today: fmt.today() }).then((d) => {
     host.innerHTML = "";
-    if (!d || !d.ready) { host.append(ui.notice("warn", ui.h("span", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers.", " ", ui.h("a", { href: "#/retirement/projection" }, "Will the money last?")))); return; }
+    if (!d || !d.ready) { host.append(ui.card(null, ui.h("p", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers."), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))); return; }
     host.append(ui.card(null, ui.row(
       ui.stat("Survived", fmt.pct(d.successRate, 0), `of ${d.windows} start years (${d.dataRange[0]} to ${d.dataRange[1] - d.years + 1})`),
       ui.stat("Spending that lasted in every start year", d.safeSpending !== null ? fmt.money(d.safeSpending, cur) : "-", `a year, today's dollars; you plan on ${fmt.money(d.spendingYearly, cur)}`),

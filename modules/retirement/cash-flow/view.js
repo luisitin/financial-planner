@@ -1,9 +1,18 @@
 // modules/retirement/cash-flow/view.js -- DOM only. The year-by-year ledger: a toggle between
 // today's dollars and the dollars of each year, one record per year on a phone, a table on desktop.
+import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute } from "./compute.js";
 
 const state = { real: true, from: "retirement" };
+
+// the plan's own withdrawal order, not a fixed one (stress test 2026-11-11: the key named one order whatever Withdrawal order chose)
+// the same names as Which account to draw from first: taxable, pre-tax, Roth (review of the cash-flow key)
+const PART = { taxable: "taxable savings", deferred: "pre-tax accounts (taxed as it comes out)", free: "Roth (tax-free)" };
+export function orderSaid(order) {
+  const parts = (order ?? []).map((k) => PART[k]).filter(Boolean);
+  return parts.length ? `Money comes out of cash first, then ${parts.join(", then ")}.` : "Money comes out of cash first, then in the order set on Withdrawal order.";
+}
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -13,7 +22,7 @@ export function render(root, ctx) {
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
 
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Year by year"), ui.h("p", { class: "lede" }, "Every year of the plan in one table: ages, what comes in, what goes out, what is taken from which account and what is left. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Year by year"), ui.h("p", { class: "lede" }, "Every year of the plan in one table: ages, what comes in, what goes out, what is taken from which account and what is left. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },
@@ -41,7 +50,7 @@ export function render(root, ctx) {
       { key: "taxes", label: "Tax", align: "right", render: (r) => money(r.out.taxes) },
       { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall ? "bad" : "" }, money(r.end.total)) },
     ], rows), tailRow ? ui.h("p", { class: "bad small", style: { margin: "10px 0 0" } }, `${tailRow.first} to ${tailRow.last}: nothing left; about ${money(tailRow.short)} short every year.`) : null),
-    ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, "Left: every retirement account together at the end of that year. Money comes out of cash first, then taxable, then pre-tax (with tax), then tax-free."),
+    ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Left: every retirement account together at the end of that year. ${orderSaid(d.order)}`),
     ui.h("ul", { class: "records only-narrow" }, rows.map((r) => ui.h("li", {},
       // the bold figure says what it is (stress test 2026-11-11, RB4: "$450,880" with its meaning 3,000 px below)
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall ? "bad" : ""}` }, `${money(r.end.total)} left`)),

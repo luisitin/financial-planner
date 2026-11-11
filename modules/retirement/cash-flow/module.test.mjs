@@ -21,3 +21,12 @@ test("Review 2026-11-06 (round 7): the year's income lines say 'your Social Secu
     assert.deepEqual(lines(p), [`${theirs} Social Security`, "your Social Security"], "was: Me's Social Security, My spouse's Social Security");
   }
 });
+
+// stress test 2026-11-11: the key under the table says the plan's own order, not always "taxable, then pre-tax"
+test("stress test: the key names the plan's withdrawal order", async () => {
+  const { orderSaid } = await import("./view.js");
+  assert.equal(orderSaid(["taxable", "deferred", "free"]), "Money comes out of cash first, then taxable savings, then pre-tax accounts (taxed as it comes out), then Roth (tax-free).");
+  assert.equal(orderSaid(["deferred", "free", "taxable"]), "Money comes out of cash first, then pre-tax accounts (taxed as it comes out), then Roth (tax-free), then taxable savings.");
+  const p = retirementPlan(); p.retirement.withdrawalOrder = ["deferred", "taxable", "free"];
+  assert.deepEqual(compute(p, { today: "2026-11-11" }).order, ["deferred", "taxable", "free"]);
+});

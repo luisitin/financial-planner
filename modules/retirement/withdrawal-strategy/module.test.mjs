@@ -354,3 +354,24 @@ test("verify R2: on a way that takes more than the law requires, the answer stil
   const k = await page(migrate(earlyRetiree()));
   assert.ok(/Take it from Checking first, then Brokerage\./.test(k.first), k.first.slice(0, 600));
 });
+
+// stress test 2026-11-11, R4: "Use this one" changes the plan in one tap; its green line names the way back and stays
+test("stress test: Use this one names the way back, and Put it back restores the old way exactly", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const url = new URL("./view.js", import.meta.url).href;
+  const plan = retirementPlan(); delete plan.retirement.strategy;
+  const r = await renderPage(url, plan, "2026-11-11");
+  const use = r.root.querySelectorAll("button").find((b) => /Use this one/.test(b.textContent));
+  assert.ok(use, "a way to choose");
+  use.click();
+  assert.ok(r.saved.at(-1).retirement.strategy && r.saved.at(-1).retirement.strategy !== "fixed-real");
+  // the next render shows the green line with the named way back
+  const r2 = await renderPage(url, r.saved.at(-1), "2026-11-11");
+  const back = r2.root.querySelectorAll("button").find((b) => /^Put it back: Same spending every year$/.test(b.textContent));
+  assert.ok(back, r2.text().slice(0, 400));
+  back.click();
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  assert.equal(r2.saved.at(-1).retirement.strategy, migrate(structuredClone(plan)).retirement.strategy, "the way the plan had before");
+  const r3 = await renderPage(url, r2.saved.at(-1), "2026-11-11");
+  assert.ok(/Back to "Same spending every year", as before\./.test(r3.text()));
+});

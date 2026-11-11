@@ -3,6 +3,7 @@
 // the year-by-year list, the rules and the official names under "How this is worked out"; the settings last (round 8, Batch 5b:
 // the owner, 2026-11-06, "Just make sure a layman can easily understand and use the page"). A "way" is a fill rate: each year,
 // convert only what would be taxed at up to that rate (the bracket's top, in compute.js).
+import { needButtons } from "../needs.js";
 import { compute, IRMAA_FIRST_TIER } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { NameIn, nameIn, nameOf, verbFor, needItem } from "../../../core/words.js";
@@ -15,7 +16,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   const best = d.options.find((o) => o.best), none = d.none;
@@ -92,7 +93,8 @@ export function render(root, ctx) {
   const say = (text, cls) => hero.append(ui.h("p", cls ? { class: cls } : {}, ...[text].flat()));
   if (d.verdict === "no-pretax") {
     say("There is nothing to convert: a conversion moves money from a 401(k) or traditional IRA into a Roth, and none is on file.", "lede");
-    say(["If you have one, add it on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), "."]);
+    say("If you have one, add it on Net worth.");
+    hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Add it on Net worth ›")));   // RB3: a button, not a word in the sentence
   } else if (d.verdict === "no-years") {
     if (nw.reason === "started") {
       // a do-or-don't in two short lines (UX review 12: "It can pay for your heirs" left her asking "so should I?")

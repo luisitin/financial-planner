@@ -245,3 +245,6 @@ the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N o
   say: with a hold-back (`taxes/estimated` `holdBack`: a withdrawal still to come) "If none was held back, Estimated payments shows how much to have held
   back from a withdrawal still to come."; with only payments to make "... January 15, 2027 (irs.gov/payments). Estimated payments has the amounts by quarter."
   Test: "follow-up 2026-11-07 (B)".
+
+## Stress test 2026-11-11 (claude-e, retirement leftovers)
+Every missing thing is a button; "Estimated payments ›" is an outlined button; "I've taken it" is outlined on the path. Its undo reads "Undo: not taken yet" and ignores taps for 0.8 s after it is drawn, because it sits where "I've taken it" was and a double tap undid it (RB3; review).

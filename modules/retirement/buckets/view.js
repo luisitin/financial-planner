@@ -1,5 +1,6 @@
 // modules/retirement/buckets/view.js -- DOM only. The three buckets as one bar and three lines, the stock
 // share they leave against the plan's, how to refill them, and the years in each (a fold).
+import { needButtons } from "../needs.js";
 import { compute, DEFAULTS } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 
@@ -33,7 +34,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Three buckets"),
     ui.h("p", { class: "lede" }, "A simple way to hold savings in retirement: the next couple of years of withdrawals in cash, the years after in bonds, the rest in stocks. When stocks fall you live on the cash and bonds and never have to sell low; in good years you top the buckets up from stocks.")));
-  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("First, the plan needs", d.missing)), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?")))); return; }
+  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("First, the plan needs", d.missing)), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))))); return; }
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   const colors = { cash: "bk-cash", bonds: "bk-bonds", stocks: "bk-stocks" };

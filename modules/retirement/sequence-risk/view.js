@@ -1,5 +1,6 @@
 // modules/retirement/sequence-risk/view.js -- DOM only. The same years of returns in three
 // orders, on your own plan, next to the steady line you assume.
+import { needButtons } from "../needs.js";
 import { compute } from "./compute.js";
 
 export function render(root, ctx) {
@@ -8,7 +9,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(Math.max(0, n), cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Why the order of returns matters"), ui.h("p", { class: "lede" }, "Bad years early in retirement, while you are withdrawing, hurt far more than the same bad years later. This page shows it on your own plan; it needs the answers from Will the money last? first."), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Why the order of returns matters"), ui.h("p", { class: "lede" }, "Bad years early in retirement, while you are withdrawing, hurt far more than the same bad years later. This page shows it on your own plan; it needs the answers from Will the money last? first."), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },

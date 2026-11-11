@@ -24,5 +24,5 @@ export function compute(plan, params = {}) {
     shortfall: k(r, r.shortfall),
   }));
   const sum = (f) => rows.reduce((s, r) => s + f(r), 0);
-  return { ready: true, real, rows, retireYear: pr.inputs.retireYear, people: pr.people, totals: { contributions: sum((r) => r.in.contributions), income: sum((r) => r.in.income), spending: sum((r) => r.out.spending), taxes: sum((r) => r.out.taxes), withdrawn: sum((r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free) }, verdict: pr.verdict, shortYear: pr.shortYear };
+  return { ready: true, real, rows, order: [...(pr.inputs.withdrawalOrder ?? [])], retireYear: pr.inputs.retireYear, people: pr.people, totals: { contributions: sum((r) => r.in.contributions), income: sum((r) => r.in.income), spending: sum((r) => r.out.spending), taxes: sum((r) => r.out.taxes), withdrawn: sum((r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free) }, verdict: pr.verdict, shortYear: pr.shortYear };
 }

@@ -24,3 +24,6 @@ The plan through `retirement/cash-flow` (today's dollars), `retirement.stocksRet
 
 ## Ideas / not yet
 - Replay the buckets through history (If history repeated) against a fixed mix.
+
+## Stress test 2026-11-11 (claude-e, retirement leftovers)
+The not-ready page has one button per missing answer (`../needs.js`) (R-A9).

@@ -31,6 +31,10 @@ export function readAmountOrShare(text) {
  * on the amount ends when the amount or the period changed (a changed period is the person's own, and a guess is only ever
  * monthly dollars), and one on the match when the match changed.
  */
+/** Above this much a year a contribution is taken for a typing slip and refused (R-A10). Far above the law's limits on retirement
+ * accounts; a brokerage account has none, so it is generous. */
+export const CONTRIBUTION_YEARLY_CEILING = 500000;
+
 export function applyContributionEdit(p, id, clean) {
   const i = (p.retirement.contributions ?? []).findIndex((c) => c.id === id);
   if (i < 0) return;
@@ -106,7 +110,10 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
     // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
     // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
-    !accounts.length ? ui.h("p", { class: "muted small" }, startable ? "No retirement account yet: one tap below adds your 401(k) to the plan. An IRA, Roth or HSA goes on the " : "First add the retirement accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), startable ? "." : " (401(k), IRA, Roth, HSA, brokerage).") : null,
+    // (R-A9: the way to Net worth is a button, not a small word in the sentence; outlined when the 401(k) question below is the
+    // filled way on)
+    !accounts.length ? ui.h("p", { class: "muted small" }, startable ? "No retirement account yet: one tap below adds your 401(k) to the plan. An IRA, Roth or HSA goes on Net worth." : "First add the retirement accounts themselves (401(k), IRA, Roth, HSA, brokerage).") : null,
+    !accounts.length ? ui.row(ui.h("a", { class: startable ? "btn secondary" : "btn", href: "#/balance/net-worth" }, "Add your accounts ›")) : null,
     d.hasData ? enoughLine() : null,
   ));
   // "are we saving enough?": the share of pay, then the plan's own answer (Will the money last?), the same one the
@@ -315,6 +322,14 @@ export function render(root, ctx) {
           amount = Math.round(said.pct * pay / perYear(1, v.period) * 100) / 100;
           pctOfPay = said.pct;
         }
+        // a slip of extra digits is said before it is saved (stress test 2026-11-11, R-A10: $99,999,999 a month was added)
+        // the whole account counts (its other rows and the employer's part too), and the check is made here, not by the browser,
+        // so an old red line never stays beside a new reason (review of R-A10)
+        const match = Math.max(0, Number(v.employerMatch) || 0);
+        if (match > CONTRIBUTION_YEARLY_CEILING) return fail(`${fmt.money(match, cur)} a year from the employer is more than anyone can put into these accounts. Check for an extra digit.`);
+        const others = (plan.retirement?.contributions ?? []).filter((c) => c.accountId === v.accountId && c.id !== editing?.id).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period) + (Number(c.employerMatch) || 0), 0);
+        const yearly = perYear(amount, v.period);
+        if (yearly + match + others > CONTRIBUTION_YEARLY_CEILING) return fail(`That comes to ${fmt.money(yearly + match + others, cur)} a year into this account${others > 0 ? " with what is already going in" : ""}${match > 0 ? ", the employer's part included" : ""}, more than anyone can put into these accounts. Check for an extra digit: the box is what goes in each time.`);
         const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
         if (pctOfPay !== null) { const t = `${pending?.text ?? pending} ${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`; pending = typeof pending === "object" ? { ...pending, text: t } : t; }
@@ -331,7 +346,8 @@ export function render(root, ctx) {
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, "🏦"),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
-      ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"))))),
+      // "Edit ›" under the amount, as on Income and Expenses (stress test 2026-11-11, CF-8: the rows could be tapped and did not say so)
+      ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"), ui.h("div", { class: "muted small" }, "Edit \u203a"))))),
   ));
   formCard.append(formHost);
   // no account yet: the form has nothing to show, so no empty card (round 8)

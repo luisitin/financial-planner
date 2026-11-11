@@ -38,3 +38,37 @@ test("the flat rate is reported as bracketsOn, not as a note", async () => {
   assert.equal(d.bracketsOn, false);
   assert.ok(!d.notes.some((n) => /flat tax rate/.test(n)));
 });
+
+// stress test 2026-11-11, RB2 and R-A9: the retirement pages that cannot work yet send a newcomer straight to where each missing
+// thing is typed (modules/retirement/needs.js), the first button filled, not to Will the money last? to read the same list again
+test("stress test: needs.js turns the projection's missing list into buttons, first filled", async () => {
+  const { needAct } = await import("../needs.js");
+  assert.deepEqual(needAct("a person with a birth date on the People page"), { href: "#/household/people", label: "Add people ›" });
+  assert.deepEqual(needAct("your accounts on the Net worth page"), { href: "#/balance/net-worth", label: "Add what you own ›" });
+  assert.deepEqual(needAct("what you will spend in retirement (a figure here, or your expenses on the Expenses page)"), { href: "#/retirement/projection?type=spending", label: "Type what you'll spend ›" });
+  assert.equal(needAct("Everyone is past the plan's end age: check the birth dates on the People page").href, "#/household/people");
+  assert.equal(needAct("the plan is longer than the history on file"), null);
+});
+test("stress test: every empty retirement page shows the same buttons and no small link to Will the money last?", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const pages = ["withdrawal-order", "withdrawal-strategy", "roth-conversions", "cash-flow", "buckets", "sequence-risk"];
+  for (const id of pages) {
+    const r = await renderPage(new URL(`../${id}/view.js`, import.meta.url).href, emptyPlan(), "2026-11-11");
+    const links = r.root.querySelectorAll("a");
+    const hrefs = links.map((a) => [a.getAttribute("href"), a.className]);
+    assert.deepEqual(hrefs.slice(0, 3), [["#/household/people", "btn"], ["#/balance/net-worth", "btn secondary"], ["#/retirement/projection?type=spending", "btn secondary"]], `${id}: ${JSON.stringify(hrefs)}`);
+    assert.ok(!hrefs.some(([h]) => h === "#/retirement/projection"), `${id} still sends to the list page: ${JSON.stringify(hrefs)}`);
+  }
+  // the two odds pages ask the PC; their not-ready answer draws the same row
+  for (const id of ["monte-carlo", "historical"]) {
+    const { compute: c } = await import(`../${id}/compute.js`);
+    // (these two read ctx.view and the store's backend, which renderPage leaves out: a ctx of their own)
+    const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js"), { render } = await import(`../${id}/view.js`);
+    const root = document.createElement("main"), plan = emptyPlan();
+    render(root, { ui, fmt: { ...fmt, today: () => "2026-11-11" }, plan, view: {}, route: { rest: [], query: {} }, store: { get: () => plan, update() {}, backend: () => "local" }, computeRemote: async (k, o) => c(plan, { today: "2026-11-11", ...o }) });
+    await new Promise((r) => setTimeout(r, 0));
+    const hrefs = root.querySelectorAll("a").map((a) => [a.getAttribute("href"), a.className]);
+    assert.ok(hrefs.some(([h, c2]) => h === "#/household/people" && c2 === "btn"), `${id}: ${JSON.stringify(hrefs)}`);
+    assert.ok(!root.querySelectorAll(".notice").some((n) => n.classList.contains("warn")), `${id}: no amber box for a first open`);
+  }
+});

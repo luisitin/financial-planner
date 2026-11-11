@@ -2,6 +2,7 @@
 // by when, and what you can spend with it; then what to do (one line, one button), the years ahead in a sentence, and every
 // IRS figure, the year-by-year list and the table under "How this is worked out" (round 8, Batch 5b: the owner, 2026-11-06,
 // "Just make sure a layman can easily understand and use the page").
+import { needButtons } from "../needs.js";
 import { compute, thisYear, thisYearTax, markTaken } from "./compute.js";
 import { firstYear } from "../withdrawal-strategy/compute.js";
 import { compute as estimated } from "../../taxes/estimated/compute.js";
@@ -9,7 +10,7 @@ import { whenCareful, monthlyOf, accountName, slot, chanceWords, BAD_RUN, BAD_RU
 import { rmdFactor, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7); thisYear names
 // someone with no name "You", which reads the same
-import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, needsWords } from "../../../core/words.js";
 // the states with no income tax (taxes/state's own list): there the hold-back is the federal tax only (round 8 review D5)
 import { NO_WAGE_TAX } from "../../taxes/state/compute.js";
 // the Roth sentence and the source line under the "none on file" answer (path part 3); with an account on file, "How this is
@@ -24,9 +25,13 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 let pending = null;
 
 export function render(root, ctx) {
+  // Undo sits where "I've taken it" was: a second tap of a double tap lands on it, so it waits a moment after it is drawn
+  // (review of RB3: a double tap marked it taken and then not taken)
+  const drawnAt = Date.now();
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
   const today = fmt.today();
+  const onPath = !!ctx.route?.query?.guide;   // drawn as a step of a guide's path (?guide=...)
   const d = compute(plan, { today });
   const money = (n) => fmt.money(n, cur);
   const long = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -49,7 +54,8 @@ export function render(root, ctx) {
   // through the year (IRC 6654(g)); null when it does not apply (nothing still to come, or no tax short)
   let est = null;
   try { est = withAmt.length ? estimated(plan, { today }) : null; } catch { est = null; }
-  const estLink = ui.h("a", { href: "#/taxes/estimated" }, "Estimated payments");
+  // a 44 px outlined button under the sentence, not a word inside it (stress test 2026-11-11, RB3)
+  const estButton = () => ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments ›"));
   const hero = ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Required withdrawals"));
   root.append(hero);
   const out = ui.h("div");
@@ -59,10 +65,11 @@ export function render(root, ctx) {
   // ---- nobody to work it out for, or nothing pre-tax --------------------------------------------------------------------------
   if (!d.people.length) {
     hero.append(ui.h("p", { class: "lede" }, "From 73 or 75, depending on the year you were born, the law makes you take some money out of accounts you haven't paid tax on yet (like a 401(k) or a traditional IRA) each year."));
-    root.append(ui.notice("warn", ui.h("span", {}, "Add the adults with their birth dates on the ", ui.h("a", { href: "#/household/people" }, "People page"), ", and this page says when and how much.")));
+    // a plain sentence and a 44 px button, not an amber box with a small link (stress test 2026-11-11, R-A9 and RB3)
+    hero.append(ui.h("p", {}, "Add the adults in your home with their birth dates, and this page says when and how much."), ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "Add the people in your home ›")));
     return;
   }
-  if (!d.hasDeferred) { hero.append(ui.h("p", { class: "lede" }, "The law requires no withdrawals: there is no 401(k) or traditional IRA on file."), ui.h("p", {}, "If you have one, add it on ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth"), "."), ui.h("p", { class: "muted small" }, ROTH_SOURCE)); return; }
+  if (!d.hasDeferred) { hero.append(ui.h("p", { class: "lede" }, "The law requires no withdrawals: there is no 401(k) or traditional IRA on file."), ui.h("p", {}, "If you have one, add it on Net worth."), ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Add it on Net worth ›")), ui.h("p", { class: "muted small" }, ROTH_SOURCE)); return; }
 
   // ---- the answer: what to take, from where, by when, and what you can spend --------------------------------------------------
   if (due.length) {
@@ -131,9 +138,11 @@ export function render(root, ctx) {
         // owed. Batch 1 landed, so Estimated payments counts the withdrawal: where it has a hold-back for a withdrawal still to come, the
         // sentence is a link to it; where it only has payments to make, the date stays and the link follows; else the date alone
         addsOf(r) !== null ? ui.h("p", { class: "small" }, `It adds about ${money(addsOf(r))} to ${whoseTax(r)} ${year} federal tax. `,
-          est?.holdBack ? ["If none was held back, ", estLink, " shows how much to have held back from a withdrawal still to come."]
-            : [`If none was held back, send that to the IRS by January 15, ${year + 1} (irs.gov/payments).`, ...(est?.needsEstimates ? [" ", estLink, " has the amounts by quarter."] : [])]) : null,
-        ui.row(ui.button("Not yet", () => { pending = `${NameOf(who)} ${year} withdrawal is back on the list.`; store.update((p) => markTaken(p, year, r.id, null)); }, { class: "secondary" }))));
+          est?.holdBack ? "If none was held back, Estimated payments shows how much to have held back from a withdrawal still to come."
+            : `If none was held back, send that to the IRS by January 15, ${year + 1} (irs.gov/payments).${est?.needsEstimates ? " Estimated payments has the amounts by quarter." : ""}`) : null,
+        addsOf(r) !== null && (est?.holdBack || est?.needsEstimates) ? estButton() : null,
+        // the way back, named (stress test 2026-11-11, R4)
+        ui.row(ui.button("Undo: not taken yet", () => { if (Date.now() - drawnAt < 800) return; pending = `${NameOf(who)} ${year} withdrawal is back on the list.`; store.update((p) => markTaken(p, year, r.id, null)); }, { class: "secondary" }))));
       continue;
     }
     const k401 = r.accounts.filter((a) => a.type === "401k").length;
@@ -149,7 +158,8 @@ export function render(root, ctx) {
       k401 && r.accounts.length > 1 ? ui.h("p", { class: "small" }, "Each 401(k)'s share comes out of that 401(k). The IRAs' shares can be taken from any one of them.") : null,
       k401 && r.working ? ui.h("p", { class: "small" }, `Still working? A 401(k) at ${nameOf(who)} current job can usually wait until retiring (check the plan's rules); IRAs cannot.`) : null,
       ui.h("p", { class: "muted small" }, "Missing it costs 25% of what was not taken."),
-      ui.row(ui.button("I've taken it", () => { pending = `Marked: ${nameOf(who)} ${year} withdrawal is taken.`; store.update((p) => markTaken(p, year, r.id, today)); })),
+      // outlined on a step of the plan's path, where the step's own way on is the one filled button (R4)
+      ui.row(ui.button("I've taken it", () => { pending = `Marked: ${nameOf(who)} ${year} withdrawal is taken.`; store.update((p) => markTaken(p, year, r.id, today)); }, onPath ? { class: "secondary" } : {})),
     ));
   }
 
@@ -159,7 +169,8 @@ export function render(root, ctx) {
   const started = d.people.some((p) => p.yearsUntil === 0 && p.deferredNow > 0);
   const next = d.schedule.find((r) => r.year === year + 1);
   const biggest = d.schedule.reduce((m, r) => Math.max(m, r.rmdReal), 0);
-  if (!d.ready) root.append(ui.notice("info", ui.h("span", {}, "To see how big they get, ", ui.h("a", { href: "#/retirement/projection" }, "Will the money last?"), " needs a few more answers.")));
+  // what the projection still needs, as buttons to where each is typed (RB2, RB3)
+  if (!d.ready) root.append(ui.card(null, ui.h("p", {}, needsWords("To see how big they get, the plan needs", d.missing)), needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last? ›"))));
   else if (d.schedule.length) root.append(ui.card("The years ahead",
     ui.h("p", {}, withAmt.length && next
       ? `Next year's ${many ? "come to" : "is"} about ${money(next.rmdReal)}, in today's dollars. All of them together come to about ${money(d.totalRmdReal)}.`

@@ -302,3 +302,6 @@ Pat and Jo unchanged ($577,371, 12 years under the plan), key row `income-first-
 is left when pay stops; on 3 of 230 sampled plans that run out anyway, they run out 1 to 8 years sooner. Engine `core/math/retirement.js` (`raisedFits`); oracles
 `withdrawal_strategy.py` (income-first) and `lead_audit.py`; test `tests/retirement-ways.test.mjs` "money review M1". The first screen also says "You plan $X a month." beside
 the figure it could spend, so the plan's own "yours" line below is no surprise. "A bad stretch like the 1970s" (the decade, not 1973).
+
+## Stress test 2026-11-11 (claude-e, retirement leftovers)
+"Use this one" names the way back: the green line carries "Put it back: <the earlier way>" and stays until the next change, and it is scrolled into view when it would sit under the top bar (R4; the review found the line off screen).

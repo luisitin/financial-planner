@@ -4,7 +4,7 @@ import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJob
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { whenCareful, carefulKey, knownAnswer, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+import { afterPaint, whenCareful, carefulKey, knownAnswer, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
@@ -46,12 +46,7 @@ export function render(root, ctx) {
     // one button for each thing still missing, the first one filled; what is done has none (stress test 2026-11-11, x-3: "People"
     // stayed the filled button after People was done, while the one thing missing was a box further down)
     const settings = settingsCard(ctx, d);
-    const typeSpending = () => {
-      settings.open = true;
-      const box = settings.querySelector("input[name=spendingMonthly]") ?? settings.querySelector("input");
-      settings.scrollIntoView({ behavior: "smooth", block: "start" });
-      box?.focus({ preventScroll: true });
-    };
+    const typeSpending = () => typeInto(settings);
     const steps = d.missing.map((m) => {
       const t = String(m);
       if (/People page/.test(t)) return { words: t.replace("a person with a birth date on the People page", "who is in the household, with birth dates (People page)"), act: ui.h("a", { href: "#/household/people" }, /^a person/.test(t) ? "Add people ›" : "Check People ›") };
@@ -69,6 +64,7 @@ export function render(root, ctx) {
       ui.row(...acts),
     ));
     root.append(settings);
+    openAsked(ctx, settings);
     return;
   }
   // "(Contributions page)" and the like are links to that page, not plain text to go and find
@@ -219,7 +215,26 @@ export function render(root, ctx) {
   root.append(unknownYet
     ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What goes into this"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, intoList))
     : ui.card("What goes into this", intoList));
-  root.append(settingsCard(ctx, d));
+  const settings = settingsCard(ctx, d);
+  root.append(settings);
+  openAsked(ctx, settings);
+}
+
+/** Retirement settings opened at the spending box, scrolled to and focused (the not-ready hero's "Type what you'll spend ↓"). */
+function typeInto(settings) {
+  settings.open = true;
+  const box = settings.querySelector("input[name=spendingMonthly]") ?? settings.querySelector("input");
+  settings.scrollIntoView({ behavior: "smooth", block: "start" });
+  box?.focus({ preventScroll: true });
+}
+
+// ?type=spending (another retirement page's "Type what you'll spend ›", needs.js): the settings open at the box once per visit,
+// not again on each redraw after a save (stress test 2026-11-11, RB2: those pages sent a newcomer here to read the list again)
+let typedFor = null;
+function openAsked(ctx, settings) {
+  if (ctx.route?.query?.type !== "spending" || typedFor === ctx.route) return;
+  typedFor = ctx.route;
+  afterPaint(() => { if (settings.isConnected) typeInto(settings); });
 }
 
 /**
@@ -288,6 +303,9 @@ function healthRecord(ctx, d) {
     ui.h("label", { style: { display: "flex", gap: "10px", alignItems: "center", minHeight: "44px", marginTop: "4px", fontSize: "var(--fs-sm)" } }, box, ui.h("span", {}, "My spending figure already includes health insurance")));
 }
 
+// a slip of extra digits is refused at the box, in the box's own words (stress test 2026-11-11, R-A10: $99,999,999,999 a month
+// was saved and the page said "Runs out in 2055"); far above any household this plan is for
+export const SPEND_MONTHLY_CEILING = 100000;
 function settingsCard(ctx, d) {
   const { ui, fmt, store, plan } = ctx;
   const rt = plan.retirement ?? {};
@@ -303,7 +321,7 @@ function settingsCard(ctx, d) {
   const waysLeft = Object.keys(STRATEGIES).length - ways.length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
-    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses` },
+    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, max: SPEND_MONTHLY_CEILING, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses` },
     { key: "stocksNow", label: "Share in stocks now", type: "percent", min: 0, max: 100, help: "the rest counts as bonds" },
     { key: "stocksRetired", label: "Share in stocks once retired", type: "percent", min: 0, max: 100 },
     { key: "taxMode", label: "How tax is worked out", type: "select", options: [{ value: "flat", label: "A flat rate on pre-tax withdrawals (quick)" }, { value: "brackets", label: "The federal brackets on each year's income" }], help: "the brackets use the filing status from the People page and the rules on the Taxes pages" },
