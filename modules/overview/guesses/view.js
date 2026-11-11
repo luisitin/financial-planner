@@ -21,7 +21,17 @@ const STYLE = `
 .gs-root .gs-group { font-weight: 600; margin: 14px 0 2px; color: var(--text-2); font-size: var(--fs-sm); }
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
-let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0 };   // this visit's looked-over rows (see render)
+let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0, upGone: 0 };
+// a settled row or card keeps its old height only for the moment a second tap could land, then lets it go (review 2026-11-11
+// N8: kept lines held 200 px around one line of text, over 500 px blank after three)
+const HOLD_MS = 700;
+function holdHeight(el, h, since) {
+  const left = HOLD_MS - (Date.now() - since);
+  if (!h || left <= 0) return el;
+  el.style.minHeight = `${h}px`;
+  try { setTimeout(() => { el.style.minHeight = ""; }, left); } catch { el.style.minHeight = ""; }
+  return el;
+}   // this visit's looked-over rows (see render)
 
 // ---- the cards about our guesses, drawn here and on the Dashboard and Expenses (spec 11.3-11.6). Each lists what its filled
 // button writes; nothing is written before a tap. `say(kind, text, undo)` keeps the page's notice for its next render; `undo` is
@@ -230,7 +240,7 @@ export function render(page, ctx) {
   const say = (kind, text, undo = null, home = null) => { pending = { kind, text, undo, home }; };
   // this visit (a new address is a new visit): the rows kept or saved, each shown as one line where it was until the person
   // leaves, so the next row does not slide under the thumb, and whether "Matters most" had rows when the visit began (F2)
-  if (ctx.route !== visit.route) visit = { route: ctx.route, done: new Map(), hadBig: null, ord: new Map(), upH: 0 };
+  if (ctx.route !== visit.route) visit = { route: ctx.route, done: new Map(), hadBig: null, ord: new Map(), upH: 0, upGone: 0 };
   // each row's place as first drawn this visit: a kept row's line goes back to it (attack2: they came out in reverse order)
   const ordOf = (path) => { if (!visit.ord.has(path)) visit.ord.set(path, visit.ord.size); return visit.ord.get(path); };
   for (const r of [...d.big, ...d.small]) ordOf(r.path);
@@ -283,8 +293,10 @@ export function render(page, ctx) {
   if (!listed.length && visit.upH) {
     // the card was here this visit and its figure was just settled: a short line keeps its height, so the rows below do not
     // move up under the thumb (attack2: Credit cards' "That's about right" slid under a tap meant for the car loan)
-    root.append(ui.h("section", { class: "card", style: { minHeight: `${visit.upH}px` } }, ui.h("h2", {}, "Better guesses"), ui.h("p", { class: "muted" }, "Nothing left to change here.")));
+    visit.upGone ||= Date.now();
+    root.append(holdHeight(ui.h("section", { class: "card" }, ui.h("h2", {}, "Better guesses"), ui.h("p", { class: "muted" }, "Nothing left to change here.")), visit.upH, visit.upGone));
   }
+  if (listed.length) visit.upGone = 0;
   if (listed.length) {
     const words = (x, v) => (x.kind === "percent" ? pctText(v) : x.kind === "money" ? `${fmt.money(v, cur)}${x.unit === "month" ? " a month" : x.unit === "year" ? " a year" : ""}` : String(v));
     const upCard = ui.card("Better guesses are ready",
@@ -305,7 +317,7 @@ export function render(page, ctx) {
   if (!d.count && visit.done.size) {
     // the last row kept or typed this visit: the lines stay, and the page says it is all looked over (attack2: it said
     // "every figure is one you typed" about guesses just kept, and jumped to the top)
-    const lines = [...visit.done.values()].sort((a, b) => a.at - b.at).map((x) => ui.h("li", { class: "gs-done", style: x.h ? { minHeight: `${x.h}px` } : {} }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))));
+    const lines = [...visit.done.values()].sort((a, b) => a.at - b.at).map((x) => holdHeight(ui.h("li", { class: "gs-done" }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0));
     root.append(ui.card("All looked over", ui.h("ul", { class: "records" }, ...lines),
       ui.h("div", { class: "row" }, ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Back to the Dashboard"))));
     root.append(sourcesFold());
@@ -337,7 +349,7 @@ export function render(page, ctx) {
       err);
     const home = homeOf(r.path);
     // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
-    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(li.getBoundingClientRect?.().height || 0) });
+    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(li.getBoundingClientRect?.().height || 0), t: Date.now() });
     // a guessed mortgage payment kept (or typed as the same figure) keeps the tax and insurance it held (escrowKept, 2026-11-07)
     const keep = () => {
       const undo = undoOf(ctx.plan);
@@ -417,7 +429,7 @@ export function render(page, ctx) {
     d.bankNote ? ui.h("div", { class: "gs-why" }, d.bankNote.text, " ", ui.h("a", { href: d.bankNote.link.href }, d.bankNote.link.label)) : null,
     ui.h("div", { class: "gs-foot" }, ui.h("a", { class: "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
   // the rows looked over this visit, one line each where they were (F2)
-  const doneLine = (x) => ui.h("li", { class: "gs-done", style: x.h ? { minHeight: `${x.h}px` } : {} }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`)));
+  const doneLine = (x) => holdHeight(ui.h("li", { class: "gs-done" }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0);
   const withDone = (rows, group) => {
     const out = rows.map(record);
     const items = rows.map((r, i) => ({ at: ordOf(r.path), el: out[i] }));
