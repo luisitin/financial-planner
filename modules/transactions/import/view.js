@@ -91,7 +91,9 @@ export function render(root, ctx) {
     // text that is not a bank file: one plain line, no column pickers and no tiles of 0 (stress test T6, 2026-11-11)
     if (!prep.add.length && !prep.skip.length && !looksLikeBankFile(prep.parsed)) {
       // a brokerage's positions file has amounts but no dates: it belongs on Holdings, not here (attack, 2026-11-11)
-      if (parsePositions(text).rows.length) {
+      const pos = parsePositions(text);
+      // a symbol column, or shares with a price: a plain "Name,Value" list is not a brokerage file
+      if (pos.rows.length && (pos.mapping.symbol >= 0 || (pos.mapping.shares >= 0 && pos.mapping.price >= 0))) {
         previewHost.append(ui.notice("info", "This is a list of investments (a positions file), not bank activity. Bring it in on the Holdings page instead."),
           ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Go to Holdings")));
         return;

@@ -2,6 +2,8 @@
 // technical parts (PC connection, AI assistant) folded at the bottom. Order, folding and
 // wording per docs/DESIGN_LOG.md 2026-09-15 (Settings round 6).
 import { conn } from "../../../core/api.js";
+import { planShapeProblem } from "./compute.js";
+import { emptyPlan } from "../../../core/schema/migrate.js";
 import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
 
 // Plain names for the plan's list sections, shown in "Your data".
@@ -113,8 +115,7 @@ export function render(root, ctx) {
     let p = null;
     try { p = JSON.parse(await f.text()); } catch { p = null; }
     // a file with the right mark but the wrong shape (a list where a list belongs) is refused too (attack, 2026-11-11)
-    const misshapen = (q) => ["accounts", "transactions", "income", "expenses", "debts", "goals", "rules", "imports"].some((k) => k in q && !Array.isArray(q[k])) || ("household" in q && (typeof q.household !== "object" || Array.isArray(q.household)));
-    if (!p || typeof p !== "object" || Array.isArray(p) || !("schemaVersion" in p) || misshapen(p)) { dataOut.say("error", "That file is not a copy made by this app. Pick a file you downloaded from this page (it is called plan- and a date, and ends in .json).", false); fileIn.value = ""; return; }
+    if (!p || typeof p !== "object" || Array.isArray(p) || !("schemaVersion" in p) || planShapeProblem(p, emptyPlan())) { dataOut.say("error", "That file is not a copy made by this app. Pick a file you downloaded from this page (it is called plan- and a date, and ends in .json).", false); fileIn.value = ""; return; }
     const now = counts.length ? ` Your plan as it is now (${counts.slice(0, 3).join(", ")}${counts.length > 3 ? ", and more" : ""}) will be replaced.` : "";
     if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
       beforeRestore = structuredClone(plan);

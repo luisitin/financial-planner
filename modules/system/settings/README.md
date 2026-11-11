@@ -31,3 +31,8 @@ copy and it cannot be undone. Download a copy first...". After the reload Settin
 device." once (sessionStorage `planner.erased`) with a "Start a new plan" button. Restore names what is replaced (the first
 three section counts) and its green notice has Undo (the plan as it was, kept for the visit). A file that is not a plan
 copy gets a plain sentence instead of the JSON parser's message.
+In the sandbox the question and the notice after the reload both speak of the pretend plan.
+A file with `schemaVersion` but the wrong shape is refused before anything is replaced: `planShapeProblem(file, emptyPlan())`
+(compute.js) checks every key the file shares with an empty plan, two levels down: a list must be a list and a set of fields a
+set of fields (so `household.people: "x"`, `holdings: "oops"`, `meta: "oops"`, `household: null` are refused). Missing keys are
+fine (migrate fills them). Before this, `household.people: "x"` restored and then stopped the app from opening at all.

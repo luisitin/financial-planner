@@ -8,7 +8,7 @@ const FIELDS = (plan, keep = "") => [
   // starts on "Pick a category...": a rule added without touching it filed under the first category (stress test T5)
   { key: "category", label: "Give it the category", type: "select", required: true, options: [{ value: "", label: "Pick a category..." }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` })),
     // a rule whose category was hidden on the Categories page still opens on it (attack, 2026-11-11)
-    ...(keep && !categoriesOf(plan).some((c) => c.id === keep) ? [(({ icon = "", label = keep } = categoriesOf(plan, { all: true }).find((c) => c.id === keep) ?? {}) => ({ value: keep, label: `${icon} ${label} (hidden)`.trim() }))()] : [])] },
+    ...(keep && !categoriesOf(plan).some((c) => c.id === keep) ? [((c = categoriesOf(plan, { all: true }).find((x) => x.id === keep)) => ({ value: keep, label: c ? `${c.icon ?? ""} ${c.label} (hidden)`.trim() : "(category removed)" }))()] : [])] },
   { key: "payee", label: "And show the payee as", type: "text", placeholder: "e.g. Netflix (blank keeps the bank's text)" },
   { key: "direction", label: "Only for", type: "select", options: [{ value: "any", label: "money in or out" }, { value: "out", label: "money going out" }, { value: "in", label: "money coming in" }] },
   { key: "accountId", label: "Only in this account", type: "select", options: [{ value: "", label: "Any account" }, ...(plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))] },
