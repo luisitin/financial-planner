@@ -97,7 +97,10 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const today = fmt.today();
   const d = compute(plan, { today });
-  const accounts = (plan.accounts ?? []).filter((a) => BUCKET_OF[a.type] && BUCKET_OF[a.type] !== "cash");
+  // a checking or savings account is listed only when a row already goes into it (spec D-B7: "it stays in the bank", answered
+  // on Will the money last?, so that row can be edited here); new rows into the bank are made only by that answer
+  const usedByRow = new Set((plan.retirement?.contributions ?? []).map((c) => c.accountId));
+  const accounts = (plan.accounts ?? []).filter((a) => BUCKET_OF[a.type] && (BUCKET_OF[a.type] !== "cash" || usedByRow.has(a.id)));
   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   let editing = null;
   // a line over the edit form saying why it opened and what the card tried (a landing, or "It matches"), and boxes filled in
@@ -125,9 +128,15 @@ export function render(root, ctx) {
   const ask = nba?.ready ? (nba.steps.find((s) => s.id === "match" && s.status !== "done")?.ask ?? []) : [];
   const startable = ask.some((a) => a.noAccount);
   const matchStep = nba?.ready ? nba.steps.find((s) => s.id === "match" && s.status !== "done") ?? null : null;
+  // money that stays in a checking or savings account (the answer "It stays in the bank" on Will the money last?) is not in
+  // the figure: it is said on its own line (review 2026-11-12, M3)
+  const bankRows = d.items.filter((i) => i.bank && i.yearly > 0);
+  const saves = d.hasData && (d.totalYearly > 0 || !bankRows.length);
+  const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
-    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
+    ui.h("h1", {}, saves ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
+    ui.h("p", { class: "lede" }, saves ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
+    bankRows.length ? ui.h("p", { class: "small" }, `${fmt.money(Math.round(d.bankYearly / 12), cur)} a month stays in ${listOf([...new Set(bankRows.map((i) => i.accountName))])}, counted for later${saves ? ": it is not in the figure above" : ""}.`) : null,
     // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
     // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
     // (R-A9: the way to Net worth is a button, not a small word in the sentence; outlined when the 401(k) question below is the
@@ -143,7 +152,7 @@ export function render(root, ctx) {
     const inc = ctx.computeOf?.("cashflow/income", { today: fmt.today() }) ?? null;
     // earned pay, a business's income included (what a SEP or solo 401(k) is based on), as How am I doing? counts it
     const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
-    const share = pay > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
+    const share = pay > 0 && d.totalYearly > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
     // what is still missing, named (birth dates or Social Security), not always "Social Security"; a verdict on our guesses waits
     const said = verdictWords(st);
     if (!share && !said) return null;
@@ -357,7 +366,7 @@ export function render(root, ctx) {
     if (!accounts.length) return;
     if (!showForm && !editing) { formHost.append(ui.button("+ Add another contribution", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
     // a new contribution starts on a retirement account, not a brokerage one
-    const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
+    const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && BUCKET_OF[a.type] !== "cash" && !a.formerJob) ?? accounts.find((a) => BUCKET_OF[a.type] !== "cash") ?? accounts[0];
     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
     const start = editing ? contributionFormStart(plan, editing) : null;
     // a box a landing filled in shows that figure, typed: no grey guess under it to keep
@@ -398,7 +407,7 @@ export function render(root, ctx) {
         update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
         editing = null; prefill = null; prefillNote = null;
       }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; fillValues = null; noteAt = null; showForm = !d.hasData; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); if (p.retirement.leftover?.rowId === id) delete p.retirement.leftover; }); }, { class: "danger" })) : null,
     ));
     // a landing's line sits right over the box it is about, so the box in the middle of a phone screen has it in view
     const lab = noteEl && noteAt ? formHost.querySelector(`[name="${noteAt}"]`)?.closest?.("label") : null;
@@ -479,7 +488,7 @@ export function render(root, ctx) {
       onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, "🏦"),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}${c.bank ? " · stays in the bank, counted for later" : ""}`)),
       // "Edit ›" under the amount, as on Income and Expenses (stress test 2026-11-11, CF-8: the rows could be tapped and did not say so)
       ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"), ui.h("div", { class: "muted small" }, "Edit \u203a"))))),
   ));

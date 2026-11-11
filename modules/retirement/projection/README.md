@@ -996,8 +996,8 @@ now has, under the answer:
   card.
 - **D-A5. The match with nothing going in.** A match alone adds $0 when nothing goes in, so the two are one row: "6.6% of pay
   plus the usual match". (The engine itself would count a match typed on a $0 row; no alternative ever writes one.)
-- **D-A6. Writes from the card.** The card writes nothing in this commit (L4 adds the money left over). Every row links to the
-  page that owns the figure, landing on the box. The before-and-after is shown when the person comes back; no schema change.
+- **D-A6. Writes from the card.** The card writes only the leftover answer (L4, below). Every other row links to the page that
+  owns the figure, landing on the box. The before-and-after is shown when the person comes back; no schema change for it.
 - **D-A7. Returns are not a fix.** The growth row's action is "Check ›", never "Raise"; its effect line shows both directions
   ("Careful 6%: runs out at 69. Hopeful 8%: runs out at 71."); under it: "Nobody can choose this. Fix the plan with what you
   control: saving, when you stop, spending."
@@ -1017,7 +1017,7 @@ second, after the money left over, which moves the answer more (Jamie 70 → 89,
 |---|---|---|---|---|
 | `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
 | `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
-| `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works | $X a month, Not counted | the amount rounded down to $10 as a monthly row of the lead earner (`workingNow` lead) into a new $0 brokerage account (taxable) / savings account (cash rate); plus "As it is, counted as spent" | "Count it ›" (Contributions) |
+| `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works, or an answer on file | not answered: $X a month, Not counted ("worked out from bills that are partly our guesses" when they are, D-B5); answered: what was said and the row it wrote, Yours; asked again: "You said in March 2026 that $500 a month is invested. Left over each month now: $900. Still right?" | not answered: the amount rounded down to $10 as a monthly row of the lead earner into a new $0 brokerage account (taxable) / savings account (cash rate), written exactly as the answer saves it (`applyLeftover`), plus "As it is, counted as spent"; answered "invest" with more left over: the rest invested too; "bank": the same row invested instead | "Answer" (in place, L4), "Change my answer"; asked again: "Still right", "Answer again" |
 | `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
 | `stop:<pid>` | the adult still works (`workingNow`) | `retirementAge`; Yours when typed on People, else the Assumptions tag | +2 years, at most 75 | "Change ›" (People) |
 | `ss:<pid>` | a Social Security figure on file | monthly at the claim age; Our guess (`guide.setup.ssWrote`), else Yours | claimed at 70 when the claim age is under it and not yet claimed | "Type yours ›" / "When ›" |
@@ -1045,3 +1045,115 @@ Now: runs out at 69." (the spec's "66" was the builder variant's.)
 (`workLanding`, `matchLanding` in `levers.js`); a $0 row is filled in with the change the card ran, so saving it gives the
 answer the card said (Casey: 88). The notice after the save says "Your retirement answer: now runs out at 88 (was 67)." See
 `contributions/README.md` "Landings, the match check, and the answer after a save".
+
+## The money left over each month, answered in place (2026-11-11, owner's request; spec part B, L4; tests `tests/levers.test.mjs` "L4 ...", `tests/leftover-invariance.test.mjs`)
+The owner asked whether the money left over each month is invested, and to count it the way the person says. Until now the
+projection added the future left-over to no bucket (cash included) and said so nowhere on this page. The card's `leftover`
+row now has **Answer**, which opens the question under the row, in place:
+- "What happens to the $1,828 left over each month?" with three chips: **Invested for later**, **It stays in the bank**,
+  **It gets spent / not sure**.
+- Invested or in the bank: "Into which account" (the household's brokerage accounts, or savings accounts for the bank, and "A
+  new account: Investments for later" / "Savings for later") and "How much a month", filled with the left-over rounded down
+  to $10 and the person's to change (never more than is left over). With the emergency fund below its target
+  (`balance/liquidity` `gap`), invested first says "Your emergency fund is $G short. Many people fill that first; count only
+  what goes into investments."
+- **Save my answer** (the panel's one filled button) writes it with `levers.js` `applyLeftover` through one `store.update`;
+  the card then opens on the notice "Saved: $1,820 a month into Investments for later (a new account at $0, on Net worth).
+  Your retirement answer: now lasts to the end, ... (was ...)." (`answerChangeWords`, the answer before kept in a
+  module-level `leftPending`), scrolled into view and focused.
+- Answered, the row reads "$1,820 a month into Investments for later, invested (you said so)" (Yours), with what investing the
+  rest would do when more is left over, and "Change my answer". "It gets spent" keeps both effects ("If it's invested ... If it
+  piles up in the bank ...").
+
+**Formulas.**
+- The left-over is Next best action's `leftOverOf(spare)` (handed in by the view, as for L2). After an "invested" or "bank"
+  answer, Next best action's `spare` already takes the new row off (`con.yearly`, all rows), so the left-over the question was
+  about is `total = leftOverOf(spare) + the row a month` (`leftoverStanding`): nothing is counted twice, and the Dashboard's
+  left-over drops by the amount (test: NBA `spare.monthly` after = before − amount).
+- The row: `{ id: "leftover-<n>", accountId, personId: lead earner, amount, period: "monthly", employerMatch: 0 }`; a new
+  account `{ id, name, type: "brokerage" | "savings", balance: 0, asOf: today, ownerId: lead earner, history: [] }`. The engine
+  adds it while the lead earner works (`core/math/retirement.js` contributions: `personIndex`, stopping at that person's
+  retirement age) and raises it with pay like every row; a brokerage row lands in the taxable bucket, a savings row in the cash
+  bucket at `returnCash` (tests).
+- Said = done: the card's effects are worked out with `applyLeftover` on a copy, exactly as the save writes it; the tests save
+  the amount the form offers and compare the verdict with the card's (Dana & Lee, Jamie; invested and in the bank).
+- Asking again (D-B6): `on` more than 365 days ago, or `|total − monthly| / monthly > 25%`.
+
+### Review round 2 (2026-11-13, the findings of the review of 2026-11-12 by their ids; tests `tests/levers-leftover.test.mjs`)
+- **The left-over is the Dashboard's (M1).** The row, its effect lines, the hero's "not counted yet: the $X left over", the
+  panel's amount and its cap all read Next best action's `spare.monthly`: the left-over after the goal saving, with uneven pay at
+  what the plan counts on (the Dashboard's "Left over each month"). The spec's table named `leftOverOf(spare)` (the goal saving
+  put back, at the month all uneven pay comes in): investing that spent the goal money twice, and the Dashboard then said "More
+  goes out than comes in" (Priya & Tom: $5,861 asked about, $4,861 left over, -$999 after). Under $50 there is no row and
+  nothing "not counted" (07 and 12 of the qa households, short after their goals). Tested on the 02, 01 and family plans: after
+  investing the prefilled amount the month is $0 to $10 ahead and "Spend less than you bring in" stands as it did.
+- **In the bank is not saving out of pay (M3).** A row into a checking or savings account stays in checking and savings for
+  every page but this one: contributions' `compute` leaves it out of its saving sums (`isBankAccount`; `contributions/README.md`),
+  so the Dashboard's "About $6,400 a year builds up in checking and savings", the emergency fund's date and Benchmarks' saving rate
+  stay as they were (Morgan, tested); the projection counts it in the cash bucket, as the card said. The left-over the question is
+  about is then the month's own (`leftoverStanding`: an invested row is put back, a bank row is not), and the notice says "$530 a
+  month stays in Savings for later, counted for later". "Kept in the bank" or "invested" is read from the row's account (B10).
+- **More counted than is left over (B3), or an account gone (B7).** When the answered row is more than the month has left over
+  now (a bill added since), the row says "You said $1,820 a month is invested; only $1,128 is left over now." with "Lower it to
+  $1,120" (to $10) and "Answer again", never "Still right"; with nothing left over, "Stop counting it". When the account the row
+  went into was deleted on Net worth, the row says it is still counted and offers "Stop counting it" (`lowerLeftover`, which at
+  0 takes the row and the answer out: the answer from before, tested). The effect lines say what each does ("Lowered to $1,120 a
+  month: ...", "No longer counted: ...", "As it is counted now: ..."). The panel never starts above what is left over.
+- **One value for what the person said (N6).** The row compares by the answer and its amount whatever the card is asking just
+  now, so a bill that makes it ask again is not "You changed the money left over ($1,820 a month invested → $1,820 a month)",
+  and neither is "Still right"; a value that reads the same before and after is never a change (`changedKeys`; tested in
+  `tests/levers-review2.test.mjs` with B5 and M5, which need the tax split).
+- **The words after an answer (P6, M7, F6, B11, P16).** An answer that lasts both times is never said with "still" (the headline,
+  which also looks at a bad run, may have turned: when it did, its own words come first, "Before: It lasts in most cases, not
+  all. Now: The money lasts."); after "We don't know yet" only the new answer is said, never a "was" the page did not say. The
+  notice is brought into view in the same drawing, so the shell does not repeat it in a note over the row just answered.
+  "Answer" only opens the question (a second tap finds it open); its Cancel closes it. "$167 a month more is left over" is
+  followed by "If $160 a month of that were invested too" (one figure, the tried amount in its own words), and "Still right"
+  says "when the $X left over changes by a lot".
+
+### Decisions (spec rv/spec.md part B; binding)
+- **D-B1. Default unchanged.** Not counted until the person answers. No silent change to anyone's answer, the same choice as
+  left2.
+- **D-B2. Until answered, show both effects.** For example: "If it's invested: lasts to 90. If it piles up in the bank: lasts to
+  79. As it is, counted as spent: runs out at 70."
+- **D-B3. Whose row.** The row's `personId` is the lead earner (goal-seek's `leadAdult`; here `workingNow`'s lead), so it stops
+  at that person's retirement age. It grows with pay raises, as every row does (`core/math/retirement.js`).
+- **D-B4. The cushion first.** If the emergency fund is below its target (`balance/liquidity`), the answer screen adds: "Your
+  emergency fund is $G short. Many people fill that first; count only what goes into investments." It is advice, not a formula,
+  and the person sets the amount.
+- **D-B5. When it rests on our guesses.** If the leftover rests on guessed spending (`guessesTouching(plan, "expenses")`), the row
+  says "worked out from bills that are partly our guesses".
+- **D-B6. Asking again.** Ask again when the answer is more than a year old, or when the leftover has moved more than 25% from
+  the amount answered. The wording: "You said in March that $500 a month is invested. Left over now: $900. Still right?"
+  (on screen with the year: "You said in March 2026 ...", and "Left over each month now").
+- **D-B7. Contributions' account list.** "Into which account" also lists a checking or savings account that a row already uses,
+  so a "stays in the bank" row can be edited. New rows into cash accounts are made only by this answer.
+
+**Builder's choices (2026-11-11).**
+- The answer is `retirement.leftover` (optional; `docs/DATA_MODEL.md`); no page's compute reads it for a figure, so a plan
+  without it gives the same output on every page as before, and a "spend" answer changes no figure anywhere
+  (`tests/leftover-invariance.test.mjs`: every module's compute on every qa fixture, the 14 households and the five phone-built
+  ones). An "invested" answer counts only through its ordinary row.
+- One reader, in words only (merged with claude-c's left2, 2026-11-12): this page's compute leaves out its note "You said about
+  $X a month is left over. That stays in checking and savings and is not added to your retirement savings here" while
+  `retirement.leftover.rowId` is set ("Left2 merge", B3 above; `tests/left2-merge-items.test.mjs`). An "invested" or "bank"
+  answer writes that row, so the note goes once the person has said where the money goes; a "spend" answer has no row and the
+  note stays. No figure moves either way.
+- The spending row after the same merge: since left2's B1 a figure typed over today's bills keeps the loans those bills hold,
+  so "10% less" no longer comes out worse. Checked on the five phone-built households, the family and the 14 qa households'
+  base plans, before the rebase and after: every answer and every other row reads the same; the spending row now shows its
+  effect line where it was hidden (5 of the 14, for example "$4,977 a month (10% less): runs out at 73.") and is a year or two
+  better on 2 more, which moves it up the list there. The rule that hides a smaller figure that comes out worse stays as a guard.
+- An "invested" or "bank" answer whose row was removed (on Contributions, which also removes the answer, or anywhere else) reads
+  as never answered: the card asks again and every figure is as before the answer.
+- "Still right" dates the answer today and keeps it for the left-over as it is now; "Answer again" opens the same question with
+  the row's own account and amount.
+- For claude-c (WORKBOARD): left2's note "a typed leftover is not added" must not show once `retirement.leftover.rowId` names a
+  row that exists. For claude-a: `balance/projection` reads the retirement projection, so it follows the new rows with no edit.
+- Safari: a phone not on the Home Screen loses `github.io` storage after 7 days without a visit (docs/PLAN.md), the answer with
+  the plan; nothing here promises it is kept.
+- **A fold on the card says what of the person's it holds (the final review F4, 2026-11-13; test `tests/levers-leftover.test.mjs`
+  "F4 ...").** "N more numbers" adds how many of its rows are the person's own, in the words of the line under the answer: "6
+  more numbers, 2 you gave us" (Jamie with growth 6% and prices 3.5% saved on an earlier visit: both rows folded and the line
+  said nothing). The card folded on track says "1 not counted" instead of "12 numbers" when it holds a row not counted yet (the
+  family's money left over, "If it's invested: lasts to the end, with about $4,455,000 more left").

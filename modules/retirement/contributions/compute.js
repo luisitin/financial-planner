@@ -57,7 +57,16 @@ export function catchUpFor(def, age) {
   return s && a >= s.from && a <= s.to ? s.amount : def.catchUp;
 }
 
-/** The plan's contribution rows, each with its account, person, limit kind and yearly amounts (the page's `items`). */
+/**
+ * A checking, savings or cash account (the projection's cash bucket: BUCKET_OF[type] === "cash"; the test in module.test.mjs
+ * holds the two lists together). A row into one is money that stays in the bank (the answer "It stays in the bank" on Will the
+ * money last?, the only way such a row is made): the projection counts it for later, but it is not saving out of pay, so it is in
+ * no sum below (review 2026-11-12, M3: the Dashboard said it "goes into retirement" and the month had nothing left for the
+ * emergency fund, though the money sits in the very savings account that is the cushion).
+ */
+export const isBankAccount = (acct) => !!acct && (acct.type === "checking" || acct.type === "savings" || acct.type === "cash");
+
+/** The plan's contribution rows, each with its account, person, limit kind and yearly amounts (the page's `items`); `bank`: a row into a checking or savings account. */
 function contributionItems(plan) {
   const people = plan.household?.people ?? [];
   const accounts = plan.accounts ?? [];
@@ -65,7 +74,7 @@ function contributionItems(plan) {
     const acct = accounts.find((a) => a.id === c.accountId);
     const person = people.find((p) => p.id === c.personId);
     const yearly = perYear(c.amount, c.period), matchYearly = Number(c.employerMatch) || 0;
-    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, limitKind: limitKind(acct?.type, acct?.name, matchYearly), typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
+    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, limitKind: limitKind(acct?.type, acct?.name, matchYearly), bank: isBankAccount(acct), typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
   });
 }
 
@@ -162,8 +171,9 @@ const HSA_LABEL = { none: "HSA (no high-deductible plan)", self: "HSA (self-only
 
 /**
  * compute(plan, { today }) -> {
- *   items: [{ ...contribution, accountName, accountType, limitKind, personName, yearly, matchYearly, totalYearly, periodLabel }],
- *   yearly (everyone's own money), matchYearly, totalYearly, byPerson: [{ personId, name, age, yearly, match, limits: [{ kind, label, limit, used, over, catchUp, year }] }],
+ *   items: [{ ...contribution, accountName, accountType, limitKind, bank, personName, yearly, matchYearly, totalYearly, periodLabel }],
+ *   yearly (everyone's own money into retirement and investment accounts), matchYearly, totalYearly, bankYearly (rows into a
+ *   checking or savings account: money that stays in the bank, in none of the three sums before it, M3), byPerson: [{ personId, name, age, yearly, match, limits: [{ kind, label, limit, used, over, catchUp, year }] }],
  *   limitsYear (the newest year with every kind), kindYear, limits (limitsFor(year)), hsa (hsaPicture), warnings: [text], hasData
  * }
  */
@@ -173,11 +183,13 @@ export function compute(plan, params = {}) {
   const L = limitsFor(year);
   const people = plan.household?.people ?? [];
   const items = contributionItems(plan);
+  // what goes into retirement and investment accounts: every row but the ones into a checking or savings account (M3)
+  const saving = items.filter((i) => !i.bank);
   // the Medicare-aware picture, the one the HSA page and the tax return read (follow-up 2026-11-07, HSA R1): someone on Medicare has a limit of 0
   const hsa = hsaPictureMedicare(plan, year, { contributions: items });
   const warnings = [];
   const byPerson = people.filter((p) => p.role !== "dependent").map((p) => {
-    const mine = items.filter((i) => i.personId === p.id);
+    const mine = saving.filter((i) => i.personId === p.id);
     const age = today && p.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null;   // the age reached this year is what the catch-up rules use
     const limits = [];
     for (const [kind, def] of Object.entries(L.kinds)) {
@@ -203,5 +215,6 @@ export function compute(plan, params = {}) {
     return { personId: p.id, name: p.name, age, yearly: mine.reduce((s, i) => s + i.yearly, 0), match: mine.reduce((s, i) => s + i.matchYearly, 0), limits };
   });
   for (const i of items) if (!i.accountType) warnings.push(`A contribution points to an account that is no longer on file.`);
-  return { items, yearly: items.reduce((s, i) => s + i.yearly, 0), matchYearly: items.reduce((s, i) => s + i.matchYearly, 0), totalYearly: items.reduce((s, i) => s + i.totalYearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
+  return { items, yearly: saving.reduce((s, i) => s + i.yearly, 0), matchYearly: saving.reduce((s, i) => s + i.matchYearly, 0), totalYearly: saving.reduce((s, i) => s + i.totalYearly, 0),
+    bankYearly: items.filter((i) => i.bank).reduce((s, i) => s + i.yearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
 }

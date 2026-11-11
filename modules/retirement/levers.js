@@ -15,10 +15,11 @@
 //   workLanding / matchLanding          -> what Contributions' ?add=<pid> and ?match=<rowId> open (L3)
 //   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
 //   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
+//   leftoverAnswer / leftoverStanding / applyLeftover / lowerLeftover / leftoverAccounts -> the money left over, answered in place (L4)
 //
-// `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
+// `spare` is Next best action's `spare` (the money left over each month: its `monthly`, the Dashboard's figure), handed in by the view: this file must not import
 // Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
-import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, compute as projection } from "./projection/compute.js";
+import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, BUCKET_OF, compute as projection } from "./projection/compute.js";
 import { project } from "../../core/math/retirement.js";
 import { isGuess, guessesTouching } from "../../core/estimate/index.js";
 import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
@@ -27,7 +28,6 @@ import { ASSUMPTIONS } from "../system/assumptions/compute.js";
 import { limitKind } from "./contributions/compute.js";
 import { daysBetween } from "../../core/math/dates.js";
 import { perYear } from "../../core/math/periods.js";
-import { leftOverOf } from "../../core/math/leftover.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../core/words.js";
 
 /** The tags, in the order the card lists them (D-A2): not counted, our guess, the usual figure, yours. */
@@ -39,7 +39,7 @@ export const SHOWN = 5;
 export const GROWTH_PRESETS = [{ name: "Careful", value: 0.06 }, { name: "Middle", value: 0.07 }, { name: "Hopeful", value: 0.08 }];
 /** How fast prices rise: a lower and a higher figure around ours (3%). */
 export const PRICE_STEPS = [0.025, 0.04];
-/** The leftover row needs at least this much a month (spec table, `leftover`). */
+/** The leftover row needs at least this much a month (spec table, `leftover`): under it there is no row and nothing "not counted". */
 export const LEFTOVER_MIN = 50;
 /** Stopping work later: two years, never past 75. */
 export const STOP_STEP = 2, STOP_MAX = 75;
@@ -243,18 +243,115 @@ export function matchChecks(plan, { today } = {}) {
 }
 /**
  * The answer after a save next to the one before it (spec L3 "Now runs out at 76 (was 66)", L5): "now runs out at 76 (was 66)",
- * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "still lasts to the
- * end, with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
+ * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "lasts to the end,
+ * with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
  * nothing moved and `still` is false.
+ * Review 2026-11-12: an answer that lasts both times is never said with "still" (P6: this is the average-market answer, and the
+ * page's headline, which also looks at a bad run of years, may have turned under it); `unknown` (the page said "We don't know
+ * yet" before: nothing saved for retirement was on file) gives the new answer alone, never a "was" the page did not say (M7).
  */
-export function answerChangeWords(before, after, money = dollars, { still = true } = {}) {
-  if (!before || !after) return "";
+export function answerChangeWords(before, after, money = dollars, { still = true, unknown = false } = {}) {
+  if (!after || (!before && !unknown)) return "";
+  if (unknown) return after.lasts ? `now lasts to the end (age ${after.endAge})` : `now runs out at ${after.age}`;
   if (!after.lasts && !before.lasts) return after.age === before.age ? (still ? `still runs out at ${after.age}` : "") : `now runs out at ${after.age} (was ${before.age})`;
   if (!after.lasts) return `now runs out at ${after.age} (it lasted to the end before)`;
   if (!before.lasts) return `now lasts to the end, age ${after.endAge} (was: runs out at ${before.age})`;
   const diff = after.endReal - before.endReal, r = roundMoney(Math.abs(diff));
-  if (r < 100) return still ? `still lasts to the end (age ${after.endAge})` : "";
-  return `still lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
+  if (r < 100) return still ? `lasts to the end, with about the same left at ${after.endAge}` : "";
+  return `lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
+}
+
+// ---- the money left over each month, answered (L4; spec part B) -------------------------------------------------------------
+export const ASK_AGAIN_DAYS = 365, ASK_AGAIN_MOVE = 0.25;
+const LEFT_ANSWERS = ["invest", "bank", "spend"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthYear = (iso) => { const m = Number(String(iso ?? "").slice(5, 7)); return m >= 1 && m <= 12 ? `${MONTHS[m - 1]} ${String(iso).slice(0, 4)}` : "the past"; };
+/**
+ * leftoverAnswer(plan) -> `retirement.leftover` with its row and account ({ answer, on, monthly, rowId, row, account, bank (the
+ * row goes into a checking or savings account), lost (the row's account is no longer on file) }), or null: not answered, not one
+ * of the three answers, or an "invested" / "in the bank" answer whose row was removed (then the question is asked again as if
+ * never answered, and everything is as before the answer: spec acceptance 5).
+ */
+export function leftoverAnswer(plan) {
+  const a = plan?.retirement?.leftover;
+  if (!a || typeof a !== "object" || !LEFT_ANSWERS.includes(a.answer)) return null;
+  if (a.answer === "spend") return { ...a, row: null, account: null, bank: false, lost: false };
+  const row = L(plan.retirement, "contributions").find((c) => c.id === a.rowId);
+  if (!row) return null;
+  const account = L(plan, "accounts").find((x) => x.id === row.accountId) ?? null;
+  return { ...a, row, account, bank: BUCKET_OF[account?.type] === "cash", lost: !account };
+}
+/**
+ * leftoverStanding(plan, leftMonthly, today) -> { ans, rowMonthly, total, rest, again }.
+ *   `leftMonthly` is the month's left-over as it stands (Next best action's `spare.monthly`, the Dashboard's figure).
+ *   `total` is the left-over the question is about, before the answer: an invested row is saving out of pay to every page, so
+ *     it has already come off `leftMonthly` and is put back (leftMonthly + the row a month); a row into the bank has not (the
+ *     money stays in checking and savings: contributions compute leaves it out of the saving, review 2026-11-12, M3), so the
+ *     total is `leftMonthly` itself. `rest` = total - the row: what is left over beyond the answer.
+ *   `again`: "lost" the row's account is no longer on file (B7); "short" the row is more than the total (B3: a bill added since;
+ *     whatever the 25% rule says, the plan is counting money that is not there); "old" answered more than 365 days ago; "moved"
+ *     the total is more than 25% away from the left-over answered about (D-B6); else null.
+ */
+export function leftoverStanding(plan, leftMonthly, today) {
+  const ans = leftoverAnswer(plan);
+  const rowMonthly = ans?.row ? perYear(ans.row.amount, ans.row.period) / 12 : 0;
+  const known = leftMonthly !== null && leftMonthly !== undefined;
+  const total = (Number(leftMonthly) || 0) + (ans?.row && !ans.bank ? rowMonthly : 0);
+  let again = null;
+  if (ans) {
+    const days = ans.on && today ? daysBetween(ans.on, today) : null;
+    const was = Number(ans.monthly) || 0;
+    if (ans.lost) again = "lost";
+    else if (known && rowMonthly > total + 0.5) again = "short";
+    else if (days !== null && days > ASK_AGAIN_DAYS) again = "old";
+    else if (known && (was > 0 ? Math.abs(total - was) / was > ASK_AGAIN_MOVE : total >= LEFTOVER_MIN)) again = "moved";
+  }
+  return { ans, rowMonthly, total, rest: total - rowMonthly, again };
+}
+/**
+ * lowerLeftover(draft, amount, { today, total }) -- the answered row brought down to what is left over now ("Lower it to
+ * $1,120"; B3), dated today for the left-over as it is; at 0 the row and the answer are taken out ("Stop counting it"), and the
+ * question is asked again when there is something left over.
+ */
+export function lowerLeftover(draft, amount, { today = null, total = 0 } = {}) {
+  const a = draft?.retirement?.leftover;
+  if (!a) return;
+  const list = L(draft.retirement, "contributions");
+  const row = list.find((c) => c.id === a.rowId);
+  const to = Math.max(0, Math.floor((Number(amount) || 0) / 10) * 10);
+  if (!row || !(to > 0)) { draft.retirement.contributions = list.filter((c) => c.id !== a.rowId); delete draft.retirement.leftover; return; }
+  row.amount = to; row.period = "monthly";
+  a.on = today; a.monthly = round2(Number(total) || 0);
+}
+/**
+ * applyLeftover(draft, { answer, monthly, amount, accountId, newAccount: { id, name, type }, personId, today }) -- the answer
+ * saved: `retirement.leftover = { answer, on, monthly (the left-over answered about), rowId? }`. "invest" and "bank" write one
+ * ordinary contribution row `leftover-<n>` (monthly, employer match 0, the lead earner's, so it stops when that person retires
+ * and grows with pay raises like every row) into `accountId` or a new $0 account (`asOf` today, the lead earner's); "spend"
+ * writes no row. The row an earlier answer wrote is taken out first (`keep` leaves it, for a change tried beside it).
+ */
+export function applyLeftover(draft, { answer, monthly = 0, amount = 0, accountId = null, newAccount = null, personId = null, today = null, keep = false } = {}) {
+  draft.retirement = draft.retirement ?? {};
+  const old = keep ? null : draft.retirement.leftover?.rowId;
+  let list = L(draft.retirement, "contributions").filter((c) => !old || c.id !== old);
+  const out = { answer, on: today, monthly: round2(Number(monthly) || 0) };
+  if (answer !== "spend" && Number(amount) > 0) {
+    let acct = accountId;
+    if (!acct && newAccount) {
+      draft.accounts = [...L(draft, "accounts"), { id: newAccount.id, name: newAccount.name, type: newAccount.type, balance: 0, asOf: today, ownerId: personId ?? "", history: [] }];
+      acct = newAccount.id;
+    }
+    const n = 1 + Math.max(0, ...list.map((c) => Number(/^leftover-(\d+)$/.exec(c.id ?? "")?.[1]) || 0));
+    out.rowId = `leftover-${n}`;
+    list = [...list, { id: out.rowId, accountId: acct, personId: personId ?? "", amount: round2(Number(amount)), period: "monthly", employerMatch: 0 }];
+  }
+  draft.retirement.contributions = list;
+  if (!keep) draft.retirement.leftover = out;
+}
+/** The accounts an answer can go into: brokerage for "invested", savings for "in the bank" (an existing one, or a new one). */
+export function leftoverAccounts(plan, answer) {
+  const type = answer === "bank" ? "savings" : answer === "invest" ? "brokerage" : null;
+  return type ? L(plan, "accounts").filter((a) => a.type === type) : [];
 }
 
 // ---- tags ---------------------------------------------------------------------------------------------------------------
@@ -353,28 +450,79 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     }
   }
 
-  // the money left over each month (spec table row `leftover`; part B)
+  // the money left over each month (spec table row `leftover`; part B, D-B1 to D-B6): not counted until the person answers;
+  // answered, the row reads the answer (Yours) and the row it wrote; asked again after a year or when it moved more than 25%
+  // (the month's left-over is the Dashboard's own: Next best action's `spare.monthly`, after the goal saving and with uneven pay
+  // at what the plan counts on. The spec's table named leftOverOf(spare), the left-over with the goal saving put back at the
+  // month all uneven pay comes in: investing that spent the goal money twice, review 2026-11-12, M1)
   const lead = leadEarner(plan, I, today);
-  const leftMonthly = spare ? leftOverOf(spare) : null;
-  if (leftMonthly !== null && leftMonthly >= LEFTOVER_MIN && lead) {
-    const amount = Math.floor(leftMonthly / 10) * 10;
-    const partly = guessesTouching(plan, ["expenses"]).length > 0;
-    const addRow = (type, name) => (draft) => {
-      const id = `lever-${type}`;
-      draft.accounts = [...L(draft, "accounts"), { id, name, type, balance: 0, ownerId: lead.id, history: [] }];
-      draft.retirement.contributions = [...L(draft.retirement, "contributions"), { id: `leftover-lever`, accountId: id, personId: lead.id, amount, period: "monthly", employerMatch: 0 }];
-    };
+  const leftMonthly = spare && Number.isFinite(Number(spare.monthly)) ? Number(spare.monthly) : null;
+  const st = leftoverStanding(plan, leftMonthly, today);
+  // one value for "what the person said", whatever the row is asking just now (N6: "You just changed this: $1,820 a month
+  // invested -> $1,820 a month" after a bill was added)
+  const saidShort = st.ans ? (st.ans.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month ${st.ans.bank ? "in the bank" : "invested"}`) : null;
+  const saidCmp = st.ans ? `${st.ans.answer}:${Math.round(st.rowMonthly)}` : "not counted";
+  const partly = guessesTouching(plan, ["expenses"]).length > 0;
+  const floor10 = (n) => Math.floor(Math.max(0, n) / 10) * 10;
+  const person = st.ans?.row?.personId || lead?.id || null;
+  // a row of the left-over into a new $0 account, as the answer saves it (applyLeftover; said = done), the answered row first
+  // taken out when it is being answered again
+  const addRow = (type, name, amount, { replace = false } = {}) => (draft) => applyLeftover(draft, { answer: type === "savings" ? "bank" : "invest", monthly: amount, amount, personId: person, today,
+    newAccount: { id: `lever-${type}`, name, type }, keep: !replace });
+  const leftWords = (n) => `${money(n)} a month${partly ? ", worked out from bills that are partly our guesses" : ""}`;
+  const answerAct = (label) => ({ label, answer: true });
+  if (st.ans && (st.again === "short" || st.again === "lost")) {
+    // the plan counts money that is not there (a bill added since the answer), or a row whose account is gone: said, with the
+    // one tap that puts it right; never "Still right" (B3, B7)
+    const a = st.ans, to = st.again === "lost" ? 0 : floor10(st.total);
+    const kind = a.bank ? "kept in the bank" : "invested";
+    const lower = (draft) => lowerLeftover(draft, to, { today, total: st.total });
     rows.push({
-      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "missing", would: unknown,
-      value: `${money(leftMonthly)} a month${partly ? ", worked out from bills that are partly our guesses" : ""}`, short: `${money(leftMonthly)} a month`,
-      amount, leadId: lead.id,
+      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "yours", ask: true, always: true,
+      value: st.again === "lost" ? `${money(st.rowMonthly)} a month is still counted as ${kind}, but the account it went into is no longer on Net worth.`
+        : `You said ${money(st.rowMonthly)} a month is ${kind}; ${st.total >= 1 ? `only ${money(st.total)} is left over now` : "nothing is left over now"}.`,
+      short: saidShort, cmp: saidCmp, amount: to, total: st.total, rowMonthly: st.rowMonthly, leadId: person, answered: a.answer,
+      alts: [{ id: "lower", say: to > 0 ? `Lowered to ${money(to)} a month` : "No longer counted", change: lower }],
+      baseSay: "As it is counted now",
+      acts: [...(to > 0 ? [{ label: `Lower it to ${money(to)}`, lower: to }] : [{ label: "Stop counting it", lower: 0 }]), ...(to > 0 || st.again === "lost" ? [answerAct("Answer again")] : [])],
+      missingWords: "the money left over each month",
+    });
+  } else if (st.ans && !st.again) {
+    // answered, and still right
+    const a = st.ans, more = leftMonthly !== null && st.rest >= LEFTOVER_MIN ? floor10(st.rest) : 0;
+    const into = a.row ? `${money(st.rowMonthly)} a month into ${a.account?.name ?? "an account"}` : "";
+    const alts = a.answer === "spend"
+      ? (more ? [{ id: "invest", say: "If it's invested", change: addRow("brokerage", "Investments for later", more, { replace: true }) }, { id: "bank", say: "If it piles up in the bank", change: addRow("savings", "Savings for later", more, { replace: true }) }] : [])
+      : [
+        ...(a.bank ? [{ id: "invest-instead", say: "If it were invested instead", change: (draft) => { const r = L(draft.retirement, "contributions").find((c) => c.id === a.rowId); if (r) { draft.accounts = [...L(draft, "accounts"), { id: "lever-brokerage", name: "Investments for later", type: "brokerage", balance: 0, ownerId: person, history: [] }]; r.accountId = "lever-brokerage"; } } }] : []),
+        ...(more ? [{ id: "more", say: `If ${money(more)} a month of that were invested too`, change: (draft) => { draft.accounts = [...L(draft, "accounts"), { id: "lever-brokerage-more", name: "Investments for later", type: "brokerage", balance: 0, ownerId: person, history: [] }]; draft.retirement.contributions = [...L(draft.retirement, "contributions"), { id: "leftover-lever", accountId: "lever-brokerage-more", personId: person, amount: more, period: "monthly", employerMatch: 0 }]; } }] : []),
+      ];
+    rows.push({
+      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "yours",
+      value: a.answer === "spend" ? `Spent (you said so)${more ? `; ${leftWords(st.rest)}` : ""}` : `${into}, ${a.bank ? "kept in the bank" : "invested"} (you said so)${more ? `; ${money(st.rest)} a month more is left over` : ""}`,
+      short: saidShort, cmp: saidCmp,
+      amount: more || floor10(st.total), total: st.total, rowMonthly: st.rowMonthly, leadId: person, answered: a.answer, alts, acts: [answerAct("Change my answer")], missingWords: "the money left over each month",
+      // the one row the card writes: never hidden by D-A2's less-than-a-year rule, so the answer and "Change my answer" stay in reach
+      always: true,
+    });
+  } else if ((st.again || (leftMonthly !== null && leftMonthly >= LEFTOVER_MIN)) && (lead || st.ans)) {
+    // never answered (or the row it wrote was removed), or answered a year ago or for a left-over that has moved since: asked
+    const amount = floor10(st.again ? st.total : leftMonthly);
+    const again = st.again ? st.ans : null;
+    const said = again ? (again.answer === "spend" ? "is spent" : `${again.bank ? "goes into the bank" : "is invested"}`) : "";
+    const saidMoney = again?.row ? money(st.rowMonthly) : money(again?.monthly ?? 0);
+    rows.push({
+      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: again ? "yours" : "missing", would: unknown, ask: !!again,
+      value: again ? `You said in ${monthYear(again.on)} that ${saidMoney} a month ${said}. Left over each month now: ${money(st.total)}. Still right?` : leftWords(leftMonthly),
+      short: again ? (again.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month`) : `${money(leftMonthly)} a month`,
+      amount, total: st.total, leadId: person,
       alts: [
-        { id: "invest", say: unknown ? "If it were invested" : "If it's invested", change: addRow("brokerage", "Investments for later") },
-        { id: "bank", say: unknown ? "If it piled up in the bank" : "If it piles up in the bank", change: addRow("savings", "Savings for later") },
+        { id: "invest", say: unknown ? "If it were invested" : again ? "If it's all invested" : "If it's invested", change: addRow("brokerage", "Investments for later", amount, { replace: true }) },
+        { id: "bank", say: unknown ? "If it piled up in the bank" : again ? "If it all piles up in the bank" : "If it piles up in the bank", change: addRow("savings", "Savings for later", amount, { replace: true }) },
       ],
-      baseSay: unknown ? null : "As it is, counted as spent",
-      acts: [{ label: "Count it ›", href: "#/retirement/contributions" }],
-      missingWords: `the ${money(leftMonthly)} left over each month`,
+      baseSay: unknown ? null : again ? "As it is now" : "As it is, counted as spent",
+      acts: again ? [{ label: "Still right", keep: true }, answerAct("Answer again")] : [answerAct("Answer")],
+      missingWords: `the ${money(leftMonthly ?? st.total)} left over each month`,
     });
   }
 

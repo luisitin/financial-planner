@@ -178,3 +178,27 @@ onto the box that holds the figure. Tests: `module.test.mjs` "L3: ..." (real UI 
   best action's own words (claude-f's file); they are not used for "the usual match" on this page or the card.
 - **D-A6 (copied): writes from the card.** The card on Will the money last? writes only the leftover answer (L4); every
   other row links to the page that owns the figure, landing on the box, as above.
+
+## The money left over, as a row of its own (2026-11-11, owner's request; spec part B, L4)
+Will the money last?'s card asks "What happens to the $X left over each month?" in place (`projection/README.md` "The money
+left over each month, answered in place"). "Invested for later" and "It stays in the bank" write one ordinary row here,
+`leftover-<n>`: monthly, employer match 0, the lead earner's, into a brokerage or a savings account (one on file, or a new $0
+"Investments for later" / "Savings for later"). It is listed, edited and removed like any other row.
+- **D-B1 (copied).** Default unchanged: not counted until the person answers; no silent change to anyone's answer.
+- **D-B3 (copied).** The row's `personId` is the lead earner, so it stops at that person's retirement age; it grows with pay
+  raises, as every row does.
+- **D-B7 (copied).** "Into which account" also lists a checking or savings account that a row already uses, so a "stays in
+  the bank" row can be edited here. New rows into cash accounts are made only by that answer (a new row on this page still
+  starts on a retirement account, never a bank one).
+- Removing the row also removes the answer (`retirement.leftover`), so the card asks again and every figure is as before it;
+  the notice says what that did to the retirement answer, as for any save here.
+- An **invested** row is saving out of pay to every page: Next best action's left-over takes it off (`con.yearly`), so the
+  left-over the Dashboard shows drops by the row's amount; nothing is counted twice.
+- A row into the **bank** (a checking, savings or cash account: `isBankAccount`, the projection's cash bucket, `BUCKET_OF[type]
+  === "cash"`; the test holds the two lists together) is money that stays in checking and savings (review 2026-11-12, M3: the
+  Dashboard said it "goes into retirement", Benchmarks counted it as 11% of pay saved for retirement, and the emergency fund
+  lost its date, though the money sits in the very savings account that is the cushion). `compute` leaves it out of `yearly`,
+  `matchYearly`, `totalYearly` and each person's limits, and gives it as `bankYearly`; so every page that reads those sums (Next
+  best action, the Dashboard, Benchmarks, this hero) counts it where it is, in the bank. The projection still counts it, in the
+  cash bucket at the cash rate (said = done with the card). The hero says it on its own line ("$530 a month stays in Savings
+  for later, counted for later") and the row reads "stays in the bank, counted for later".

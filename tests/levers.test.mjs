@@ -311,9 +311,115 @@ test("L3 answerChangeWords: the answer after a save beside the one before it", (
   assert.equal(LV.answerChangeWords(out(70), out(70), undefined, { still: false }), "");
   assert.equal(LV.answerChangeWords(out(66), last(5000)), "now lasts to the end, age 95 (was: runs out at 66)");
   assert.equal(LV.answerChangeWords(last(5000), out(90)), "now runs out at 90 (it lasted to the end before)");
-  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "still lasts to the end, with about $41,000 more left at 95 (today's dollars)");
-  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "still lasts to the end (age 95)");
+  // (an answer that lasts both times is never "still": review 2026-11-12, P6; tests/levers-leftover.test.mjs)
+  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "lasts to the end, with about $41,000 more left at 95 (today's dollars)");
+  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "lasts to the end, with about the same left at 95");
   assert.equal(LV.answerChangeWords(null, out(70)), "");
+});
+
+// ---- L4: the money left over each month, answered in place (spec part B, D-B1 to D-B7) ----
+const leftRow = (plan) => row(rowsOf(plan), "leftover");
+const answer = (plan, opts) => { const p = structuredClone(plan); LV.applyLeftover(p, { today: T, personId: "setup-self", ...opts }); return p; };
+
+test("L4 applyLeftover: one ordinary monthly row of the amount, the lead earner's, into a new $0 account or one on file; spend writes none", () => {
+  const p = plans.danaLee();
+  const inv = answer(p, { answer: "invest", monthly: 1828.4, amount: 1820, newAccount: { id: "acct-new", name: "Investments for later", type: "brokerage" } });
+  assert.deepEqual(inv.retirement.leftover, { answer: "invest", on: T, monthly: 1828.4, rowId: "leftover-1" });
+  assert.deepEqual(inv.retirement.contributions.at(-1), { id: "leftover-1", accountId: "acct-new", personId: "setup-self", amount: 1820, period: "monthly", employerMatch: 0 });
+  assert.deepEqual(inv.accounts.at(-1), { id: "acct-new", name: "Investments for later", type: "brokerage", balance: 0, asOf: T, ownerId: "setup-self", history: [] });
+  assert.equal(inv.retirement.contributions.length, p.retirement.contributions.length + 1);
+  // answered again: the earlier row goes, the new one takes its place (into a savings account on file)
+  inv.accounts.push({ id: "a-sav", name: "Rainy day", type: "savings", balance: 5000, ownerId: "", history: [] });
+  const bank = structuredClone(inv); LV.applyLeftover(bank, { answer: "bank", monthly: 1828.4, amount: 1000, accountId: "a-sav", personId: "setup-self", today: T });
+  assert.deepEqual(bank.retirement.contributions.filter((c) => /^leftover-/.test(c.id)).map((c) => [c.id, c.accountId, c.amount]), [["leftover-1", "a-sav", 1000]]);
+  assert.equal(bank.accounts.length, inv.accounts.length, "no new account when one on file is picked");
+  const spend = structuredClone(inv); LV.applyLeftover(spend, { answer: "spend", monthly: 1828.4, today: T });
+  assert.deepEqual(spend.retirement.leftover, { answer: "spend", on: T, monthly: 1828.4 });
+  assert.equal(spend.retirement.contributions.length, p.retirement.contributions.length, "spend: no row, and the earlier one is gone");
+  assert.ok(LV.leftoverAccounts(bank, "bank").some((a) => a.id === "a-sav") && LV.leftoverAccounts(bank, "bank").every((a) => a.type === "savings"));
+  assert.equal(LV.leftoverAccounts(bank, "invest").map((a) => a.id).join(), "acct-new");
+});
+
+test("L4 said = done: the answer saved gives the card's effect; invested, Next best action's left-over drops by the amount; in the bank, it stays; nothing counted twice", () => {
+  for (const k of ["danaLee", "jamie"]) {
+    const p = plans[k]();
+    const r = leftRow(p);
+    assert.equal(r.tag, "missing");
+    const before = nbaCompute(p, { today: T }).spare.monthly;
+    for (const [i, a, type] of [[0, "invest", "brokerage"], [1, "bank", "savings"]]) {
+      const q = answer(p, { answer: a, monthly: r.total, amount: r.amount, newAccount: { id: `n-${a}`, name: "x", type } });
+      assert.deepEqual(LV.answerOf(q, { today: T }), r.outs[i], `${k} ${a}: the verdict after the save is the card's`);
+      // invested, it is saving out of pay and comes off the month; in the bank it stays in checking and savings (M3)
+      assert.ok(Math.abs(nbaCompute(q, { today: T }).spare.monthly - (before - (a === "bank" ? 0 : r.amount))) < 0.01, `${k} ${a}: the left-over after`);
+    }
+    // spend changes nothing the answer rests on
+    assert.deepEqual(LV.answerOf(answer(p, { answer: "spend", monthly: r.total }), { today: T }), LV.answerOf(p, { today: T }));
+  }
+  // Dana & Lee's acceptance figures: $1,828 left over, $1,820 the amount
+  const d = leftRow(plans.danaLee());
+  assert.deepEqual([d.value, d.amount, d.leadId], ["$1,828 a month", 1820, "setup-self"]);
+  assert.match(d.effects.join(" "), /^If it's invested: lasts to the end, with about \$[\d,]+ more left at 97 \(today's dollars\)\. If it piles up in the bank: lasts to the end, with about \$[\d,]+ more left at 97 \(today's dollars\)\. As it is, counted as spent: lasts to the end \(age 97\)\.$/);
+});
+
+test("L4 the bank row lands in the cash bucket at the cash rate, and every row stops when the lead earner stops work", () => {
+  const p = plans.jamie();
+  const r = leftRow(p);
+  const q = answer(p, { answer: "bank", monthly: r.total, amount: r.amount, newAccount: { id: "n-bank", name: "Savings for later", type: "savings" } });
+  const I = buildInputs(q, { today: T }).inputs;
+  const c = I.contributions.find((x) => x.name === "Savings for later");
+  assert.deepEqual([c.bucket, c.yearly, c.personIndex], ["cash", r.amount * 12, 0]);
+  const a = project(buildInputs(p, { today: T }).inputs).rows, b = project(I).rows;
+  const retireAge = I.people[0].retireAge;
+  for (let i = 0; i < a.length; i++) {
+    const added = b[i].contributions - a[i].contributions;
+    if (a[i].ages[0] < retireAge) assert.ok(added > 0, `${a[i].year}: the row goes in while Jamie works`);
+    else assert.ok(Math.abs(added) < 1e-6, `${a[i].year}: nothing after ${retireAge}`);
+  }
+  // the cash it builds grows at the plan's cash rate, not the stocks' (the bank answer's effect is smaller than investing it)
+  assert.ok(r.outs[1].age < r.outs[0].age);
+});
+
+test("L4 the row reads the answer: Yours, what was saved; spend keeps both effects; a removed row is asked again", () => {
+  const p = plans.jamie(), r = leftRow(p);
+  const inv = answer(p, { answer: "invest", monthly: r.total, amount: 560, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } });
+  const a = leftRow(inv);
+  assert.equal(a.tag, "yours");
+  assert.equal(a.value, "$560 a month into Investments for later, invested (you said so)");
+  // part of it: the rest is said, with what investing it too would do
+  const part = leftRow(answer(p, { answer: "invest", monthly: r.total, amount: 300, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } }));
+  assert.equal(part.value, "$300 a month into Investments for later, invested (you said so); $267 a month more is left over");
+  assert.match(part.effects[0], /^If \$260 a month of that were invested too: /);
+  assert.deepEqual(a.acts.map((x) => x.label), ["Change my answer"]);
+  // the one row the card writes is never hidden by the less-than-a-year rule (Dana & Lee: all of it invested, nothing more to try)
+  const dl = plans.danaLee(), dlr = leftRow(dl);
+  const dlAll = rowsOf(answer(dl, { answer: "invest", monthly: dlr.total, amount: dlr.amount, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } }));
+  assert.ok([...dlAll.shown, ...dlAll.folded].some((x) => x.key === "leftover") && !dlAll.hidden.some((x) => x.key === "leftover"));
+  assert.ok(!LV.leverList(inv, { today: T, spare: spareOf(inv) }).missing.some((m) => /left over/.test(m)), "no longer 'not counted'");
+  const s = answer(p, { answer: "spend", monthly: r.total });
+  const sp = leftRow(s);
+  assert.equal(sp.tag, "yours");
+  assert.match(sp.value, /^Spent \(you said so\); \$567 a month/);
+  assert.deepEqual(sp.effects.slice(0, 2), r.effects.slice(0, 2), "the same two effects as before the answer");
+  // the row removed on Contributions: asked again, as if never answered (spec acceptance 5)
+  const gone = structuredClone(inv); gone.retirement.contributions = gone.retirement.contributions.filter((c) => c.id !== "leftover-1");
+  assert.equal(LV.leftoverAnswer(gone), null);
+  assert.deepEqual([leftRow(gone).tag, leftRow(gone).value], ["missing", "$567 a month"]);
+  assert.deepEqual(LV.answerOf(gone, { today: T }), LV.answerOf(p, { today: T }), "everything returns to the earlier figures");
+});
+
+test("L4 asked again after 365 days, or when the left-over moved more than 25% from the one answered about (D-B6)", () => {
+  const p = plans.jamie(), r = leftRow(p);
+  const at = (on, monthly) => { const q = answer(p, { answer: "invest", monthly, amount: 300, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } }); q.retirement.leftover.on = on; return q; };
+  assert.equal(!!leftRow(at("2025-11-12", r.total)).ask, false, "364 days: not yet");
+  const old = leftRow(at("2025-11-10", r.total));
+  assert.equal(old.ask, true);
+  assert.equal(old.value, "You said in November 2025 that $300 a month is invested. Left over each month now: $567. Still right?");
+  assert.deepEqual(old.acts.map((x) => x.label), ["Still right", "Answer again"]);
+  assert.equal(rowsOf(at("2025-11-10", r.total)).shown[0].key, "leftover", "asked first");
+  assert.equal(leftRow(at(T, r.total / 1.3)).ask, true, "moved 30% from the one answered about");
+  assert.equal(!!leftRow(at(T, r.total / 1.2)).ask, false, "moved 20%");
+  const sp = answer(p, { answer: "spend", monthly: 400 });
+  assert.match(leftRow(sp).value, /^You said in November 2026 that \$400 a month is spent\. Left over each month now: \$567\. Still right\?$/);
 });
 
 test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {

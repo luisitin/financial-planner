@@ -6,7 +6,7 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
-import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS } from "../levers.js";
+import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
@@ -20,6 +20,8 @@ let healthPending = null;
 // "What this rests on" (owner's request 2026-11-11, spec part A): the answer and the numbers last drawn on this visit, so coming
 // back after a change elsewhere says "Before your change: ... Now: ..." (D-A6; a module-level memory as careful.js keeps)
 let lastDrawn = null;
+// the money left over, answered on the card (spec L4): what was saved and the answer before it, said on the next drawing
+let leftPending = null;
 // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
 // ladder of steps (about 80 ms on a PC), and a redraw that changed nothing else needs none of it again
 const spareMemo = new Map();
@@ -202,7 +204,14 @@ export function render(root, ctx) {
   const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
   const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money }) : null;
+  // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
+  const leftNotice = leftPending ? (() => {
+    const w = answerChangeWords(leftPending.before, nowAnswer, money);
+    const n = ui.notice("ok", `${leftPending.text}${w ? ` Your retirement answer: ${w}.` : ""}`);
+    leftPending = null;
+    return n;
+  })() : null;
+  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice }) : null;
   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
@@ -243,6 +252,9 @@ export function render(root, ctx) {
       ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
       ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›"))));
   if (lvCard) landCheck(ctx, lvCard);
+  // an answer just saved on the card: its notice is brought into view now, in this drawing, so the shell sees it on the screen and
+  // does not repeat it as a note at the foot that covers the row just answered (review 2026-11-12, F6/P13)
+  if (leftNotice?.isConnected !== false && leftNotice) leftNotice.scrollIntoView?.({ block: "center" });
   // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
   if (!unknownYet) root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
@@ -461,7 +473,7 @@ function settingsCard(ctx, d) {
  * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
  */
-function leversCard(ctx, d, list, { unknownYet, money }) {
+function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
   const { ui, fmt, plan } = ctx;
   const today = fmt.today();
   const folded = !unknownYet && d.verdict === "on track";
@@ -475,11 +487,14 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
   const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
   const busy = busyWords(ui, "Working out what each number does to the answer.");
   const tail = ui.h("div");
-  const body = [intro, busy, rowsEl, tail];
+  const body = [intro, notice, busy, rowsEl, tail];
+  // folded on track, its line names a number it holds that is not counted yet (the final review F4: the family's left-over, "If
+  // it's invested: lasts to the end, with about $4,455,000 more left", sat under "12 numbers")
+  const notCounted = list.rows.filter((r) => r.tag === "missing").length;
   const card = folded
-    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
+    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, notCounted ? `${notCounted} not counted` : `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
     : ui.h("section", { class: "card lv" }, head, ...body);
-  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; }"));
+  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; } .lv .lv-ans { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); } .lv .lv-ans .chips { flex-wrap: wrap; margin: 8px 0 12px; }"));
   let started = false;
   const start = () => {
     if (started) return;
@@ -490,30 +505,152 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
     rowsEl.removeAttribute("aria-busy");
     busy.remove();
     if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
-    rowsEl.replaceChildren(...r.shown.map((x) => record(x)));
+    // the left-over just answered stays right under its notice (first), whatever its place in the order
+    let shown = r.shown, folded = r.folded;
+    const just = notice ? [...shown, ...folded].find((x) => x.key === "leftover") : null;
+    if (just) {
+      const rest = shown.filter((x) => x !== just);
+      shown = [just, ...rest].slice(0, SHOWN_ROWS);
+      folded = [...rest.slice(SHOWN_ROWS - 1), ...folded.filter((x) => x !== just)];
+    }
+    rowsEl.replaceChildren(...shown.map((x) => record(x)));
     tail.replaceChildren();
-    if (r.folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${r.folded.length} more number${r.folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, r.folded.map((x) => record(x)))));
+    // the fold's line says how many of its numbers are the person's own, in the words of the line under the answer (owner's rule
+    // 4; the final review F4: "6 more numbers" held "How fast investments grow, Yours, stocks 6%" and "How fast prices rise,
+    // Yours, 3.5%" without a word)
+    const yoursIn = folded.filter((x) => x.tag === "yours").length;
+    if (folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${folded.length} more number${folded.length === 1 ? "" : "s"}${yoursIn ? `, ${yoursIn} you gave us` : ""}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, folded.map((x) => record(x)))));
     // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
     if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
   }
   function record(x) {
-    const acts = (x.acts ?? []).map((a) => (a.open === "settings"
+    const li = ui.h("li", { "data-lever": x.key });
+    // the money left over is answered here, in place (spec L4): the button opens the question under the row
+    let panel = null;
+    // "Answer" only opens (a second tap of a double tap finds the question open, B11); its Cancel closes it
+    const close = (btn) => { if (!panel) return; panel.remove(); panel = null; btn.setAttribute("aria-expanded", "false"); btn.focus?.(); };
+    const toggle = (btn) => {
+      if (panel) { panel.querySelector?.("button")?.focus?.({ preventScroll: true }); return; }
+      panel = leftoverPanel(ctx, x, money, () => close(btn), { unknown: unknownYet });
+      li.append(panel);
+      btn.setAttribute("aria-expanded", "true");
+      panel.querySelector?.("button")?.focus?.({ preventScroll: true });
+      panel.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    };
+    const acts = (x.acts ?? []).map((a) => (a.answer
+      ? ui.h("button", { type: "button", class: "btn secondary small", "aria-expanded": "false", onClick: (e) => toggle(e.currentTarget) }, a.label)
+      : a.keep
+      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => keepLeftover(ctx, x, money) }, a.label)
+      : a.lower !== undefined
+      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => lowerNow(ctx, x, a.lower, money) }, a.label)
+      // a box further down this same page: opened, scrolled to and focused in place. Never a link to this page's own address
+      // (N4: the page was drawn again from the top and then moved, so the second tap of a double tap followed whatever link
+      // passed under the thumb), and taps are let go while it glides
+      : a.open === "spending"
+      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: (e) => { holdTaps(e); openSpending?.(); } }, a.label)
+      : a.open === "settings"
       ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { s.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
       : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
-    return ui.h("li", { "data-lever": x.key },
+    // (the DOM's own append writes a null as the text "null": only the parts there are)
+    li.append(...[
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
       ui.h("div", { class: "rec-sub" }, x.value),
       x.effects?.length ? ui.h("div", { class: "lv-eff small" }, x.effects.map((t) => ui.h("p", {}, t))) : null,
       x.note ? ui.h("p", { class: "muted small", style: { margin: "4px 0 0" } }, x.note) : null,
-      acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null);
+      acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null].filter(Boolean));
+    return li;
   }
   if (folded) card.addEventListener?.("toggle", () => { if (card.open) start(); });
   else start();
+  // after an answer saved on the card: the card stays open and its notice is brought into view (a fold on track included)
+  if (notice) {
+    if (folded) { card.open = true; start(); }
+    notice.setAttribute("tabindex", "-1");
+    afterPaint(() => { if (!notice.isConnected) return; notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true }); });
+  }
   card.__start = start;
   card.__head = head;
   return card;
 }
 const SHOWN_ROWS = 3;
+
+/**
+ * "What happens to the money left over each month?" answered in place (spec L4, decisions D-B1 to D-B7): invested for later (a
+ * monthly row into a brokerage account: one on file, or a new $0 "Investments for later"), it stays in the bank (a row into a
+ * savings account, grown at the cash rate), or it gets spent / not sure (the answer only). The amount starts at the left-over
+ * rounded down to $10 and is the person's to change; the emergency fund's gap is said first when there is one (D-B4).
+ */
+function leftoverPanel(ctx, x, money, close, { unknown = false } = {}) {
+  const { ui, fmt, plan } = ctx;
+  const today = fmt.today();
+  const ans = leftoverAnswer(plan);
+  let choice = ans?.answer ?? null;
+  let gap = 0;
+  try { gap = Number(ctx.computeOf?.("balance/liquidity", { today })?.gap) || 0; } catch { gap = 0; }
+  const panel = ui.h("div", { class: "lv-ans" });
+  const CHOICES = [["invest", "Invested for later"], ["bank", "It stays in the bank"], ["spend", "It gets spent / not sure"]];
+  const save = (v) => {
+    const fail = (t) => { panel.querySelector(".notice.error")?.remove(); panel.querySelector("form")?.prepend(ui.notice("error", t)); return false; };
+    const before = (() => { try { return answerOf(plan, { today }); } catch { return null; } })();
+    const total = Math.round(x.total * 100) / 100;
+    if (choice === "spend") {
+      leftPending = { text: "Saved: the money left over each month is counted as spent, as before.", before, unknown };
+      ctx.store.update((draft) => applyLeftover(draft, { answer: "spend", monthly: total, today, personId: x.leadId }));
+      return;
+    }
+    const amount = Number(v.amount);
+    if (!(amount > 0)) return fail("Type how much goes there each month, like 500.");
+    if (amount > total + 0.5) return fail(`That is more than is left over each month (${money(total)}). Type ${money(Math.floor(total))} or less.`);
+    const fresh = choice === "bank" ? { name: "Savings for later", type: "savings" } : { name: "Investments for later", type: "brokerage" };
+    const acct = v.accountId && v.accountId !== "new" ? (plan.accounts ?? []).find((a) => a.id === v.accountId) : null;
+    // (in the bank it is not saving out of pay: the month's left-over stays as it is, and the money is counted for later; M3)
+    leftPending = { text: choice === "bank" ? `Saved: ${fmt.money(amount, plan.meta.currency)} a month stays in ${acct?.name ?? fresh.name}${acct ? "" : " (a new account at $0, on Net worth)"}, counted for later.`
+      : `Saved: ${fmt.money(amount, plan.meta.currency)} a month into ${acct?.name ?? fresh.name}${acct ? "" : " (a new account at $0, on Net worth)"}.`, before, unknown };
+    ctx.store.update((draft) => applyLeftover(draft, { answer: choice, monthly: total, amount, accountId: acct?.id ?? null, newAccount: acct ? null : { id: ui.uid(), ...fresh }, personId: x.leadId, today }));
+  };
+  const draw = () => {
+    const kids = [
+      ui.h("p", { style: { margin: "0" } }, ui.h("strong", {}, `What happens to the ${money(x.total)} left over each month?`)),
+      ui.h("div", { class: "chips", role: "group", "aria-label": "What happens to it" }, CHOICES.map(([k, label]) =>
+        ui.h("button", { type: "button", class: `chip${choice === k ? " on" : ""}`, "aria-pressed": choice === k ? "true" : "false", onClick: () => { choice = k; draw(); panel.querySelector?.(`[data-choice="${k}"]`)?.focus?.({ preventScroll: true }); }, "data-choice": k }, label))),
+    ];
+    if (choice === "invest" || choice === "bank") {
+      const accts = leftoverAccounts(plan, choice);
+      const fresh = choice === "bank" ? "Savings for later" : "Investments for later";
+      const was = ans?.row && ans.answer === choice ? ans.row : null;
+      if (choice === "invest" && gap > 0.5) kids.push(ui.h("p", { class: "small" }, `Your emergency fund is ${money(gap)} short. Many people fill that first; count only what goes into investments.`));
+      kids.push(ui.form([
+        { key: "accountId", label: "Into which account", type: "select", options: [...accts.map((a) => ({ value: a.id, label: a.name })), { value: "new", label: `A new account: ${fresh}` }] },
+        { key: "amount", label: "How much a month", type: "money", min: 0, required: true, help: `Left over each month: ${money(x.total)}. Count only what really goes there.` },
+      // (the amount starts at what was said before, never above what is left over now: B3)
+      ], { accountId: was && accts.some((a) => a.id === was.accountId) ? was.accountId : accts[0]?.id ?? "new", amount: was && Number(was.amount) <= x.total + 0.5 ? Math.round(Number(was.amount) * 100) / 100 : x.amount }, save, { submitLabel: "Save my answer", onCancel: close }));
+    } else if (choice === "spend") {
+      kids.push(ui.h("p", { class: "muted small" }, "The plan keeps counting it as spent: nothing goes into savings for later."));
+      kids.push(ui.form([], {}, save, { submitLabel: "Save my answer", onCancel: close }));
+    } else kids.push(ui.row(ui.button("Cancel", close, { class: "secondary" })));
+    panel.replaceChildren(...kids);
+  };
+  draw();
+  return panel;
+}
+/**
+ * "Still right": the answer asked again is kept as it is, dated today, for the left-over as it is now (D-B6). Never an amount
+ * above what is left over now (B3: the row then offers "Lower it" instead, and this does nothing).
+ */
+function keepLeftover(ctx, x, money) {
+  const { fmt, plan } = ctx;
+  if ((x.rowMonthly ?? 0) > x.total + 0.5) return;
+  const before = (() => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } })();
+  leftPending = { text: `Saved: still right. We will ask again in a year, or when the ${money(x.total)} left over changes by a lot.`, before };
+  ctx.store.update((draft) => { if (draft.retirement?.leftover) { draft.retirement.leftover.on = fmt.today(); draft.retirement.leftover.monthly = Math.round(x.total * 100) / 100; } });
+}
+/** "Lower it to $1,120" / "Stop counting it": the answered row brought down to what is left over now, or taken out (B3, B7). */
+function lowerNow(ctx, x, to, money) {
+  const { fmt, plan } = ctx;
+  const before = (() => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } })();
+  leftPending = { text: to > 0 ? `Saved: ${money(to)} a month is counted now (it was ${money(x.rowMonthly ?? 0)}).` : `Saved: the ${money(x.rowMonthly ?? 0)} a month is no longer counted.`, before };
+  ctx.store.update((draft) => lowerLeftover(draft, to, { today: fmt.today(), total: x.total }));
+}
 const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 /** The card opened (a fold under an answer on track), brought to the top of the screen and its heading focused. */
