@@ -160,7 +160,8 @@ test("withdrawal order: four orders ranked by what is left after tax; the tap th
   const best = d.options.find((o) => o.best);
   assert.ok(d.options.every((o) => !o.success || o.endAfterTaxReal <= best.endAfterTaxReal + 0.01));
   assert.ok(d.options.every((o) => o.endAfterTaxReal <= o.endBalanceReal + 0.01));
-  assert.ok(d.notes.some((n) => n.includes("flat")));
+  // the flat rate is the page's own notice with a button now (stress test 2026-11-11, x-4), reported as bracketsOn
+  assert.equal(d.bracketsOn, false); assert.ok(!d.notes.some((n) => n.includes("flat tax rate")));
   const p = taxPlan(); p.retirement.withdrawalOrder = ["deferred", "taxable", "free"];
   assert.equal(withdrawalOrder(p, { today: TODAY }).current, "deferred-first");
   assert.equal(withdrawalOrder(emptyPlan(), { today: TODAY }).ready, false);

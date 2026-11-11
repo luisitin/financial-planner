@@ -74,3 +74,9 @@ The owner's answer, 2026-11-06: "You can do as you please. Just make sure a laym
 withdrawal (How much to take out README), so with them the tax an order saves would be spent rather than kept. `compute` runs
 every order with `strategy: "fixed-real"`, so the ranking is the same whichever way the plan uses. Test "5b: ..." in
 `module.test.mjs` (failed before).
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **The best order on the first screen** (x-4): a filled `Use "<order>"` in the first card when it is not yours. The flat-rate note
+  is the page's own notice in plain words with "Work out tax at the real rates" (it was builder words in `notes`; compute reports
+  `bracketsOn`). My choice after review: choosing an order never switches the tax setting by itself, since the real rates move every
+  retirement figure, often more than the order does; the green line says the order changes nothing until they are on.

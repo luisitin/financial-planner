@@ -27,3 +27,14 @@ test("5b: a plan on a share of what is left compares its orders at the same spen
     assert.equal(d.best, steady.best);
   }
 });
+
+// stress test 2026-11-11, x-4: the flat-rate warning is the page's own notice with a button, not a line of builder words in `notes`
+test("the flat rate is reported as bracketsOn, not as a note", async () => {
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const p = retirementPlan("2026-11-11");
+  p.retirement = { ...(p.retirement ?? {}), taxMode: "flat" };
+  const d = compute(p, { today: "2026-11-11" });
+  assert.equal(d.ready, true);
+  assert.equal(d.bracketsOn, false);
+  assert.ok(!d.notes.some((n) => /flat tax rate/.test(n)));
+});

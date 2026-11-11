@@ -31,6 +31,7 @@ export function compute(plan, params = {}) {
   for (const o of options) o.best = o.key === best.key;
   const worst = options.reduce((a, x) => score(x) < score(a) ? x : a, options[0]);
   const notes = [...b.notes];
-  if ((plan.retirement?.taxMode ?? "flat") !== "brackets") notes.push("The projection itself still uses a flat tax rate, where the order makes no difference. Switch it to the federal brackets in the settings on Will the money last? to make the chosen order count.");
+  // the flat-rate note is no longer a line of text here: the page says it in plain words with its own button (`bracketsOn`; stress
+  // test 2026-11-11, x-4: "the projection", "federal brackets" and a setting on another page, with no way to act)
   return { ready: true, missing: [], current, options, best: best.key, gainVsWorst: best.success && worst.success ? best.endAfterTaxReal - worst.endAfterTaxReal : 0, taxSpread: worst.taxesReal - best.taxesReal, allFail: !options.some((o) => o.success), bracketsOn: (plan.retirement?.taxMode ?? "flat") === "brackets", notes, people: b.people, hasDeferred: b.inputs.balances.deferred > 0, hasFree: b.inputs.balances.free > 0, hasTaxable: b.inputs.balances.taxable > 0 };
 }
