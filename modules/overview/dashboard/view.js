@@ -18,6 +18,7 @@ const STYLE = `
 .db-now h1 { font-size: var(--fs-xl); margin: 0 0 6px; }
 .db-now .db-head { color: var(--text); font-size: var(--fs-md); line-height: 1.45; margin: 0 0 14px; text-wrap: pretty; }
 .db-now .db-rows { list-style: none; margin: 0 0 16px; padding: 0; }
+@media (min-width: 360px) { .db-now .db-rows:has(+ .db-later) { margin-bottom: 0; } .db-now .db-later li:first-child a { border-top: 1px solid var(--line); } }
 .db-now .db-rows li + li a { border-top: 1px solid var(--line); }
 .db-now .db-rows a { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 2px; color: var(--text); text-decoration: none; }
 .db-now .db-rows a:hover .db-k { color: var(--accent-ink); }
@@ -31,6 +32,8 @@ const STYLE = `
 .db-now .db-go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; text-align: center; font-size: var(--fs-md); }
 .db-now .db-all { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; font-weight: 600; }
 /* a 320 px phone: the row's explanation goes under its figure, so the filled button stays on the first screen (stress test 2026-11-11) */
+/* ... and the check-in row goes under the filled button there (review 2026-11-11 N10: it pushed the button off a 568 px screen) */
+@media (max-width: 359px) { .db-now { display: flex; flex-direction: column; } .db-now > * { order: 1; } .db-now > .db-later { order: 3; margin-top: 10px; } .db-now > .db-all { order: 2; } }
 @media (max-width: 359px) { .db-now .db-rows a { flex-wrap: wrap; row-gap: 2px; column-gap: 8px; } .db-now .db-k { display: contents; } .db-now .db-rows .db-s { order: 5; flex-basis: 100%; padding-left: 18px; margin-top: 0; } .db-now .db-v { margin-left: auto; } .db-now .db-go { font-size: var(--fs); } }
 .db-hero .db-go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; margin-top: 14px; text-align: center; font-size: var(--fs-md); }
 .db-hero .db-all { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; font-weight: 600; }
@@ -146,7 +149,7 @@ export function render(root, ctx) {
       // place. Checked in: one quiet line that says so and when the next one is (unless the balances row is due).
       // (a plan made this month is never asked about last month: checkInDue wants something dated before the 1st)
       const due = usable(ctx, "overview/monthly-review") ? checkInDue(plan, today) : null;
-      if (due && !due.done) rows.push({ dot: oldDays >= 25 ? "warn" : "", k: `Your ${due.name} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "A look back at where the money went: about ten minutes", v: "Start ›", open: true, href: `#/overview/monthly-review?month=${due.month}` });
+      if (due && !due.done) rows.push({ late: true, dot: oldDays >= 25 ? "warn" : "", k: `Your ${due.name} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "A look back at where the money went: about ten minutes", v: "Start ›", open: true, href: `#/overview/monthly-review?month=${due.month}` });
       else if (due?.done && oldDays < 25) rows.push({ dot: "ok", k: `${due.name} check-in done \u2713`, s: `Next: early ${due.nextWhen}, to look back at ${due.nextName}`, v: "", href: `#/overview/monthly-review?month=${due.month}` });
       else if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
       // (C7 UX reviews 2 and 4: with spending or a debt left out, or a list far too short, the month and retirement wait on the card)
@@ -165,11 +168,11 @@ export function render(root, ctx) {
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
         ui.h("h1", { id: "db-now-h" }, name ? `Hi ${name}.` : "Where you stand"),
         ui.h("p", { class: "db-head" }, calmHeadline(st.headline, { underWay })),
-        ui.h("ul", { class: "db-rows" }, rows.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.`, ...(r.onClick ? { onClick: r.onClick } : {}) },
+        ...[rows.filter((r) => !r.late), rows.filter((r) => r.late)].filter((list) => list.length).map((list, i) => ui.h("ul", { class: `db-rows${i ? " db-later" : ""}` }, list.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.`, ...(r.onClick ? { onClick: r.onClick } : {}) },
           ui.h("span", { class: `db-dot ${r.dot}`, "aria-hidden": "true" }),
           ui.h("span", { class: "db-k", "aria-hidden": "true" }, r.k, ui.h("span", { class: "db-s" }, r.s)),
           ui.h("span", { class: `db-v${r.open ? " open" : ""}`, "aria-hidden": "true" }, r.v),
-          r.open ? null : ui.h("span", { class: "db-chev", "aria-hidden": "true" }, "›"))))),
+          r.open ? null : ui.h("span", { class: "db-chev", "aria-hidden": "true" }, "›")))))),
         nx?.line ? ui.h("p", { class: "db-s", style: { margin: "0 0 8px" } }, nx.line) : null,
         nx ? ui.h("a", { class: "btn db-go", href: nx.href }, `${nx.label} ›`) : null,
         nx?.kind === "plan" ? null : ui.h("a", { class: "db-all", href: way?.started ? way.planHref : "#/overview/setup/done" }, underWay ? "See your plan so far ›" : way?.complete ? "See your plan ›" : move ? "See all your moves ›" : "See where you stand ›")));
