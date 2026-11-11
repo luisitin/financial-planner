@@ -146,3 +146,6 @@ either on file it is scored as before. Every part's row ends with the page it op
 Part way through the questions there is no grade ("No score yet", "Continue your plan: question N of 7"). After the questions,
 with something still missing, the filled button names the page that takes it (Add who is in your household / Add what you
 own / Add what goes out), never the questions again.
+
+## Review 2026-11-11 round 4 (claude-r N18)
+- The "No score yet" button reads "Set up my plan ›" (to the Set up page), the words every other page uses for an empty plan; it read "Answer a few easy questions ›" to the same place. With an account and the questions never opened it is the Dashboard's first step instead (`firstStep()` kind `basics`, e.g. "Continue your plan: Add your household ›"), with "Add what is still missing."

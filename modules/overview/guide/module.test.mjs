@@ -646,9 +646,14 @@ test("barFor, the path: ?guide=plan draws path mode whatever is followed; one Ne
   assert.ok(barFor(nw, { page: "retirement/projection", query: { guide: "plan", step: "retire" }, today: TD }).waiting);
 });
 test("barFor, continue: the four texts; this-page-is-next goes to ?guide=plan&step=; the one-page trail still shows", () => {
-  // never started: Start your plan
+  // never started: the Dashboard's "Set up my plan", to the questions (review 2026-11-11 N18)
   let c = barFor(empty(), { page: "balance/net-worth", today: TD });
-  assert.deepEqual([c.mode, c.text, c.href], ["continue", "Start your plan: a few easy questions ›", "#/overview/start"]);
+  assert.deepEqual([c.mode, c.text, c.href], ["continue", "Set up my plan ›", "#/overview/setup"]);
+  // the questions turned off: the Dashboard's checklist step, never a page that is off (attack on N18)
+  c = barFor(empty(), { page: "cashflow/income", off: ["overview/setup"], today: TD });
+  assert.deepEqual([c.text, c.href], ["Do step 1: Add your accounts ›", "#/balance/net-worth"]);
+  c = barFor(empty(), { page: "cashflow/income", off: ["overview/setup", "overview/start", "balance/net-worth"], today: TD });
+  assert.ok(!c || !/overview\/(setup|start)|balance\/net-worth/.test(c.href ?? ""), "no row to a page that is off");
   // under way
   const p = sam(); S.markAt(p, "done", TD); startGuide(p, PATH_ID, TD);
   c = barFor(p, { page: "balance/net-worth", today: TD });

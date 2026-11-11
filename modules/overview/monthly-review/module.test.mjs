@@ -393,7 +393,22 @@ test("attack on N11: an older month opened again with a note stays among the mon
 
 test("N6 (review 2026-11-11): a blank plan has nothing to check in on; a plan with anything in it does", () => {
   assert.equal(compute(emptyPlan(), { today: "2026-11-11" }).empty, true);
+  // pay alone, no accounts, the questions not begun: still a plan to set up, as every other page says (N19)
   const p = emptyPlan(); p.income.push({ id: "i", type: "salary", amount: 4000 });
-  assert.equal(compute(p, { today: "2026-11-11" }).empty, false);
+  assert.equal(compute(p, { today: "2026-11-11" }).empty, true);
+  // the questions begun, or an account added: there is something to check in on
+  const q = emptyPlan(); q.income.push({ id: "i", type: "salary", amount: 4000 }); q.guide = { setup: { startedAt: "2026-11-10", at: "money" } };
+  assert.equal(compute(q, { today: "2026-11-11" }).empty, false);
+  const a = emptyPlan(); a.accounts.push({ id: "a", type: "checking", name: "Checking", balance: 2000 });
+  assert.equal(compute(a, { today: "2026-11-11" }).empty, false);
   assert.equal(compute(migrate(familyPlan("2026-11-11")), { today: "2026-11-11" }).empty, false);
+  // pay and bills plus a debt or a goal: real things to look at, the steps show (attack on N19)
+  for (const add of [(x) => x.debts.push({ id: "d", name: "Card", balance: 8000, rate: 0.24, minPayment: 200 }), (x) => x.goals.push({ id: "g", name: "Trip", target: 5000, targetDate: "2027-01-01" })]) {
+    const g = emptyPlan(); g.income.push({ id: "i", type: "salary", amount: 4000 }); g.expenses.push({ id: "e", name: "Rent", amount: 1500 }); add(g);
+    assert.equal(compute(g, { today: "2026-11-11" }).empty, false);
+  }
+  // part way through the questions with nothing in: the hero's button continues the questions, as the Dashboard does
+  const m = emptyPlan(); m.guide = { setup: { startedAt: "2026-11-10", at: "money" } };
+  const r = compute(m, { today: "2026-11-11" });
+  assert.equal(r.empty, true); assert.equal(r.first.kind, "questions"); assert.match(r.first.label, /^Continue your plan: question \d of \d$/); assert.equal(r.first.href, "#/overview/setup/money");
 });

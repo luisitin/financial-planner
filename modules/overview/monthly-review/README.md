@@ -131,3 +131,6 @@ The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboa
 - The month chips are this month and last, then the month on screen and every month opened again and not finished, newest first: an older month opened again is never out of reach with its note (attack on N11).
 - A blank plan (no accounts, pay, bills, transactions or check-ins) has nothing to check in on: the page says so and its one button is "Set up my plan" (N6).
 - The first thing left to do is the filled "Next: ..." button on the first screen for the month to close too; its Finish button stays outlined until nothing is left (N7).
+
+## Review 2026-11-11 round 4 (claude-r N19)
+- `empty` (the "set up your plan first" hero with "Set up my plan ›") holds while there are no accounts, no transactions and no review, and either the Dashboard's first step is still "Set up my plan" (`firstStep()` kind `start`) with no debts and no goals, or there is no income or spending. Part way through the questions the hero's button is the Dashboard's "Continue your plan: question 2 of 7" (`first`). So pay entered with no accounts, the questions not started, no longer asks to update balances there are none of. Pay with the questions under way, or any account, shows the steps as before. Test: `module.test.mjs` (N6/N19).

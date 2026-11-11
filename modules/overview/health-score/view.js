@@ -3,6 +3,7 @@
 // Runs on the PC when connected (it runs the stress tests).
 import { PARTS, BANDS } from "./compute.js";
 import { setupCard } from "../start/compute.js";
+import { firstStep } from "../dashboard/compute.js";
 
 const STYLE = `
 .hs-root .hs-hero { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
@@ -50,15 +51,19 @@ export function render(page, ctx) {
       const P = (k) => (ctx.plan?.[k] ?? []).length;
       const gap = !(ctx.plan?.household?.people ?? []).length ? ["#/household/people", "Add who is in your household \u203a"]
         : !P("accounts") ? ["#/balance/net-worth", "Add what you own \u203a"] : ["#/cashflow/expenses", "Add what goes out \u203a"];
+      // never opened: the Dashboard's first step (firstStep), "Set up my plan" only while there are no accounts; with an
+      // account it is the first missing basic, as the Dashboard and the quiet row say it (attack on N18)
+      let fs = null; try { fs = firstStep(ctx.plan); } catch { fs = null; }
       const btn = sc?.state === "started" ? [sc.href, `Continue your plan: question ${sc.q} of ${sc.total} \u203a`]
-        : sc?.state === "done" ? gap : ["#/overview/setup", "Answer a few easy questions \u203a"];
+        : sc?.state === "done" ? gap : fs?.kind === "basics" ? [fs.href, `${fs.label} \u203a`] : ["#/overview/setup", "Set up my plan \u203a"];
+      const basics = sc?.state !== "started" && sc?.state !== "done" && fs?.kind === "basics";
       const lede = sc?.state === "started" ? "Your score appears once you reach the end of the questions, so it counts everything you tell us."
-        : sc?.state === "done" ? "Your score appears once the plan knows who you are, what you own and what you spend. Add what is still missing."
+        : sc?.state === "done" || basics ? "Your score appears once the plan knows who you are, what you own and what you spend. Add what is still missing."
           : "Your score appears once the plan knows who you are, what you own and what you spend. The easy questions fill in all three.";
       host.append(ui.h("section", { class: "card accent hero" },
         ui.h("h1", {}, "No score yet"),
         ui.h("p", { class: "lede" }, lede),
-        ctx.modules?.has?.("overview/setup") ? ui.h("a", { class: "btn", href: btn[0], style: { marginTop: "6px" } }, btn[1]) : null));
+        basics || ctx.modules?.has?.("overview/setup") ? ui.h("a", { class: "btn", href: btn[0], style: { marginTop: "6px" } }, btn[1]) : null));
       host.append(ui.h("details", { class: "card fold fold-card" },
         ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "The seven parts it will score"), ui.h("span", { class: "fold-chev" }, "\u203a")),
         ui.h("div", { class: "fold-body" }, ui.h("ul", { class: "hs-parts" }, d.parts.map(partRow)))));

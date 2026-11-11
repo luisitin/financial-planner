@@ -96,3 +96,8 @@ it counts a payment the borrower chooses on top.
 
 Months are whole numbers, one decimal only under 2 ("aim 6 months", "Cash covers 11 months", "0.9 months"), the rule of the Emergency fund page (design log 2026-09-15 round 13), now `monthsText` / `monthsWords` in `core/format.js` and used by every page that says a count of months.
 Final check (2026-11-07): "it can carry about $4,720 a month against the $4,167 planned": what the plan can carry is an estimate and keeps the $10 Goal seek and Plan health score show; the month planned is to the dollar. Test in `tests/wording-verify.test.mjs`.
+
+## Review 2026-11-11 round 4 (claude-r N17)
+- The cash bar's "you" and "aim" labels (and its spoken label) say the months the way the sentence does, `monthsNear(v, aim)`
+  from `core/words.js`: 5.7 months reads "you 5.7 months" against "aim 6 months", never "you 6 months" under a sentence
+  that says 5.7. Test: `module.test.mjs` ("N17").

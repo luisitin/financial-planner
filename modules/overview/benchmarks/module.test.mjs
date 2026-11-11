@@ -150,3 +150,13 @@ test("verify: retired and the plan lasts only just: on par, not ahead", async ()
   assert.match(own.sentence, /lasts, but only just/);
   assert.equal(d.ahead, d.items.filter((x) => x.verdict === "ahead" || x.verdict === "lasts").length);
 });
+
+test("the emergency fund's bar says the months as the sentence does: 5.7 is never 'you 6 months' beside 'aim 6' (review 2026-11-11 N17)", async () => {
+  const fs = await import("node:fs");
+  const { monthsNear } = await import("../../../core/words.js");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes('x.unit === "months" ? monthsNear(v, x.benchmark)') && !view.includes("fmt.monthsWords"), "the bar's labels use monthsNear");
+  assert.equal(monthsNear(5.7, 6), "5.7 months");
+  assert.equal(monthsNear(6.42, 6), "6.4 months");
+  assert.equal(monthsNear(6, 6), "6 months");
+});

@@ -1,6 +1,7 @@
 // modules/overview/benchmarks/view.js -- DOM only. Each comparison as a ruler: where you are, where the
 // benchmark is, a word for which side of it you are on, a sentence and its source.
 import { compute } from "./compute.js";
+import { monthsNear } from "../../../core/words.js";
 
 const STYLE = `
 .bm-root .bm-items { list-style: none; margin: 0; padding: 0; }
@@ -32,7 +33,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.judged ? `Ahead on ${d.ahead} of ${d.judged}` : "How am I doing?"),
     ui.h("p", { class: "lede" }, `Against families whose head is ${d.group.label} (the Federal Reserve's ${d.scfYear} survey) and the rules of thumb most planners use. Benchmarks are a compass, not a grade: your own plan's numbers matter more.`)));
-  const show = (x, v) => (v === null ? "-" : x.unit === "money" ? fmt.money(Math.round(v / 100) * 100, cur) : x.unit === "multiple" ? `${v.toFixed(1)}x pay` : x.unit === "months" ? fmt.monthsWords(v) : `${Math.round(v * 100)}%`);
+  const show = (x, v) => (v === null ? "-" : x.unit === "money" ? fmt.money(Math.round(v / 100) * 100, cur) : x.unit === "multiple" ? `${v.toFixed(1)}x pay` : x.unit === "months" ? monthsNear(v, x.benchmark) : `${Math.round(v * 100)}%`);
   root.append(ui.h("section", { class: "card" }, ui.h("ul", { class: "bm-items" }, d.items.map((x) => {
     const [tone, word] = PILL[x.verdict];
     return ui.h("li", { class: "bm-item" },

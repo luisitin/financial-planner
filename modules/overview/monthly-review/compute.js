@@ -10,6 +10,7 @@ import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeAlerts, goalsBehind } from "../alerts/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { firstStep } from "../dashboard/compute.js";
 import { coverage, monthCover, COVER_SLACK, monthGaps, gapIssues, theCard, paymentsTo, bringWords, shortDate, firstLineOf } from "../../transactions/ledger/compute.js";
 import { usualInDays } from "../../transactions/import/compute.js";
 import { date as fmtDate } from "../../../core/format.js";
@@ -217,8 +218,11 @@ export function compute(plan, params = {}) {
   const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
   // nothing in the plan yet (no accounts, pay, bills, transactions or check-ins): there is nothing to check in on, and the page
   // says to set the plan up first, as every other page does (review 2026-11-11 N6: "update the balances" with no accounts)
-  const empty = !(plan.accounts ?? []).length && !(plan.income ?? []).length && !(plan.expenses ?? []).length && !hasTx && !reviews.length;
-  return { ready: true, missing: [], empty, month, label, choices: monthChoices(today, month, plan), steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+  // pay or bills alone, no accounts and the questions not begun, is still a plan to set up: the first step every other page
+  // gives it is "Set up my plan", never "update the balances" it does not have (review 2026-11-11 N19)
+  let fs = null; try { fs = firstStep(plan); } catch { fs = null; }
+  const empty = !(plan.accounts ?? []).length && !hasTx && !reviews.length && ((fs?.kind === "start" && !(plan.debts ?? []).length && !(plan.goals ?? []).length) || (!(plan.income ?? []).length && !(plan.expenses ?? []).length));
+  return { ready: true, missing: [], empty, first: empty && fs ? { kind: fs.kind, label: fs.label, href: fs.href } : null, month, label, choices: monthChoices(today, month, plan), steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
 }
 
 // this month and last, then the month on screen and every month opened again and not finished (its note waits in

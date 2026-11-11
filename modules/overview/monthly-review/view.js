@@ -42,7 +42,9 @@ export function render(page, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Monthly check-in"),
       ui.h("p", { class: "lede" }, "Once a month, about ten minutes: update your balances, look at what you spent, and see how the month went. There is nothing to check in on yet; set up your plan first."),
-      ui.row(ui.h("a", { class: "btn", href: setupOn ? "#/overview/setup" : "#/balance/net-worth" }, setupOn ? "Set up my plan \u203a" : "Add your accounts \u203a"))));
+      // part way through the questions: the Dashboard's "Continue your plan: question 2 of 7" (attack on N19)
+      ui.row(ui.h("a", { class: "btn", href: setupOn ? (d.first?.kind === "questions" ? d.first.href : "#/overview/setup") : "#/balance/net-worth" },
+        setupOn ? (d.first?.kind === "questions" ? `${d.first.label} \u203a` : "Set up my plan \u203a") : "Add your accounts \u203a"))));
     return;
   }
   const left = d.todo - d.done;

@@ -258,3 +258,11 @@ test("no grade part way through the questions; after them the button names the m
   assert.ok(src.includes('sc?.state === "done" ? gap'));
   assert.ok(src.includes('"Add what you own \\u203a"') && src.includes('"Add what goes out \\u203a"'));
 });
+
+test("an empty plan's filled button says what every other page says: Set up my plan (review 2026-11-11 N18)", async () => {
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes('["#/overview/setup", "Set up my plan \\u203a"]') && !view.includes("Answer a few easy questions"));
+  // with an account the never-opened button is the Dashboard's first step (firstStep basics), not "Set up my plan" (attack on N18)
+  assert.ok(view.includes("firstStep(ctx.plan)") && view.includes('fs?.kind === "basics" ? [fs.href'));
+});
